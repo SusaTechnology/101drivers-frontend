@@ -1,12 +1,11 @@
 // components/pages/admin-pricing-config-form.tsx
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
   Settings,
   Info,
-  DollarSign,
   Verified,
 } from 'lucide-react';
 
@@ -18,7 +17,6 @@ import { Brand } from '@/lib/items/brand';
 import { navItems } from '@/lib/items/navItems';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigForm } from '@/components/pricing/PricingConfigForm';
-import { useSavePricingConfig, usePricingConfig } from '@/hooks/pricing/usePricingConfigs';
 import type { PricingConfigFormData, PricingConfig } from '@/types/pricing';
 import { DEFAULT_PRICING_CONFIG } from '@/types/pricing';
 
@@ -42,11 +40,13 @@ const MOCK_CONFIG: PricingConfig = {
   isActive: true,
 };
 
-export default function AdminPricingConfigFormPage() {
+interface AdminPricingConfigFormPageProps {
+  configId?: string;
+}
+
+export default function AdminPricingConfigFormPage({ configId }: AdminPricingConfigFormPageProps) {
   const { actionItems, signOut } = useAdminActions();
   const navigate = useNavigate();
-  const params = useParams({ from: '/admin-pricing-config/edit/$configId' });
-  const configId = params?.configId;
 
   const isEditMode = !!configId;
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,34 +54,13 @@ export default function AdminPricingConfigFormPage() {
     isEditMode ? undefined : DEFAULT_PRICING_CONFIG
   );
 
-  // Fetch existing config for edit mode
-  const { data: configData, isLoading } = usePricingConfig(configId, isEditMode);
-
-  // Save mutation
-  const saveMutation = useSavePricingConfig({
-    onSuccess: (data) => {
-      toast.success(
-        isEditMode
-          ? 'Configuration updated successfully'
-          : 'Configuration created successfully'
-      );
-      navigate({ to: '/admin-pricing-config' });
-    },
-    onError: (error) => {
-      toast.error(`Failed to save: ${error.message}`);
-      setIsSubmitting(false);
-    },
-  });
-
   // Load data for edit mode
   useEffect(() => {
-    if (isEditMode && configData?.data) {
-      setInitialData(configData.data);
-    } else if (isEditMode) {
-      // Use mock data for development
+    if (isEditMode) {
+      // Use mock data for development - in production, this would be an API call
       setInitialData(MOCK_CONFIG);
     }
-  }, [isEditMode, configData]);
+  }, [isEditMode]);
 
   // Handle form submission
   const handleSubmit = async (data: PricingConfigFormData) => {
@@ -107,7 +86,7 @@ export default function AdminPricingConfigFormPage() {
   };
 
   // Loading state for edit mode
-  if (isEditMode && isLoading) {
+  if (isEditMode && !initialData) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
         <Navbar

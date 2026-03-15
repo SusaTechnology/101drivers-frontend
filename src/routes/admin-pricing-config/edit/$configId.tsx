@@ -6,5 +6,6 @@ export const Route = createFileRoute('/admin-pricing-config/edit/$configId')({
 })
 
 function RouteComponent() {
-  return <AdminPricingConfigFormPage />
+  const { configId } = Route.useParams()
+  return <AdminPricingConfigFormPage configId={configId} />
 }
