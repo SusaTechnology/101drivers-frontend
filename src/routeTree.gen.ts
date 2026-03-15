@@ -45,6 +45,7 @@ import { Route as AdminReportDeliveriesIndexRouteImport } from './routes/admin-r
 import { Route as AdminReportComplianceIndexRouteImport } from './routes/admin-report-compliance/index'
 import { Route as AdminPricingIndexRouteImport } from './routes/admin-pricing/index'
 import { Route as AdminPricingRuleIndexRouteImport } from './routes/admin-pricing-rule/index'
+import { Route as AdminPricingConfigIndexRouteImport } from './routes/admin-pricing-config/index'
 import { Route as AdminPaymentsIndexRouteImport } from './routes/admin-payments/index'
 import { Route as AdminNotificationPolicyIndexRouteImport } from './routes/admin-notification-policy/index'
 import { Route as AdminInsuranceReportingIndexRouteImport } from './routes/admin-insurance-reporting/index'
@@ -60,6 +61,8 @@ import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-passw
 import { Route as AuthDealerSignupRouteImport } from './routes/auth/dealer-signup'
 import { Route as AuthDealerSigninRouteImport } from './routes/auth/dealer-signin'
 import { Route as AuthAdminSigninRouteImport } from './routes/auth/admin-signin'
+import { Route as AdminPricingConfigCreateIndexRouteImport } from './routes/admin-pricing-config/create/index'
+import { Route as AdminPricingConfigEditConfigIdRouteImport } from './routes/admin-pricing-config/edit/$configId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -252,6 +255,11 @@ const AdminPricingRuleIndexRoute = AdminPricingRuleIndexRouteImport.update({
   path: '/admin-pricing-rule/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPricingConfigIndexRoute = AdminPricingConfigIndexRouteImport.update({
+  id: '/admin-pricing-config/',
+  path: '/admin-pricing-config/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPaymentsIndexRoute = AdminPaymentsIndexRouteImport.update({
   id: '/admin-payments/',
   path: '/admin-payments/',
@@ -331,6 +339,18 @@ const AuthAdminSigninRoute = AuthAdminSigninRouteImport.update({
   path: '/auth/admin-signin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPricingConfigCreateIndexRoute =
+  AdminPricingConfigCreateIndexRouteImport.update({
+    id: '/admin-pricing-config/create/',
+    path: '/admin-pricing-config/create/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminPricingConfigEditConfigIdRoute =
+  AdminPricingConfigEditConfigIdRouteImport.update({
+    id: '/admin-pricing-config/edit/$configId',
+    path: '/admin-pricing-config/edit/$configId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -349,6 +369,7 @@ export interface FileRoutesByFullPath {
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
   '/admin-payments/': typeof AdminPaymentsIndexRoute
+  '/admin-pricing-config/': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule/': typeof AdminPricingRuleIndexRoute
   '/admin-pricing/': typeof AdminPricingIndexRoute
   '/admin-report-compliance/': typeof AdminReportComplianceIndexRoute
@@ -384,6 +405,8 @@ export interface FileRoutesByFullPath {
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
   '/quote-details/': typeof QuoteDetailsIndexRoute
   '/terms/': typeof TermsIndexRoute
+  '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
+  '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -402,6 +425,7 @@ export interface FileRoutesByTo {
   '/admin-insurance-reporting': typeof AdminInsuranceReportingIndexRoute
   '/admin-notification-policy': typeof AdminNotificationPolicyIndexRoute
   '/admin-payments': typeof AdminPaymentsIndexRoute
+  '/admin-pricing-config': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule': typeof AdminPricingRuleIndexRoute
   '/admin-pricing': typeof AdminPricingIndexRoute
   '/admin-report-compliance': typeof AdminReportComplianceIndexRoute
@@ -437,6 +461,8 @@ export interface FileRoutesByTo {
   '/quote-confirmation': typeof QuoteConfirmationIndexRoute
   '/quote-details': typeof QuoteDetailsIndexRoute
   '/terms': typeof TermsIndexRoute
+  '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
+  '/admin-pricing-config/create': typeof AdminPricingConfigCreateIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -456,6 +482,7 @@ export interface FileRoutesById {
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
   '/admin-payments/': typeof AdminPaymentsIndexRoute
+  '/admin-pricing-config/': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule/': typeof AdminPricingRuleIndexRoute
   '/admin-pricing/': typeof AdminPricingIndexRoute
   '/admin-report-compliance/': typeof AdminReportComplianceIndexRoute
@@ -491,6 +518,8 @@ export interface FileRoutesById {
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
   '/quote-details/': typeof QuoteDetailsIndexRoute
   '/terms/': typeof TermsIndexRoute
+  '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
+  '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -511,6 +540,7 @@ export interface FileRouteTypes {
     | '/admin-insurance-reporting/'
     | '/admin-notification-policy/'
     | '/admin-payments/'
+    | '/admin-pricing-config/'
     | '/admin-pricing-rule/'
     | '/admin-pricing/'
     | '/admin-report-compliance/'
@@ -546,6 +576,8 @@ export interface FileRouteTypes {
     | '/quote-confirmation/'
     | '/quote-details/'
     | '/terms/'
+    | '/admin-pricing-config/edit/$configId'
+    | '/admin-pricing-config/create/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -564,6 +596,7 @@ export interface FileRouteTypes {
     | '/admin-insurance-reporting'
     | '/admin-notification-policy'
     | '/admin-payments'
+    | '/admin-pricing-config'
     | '/admin-pricing-rule'
     | '/admin-pricing'
     | '/admin-report-compliance'
@@ -599,6 +632,8 @@ export interface FileRouteTypes {
     | '/quote-confirmation'
     | '/quote-details'
     | '/terms'
+    | '/admin-pricing-config/edit/$configId'
+    | '/admin-pricing-config/create'
   id:
     | '__root__'
     | '/'
@@ -617,6 +652,7 @@ export interface FileRouteTypes {
     | '/admin-insurance-reporting/'
     | '/admin-notification-policy/'
     | '/admin-payments/'
+    | '/admin-pricing-config/'
     | '/admin-pricing-rule/'
     | '/admin-pricing/'
     | '/admin-report-compliance/'
@@ -652,6 +688,8 @@ export interface FileRouteTypes {
     | '/quote-confirmation/'
     | '/quote-details/'
     | '/terms/'
+    | '/admin-pricing-config/edit/$configId'
+    | '/admin-pricing-config/create/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -671,6 +709,7 @@ export interface RootRouteChildren {
   AdminInsuranceReportingIndexRoute: typeof AdminInsuranceReportingIndexRoute
   AdminNotificationPolicyIndexRoute: typeof AdminNotificationPolicyIndexRoute
   AdminPaymentsIndexRoute: typeof AdminPaymentsIndexRoute
+  AdminPricingConfigIndexRoute: typeof AdminPricingConfigIndexRoute
   AdminPricingRuleIndexRoute: typeof AdminPricingRuleIndexRoute
   AdminPricingIndexRoute: typeof AdminPricingIndexRoute
   AdminReportComplianceIndexRoute: typeof AdminReportComplianceIndexRoute
@@ -706,6 +745,8 @@ export interface RootRouteChildren {
   QuoteConfirmationIndexRoute: typeof QuoteConfirmationIndexRoute
   QuoteDetailsIndexRoute: typeof QuoteDetailsIndexRoute
   TermsIndexRoute: typeof TermsIndexRoute
+  AdminPricingConfigEditConfigIdRoute: typeof AdminPricingConfigEditConfigIdRoute
+  AdminPricingConfigCreateIndexRoute: typeof AdminPricingConfigCreateIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -962,6 +1003,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPricingRuleIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-pricing-config/': {
+      id: '/admin-pricing-config/'
+      path: '/admin-pricing-config'
+      fullPath: '/admin-pricing-config/'
+      preLoaderRoute: typeof AdminPricingConfigIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-payments/': {
       id: '/admin-payments/'
       path: '/admin-payments'
@@ -1067,6 +1115,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAdminSigninRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-pricing-config/create/': {
+      id: '/admin-pricing-config/create/'
+      path: '/admin-pricing-config/create'
+      fullPath: '/admin-pricing-config/create/'
+      preLoaderRoute: typeof AdminPricingConfigCreateIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-pricing-config/edit/$configId': {
+      id: '/admin-pricing-config/edit/$configId'
+      path: '/admin-pricing-config/edit/$configId'
+      fullPath: '/admin-pricing-config/edit/$configId'
+      preLoaderRoute: typeof AdminPricingConfigEditConfigIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1087,6 +1149,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminInsuranceReportingIndexRoute: AdminInsuranceReportingIndexRoute,
   AdminNotificationPolicyIndexRoute: AdminNotificationPolicyIndexRoute,
   AdminPaymentsIndexRoute: AdminPaymentsIndexRoute,
+  AdminPricingConfigIndexRoute: AdminPricingConfigIndexRoute,
   AdminPricingRuleIndexRoute: AdminPricingRuleIndexRoute,
   AdminPricingIndexRoute: AdminPricingIndexRoute,
   AdminReportComplianceIndexRoute: AdminReportComplianceIndexRoute,
@@ -1122,6 +1185,8 @@ const rootRouteChildren: RootRouteChildren = {
   QuoteConfirmationIndexRoute: QuoteConfirmationIndexRoute,
   QuoteDetailsIndexRoute: QuoteDetailsIndexRoute,
   TermsIndexRoute: TermsIndexRoute,
+  AdminPricingConfigEditConfigIdRoute: AdminPricingConfigEditConfigIdRoute,
+  AdminPricingConfigCreateIndexRoute: AdminPricingConfigCreateIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

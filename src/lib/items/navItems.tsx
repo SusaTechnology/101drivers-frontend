@@ -2,7 +2,7 @@ export const navItems = [
   { href: '/admin-dashboard', label: 'Dashboard', active: true },
   { href: '/admin-users', label: 'Users' },
   { href: '/admin-deliveries', label: 'Deliveries' },
-  { href: '/admin-pricing', label: 'Pricing' },
+  { href: '/admin-pricing-config', label: 'Pricing' },
   { href: '/admin-scheduling-policy', label: 'Scheduling' },
   { href: '/admin-disputes', label: 'Disputes' },
   { href: '/admin-payments', label: 'Payments' },
