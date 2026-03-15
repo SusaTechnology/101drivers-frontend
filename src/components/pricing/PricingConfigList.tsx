@@ -15,6 +15,7 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
+  Star,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,7 @@ interface PricingConfigListProps {
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onToggleStatus?: (id: string, isActive: boolean) => void;
+  onSetDefault?: (id: string) => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
 }
@@ -70,12 +72,12 @@ interface PricingConfigListProps {
 const modeBadgeStyles: Record<PricingMode, { icon: React.ElementType; className: string; label: string }> = {
   CATEGORY_ABC: {
     icon: Tag,
-    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
     label: 'Category A/B/C',
   },
   FLAT_TIER: {
     icon: Layers,
-    className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
     label: 'Flat Tier',
   },
   PER_MILE: {
@@ -91,6 +93,7 @@ export function PricingConfigList({
   onEdit,
   onDelete,
   onToggleStatus,
+  onSetDefault,
   searchQuery = '',
   onSearchChange,
 }: PricingConfigListProps) {
@@ -113,6 +116,12 @@ export function PricingConfigList({
   const handleToggleStatus = (id: string, currentStatus: boolean) => {
     if (onToggleStatus) {
       onToggleStatus(id, !currentStatus);
+    }
+  };
+
+  const handleSetDefault = (id: string) => {
+    if (onSetDefault) {
+      onSetDefault(id);
     }
   };
 
@@ -231,11 +240,20 @@ export function PricingConfigList({
                       className="border-slate-100 dark:border-slate-800 hover:bg-primary/5 transition"
                     >
                       <TableCell className="py-4">
-                        <div className="font-extrabold text-slate-900 dark:text-white">
-                          {config.name}
-                        </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          ID: {config.id?.slice(0, 8)}...
+                        <div className="flex items-center gap-2">
+                          {config.isDefault && (
+                            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                          )}
+                          <div>
+                            <div className="font-extrabold text-slate-900 dark:text-white">
+                              {config.name}
+                            </div>
+                            {config.description && (
+                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[200px]">
+                                {config.description}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="py-4">
@@ -256,6 +274,11 @@ export function PricingConfigList({
                             + ${config.insuranceFee.toFixed(2)} insurance
                           </div>
                         ) : null}
+                        {config.pricingMode === 'PER_MILE' && config.perMileRate && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            ${config.perMileRate}/mi
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="py-4">
                         <div className="font-bold text-slate-700 dark:text-slate-300">
@@ -263,27 +286,38 @@ export function PricingConfigList({
                         </div>
                       </TableCell>
                       <TableCell className="py-4">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full",
-                            config.isActive
-                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800"
-                              : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full",
+                              config.active
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800"
+                                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                            )}
+                          >
+                            {config.active ? (
+                              <>
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                Active
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="w-3.5 h-3.5" />
+                                Inactive
+                              </>
+                            )}
+                          </Badge>
+                          {config.isDefault && (
+                            <Badge
+                              variant="outline"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+                            >
+                              <Star className="w-3.5 h-3.5" />
+                              Default
+                            </Badge>
                           )}
-                        >
-                          {config.isActive ? (
-                            <>
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              Active
-                            </>
-                          ) : (
-                            <>
-                              <XCircle className="w-3.5 h-3.5" />
-                              Inactive
-                            </>
-                          )}
-                        </Badge>
+                        </div>
                       </TableCell>
                       <TableCell className="py-4 text-right">
                         <DropdownMenu>
@@ -298,17 +332,17 @@ export function PricingConfigList({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem
-                              onClick={() => handleEdit(config.id!)}
+                              onClick={() => handleEdit(config.id)}
                               className="cursor-pointer"
                             >
                               <Edit className="w-4 h-4 mr-2 text-primary" />
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => handleToggleStatus(config.id!, config.isActive || false)}
+                              onClick={() => handleToggleStatus(config.id, config.active)}
                               className="cursor-pointer"
                             >
-                              {config.isActive ? (
+                              {config.active ? (
                                 <>
                                   <XCircle className="w-4 h-4 mr-2 text-amber-500" />
                                   Deactivate
@@ -320,6 +354,15 @@ export function PricingConfigList({
                                 </>
                               )}
                             </DropdownMenuItem>
+                            {!config.isDefault && (
+                              <DropdownMenuItem
+                                onClick={() => handleSetDefault(config.id)}
+                                className="cursor-pointer"
+                              >
+                                <Star className="w-4 h-4 mr-2 text-amber-500" />
+                                Set as Default
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -341,7 +384,7 @@ export function PricingConfigList({
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => handleDelete(config.id!)}
+                                    onClick={() => handleDelete(config.id)}
                                     className="bg-red-600 hover:bg-red-700 text-white"
                                   >
                                     Delete

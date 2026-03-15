@@ -1,5 +1,5 @@
 // components/pricing/PricingConfigForm.tsx
-import React, { useEffect, useReducer } from 'react';
+import React from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,6 +16,9 @@ import {
   AlertCircle,
   Save,
   Calculator,
+  FileText,
+  CheckCircle,
+  Star,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -39,40 +42,49 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import type {
   PricingConfigFormData,
   PricingMode,
   CategoryRule,
   PricingTier,
 } from '@/types/pricing';
-import { DEFAULT_PRICING_CONFIG, DEFAULT_TIER } from '@/types/pricing';
+import { DEFAULT_PRICING_CONFIG, DEFAULT_TIER, DEFAULT_CATEGORY_RULES } from '@/types/pricing';
 
 // Validation schema using Zod with conditional validation
 const createPricingConfigSchema = (pricingMode: PricingMode) => {
   return z.object({
     id: z.string().optional(),
     name: z.string().min(1, 'Configuration name is required'),
+    description: z.string().optional(),
     pricingMode: z.enum(['CATEGORY_ABC', 'FLAT_TIER', 'PER_MILE']),
     baseFee: z.number().min(0, 'Base fee must be 0 or greater'),
+    perMileRate: z.number().nullable(),
     insuranceFee: z.number().min(0, 'Insurance fee must be 0 or greater'),
-    transactionFeePct: z.number().min(0, 'Transaction fee % must be 0 or greater').max(100, 'Transaction fee % cannot exceed 100'),
+    transactionFeePct: z.number().min(0, 'Transaction fee % must be 0 or greater').max(100),
     transactionFeeFixed: z.number().min(0, 'Transaction fee fixed must be 0 or greater'),
     feePassThrough: z.boolean(),
-    driverSharePct: z.number().min(0, 'Driver share % must be 0 or greater').max(100, 'Driver share % cannot exceed 100'),
+    driverSharePct: z.number().min(0).max(100),
+    active: z.boolean(),
+    activateAsDefault: z.boolean(),
     // Conditional validation based on pricing mode
     tiers: pricingMode === 'FLAT_TIER'
       ? z.array(z.object({
-          minMiles: z.number().min(0, 'Min miles must be 0 or greater'),
-          maxMiles: z.number().min(0, 'Max miles must be 0 or greater'),
+          minMiles: z.number().min(0),
+          maxMiles: z.number().nullable(),
           flatPrice: z.number().min(0, 'Price must be 0 or greater'),
         })).min(1, 'At least one tier is required for FLAT_TIER mode')
-      : z.array(z.any()).max(0, 'Tiers must be empty for this pricing mode'),
+      : z.array(z.any()),
     categoryRules: pricingMode === 'CATEGORY_ABC'
       ? z.array(z.object({
           category: z.enum(['A', 'B', 'C']),
-          price: z.number().min(0, 'Price must be 0 or greater'),
-        })).min(1, 'At least one category rule is required for CATEGORY_ABC mode')
-      : z.array(z.any()).max(0, 'Category rules must be empty for this pricing mode'),
+          minMiles: z.number().min(0),
+          maxMiles: z.number().nullable(),
+          baseFee: z.number().min(0),
+          perMileRate: z.number().nullable(),
+          flatPrice: z.number().nullable(),
+        })).min(1, 'At least one category rule is required')
+      : z.array(z.any()),
   });
 };
 
@@ -99,7 +111,7 @@ export function PricingConfigForm({
   mode = 'create',
 }: PricingConfigFormProps) {
   const [pricingMode, setPricingMode] = React.useState<PricingMode>(
-    initialData?.pricingMode || 'CATEGORY_ABC'
+    initialData?.pricingMode || 'PER_MILE'
   );
 
   // Dynamic schema based on pricing mode
@@ -121,7 +133,6 @@ export function PricingConfigForm({
     defaultValues: {
       ...DEFAULT_PRICING_CONFIG,
       ...initialData,
-      pricingMode,
     },
   });
 
@@ -148,6 +159,7 @@ export function PricingConfigForm({
   const watchedInsuranceFee = watch('insuranceFee');
   const watchedTransactionFeePct = watch('transactionFeePct');
   const watchedDriverSharePct = watch('driverSharePct');
+  const watchedPerMileRate = watch('perMileRate');
 
   // Handle pricing mode change
   const handlePricingModeChange = (newMode: PricingMode) => {
@@ -157,16 +169,14 @@ export function PricingConfigForm({
     // Reset arrays based on mode
     if (newMode === 'CATEGORY_ABC') {
       setValue('tiers', []);
+      setValue('perMileRate', null);
       // Set default category rules if empty
       if (categoryRuleFields.length === 0) {
-        replaceCategoryRules([
-          { category: 'A', price: 120 },
-          { category: 'B', price: 160 },
-          { category: 'C', price: 210 },
-        ]);
+        replaceCategoryRules(DEFAULT_CATEGORY_RULES);
       }
     } else if (newMode === 'FLAT_TIER') {
       setValue('categoryRules', []);
+      setValue('perMileRate', null);
       // Set default tier if empty
       if (tierFields.length === 0) {
         appendTier(DEFAULT_TIER);
@@ -174,17 +184,18 @@ export function PricingConfigForm({
     } else if (newMode === 'PER_MILE') {
       setValue('tiers', []);
       setValue('categoryRules', []);
+      setValue('perMileRate', 4.5);
     }
   };
 
   // Add new tier
   const handleAddTier = () => {
-    const lastTier = tierFields[tierFields.length - 1];
-    const newMinMiles = lastTier ? (lastTier as PricingTier).maxMiles + 0.01 : 0;
+    const lastTier = tierFields[tierFields.length - 1] as PricingTier | undefined;
+    const newMinMiles = lastTier?.maxMiles ? lastTier.maxMiles + 0.01 : 0;
     appendTier({
       minMiles: newMinMiles,
-      maxMiles: newMinMiles + 50,
-      flatPrice: 150,
+      maxMiles: null,
+      flatPrice: 200,
     });
   };
 
@@ -194,19 +205,22 @@ export function PricingConfigForm({
     const insuranceFee = watchedInsuranceFee || 0;
     const transactionFeePct = watchedTransactionFeePct || 0;
     const driverSharePct = watchedDriverSharePct || 0;
+    const perMileRate = watchedPerMileRate || 0;
 
-    // Example quote: $200 base
-    const exampleBase = 200;
-    const transactionFee = exampleBase * (transactionFeePct / 100);
+    // Example quote: 50 miles
+    const exampleMiles = 50;
+    const transportationCost = pricingMode === 'PER_MILE' ? exampleMiles * perMileRate : 200;
+    const transactionFee = transportationCost * (transactionFeePct / 100) + (watch('transactionFeeFixed') || 0);
     const totalFees = baseFee + insuranceFee + transactionFee;
-    const driverShare = exampleBase * (driverSharePct / 100);
+    const driverShare = transportationCost * (driverSharePct / 100);
 
     return {
-      exampleBase,
+      exampleMiles,
+      transportationCost,
       transactionFee,
       totalFees,
       driverShare,
-      dealerTotal: exampleBase + totalFees,
+      dealerTotal: transportationCost + totalFees,
     };
   };
 
@@ -215,9 +229,9 @@ export function PricingConfigForm({
   // Handle form submission
   const onFormSubmit = async (data: FormSchemaType) => {
     try {
-      // Ensure proper data structure based on pricing mode
       const submitData: PricingConfigFormData = {
         ...data,
+        description: data.description || '',
         tiers: pricingMode === 'FLAT_TIER' ? (data.tiers as PricingTier[]) : [],
         categoryRules: pricingMode === 'CATEGORY_ABC' ? (data.categoryRules as CategoryRule[]) : [],
       };
@@ -234,7 +248,7 @@ export function PricingConfigForm({
         <CardHeader className="border-b border-slate-100 dark:border-slate-800">
           <CardTitle className="text-xl font-black">Configuration Details</CardTitle>
           <CardDescription className="text-sm mt-1">
-            Set the name and pricing mode for this configuration
+            Set the name, description, and pricing mode
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 sm:p-7 space-y-4">
@@ -247,7 +261,7 @@ export function PricingConfigForm({
               <Input
                 id="name"
                 {...register('name')}
-                placeholder="e.g., Standard Pricing 2024"
+                placeholder="e.g., Default Per Mile Pricing"
                 className={cn(
                   "w-full h-11 rounded-2xl border px-4 text-sm",
                   errors.name ? "border-red-500" : "border-slate-200 dark:border-slate-700"
@@ -278,10 +292,10 @@ export function PricingConfigForm({
                       <SelectValue placeholder="Select pricing mode" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="CATEGORY_ABC">
+                      <SelectItem value="PER_MILE">
                         <div className="flex items-center gap-2">
-                          <Tag className="w-4 h-4 text-primary" />
-                          Category A/B/C
+                          <Calculator className="w-4 h-4 text-primary" />
+                          Per Mile
                         </div>
                       </SelectItem>
                       <SelectItem value="FLAT_TIER">
@@ -290,10 +304,10 @@ export function PricingConfigForm({
                           Flat Tier
                         </div>
                       </SelectItem>
-                      <SelectItem value="PER_MILE">
+                      <SelectItem value="CATEGORY_ABC">
                         <div className="flex items-center gap-2">
-                          <Calculator className="w-4 h-4 text-primary" />
-                          Per Mile
+                          <Tag className="w-4 h-4 text-primary" />
+                          Category A/B/C
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -301,6 +315,19 @@ export function PricingConfigForm({
                 )}
               />
             </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <Label htmlFor="description" className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
+              Description
+            </Label>
+            <Textarea
+              id="description"
+              {...register('description')}
+              placeholder="e.g., Global default per-mile pricing for standard deliveries"
+              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm min-h-[80px]"
+            />
           </div>
 
           {/* Mode description */}
@@ -311,7 +338,8 @@ export function PricingConfigForm({
                 <div>
                   <div className="font-bold text-slate-900 dark:text-white">Category A/B/C Pricing</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Set fixed prices for vehicle categories A, B, and C. The price is determined by the vehicle category.
+                    Define pricing rules for vehicle categories A, B, and C based on mileage ranges.
+                    Each category can have its own base fee and per-mile rate.
                   </p>
                 </div>
               </div>
@@ -323,6 +351,7 @@ export function PricingConfigForm({
                   <div className="font-bold text-slate-900 dark:text-white">Flat Tier Pricing</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                     Define mileage-based tiers with flat prices. The price is determined by the distance range.
+                    Maximum miles can be null for unlimited upper bound.
                   </p>
                 </div>
               </div>
@@ -333,14 +362,100 @@ export function PricingConfigForm({
                 <div>
                   <div className="font-bold text-slate-900 dark:text-white">Per Mile Pricing</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Price is calculated based on a per-mile rate. Base fee and other fees apply.
+                    Simple per-mile rate calculation. The price is calculated based on distance multiplied by the per-mile rate.
                   </p>
                 </div>
               </div>
             )}
           </div>
+
+          {/* Status toggles */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                <div>
+                  <Label htmlFor="active" className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    Active
+                  </Label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Enable this configuration
+                  </p>
+                </div>
+              </div>
+              <Controller
+                name="active"
+                control={control}
+                render={({ field }) => (
+                  <Switch
+                    id="active"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="flex items-center gap-3">
+                <Star className="w-5 h-5 text-amber-500" />
+                <div>
+                  <Label htmlFor="activateAsDefault" className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    Set as Default
+                  </Label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Make this the default config
+                  </p>
+                </div>
+              </div>
+              <Controller
+                name="activateAsDefault"
+                control={control}
+                render={({ field }) => (
+                  <Switch
+                    id="activateAsDefault"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* PER_MILE Rate */}
+      {pricingMode === 'PER_MILE' && (
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader className="border-b border-slate-100 dark:border-slate-800">
+            <CardTitle className="text-xl font-black">Per Mile Rate</CardTitle>
+            <CardDescription className="text-sm mt-1">
+              Set the per-mile rate for this configuration
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 sm:p-7">
+            <div className="bg-slate-50 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 p-5">
+              <Label htmlFor="perMileRate" className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
+                Rate per Mile ($)
+              </Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="perMileRate"
+                  type="number"
+                  step="0.01"
+                  {...register('perMileRate', { valueAsNumber: true })}
+                  className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                  placeholder="4.50"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                This rate will be multiplied by the distance to calculate transportation cost
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Category Rules (CATEGORY_ABC mode) */}
       {pricingMode === 'CATEGORY_ABC' && (
@@ -348,9 +463,9 @@ export function PricingConfigForm({
           <CardHeader className="border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xl font-black">Category Pricing</CardTitle>
+                <CardTitle className="text-xl font-black">Category Pricing Rules</CardTitle>
                 <CardDescription className="text-sm mt-1">
-                  Set prices for each vehicle category
+                  Define pricing rules for each vehicle category
                 </CardDescription>
               </div>
               <Badge variant="outline" className="bg-primary/10 border-primary/25 text-primary-foreground">
@@ -359,47 +474,85 @@ export function PricingConfigForm({
             </div>
           </CardHeader>
           <CardContent className="p-6 sm:p-7">
-            <div className="space-y-4">
+            <div className="space-y-6">
               {(['A', 'B', 'C'] as const).map((category, index) => (
                 <div
                   key={category}
-                  className={cn(
-                    "flex items-center gap-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800",
-                    "bg-white dark:bg-slate-900"
-                  )}
+                  className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5"
                 >
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "px-4 py-2 text-base font-bold border",
-                      categoryColors[category]
-                    )}
-                  >
-                    Category {category}
-                  </Badge>
-                  <div className="flex-1">
-                    <Label
-                      htmlFor={`categoryRules.${index}.price`}
-                      className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block"
+                  <div className="flex items-center gap-3 mb-4">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "px-4 py-2 text-base font-bold border",
+                        categoryColors[category]
+                      )}
                     >
-                      Price ($)
-                    </Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      Category {category}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
+                        Min Miles
+                      </Label>
                       <Input
-                        id={`categoryRules.${index}.price`}
                         type="number"
                         step="0.01"
-                        {...register(`categoryRules.${index}.price` as const, { valueAsNumber: true })}
-                        className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
-                        placeholder="0.00"
+                        {...register(`categoryRules.${index}.minMiles` as const, { valueAsNumber: true })}
+                        className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 text-sm"
                       />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
+                        Max Miles (null = unlimited)
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...register(`categoryRules.${index}.maxMiles` as const, { valueAsNumber: true })}
+                        className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 text-sm"
+                        placeholder="null"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
+                        Base Fee ($)
+                      </Label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...register(`categoryRules.${index}.baseFee` as const, { valueAsNumber: true })}
+                          className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
+                        Per Mile Rate ($)
+                      </Label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          {...register(`categoryRules.${index}.perMileRate` as const, { valueAsNumber: true })}
+                          className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                        />
+                      </div>
                     </div>
                   </div>
                   <input
                     type="hidden"
                     {...register(`categoryRules.${index}.category` as const)}
                     value={category}
+                  />
+                  <input
+                    type="hidden"
+                    {...register(`categoryRules.${index}.flatPrice` as const)}
+                    value={null}
                   />
                 </div>
               ))}
@@ -464,14 +617,14 @@ export function PricingConfigForm({
                     </div>
                     <div>
                       <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
-                        Max Miles
+                        Max Miles (null = unlimited)
                       </Label>
                       <Input
                         type="number"
                         step="0.01"
                         {...register(`tiers.${index}.maxMiles` as const, { valueAsNumber: true })}
                         className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 text-sm"
-                        placeholder="25"
+                        placeholder="null"
                       />
                     </div>
                     <div>
@@ -495,7 +648,6 @@ export function PricingConfigForm({
                         variant="outline"
                         size="sm"
                         onClick={() => removeTier(index)}
-                        disabled={tierFields.length <= 1}
                         className="w-full h-11 rounded-2xl border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/10"
                       >
                         <Minus className="w-4 h-4 mr-2" />
@@ -619,7 +771,7 @@ export function PricingConfigForm({
                 />
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-                Percentage of base price going to driver
+                Percentage of transportation cost going to driver
               </p>
             </div>
 
@@ -662,12 +814,14 @@ export function PricingConfigForm({
         <CardContent className="p-6 sm:p-7">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5">
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-4">
-              Example: $200 Base Price
+              Example: {preview.exampleMiles} miles
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Base Transportation</span>
-                <span className="font-bold text-slate-900 dark:text-white">${preview.exampleBase.toFixed(2)}</span>
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  Transportation {pricingMode === 'PER_MILE' && `(${preview.exampleMiles} mi × $${watchedPerMileRate || 0}/mi)`}
+                </span>
+                <span className="font-bold text-slate-900 dark:text-white">${preview.transportationCost.toFixed(2)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600 dark:text-slate-400">Base Fee</span>
@@ -678,7 +832,9 @@ export function PricingConfigForm({
                 <span className="font-bold text-slate-900 dark:text-white">${watchedInsuranceFee?.toFixed(2) || '0.00'}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Transaction Fee ({watchedTransactionFeePct || 0}%)</span>
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  Transaction Fee ({watchedTransactionFeePct || 0}% + ${watch('transactionFeeFixed') || 0})
+                </span>
                 <span className="font-bold text-slate-900 dark:text-white">${preview.transactionFee.toFixed(2)}</span>
               </div>
               <Separator className="my-2" />
@@ -699,7 +855,7 @@ export function PricingConfigForm({
       <div className="flex justify-end gap-3">
         <Button
           type="submit"
-          disabled={isSubmitting || !isDirty}
+          disabled={isSubmitting}
           className="inline-flex items-center gap-2 px-8 py-3 rounded-2xl bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20 transition"
         >
           {isSubmitting ? (

@@ -5,10 +5,14 @@ import { toast } from 'sonner';
 import {
   DollarSign,
   Map,
-  Settings,
   Info,
-  CreditCard,
   Verified,
+  Star,
+  CheckCircle,
+  XCircle,
+  Calculator,
+  Tag,
+  Layers,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -18,86 +22,97 @@ import { Brand } from '@/lib/items/brand';
 import { navItems } from '@/lib/items/navItems';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigList } from '@/components/pricing/PricingConfigList';
-import { useSavePricingConfig, useDeletePricingConfig, useTogglePricingConfigStatus } from '@/hooks/pricing/usePricingConfigs';
-import type { PricingConfig } from '@/types/pricing';
+import { getUser } from '@/lib/tanstack/dataQuery';
+import type { PricingConfig, PricingMode } from '@/types/pricing';
 
-// Mock data for development - will be replaced with API data
+// Mock data for development - remove when API is ready
 const MOCK_CONFIGS: PricingConfig[] = [
   {
     id: 'cfg-001',
-    name: 'Standard Category Pricing',
-    pricingMode: 'CATEGORY_ABC',
-    baseFee: 40,
+    name: 'Default Per Mile Pricing',
+    description: 'Global default per-mile pricing for standard deliveries',
+    pricingMode: 'PER_MILE',
+    baseFee: 45,
+    perMileRate: 4.5,
     insuranceFee: 8,
     transactionFeePct: 2.9,
     transactionFeeFixed: 3,
     feePassThrough: true,
     driverSharePct: 60,
+    active: true,
+    isDefault: true,
     tiers: [],
-    categoryRules: [
-      { category: 'A', price: 120 },
-      { category: 'B', price: 160 },
-      { category: 'C', price: 210 },
-    ],
-    isActive: true,
-    createdAt: '2026-01-15T10:00:00Z',
-    updatedAt: '2026-02-01T08:10:00Z',
+    categoryRules: [],
   },
   {
     id: 'cfg-002',
-    name: 'Long Distance Tier Pricing',
+    name: 'Dealer Flat Tier Pricing',
+    description: 'Flat tier pricing for dealer accounts',
     pricingMode: 'FLAT_TIER',
     baseFee: 45,
-    insuranceFee: 10,
+    perMileRate: null,
+    insuranceFee: 8,
     transactionFeePct: 2.9,
     transactionFeeFixed: 3,
     feePassThrough: true,
-    driverSharePct: 55,
+    driverSharePct: 60,
+    active: true,
+    isDefault: false,
     tiers: [
       { minMiles: 0, maxMiles: 25, flatPrice: 120 },
       { minMiles: 25.01, maxMiles: 75, flatPrice: 220 },
-      { minMiles: 75.01, maxMiles: 150, flatPrice: 350 },
+      { minMiles: 75.01, maxMiles: 150, flatPrice: 420 },
+      { minMiles: 150.01, maxMiles: null, flatPrice: 700 },
     ],
     categoryRules: [],
-    isActive: false,
-    createdAt: '2026-01-20T14:30:00Z',
-    updatedAt: '2026-01-25T09:15:00Z',
+  },
+  {
+    id: 'cfg-003',
+    name: 'Category ABC Pricing',
+    description: 'Mileage category based pricing',
+    pricingMode: 'CATEGORY_ABC',
+    baseFee: 45,
+    perMileRate: null,
+    insuranceFee: 8,
+    transactionFeePct: 2.9,
+    transactionFeeFixed: 3,
+    feePassThrough: true,
+    driverSharePct: 60,
+    active: false,
+    isDefault: false,
+    tiers: [],
+    categoryRules: [
+      { category: 'A', minMiles: 0, maxMiles: 25, baseFee: 40, perMileRate: 3.5, flatPrice: null },
+      { category: 'B', minMiles: 25.01, maxMiles: 75, baseFee: 55, perMileRate: 4.25, flatPrice: null },
+      { category: 'C', minMiles: 75.01, maxMiles: null, baseFee: 70, perMileRate: 5.25, flatPrice: null },
+    ],
   },
 ];
+
+// Mode badge styles
+const modeBadgeStyles: Record<PricingMode, { icon: React.ElementType; className: string; label: string }> = {
+  CATEGORY_ABC: {
+    icon: Tag,
+    className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
+    label: 'Category A/B/C',
+  },
+  FLAT_TIER: {
+    icon: Layers,
+    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    label: 'Flat Tier',
+  },
+  PER_MILE: {
+    icon: Calculator,
+    className: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800',
+    label: 'Per Mile',
+  },
+};
 
 export default function AdminPricingConfigPage() {
   const { actionItems, signOut } = useAdminActions();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [configs, setConfigs] = useState<PricingConfig[]>(MOCK_CONFIGS);
-
-  // Mutations
-  const saveMutation = useSavePricingConfig({
-    onSuccess: () => {
-      toast.success('Configuration saved successfully');
-    },
-    onError: (error) => {
-      toast.error(`Failed to save: ${error.message}`);
-    },
-  });
-
-  const deleteMutation = useDeletePricingConfig({
-    onSuccess: () => {
-      toast.success('Configuration deleted');
-    },
-    onError: (error) => {
-      toast.error(`Failed to delete: ${error.message}`);
-    },
-  });
-
-  const toggleStatusMutation = useTogglePricingConfigStatus({
-    onSuccess: () => {
-      toast.success('Status updated');
-    },
-    onError: (error) => {
-      toast.error(`Failed to update status: ${error.message}`);
-    },
-  });
 
   // Handlers
   const handleEdit = (id: string) => {
@@ -112,13 +127,22 @@ export default function AdminPricingConfigPage() {
 
   const handleToggleStatus = (id: string, isActive: boolean) => {
     // For now, update local state - will be replaced with actual API call
-    setConfigs(prev => prev.map(c => c.id === id ? { ...c, isActive } : c));
+    setConfigs(prev => prev.map(c => c.id === id ? { ...c, active: isActive } : c));
     toast.success(isActive ? 'Configuration activated' : 'Configuration deactivated');
+  };
+
+  const handleSetDefault = (id: string) => {
+    setConfigs(prev => prev.map(c => ({
+      ...c,
+      isDefault: c.id === id,
+    })));
+    toast.success('Configuration set as default');
   };
 
   // Filter configs by search query
   const filteredConfigs = configs.filter(config =>
-    config.name.toLowerCase().includes(searchQuery.toLowerCase())
+    config.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    config.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -165,7 +189,7 @@ export default function AdminPricingConfigPage() {
             </h1>
             <p className="text-slate-600 dark:text-slate-400 mt-2 text-lg max-w-3xl leading-relaxed">
               Create and manage pricing configurations for the 101 Drivers platform.
-              Supports Category A/B/C pricing, Flat Tier pricing, and Per-Mile pricing modes.
+              Supports Per Mile, Flat Tier, and Category A/B/C pricing modes.
             </p>
           </div>
         </section>
@@ -178,6 +202,7 @@ export default function AdminPricingConfigPage() {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onToggleStatus={handleToggleStatus}
+            onSetDefault={handleSetDefault}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
           />
@@ -192,10 +217,25 @@ export default function AdminPricingConfigPage() {
             </AlertTitle>
             <AlertDescription className="text-blue-900/80 dark:text-blue-200/80 text-xs mt-1">
               <ul className="list-disc list-inside space-y-1 mt-2">
-                <li><strong>Category A/B/C:</strong> Fixed prices per vehicle category</li>
-                <li><strong>Flat Tier:</strong> Mileage-based pricing tiers</li>
-                <li><strong>Per Mile:</strong> Simple per-mile rate calculation</li>
+                <li><strong>Per Mile:</strong> Simple per-mile rate calculation (miles × rate)</li>
+                <li><strong>Flat Tier:</strong> Mileage-based tiers with flat prices</li>
+                <li><strong>Category A/B/C:</strong> Vehicle category-based pricing with mileage ranges</li>
               </ul>
+            </AlertDescription>
+          </Alert>
+        </section>
+
+        {/* API Endpoint Info */}
+        <section className="mt-4">
+          <Alert className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800">
+            <Info className="h-4 w-4 text-slate-500" />
+            <AlertTitle className="text-slate-700 dark:text-slate-300 text-sm font-extrabold">
+              API Endpoint
+            </AlertTitle>
+            <AlertDescription className="text-slate-600 dark:text-slate-400 text-xs mt-1">
+              <code className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded">
+                POST /api/pricingConfigs/admin-save
+              </code>
             </AlertDescription>
           </Alert>
         </section>

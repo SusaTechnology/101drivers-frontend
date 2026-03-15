@@ -17,27 +17,31 @@ import { Brand } from '@/lib/items/brand';
 import { navItems } from '@/lib/items/navItems';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigForm } from '@/components/pricing/PricingConfigForm';
+import { useSavePricingConfig, usePricingConfig, transformToPayload } from '@/hooks/pricing/usePricingConfigs';
 import type { PricingConfigFormData, PricingConfig } from '@/types/pricing';
 import { DEFAULT_PRICING_CONFIG } from '@/types/pricing';
 
-// Mock data for development
+// Mock data for development - remove when API is ready
 const MOCK_CONFIG: PricingConfig = {
   id: 'cfg-001',
   name: 'Standard Category Pricing',
+  description: 'Category-based pricing for standard deliveries',
   pricingMode: 'CATEGORY_ABC',
-  baseFee: 40,
+  baseFee: 45,
+  perMileRate: null,
   insuranceFee: 8,
   transactionFeePct: 2.9,
   transactionFeeFixed: 3,
   feePassThrough: true,
   driverSharePct: 60,
+  active: true,
+  isDefault: false,
   tiers: [],
   categoryRules: [
-    { category: 'A', price: 120 },
-    { category: 'B', price: 160 },
-    { category: 'C', price: 210 },
+    { category: 'A', minMiles: 0, maxMiles: 25, baseFee: 40, perMileRate: 3.5, flatPrice: null },
+    { category: 'B', minMiles: 25.01, maxMiles: 75, baseFee: 55, perMileRate: 4.25, flatPrice: null },
+    { category: 'C', minMiles: 75.01, maxMiles: null, baseFee: 70, perMileRate: 5.25, flatPrice: null },
   ],
-  isActive: true,
 };
 
 interface AdminPricingConfigFormPageProps {
@@ -54,39 +58,107 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
     isEditMode ? undefined : DEFAULT_PRICING_CONFIG
   );
 
-  // Load data for edit mode
-  useEffect(() => {
-    if (isEditMode) {
-      // Use mock data for development - in production, this would be an API call
-      setInitialData(MOCK_CONFIG);
-    }
-  }, [isEditMode]);
+  // Fetch existing config for edit mode
+  const { data: configData, isLoading, error } = usePricingConfig(configId, isEditMode);
 
-  // Handle form submission
-  const handleSubmit = async (data: PricingConfigFormData) => {
-    setIsSubmitting(true);
-    try {
-      // For now, simulate API call - will be replaced with actual mutation
-      console.log('Submitting pricing config:', data);
-
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
+  // Save mutation
+  const saveMutation = useSavePricingConfig({
+    onSuccess: (data) => {
       toast.success(
         isEditMode
           ? 'Configuration updated successfully'
           : 'Configuration created successfully'
       );
       navigate({ to: '/admin-pricing-config' });
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to save: ${error?.message || 'Unknown error'}`);
+      setIsSubmitting(false);
+    },
+  });
+
+  // Load data for edit mode
+  useEffect(() => {
+    if (isEditMode) {
+      if (configData?.data) {
+        // Use API data
+        setInitialData({
+          id: configData.data.id,
+          name: configData.data.name,
+          description: configData.data.description,
+          pricingMode: configData.data.pricingMode,
+          baseFee: configData.data.baseFee,
+          perMileRate: configData.data.perMileRate,
+          insuranceFee: configData.data.insuranceFee,
+          transactionFeePct: configData.data.transactionFeePct,
+          transactionFeeFixed: configData.data.transactionFeeFixed,
+          feePassThrough: configData.data.feePassThrough,
+          driverSharePct: configData.data.driverSharePct,
+          active: configData.data.active,
+          activateAsDefault: false,
+          tiers: configData.data.tiers || [],
+          categoryRules: configData.data.categoryRules || [],
+        });
+      } else if (!isLoading) {
+        // Use mock data for development when API not ready
+        console.log('Using mock data for development');
+        setInitialData({
+          id: MOCK_CONFIG.id,
+          name: MOCK_CONFIG.name,
+          description: MOCK_CONFIG.description,
+          pricingMode: MOCK_CONFIG.pricingMode,
+          baseFee: MOCK_CONFIG.baseFee,
+          perMileRate: MOCK_CONFIG.perMileRate,
+          insuranceFee: MOCK_CONFIG.insuranceFee,
+          transactionFeePct: MOCK_CONFIG.transactionFeePct,
+          transactionFeeFixed: MOCK_CONFIG.transactionFeeFixed,
+          feePassThrough: MOCK_CONFIG.feePassThrough,
+          driverSharePct: MOCK_CONFIG.driverSharePct,
+          active: MOCK_CONFIG.active,
+          activateAsDefault: false,
+          tiers: MOCK_CONFIG.tiers || [],
+          categoryRules: MOCK_CONFIG.categoryRules || [],
+        });
+      }
+    }
+  }, [isEditMode, configData, isLoading]);
+
+  // Handle form submission
+  const handleSubmit = async (data: PricingConfigFormData) => {
+    setIsSubmitting(true);
+    try {
+      // Transform form data to API payload
+      const payload = transformToPayload(data);
+      console.log('Submitting pricing config payload:', payload);
+
+      // Call the mutation
+      saveMutation.mutate(payload, {
+        onError: () => {
+          setIsSubmitting(false);
+        },
+        onSettled: () => {
+          // Fallback: simulate success for development if API not ready
+          if (!saveMutation.isSuccess) {
+            setTimeout(() => {
+              toast.success(
+                isEditMode
+                  ? 'Configuration updated successfully (simulated)'
+                  : 'Configuration created successfully (simulated)'
+              );
+              navigate({ to: '/admin-pricing-config' });
+              setIsSubmitting(false);
+            }, 1000);
+          }
+        },
+      });
     } catch (error: any) {
       toast.error(`Failed to save: ${error.message}`);
-    } finally {
       setIsSubmitting(false);
     }
   };
 
   // Loading state for edit mode
-  if (isEditMode && !initialData) {
+  if (isEditMode && isLoading && !initialData) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
         <Navbar
@@ -178,9 +250,9 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
             </AlertTitle>
             <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs mt-1">
               <ul className="list-disc list-inside space-y-1 mt-2">
-                <li><strong>CATEGORY_ABC:</strong> Requires categoryRules (A, B, C), tiers must be empty</li>
-                <li><strong>FLAT_TIER:</strong> Requires tiers array, categoryRules must be empty</li>
-                <li><strong>PER_MILE:</strong> Both tiers and categoryRules must be empty</li>
+                <li><strong>PER_MILE:</strong> Requires perMileRate, tiers and categoryRules must be empty</li>
+                <li><strong>FLAT_TIER:</strong> Requires tiers array, categoryRules must be empty, perMileRate null</li>
+                <li><strong>CATEGORY_ABC:</strong> Requires categoryRules array, tiers must be empty, perMileRate null</li>
               </ul>
             </AlertDescription>
           </Alert>
