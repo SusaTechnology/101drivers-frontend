@@ -1,6 +1,6 @@
 // components/dashboard/NeedsAttention.tsx
 import React from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import {
   AlertCircle,
   ArrowRight,
@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { NeedsAttentionItem, DashboardAction, IssueType } from '@/types/dashboard';
 import { cn } from '@/lib/utils';
+import { getRouteFromTarget } from '@/lib/dashboardRoutes';
 
 interface NeedsAttentionProps {
   data: NeedsAttentionItem[] | undefined;
@@ -108,14 +109,12 @@ function getItemPreview(item: NeedsAttentionItem): string {
 
 function AttentionItemCard({
   item,
-  onActionClick,
 }: {
   item: NeedsAttentionItem;
-  onActionClick?: (action: DashboardAction) => void;
 }) {
   const config = ISSUE_CONFIG[item.issueType] || ISSUE_CONFIG.DELIVERY_COMPLIANCE_MISSING;
   const Icon = config.icon;
-  const navigate = useNavigate();
+  const routePath = item.action?.target ? getRouteFromTarget(item.action.target) : null;
 
   const textColorMap: Record<string, string> = {
     'text-primary': 'text-primary',
@@ -124,18 +123,13 @@ function AttentionItemCard({
     'text-green-500': 'text-green-700 dark:text-green-300',
   };
 
-  const handleAction = () => {
-    if (item.action?.target) {
-      navigate({ to: `/${item.action.target}` });
-    }
-  };
-
-  return (
+  const content = (
     <div
       className={cn(
-        'flex items-start justify-between gap-4 p-4 rounded-2xl border',
+        'flex items-start justify-between gap-4 p-4 rounded-2xl border transition-colors',
         config.bgColor,
-        config.borderColor
+        config.borderColor,
+        routePath && 'cursor-pointer hover:opacity-80'
       )}
     >
       <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -164,18 +158,29 @@ function AttentionItemCard({
           )}
         </div>
       </div>
-      <button
-        onClick={handleAction}
-        className={cn(
-          'text-sm font-extrabold hover:opacity-90 transition inline-flex items-center gap-1 shrink-0',
-          textColorMap[config.color] || 'text-primary'
-        )}
-      >
-        {item.action.label}
-        <ArrowRight className="w-4 h-4" />
-      </button>
+      {item.action && (
+        <span
+          className={cn(
+            'text-sm font-extrabold hover:opacity-90 transition inline-flex items-center gap-1 shrink-0',
+            textColorMap[config.color] || 'text-primary'
+          )}
+        >
+          {item.action.label}
+          <ArrowRight className="w-4 h-4" />
+        </span>
+      )}
     </div>
   );
+
+  if (routePath) {
+    return (
+      <Link to={routePath} key={item.issueType}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div key={item.issueType}>{content}</div>;
 }
 
 function AttentionItemSkeleton() {
@@ -208,7 +213,7 @@ function EmptyState() {
   );
 }
 
-export function NeedsAttention({ data, isLoading, onActionClick }: NeedsAttentionProps) {
+export function NeedsAttention({ data, isLoading }: NeedsAttentionProps) {
   const priorityItems = data?.filter((item) => item.count > 0) || [];
   const otherItems = data?.filter((item) => item.count === 0) || [];
 
@@ -237,7 +242,7 @@ export function NeedsAttention({ data, isLoading, onActionClick }: NeedsAttentio
         ) : data && data.length > 0 ? (
           <div className="space-y-3">
             {priorityItems.map((item) => (
-              <AttentionItemCard key={item.issueType} item={item} onActionClick={onActionClick} />
+              <AttentionItemCard key={item.issueType} item={item} />
             ))}
             {otherItems.length > 0 && (
               <div className="pt-3 border-t border-slate-200 dark:border-slate-800">

@@ -1,6 +1,6 @@
 // components/dashboard/SummaryCards.tsx
 import React from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, Link } from '@tanstack/react-router';
 import {
   Truck,
   UserCheck,
@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { SummaryCards as SummaryCardsType, DashboardAction } from '@/types/dashboard';
 import { cn } from '@/lib/utils';
+import { getRouteFromTarget } from '@/lib/dashboardRoutes';
 
 interface SummaryCardsProps {
   data: SummaryCardsType | undefined;
@@ -43,13 +44,7 @@ function KPICard({
   chips,
   action,
 }: KPICardProps) {
-  const navigate = useNavigate();
-
-  const handleAction = () => {
-    if (action?.target) {
-      navigate({ to: `/${action.target}` });
-    }
-  };
+  const routePath = action?.target ? getRouteFromTarget(action.target) : null;
 
   return (
     <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover-lift transition-all duration-200">
@@ -100,10 +95,10 @@ function KPICard({
           </div>
         )}
 
-        {action && (
+        {action && routePath && (
           <div className="mt-6">
-            <button
-              onClick={handleAction}
+            <Link
+              to={routePath}
               className={cn(
                 'inline-flex items-center gap-2 text-sm font-extrabold hover:opacity-90 transition',
                 color === 'amber'
@@ -115,7 +110,7 @@ function KPICard({
             >
               {action.label}
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </Link>
           </div>
         )}
       </CardContent>

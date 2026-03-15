@@ -1,6 +1,6 @@
 // components/dashboard/ActiveDeliveries.tsx
 import React from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { Truck, ArrowRight, Clock, MapPin, User } from 'lucide-react';
 import {
   Card,
@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ActiveDeliveries as ActiveDeliveriesType, Delivery, DashboardAction } from '@/types/dashboard';
 import { cn } from '@/lib/utils';
+import { getRouteFromTarget } from '@/lib/dashboardRoutes';
 
 interface ActiveDeliveriesProps {
   data: ActiveDeliveriesType | undefined;
@@ -61,16 +62,16 @@ function DeliveryStatusBadge({ status }: { status: string }) {
 
 function DeliveryCard({ delivery }: { delivery: Delivery }) {
   const driver = delivery.assignments?.[0]?.driver;
-  const customerName = delivery.customer.businessName || delivery.customer.contactName;
+  const customerName = delivery.customer?.businessName || delivery.customer?.contactName || 'Unknown Customer';
 
   return (
-    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">
           <Avatar className="w-10 h-10 rounded-xl">
             <AvatarImage src={driver?.profilePhotoUrl} />
             <AvatarFallback className="rounded-xl bg-primary/15 text-primary font-bold">
-              {driver?.user.fullName?.charAt(0) || '?'}
+              {driver?.user?.fullName?.charAt(0) || '?'}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
@@ -89,7 +90,7 @@ function DeliveryCard({ delivery }: { delivery: Delivery }) {
             {driver && (
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
                 <User className="w-3 h-3" />
-                {driver.user.fullName}
+                {driver.user?.fullName}
               </p>
             )}
           </div>
@@ -122,13 +123,7 @@ function DeliveryCardSkeleton() {
 }
 
 function EmptyState({ action }: { action?: DashboardAction }) {
-  const navigate = useNavigate();
-
-  const handleClick = () => {
-    if (action?.target) {
-      navigate({ to: `/${action.target}` });
-    }
-  };
+  const routePath = action?.target ? getRouteFromTarget(action.target) : null;
 
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -141,29 +136,23 @@ function EmptyState({ action }: { action?: DashboardAction }) {
       <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
         All deliveries are currently idle
       </p>
-      {action && (
-        <button
-          onClick={handleClick}
+      {action && routePath && (
+        <Link
+          to={routePath}
           className="mt-4 inline-flex items-center gap-2 text-sm font-extrabold text-primary hover:opacity-90 transition"
         >
           {action.label}
           <ArrowRight className="w-4 h-4" />
-        </button>
+        </Link>
       )}
     </div>
   );
 }
 
-export function ActiveDeliveries({ data, isLoading, onActionClick }: ActiveDeliveriesProps) {
+export function ActiveDeliveries({ data, isLoading }: ActiveDeliveriesProps) {
   const deliveries = data?.items || [];
   const action = data?.action;
-  const navigate = useNavigate();
-
-  const handleActionClick = () => {
-    if (action?.target) {
-      navigate({ to: `/${action.target}` });
-    }
-  };
+  const routePath = action?.target ? getRouteFromTarget(action.target) : null;
 
   return (
     <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
@@ -175,14 +164,14 @@ export function ActiveDeliveries({ data, isLoading, onActionClick }: ActiveDeliv
               Quick view. Open details for evidence, status timeline, and actions.
             </CardDescription>
           </div>
-          {action && (
-            <button
-              onClick={handleActionClick}
+          {action && routePath && (
+            <Link
+              to={routePath}
               className="inline-flex items-center gap-2 text-sm font-extrabold bg-slate-900 text-white dark:bg-white dark:text-slate-950 px-4 py-2 rounded-2xl hover:opacity-90 transition"
             >
               {action.label}
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </Link>
           )}
         </div>
       </CardHeader>

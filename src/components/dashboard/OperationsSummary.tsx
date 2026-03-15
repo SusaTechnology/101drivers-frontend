@@ -1,6 +1,6 @@
 // components/dashboard/OperationsSummary.tsx
 import React from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import {
   AlertTriangle,
   Clock,
@@ -35,20 +35,11 @@ interface OpsMetricProps {
 }
 
 function OpsMetric({ label, value, icon: Icon, isWarning, linkTo }: OpsMetricProps) {
-  const navigate = useNavigate();
-
-  const handleClick = () => {
-    if (linkTo) {
-      navigate({ to: linkTo });
-    }
-  };
-
-  return (
+  const content = (
     <div
-      onClick={handleClick}
       className={cn(
-        'p-4 rounded-2xl border transition-all duration-200 hover:scale-[1.02]',
-        linkTo && 'cursor-pointer',
+        'p-4 rounded-2xl border transition-all duration-200',
+        linkTo && 'cursor-pointer hover:scale-[1.02]',
         isWarning && value > 0
           ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800'
           : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800'
@@ -88,6 +79,16 @@ function OpsMetric({ label, value, icon: Icon, isWarning, linkTo }: OpsMetricPro
       </div>
     </div>
   );
+
+  if (linkTo) {
+    return (
+      <Link to={linkTo} key={label}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div key={label}>{content}</div>;
 }
 
 function OperationsSkeleton() {
@@ -121,6 +122,51 @@ export function OperationsSummary({ data, isLoading }: OperationsSummaryProps) {
     data.staleBookedDeliveries > 0
   );
 
+  const metrics: OpsMetricProps[] = data ? [
+    {
+      label: 'Listed unassigned',
+      value: data.listedWithoutAssignment,
+      icon: Truck,
+      isWarning: true,
+      linkTo: '/admin-deliveries',
+    },
+    {
+      label: 'Booked not ready',
+      value: data.bookedWithoutComplianceReady,
+      icon: Clock,
+      isWarning: true,
+      linkTo: '/admin-deliveries',
+    },
+    {
+      label: 'Active no tracking',
+      value: data.activeWithoutTracking,
+      icon: AlertCircle,
+      isWarning: true,
+      linkTo: '/admin-deliveries',
+    },
+    {
+      label: 'Missing compliance',
+      value: data.deliveriesMissingCompliance,
+      icon: FileWarning,
+      isWarning: true,
+      linkTo: '/admin-deliveries',
+    },
+    {
+      label: 'Stale quoted',
+      value: data.staleQuotedDeliveries,
+      icon: CalendarClock,
+      isWarning: true,
+      linkTo: '/admin-deliveries',
+    },
+    {
+      label: 'Stale booked',
+      value: data.staleBookedDeliveries,
+      icon: CalendarClock,
+      isWarning: true,
+      linkTo: '/admin-deliveries',
+    },
+  ] : [];
+
   return (
     <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
       <CardHeader className="p-6 sm:p-7">
@@ -145,52 +191,13 @@ export function OperationsSummary({ data, isLoading }: OperationsSummaryProps) {
       <CardContent className="p-6 sm:p-7 pt-0">
         {isLoading ? (
           <OperationsSkeleton />
-        ) : data ? (
+        ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <OpsMetric
-              label="Listed unassigned"
-              value={data.listedWithoutAssignment}
-              icon={Truck}
-              isWarning
-              linkTo="/admin-deliveries"
-            />
-            <OpsMetric
-              label="Booked not ready"
-              value={data.bookedWithoutComplianceReady}
-              icon={Clock}
-              isWarning
-              linkTo="/admin-deliveries"
-            />
-            <OpsMetric
-              label="Active no tracking"
-              value={data.activeWithoutTracking}
-              icon={AlertCircle}
-              isWarning
-              linkTo="/admin-deliveries"
-            />
-            <OpsMetric
-              label="Missing compliance"
-              value={data.deliveriesMissingCompliance}
-              icon={FileWarning}
-              isWarning
-              linkTo="/admin-deliveries"
-            />
-            <OpsMetric
-              label="Stale quoted"
-              value={data.staleQuotedDeliveries}
-              icon={CalendarClock}
-              isWarning
-              linkTo="/admin-deliveries"
-            />
-            <OpsMetric
-              label="Stale booked"
-              value={data.staleBookedDeliveries}
-              icon={CalendarClock}
-              isWarning
-              linkTo="/admin-deliveries"
-            />
+            {metrics.map((metric) => (
+              <OpsMetric key={metric.label} {...metric} />
+            ))}
           </div>
-        ) : null}
+        )}
       </CardContent>
     </Card>
   );
