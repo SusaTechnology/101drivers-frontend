@@ -1,29 +1,53 @@
-// Types for Pricing Configuration
+// Types for Pricing Configuration - matching API response
 
 export type PricingMode = 'CATEGORY_ABC' | 'FLAT_TIER' | 'PER_MILE';
 
-// Category rule for CATEGORY_ABC mode - matches API payload
+// Category rule from API
 export interface CategoryRule {
+  id?: string;
   category: 'A' | 'B' | 'C';
   minMiles: number;
   maxMiles: number | null;
-  baseFee: number;
+  baseFee: number | null;
   perMileRate: number | null;
   flatPrice: number | null;
+  pricingConfigId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-// Pricing tier for FLAT_TIER mode - matches API payload
+// Pricing tier from API
 export interface PricingTier {
+  id?: string;
   minMiles: number;
   maxMiles: number | null;
   flatPrice: number;
+  pricingConfigId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-// Full pricing config payload for API - matches POST /pricingConfigs/admin-save
-export interface PricingConfigPayload {
-  id: string | null;
+// Customer linked to pricing config
+export interface PricingCustomer {
+  id: string;
+  customerType: 'PRIVATE' | 'BUSINESS';
+  approvalStatus: string;
+  businessName: string | null;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  pricingModeOverride: string | null;
+  postpaidEnabled: boolean;
+  pricingConfigId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Pricing config from API (list response)
+export interface PricingConfig {
+  id: string;
   name: string;
-  description?: string;
+  description: string | null;
   pricingMode: PricingMode;
   baseFee: number;
   perMileRate: number | null;
@@ -33,34 +57,39 @@ export interface PricingConfigPayload {
   feePassThrough: boolean;
   driverSharePct: number;
   active: boolean;
-  activateAsDefault?: boolean;
+  tiers: PricingTier[];
+  categoryRules: CategoryRule[];
+  customers: PricingCustomer[];
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    tiers: number;
+    categoryRules: number;
+    customers: number;
+  };
+}
+
+// Payload for create/update API
+export interface PricingConfigPayload {
+  id: string | null;
+  name: string;
+  description: string;
+  pricingMode: PricingMode;
+  baseFee: number;
+  perMileRate: number | null;
+  insuranceFee: number;
+  transactionFeePct: number;
+  transactionFeeFixed: number;
+  feePassThrough: boolean;
+  driverSharePct: number;
+  active: boolean;
+  activateAsDefault: boolean;
   tiers: PricingTier[];
   categoryRules: CategoryRule[];
   actorUserId: string;
 }
 
-// Pricing config from API (with additional fields)
-export interface PricingConfig {
-  id: string;
-  name: string;
-  description?: string;
-  pricingMode: PricingMode;
-  baseFee: number;
-  perMileRate: number | null;
-  insuranceFee: number;
-  transactionFeePct: number;
-  transactionFeeFixed: number;
-  feePassThrough: boolean;
-  driverSharePct: number;
-  active: boolean;
-  isDefault?: boolean;
-  tiers: PricingTier[];
-  categoryRules: CategoryRule[];
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-// Form data structure
+// Form data structure (for form state)
 export interface PricingConfigFormData {
   id?: string | null;
   name: string;
@@ -145,3 +174,24 @@ export const DEFAULT_CATEGORY_RULES: CategoryRule[] = [
     flatPrice: null,
   },
 ];
+
+// Helper to convert API config to form data
+export function configToFormData(config: PricingConfig): PricingConfigFormData {
+  return {
+    id: config.id,
+    name: config.name,
+    description: config.description || '',
+    pricingMode: config.pricingMode,
+    baseFee: config.baseFee,
+    perMileRate: config.perMileRate,
+    insuranceFee: config.insuranceFee,
+    transactionFeePct: config.transactionFeePct,
+    transactionFeeFixed: config.transactionFeeFixed,
+    feePassThrough: config.feePassThrough,
+    driverSharePct: config.driverSharePct,
+    active: config.active,
+    activateAsDefault: false,
+    tiers: config.tiers || [],
+    categoryRules: config.categoryRules || [],
+  };
+}

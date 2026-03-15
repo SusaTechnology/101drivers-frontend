@@ -19,30 +19,7 @@ import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigForm } from '@/components/pricing/PricingConfigForm';
 import { useSavePricingConfig, usePricingConfig, transformToPayload } from '@/hooks/pricing/usePricingConfigs';
 import type { PricingConfigFormData, PricingConfig } from '@/types/pricing';
-import { DEFAULT_PRICING_CONFIG } from '@/types/pricing';
-
-// Mock data for development - remove when API is ready
-const MOCK_CONFIG: PricingConfig = {
-  id: 'cfg-001',
-  name: 'Standard Category Pricing',
-  description: 'Category-based pricing for standard deliveries',
-  pricingMode: 'CATEGORY_ABC',
-  baseFee: 45,
-  perMileRate: null,
-  insuranceFee: 8,
-  transactionFeePct: 2.9,
-  transactionFeeFixed: 3,
-  feePassThrough: true,
-  driverSharePct: 60,
-  active: true,
-  isDefault: false,
-  tiers: [],
-  categoryRules: [
-    { category: 'A', minMiles: 0, maxMiles: 25, baseFee: 40, perMileRate: 3.5, flatPrice: null },
-    { category: 'B', minMiles: 25.01, maxMiles: 75, baseFee: 55, perMileRate: 4.25, flatPrice: null },
-    { category: 'C', minMiles: 75.01, maxMiles: null, baseFee: 70, perMileRate: 5.25, flatPrice: null },
-  ],
-};
+import { DEFAULT_PRICING_CONFIG, configToFormData } from '@/types/pricing';
 
 interface AdminPricingConfigFormPageProps {
   configId?: string;
@@ -59,11 +36,12 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
   );
 
   // Fetch existing config for edit mode
-  const { data: configData, isLoading, error } = usePricingConfig(configId, isEditMode);
+  const { data: configData, isLoading, isError, error } = usePricingConfig(configId, isEditMode);
 
   // Save mutation
   const saveMutation = useSavePricingConfig({
     onSuccess: (data) => {
+      setIsSubmitting(false);
       toast.success(
         isEditMode
           ? 'Configuration updated successfully'
@@ -72,56 +50,17 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
       navigate({ to: '/admin-pricing-config' });
     },
     onError: (error: any) => {
-      toast.error(`Failed to save: ${error?.message || 'Unknown error'}`);
       setIsSubmitting(false);
+      toast.error(`Failed to save: ${error?.message || 'Unknown error'}`);
     },
   });
 
   // Load data for edit mode
   useEffect(() => {
-    if (isEditMode) {
-      if (configData?.data) {
-        // Use API data
-        setInitialData({
-          id: configData.data.id,
-          name: configData.data.name,
-          description: configData.data.description,
-          pricingMode: configData.data.pricingMode,
-          baseFee: configData.data.baseFee,
-          perMileRate: configData.data.perMileRate,
-          insuranceFee: configData.data.insuranceFee,
-          transactionFeePct: configData.data.transactionFeePct,
-          transactionFeeFixed: configData.data.transactionFeeFixed,
-          feePassThrough: configData.data.feePassThrough,
-          driverSharePct: configData.data.driverSharePct,
-          active: configData.data.active,
-          activateAsDefault: false,
-          tiers: configData.data.tiers || [],
-          categoryRules: configData.data.categoryRules || [],
-        });
-      } else if (!isLoading) {
-        // Use mock data for development when API not ready
-        console.log('Using mock data for development');
-        setInitialData({
-          id: MOCK_CONFIG.id,
-          name: MOCK_CONFIG.name,
-          description: MOCK_CONFIG.description,
-          pricingMode: MOCK_CONFIG.pricingMode,
-          baseFee: MOCK_CONFIG.baseFee,
-          perMileRate: MOCK_CONFIG.perMileRate,
-          insuranceFee: MOCK_CONFIG.insuranceFee,
-          transactionFeePct: MOCK_CONFIG.transactionFeePct,
-          transactionFeeFixed: MOCK_CONFIG.transactionFeeFixed,
-          feePassThrough: MOCK_CONFIG.feePassThrough,
-          driverSharePct: MOCK_CONFIG.driverSharePct,
-          active: MOCK_CONFIG.active,
-          activateAsDefault: false,
-          tiers: MOCK_CONFIG.tiers || [],
-          categoryRules: MOCK_CONFIG.categoryRules || [],
-        });
-      }
+    if (isEditMode && configData) {
+      setInitialData(configToFormData(configData as PricingConfig));
     }
-  }, [isEditMode, configData, isLoading]);
+  }, [isEditMode, configData]);
 
   // Handle form submission
   const handleSubmit = async (data: PricingConfigFormData) => {
@@ -132,33 +71,15 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
       console.log('Submitting pricing config payload:', payload);
 
       // Call the mutation
-      saveMutation.mutate(payload, {
-        onError: () => {
-          setIsSubmitting(false);
-        },
-        onSettled: () => {
-          // Fallback: simulate success for development if API not ready
-          if (!saveMutation.isSuccess) {
-            setTimeout(() => {
-              toast.success(
-                isEditMode
-                  ? 'Configuration updated successfully (simulated)'
-                  : 'Configuration created successfully (simulated)'
-              );
-              navigate({ to: '/admin-pricing-config' });
-              setIsSubmitting(false);
-            }, 1000);
-          }
-        },
-      });
+      saveMutation.mutate(payload);
     } catch (error: any) {
-      toast.error(`Failed to save: ${error.message}`);
       setIsSubmitting(false);
+      toast.error(`Failed to save: ${error.message}`);
     }
   };
 
   // Loading state for edit mode
-  if (isEditMode && isLoading && !initialData) {
+  if (isEditMode && isLoading) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
         <Navbar
@@ -173,6 +94,42 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
           <div className="space-y-6">
             <Skeleton className="h-10 w-64" />
             <Skeleton className="h-96 w-full" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // Error state for edit mode
+  if (isEditMode && isError) {
+    return (
+      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+        <Navbar
+          brand={<Brand />}
+          items={navItems}
+          actions={actionItems}
+          onSignOut={signOut}
+          title="Admin"
+        />
+
+        <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
+          <Alert className="bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30">
+            <Info className="h-4 w-4 text-red-500" />
+            <AlertTitle className="text-red-900 dark:text-red-200 text-sm font-extrabold">
+              Error Loading Configuration
+            </AlertTitle>
+            <AlertDescription className="text-red-900/80 dark:text-red-200/80 text-xs mt-1">
+              {error?.message || 'Failed to load pricing configuration. Please try again.'}
+            </AlertDescription>
+          </Alert>
+          <div className="mt-6">
+            <Link
+              to="/admin-pricing-config"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl text-[11px] font-black uppercase tracking-widest border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-primary/5 transition"
+            >
+              <ArrowLeft className="w-4 h-4 text-primary" />
+              Back to Configurations
+            </Link>
           </div>
         </main>
       </div>

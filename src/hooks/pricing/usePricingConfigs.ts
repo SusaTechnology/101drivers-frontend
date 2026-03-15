@@ -4,7 +4,6 @@ import type {
   PricingConfig,
   PricingConfigPayload,
   PricingConfigFormData,
-  PricingConfigListResponse,
   PricingConfigResponse,
 } from '@/types/pricing';
 
@@ -35,27 +34,23 @@ function transformToPayload(data: PricingConfigFormData): PricingConfigPayload {
   };
 }
 
-// Hook to fetch all pricing configs
+// Hook to fetch all pricing configs from API
 export function usePricingConfigs(options?: {
-  pagination?: { pageIndex: number; pageSize: number };
-  globalFilter?: string;
   enabled?: boolean;
 }) {
-  const { pagination = { pageIndex: 0, pageSize: 20 }, globalFilter = '', enabled = true } = options || {};
+  const { enabled = true } = options || {};
 
-  return useDataQuery<PricingConfigListResponse>({
+  return useDataQuery<PricingConfig[]>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs`,
-    pagination,
-    globalFilter,
     enabled,
-    noFilter: false,
+    noFilter: true,
     staleTime: 30 * 1000, // 30 seconds
   });
 }
 
 // Hook to fetch a single pricing config by ID
 export function usePricingConfig(id: string | undefined, enabled = true) {
-  return useDataQuery<PricingConfigResponse>({
+  return useDataQuery<PricingConfig>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/${id}`,
     enabled: !!id && enabled,
     noFilter: true,
@@ -70,8 +65,6 @@ export function useSavePricingConfig(options?: {
   return useDataMutation<PricingConfigResponse, PricingConfigPayload>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/admin-save`,
     method: 'POST',
-    successMessage: 'Pricing configuration saved successfully',
-    errorMessage: 'Failed to save pricing configuration',
     onSuccess: options?.onSuccess,
     onError: options?.onError,
   });
@@ -85,8 +78,6 @@ export function useDeletePricingConfig(options?: {
   return useDataMutation<{ success: boolean; message: string }, { id: string }>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/:id`,
     method: 'DELETE',
-    successMessage: 'Pricing configuration deleted successfully',
-    errorMessage: 'Failed to delete pricing configuration',
     onSuccess: options?.onSuccess,
     onError: options?.onError,
   });
@@ -100,8 +91,6 @@ export function useTogglePricingConfigStatus(options?: {
   return useDataMutation<PricingConfigResponse, { id: string; active: boolean; actorUserId: string }>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/:id/status`,
     method: 'PATCH',
-    successMessage: 'Pricing configuration status updated',
-    errorMessage: 'Failed to update status',
     onSuccess: options?.onSuccess,
     onError: options?.onError,
   });
@@ -115,8 +104,6 @@ export function useSetDefaultPricingConfig(options?: {
   return useDataMutation<PricingConfigResponse, { id: string; actorUserId: string }>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/:id/set-default`,
     method: 'PATCH',
-    successMessage: 'Pricing configuration set as default',
-    errorMessage: 'Failed to set as default',
     onSuccess: options?.onSuccess,
     onError: options?.onError,
   });

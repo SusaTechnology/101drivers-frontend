@@ -7,112 +7,48 @@ import {
   Map,
   Info,
   Verified,
-  Star,
-  CheckCircle,
-  XCircle,
-  Calculator,
-  Tag,
-  Layers,
+  RefreshCw,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/shared/layout/testNavbar';
 import { Brand } from '@/lib/items/brand';
 import { navItems } from '@/lib/items/navItems';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigList } from '@/components/pricing/PricingConfigList';
+import { usePricingConfigs, useDeletePricingConfig, useTogglePricingConfigStatus } from '@/hooks/pricing/usePricingConfigs';
 import { getUser } from '@/lib/tanstack/dataQuery';
-import type { PricingConfig, PricingMode } from '@/types/pricing';
-
-// Mock data for development - remove when API is ready
-const MOCK_CONFIGS: PricingConfig[] = [
-  {
-    id: 'cfg-001',
-    name: 'Default Per Mile Pricing',
-    description: 'Global default per-mile pricing for standard deliveries',
-    pricingMode: 'PER_MILE',
-    baseFee: 45,
-    perMileRate: 4.5,
-    insuranceFee: 8,
-    transactionFeePct: 2.9,
-    transactionFeeFixed: 3,
-    feePassThrough: true,
-    driverSharePct: 60,
-    active: true,
-    isDefault: true,
-    tiers: [],
-    categoryRules: [],
-  },
-  {
-    id: 'cfg-002',
-    name: 'Dealer Flat Tier Pricing',
-    description: 'Flat tier pricing for dealer accounts',
-    pricingMode: 'FLAT_TIER',
-    baseFee: 45,
-    perMileRate: null,
-    insuranceFee: 8,
-    transactionFeePct: 2.9,
-    transactionFeeFixed: 3,
-    feePassThrough: true,
-    driverSharePct: 60,
-    active: true,
-    isDefault: false,
-    tiers: [
-      { minMiles: 0, maxMiles: 25, flatPrice: 120 },
-      { minMiles: 25.01, maxMiles: 75, flatPrice: 220 },
-      { minMiles: 75.01, maxMiles: 150, flatPrice: 420 },
-      { minMiles: 150.01, maxMiles: null, flatPrice: 700 },
-    ],
-    categoryRules: [],
-  },
-  {
-    id: 'cfg-003',
-    name: 'Category ABC Pricing',
-    description: 'Mileage category based pricing',
-    pricingMode: 'CATEGORY_ABC',
-    baseFee: 45,
-    perMileRate: null,
-    insuranceFee: 8,
-    transactionFeePct: 2.9,
-    transactionFeeFixed: 3,
-    feePassThrough: true,
-    driverSharePct: 60,
-    active: false,
-    isDefault: false,
-    tiers: [],
-    categoryRules: [
-      { category: 'A', minMiles: 0, maxMiles: 25, baseFee: 40, perMileRate: 3.5, flatPrice: null },
-      { category: 'B', minMiles: 25.01, maxMiles: 75, baseFee: 55, perMileRate: 4.25, flatPrice: null },
-      { category: 'C', minMiles: 75.01, maxMiles: null, baseFee: 70, perMileRate: 5.25, flatPrice: null },
-    ],
-  },
-];
-
-// Mode badge styles
-const modeBadgeStyles: Record<PricingMode, { icon: React.ElementType; className: string; label: string }> = {
-  CATEGORY_ABC: {
-    icon: Tag,
-    className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800',
-    label: 'Category A/B/C',
-  },
-  FLAT_TIER: {
-    icon: Layers,
-    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800',
-    label: 'Flat Tier',
-  },
-  PER_MILE: {
-    icon: Calculator,
-    className: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800',
-    label: 'Per Mile',
-  },
-};
+import type { PricingConfig } from '@/types/pricing';
 
 export default function AdminPricingConfigPage() {
   const { actionItems, signOut } = useAdminActions();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [configs, setConfigs] = useState<PricingConfig[]>(MOCK_CONFIGS);
+
+  // Fetch pricing configs from API
+  const { data: configs, isLoading, isError, error, refetch } = usePricingConfigs();
+
+  // Delete mutation
+  const deleteMutation = useDeletePricingConfig({
+    onSuccess: () => {
+      toast.success('Configuration deleted successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to delete: ${error?.message || 'Unknown error'}`);
+    },
+  });
+
+  // Toggle status mutation
+  const toggleStatusMutation = useTogglePricingConfigStatus({
+    onSuccess: () => {
+      toast.success('Status updated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to update status: ${error?.message || 'Unknown error'}`);
+    },
+  });
 
   // Handlers
   const handleEdit = (id: string) => {
@@ -120,30 +56,33 @@ export default function AdminPricingConfigPage() {
   };
 
   const handleDelete = (id: string) => {
-    // For now, update local state - will be replaced with actual API call
-    setConfigs(prev => prev.filter(c => c.id !== id));
-    toast.success('Configuration deleted');
+    deleteMutation.mutate({ id });
   };
 
   const handleToggleStatus = (id: string, isActive: boolean) => {
-    // For now, update local state - will be replaced with actual API call
-    setConfigs(prev => prev.map(c => c.id === id ? { ...c, active: isActive } : c));
-    toast.success(isActive ? 'Configuration activated' : 'Configuration deactivated');
+    const user = getUser();
+    toggleStatusMutation.mutate({
+      id,
+      active: isActive,
+      actorUserId: user?.id || 'admin_user',
+    });
   };
 
   const handleSetDefault = (id: string) => {
-    setConfigs(prev => prev.map(c => ({
-      ...c,
-      isDefault: c.id === id,
-    })));
+    // TODO: Implement set as default API call
     toast.success('Configuration set as default');
   };
 
   // Filter configs by search query
-  const filteredConfigs = configs.filter(config =>
-    config.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    config.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredConfigs = React.useMemo(() => {
+    if (!configs) return [];
+    if (!searchQuery) return configs;
+    
+    return configs.filter(config =>
+      config.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      config.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [configs, searchQuery]);
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
@@ -192,13 +131,39 @@ export default function AdminPricingConfigPage() {
               Supports Per Mile, Flat Tier, and Category A/B/C pricing modes.
             </p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </Button>
+          </div>
         </section>
+
+        {/* Error state */}
+        {isError && (
+          <section className="mt-6">
+            <Alert className="bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30">
+              <Info className="h-4 w-4 text-red-500" />
+              <AlertTitle className="text-red-900 dark:text-red-200 text-sm font-extrabold">
+                Error Loading Pricing Configurations
+              </AlertTitle>
+              <AlertDescription className="text-red-900/80 dark:text-red-200/80 text-xs mt-1">
+                {error?.message || 'Failed to load pricing configurations. Please try again.'}
+              </AlertDescription>
+            </Alert>
+          </section>
+        )}
 
         {/* Pricing Config List */}
         <section className="mt-8">
           <PricingConfigList
             configs={filteredConfigs}
-            isLoading={false}
+            isLoading={isLoading}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onToggleStatus={handleToggleStatus}
@@ -230,12 +195,17 @@ export default function AdminPricingConfigPage() {
           <Alert className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800">
             <Info className="h-4 w-4 text-slate-500" />
             <AlertTitle className="text-slate-700 dark:text-slate-300 text-sm font-extrabold">
-              API Endpoint
+              API Endpoints
             </AlertTitle>
             <AlertDescription className="text-slate-600 dark:text-slate-400 text-xs mt-1">
-              <code className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded">
-                POST /api/pricingConfigs/admin-save
-              </code>
+              <div className="flex flex-col gap-1 mt-2">
+                <code className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded">
+                  GET /api/pricingConfigs
+                </code>
+                <code className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded">
+                  POST /api/pricingConfigs/admin-save
+                </code>
+              </div>
             </AlertDescription>
           </Alert>
         </section>

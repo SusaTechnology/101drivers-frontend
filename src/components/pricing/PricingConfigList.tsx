@@ -16,6 +16,8 @@ import {
   CheckCircle,
   XCircle,
   Star,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -241,8 +243,8 @@ export function PricingConfigList({
                     >
                       <TableCell className="py-4">
                         <div className="flex items-center gap-2">
-                          {config.isDefault && (
-                            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                          {config._count?.customers && config._count.customers > 0 && (
+                            <Star className="w-4 h-4 text-amber-500 fill-amber-500" title="Has assigned customers" />
                           )}
                           <div>
                             <div className="font-extrabold text-slate-900 dark:text-white">
@@ -279,6 +281,16 @@ export function PricingConfigList({
                             ${config.perMileRate}/mi
                           </div>
                         )}
+                        {config.pricingMode === 'FLAT_TIER' && config.tiers.length > 0 && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {config.tiers.length} tier{config.tiers.length > 1 ? 's' : ''}
+                          </div>
+                        )}
+                        {config.pricingMode === 'CATEGORY_ABC' && config.categoryRules.length > 0 && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {config.categoryRules.length} categor{config.categoryRules.length > 1 ? 'ies' : 'y'}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="py-4">
                         <div className="font-bold text-slate-700 dark:text-slate-300">
@@ -308,13 +320,13 @@ export function PricingConfigList({
                               </>
                             )}
                           </Badge>
-                          {config.isDefault && (
+                          {config._count?.customers && config._count.customers > 0 && (
                             <Badge
                               variant="outline"
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800"
                             >
                               <Star className="w-3.5 h-3.5" />
-                              Default
+                              {config._count.customers} customer{config._count.customers > 1 ? 's' : ''}
                             </Badge>
                           )}
                         </div>
@@ -354,15 +366,13 @@ export function PricingConfigList({
                                 </>
                               )}
                             </DropdownMenuItem>
-                            {!config.isDefault && (
-                              <DropdownMenuItem
-                                onClick={() => handleSetDefault(config.id)}
-                                className="cursor-pointer"
-                              >
-                                <Star className="w-4 h-4 mr-2 text-amber-500" />
-                                Set as Default
-                              </DropdownMenuItem>
-                            )}
+                            <DropdownMenuItem
+                              onClick={() => handleSetDefault(config.id)}
+                              className="cursor-pointer"
+                            >
+                              <Star className="w-4 h-4 mr-2 text-amber-500" />
+                              Set as Default
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -406,7 +416,7 @@ export function PricingConfigList({
         {configs.length > 0 && (
           <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Showing <span className="font-extrabold">{configs.length}</span> configurations
+              Showing <span className="font-extrabold">{configs.length}</span> configuration{configs.length !== 1 ? 's' : ''}
             </p>
           </div>
         )}
