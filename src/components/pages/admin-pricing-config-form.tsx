@@ -47,7 +47,21 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
           ? 'Configuration updated successfully'
           : 'Configuration created successfully'
       );
-      navigate({ to: '/admin-pricing-config' });
+      
+      // Update the form data immediately with the response
+      if (data?.data) {
+        const updatedFormData = configToFormData(data.data);
+        setInitialData(updatedFormData);
+        
+        // If this was a create (no configId), update the URL to edit mode
+        // so subsequent saves are updates, not creates
+        if (!isEditMode && data.data.id) {
+          navigate({ 
+            to: `/admin-pricing-config/edit/${data.data.id}`,
+            replace: true 
+          });
+        }
+      }
     },
     onError: (error: any) => {
       setIsSubmitting(false);

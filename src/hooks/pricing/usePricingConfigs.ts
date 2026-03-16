@@ -57,6 +57,9 @@ export function usePricingConfig(id: string | undefined, enabled = true) {
   });
 }
 
+// Query key for pricing configs list - used for cache invalidation
+export const PRICING_CONFIGS_QUERY_KEY = ['data', `${API_BASE_URL}/api/pricingConfigs`];
+
 // Hook to save (create or update) a pricing config
 export function useSavePricingConfig(options?: {
   onSuccess?: (data: PricingConfigResponse) => void;
@@ -67,6 +70,9 @@ export function useSavePricingConfig(options?: {
     method: 'POST',
     onSuccess: options?.onSuccess,
     onError: options?.onError,
+    // Invalidate the pricing configs list query to refresh the data
+    invalidateQueryKey: [PRICING_CONFIGS_QUERY_KEY],
+    onSuccessInvalidate: true,
   });
 }
 
