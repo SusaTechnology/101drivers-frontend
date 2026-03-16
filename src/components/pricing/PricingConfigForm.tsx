@@ -136,6 +136,17 @@ export function PricingConfigForm({
     },
   });
 
+  // Reset form when initialData changes (for edit mode loading)
+  React.useEffect(() => {
+    if (initialData) {
+      reset({
+        ...DEFAULT_PRICING_CONFIG,
+        ...initialData,
+      });
+      setPricingMode(initialData.pricingMode || 'PER_MILE');
+    }
+  }, [initialData, reset]);
+
   // Field arrays for dynamic rows
   const {
     fields: tierFields,
@@ -235,6 +246,7 @@ export function PricingConfigForm({
         tiers: pricingMode === 'FLAT_TIER' ? (data.tiers as PricingTier[]) : [],
         categoryRules: pricingMode === 'CATEGORY_ABC' ? (data.categoryRules as CategoryRule[]) : [],
       };
+      console.log('Form submitting data:', { id: submitData.id, mode: mode });
       await onSubmit(submitData);
     } catch (error) {
       console.error('Form submission error:', error);
@@ -243,6 +255,9 @@ export function PricingConfigForm({
 
   return (
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
+      {/* Hidden ID field for edit mode */}
+      <input type="hidden" {...register('id')} />
+      
       {/* Configuration Name & Mode */}
       <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
         <CardHeader className="border-b border-slate-100 dark:border-slate-800">

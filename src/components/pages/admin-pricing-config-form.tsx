@@ -58,7 +58,13 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
   // Load data for edit mode
   useEffect(() => {
     if (isEditMode && configData) {
-      setInitialData(configToFormData(configData as PricingConfig));
+      const formData = configToFormData(configData as PricingConfig);
+      console.log('Loading config data for edit:', { 
+        id: formData.id, 
+        name: formData.name,
+        pricingMode: formData.pricingMode 
+      });
+      setInitialData(formData);
     }
   }, [isEditMode, configData]);
 
@@ -68,7 +74,11 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
     try {
       // Transform form data to API payload
       const payload = transformToPayload(data);
-      console.log('Submitting pricing config payload:', payload);
+      console.log('Submitting pricing config payload:', { 
+        id: payload.id, 
+        name: payload.name, 
+        isUpdate: !!payload.id 
+      });
 
       // Call the mutation
       saveMutation.mutate(payload);
