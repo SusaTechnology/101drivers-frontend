@@ -309,25 +309,29 @@ export function GlobalFilterBar({
                     <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
                       Customer Type
                     </Label>
-                    <Select
-                      value={localFilters.customerType || ''}
-                      onValueChange={(value) => setLocalFilters(prev => ({
-                        ...prev,
-                        customerType: value as CustomerType || undefined,
-                      }))}
-                    >
-                      <SelectTrigger className="h-9 rounded-xl text-sm">
-                        <SelectValue placeholder="All types" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">All types</SelectItem>
-                        {CUSTOMER_TYPES.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Select
+                          value={localFilters.customerType || 'ALL'}
+                          onValueChange={(value) => setLocalFilters(prev => ({
+                            ...prev,
+                            customerType: value === 'ALL' ? undefined : value as CustomerType,
+                          }))}
+                        >
+                          <SelectTrigger className="h-9 rounded-xl text-sm">
+                            <SelectValue placeholder="All types" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ALL">All types</SelectItem>
+                            {CUSTOMER_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Service Type */}
@@ -336,17 +340,17 @@ export function GlobalFilterBar({
                       Service Type
                     </Label>
                     <Select
-                      value={localFilters.serviceType || ''}
+                      value={localFilters.serviceType || 'ALL'}
                       onValueChange={(value) => setLocalFilters(prev => ({
                         ...prev,
-                        serviceType: value as ServiceType || undefined,
+                        serviceType: value === 'ALL' ? undefined : value as ServiceType,
                       }))}
                     >
                       <SelectTrigger className="h-9 rounded-xl text-sm">
                         <SelectValue placeholder="All services" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All services</SelectItem>
+                        <SelectItem value="ALL">All services</SelectItem>
                         {SERVICE_TYPES.map((type) => (
                           <SelectItem key={type.value} value={type.value}>
                             {type.label}
