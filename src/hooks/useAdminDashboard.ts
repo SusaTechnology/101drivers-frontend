@@ -7,6 +7,7 @@ import type {
   CustomerType,
   ServiceType,
   DatePreset,
+  CustomerLookupItem,
 } from '@/types/dashboard';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -232,4 +233,21 @@ export function formatDashboardMiles(miles: number | null | undefined, decimals:
 export function formatDashboardPercent(value: number | null | undefined, decimals: number = 1): string {
   if (value === null || value === undefined) return '0%';
   return `${value.toFixed(decimals)}%`;
+}
+
+/**
+ * Hook to fetch customer lookup list for filters
+ */
+export function useCustomerLookup(options?: {
+  enabled?: boolean;
+  staleTime?: number;
+}) {
+  const { enabled = true, staleTime = 5 * 60 * 1000 } = options || {}; // 5 minutes stale time
+
+  return useDataQuery<CustomerLookupItem[]>({
+    apiEndPoint: `${API_BASE_URL}/customers/lookup/minimal`,
+    enabled,
+    noFilter: true,
+    staleTime,
+  });
 }

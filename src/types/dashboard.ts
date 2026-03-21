@@ -102,6 +102,14 @@ export interface Customer {
   contactName: string;
 }
 
+// ==================== CUSTOMER LOOKUP (minimal) ====================
+
+export interface CustomerLookupItem {
+  id: string;
+  name: string;
+  customerType: CustomerType;
+}
+
 // ==================== DRIVER ====================
 
 export interface Driver {

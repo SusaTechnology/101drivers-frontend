@@ -1,6 +1,6 @@
 // components/dashboard/GlobalFilterBar.tsx
-import React, { useState, useEffect } from 'react';
-import { Calendar, Filter, X, ChevronDown, RefreshCw, Check } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar, Filter, X, ChevronDown, RefreshCw, Check, Search, Building, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -25,6 +25,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import type {
   DashboardQueryParams,
@@ -33,8 +41,9 @@ import type {
   CustomerType,
   ServiceType,
   FiltersApplied,
+  CustomerLookupItem,
 } from '@/types/dashboard';
-import { getDateRangeForPreset, formatDashboardDate } from '@/hooks/useAdminDashboard';
+import { getDateRangeForPreset, formatDashboardDate, useCustomerLookup } from '@/hooks/useAdminDashboard';
 
 interface GlobalFilterBarProps {
   filtersApplied: FiltersApplied | undefined;
@@ -89,6 +98,28 @@ export function GlobalFilterBar({
 }: GlobalFilterBarProps) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [localFilters, setLocalFilters] = useState<DashboardQueryParams>({});
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false);
+
+  // Fetch customers for the dropdown
+  const { data: customers = [], isLoading: isLoadingCustomers } = useCustomerLookup();
+
+  // Find selected customer name for display
+  const selectedCustomer = useMemo(() => {
+    if (localFilters.customerId && customers.length > 0) {
+      return customers.find(c => c.id === localFilters.customerId);
+    }
+    return null;
+  }, [localFilters.customerId, customers]);
+
+  // Filter customers by search
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearch) return customers;
+    const search = customerSearch.toLowerCase();
+    return customers.filter(c =>
+      c.name.toLowerCase().includes(search)
+    );
+  }, [customers, customerSearch]);
 
   // Initialize local filters from applied filters
   useEffect(() => {
@@ -124,6 +155,14 @@ export function GlobalFilterBar({
     if (filtersApplied?.disputedOnly) count++;
     return count;
   }, [filtersApplied]);
+
+  // Find customer name from applied filter (for active chip display)
+  const appliedCustomer = useMemo(() => {
+    if (filtersApplied?.customerId && customers.length > 0) {
+      return customers.find(c => c.id === filtersApplied.customerId);
+    }
+    return null;
+  }, [filtersApplied?.customerId, customers]);
 
   const handlePresetChange = (preset: DatePreset) => {
     if (preset === 'CUSTOM') {
@@ -396,20 +435,87 @@ export function GlobalFilterBar({
                     </Select>
                   </div>
 
-                  {/* Customer ID */}
+                  {/* Customer Select */}
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                      Customer ID
+                      Customer
                     </Label>
-                    <Input
-                      placeholder="Enter customer ID..."
-                      value={localFilters.customerId || ''}
-                      onChange={(e) => setLocalFilters(prev => ({
-                        ...prev,
-                        customerId: e.target.value || undefined,
-                      }))}
-                      className="h-9 rounded-xl text-sm"
-                    />
+                    <Popover open={isCustomerSelectOpen} onOpenChange={setIsCustomerSelectOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={isCustomerSelectOpen}
+                          className="w-full h-9 rounded-xl justify-between font-normal"
+                        >
+                          {selectedCustomer ? (
+                            <span className="flex items-center gap-2 truncate">
+                              {selectedCustomer.customerType === 'BUSINESS' ? (
+                                <Building className="w-3 h-3 shrink-0" />
+                              ) : (
+                                <User className="w-3 h-3 shrink-0" />
+                              )}
+                              <span className="truncate">{selectedCustomer.name}</span>
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">Select customer...</span>
+                          )}
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search customer..."
+                            value={customerSearch}
+                            onValueChange={setCustomerSearch}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {isLoadingCustomers ? 'Loading...' : 'No customer found.'}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {filteredCustomers.slice(0, 50).map((customer) => (
+                                <CommandItem
+                                  key={customer.id}
+                                  value={customer.id}
+                                  onSelect={() => {
+                                    setLocalFilters(prev => ({
+                                      ...prev,
+                                      customerId: customer.id === localFilters.customerId ? undefined : customer.id,
+                                    }));
+                                    setCustomerSearch('');
+                                    setIsCustomerSelectOpen(false);
+                                  }}
+                                  className="flex items-center gap-2"
+                                >
+                                  <Check
+                                    className={cn(
+                                      'h-4 w-4',
+                                      localFilters.customerId === customer.id ? 'opacity-100' : 'opacity-0'
+                                    )}
+                                  />
+                                  {customer.customerType === 'BUSINESS' ? (
+                                    <Building className="w-3 h-3 text-muted-foreground" />
+                                  ) : (
+                                    <User className="w-3 h-3 text-muted-foreground" />
+                                  )}
+                                  <span className="truncate">{customer.name}</span>
+                                  <span className="text-xs text-muted-foreground ml-auto">
+                                    {customer.customerType === 'BUSINESS' ? 'Business' : 'Private'}
+                                  </span>
+                                </CommandItem>
+                              ))}
+                              {filteredCustomers.length > 50 && (
+                                <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
+                                  Showing 50 of {filteredCustomers.length} customers. Refine your search.
+                                </div>
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   {/* Created By Role */}
@@ -512,7 +618,7 @@ export function GlobalFilterBar({
                   variant="outline"
                   className="chip bg-primary/10 border-primary/25 text-primary-foreground text-[10px]"
                 >
-                  ID: {filtersApplied.customerId.substring(0, 8)}...
+                  {appliedCustomer ? appliedCustomer.name : `ID: ${filtersApplied.customerId.substring(0, 8)}...`}
                   <X
                     className="w-3 h-3 ml-1 cursor-pointer"
                     onClick={() => onFiltersChange({ ...localFilters, customerId: undefined })}
