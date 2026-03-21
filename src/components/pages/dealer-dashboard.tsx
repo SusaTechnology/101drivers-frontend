@@ -23,6 +23,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Home,
   Truck,
   Wrench,
@@ -59,6 +65,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 const formatDate = (dateString: string) => {
   if (!dateString) return ''
@@ -166,21 +173,25 @@ export default function DealerDashboard() {
   }) || []
 
   // Filter deliveries (based on transformed data)
-  const filteredDeliveries = deliveries.filter((delivery) => {
-    if (activeStatus !== 'ALL' && delivery.status !== activeStatus) return false
-    if (serviceType !== 'ALL' && delivery.service !== serviceType) return false
-    
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      return (
-        delivery.ref.toLowerCase().includes(query) ||
-        delivery.pickup.toLowerCase().includes(query) ||
-        delivery.dropoff.toLowerCase().includes(query)
-      )
-    }
-    
-    return true
-  })
+const filteredDeliveries = deliveries.filter((delivery) => {
+  if (activeStatus !== 'ALL' && delivery.status !== activeStatus) return false;
+  if (serviceType !== 'ALL' && delivery.service !== serviceType) return false;
+  
+  if (searchQuery) {
+    const query = searchQuery.toLowerCase();
+    if (
+      !delivery.ref.toLowerCase().includes(query) &&
+      !delivery.pickup.toLowerCase().includes(query) &&
+      !delivery.dropoff.toLowerCase().includes(query)
+    ) return false;
+  }
+
+  // Date filtering
+  if (dateFrom && delivery.scheduleDate < dateFrom) return false;
+  if (dateTo && delivery.scheduleDate > dateTo) return false;
+
+  return true;
+});
 
   // Status badge component
   const StatusBadge = ({ status, urgent }: { status: string; urgent?: boolean }) => {
@@ -293,6 +304,7 @@ export default function DealerDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
+          <NotificationBell customerId={dealerId} />
           <Link
             to="/dealer-create-delivery"
             className="hidden sm:inline-flex items-center gap-2 bg-lime-500 text-slate-950 hover:bg-lime-600 px-5 py-2.5 rounded-full text-sm hover:shadow-lg hover:shadow-lime-500/20 transition-all font-extrabold"
@@ -311,13 +323,25 @@ export default function DealerDashboard() {
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
 
-          <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            <User className="h-5 w-5 text-lime-500" />
-            <div className="leading-tight">
-              <div className="text-xs font-extrabold text-slate-900 dark:text-white">Cali Motors Group</div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">dealer@calimotors.com</div>
-            </div>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                <User className="h-5 w-5 text-lime-500" />
+                <div className="leading-tight">
+                  <div className="text-xs font-extrabold text-slate-900 dark:text-white">Cali Motors Group</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">dealer@calimotors.com</div>
+                </div>
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link to="/dealer-settings" className="flex items-center gap-2 w-full">
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -332,10 +356,10 @@ export default function DealerDashboard() {
               Create Delivery
             </Link>
             <Link
-              // to="/dealer/notifications"
+               to="/dealer-settings"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors"
             >
-              Notification Settings
+              Settings
             </Link>
             <Link
               to="/"
@@ -446,13 +470,13 @@ export default function DealerDashboard() {
               <Plus className="h-4 w-4 text-lime-500" />
               New Delivery
             </Link>
-            <Link
-              // to="/dealer/notifications"
+            {/* <Link
+               to="/dealer-settings"
               className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition font-extrabold"
             >
               <Bell className="h-4 w-4" />
               Notification Settings
-            </Link>
+            </Link> */}
           </div>
         </section>
 
@@ -667,8 +691,8 @@ export default function DealerDashboard() {
                         </TableCell>
                         <TableCell className="text-right">
                           <Link
-                            // to="/dealer-delivery-details"
-                            // state={{ id: delivery.id}}
+                             to="/dealer-delivery-details"
+                             state={{ id: delivery.id}}
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold hover:opacity-90 transition"
                           >
                             {delivery.status === 'ACTIVE' ? 'Track' : delivery.status === 'COMPLETED' ? 'View Proof' : 'View'}

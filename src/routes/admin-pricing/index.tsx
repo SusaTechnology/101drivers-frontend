@@ -1,4 +1,4 @@
-import AdminPricingPage from '@/components/pages/admin-pricing'
+import AdminPricingConfigPage from '@/components/pages/admin-pricing-config'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/admin-pricing/')({
@@ -6,5 +6,5 @@ export const Route = createFileRoute('/admin-pricing/')({
 })
 
 function RouteComponent() {
-  return <AdminPricingPage />
+  return <AdminPricingConfigPage />
 }

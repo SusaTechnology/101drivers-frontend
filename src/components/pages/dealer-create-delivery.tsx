@@ -49,7 +49,7 @@ import {
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
-import { getUser, useCreate } from "@/lib/tanstack/dataQuery";
+import { getUser, useCreate, useDataQuery } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 
 // Form validation schema
@@ -90,8 +90,6 @@ const deliverySchema = z.object({
   paymentType: z.enum(["PREPAID", "POSTPAID"]).optional(),
   dealerAuthorized: z.boolean().optional(),
   status: z.enum( ["DRAFT", "QUOTED", "LISTED", "BOOKED", "ACTIVE", "COMPLETED", "CANCELLED", "EXPIRED"]),
-  // customer: z.string()
-  // isUrgent:
 });
 
 type DeliveryFormData = z.infer<typeof deliverySchema>;
@@ -129,6 +127,28 @@ interface SchedulePreviewResponse {
   afterHours: boolean;
   feasible: boolean;
   message: string | null;
+}
+
+// Types for saved data
+interface SavedAddress {
+  id: string;
+  address: string;
+  city: string;
+  country: string;
+  label?: string;
+  lat: number;
+  lng: number;
+  placeId?: string;
+  postalCode?: string;
+  state?: string;
+}
+
+interface SavedVehicle {
+  id: string;
+  color: string;
+  licensePlate: string;
+  make: string;
+  model: string;
 }
 
 // Helper to parse time window like "9:00 AM – 11:00 AM"
@@ -191,7 +211,18 @@ export default function CreateDeliveryPage() {
     transaction: 0,
   });
   const customer = getUser();
-  
+
+  // Saved addresses state
+  const [useSavedAddresses, setUseSavedAddresses] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedSavedAddress, setSelectedSavedAddress] = useState<SavedAddress | null>(null);
+
+  // Saved vehicles state
+  const [useSavedVehicle, setUseSavedVehicle] = useState(false);
+  const [savedVehicles, setSavedVehicles] = useState<SavedVehicle[]>([]);
+  const [selectedSavedVehicle, setSelectedSavedVehicle] = useState<SavedVehicle | null>(null);
+  const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
+
   // Mutation for creating delivery
   const createDelivery = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`, {
     onSuccess: () => {
@@ -237,6 +268,36 @@ export default function CreateDeliveryPage() {
     libraries: ['geometry', 'places'],
   });
 
+  // Fetch saved addresses when checkbox is checked
+  const savedAddressesQuery = useDataQuery<SavedAddress[]>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/savedAddresses?where[customer][id]=${customer?.profileId}`,
+    enabled: useSavedAddresses && !!customer?.profileId,
+    staleTime: 5 * 60 * 1000,
+    queryKey: ['savedAddresses', customer?.profileId],
+    noFilter: true
+  });
+
+  useEffect(() => {
+    if (savedAddressesQuery.data) {
+      setSavedAddresses(savedAddressesQuery.data);
+    }
+  }, [savedAddressesQuery.data]);
+
+  // Fetch saved vehicles when checkbox is checked
+  const savedVehiclesQuery = useDataQuery<SavedVehicle[]>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/savedVehicles?where[customer][id]=${customer?.profileId}`,
+    enabled: useSavedVehicle && !!customer?.profileId,
+    staleTime: 5 * 60 * 1000,
+    queryKey: ['savedVehicles', customer?.profileId],
+    noFilter: true
+  });
+
+  useEffect(() => {
+    if (savedVehiclesQuery.data) {
+      setSavedVehicles(savedVehiclesQuery.data);
+    }
+  }, [savedVehiclesQuery.data]);
+
   // Watch form values for dynamic behavior
   const serviceType = watch("serviceType");
   const pickupAddress = watch("pickupAddress");
@@ -263,7 +324,7 @@ export default function CreateDeliveryPage() {
   }, [dealerAuthorized]);
 
   
-  const getQuotePreview = useCreate<QuotePreviewResponse, { pickupAddress: string; dropoffAddress: string; serviceType: string }>(
+  const getQuotePreview = useCreate<QuotePreviewResponse, { pickupAddress: string; dropoffAddress: string; serviceType: string, customerId?: string }>(
   `${import.meta.env.VITE_API_URL}/api/deliveryRequests/quote-preview`,
   {
     onSuccess: (data) => {
@@ -306,10 +367,15 @@ export default function CreateDeliveryPage() {
   );
 
 const handleQuotePreview = () => {
-      if (pickupAddress && dropoffAddress && serviceType) {
-      getQuotePreview.mutate({ pickupAddress, dropoffAddress, serviceType });
-    }
+  if (pickupAddress && dropoffAddress && serviceType) {
+    getQuotePreview.mutate({
+      pickupAddress,
+      dropoffAddress,
+      serviceType,
+      ...(customer?.profileId && { customerId: customer.profileId }),
+    });
   }
+};
 
   // Geocoder helper for the "Same as business info" button
   const geocodeAddress = (address: string, setter: (coords: google.maps.LatLngLiteral) => void) => {
@@ -363,6 +429,30 @@ const handleQuotePreview = () => {
   
     }
   }, []);
+
+  // Handle saved address selection
+  const handleSavedAddressSelect = (addressId: string) => {
+    const address = savedAddresses.find(a => a.id === addressId);
+    if (address) {
+      setSelectedSavedAddress(address);
+      setValue("pickupAddress", address.address);
+      setPickupCoords({ lat: address.lat, lng: address.lng });
+      setPickupPlaceId(address.placeId || null);
+      if (address.state) {
+        setPickupState(address.state);
+      }
+    }
+  };
+
+  // Handle saved vehicle selection
+  const handleSavedVehicleSelect = (vehicle: SavedVehicle) => {
+    setSelectedSavedVehicle(vehicle);
+    setValue("make", vehicle.make);
+    setValue("model", vehicle.model);
+    setValue("color", vehicle.color);
+    setValue("licensePlate", vehicle.licensePlate);
+    setShowVehicleDropdown(false);
+  };
 
   // Handle "Same as business info" button
   const handleSameAsBusiness = () => {
@@ -640,10 +730,6 @@ const handleQuotePreview = () => {
                       request).
                     </p>
                   </div>
-                  {/* <Badge variant="outline" className="hidden sm:flex">
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    PRD-aligned
-                  </Badge> */}
                 </div>
               </CardHeader>
               <CardContent>
@@ -723,7 +809,7 @@ const handleQuotePreview = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  {/* Pickup Address - replaced with LocationAutocomplete */}
+                  {/* Pickup Address - with saved addresses toggle */}
                   <div className="space-y-2">
                     <Label
                       htmlFor="pickupAddress"
@@ -731,15 +817,33 @@ const handleQuotePreview = () => {
                     >
                       Pickup address
                     </Label>
-                    <LocationAutocomplete
-                      key="pickup"
-                      value={pickupAddress || ""}
-                      onChange={(val) => setValue("pickupAddress", val)}
-                      onPlaceSelect={handlePickupSelect}
-                      isLoaded={isLoaded}
-                      placeholder="Search pickup location (California only)"
-                      icon={<MapPin className="h-5 w-5 text-slate-400" />}
-                    />
+                    {useSavedAddresses ? (
+                      <Select
+                        onValueChange={handleSavedAddressSelect}
+                        value={selectedSavedAddress?.id || ""}
+                      >
+                        <SelectTrigger className="h-14 rounded-2xl w-full">
+                          <SelectValue placeholder="Select saved address" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {savedAddresses.map((addr) => (
+                            <SelectItem key={addr.id} value={addr.id}>
+                              {addr.label ? `${addr.label}: ${addr.address}` : addr.address}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <LocationAutocomplete
+                        key="pickup"
+                        value={pickupAddress || ""}
+                        onChange={(val) => setValue("pickupAddress", val)}
+                        onPlaceSelect={handlePickupSelect}
+                        isLoaded={isLoaded}
+                        placeholder="Search pickup location (California only)"
+                        icon={<MapPin className="h-5 w-5 text-slate-400" />}
+                      />
+                    )}
                     {errors.pickupAddress && (
                       <p className="text-xs text-red-500">
                         {errors.pickupAddress.message}
@@ -747,6 +851,29 @@ const handleQuotePreview = () => {
                     )}
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="useSavedAddresses"
+                          checked={useSavedAddresses}
+                          onCheckedChange={(checked) => {
+                            setUseSavedAddresses(!!checked);
+                            if (!checked) {
+                              // Reset to autocomplete mode
+                              setSelectedSavedAddress(null);
+                              setValue("pickupAddress", "");
+                              setPickupCoords(null);
+                              setPickupPlaceId(null);
+                              setPickupState(null);
+                            }
+                          }}
+                        />
+                        <Label
+                          htmlFor="useSavedAddresses"
+                          className="text-xs font-bold cursor-pointer"
+                        >
+                          Use saved addresses
+                        </Label>
+                      </div>
+                      {/* <div className="flex items-center space-x-2">
                         <Checkbox
                           id="rememberPickup"
                           {...register("rememberPickup")}
@@ -757,8 +884,8 @@ const handleQuotePreview = () => {
                         >
                           Remember pickup for next time
                         </Label>
-                      </div>
-                      <Button
+                      </div> */}
+                      {/* <Button
                         type="button"
                         variant="ghost"
                         size="sm"
@@ -767,11 +894,11 @@ const handleQuotePreview = () => {
                       >
                         <Settings className="h-3 w-3 mr-1" />
                         Same as business info
-                      </Button>
+                      </Button> */}
                     </div>
                   </div>
 
-                  {/* Drop-off Address - replaced with LocationAutocomplete */}
+                  {/* Drop-off Address - unchanged */}
                   <div className="space-y-2">
                     <Label
                       htmlFor="dropoffAddress"
@@ -1214,6 +1341,54 @@ const handleQuotePreview = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Checkbox for saved vehicles */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="useSavedVehicle"
+                    checked={useSavedVehicle}
+                    onCheckedChange={(checked) => {
+                      setUseSavedVehicle(!!checked);
+                      if (!checked) {
+                        setSelectedSavedVehicle(null);
+                        // Optionally clear fields? We'll leave them as is.
+                      }
+                    }}
+                  />
+                  <Label
+                    htmlFor="useSavedVehicle"
+                    className="text-xs font-bold cursor-pointer"
+                  >
+                    Use saved vehicle
+                  </Label>
+                </div>
+
+                {/* Extra input for saved vehicle selection */}
+                {useSavedVehicle && (
+                  <div className="relative mb-4">
+                    <Input
+                      placeholder="Select saved vehicle..."
+                      onFocus={() => setShowVehicleDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowVehicleDropdown(false), 200)}
+                      value={selectedSavedVehicle ? `${selectedSavedVehicle.make} ${selectedSavedVehicle.model} (${selectedSavedVehicle.licensePlate})` : ""}
+                      readOnly
+                      className="h-14 rounded-2xl"
+                    />
+                    {showVehicleDropdown && savedVehicles.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-60 overflow-auto">
+                        {savedVehicles.map((vehicle) => (
+                          <div
+                            key={vehicle.id}
+                            className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                            onClick={() => handleSavedVehicleSelect(vehicle)}
+                          >
+                            {vehicle.make} {vehicle.model} - {vehicle.color} ({vehicle.licensePlate})
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Basic Vehicle Info */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-2">
@@ -1258,7 +1433,7 @@ const handleQuotePreview = () => {
                       Transmission
                     </Label>
                     <Select
-                      {...register("transmission")}
+                      value={transmission}
                       onValueChange={(value) => setValue("transmission", value)}
                     >
                       <SelectTrigger className="h-14 rounded-2xl">
@@ -1287,7 +1462,7 @@ const handleQuotePreview = () => {
                       Make
                     </Label>
                     <Select
-                      {...register("make")}
+                      value={make}
                       onValueChange={(value) => setValue("make", value)}
                     >
                       <SelectTrigger className="h-14 rounded-2xl">
@@ -1320,7 +1495,7 @@ const handleQuotePreview = () => {
                       Model
                     </Label>
                     <Select
-                      {...register("model")}
+                      value={model}
                       onValueChange={(value) => setValue("model", value)}
                     >
                       <SelectTrigger className="h-14 rounded-2xl">
@@ -1354,7 +1529,7 @@ const handleQuotePreview = () => {
                       Trim (if available)
                     </Label>
                     <Select
-                      {...register("trim")}
+                      value={trim}
                       onValueChange={(value) => setValue("trim", value)}
                     >
                       <SelectTrigger className="h-14 rounded-2xl">
@@ -1382,7 +1557,7 @@ const handleQuotePreview = () => {
                       Color
                     </Label>
                     <Select
-                      {...register("color")}
+                      value={color}
                       onValueChange={(value) => setValue("color", value)}
                     >
                       <SelectTrigger className="h-14 rounded-2xl">

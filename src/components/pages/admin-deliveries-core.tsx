@@ -28,11 +28,6 @@ import {
   AlertCircle,
   Clock,
 } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
-import { useAdminActions } from "@/hooks/useAdminActions";
-import { Navbar } from "../shared/layout/testNavbar";
-import { Brand } from "@/lib/items/brand";
-import { navItems } from "@/lib/items/navItems";
 
 // Types
 interface Delivery {
@@ -163,8 +158,6 @@ const initialDeliveries: Delivery[] = [
 
 const AdminDeliveries: React.FC = () => {
   // State
-  const { actionItems, signOut } = useAdminActions();
-
   const [deliveries, setDeliveries] = useState<Delivery[]>(initialDeliveries);
   const [filteredDeliveries, setFilteredDeliveries] = useState<Delivery[]>(initialDeliveries);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -259,13 +252,61 @@ const AdminDeliveries: React.FC = () => {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Header */}
-            <Navbar
-              brand={<Brand />}
-              items={navItems}
-              actions={actionItems}
-              onSignOut={signOut}
-              title="Admin"
-            />
+      <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-10">
+            <a className="flex items-center" href="#" aria-label="101 Drivers">
+              <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200 dark:border-slate-700">
+                <img
+                  src="assets/101drivers-logo.jpg"
+                  alt="101 Drivers"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </a>
+            <nav className="hidden md:flex items-center gap-7">
+              <a className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">
+                Dashboard
+              </a>
+              <a className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">
+                Users
+              </a>
+              <a className="text-sm font-semibold text-slate-900 dark:text-white hover:text-primary transition-colors" href="#">
+                Deliveries
+              </a>
+              <a className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">
+                Disputes
+              </a>
+              <a className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">
+                Payments
+              </a>
+              <a className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">
+                Insurance
+              </a>
+              <a className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">
+                Reports
+              </a>
+            </nav>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleTheme}
+              className="rounded-2xl w-11 h-11 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            >
+              {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+            <Button
+              variant="outline"
+              className="hidden sm:inline-flex gap-2 rounded-full border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
+        </div>
+      </header>
 
       {/* Main Content */}
       <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10">

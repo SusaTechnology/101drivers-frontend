@@ -1,6 +1,5 @@
-// components/pages/admin-pricing-config.tsx
 import React, { useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import {
   DollarSign,
@@ -18,51 +17,69 @@ import { Brand } from '@/lib/items/brand';
 import { navItems } from '@/lib/items/navItems';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigList } from '@/components/pricing/PricingConfigList';
-import { usePricingConfigs, useDeletePricingConfig, useTogglePricingConfigStatus } from '@/hooks/pricing/usePricingConfigs';
-import { getUser } from '@/lib/tanstack/dataQuery';
+import {
+  useDataQuery,
+  useDelete,
+  usePatch,
+  getUser,
+} from '@/lib/tanstack/dataQuery';
 import type { PricingConfig } from '@/types/pricing';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export default function AdminPricingConfigPage() {
   const { actionItems, signOut } = useAdminActions();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch pricing configs from API
-  const { data: configs, isLoading, isError, error, refetch } = usePricingConfigs();
+  // ---------- Fetch pricing configs ----------
+  const {
+    data: configs,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useDataQuery<PricingConfig[]>({
+    apiEndPoint: `${API_BASE_URL}/api/pricingConfigs`,
+    noFilter: true,
+    staleTime: 30 * 1000,
+  });
 
-  // Delete mutation
-  const deleteMutation = useDeletePricingConfig({
+  // ---------- Delete mutation ----------
+  const deleteMutation = useDelete(`${API_BASE_URL}/api/pricingConfigs/:id`, {
     onSuccess: () => {
       toast.success('Configuration deleted successfully');
     },
     onError: (error: any) => {
       toast.error(`Failed to delete: ${error?.message || 'Unknown error'}`);
     },
+    invalidateQueryKey: [['data', `${API_BASE_URL}/api/pricingConfigs`]],
   });
 
-  // Toggle status mutation
-  const toggleStatusMutation = useTogglePricingConfigStatus({
+  // ---------- Toggle status mutation ----------
+  const toggleStatusMutation = usePatch(`${API_BASE_URL}/api/pricingConfigs/:id/`, {
     onSuccess: () => {
       toast.success('Status updated successfully');
     },
     onError: (error: any) => {
       toast.error(`Failed to update status: ${error?.message || 'Unknown error'}`);
     },
+    invalidateQueryKey: [['data', `${API_BASE_URL}/api/pricingConfigs`]],
   });
 
-  // Handlers
+  // ---------- Handlers ----------
   const handleEdit = (id: string) => {
     navigate({ to: `/admin-pricing-config/edit/${id}` });
   };
 
   const handleDelete = (id: string) => {
-    deleteMutation.mutate({ id });
+    deleteMutation.mutate({ pathParams: { id } });
   };
 
   const handleToggleStatus = (id: string, isActive: boolean) => {
     const user = getUser();
     toggleStatusMutation.mutate({
-      id,
+      pathParams: { id },
       active: isActive,
       actorUserId: user?.id || 'admin_user',
     });
@@ -77,10 +94,10 @@ export default function AdminPricingConfigPage() {
   const filteredConfigs = React.useMemo(() => {
     if (!configs) return [];
     if (!searchQuery) return configs;
-    
-    return configs.filter(config =>
-      config.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      config.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    return configs.filter(
+      (config) =>
+        config.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        config.description?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [configs, searchQuery]);
 
@@ -190,8 +207,8 @@ export default function AdminPricingConfigPage() {
           </Alert>
         </section>
 
-        {/* API Endpoint Info */}
-        <section className="mt-4">
+        {/* API Endpoint Info (commented out as in original) */}
+        {/* <section className="mt-4">
           <Alert className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800">
             <Info className="h-4 w-4 text-slate-500" />
             <AlertTitle className="text-slate-700 dark:text-slate-300 text-sm font-extrabold">
@@ -208,7 +225,7 @@ export default function AdminPricingConfigPage() {
               </div>
             </AlertDescription>
           </Alert>
-        </section>
+        </section> */}
       </main>
     </div>
   );

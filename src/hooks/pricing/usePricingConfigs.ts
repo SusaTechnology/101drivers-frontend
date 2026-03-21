@@ -50,6 +50,7 @@ export function usePricingConfigs(options?: {
 
 // Hook to fetch a single pricing config by ID
 export function usePricingConfig(id: string | undefined, enabled = true) {
+  
   return useDataQuery<PricingConfig>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/${id}`,
     enabled: !!id && enabled,
@@ -65,6 +66,8 @@ export function useSavePricingConfig(options?: {
   onSuccess?: (data: PricingConfigResponse) => void;
   onError?: (error: unknown) => void;
 }) {
+
+
   return useDataMutation<PricingConfigResponse, PricingConfigPayload>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/admin-save`,
     method: 'POST',
@@ -81,6 +84,7 @@ export function useDeletePricingConfig(options?: {
   onSuccess?: () => void;
   onError?: (error: unknown) => void;
 }) {
+  console.log("this is teh id from the hook")
   return useDataMutation<{ success: boolean; message: string }, { id: string }>({
     apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/:id`,
     method: 'DELETE',

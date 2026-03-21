@@ -193,7 +193,7 @@ export default function DriverPickupChecklistPage() {
         toast.success('Trip started!', {
           description: 'You are now on route. Safe travels!',
         })
-        navigate({ to: '/driver-active' })
+        navigate({ to: '/driver-active', search: {deliveryId} })
       },
       onError: (error) => {
         toast.error('Failed to start trip', {
@@ -527,13 +527,13 @@ export default function DriverPickupChecklistPage() {
                 </div>
               </div>
             </div>
-
+{/* 
             <div className="mt-6 flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30">
               <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
               <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
                 Prototype UI: uploads + validation are simulated. In production, every photo is time-stamped, geo-tagged (optional), and audited.
               </p>
-            </div>
+            </div> */}
           </CardContent>
         </Card>
 
@@ -960,7 +960,7 @@ export default function DriverPickupChecklistPage() {
               className="bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-2xl py-4 font-extrabold hover:opacity-90 transition flex items-center justify-center gap-2"
             >
               <Save className="w-4 h-4" />
-              {saveProgressMutation.isPending ? 'Saving...' : 'Save Progress'}
+              {saveProgressMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
 
             <Button

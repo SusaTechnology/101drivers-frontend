@@ -1,5 +1,5 @@
 // app/pages/admin/disputes/index.tsx
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -39,7 +39,6 @@ import {
   AlertTriangle,
   Eye,
   ExternalLink as OpenInNew,
-  
   ChevronLeft,
   ChevronRight,
   Home,
@@ -88,6 +87,10 @@ import {
   X as XIcon,
   ToggleLeft,
   ToggleRight,
+  FilePen,
+  FilePlus,
+  FileMinus,
+  Scale as ScaleIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -98,6 +101,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -107,14 +111,72 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-// import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useAdminActions } from '@/hooks/useAdminActions'
 import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
 import { Navbar } from '../shared/layout/testNavbar'
+import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
 
-// Filter form schema
+// ---------- Types (same as before) ----------
+interface DisputeNote {
+  id: string
+  note: string
+  createdAt: string
+  createdByUserId: string
+}
+
+interface DeliverySummary {
+  id: string
+  status: string
+  serviceType: string
+  customerId: string
+  quoteId: string | null
+  pickupAddress: string
+  dropoffAddress: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface DisputeCase {
+  id: string
+  deliveryId: string
+  reason: string
+  legalHold: boolean
+  status: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'CLOSED'
+  openedAt: string | null
+  resolvedAt: string | null
+  closedAt: string | null
+  createdAt: string
+  updatedAt: string
+  delivery: DeliverySummary
+  notes: DisputeNote[]
+  _count: {
+    notes: number
+  }
+}
+
+// Filter form schema (unchanged)
 const filterSchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
@@ -127,112 +189,139 @@ const filterSchema = z.object({
 
 type FilterFormData = z.infer<typeof filterSchema>
 
-// Mock data
-const MOCK_DISPUTES = {
-  kpis: [
-    { label: 'Open', value: '12', description: 'Awaiting review / action' },
-    { label: 'In Review', value: '7', description: 'Evidence collection + mediation' },
-    { label: 'Resolved', value: '41', description: 'Closed this month (prototype)' },
-  ],
-
-  disputes: [
-    {
-      id: 'DSP-100238',
-      icon: Gavel,
-      iconColor: 'rose',
-      raisedBy: 'Customer',
-      date: 'Feb 10, 2026',
-      summary: 'Claim: scratch on rear bumper at drop-off (photos attached).',
-      delivery: {
-        id: 'DEL-90211',
-        route: 'San Jose → Los Angeles',
-        driver: 'D-00192',
-        dealer: 'Tesla SJ',
-      },
-      type: { label: 'Damage', icon: Car, color: 'slate' },
-      status: { label: 'Open', color: 'rose', icon: AlertCircle },
-    },
-    {
-      id: 'DSP-100217',
-      icon: Schedule,
-      iconColor: 'amber',
-      raisedBy: 'Dealer',
-      date: 'Feb 08, 2026',
-      summary: 'Delay beyond pickup window; reassignment requested.',
-      delivery: {
-        id: 'DEL-90172',
-        route: 'Sacramento → Oakland',
-        driver: 'Unassigned',
-        dealer: 'AutoHub',
-      },
-      type: { label: 'Delay', icon: Timer, color: 'slate' },
-      status: { label: 'In Review', color: 'amber', icon: Hourglass },
-    },
-    {
-      id: 'DSP-100201',
-      icon: CreditCard,
-      iconColor: 'indigo',
-      raisedBy: 'Customer',
-      date: 'Feb 05, 2026',
-      summary: 'Charge mismatch between estimate and captured amount.',
-      delivery: {
-        id: 'DEL-90098',
-        route: 'Fresno → San Diego',
-        driver: 'D-00077',
-        dealer: 'CarMax',
-      },
-      type: { label: 'Payment', icon: ReceiptLong, color: 'slate' },
-      status: { label: 'Awaiting', color: 'slate', icon: MessageSquare },
-    },
-  ],
-
-  statusOptions: [
-    { value: 'any', label: 'Any' },
-    { value: 'open', label: 'Open' },
-    { value: 'in-review', label: 'In Review' },
-    { value: 'awaiting-driver', label: 'Awaiting Driver' },
-    { value: 'awaiting-customer', label: 'Awaiting Customer' },
-    { value: 'awaiting-dealer', label: 'Awaiting Dealer' },
-    { value: 'resolved', label: 'Resolved' },
-    { value: 'closed', label: 'Closed' },
-  ],
-
-  priorityOptions: [
-    { value: 'any', label: 'Any' },
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'critical', label: 'Critical' },
-  ],
-
-  typeOptions: [
-    { value: 'any', label: 'Any' },
-    { value: 'damage', label: 'Damage claim' },
-    { value: 'no-show', label: 'No-show' },
-    { value: 'delay', label: 'Delay / SLA breach' },
-    { value: 'payment', label: 'Payment dispute' },
-    { value: 'policy', label: 'Policy violation' },
-    { value: 'other', label: 'Other' },
-  ],
-
-  raisedByOptions: [
-    { value: 'any', label: 'Any' },
-    { value: 'customer', label: 'Customer' },
-    { value: 'dealer', label: 'Dealer' },
-    { value: 'driver', label: 'Driver' },
-    { value: 'admin', label: 'Admin' },
-  ],
+// Status badge color mapping
+const statusColorMap: Record<string, string> = {
+  OPEN: 'rose',
+  UNDER_REVIEW: 'amber',
+  RESOLVED: 'emerald',
+  CLOSED: 'slate',
 }
 
-
+const statusIconMap: Record<string, any> = {
+  OPEN: AlertCircle,
+  UNDER_REVIEW: Hourglass,
+  RESOLVED: CheckCircle,
+  CLOSED: XCircle,
+}
 
 export default function AdminDisputesPage() {
-  const { actionItems, signOut } = useAdminActions();
+  const { actionItems, signOut } = useAdminActions()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
+  const actorUser = getUser()
+  const actorUserId = actorUser?.id
 
+  // Dialog states
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  const [actionDialogOpen, setActionDialogOpen] = useState(false)
+  const [actionDialogType, setActionDialogType] = useState<
+    'open' | 'addNote' | 'resolve' | 'close' | 'legalHold' | null
+  >(null)
+  const [selectedDispute, setSelectedDispute] = useState<DisputeCase | null>(null)
+
+  // Forms for each action (same as before)
+  const openForm = useForm<{ note: string }>({
+    defaultValues: { note: '' },
+  })
+  const noteForm = useForm<{ note: string }>({
+    defaultValues: { note: '' },
+  })
+  const resolveForm = useForm<{ resolutionNote: string }>({
+    defaultValues: { resolutionNote: '' },
+  })
+  const closeForm = useForm<{ closingNote: string }>({
+    defaultValues: { closingNote: '' },
+  })
+  const legalHoldForm = useForm<{ closingNote: string }>({
+    defaultValues: { closingNote: '' },
+  })
+
+  // Fetch disputes
+  const {
+    data: disputes,
+    isLoading,
+    refetch,
+  } = useDataQuery<DisputeCase[]>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/disputeCases/admin`,
+    noFilter: true,
+  })
+
+  // Mutations (same as before)
+  const openMutation = useCreate<any, { deliveryId: string; reason: string; actorUserId: string }>(
+    `${import.meta.env.VITE_API_URL}/api/disputeCases/admin/open`,
+    {
+      onSuccess: () => {
+        toast.success('Dispute opened')
+        refetch()
+        setActionDialogOpen(false)
+      },
+      onError: (error) => toast.error('Failed to open dispute', { description: error.message }),
+    }
+  )
+
+  const addNoteMutation = useCreate<any, { note: string; actorUserId: string }>(
+    `${import.meta.env.VITE_API_URL}/api/disputeCases/:id/admin-note`,
+    {
+      onSuccess: () => {
+        toast.success('Note added')
+        refetch()
+        setActionDialogOpen(false)
+      },
+      onError: (error) => toast.error('Failed to add note', { description: error.message }),
+    }
+  )
+
+  const changeStatusMutation = useCreate<any, { status: string; note?: string; actorUserId: string }>(
+    `${import.meta.env.VITE_API_URL}/api/disputeCases/:id/admin-status`,
+    {
+      onSuccess: () => {
+        toast.success('Status updated')
+        refetch()
+        setActionDialogOpen(false)
+      },
+      onError: (error) => toast.error('Failed to update status', { description: error.message }),
+    }
+  )
+
+  const resolveMutation = useCreate<any, { resolutionNote: string; actorUserId: string }>(
+    `${import.meta.env.VITE_API_URL}/api/disputeCases/:id/admin-resolve`,
+    {
+      onSuccess: () => {
+        toast.success('Dispute resolved')
+        refetch()
+        setActionDialogOpen(false)
+      },
+      onError: (error) => toast.error('Failed to resolve', { description: error.message }),
+    }
+  )
+
+  const closeMutation = useCreate<any, { closingNote: string; actorUserId: string }>(
+    `${import.meta.env.VITE_API_URL}/api/disputeCases/:id/admin-close`,
+    {
+      onSuccess: () => {
+        toast.success('Dispute closed')
+        refetch()
+        setActionDialogOpen(false)
+      },
+      onError: (error) => toast.error('Failed to close', { description: error.message }),
+    }
+  )
+
+  const legalHoldMutation = useCreate<any, { closingNote: string; actorUserId: string,legalHold: boolean, }>(
+    `${import.meta.env.VITE_API_URL}/api/disputeCases/:id/admin-legal-hold`,
+    {
+      onSuccess: () => {
+        toast.success('Legal hold toggled')
+        refetch()
+        setActionDialogOpen(false)
+      },
+      onError: (error) => toast.error('Failed to update legal hold', { description: error.message }),
+    }
+  )
+
+  // Filter form
   const filterForm = useForm<FilterFormData>({
     resolver: zodResolver(filterSchema),
     defaultValues: {
@@ -246,12 +335,150 @@ export default function AdminDisputesPage() {
     },
   })
 
+  // Client-side filtering
+  const filteredDisputes = useMemo(() => {
+    if (!disputes) return []
+    const { search, status } = filterForm.getValues()
+    return disputes.filter((dispute) => {
+      if (search) {
+        const term = search.toLowerCase()
+        const matches =
+          dispute.id.toLowerCase().includes(term) ||
+          dispute.deliveryId.toLowerCase().includes(term) ||
+          dispute.reason.toLowerCase().includes(term) ||
+          dispute.delivery.pickupAddress.toLowerCase().includes(term) ||
+          dispute.delivery.dropoffAddress.toLowerCase().includes(term)
+        if (!matches) return false
+      }
+      if (status && status !== 'any' && dispute.status !== status) return false
+      return true
+    })
+  }, [disputes, filterForm.watch()])
+
+  // Compute KPIs
+  const kpis = useMemo(() => {
+    if (!disputes) return []
+    const open = disputes.filter(d => d.status === 'OPEN').length
+    const inReview = disputes.filter(d => d.status === 'UNDER_REVIEW').length
+    const resolved = disputes.filter(d => d.status === 'RESOLVED').length
+    const closed = disputes.filter(d => d.status === 'CLOSED').length
+    return [
+      { label: 'Open', value: open, description: 'Awaiting review / action' },
+      { label: 'In Review', value: inReview, description: 'Evidence collection + mediation' },
+      { label: 'Resolved', value: resolved, description: 'Resolved this month' },
+      { label: 'Closed', value: closed, description: 'Closed cases' },
+    ]
+  }, [disputes])
+
+  // Handlers
+  const handleApplyFilters = (data: FilterFormData) => {
+    toast.success('Filters applied')
+  }
+
+  const handleResetFilters = () => {
+    filterForm.reset({
+      search: '',
+      status: 'any',
+      priority: 'any',
+      type: 'any',
+      raisedBy: 'any',
+      fromDate: '',
+      toDate: '',
+    })
+    toast.info('Filters reset')
+  }
+
+  const handleExport = () => {
+    toast.success('Export started', { description: 'Disputes report will be downloaded.' })
+  }
+
+  const handleCreateDispute = () => {
+    toast.info('Create new dispute', { description: 'Opening dispute creation form.' })
+    // navigate({ to: '/admin/disputes/new' })
+  }
+
+  // Open detail dialog
+  const openDetailDialog = (dispute: DisputeCase) => {
+    setSelectedDispute(dispute)
+    setDetailDialogOpen(true)
+  }
+
+  // Open action dialog from within detail dialog
+  const openActionDialog = (type: typeof actionDialogType) => {
+    setActionDialogType(type)
+    setActionDialogOpen(true)
+    // Reset the appropriate form
+    switch (type) {
+      case 'open':
+        openForm.reset({ note: '' })
+        break
+      case 'addNote':
+        noteForm.reset({ note: '' })
+        break
+      case 'resolve':
+        resolveForm.reset({ resolutionNote: '' })
+        break
+      case 'close':
+        closeForm.reset({ closingNote: '' })
+        break
+      case 'legalHold':
+        legalHoldForm.reset({ closingNote: '' })
+        break
+    }
+  }
+
+  // Submission handlers (same as before)
+  const onSubmitOpen = (data: { note: string }) => {
+    if (!selectedDispute || !actorUserId) return
+    openMutation.mutate({
+      deliveryId: selectedDispute.deliveryId,
+      reason: data.note,
+      actorUserId,
+    })
+  }
+
+  const onSubmitAddNote = (data: { note: string }) => {
+    if (!selectedDispute || !actorUserId) return
+    addNoteMutation.mutate({
+      pathParams: { id: selectedDispute.id },
+      note: data.note,
+      actorUserId,
+    })
+  }
+
+  const onSubmitResolve = (data: { resolutionNote: string }) => {
+    if (!selectedDispute || !actorUserId) return
+    resolveMutation.mutate({
+      pathParams: { id: selectedDispute.id },
+      resolutionNote: data.resolutionNote,
+      actorUserId,
+    })
+  }
+
+  const onSubmitClose = (data: { closingNote: string }) => {
+    if (!selectedDispute || !actorUserId) return
+    closeMutation.mutate({
+      pathParams: { id: selectedDispute.id },
+      closingNote: data.closingNote,
+      actorUserId,
+    })
+  }
+
+  const onSubmitLegalHold = (data: { closingNote: string }) => {
+    if (!selectedDispute || !actorUserId) return
+    legalHoldMutation.mutate({
+      pathParams: { id: selectedDispute.id },
+      closingNote: data.closingNote,
+      actorUserId,
+      legalHold: true,
+    })
+  }
+
   // Theme handling
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Mobile menu handling
   useEffect(() => {
     if (mobileMenuOpen) {
       document.body.style.overflow = 'hidden'
@@ -273,108 +500,20 @@ export default function AdminDisputesPage() {
     navigate({ to: '/auth/admin-signin' })
   }
 
-  const handleApplyFilters = (data: FilterFormData) => {
-    toast.success('Filters applied', {
-      description: 'Disputes list filtered.',
-    })
-    console.log('Filters:', data)
-  }
-
-  const handleResetFilters = () => {
-    filterForm.reset({
-      search: '',
-      status: 'any',
-      priority: 'any',
-      type: 'any',
-      raisedBy: 'any',
-      fromDate: '',
-      toDate: '',
-    })
-    toast.info('Filters reset')
-  }
-
-  const handleExport = () => {
-    toast.success('Export started', {
-      description: 'Disputes report will be downloaded.',
-    })
-  }
-
-  const handleCreateDispute = () => {
-    toast.info('Create new dispute', {
-      description: 'Opening dispute creation form.',
-    })
-    // navigate({ to: '/admin/disputes/new' })
-  }
-
-  // Status badge component
-  const StatusBadge = ({ 
-    status, 
-    color = 'slate', 
-    icon: Icon,
-    className 
-  }: { 
-    status: string; 
-    color?: string; 
-    icon?: any;
-    className?: string;
-  }) => {
-    const colors: Record<string, string> = {
-      rose: 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30 text-rose-900 dark:text-rose-200',
-      amber: 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200',
-      slate: 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200',
-      indigo: 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30 text-indigo-900 dark:text-indigo-200',
-    }
-
-    const StatusIcon = Icon || AlertCircle
-
-    return (
-      <Badge 
-        variant="outline" 
-        className={cn(
-          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border",
-          colors[color] || colors.slate,
-          className
-        )}
-      >
-        <StatusIcon className="w-3.5 h-3.5" />
-        {status}
-      </Badge>
-    )
-  }
-
-  // Type badge component
-  const TypeBadge = ({ 
-    type, 
-    icon: Icon, 
-    color = 'slate' 
-  }: { 
-    type: string; 
-    icon?: any; 
-    color?: string 
-  }) => {
-    return (
-      <Badge 
-        variant="outline" 
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200"
-      >
-        {Icon && <Icon className="w-3.5 h-3.5 text-primary" />}
-        {type}
-      </Badge>
-    )
-  }
+  if (!mounted) return null
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-          <Navbar
-            brand={<Brand />}
-            items={navItems}
-            actions={actionItems}
-            onSignOut={signOut}
-            title="Admin"
-            />
+      <Navbar
+        brand={<Brand />}
+        items={navItems}
+        actions={actionItems}
+        onSignOut={signOut}
+        title="Admin"
+      />
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
-        {/* Top */}
+        {/* Top section - unchanged */}
         <section className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -416,8 +555,8 @@ export default function AdminDisputesPage() {
         </section>
 
         {/* KPIs */}
-        <section className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {MOCK_DISPUTES.kpis.map((kpi) => (
+        <section className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+          {kpis.map((kpi) => (
             <Card key={kpi.label} className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800">
               <CardContent className="p-5">
                 <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
@@ -436,7 +575,7 @@ export default function AdminDisputesPage() {
 
         {/* Filters + Table */}
         <section className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Filters */}
+          {/* Filters (unchanged) */}
           <div className="lg:col-span-4 space-y-6">
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardHeader className="border-b border-slate-100 dark:border-slate-800">
@@ -466,7 +605,7 @@ export default function AdminDisputesPage() {
                         <Input
                           {...filterForm.register('search')}
                           className="w-full h-11 pl-11 pr-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
-                          placeholder="Dispute ID, Delivery ID, VIN, email..."
+                          placeholder="Dispute ID, Delivery ID, reason..."
                         />
                       </div>
                     </div>
@@ -484,11 +623,11 @@ export default function AdminDisputesPage() {
                             <SelectValue placeholder="Any" />
                           </SelectTrigger>
                           <SelectContent>
-                            {MOCK_DISPUTES.statusOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="any">Any</SelectItem>
+                            <SelectItem value="OPEN">Open</SelectItem>
+                            <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
+                            <SelectItem value="RESOLVED">Resolved</SelectItem>
+                            <SelectItem value="CLOSED">Closed</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -496,20 +635,10 @@ export default function AdminDisputesPage() {
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
                           Priority
                         </Label>
-                        <Select
-                          onValueChange={(value) => filterForm.setValue('priority', value)}
-                          defaultValue="any"
-                        >
+                        <Select disabled>
                           <SelectTrigger className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 px-4 text-sm">
                             <SelectValue placeholder="Any" />
                           </SelectTrigger>
-                          <SelectContent>
-                            {MOCK_DISPUTES.priorityOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
                         </Select>
                       </div>
                     </div>
@@ -519,40 +648,20 @@ export default function AdminDisputesPage() {
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
                           Type
                         </Label>
-                        <Select
-                          onValueChange={(value) => filterForm.setValue('type', value)}
-                          defaultValue="any"
-                        >
+                        <Select disabled>
                           <SelectTrigger className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 px-4 text-sm">
                             <SelectValue placeholder="Any" />
                           </SelectTrigger>
-                          <SelectContent>
-                            {MOCK_DISPUTES.typeOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
                         </Select>
                       </div>
                       <div>
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
                           Raised by
                         </Label>
-                        <Select
-                          onValueChange={(value) => filterForm.setValue('raisedBy', value)}
-                          defaultValue="any"
-                        >
+                        <Select disabled>
                           <SelectTrigger className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 px-4 text-sm">
                             <SelectValue placeholder="Any" />
                           </SelectTrigger>
-                          <SelectContent>
-                            {MOCK_DISPUTES.raisedByOptions.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
                         </Select>
                       </div>
                     </div>
@@ -610,7 +719,7 @@ export default function AdminDisputesPage() {
               </CardContent>
             </Card>
 
-            {/* Quick actions */}
+            {/* Quick actions (unchanged) */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardHeader className="border-b border-slate-100 dark:border-slate-800">
                 <div>
@@ -663,120 +772,126 @@ export default function AdminDisputesPage() {
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="pill bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30 text-rose-900 dark:text-rose-200">
                       <AlertCircle className="w-3.5 h-3.5 text-rose-500 mr-1" />
-                      12 Open
+                      {kpis.find(k => k.label === 'Open')?.value || 0} Open
                     </Badge>
                     <Badge variant="outline" className="pill bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
                       <Schedule className="w-3.5 h-3.5 text-primary mr-1" />
-                      7 In Review
+                      {kpis.find(k => k.label === 'In Review')?.value || 0} In Review
                     </Badge>
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="p-6 sm:p-7">
-                <div className="overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800">
-                  {/* Header */}
-                  <div className="grid grid-cols-12 gap-3 px-6 py-4 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
-                    <div className="col-span-3 text-[11px] font-black uppercase tracking-widest text-slate-400">
-                      Dispute
-                    </div>
-                    <div className="col-span-3 text-[11px] font-black uppercase tracking-widest text-slate-400">
-                      Linked delivery
-                    </div>
-                    <div className="col-span-2 text-[11px] font-black uppercase tracking-widest text-slate-400">
-                      Type
-                    </div>
-                    <div className="col-span-2 text-[11px] font-black uppercase tracking-widest text-slate-400">
-                      Status
-                    </div>
-                    <div className="col-span-2 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">
-                      Actions
-                    </div>
-                  </div>
-
-                  {/* Rows */}
-                  <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                    {MOCK_DISPUTES.disputes.map((dispute, index) => (
-                      <div key={dispute.id} className="grid grid-cols-12 gap-3 px-6 py-4 hover:bg-primary/5 transition">
-                        {/* Dispute column */}
-                        <div className="col-span-3">
-                          <div className="flex items-start gap-3">
-                            <div className={cn(
-                              "w-10 h-10 rounded-2xl flex items-center justify-center border shrink-0",
-                              dispute.iconColor === 'rose' && "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200/60 dark:border-rose-900/30",
-                              dispute.iconColor === 'amber' && "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200/60 dark:border-amber-900/30",
-                              dispute.iconColor === 'indigo' && "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200/60 dark:border-indigo-900/30"
-                            )}>
-                              <dispute.icon className="w-5 h-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-sm font-black text-slate-900 dark:text-white">
-                                {dispute.id}
-                              </div>
-                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Raised by {dispute.raisedBy} • {dispute.date}
-                              </div>
-                              <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 truncate">
-                                {dispute.summary}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Delivery column */}
-                        <div className="col-span-3">
-                          <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                            <Link
-                            //   to={`/admin/delivery/${dispute.delivery.id}`}
-                              className="hover:text-primary transition-colors"
-                            >
-                              {dispute.delivery.id}
-                            </Link>
-                          </div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            {dispute.delivery.route}
-                          </div>
-                          <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
-                            Driver: {dispute.delivery.driver} • Dealer: {dispute.delivery.dealer}
-                          </div>
-                        </div>
-
-                        {/* Type column */}
-                        <div className="col-span-2">
-                          <TypeBadge 
-                            type={dispute.type.label} 
-                            icon={dispute.type.icon} 
-                          />
-                        </div>
-
-                        {/* Status column */}
-                        <div className="col-span-2">
-                          <StatusBadge 
-                            status={dispute.status.label} 
-                            color={dispute.status.color}
-                            icon={dispute.status.icon}
-                          />
-                        </div>
-
-                        {/* Actions column */}
-                        <div className="col-span-2 flex justify-end gap-2">
-                          <Link
-                            // to={`/admin/dispute/${dispute.id}`}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl font-extrabold bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition"
-                          >
-                            View
-                            <ArrowRight className="w-4 h-4" />
-                          </Link>
-                        </div>
+                {isLoading ? (
+                  <div className="text-center py-8">Loading disputes...</div>
+                ) : filteredDisputes.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500">No disputes found</div>
+                ) : (
+                  <div className="overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800">
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-3 px-6 py-4 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
+                      <div className="col-span-3 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Dispute
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="col-span-3 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Linked delivery
+                      </div>
+                      <div className="col-span-2 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Type / Reason
+                      </div>
+                      <div className="col-span-2 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Status
+                      </div>
+                      <div className="col-span-2 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">
+                        Actions
+                      </div>
+                    </div>
 
-                {/* Pagination */}
+                    {/* Table Rows */}
+                    <div className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {filteredDisputes.map((dispute) => (
+                        <div key={dispute.id} className="grid grid-cols-12 gap-3 px-6 py-4 hover:bg-primary/5 transition">
+                          {/* Dispute column */}
+                          <div className="col-span-3">
+                            <div className="flex items-start gap-3">
+                              <div className={cn(
+                                "w-10 h-10 rounded-2xl flex items-center justify-center border shrink-0",
+                                dispute.legalHold ? "bg-indigo-500/10 text-indigo-600 border-indigo-200/60" : "bg-rose-500/10 text-rose-600 border-rose-200/60"
+                              )}>
+                                {dispute.legalHold ? <ScaleIcon className="w-5 h-5" /> : <Gavel className="w-5 h-5" />}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-black text-slate-900 dark:text-white">
+                                  {dispute.id.slice(-8).toUpperCase()}
+                                </div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                  Opened {new Date(dispute.openedAt || dispute.createdAt).toLocaleDateString()}
+                                </div>
+                                <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 truncate">
+                                  {dispute.reason}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Delivery column */}
+                          <div className="col-span-3">
+                            <div className="text-sm font-extrabold text-slate-900 dark:text-white">
+                              <Link
+                                to={`/admin/delivery/${dispute.deliveryId}`}
+                                className="hover:text-primary transition-colors"
+                              >
+                                {dispute.deliveryId.slice(-8).toUpperCase()}
+                              </Link>
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              {dispute.delivery.pickupAddress} → {dispute.delivery.dropoffAddress}
+                            </div>
+                            <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                              Status: {dispute.delivery.status}
+                            </div>
+                          </div>
+
+                          {/* Type / Reason column */}
+                          <div className="col-span-2">
+                            <Badge variant="outline" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
+                              <Car className="w-3.5 h-3.5 text-primary" />
+                              {dispute.reason.length > 20 ? dispute.reason.slice(0, 20) + '…' : dispute.reason}
+                            </Badge>
+                          </div>
+
+                          {/* Status column */}
+                          <div className="col-span-2">
+                            <StatusBadge
+                              status={dispute.status}
+                              color={statusColorMap[dispute.status] || 'slate'}
+                              icon={statusIconMap[dispute.status] || AlertCircle}
+                            />
+                            {dispute.legalHold && (
+                              <Badge variant="outline" className="mt-1 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold border bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-900/30 text-indigo-700 dark:text-indigo-200">
+                                <ScaleIcon className="w-3 h-3" />
+                                Legal Hold
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Actions column - only View button */}
+                          <div className="col-span-2 flex justify-end gap-2">
+                            <Button size="sm" variant="outline" onClick={() => openDetailDialog(dispute)}>
+                              <Eye className="w-3.5 h-3.5 mr-1" /> View
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pagination placeholder */}
                 <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                    Showing 1–3 of 60 disputes (prototype)
+                    Showing {filteredDisputes.length} of {disputes?.length || 0} disputes
                   </p>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" className="px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-800 hover:bg-primary/5">
@@ -825,6 +940,356 @@ export default function AdminDisputesPage() {
           </div>
         </div>
       </footer>
+
+      {/* ---------- Detail Dialog (Beautiful Redesign) ---------- */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black flex items-center gap-3">
+              <span>Dispute {selectedDispute?.id.slice(-8).toUpperCase()}</span>
+              {selectedDispute && (
+                <>
+                  <StatusBadge
+                    status={selectedDispute.status}
+                    color={statusColorMap[selectedDispute.status] || 'slate'}
+                    icon={statusIconMap[selectedDispute.status] || AlertCircle}
+                  />
+                  {selectedDispute.legalHold && (
+                    <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-900/30 text-indigo-700 dark:text-indigo-200">
+                      <ScaleIcon className="w-3.5 h-3.5 mr-1" />
+                      Legal Hold
+                    </Badge>
+                  )}
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Detailed information and actions for this dispute.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedDispute && (
+            <>
+              <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+                <Tabs defaultValue="overview" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="notes">Notes ({selectedDispute._count.notes})</TabsTrigger>
+                  </TabsList>
+
+                  {/* Overview Tab */}
+                  <TabsContent value="overview" className="space-y-4 mt-4">
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Dispute Information</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-xs text-slate-500">Reason</Label>
+                          <p className="text-sm font-medium mt-1">{selectedDispute.reason}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-500">Opened At</Label>
+                          <p className="text-sm mt-1">{selectedDispute.openedAt ? new Date(selectedDispute.openedAt).toLocaleString() : '—'}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-500">Resolved At</Label>
+                          <p className="text-sm mt-1">{selectedDispute.resolvedAt ? new Date(selectedDispute.resolvedAt).toLocaleString() : '—'}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-500">Closed At</Label>
+                          <p className="text-sm mt-1">{selectedDispute.closedAt ? new Date(selectedDispute.closedAt).toLocaleString() : '—'}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-500">Created At</Label>
+                          <p className="text-sm mt-1">{new Date(selectedDispute.createdAt).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-500">Last Updated</Label>
+                          <p className="text-sm mt-1">{new Date(selectedDispute.updatedAt).toLocaleString()}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Linked Delivery</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid grid-cols-2 gap-4">
+                        {/* <div>
+                          <Label className="text-xs text-slate-500">Delivery ID</Label>
+                          <p className="text-sm font-mono mt-1">{selectedDispute.deliveryId}</p>
+                        </div> */}
+                        <div>
+                          <Label className="text-xs text-slate-500">Status</Label>
+                          <p className="text-sm mt-1">{selectedDispute.delivery.status}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-500">Service Type</Label>
+                          <p className="text-sm mt-1">{selectedDispute.delivery.serviceType}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs text-slate-500">Pickup Address</Label>
+                          <p className="text-sm mt-1">{selectedDispute.delivery.pickupAddress}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs text-slate-500">Dropoff Address</Label>
+                          <p className="text-sm mt-1">{selectedDispute.delivery.dropoffAddress}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+
+                  {/* Notes Tab */}
+                  <TabsContent value="notes" className="mt-4">
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Internal Notes</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ScrollArea className="h-64 pr-4">
+                          {selectedDispute.notes.length === 0 ? (
+                            <p className="text-sm text-slate-400 text-center py-8">No notes yet</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {selectedDispute.notes.map((note) => (
+                                <div key={note.id} className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                  <p className="text-sm">{note.note}</p>
+                                  <p className="text-xs text-slate-500 mt-2">
+                                    {new Date(note?.createdAt)?.toLocaleString()} • by {note?.createdByUserId?.slice(-6)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap justify-end gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                {selectedDispute.status !== 'OPEN' && (
+                  <Button variant="outline" onClick={() => openActionDialog('open')}>
+                    <FilePlus className="w-4 h-4 mr-2" /> Open
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => openActionDialog('addNote')}>
+                  <FilePen className="w-4 h-4 mr-2" /> Add Note
+                </Button>
+                {selectedDispute.status === 'OPEN' && (
+                  <>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => openActionDialog('resolve')}>
+                      <CheckCircle className="w-4 h-4 mr-2" /> Resolve
+                    </Button>
+                    <Button variant="destructive" onClick={() => openActionDialog('close')}>
+                      <XCircle className="w-4 h-4 mr-2" /> Close
+                    </Button>
+                  </>
+                )}
+                <Button
+                  variant={selectedDispute.legalHold ? "default" : "outline"}
+                  className={selectedDispute.legalHold ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}
+                  onClick={() => openActionDialog('legalHold')}
+                >
+                  <ScaleIcon className="w-4 h-4 mr-2" />
+                  {selectedDispute.legalHold ? 'Remove Legal Hold' : 'Apply Legal Hold'}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------- Action Dialogs (unchanged, but now controlled by actionDialogOpen) ---------- */}
+
+      {/* Open Dialog */}
+      <Dialog open={actionDialogOpen && actionDialogType === 'open'} onOpenChange={setActionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Open Dispute</DialogTitle>
+            <DialogDescription>
+              Provide a reason for opening this dispute.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...openForm}>
+            <form onSubmit={openForm.handleSubmit(onSubmitOpen)} className="space-y-4">
+              <FormField
+                control={openForm.control}
+                name="note"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reason</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={openMutation.isPending}>Open</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Note Dialog */}
+      <Dialog open={actionDialogOpen && actionDialogType === 'addNote'} onOpenChange={setActionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Note</DialogTitle>
+            <DialogDescription>
+              Add an internal note to this dispute.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...noteForm}>
+            <form onSubmit={noteForm.handleSubmit(onSubmitAddNote)} className="space-y-4">
+              <FormField
+                control={noteForm.control}
+                name="note"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Note</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={addNoteMutation.isPending}>Add Note</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resolve Dialog */}
+      <Dialog open={actionDialogOpen && actionDialogType === 'resolve'} onOpenChange={setActionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resolve Dispute</DialogTitle>
+            <DialogDescription>
+              Provide a resolution note.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...resolveForm}>
+            <form onSubmit={resolveForm.handleSubmit(onSubmitResolve)} className="space-y-4">
+              <FormField
+                control={resolveForm.control}
+                name="resolutionNote"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Resolution Note</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={resolveMutation.isPending}>Resolve</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close Dialog */}
+      <Dialog open={actionDialogOpen && actionDialogType === 'close'} onOpenChange={setActionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Close Dispute</DialogTitle>
+            <DialogDescription>
+              Provide a closing note.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...closeForm}>
+            <form onSubmit={closeForm.handleSubmit(onSubmitClose)} className="space-y-4">
+              <FormField
+                control={closeForm.control}
+                name="closingNote"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Closing Note</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={closeMutation.isPending}>Close</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Legal Hold Dialog */}
+      <Dialog open={actionDialogOpen && actionDialogType === 'legalHold'} onOpenChange={setActionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selectedDispute?.legalHold ? 'Remove Legal Hold' : 'Apply Legal Hold'}</DialogTitle>
+            <DialogDescription>
+              {selectedDispute?.legalHold
+                ? 'Provide a note about removing legal hold.'
+                : 'Provide a note about applying legal hold.'}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...legalHoldForm}>
+            <form onSubmit={legalHoldForm.handleSubmit(onSubmitLegalHold)} className="space-y-4">
+              <FormField
+                control={legalHoldForm.control}
+                name="closingNote"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Note</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={legalHoldMutation.isPending}>
+                  {selectedDispute?.legalHold ? 'Remove Hold' : 'Apply Hold'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+// Helper StatusBadge component (same as before)
+const StatusBadge = ({ status, color, icon: Icon, className }: any) => {
+  const colors: Record<string, string> = {
+    rose: 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30 text-rose-900 dark:text-rose-200',
+    amber: 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200',
+    emerald: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200',
+    slate: 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200',
+    indigo: 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30 text-indigo-900 dark:text-indigo-200',
+  }
+  return (
+    <Badge variant="outline" className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border", colors[color] || colors.slate, className)}>
+      <Icon className="w-3.5 h-3.5" />
+      {status}
+    </Badge>
   )
 }

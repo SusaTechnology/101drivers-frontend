@@ -1,4 +1,3 @@
-// components/pages/admin-pricing-config-form.tsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { toast } from 'sonner';
@@ -17,9 +16,16 @@ import { Brand } from '@/lib/items/brand';
 import { navItems } from '@/lib/items/navItems';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { PricingConfigForm } from '@/components/pricing/PricingConfigForm';
-import { useSavePricingConfig, usePricingConfig, transformToPayload } from '@/hooks/pricing/usePricingConfigs';
+import { transformToPayload } from '@/hooks/pricing/usePricingConfigs'; // keep utility
+import {
+  useDataQuery,
+  useDataMutation,
+  getUser,
+} from '@/lib/tanstack/dataQuery';
 import type { PricingConfigFormData, PricingConfig } from '@/types/pricing';
 import { DEFAULT_PRICING_CONFIG, configToFormData } from '@/types/pricing';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 interface AdminPricingConfigFormPageProps {
   configId?: string;
@@ -36,47 +42,65 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
   );
 
   // Fetch existing config for edit mode
-  const { data: configData, isLoading, isError, error } = usePricingConfig(configId, isEditMode);
+  const {
+    data: configData,
+    isLoading,
+    isError,
+    error,
+  } = useDataQuery<PricingConfig>({
+    apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/${configId}`,
+    enabled: isEditMode,
+    noFilter: true,
+  });
 
-  // Save mutation
-  const saveMutation = useSavePricingConfig({
-    onSuccess: (data) => {
+  // Save mutation (handles both create and update)
+  const saveMutation = useDataMutation<PricingConfig, PricingConfigFormData & { actorUserId?: string }>({
+    apiEndPoint: `${API_BASE_URL}/api/pricingConfigs/admin-save`,
+    method: 'POST',
+    onSuccess: (data, variables) => {
       setIsSubmitting(false);
       toast.success(
         isEditMode
           ? 'Configuration updated successfully'
           : 'Configuration created successfully'
       );
-      
+
       // Update the form data immediately with the response
-      if (data?.data) {
-        const updatedFormData = configToFormData(data.data);
+      if (data) {
+        const updatedFormData = configToFormData(data);
         setInitialData(updatedFormData);
-        
+
         // If this was a create (no configId), update the URL to edit mode
         // so subsequent saves are updates, not creates
-        if (!isEditMode && data.data.id) {
-          navigate({ 
-            to: `/admin-pricing-config/edit/${data.data.id}`,
-            replace: true 
+        if (!isEditMode && data.id) {
+          navigate({
+            to: `/admin-pricing-config/edit/${data.id}`,
+            replace: true,
           });
         }
       }
+
+      // Invalidate the list and the single config query (if any)
+      // saveMutation.onSuccessInvalidate = true;
     },
     onError: (error: any) => {
       setIsSubmitting(false);
       toast.error(`Failed to save: ${error?.message || 'Unknown error'}`);
     },
+    invalidateQueryKey: [
+      ['data', `${API_BASE_URL}/api/pricingConfigs`],
+      ...(configId ? [['data', `${API_BASE_URL}/api/pricingConfigs/${configId}`]] : []),
+    ],
   });
 
   // Load data for edit mode
   useEffect(() => {
     if (isEditMode && configData) {
-      const formData = configToFormData(configData as PricingConfig);
-      console.log('Loading config data for edit:', { 
-        id: formData.id, 
+      const formData = configToFormData(configData);
+      console.log('Loading config data for edit:', {
+        id: formData.id,
         name: formData.name,
-        pricingMode: formData.pricingMode 
+        pricingMode: formData.pricingMode,
       });
       setInitialData(formData);
     }
@@ -86,16 +110,22 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
   const handleSubmit = async (data: PricingConfigFormData) => {
     setIsSubmitting(true);
     try {
-      // Transform form data to API payload
+      // Transform form data to API payload and add actorUserId
       const payload = transformToPayload(data);
-      console.log('Submitting pricing config payload:', { 
-        id: payload.id, 
-        name: payload.name, 
-        isUpdate: !!payload.id 
+      const user = getUser();
+      const payloadWithActor = {
+        ...payload,
+        actorUserId: user?.id || 'admin_user',
+      };
+
+      console.log('Submitting pricing config payload:', {
+        id: payloadWithActor.id,
+        name: payloadWithActor.name,
+        isUpdate: !!payloadWithActor.id,
       });
 
       // Call the mutation
-      saveMutation.mutate(payload);
+      saveMutation.mutate(payloadWithActor);
     } catch (error: any) {
       setIsSubmitting(false);
       toast.error(`Failed to save: ${error.message}`);

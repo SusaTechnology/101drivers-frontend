@@ -4,10 +4,12 @@ import { Link, useParams, useNavigate, useLocation } from '@tanstack/react-route
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useJsApiLoader } from '@react-google-maps/api'
 import RouteMap from '@/components/map/RouteMap'
 import {
@@ -51,9 +53,11 @@ import {
   Target,
   Award,
   ChevronRight,
+  DollarSign,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
+import { toast } from 'sonner'
 
 // Helper to format date
 const formatDate = (dateString: string) => {
@@ -81,14 +85,35 @@ const serviceTypeMap: Record<string, { icon: React.ReactNode; label: string }> =
   default: { icon: <Truck className="h-4 w-4" />, label: 'Delivery' },
 }
 
+// Tip payload type
+interface TipPayload {
+  amount: number
+  delivery: { id: string }
+  provider: 'STRIPE' | 'MANUAL' | 'OTHER'
+  providerRef: string
+  status: 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED'
+}
+
 export default function DealerDeliveryDetails() {
   const { state } = useLocation()
-const id = state?.id
+  const id = state?.id
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('details')
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null)
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null)
+
+  // Rating state
+  const [ratingStars, setRatingStars] = useState(0)
+  const [ratingComment, setRatingComment] = useState('')
+
+  // Tip state
+  const [tipAmount, setTipAmount] = useState<number | ''>('')
+  const [tipProvider, setTipProvider] = useState<'STRIPE' | 'MANUAL' | 'OTHER'>('MANUAL')
+  const [tipProviderRef, setTipProviderRef] = useState('')
+  const [tipStatus, setTipStatus] = useState<'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED'>('CAPTURED')
+
+  const [customTipInput, setCustomTipInput] = useState('')
 
   const user = getUser()
   const dealerId = user?.profileId
@@ -108,9 +133,37 @@ const id = state?.id
     error,
     refetch
   } = useDataQuery({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${dealerId}/deliveries/${id}`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${id}`,
     noFilter: true,
     enabled: !!dealerId && !!id,
+  })
+
+  // Rating mutation
+  const ratingMutation = useCreate<any, any>(`${import.meta.env.VITE_API_URL}/api/deliveryRatings`, {
+    onSuccess: () => {
+      toast.success('Rating submitted', { description: 'Thank you for your feedback!' })
+      setRatingStars(0)
+      setRatingComment('')
+    },
+    onError: (error) => {
+      toast.error('Failed to submit rating', { description: error.message })
+    }
+  })
+
+  // Tip mutation
+  const tipMutation = useCreate<TipPayload, TipPayload>(`${import.meta.env.VITE_API_URL}/api/tips`, {
+    onSuccess: () => {
+      toast.success('Tip sent', { description: 'Thank you for your generosity!' })
+      // Reset form
+      setTipAmount('')
+      setTipProvider('MANUAL')
+      setTipProviderRef('')
+      setTipStatus('CAPTURED')
+      setCustomTipInput('')
+    },
+    onError: (error) => {
+      toast.error('Failed to send tip', { description: error.message })
+    }
   })
 
   // Geocode addresses when data is loaded
@@ -167,10 +220,21 @@ const id = state?.id
     : '—'
 
   // Price
-  const price = deliveryData?.payment?.amount || deliveryData?.quote?.estimatedAmount
+  const price = deliveryData?.payment?.amount || deliveryData?.quote?.estimatedPrice
   const priceType = deliveryData?.payment ? 'Final' : (deliveryData?.quote ? 'Est.' : '—')
 
-  // Timeline based on status and timestamps
+  // Driver info from assignments
+  const assignment = deliveryData?.assignments?.[0]
+  const driver = assignment?.driver ? {
+    id: assignment.driver.id,
+    name: assignment.driver.user?.fullName || 'Driver',
+    rating: assignment.driver.rating || '—',
+    deliveries: assignment.driver.deliveryCount || '—',
+    verified: assignment.driver.status === 'APPROVED',
+    phone: assignment.driver.phone || '—',
+  } : null
+
+  // Timeline based on real timestamps
   const timelineItems = [
     {
       status: 'Request submitted',
@@ -180,42 +244,41 @@ const id = state?.id
     },
     {
       status: 'Booked (driver assigned)',
-      time: deliveryData?.bookedAt ? formatDateTime(deliveryData.bookedAt) : (deliveryData?.status !== 'LISTED' ? 'Pending' : '—'),
-      completed: deliveryData?.status !== 'LISTED',
+      time: assignment?.assignedAt ? formatDateTime(assignment.assignedAt) : (deliveryData?.status !== 'LISTED' ? 'Pending' : '—'),
+      completed: !!assignment,
       icon: Hourglass,
     },
     {
       status: 'Active (pickup → in transit)',
-      time: deliveryData?.activeAt ? formatDateTime(deliveryData.activeAt) : (deliveryData?.status === 'ACTIVE' || deliveryData?.status === 'COMPLETED' ? 'In progress' : '—'),
-      completed: deliveryData?.status === 'ACTIVE' || deliveryData?.status === 'COMPLETED',
+      time: deliveryData?.trackingSession?.startedAt ? formatDateTime(deliveryData.trackingSession.startedAt) : (deliveryData?.status === 'ACTIVE' || deliveryData?.status === 'COMPLETED' ? 'In progress' : '—'),
+      completed: !!deliveryData?.trackingSession?.startedAt,
       icon: Package,
     },
     {
       status: 'Completed',
-      time: deliveryData?.completedAt ? formatDateTime(deliveryData.completedAt) : (deliveryData?.status === 'COMPLETED' ? 'Completed' : '—'),
+      time: deliveryData?.compliance?.dropoffCompletedAt ? formatDateTime(deliveryData.compliance.dropoffCompletedAt) : (deliveryData?.status === 'COMPLETED' ? 'Completed' : '—'),
       completed: deliveryData?.status === 'COMPLETED',
       icon: CheckSquare,
     },
   ]
-
-  // Driver info (if available)
-  const driver = deliveryData?.driver ? {
-    name: deliveryData.driver.name || 'Driver',
-    rating: deliveryData.driver.rating || '—',
-    deliveries: deliveryData.driver.deliveryCount || '—',
-    verified: deliveryData.driver.verified || false,
-    phone: deliveryData.driver.phone || '—',
-  } : null
 
   // Proofs data
   const proofs = {
     vin: deliveryData?.vinVerificationCode || '—',
     odometerStart: deliveryData?.compliance?.odometerStart || '—',
     odometerEnd: deliveryData?.compliance?.odometerEnd || '—',
-    trackingStatus: deliveryData?.trackingSession ? 'Started' : 'Not started',
+    trackingStatus: deliveryData?.trackingSession?.status || 'Not started',
     trackingStart: deliveryData?.trackingSession?.startedAt ? formatDateTime(deliveryData.trackingSession.startedAt) : '—',
-    trackingEnd: deliveryData?.trackingSession?.endedAt ? formatDateTime(deliveryData.trackingSession.endedAt) : '—',
+    trackingEnd: deliveryData?.trackingSession?.stoppedAt ? formatDateTime(deliveryData.trackingSession.stoppedAt) : '—',
   }
+
+  // Filter evidence photos
+  const pickupPhotos = deliveryData?.evidence?.filter(
+    (e: any) => e.phase === 'PICKUP' && e.type === 'PICKUP_PHOTO' && e.imageUrl
+  ) || []
+  const dropoffPhotos = deliveryData?.evidence?.filter(
+    (e: any) => e.phase === 'DROPOFF' && e.type === 'DROPOFF_PHOTO' && e.imageUrl
+  ) || []
 
   // Messages (static for prototype)
   const [messages, setMessages] = useState([
@@ -224,7 +287,62 @@ const id = state?.id
   ])
   const [newMessage, setNewMessage] = useState('')
 
-  // Status badge component (same as before)
+  // Submit rating
+  const handleSubmitRating = () => {
+    if (!driver) {
+      toast.error('No driver assigned yet')
+      return
+    }
+    if (ratingStars === 0) {
+      toast.error('Please select a star rating')
+      return
+    }
+    const payload = {
+      comment: ratingComment,
+      customer: { id: deliveryData.customer.id },
+      delivery: { id: deliveryData.id },
+      driver: { id: driver.id },
+      stars: ratingStars,
+      target: 'DRIVER',
+    }
+    ratingMutation.mutate(payload)
+  }
+
+  // Submit tip
+  const handleTipSubmit = () => {
+    if (!driver) {
+      toast.error('No driver assigned yet')
+      return
+    }
+    if (deliveryData.status !== 'COMPLETED') {
+      toast.error('Tips can only be given after delivery is completed')
+      return
+    }
+    let amount = tipAmount
+    if (amount === '' && customTipInput) {
+      amount = parseFloat(customTipInput)
+    }
+    if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid tip amount')
+      return
+    }
+    const payload: TipPayload = {
+      amount,
+      delivery: { id: deliveryData.id },
+      provider: tipProvider,
+      providerRef: tipProviderRef,
+      status: tipStatus,
+    }
+    tipMutation.mutate(payload)
+  }
+
+  // Preset tip handler
+  const handlePresetTip = (amount: number) => {
+    setTipAmount(amount)
+    setCustomTipInput('')
+  }
+
+  // Status badge component
   const StatusBadge = ({ status }: { status: string }) => {
     const getStatusConfig = () => {
       switch (status) {
@@ -277,7 +395,7 @@ const id = state?.id
     )
   }
 
-  // Header component (unchanged except for dynamic dealer name)
+  // Header component (unchanged)
   const Header = () => (
     <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -475,7 +593,15 @@ const id = state?.id
               <Calendar className="h-4 w-4 text-lime-500" />
               Edit Schedule
             </Button>
-
+    {(deliveryData.status === 'BOOKED' || deliveryData.status === 'ACTIVE') && (
+      <Button
+        onClick={() => navigate({ to: `/live-track?deliveryId=${deliveryData.id}` })}
+        className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-lime-500 text-slate-950 font-extrabold hover:bg-lime-600"
+      >
+        <Navigation className="h-4 w-4" />
+        Live track the driver
+      </Button>
+    )}
             <Button className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold hover:opacity-90">
               <Headphones className="h-4 w-4" />
               Contact Support
@@ -749,34 +875,82 @@ const id = state?.id
                         </CardContent>
                       </Card>
 
-                      {/* Photos (placeholder) */}
+                      {/* Pickup Photos */}
                       <Card className="rounded-3xl border-slate-200 dark:border-slate-800 md:col-span-2">
                         <CardContent className="p-6">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-11 h-11 rounded-2xl bg-lime-500/15 flex items-center justify-center">
-                                <Camera className="h-5 w-5 text-lime-500" />
-                              </div>
-                              <div>
-                                <div className="font-black text-slate-900 dark:text-white">Photo documentation</div>
-                                <div className="text-sm text-slate-600 dark:text-slate-400">
-                                  Pickup + drop-off required photos (prototype thumbnails)
-                                </div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-lime-500/15 flex items-center justify-center">
+                              <Camera className="h-5 w-5 text-lime-500" />
+                            </div>
+                            <div>
+                              <div className="font-black text-slate-900 dark:text-white">Pickup photos</div>
+                              <div className="text-sm text-slate-600 dark:text-slate-400">
+                                {pickupPhotos.length} photo{pickupPhotos.length !== 1 ? 's' : ''} captured
                               </div>
                             </div>
-
-                            <Button variant="outline" className="gap-2">
-                              <ChevronRight className="h-4 w-4 text-lime-500" />
-                              View all
-                            </Button>
                           </div>
 
-                          <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            {[1, 2, 3, 4].map((i) => (
-                              <div key={i} className="aspect-[4/3] rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 flex items-center justify-center">
-                                <Camera className="h-6 w-6 text-slate-600 dark:text-slate-300" />
-                              </div>
+                          <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                            {pickupPhotos.map((photo) => (
+                              <a
+                                key={photo.imageUrl}
+                                href={photo.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="aspect-square rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
+                              >
+                                <img
+                                  src={photo.imageUrl}
+                                  alt={`Pickup ${photo.slotIndex}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </a>
                             ))}
+                            {pickupPhotos.length === 0 && (
+                              <div className="col-span-full text-center py-8 text-slate-500">
+                                No pickup photos uploaded yet.
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Dropoff Photos */}
+                      <Card className="rounded-3xl border-slate-200 dark:border-slate-800 md:col-span-2">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-lime-500/15 flex items-center justify-center">
+                              <Camera className="h-5 w-5 text-lime-500" />
+                            </div>
+                            <div>
+                              <div className="font-black text-slate-900 dark:text-white">Drop-off photos</div>
+                              <div className="text-sm text-slate-600 dark:text-slate-400">
+                                {dropoffPhotos.length} photo{dropoffPhotos.length !== 1 ? 's' : ''} captured
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                            {dropoffPhotos.map((photo) => (
+                              <a
+                                key={photo.imageUrl}
+                                href={photo.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="aspect-square rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
+                              >
+                                <img
+                                  src={photo.imageUrl}
+                                  alt={`Dropoff ${photo.slotIndex}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </a>
+                            ))}
+                            {dropoffPhotos.length === 0 && (
+                              <div className="col-span-full text-center py-8 text-slate-500">
+                                No drop-off photos uploaded yet.
+                              </div>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -917,7 +1091,7 @@ const id = state?.id
             </Tabs>
           </div>
 
-          {/* Right: Driver card + contact + rating/tip */}
+          {/* Right: Driver card + contact + rating + tip */}
           <div className="lg:col-span-5 space-y-6">
             {/* Driver identity */}
             <Card className="border-slate-200 dark:border-slate-800 rounded-3xl hover:shadow-xl transition-shadow">
@@ -954,7 +1128,7 @@ const id = state?.id
                           </div>
                         </div>
                         <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          {driver.deliveries} deliveries • ID verified
+                          {driver.deliveries} deliveries • {driver.verified ? 'ID verified' : 'Pending verification'}
                         </div>
                       </div>
                     </div>
@@ -1025,10 +1199,10 @@ const id = state?.id
               </CardContent>
             </Card>
 
-            {/* Rating & tip */}
+            {/* Rating card (now only rating) */}
             <Card className="border-slate-200 dark:border-slate-800 rounded-3xl hover:shadow-xl transition-shadow">
               <CardHeader>
-                <CardTitle className="text-xl font-black text-slate-900 dark:text-white">Rate & tip (after completion)</CardTitle>
+                <CardTitle className="text-xl font-black text-slate-900 dark:text-white">Rate driver (after completion)</CardTitle>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                   Available when the delivery is marked Completed.
                 </p>
@@ -1036,34 +1210,202 @@ const id = state?.id
               <CardContent>
                 <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
                   <CardContent className="p-5">
+                    {/* Star rating */}
                     <div className="flex items-center justify-between">
                       <div className="text-sm font-black text-slate-900 dark:text-white">Your rating</div>
-                      <div className="flex items-center gap-1 text-amber-500">
-                        {[1, 2, 3, 4, 5].map((i) => (
-                          <Star key={i} className="h-5 w-5 fill-amber-500" />
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setRatingStars(star)}
+                            disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                            className="focus:outline-none"
+                          >
+                            <Star
+                              className={cn(
+                                "h-6 w-6 transition-colors",
+                                star <= ratingStars
+                                  ? "fill-amber-500 text-amber-500"
+                                  : "text-slate-300 dark:text-slate-600"
+                              )}
+                            />
+                          </button>
                         ))}
                       </div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <Button variant="outline" className="py-3" disabled={deliveryData.status !== 'COMPLETED'}>
-                        Tip $5
-                      </Button>
-                      <Button variant="outline" className="py-3" disabled={deliveryData.status !== 'COMPLETED'}>
-                        Tip $10
-                      </Button>
-                      <Button variant="outline" className="py-3" disabled={deliveryData.status !== 'COMPLETED'}>
-                        Custom
-                      </Button>
+                    {/* Comment */}
+                    <div className="mt-4">
+                      <Textarea
+                        placeholder="Leave a comment (optional)"
+                        value={ratingComment}
+                        onChange={(e) => setRatingComment(e.target.value)}
+                        disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                        className="rounded-2xl border-slate-200 dark:border-slate-700"
+                      />
                     </div>
 
-                    <Button 
-                      className="mt-4 w-full py-4 gap-2" 
-                      disabled={deliveryData.status !== 'COMPLETED'}
+                    {/* Submit button */}
+                    <Button
+                      className="mt-4 w-full py-4 gap-2"
+                      disabled={deliveryData.status !== 'COMPLETED' || !driver || ratingStars === 0 || ratingMutation.isPending}
+                      onClick={handleSubmitRating}
                     >
-                      {deliveryData.status === 'COMPLETED' ? 'Submit Rating' : 'Rating disabled until Complete'}
+                      {ratingMutation.isPending ? 'Submitting...' : 'Submit Rating'}
                       <ChevronRight className="h-4 w-4" />
                     </Button>
+
+                    {!driver && deliveryData.status === 'COMPLETED' && (
+                      <p className="text-xs text-amber-600 mt-2">Driver information missing – cannot rate.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </CardContent>
+            </Card>
+
+            {/* NEW Tip Card */}
+            <Card className="border-slate-200 dark:border-slate-800 rounded-3xl hover:shadow-xl transition-shadow">
+              <CardHeader>
+                <CardTitle className="text-xl font-black text-slate-900 dark:text-white">Tip driver</CardTitle>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                  Show your appreciation with a tip (optional). Available after completion.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+                  <CardContent className="p-5 space-y-4">
+                    {/* Preset amounts */}
+                    <div>
+                      <Label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Quick tip</Label>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePresetTip(5)}
+                          disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                          className="py-5"
+                        >
+                          $5
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePresetTip(10)}
+                          disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                          className="py-5"
+                        >
+                          $10
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePresetTip(20)}
+                          disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                          className="py-5"
+                        >
+                          $20
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Custom amount */}
+                    <div>
+                      <Label htmlFor="custom-tip" className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Custom amount ($)
+                      </Label>
+                      <Input
+                        id="custom-tip"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={customTipInput}
+                        onChange={(e) => {
+                          setCustomTipInput(e.target.value)
+                          setTipAmount('') // clear preset selection when typing
+                        }}
+                        disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                        className="mt-2 rounded-2xl"
+                      />
+                    </div>
+
+                    {/* Provider selection */}
+                    <div>
+                      <Label htmlFor="tip-provider" className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Payment provider
+                      </Label>
+                      <Select
+                        value={tipProvider}
+                        onValueChange={(value: 'STRIPE' | 'MANUAL' | 'OTHER') => setTipProvider(value)}
+                        disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                      >
+                        <SelectTrigger id="tip-provider" className="mt-2 rounded-2xl">
+                          <SelectValue placeholder="Select provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="STRIPE">Stripe</SelectItem>
+                          <SelectItem value="MANUAL">Manual</SelectItem>
+                          <SelectItem value="OTHER">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Provider reference */}
+                    <div>
+                      <Label htmlFor="tip-provider-ref" className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Provider reference (optional)
+                      </Label>
+                      <Input
+                        id="tip-provider-ref"
+                        placeholder="e.g. payment intent ID"
+                        value={tipProviderRef}
+                        onChange={(e) => setTipProviderRef(e.target.value)}
+                        disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                        className="mt-2 rounded-2xl"
+                      />
+                    </div>
+
+                    {/* Status selection */}
+                    {/* <div>
+                      <Label htmlFor="tip-status" className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        Payment status
+                      </Label>
+                      <Select
+                        value={tipStatus}
+                        onValueChange={(value: 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED') => setTipStatus(value)}
+                        disabled={deliveryData.status !== 'COMPLETED' || !driver}
+                      >
+                        <SelectTrigger id="tip-status" className="mt-2 rounded-2xl">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="AUTHORIZED">Authorized</SelectItem>
+                          <SelectItem value="CAPTURED">Captured</SelectItem>
+                          <SelectItem value="FAILED">Failed</SelectItem>
+                          <SelectItem value="REFUNDED">Refunded</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div> */}
+
+                    {/* Submit button */}
+                    <Button
+                      className="w-full py-4 gap-2 mt-2"
+                      disabled={
+                        deliveryData.status !== 'COMPLETED' ||
+                        !driver ||
+                        tipMutation.isPending ||
+                        (tipAmount === '' && !customTipInput)
+                      }
+                      onClick={handleTipSubmit}
+                    >
+                      {tipMutation.isPending ? 'Sending...' : 'Send Tip'}
+                      <DollarSign className="h-4 w-4" />
+                    </Button>
+
+                    {!driver && deliveryData.status === 'COMPLETED' && (
+                      <p className="text-xs text-amber-600">Driver information missing – cannot tip.</p>
+                    )}
                   </CardContent>
                 </Card>
               </CardContent>

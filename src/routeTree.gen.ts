@@ -15,6 +15,7 @@ import { Route as QuoteDetailsIndexRouteImport } from './routes/quote-details/in
 import { Route as QuoteConfirmationIndexRouteImport } from './routes/quote-confirmation/index'
 import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
+import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as LandingIndexRouteImport } from './routes/landing/index'
 import { Route as DriverWalletIndexRouteImport } from './routes/driver-wallet/index'
 import { Route as DriverSigninIndexRouteImport } from './routes/driver-signin/index'
@@ -29,6 +30,7 @@ import { Route as DriverInboxIndexRouteImport } from './routes/driver-inbox/inde
 import { Route as DriverDropoffChecklistIndexRouteImport } from './routes/driver-dropoff-checklist/index'
 import { Route as DriverDashboardIndexRouteImport } from './routes/driver-dashboard/index'
 import { Route as DriverActiveIndexRouteImport } from './routes/driver-active/index'
+import { Route as DealerSettingsIndexRouteImport } from './routes/dealer-settings/index'
 import { Route as DealerOnboardingIndexRouteImport } from './routes/dealer-onboarding/index'
 import { Route as DealerDeliveryDetailsIndexRouteImport } from './routes/dealer-delivery-details/index'
 import { Route as DealerDashboardIndexRouteImport } from './routes/dealer-dashboard/index'
@@ -92,6 +94,11 @@ const PrivacyIndexRoute = PrivacyIndexRouteImport.update({
 const MapTestIndexRoute = MapTestIndexRouteImport.update({
   id: '/map-test/',
   path: '/map-test/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LiveTrackIndexRoute = LiveTrackIndexRouteImport.update({
+  id: '/live-track/',
+  path: '/live-track/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LandingIndexRoute = LandingIndexRouteImport.update({
@@ -165,6 +172,11 @@ const DriverDashboardIndexRoute = DriverDashboardIndexRouteImport.update({
 const DriverActiveIndexRoute = DriverActiveIndexRouteImport.update({
   id: '/driver-active/',
   path: '/driver-active/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DealerSettingsIndexRoute = DealerSettingsIndexRouteImport.update({
+  id: '/dealer-settings/',
+  path: '/dealer-settings/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DealerOnboardingIndexRoute = DealerOnboardingIndexRouteImport.update({
@@ -386,6 +398,7 @@ export interface FileRoutesByFullPath {
   '/dealer-dashboard/': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details/': typeof DealerDeliveryDetailsIndexRoute
   '/dealer-onboarding/': typeof DealerOnboardingIndexRoute
+  '/dealer-settings/': typeof DealerSettingsIndexRoute
   '/driver-active/': typeof DriverActiveIndexRoute
   '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-dropoff-checklist/': typeof DriverDropoffChecklistIndexRoute
@@ -400,6 +413,7 @@ export interface FileRoutesByFullPath {
   '/driver-signin/': typeof DriverSigninIndexRoute
   '/driver-wallet/': typeof DriverWalletIndexRoute
   '/landing/': typeof LandingIndexRoute
+  '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
   '/privacy/': typeof PrivacyIndexRoute
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
@@ -442,6 +456,7 @@ export interface FileRoutesByTo {
   '/dealer-dashboard': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details': typeof DealerDeliveryDetailsIndexRoute
   '/dealer-onboarding': typeof DealerOnboardingIndexRoute
+  '/dealer-settings': typeof DealerSettingsIndexRoute
   '/driver-active': typeof DriverActiveIndexRoute
   '/driver-dashboard': typeof DriverDashboardIndexRoute
   '/driver-dropoff-checklist': typeof DriverDropoffChecklistIndexRoute
@@ -456,6 +471,7 @@ export interface FileRoutesByTo {
   '/driver-signin': typeof DriverSigninIndexRoute
   '/driver-wallet': typeof DriverWalletIndexRoute
   '/landing': typeof LandingIndexRoute
+  '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
   '/privacy': typeof PrivacyIndexRoute
   '/quote-confirmation': typeof QuoteConfirmationIndexRoute
@@ -499,6 +515,7 @@ export interface FileRoutesById {
   '/dealer-dashboard/': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details/': typeof DealerDeliveryDetailsIndexRoute
   '/dealer-onboarding/': typeof DealerOnboardingIndexRoute
+  '/dealer-settings/': typeof DealerSettingsIndexRoute
   '/driver-active/': typeof DriverActiveIndexRoute
   '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-dropoff-checklist/': typeof DriverDropoffChecklistIndexRoute
@@ -513,6 +530,7 @@ export interface FileRoutesById {
   '/driver-signin/': typeof DriverSigninIndexRoute
   '/driver-wallet/': typeof DriverWalletIndexRoute
   '/landing/': typeof LandingIndexRoute
+  '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
   '/privacy/': typeof PrivacyIndexRoute
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
@@ -557,6 +575,7 @@ export interface FileRouteTypes {
     | '/dealer-dashboard/'
     | '/dealer-delivery-details/'
     | '/dealer-onboarding/'
+    | '/dealer-settings/'
     | '/driver-active/'
     | '/driver-dashboard/'
     | '/driver-dropoff-checklist/'
@@ -571,6 +590,7 @@ export interface FileRouteTypes {
     | '/driver-signin/'
     | '/driver-wallet/'
     | '/landing/'
+    | '/live-track/'
     | '/map-test/'
     | '/privacy/'
     | '/quote-confirmation/'
@@ -613,6 +633,7 @@ export interface FileRouteTypes {
     | '/dealer-dashboard'
     | '/dealer-delivery-details'
     | '/dealer-onboarding'
+    | '/dealer-settings'
     | '/driver-active'
     | '/driver-dashboard'
     | '/driver-dropoff-checklist'
@@ -627,6 +648,7 @@ export interface FileRouteTypes {
     | '/driver-signin'
     | '/driver-wallet'
     | '/landing'
+    | '/live-track'
     | '/map-test'
     | '/privacy'
     | '/quote-confirmation'
@@ -669,6 +691,7 @@ export interface FileRouteTypes {
     | '/dealer-dashboard/'
     | '/dealer-delivery-details/'
     | '/dealer-onboarding/'
+    | '/dealer-settings/'
     | '/driver-active/'
     | '/driver-dashboard/'
     | '/driver-dropoff-checklist/'
@@ -683,6 +706,7 @@ export interface FileRouteTypes {
     | '/driver-signin/'
     | '/driver-wallet/'
     | '/landing/'
+    | '/live-track/'
     | '/map-test/'
     | '/privacy/'
     | '/quote-confirmation/'
@@ -726,6 +750,7 @@ export interface RootRouteChildren {
   DealerDashboardIndexRoute: typeof DealerDashboardIndexRoute
   DealerDeliveryDetailsIndexRoute: typeof DealerDeliveryDetailsIndexRoute
   DealerOnboardingIndexRoute: typeof DealerOnboardingIndexRoute
+  DealerSettingsIndexRoute: typeof DealerSettingsIndexRoute
   DriverActiveIndexRoute: typeof DriverActiveIndexRoute
   DriverDashboardIndexRoute: typeof DriverDashboardIndexRoute
   DriverDropoffChecklistIndexRoute: typeof DriverDropoffChecklistIndexRoute
@@ -740,6 +765,7 @@ export interface RootRouteChildren {
   DriverSigninIndexRoute: typeof DriverSigninIndexRoute
   DriverWalletIndexRoute: typeof DriverWalletIndexRoute
   LandingIndexRoute: typeof LandingIndexRoute
+  LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
   PrivacyIndexRoute: typeof PrivacyIndexRoute
   QuoteConfirmationIndexRoute: typeof QuoteConfirmationIndexRoute
@@ -791,6 +817,13 @@ declare module '@tanstack/react-router' {
       path: '/map-test'
       fullPath: '/map-test/'
       preLoaderRoute: typeof MapTestIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/live-track/': {
+      id: '/live-track/'
+      path: '/live-track'
+      fullPath: '/live-track/'
+      preLoaderRoute: typeof LiveTrackIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/landing/': {
@@ -889,6 +922,13 @@ declare module '@tanstack/react-router' {
       path: '/driver-active'
       fullPath: '/driver-active/'
       preLoaderRoute: typeof DriverActiveIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dealer-settings/': {
+      id: '/dealer-settings/'
+      path: '/dealer-settings'
+      fullPath: '/dealer-settings/'
+      preLoaderRoute: typeof DealerSettingsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dealer-onboarding/': {
@@ -1166,6 +1206,7 @@ const rootRouteChildren: RootRouteChildren = {
   DealerDashboardIndexRoute: DealerDashboardIndexRoute,
   DealerDeliveryDetailsIndexRoute: DealerDeliveryDetailsIndexRoute,
   DealerOnboardingIndexRoute: DealerOnboardingIndexRoute,
+  DealerSettingsIndexRoute: DealerSettingsIndexRoute,
   DriverActiveIndexRoute: DriverActiveIndexRoute,
   DriverDashboardIndexRoute: DriverDashboardIndexRoute,
   DriverDropoffChecklistIndexRoute: DriverDropoffChecklistIndexRoute,
@@ -1180,6 +1221,7 @@ const rootRouteChildren: RootRouteChildren = {
   DriverSigninIndexRoute: DriverSigninIndexRoute,
   DriverWalletIndexRoute: DriverWalletIndexRoute,
   LandingIndexRoute: LandingIndexRoute,
+  LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,
   PrivacyIndexRoute: PrivacyIndexRoute,
   QuoteConfirmationIndexRoute: QuoteConfirmationIndexRoute,
