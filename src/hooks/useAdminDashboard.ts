@@ -245,7 +245,7 @@ export function useCustomerLookup(options?: {
   const { enabled = true, staleTime = 5 * 60 * 1000 } = options || {}; // 5 minutes stale time
 
   return useDataQuery<CustomerLookupItem[]>({
-    apiEndPoint: `${API_BASE_URL}/customers/lookup/minimal`,
+    apiEndPoint: `${API_BASE_URL}/api/customers/lookup/minimal`,
     enabled,
     noFilter: true,
     staleTime,
