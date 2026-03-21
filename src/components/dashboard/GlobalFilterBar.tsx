@@ -74,6 +74,13 @@ const SERVICE_TYPES: { value: ServiceType; label: string }[] = [
   { value: 'SERVICE_PICKUP_RETURN', label: 'Service Pickup/Return' },
 ];
 
+const CREATED_BY_ROLES: { value: string; label: string }[] = [
+  { value: 'PRIVATE_CUSTOMER', label: 'Private Customer' },
+  { value: 'BUSINESS_CUSTOMER', label: 'Business Customer' },
+  { value: 'DRIVER', label: 'Driver' },
+  { value: 'ADMIN', label: 'Admin' },
+];
+
 export function GlobalFilterBar({
   filtersApplied,
   onFiltersChange,
@@ -91,7 +98,9 @@ export function GlobalFilterBar({
         from: filtersApplied.from || undefined,
         to: filtersApplied.to || undefined,
         statuses: filtersApplied.statuses.length > 0 ? filtersApplied.statuses : undefined,
+        customerId: filtersApplied.customerId || undefined,
         customerType: filtersApplied.customerType || undefined,
+        createdByRole: filtersApplied.createdByRole || undefined,
         serviceType: filtersApplied.serviceType || undefined,
         requiresOpsConfirmation: filtersApplied.requiresOpsConfirmation ?? undefined,
         urgentOnly: filtersApplied.urgentOnly ?? undefined,
@@ -106,7 +115,9 @@ export function GlobalFilterBar({
     if (filtersApplied?.datePreset) count++;
     if (filtersApplied?.from || filtersApplied?.to) count++;
     if (filtersApplied?.statuses && filtersApplied.statuses.length > 0) count++;
+    if (filtersApplied?.customerId) count++;
     if (filtersApplied?.customerType) count++;
+    if (filtersApplied?.createdByRole) count++;
     if (filtersApplied?.serviceType) count++;
     if (filtersApplied?.requiresOpsConfirmation) count++;
     if (filtersApplied?.urgentOnly) count++;
@@ -385,6 +396,48 @@ export function GlobalFilterBar({
                     </Select>
                   </div>
 
+                  {/* Customer ID */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      Customer ID
+                    </Label>
+                    <Input
+                      placeholder="Enter customer ID..."
+                      value={localFilters.customerId || ''}
+                      onChange={(e) => setLocalFilters(prev => ({
+                        ...prev,
+                        customerId: e.target.value || undefined,
+                      }))}
+                      className="h-9 rounded-xl text-sm"
+                    />
+                  </div>
+
+                  {/* Created By Role */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      Created By
+                    </Label>
+                    <Select
+                      value={localFilters.createdByRole || 'ALL'}
+                      onValueChange={(value) => setLocalFilters(prev => ({
+                        ...prev,
+                        createdByRole: value === 'ALL' ? undefined : value,
+                      }))}
+                    >
+                      <SelectTrigger className="h-9 rounded-xl text-sm">
+                        <SelectValue placeholder="All roles" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All roles</SelectItem>
+                        {CREATED_BY_ROLES.map((role) => (
+                          <SelectItem key={role.value} value={role.value}>
+                            {role.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {/* Toggle Filters */}
                   <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
                     <div className="flex items-center justify-between">
@@ -454,6 +507,18 @@ export function GlobalFilterBar({
           {/* Active Filter Chips */}
           {activeFilterCount > 0 && (
             <div className="flex items-center gap-1">
+              {filtersApplied?.customerId && (
+                <Badge
+                  variant="outline"
+                  className="chip bg-primary/10 border-primary/25 text-primary-foreground text-[10px]"
+                >
+                  ID: {filtersApplied.customerId.substring(0, 8)}...
+                  <X
+                    className="w-3 h-3 ml-1 cursor-pointer"
+                    onClick={() => onFiltersChange({ ...localFilters, customerId: undefined })}
+                  />
+                </Badge>
+              )}
               {filtersApplied?.customerType && (
                 <Badge
                   variant="outline"
@@ -463,6 +528,18 @@ export function GlobalFilterBar({
                   <X
                     className="w-3 h-3 ml-1 cursor-pointer"
                     onClick={() => onFiltersChange({ ...localFilters, customerType: undefined })}
+                  />
+                </Badge>
+              )}
+              {filtersApplied?.createdByRole && (
+                <Badge
+                  variant="outline"
+                  className="chip bg-primary/10 border-primary/25 text-primary-foreground text-[10px]"
+                >
+                  {CREATED_BY_ROLES.find(r => r.value === filtersApplied.createdByRole)?.label || filtersApplied.createdByRole}
+                  <X
+                    className="w-3 h-3 ml-1 cursor-pointer"
+                    onClick={() => onFiltersChange({ ...localFilters, createdByRole: undefined })}
                   />
                 </Badge>
               )}
