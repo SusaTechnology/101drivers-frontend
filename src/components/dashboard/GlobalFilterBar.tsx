@@ -1,6 +1,6 @@
 // components/dashboard/GlobalFilterBar.tsx
 import React, { useState, useEffect } from 'react';
-import { Calendar, Filter, X, ChevronDown, RefreshCw } from 'lucide-react';
+import { Calendar, Filter, X, ChevronDown, RefreshCw, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -169,7 +169,7 @@ export function GlobalFilterBar({
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-400" />
             <Select
-              value={filtersApplied?.datePreset || ''}
+              value={filtersApplied?.datePreset || 'TODAY'}
               onValueChange={(value) => handlePresetChange(value as DatePreset)}
             >
               <SelectTrigger className="w-[140px] h-9 rounded-xl text-sm">
@@ -192,25 +192,50 @@ export function GlobalFilterBar({
             </Badge>
           )}
 
-          {/* Quick Status Filters */}
-          <div className="flex items-center gap-1">
-            {(['ACTIVE', 'COMPLETED', 'DISPUTED'] as DeliveryStatus[]).map((status) => (
+          {/* Quick Status Filter Dropdown */}
+          <Popover>
+            <PopoverTrigger asChild>
               <Button
-                key={status}
-                variant={filtersApplied?.statuses?.includes(status) ? 'default' : 'outline'}
+                variant="outline"
                 size="sm"
-                onClick={() => handleQuickStatusFilter(status)}
-                className={cn(
-                  'h-8 px-3 text-xs font-bold rounded-xl',
-                  filtersApplied?.statuses?.includes(status)
-                    ? 'bg-primary text-slate-950'
-                    : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800'
-                )}
+                className="h-9 px-3 rounded-xl gap-2"
               >
-                {status}
+                <span className="text-xs font-semibold">
+                  {filtersApplied?.statuses && filtersApplied.statuses.length > 0
+                    ? filtersApplied.statuses.length === 1
+                      ? filtersApplied.statuses[0]
+                      : `${filtersApplied.statuses.length} Statuses`
+                    : 'Status'}
+                </span>
+                <ChevronDown className="w-3 h-3" />
               </Button>
-            ))}
-          </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" align="start">
+              <div className="space-y-1">
+                {(['ACTIVE', 'COMPLETED', 'DISPUTED'] as DeliveryStatus[]).map((status) => (
+                  <div
+                    key={status}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                    onClick={() => handleQuickStatusFilter(status)}
+                  >
+                    <div
+                      className={cn(
+                        'w-4 h-4 rounded border-2 flex items-center justify-center',
+                        filtersApplied?.statuses?.includes(status)
+                          ? 'bg-primary border-primary'
+                          : 'border-slate-300 dark:border-slate-600'
+                      )}
+                    >
+                      {filtersApplied?.statuses?.includes(status) && (
+                        <Check className="w-3 h-3 text-slate-950" />
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold">{status}</span>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
 
           {/* More Filters Popover */}
           <Popover open={isFilterOpen} onOpenChange={setIsFilterOpen}>
