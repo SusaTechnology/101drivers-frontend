@@ -1,55 +1,67 @@
 // components/pages/admin-dashboard.tsx
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   ArrowRight,
   Verified,
   RefreshCw,
-  Calendar,
-  Filter,
+  LayoutDashboard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Navbar } from '../shared/layout/testNavbar';
+import { Badge } from '@/components/ui/badge';
+import { Navbar } from '@/components/shared/layout/testNavbar';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { useAdminDashboard } from '@/hooks/useAdminDashboard';
+import type { DashboardQueryParams } from '@/types/dashboard';
+
+// Dashboard Components
+import { GlobalFilterBar } from '@/components/dashboard/GlobalFilterBar';
 import { SummaryCards } from '@/components/dashboard/SummaryCards';
-import { ActiveDeliveries } from '@/components/dashboard/ActiveDeliveries';
+import { AlertsStrip } from '@/components/dashboard/AlertsStrip';
+import { LiveTrackingSection } from '@/components/dashboard/LiveTrackingSection';
 import { NeedsAttention } from '@/components/dashboard/NeedsAttention';
+import { PipelineChart } from '@/components/dashboard/PipelineChart';
+import { OperationsHealth } from '@/components/dashboard/OperationsHealth';
+import { FinanceSnapshot } from '@/components/dashboard/FinanceSnapshot';
 import { PricingSnapshot } from '@/components/dashboard/PricingSnapshot';
 import { SchedulingPolicy } from '@/components/dashboard/SchedulingPolicy';
-import { PipelineChart } from '@/components/dashboard/PipelineChart';
 import { ActorSummary } from '@/components/dashboard/ActorSummary';
-import { FinanceSummary } from '@/components/dashboard/FinanceSummary';
-import { OperationsSummary } from '@/components/dashboard/OperationsSummary';
-import { QuickTools, AdminHubs } from '@/components/dashboard/QuickTools';
-import type { DashboardAction } from '@/types/dashboard';
+import { DealerActivity } from '@/components/dashboard/DealerActivity';
+import { DriverOperations } from '@/components/dashboard/DriverOperations';
+import { DeliveryBreakdowns } from '@/components/dashboard/DeliveryBreakdowns';
+import { ReportsPreview } from '@/components/dashboard/ReportsPreview';
+import { RecentActivity } from '@/components/dashboard/RecentActivity';
+import { QuickActions } from '@/components/dashboard/QuickActions';
 
 export default function AdminDashboardPage() {
   const { actionItems, signOut } = useAdminActions();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [filterParams, setFilterParams] = useState<DashboardQueryParams>({});
 
+  // Fetch dashboard data
   const {
     data: dashboardData,
     isLoading,
-    refetch,
     isFetching,
-  } = useAdminDashboard(undefined, {
+    refetch,
+  } = useAdminDashboard(filterParams, {
     refetchInterval: 60000, // Refresh every minute
     staleTime: 30000, // Consider data fresh for 30 seconds
   });
 
-  const handleRefresh = async () => {
+  // Handle manual refresh
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await refetch();
     setTimeout(() => setIsRefreshing(false), 500);
-  };
+  }, [refetch]);
 
-  const handleActionClick = (action: DashboardAction) => {
-    // Navigation is handled by the Link components
-    console.log('Action clicked:', action);
-  };
+  // Handle filter changes
+  const handleFiltersChange = useCallback((params: DashboardQueryParams) => {
+    setFilterParams(params);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
@@ -62,116 +74,197 @@ export default function AdminDashboardPage() {
         title="Admin"
       />
 
-      <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-12">
-        {/* Top row */}
-        <section className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-          <div>
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-slate-900 border border-primary/25 w-fit">
-              <Verified className="w-3.5 h-3.5 text-primary font-bold" />
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-700 dark:text-slate-200">
-                Admin Ops • CA MVP
-              </span>
+      <main className="w-full max-w-[1600px] mx-auto px-4 lg:px-6 py-6 lg:py-8">
+        {/* ========================================== */}
+        {/* ROW 0: Page Header */}
+        {/* ========================================== */}
+        <section className="mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <Badge
+                  variant="outline"
+                  className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200"
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5 text-primary mr-1" />
+                  Operations Command Center
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="badge bg-primary/10 border-primary/25 text-primary-foreground"
+                >
+                  <Verified className="w-3.5 h-3.5 mr-1" />
+                  Admin only
+                </Badge>
+              </div>
+
+              <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
+                Dashboard
+              </h1>
+              <p className="text-slate-600 dark:text-slate-400 mt-2 text-base max-w-2xl leading-relaxed">
+                Monitor deliveries, approvals, disputes, pricing, and policy. Use filters and deep links to resolve issues fast.
+              </p>
             </div>
 
-            <h1 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mt-4">
-              Dashboard
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400 mt-3 text-lg max-w-2xl leading-relaxed">
-              Monitor deliveries, approvals, disputes, pricing, and policy. Use filters and deep links to resolve issues fast.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-              variant="outline"
-              onClick={handleRefresh}
-              disabled={isRefreshing || isFetching}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-extrabold"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing || isFetching ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Link
-              to="/admin-users"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-extrabold bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 transition"
-            >
-              Review Approvals
-              <Verified className="w-4 h-4 text-primary" />
-            </Link>
-            <Link
-              to="/admin-deliveries"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-extrabold bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20 transition"
-            >
-              Open Deliveries
-              <ArrowRight className="w-4 h-4" />
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link
+                to="/admin-deliveries"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-extrabold bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20 transition"
+              >
+                Open Deliveries
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
         </section>
 
-        {/* KPI cards */}
-        <section className="mt-10">
-          <SummaryCards
-            data={dashboardData?.summaryCards}
-            isLoading={isLoading}
-            onActionClick={handleActionClick}
+        {/* ========================================== */}
+        {/* ROW 1: Global Filter Bar */}
+        {/* ========================================== */}
+        <section className="mb-6">
+          <GlobalFilterBar
+            filtersApplied={dashboardData?.filtersApplied}
+            onFiltersChange={handleFiltersChange}
+            onRefresh={handleRefresh}
+            isLoading={isFetching}
           />
         </section>
 
-        {/* Delivery Pipeline */}
-        <section className="mt-10">
-          <PipelineChart data={dashboardData?.pipeline} isLoading={isLoading} />
+        {/* ========================================== */}
+        {/* ROW 2: Hero Summary Cards */}
+        {/* ========================================== */}
+        <section className="mb-6">
+          <SummaryCards
+            data={dashboardData?.summaryCards}
+            isLoading={isLoading}
+          />
         </section>
 
-        {/* Main grid */}
-        <section className="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left column */}
-          <div className="lg:col-span-7 space-y-6">
-            {/* Active deliveries */}
-            <ActiveDeliveries
-              data={dashboardData?.activeDeliveries}
+        {/* ========================================== */}
+        {/* ROW 3: Alerts Strip (if present) */}
+        {/* ========================================== */}
+        {dashboardData?.alerts && dashboardData.alerts.items.length > 0 && (
+          <section className="mb-6">
+            <AlertsStrip
+              data={dashboardData.alerts}
               isLoading={isLoading}
-              onActionClick={handleActionClick}
             />
+          </section>
+        )}
 
-            {/* Needs attention */}
-            <NeedsAttention
-              data={dashboardData?.needsAttention}
-              isLoading={isLoading}
-              onActionClick={handleActionClick}
-            />
+        {/* ========================================== */}
+        {/* ROW 4: Live Operations & Needs Attention */}
+        {/* ========================================== */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <LiveTrackingSection
+            liveTrackingOverview={dashboardData?.liveTrackingOverview}
+            activeDeliveries={dashboardData?.activeDeliveries}
+            isLoading={isLoading}
+          />
+          <NeedsAttention
+            data={dashboardData?.needsAttention}
+            isLoading={isLoading}
+          />
+        </section>
 
-            {/* Operations Health */}
-            <OperationsSummary data={dashboardData?.operations} isLoading={isLoading} />
+        {/* ========================================== */}
+        {/* ROW 5: Pipeline & Operations Health */}
+        {/* ========================================== */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <PipelineChart
+            data={dashboardData?.pipeline}
+            isLoading={isLoading}
+          />
+          <OperationsHealth
+            data={dashboardData?.operations}
+            isLoading={isLoading}
+          />
+        </section>
 
-            {/* Finance Overview */}
-            <FinanceSummary data={dashboardData?.finance} isLoading={isLoading} />
-          </div>
+        {/* ========================================== */}
+        {/* ROW 6: Finance Snapshot */}
+        {/* ========================================== */}
+        <section className="mb-6">
+          <FinanceSnapshot
+            finance={dashboardData?.finance}
+            financialSnapshot={dashboardData?.financialSnapshot}
+            isLoading={isLoading}
+          />
+        </section>
 
-          {/* Right column */}
-          <div className="lg:col-span-5 space-y-6">
-            {/* Pricing snapshot */}
-            <PricingSnapshot data={dashboardData?.pricingSnapshot} isLoading={isLoading} />
+        {/* ========================================== */}
+        {/* ROW 7: Actor Summary & Pricing/Scheduling */}
+        {/* ========================================== */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <ActorSummary
+            data={dashboardData?.actorSummary}
+            isLoading={isLoading}
+          />
+          <PricingSnapshot
+            data={dashboardData?.pricingSnapshot}
+            isLoading={isLoading}
+          />
+          <SchedulingPolicy
+            data={dashboardData?.schedulingPolicy}
+            isLoading={isLoading}
+          />
+        </section>
 
-            {/* Scheduling policy */}
-            <SchedulingPolicy data={dashboardData?.schedulingPolicy} isLoading={isLoading} />
+        {/* ========================================== */}
+        {/* ROW 8: Dealer Activity & Driver Operations */}
+        {/* ========================================== */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <DealerActivity
+            data={dashboardData?.dealerActivity}
+            isLoading={isLoading}
+          />
+          <DriverOperations
+            data={dashboardData?.driverOperations}
+            isLoading={isLoading}
+          />
+        </section>
 
-            {/* Actor Summary */}
-            <ActorSummary data={dashboardData?.actorSummary} isLoading={isLoading} />
+        {/* ========================================== */}
+        {/* ROW 9: Delivery Breakdowns */}
+        {/* ========================================== */}
+        <section className="mb-6">
+          <DeliveryBreakdowns
+            data={dashboardData?.deliveryBreakdowns}
+            isLoading={isLoading}
+          />
+        </section>
 
-            {/* Quick tools */}
-            <QuickTools />
+        {/* ========================================== */}
+        {/* ROW 10: Reports Preview */}
+        {/* ========================================== */}
+        <section className="mb-6">
+          <ReportsPreview
+            data={dashboardData?.reportsPreview}
+            isLoading={isLoading}
+          />
+        </section>
 
-            {/* Admin hubs callout */}
-            <AdminHubs />
-          </div>
+        {/* ========================================== */}
+        {/* ROW 11: Quick Actions & Recent Activity */}
+        {/* ========================================== */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <QuickActions
+            data={dashboardData?.quickActions}
+            isLoading={isLoading}
+          />
+          <RecentActivity
+            data={dashboardData?.recent}
+            isLoading={isLoading}
+          />
         </section>
       </main>
 
-      <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
+      {/* Footer */}
+      <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-8 pb-8">
+        <div className="max-w-[1600px] mx-auto px-4 lg:px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl overflow-hidden bg-black border border-slate-200">
+              <div className="w-10 h-10 rounded-xl overflow-hidden bg-black border border-slate-200">
                 <img
                   src="/assets/101drivers-logo.jpg"
                   alt="101 Drivers logo"

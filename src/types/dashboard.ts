@@ -31,6 +31,8 @@ export type TrackingStatus = 'STARTED' | 'STOPPED' | 'PAUSED';
 
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 
+export type DatePreset = 'TODAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'THIS_MONTH' | 'CUSTOM';
+
 export type IssueType =
   | 'DELIVERY_COMPLIANCE_MISSING'
   | 'DEALER_APPROVAL_PENDING'
@@ -38,15 +40,20 @@ export type IssueType =
   | 'LISTED_WITHOUT_ASSIGNMENT'
   | 'OPS_CONFIRMATION_REQUIRED'
   | 'PAYOUT_ELIGIBLE'
-  | 'OPEN_DISPUTE';
+  | 'OPEN_DISPUTE'
+  | 'PAYMENT_FAILED'
+  | 'ACTIVE_WITHOUT_TRACKING'
+  | 'STALE_TRACKING';
+
+export type AlertSeverity = 'CRITICAL' | 'WARNING';
 
 // ==================== ACTION TYPE ====================
 
-export interface DashboardAction {
+export interface AdminDashboardAction {
   type: 'NAVIGATE' | 'EXTERNAL' | 'MODAL';
   label: string;
   target: string;
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown> | null;
 }
 
 // ==================== FILTERS ====================
@@ -54,8 +61,8 @@ export interface DashboardAction {
 export interface FiltersApplied {
   from: string | null;
   to: string | null;
-  datePreset: string | null;
-  statuses: string[];
+  datePreset: DatePreset | null;
+  statuses: DeliveryStatus[];
   customerId: string | null;
   customerType: CustomerType | null;
   createdByRole: string | null;
@@ -63,6 +70,20 @@ export interface FiltersApplied {
   requiresOpsConfirmation: boolean | null;
   urgentOnly: boolean | null;
   disputedOnly: boolean | null;
+}
+
+export interface DashboardQueryParams {
+  datePreset?: DatePreset;
+  from?: string;
+  to?: string;
+  statuses?: DeliveryStatus[];
+  customerId?: string;
+  customerType?: CustomerType;
+  createdByRole?: string;
+  serviceType?: ServiceType;
+  requiresOpsConfirmation?: boolean;
+  urgentOnly?: boolean;
+  disputedOnly?: boolean;
 }
 
 // ==================== USER & CUSTOMER ====================
@@ -92,12 +113,19 @@ export interface Driver {
 
 // ==================== TRACKING SESSION ====================
 
+export interface TrackingPoint {
+  lat: number;
+  lng: number;
+  recordedAt: string;
+}
+
 export interface TrackingSession {
   id: string;
   status: TrackingStatus;
   startedAt: string | null;
   stoppedAt: string | null;
   drivenMiles: number | null;
+  points?: TrackingPoint[];
 }
 
 // ==================== COMPLIANCE ====================
@@ -219,26 +247,26 @@ export interface PendingCustomer {
 export interface DeliveriesInMotion {
   count: number;
   items: Delivery[];
-  action: DashboardAction;
+  action: AdminDashboardAction;
 }
 
 export interface PendingDriverApprovals {
   count: number;
   items: PendingDriver[];
-  action: DashboardAction;
+  action: AdminDashboardAction;
 }
 
 export interface OpenClaims {
   count: number;
   items: Dispute[];
-  action: DashboardAction;
+  action: AdminDashboardAction;
 }
 
 export interface CapturedRevenue {
   count: number;
   amount: number;
   items: Payment[];
-  action: DashboardAction;
+  action: AdminDashboardAction;
 }
 
 export interface SummaryCards {
@@ -248,22 +276,154 @@ export interface SummaryCards {
   capturedRevenue: CapturedRevenue;
 }
 
+// ==================== SUMMARY ====================
+
+export interface Summary {
+  totalDeliveries: number;
+  activeTrips: number;
+  completedDeliveries: number;
+  cancelledDeliveries: number;
+  deliveriesNeedingOpsConfirmation: number;
+  openDisputes: number;
+  pendingCustomerApprovals: number;
+  pendingDriverApprovals: number;
+}
+
+// ==================== PIPELINE ====================
+
+export interface Pipeline {
+  draft: number;
+  quoted: number;
+  listed: number;
+  booked: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+  expired: number;
+  disputed: number;
+}
+
+// ==================== FINANCE ====================
+
+export interface Finance {
+  authorizedPaymentsCount: number;
+  capturedPaymentsCount: number;
+  invoicedPostpaidCount: number;
+  paidPostpaidCount: number;
+  failedPaymentsCount: number;
+  eligiblePayoutCount: number;
+  paidPayoutCount: number;
+  grossRevenue: number;
+  capturedRevenue: number;
+  postpaidReceivable: number;
+  paidOutAmount: number;
+  pendingPayoutAmount: number;
+}
+
+export interface FinancialSnapshot {
+  grossRevenue: number;
+  capturedRevenue: number;
+  postpaidReceivable: number;
+  pendingPayoutAmount: number;
+  paidOutAmount: number;
+  insuranceFeesEstimated: number;
+}
+
+// ==================== OPERATIONS ====================
+
+export interface Operations {
+  listedWithoutAssignment: number;
+  bookedWithoutComplianceReady: number;
+  activeWithoutTracking: number;
+  deliveriesMissingCompliance: number;
+  staleQuotedDeliveries: number;
+  staleBookedDeliveries: number;
+}
+
+// ==================== ALERTS ====================
+
+export interface AlertItem {
+  severity: AlertSeverity;
+  code: string;
+  title: string;
+  subtitle?: string | null;
+  count: number;
+  action?: AdminDashboardAction | null;
+}
+
+export interface Alerts {
+  criticalCount: number;
+  warningCount: number;
+  items: AlertItem[];
+}
+
 // ==================== ACTIVE DELIVERIES ====================
 
 export interface ActiveDeliveries {
   count: number;
   items: Delivery[];
-  action: DashboardAction;
+  action?: AdminDashboardAction | null;
+}
+
+// ==================== LIVE TRACKING OVERVIEW ====================
+
+export interface LiveTrackingItem {
+  deliveryId: string;
+  status: DeliveryStatus;
+  driverId: string | null;
+  driverName: string | null;
+  latestPointAt: string | null;
+  latestLat: number | null;
+  latestLng: number | null;
+  trackingStatus: TrackingStatus | null;
+  drivenMiles: number;
+  pickupAddress: string;
+  dropoffAddress: string;
+}
+
+export interface LiveTrackingOverview {
+  activeTrackedCount: number;
+  activeUntrackedCount: number;
+  staleTrackingCount: number;
+  items: LiveTrackingItem[];
+  action?: AdminDashboardAction | null;
 }
 
 // ==================== NEEDS ATTENTION ====================
 
 export interface NeedsAttentionItem {
-  issueType: IssueType;
+  issueType: IssueType | string;
   title: string;
   count: number;
-  items: any[]; // Can be Delivery, PendingDriver, PendingCustomer, Payout, Dispute
-  action: DashboardAction;
+  items: unknown[];
+  action?: AdminDashboardAction | null;
+}
+
+// ==================== DRIVER OPERATIONS ====================
+
+export interface DriverOperations {
+  approvedDrivers: number;
+  pendingDrivers: number;
+  suspendedDrivers: number;
+  driversWithActiveTrips: number;
+  recentPendingDrivers: PendingDriver[];
+}
+
+// ==================== DEALER ACTIVITY ====================
+
+export interface TopDealer {
+  customerId: string;
+  businessName: string;
+  deliveries: number;
+  activeDeliveries: number;
+  disputedDeliveries: number;
+}
+
+export interface DealerActivity {
+  approvedBusinessCustomers: number;
+  pendingBusinessCustomers: number;
+  activeBusinessCustomersInRange: number;
+  topDealersByVolume: TopDealer[];
 }
 
 // ==================== PRICING SNAPSHOT ====================
@@ -338,59 +498,6 @@ export interface ActorSummary {
   };
 }
 
-// ==================== SUMMARY ====================
-
-export interface Summary {
-  totalDeliveries: number;
-  activeTrips: number;
-  completedDeliveries: number;
-  cancelledDeliveries: number;
-  deliveriesNeedingOpsConfirmation: number;
-  openDisputes: number;
-  pendingCustomerApprovals: number;
-  pendingDriverApprovals: number;
-}
-
-// ==================== PIPELINE ====================
-
-export interface Pipeline {
-  draft: number;
-  quoted: number;
-  listed: number;
-  booked: number;
-  active: number;
-  completed: number;
-  cancelled: number;
-  expired: number;
-  disputed: number;
-}
-
-// ==================== FINANCE ====================
-
-export interface Finance {
-  authorizedPaymentsCount: number;
-  capturedPaymentsCount: number;
-  invoicedPostpaidCount: number;
-  paidPostpaidCount: number;
-  eligiblePayoutCount: number;
-  paidPayoutCount: number;
-  grossRevenue: number;
-  capturedRevenue: number;
-  postpaidReceivable: number;
-  paidOutAmount: number;
-}
-
-// ==================== OPERATIONS ====================
-
-export interface Operations {
-  listedWithoutAssignment: number;
-  bookedWithoutComplianceReady: number;
-  activeWithoutTracking: number;
-  deliveriesMissingCompliance: number;
-  staleQuotedDeliveries: number;
-  staleBookedDeliveries: number;
-}
-
 // ==================== DELIVERY BREAKDOWNS ====================
 
 export interface DeliveryBreakdowns {
@@ -404,6 +511,17 @@ export interface DeliveryBreakdowns {
     betweenLocations: number;
     servicePickupReturn: number;
   };
+}
+
+// ==================== REPORTS PREVIEW ====================
+
+export interface ReportsPreview {
+  deliveriesToday: number;
+  completionRate: number;
+  disputeRate: number;
+  avgDrivenMilesCompleted: number;
+  from: string;
+  to: string;
 }
 
 // ==================== RECENT ====================
@@ -423,31 +541,27 @@ export interface Recent {
 export interface AdminDashboardOverview {
   filtersApplied: FiltersApplied;
   summaryCards: SummaryCards;
-  activeDeliveries: ActiveDeliveries;
-  needsAttention: NeedsAttentionItem[];
-  pricingSnapshot: PricingSnapshot | null;
-  schedulingPolicy: SchedulingPolicy | null;
-  actorSummary: ActorSummary;
-  summary: Summary;
-  pipeline: Pipeline;
-  finance: Finance;
-  operations: Operations;
-  deliveryBreakdowns: DeliveryBreakdowns;
-  recent: Recent;
+  summary?: Summary;
+  pipeline?: Pipeline;
+  finance?: Finance;
+  financialSnapshot?: FinancialSnapshot;
+  operations?: Operations;
+  alerts?: Alerts;
+  activeDeliveries?: ActiveDeliveries;
+  liveTrackingOverview?: LiveTrackingOverview;
+  needsAttention?: NeedsAttentionItem[];
+  driverOperations?: DriverOperations;
+  dealerActivity?: DealerActivity;
+  pricingSnapshot?: PricingSnapshot | null;
+  schedulingPolicy?: SchedulingPolicy | null;
+  actorSummary?: ActorSummary;
+  deliveryBreakdowns?: DeliveryBreakdowns;
+  reportsPreview?: ReportsPreview;
+  quickActions?: AdminDashboardAction[];
+  recent?: Recent;
 }
 
-// ==================== QUERY PARAMS ====================
+// ==================== LEGACY TYPES (for backward compatibility) ====================
 
-export interface DashboardQueryParams {
-  from?: string;
-  to?: string;
-  datePreset?: string;
-  statuses?: string[];
-  customerId?: string;
-  customerType?: CustomerType;
-  createdByRole?: string;
-  serviceType?: ServiceType;
-  requiresOpsConfirmation?: boolean;
-  urgentOnly?: boolean;
-  disputedOnly?: boolean;
-}
+// These are kept for backward compatibility with existing components
+export type DashboardAction = AdminDashboardAction;

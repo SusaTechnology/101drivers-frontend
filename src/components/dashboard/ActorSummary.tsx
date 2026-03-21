@@ -1,7 +1,16 @@
 // components/dashboard/ActorSummary.tsx
 import React from 'react';
 import { Link } from '@tanstack/react-router';
-import { Users, Building2, Truck, ArrowRight } from 'lucide-react';
+import {
+  Users,
+  Building2,
+  UserCheck,
+  ArrowRight,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Ban,
+} from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -11,8 +20,8 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { ActorSummary as ActorSummaryType } from '@/types/dashboard';
 import { cn } from '@/lib/utils';
+import type { ActorSummary as ActorSummaryType } from '@/types/dashboard';
 
 interface ActorSummaryProps {
   data: ActorSummaryType | undefined;
@@ -22,93 +31,82 @@ interface ActorSummaryProps {
 interface ActorCardProps {
   title: string;
   icon: React.ElementType;
+  iconColor: string;
   stats: {
     pending: number;
     approved: number;
-    rejected: number;
+    rejected?: number;
     suspended: number;
   };
   linkTo: string;
+  linkParams?: Record<string, string>;
 }
 
-function ActorCard({ title, icon: Icon, stats, linkTo }: ActorCardProps) {
-  const total = stats.pending + stats.approved + stats.rejected + stats.suspended;
+function ActorCard({ title, icon: Icon, iconColor, stats, linkTo, linkParams }: ActorCardProps) {
+  const total = stats.pending + stats.approved + (stats.rejected || 0) + stats.suspended;
 
   return (
-    <Link
-      to={linkTo}
-      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 transition block"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
-            <Icon className="w-4 h-4 text-primary" />
+    <Link to={linkTo} search={linkParams}>
+      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-primary/30 hover:bg-primary/5 transition-colors cursor-pointer group">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Icon className={cn('w-5 h-5', iconColor)} />
+            <span className="text-sm font-bold text-slate-900 dark:text-white">
+              {title}
+            </span>
           </div>
-          <p className="text-sm font-extrabold text-slate-900 dark:text-white">
-            {title}
-          </p>
+          <Badge variant="outline" className="text-[10px] font-bold">
+            {total} total
+          </Badge>
         </div>
-        <span className="text-lg font-black text-slate-900 dark:text-white">
-          {total}
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {stats.pending > 0 && (
-          <Badge
-            variant="outline"
-            className="text-[10px] font-bold bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
-          >
-            {stats.pending} pending
-          </Badge>
-        )}
-        <Badge
-          variant="outline"
-          className="text-[10px] font-bold bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
-        >
-          {stats.approved} approved
-        </Badge>
-        {stats.rejected > 0 && (
-          <Badge
-            variant="outline"
-            className="text-[10px] font-bold bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
-          >
-            {stats.rejected} rejected
-          </Badge>
-        )}
-        {stats.suspended > 0 && (
-          <Badge
-            variant="outline"
-            className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-          >
-            {stats.suspended} suspended
-          </Badge>
-        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center gap-2 text-xs">
+            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+            <span className="text-slate-600 dark:text-slate-400">Approved:</span>
+            <span className="font-bold text-slate-900 dark:text-white">{stats.approved}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <Clock className="w-3.5 h-3.5 text-amber-500" />
+            <span className="text-slate-600 dark:text-slate-400">Pending:</span>
+            <span className="font-bold text-slate-900 dark:text-white">{stats.pending}</span>
+          </div>
+          {stats.rejected !== undefined && (
+            <div className="flex items-center gap-2 text-xs">
+              <XCircle className="w-3.5 h-3.5 text-red-500" />
+              <span className="text-slate-600 dark:text-slate-400">Rejected:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{stats.rejected}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-xs">
+            <Ban className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-slate-600 dark:text-slate-400">Suspended:</span>
+            <span className="font-bold text-slate-900 dark:text-white">{stats.suspended}</span>
+          </div>
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+          <span className="text-xs font-bold text-primary flex items-center gap-1">
+            View details <ArrowRight className="w-3 h-3" />
+          </span>
+        </div>
       </div>
     </Link>
   );
 }
 
-function ActorSummarySkeleton() {
+function ActorSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      {[1, 2, 3].map((i) => (
-        <div
-          key={i}
-          className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Skeleton className="w-8 h-8 rounded-lg" />
-              <Skeleton className="h-5 w-24" />
-            </div>
-            <Skeleton className="h-6 w-8" />
-          </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-5 w-16" />
-            <Skeleton className="h-5 w-16" />
-          </div>
-        </div>
-      ))}
+    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+      <div className="flex items-center justify-between mb-4">
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-5 w-16" />
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-full" />
+      </div>
     </div>
   );
 }
@@ -116,49 +114,75 @@ function ActorSummarySkeleton() {
 export function ActorSummary({ data, isLoading }: ActorSummaryProps) {
   return (
     <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-      <CardHeader className="p-6 sm:p-7">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle className="text-xl font-black">Actors overview</CardTitle>
-            <CardDescription className="text-sm mt-1">
-              Quick summary of customers and drivers in the system.
-            </CardDescription>
-          </div>
+      <CardHeader className="p-6 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center">
-            <Users className="w-6 h-6 text-primary font-bold" />
+            <Users className="w-6 h-6 text-primary" />
+          </div>
+          <div>
+            <CardTitle className="text-xl font-black">Platform Users</CardTitle>
+            <CardDescription className="text-sm mt-1">
+              Customers, dealers, and drivers
+            </CardDescription>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-6 sm:p-7 pt-0">
+
+      <CardContent className="p-4">
         {isLoading ? (
-          <ActorSummarySkeleton />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <ActorSkeleton key={i} />
+            ))}
+          </div>
         ) : data ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <ActorCard
-              title="Private Customers"
-              icon={Users}
-              stats={data.privateCustomers}
-              linkTo="/admin-users"
-            />
+          <div className="space-y-3">
             <ActorCard
               title="Business Customers"
               icon={Building2}
-              stats={data.businessCustomers}
-              linkTo="/admin-users"
-            />
-            <ActorCard
-              title="Drivers"
-              icon={Truck}
+              iconColor="text-purple-500"
               stats={{
-                pending: data.drivers.pending,
-                approved: data.drivers.approved,
-                rejected: 0,
-                suspended: data.drivers.suspended,
+                pending: data.businessCustomers?.pending ?? 0,
+                approved: data.businessCustomers?.approved ?? 0,
+                rejected: data.businessCustomers?.rejected ?? 0,
+                suspended: data.businessCustomers?.suspended ?? 0,
               }}
               linkTo="/admin-users"
+              linkParams={{ tab: 'customers', customerType: 'BUSINESS' }}
+            />
+
+            <ActorCard
+              title="Private Customers"
+              icon={Users}
+              iconColor="text-blue-500"
+              stats={{
+                pending: data.privateCustomers?.pending ?? 0,
+                approved: data.privateCustomers?.approved ?? 0,
+                rejected: data.privateCustomers?.rejected ?? 0,
+                suspended: data.privateCustomers?.suspended ?? 0,
+              }}
+              linkTo="/admin-users"
+              linkParams={{ tab: 'customers', customerType: 'PRIVATE' }}
+            />
+
+            <ActorCard
+              title="Drivers"
+              icon={UserCheck}
+              iconColor="text-green-500"
+              stats={{
+                pending: data.drivers?.pending ?? 0,
+                approved: data.drivers?.approved ?? 0,
+                suspended: data.drivers?.suspended ?? 0,
+              }}
+              linkTo="/admin-users"
+              linkParams={{ tab: 'drivers' }}
             />
           </div>
-        ) : null}
+        ) : (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <p className="text-sm text-slate-500">No user data available</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
