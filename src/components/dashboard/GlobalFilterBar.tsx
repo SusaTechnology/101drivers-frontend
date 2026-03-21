@@ -233,23 +233,44 @@ export function GlobalFilterBar({
 
   // Helper to clear a specific filter from applied filters
   const clearFilter = (filterKey: keyof DashboardQueryParams) => {
-    // Build new filters from currently applied filters, removing the specified key
-    const newFilters: DashboardQueryParams = {
-      datePreset: filtersApplied?.datePreset || undefined,
-      from: filtersApplied?.from || undefined,
-      to: filtersApplied?.to || undefined,
-      statuses: filtersApplied?.statuses && filtersApplied.statuses.length > 0 ? filtersApplied.statuses : undefined,
-      customerId: filtersApplied?.customerId || undefined,
-      customerType: filtersApplied?.customerType || undefined,
-      createdByRole: filtersApplied?.createdByRole || undefined,
-      serviceType: filtersApplied?.serviceType || undefined,
-      requiresOpsConfirmation: filtersApplied?.requiresOpsConfirmation ?? undefined,
-      urgentOnly: filtersApplied?.urgentOnly ?? undefined,
-      disputedOnly: filtersApplied?.disputedOnly ?? undefined,
-    };
+    // Build new filters from currently applied filters, only including truthy values
+    const newFilters: DashboardQueryParams = {};
     
-    // Remove the specific filter
-    delete newFilters[filterKey];
+    // Only add defined, non-null values
+    if (filtersApplied?.datePreset && filterKey !== 'datePreset') {
+      newFilters.datePreset = filtersApplied.datePreset;
+    }
+    if (filtersApplied?.from && filterKey !== 'from') {
+      newFilters.from = filtersApplied.from;
+    }
+    if (filtersApplied?.to && filterKey !== 'to') {
+      newFilters.to = filtersApplied.to;
+    }
+    if (filtersApplied?.statuses && filtersApplied.statuses.length > 0 && filterKey !== 'statuses') {
+      newFilters.statuses = filtersApplied.statuses;
+    }
+    if (filtersApplied?.customerId && filterKey !== 'customerId') {
+      newFilters.customerId = filtersApplied.customerId;
+    }
+    if (filtersApplied?.customerType && filterKey !== 'customerType') {
+      newFilters.customerType = filtersApplied.customerType;
+    }
+    if (filtersApplied?.createdByRole && filterKey !== 'createdByRole') {
+      newFilters.createdByRole = filtersApplied.createdByRole;
+    }
+    if (filtersApplied?.serviceType && filterKey !== 'serviceType') {
+      newFilters.serviceType = filtersApplied.serviceType;
+    }
+    // Handle boolean filters - only add if true and not being cleared
+    if (filtersApplied?.requiresOpsConfirmation === true && filterKey !== 'requiresOpsConfirmation') {
+      newFilters.requiresOpsConfirmation = true;
+    }
+    if (filtersApplied?.urgentOnly === true && filterKey !== 'urgentOnly') {
+      newFilters.urgentOnly = true;
+    }
+    if (filtersApplied?.disputedOnly === true && filterKey !== 'disputedOnly') {
+      newFilters.disputedOnly = true;
+    }
     
     // Update both local and applied filters
     setLocalFilters(newFilters);
