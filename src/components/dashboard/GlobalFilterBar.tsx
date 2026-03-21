@@ -112,14 +112,34 @@ export function GlobalFilterBar({
     return null;
   }, [localFilters.customerId, customers]);
 
-  // Filter customers by search
+  // Filter customers by search and customer type
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers;
-    const search = customerSearch.toLowerCase();
-    return customers.filter(c =>
-      c.name.toLowerCase().includes(search)
-    );
-  }, [customers, customerSearch]);
+    let result = customers;
+
+    // Filter by customer type if selected
+    if (localFilters.customerType) {
+      result = result.filter(c => c.customerType === localFilters.customerType);
+    }
+
+    // Filter by search text
+    if (customerSearch) {
+      const search = customerSearch.toLowerCase();
+      result = result.filter(c =>
+        c.name.toLowerCase().includes(search)
+      );
+    }
+
+    return result;
+  }, [customers, customerSearch, localFilters.customerType]);
+
+  // Clear selected customer if it doesn't match the new customer type filter
+  useEffect(() => {
+    if (localFilters.customerId && localFilters.customerType && selectedCustomer) {
+      if (selectedCustomer.customerType !== localFilters.customerType) {
+        setLocalFilters(prev => ({ ...prev, customerId: undefined }));
+      }
+    }
+  }, [localFilters.customerType, localFilters.customerId, selectedCustomer]);
 
   // Initialize local filters from applied filters
   useEffect(() => {
