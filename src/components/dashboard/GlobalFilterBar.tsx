@@ -685,10 +685,23 @@ export function GlobalFilterBar({
                   className="chip bg-primary/10 border-primary/25 text-primary-foreground text-[10px]"
                 >
                   {appliedCustomer ? appliedCustomer.name : `ID: ${filtersApplied.customerId.substring(0, 8)}...`}
-                  <X
-                    className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => clearFilter('customerId')}
-                  />
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="ml-1 hover:bg-black/10 rounded-full p-0.5 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearFilter('customerId');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        clearFilter('customerId');
+                      }
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </span>
                 </Badge>
               )}
               {filtersApplied?.customerType && (
@@ -697,10 +710,23 @@ export function GlobalFilterBar({
                   className="chip bg-primary/10 border-primary/25 text-primary-foreground text-[10px]"
                 >
                   {filtersApplied.customerType}
-                  <X
-                    className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => clearFilter('customerType')}
-                  />
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="ml-1 hover:bg-black/10 rounded-full p-0.5 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearFilter('customerType');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        clearFilter('customerType');
+                      }
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </span>
                 </Badge>
               )}
               {filtersApplied?.createdByRole && (
@@ -709,10 +735,23 @@ export function GlobalFilterBar({
                   className="chip bg-primary/10 border-primary/25 text-primary-foreground text-[10px]"
                 >
                   {CREATED_BY_ROLES.find(r => r.value === filtersApplied.createdByRole)?.label || filtersApplied.createdByRole}
-                  <X
-                    className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => clearFilter('createdByRole')}
-                  />
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="ml-1 hover:bg-black/10 rounded-full p-0.5 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearFilter('createdByRole');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        clearFilter('createdByRole');
+                      }
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </span>
                 </Badge>
               )}
               {filtersApplied?.serviceType && (
@@ -721,10 +760,23 @@ export function GlobalFilterBar({
                   className="chip bg-primary/10 border-primary/25 text-primary-foreground text-[10px]"
                 >
                   {filtersApplied.serviceType.replace('_', ' ')}
-                  <X
-                    className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => clearFilter('serviceType')}
-                  />
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="ml-1 hover:bg-black/10 rounded-full p-0.5 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearFilter('serviceType');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        clearFilter('serviceType');
+                      }
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </span>
                 </Badge>
               )}
               {filtersApplied?.urgentOnly && (
@@ -733,10 +785,23 @@ export function GlobalFilterBar({
                   className="chip bg-amber-100 border-amber-200 text-amber-700 text-[10px]"
                 >
                   Urgent
-                  <X
-                    className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => clearFilter('urgentOnly')}
-                  />
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="ml-1 hover:bg-black/10 rounded-full p-0.5 cursor-pointer transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearFilter('urgentOnly');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        clearFilter('urgentOnly');
+                      }
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </span>
                 </Badge>
               )}
             </div>
