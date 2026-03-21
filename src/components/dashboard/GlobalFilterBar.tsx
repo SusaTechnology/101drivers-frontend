@@ -231,6 +231,31 @@ export function GlobalFilterBar({
     onFiltersChange(newFilters);
   };
 
+  // Helper to clear a specific filter from applied filters
+  const clearFilter = (filterKey: keyof DashboardQueryParams) => {
+    // Build new filters from currently applied filters, removing the specified key
+    const newFilters: DashboardQueryParams = {
+      datePreset: filtersApplied?.datePreset || undefined,
+      from: filtersApplied?.from || undefined,
+      to: filtersApplied?.to || undefined,
+      statuses: filtersApplied?.statuses && filtersApplied.statuses.length > 0 ? filtersApplied.statuses : undefined,
+      customerId: filtersApplied?.customerId || undefined,
+      customerType: filtersApplied?.customerType || undefined,
+      createdByRole: filtersApplied?.createdByRole || undefined,
+      serviceType: filtersApplied?.serviceType || undefined,
+      requiresOpsConfirmation: filtersApplied?.requiresOpsConfirmation ?? undefined,
+      urgentOnly: filtersApplied?.urgentOnly ?? undefined,
+      disputedOnly: filtersApplied?.disputedOnly ?? undefined,
+    };
+    
+    // Remove the specific filter
+    delete newFilters[filterKey];
+    
+    // Update both local and applied filters
+    setLocalFilters(newFilters);
+    onFiltersChange(newFilters);
+  };
+
   return (
     <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
       <CardContent className="p-4">
@@ -641,7 +666,7 @@ export function GlobalFilterBar({
                   {appliedCustomer ? appliedCustomer.name : `ID: ${filtersApplied.customerId.substring(0, 8)}...`}
                   <X
                     className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => onFiltersChange({ ...localFilters, customerId: undefined })}
+                    onClick={() => clearFilter('customerId')}
                   />
                 </Badge>
               )}
@@ -653,7 +678,7 @@ export function GlobalFilterBar({
                   {filtersApplied.customerType}
                   <X
                     className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => onFiltersChange({ ...localFilters, customerType: undefined })}
+                    onClick={() => clearFilter('customerType')}
                   />
                 </Badge>
               )}
@@ -665,7 +690,7 @@ export function GlobalFilterBar({
                   {CREATED_BY_ROLES.find(r => r.value === filtersApplied.createdByRole)?.label || filtersApplied.createdByRole}
                   <X
                     className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => onFiltersChange({ ...localFilters, createdByRole: undefined })}
+                    onClick={() => clearFilter('createdByRole')}
                   />
                 </Badge>
               )}
@@ -677,7 +702,7 @@ export function GlobalFilterBar({
                   {filtersApplied.serviceType.replace('_', ' ')}
                   <X
                     className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => onFiltersChange({ ...localFilters, serviceType: undefined })}
+                    onClick={() => clearFilter('serviceType')}
                   />
                 </Badge>
               )}
@@ -689,7 +714,7 @@ export function GlobalFilterBar({
                   Urgent
                   <X
                     className="w-3 h-3 ml-1 cursor-pointer"
-                    onClick={() => onFiltersChange({ ...localFilters, urgentOnly: undefined })}
+                    onClick={() => clearFilter('urgentOnly')}
                   />
                 </Badge>
               )}
