@@ -66,6 +66,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, authFetch, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import LiveTrackingWidget from '@/components/dashboard/LiveTrackingWidget'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Rocket } from 'lucide-react'
 
@@ -623,6 +624,49 @@ const filteredDeliveries = deliveries.filter((delivery) => {
             </Link> */}
           </div>
         </section>
+
+        {/* Live Tracking Section - Show for ACTIVE deliveries */}
+        {deliveriesData?.filter((d: any) => d.status === 'ACTIVE').length > 0 && (
+          <section className="mt-8">
+            <div className="space-y-4">
+              {deliveriesData
+                .filter((d: any) => d.status === 'ACTIVE')
+                .map((activeDelivery: any) => {
+                  const assignment = activeDelivery.assignments?.[0]
+                  const driver = assignment?.driver
+                  
+                  return (
+                    <LiveTrackingWidget
+                      key={activeDelivery.id}
+                      deliveryId={activeDelivery.id}
+                      deliveryRef={activeDelivery.id.slice(-6).toUpperCase()}
+                      vehicle={{
+                        make: activeDelivery.vehicleMake,
+                        model: activeDelivery.vehicleModel,
+                        color: activeDelivery.vehicleColor,
+                        licensePlate: activeDelivery.licensePlate,
+                      }}
+                      pickup={{
+                        address: activeDelivery.pickupAddress,
+                        lat: activeDelivery.pickupLat,
+                        lng: activeDelivery.pickupLng,
+                      }}
+                      dropoff={{
+                        address: activeDelivery.dropoffAddress,
+                        lat: activeDelivery.dropoffLat,
+                        lng: activeDelivery.dropoffLng,
+                      }}
+                      driver={driver ? {
+                        name: driver.user?.fullName || driver.name || 'Driver',
+                        phone: driver.phone,
+                        rating: driver.rating,
+                      } : undefined}
+                    />
+                  )
+                })}
+            </div>
+          </section>
+        )}
 
         {/* Status tabs */}
         <section className="mt-8">
