@@ -32,7 +32,7 @@ import {
   Bell,
   Database,
   Gift,
-  Trademark,
+  Stamp,
   AlertTriangle,
   FileWarning,
   XCircle,
@@ -441,7 +441,7 @@ export default function PrivacyPolicy() {
                 </P>
 
                 {/* Intellectual Property */}
-                <SectionHeader icon={Trademark} title="Intellectual Property" id="intellectual-property" />
+                <SectionHeader icon={Stamp} title="Intellectual Property" id="intellectual-property" />
                 <P>
                   All intellectual property rights in and to the 101 Drivers Platform are owned by 101 Drivers absolutely and in their entirety. This includes database rights, inventions and patentable subject-matter, patents, copyright, design rights (whether registered or unregistered), trademarks (whether registered or unregistered), and other similar rights wherever existing in the world, together with the right to apply for protection of the same. Any questions, comments, suggestions, ideas, feedback, or other information provided by you to us are non-confidential and shall become the sole property of 101 Drivers. 101 Drivers shall own exclusive rights, including all intellectual property rights, and shall be entitled to the unrestricted use and dissemination of these Submissions for any purpose, commercial or otherwise, without acknowledgment or compensation to you.
                 </P>
