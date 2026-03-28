@@ -48,12 +48,21 @@ import {
   CheckCircle,
   FileText,
   HelpCircle,
+  Rocket,
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
 import { getUser, useCreate, useDataQuery, usePatch, authFetch } from "@/lib/tanstack/dataQuery";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Form validation schema
 const deliverySchema = z.object({
@@ -78,8 +87,6 @@ const deliverySchema = z.object({
   makeOther: z.string().optional(),
   model: z.string().min(1, "Model is required"),
   modelOther: z.string().optional(),
-  trim: z.string().optional(),
-  trimOther: z.string().optional(),
   color: z.string().min(1, "Color is required"),
   colorOther: z.string().optional(),
   instructions: z.string().optional(),
@@ -290,6 +297,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   
   const [isLoadingDraft, setIsLoadingDraft] = useState(!!draftId);
+  
+  // Release dialog state
+  const [showReleaseDialog, setShowReleaseDialog] = useState(false);
+  const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
   const customer = getUser();
 
   // Fetch customer data to check postpaidEnabled status
@@ -321,7 +332,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Mutation for creating delivery
   const createDelivery = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`, {
-    onSuccess: async () => {
+    onSuccess: async (data: any) => {
       // If editing a draft, delete it after successful submission
       if (draftId) {
         try {
@@ -332,10 +343,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           console.error('Failed to delete draft after submission:', e);
         }
       }
-      toast.success("Delivery request created successfully", {
-        description: "Your delivery has been listed. You will receive email confirmation shortly.",
-      });
-      navigate({ to: "/dealer-dashboard" });
+      // Show release dialog instead of navigating
+      setCreatedDeliveryId(data?.id || data?.deliveryRequest?.id || null);
+      setShowReleaseDialog(true);
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to create delivery request";
@@ -352,6 +362,34 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       });
     },
     successMessage: undefined, // Using custom toast above
+  });
+
+  // Query client for invalidating queries
+  const queryClient = useQueryClient();
+
+  // Mutation for releasing to marketplace
+  const releaseToMarketMutation = useMutation({
+    mutationFn: async (deliveryId: string) => {
+      return authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/release-to-marketplace`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    },
+    onSuccess: () => {
+      toast.success("Released to market", {
+        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
+      });
+      setShowReleaseDialog(false);
+      navigate({ to: "/dealer-dashboard" });
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to release to market", { description: error.message });
+    }
   });
 
   // Mutation for saving as draft (new draft)
@@ -598,6 +636,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     defaultValues: {
       serviceType: "HOME_DELIVERY",
       paymentType: "PREPAID",
+      transmission: "Automatic",
       rememberPickup: false,
       enableRecipient: false,
       dealerAuthorized: false,
@@ -687,7 +726,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const transmission = watch("transmission");
   const make = watch("make");
   const model = watch("model");
-  const trim = watch("trim");
+
   const color = watch("color");
   const licensePlate = watch("licensePlate");
   const vinVerification = watch("vinVerification");
@@ -789,6 +828,19 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     successMessage: undefined,
   }
 );
+
+  // Auto-calculate quote when both addresses are set
+  useEffect(() => {
+    if (pickupCoords && dropoffCoords && !hasCalculated && pickupAddress && dropoffAddress) {
+      getQuotePreview.mutate({
+        pickupAddress,
+        dropoffAddress,
+        serviceType,
+        ...(customer?.profileId && { customerId: customer.profileId }),
+      });
+    }
+  }, [pickupCoords, dropoffCoords]);
+
   // Mutation for schedule preview - handles both discovery and validation modes
   const getSchedulePreview = useCreate<SchedulePreviewResponse, SchedulePreviewRequest>(
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/schedule-preview`,
@@ -1135,7 +1187,7 @@ const handleQuotePreview = () => {
             variant="outline"
             size="sm"
             onClick={() => navigate({ to: "/dealer-dashboard" })}
-            className="hidden sm:inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -1230,6 +1282,52 @@ const handleQuotePreview = () => {
           </div>
         </div>
       )}
+
+      {/* Release to Market Dialog */}
+      <Dialog open={showReleaseDialog} onOpenChange={setShowReleaseDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-lime-500" />
+              Delivery Created Successfully
+            </DialogTitle>
+            <DialogDescription>
+              Your delivery request has been created with status "Quoted". Would you like to release it to the marketplace now?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Releasing to the marketplace will make your delivery visible to available drivers. You'll be notified when a driver books it.
+            </p>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => navigate({ to: "/dealer-dashboard" })}
+              className="w-full sm:w-auto"
+            >
+              View in Dashboard
+            </Button>
+            <Button
+              onClick={() => createdDeliveryId && releaseToMarketMutation.mutate(createdDeliveryId)}
+              disabled={releaseToMarketMutation.isPending}
+              className="w-full sm:w-auto bg-lime-500 text-slate-950 hover:bg-lime-600 font-extrabold"
+            >
+              {releaseToMarketMutation.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950 mr-2"></div>
+                  Releasing...
+                </>
+              ) : (
+                <>
+                  <Rocket className="h-4 w-4 mr-2" />
+                  Release to Market
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
         {/* Title section */}
@@ -1867,7 +1965,7 @@ const handleQuotePreview = () => {
                       Vehicle details
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      Make/model/trim/color from dropdowns; "Other" unlocks
+                      Make/model/color from dropdowns; "Other" unlocks
                       free-text. VIN verification required.
                     </p>
                   </div>
@@ -2002,32 +2100,6 @@ const handleQuotePreview = () => {
                       Must be exactly 4 numeric digits (no letters).
                     </p>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="transmission" className="text-xs font-bold">
-                      Transmission
-                    </Label>
-                    <Select
-                      value={transmission}
-                      onValueChange={(value) => setValue("transmission", value)}
-                    >
-                      <SelectTrigger className="h-14 rounded-2xl">
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Automatic">Automatic</SelectItem>
-                        <SelectItem value="Manual">Manual</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {transmission === "Other" && (
-                      <Input
-                        {...register("transmissionOther")}
-                        className="h-14 rounded-2xl mt-2"
-                        placeholder="Enter transmission"
-                      />
-                    )}
-                  </div>
                 </div>
 
                 {/* Make & Model */}
@@ -2097,39 +2169,11 @@ const handleQuotePreview = () => {
                   </div>
                 </div>
 
-                {/* Trim & Color */}
+                {/* Color & Transmission */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="trim" className="text-xs font-bold">
-                      Trim (if available)
-                    </Label>
-                    <Select
-                      value={trim}
-                      onValueChange={(value) => setValue("trim", value)}
-                    >
-                      <SelectTrigger className="h-14 rounded-2xl">
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Base">Base</SelectItem>
-                        <SelectItem value="Sport">Sport</SelectItem>
-                        <SelectItem value="Limited">Limited</SelectItem>
-                        <SelectItem value="Touring">Touring</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {trim === "Other" && (
-                      <Input
-                        {...register("trimOther")}
-                        className="h-14 rounded-2xl mt-2"
-                        placeholder="Enter trim"
-                      />
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
                     <Label htmlFor="color" className="text-xs font-bold">
-                      Color
+                      Color <span className="text-red-500">*</span>
                     </Label>
                     <Select
                       value={color}
@@ -2153,6 +2197,32 @@ const handleQuotePreview = () => {
                         {...register("colorOther")}
                         className="h-14 rounded-2xl mt-2"
                         placeholder="Enter color"
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="transmission" className="text-xs font-bold">
+                      Transmission
+                    </Label>
+                    <Select
+                      value={transmission}
+                      onValueChange={(value) => setValue("transmission", value)}
+                    >
+                      <SelectTrigger className="h-14 rounded-2xl">
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Automatic">Automatic</SelectItem>
+                        <SelectItem value="Manual">Manual</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {transmission === "Other" && (
+                      <Input
+                        {...register("transmissionOther")}
+                        className="h-14 rounded-2xl mt-2"
+                        placeholder="Enter transmission"
                       />
                     )}
                   </div>

@@ -79,8 +79,6 @@ const editDeliverySchema = z.object({
   makeOther: z.string().optional(),
   model: z.string().min(1, "Model is required"),
   modelOther: z.string().optional(),
-  trim: z.string().optional(),
-  trimOther: z.string().optional(),
   color: z.string().min(1, "Color is required"),
   colorOther: z.string().optional(),
   instructions: z.string().optional(),
@@ -440,7 +438,7 @@ export default function DealerEditDelivery() {
             variant="outline"
             size="sm"
             onClick={() => navigate({ to: "/dealer-delivery-details", state: { id: deliveryId } })}
-            className="hidden sm:inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Details

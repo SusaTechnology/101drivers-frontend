@@ -768,7 +768,7 @@ export default function DealerDeliveryDetails() {
         <div className="flex items-center gap-4">
           <Link
             to="/dealer-dashboard"
-            className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Deliveries
@@ -963,6 +963,49 @@ export default function DealerDeliveryDetails() {
               <Headphones className="h-4 w-4" />
               Contact Support
             </Button>
+          </div>
+        </section>
+
+        {/* Prominent Schedule Section */}
+        <section className="mt-6 mb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Pickup Time Card */}
+            <Card className="border-slate-200 dark:border-slate-800 rounded-2xl bg-lime-50 dark:bg-lime-900/10">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-lime-500/20 flex items-center justify-center">
+                    <Clock className="h-5 w-5 text-lime-600 dark:text-lime-400" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Pickup Window</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                      {deliveryData.pickupWindowStart && deliveryData.pickupWindowEnd
+                        ? `${formatDate(deliveryData.pickupWindowStart)} • ${formatTime(deliveryData.pickupWindowStart)} – ${formatTime(deliveryData.pickupWindowEnd)}`
+                        : 'Not scheduled'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Dropoff Time Card */}
+            <Card className="border-slate-200 dark:border-slate-800 rounded-2xl bg-blue-50 dark:bg-blue-900/10">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                    <Flag className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Drop-off Window</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                      {deliveryData.dropoffWindowStart && deliveryData.dropoffWindowEnd
+                        ? `${formatDate(deliveryData.dropoffWindowStart)} • ${formatTime(deliveryData.dropoffWindowStart)} – ${formatTime(deliveryData.dropoffWindowEnd)}`
+                        : 'Not scheduled'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </section>
 
