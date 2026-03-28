@@ -198,7 +198,7 @@ export default function DealerSupportDetail() {
         <div className="flex items-center gap-3">
           <Link
             to="/dealer-support-list"
-            className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to List

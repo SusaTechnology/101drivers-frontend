@@ -735,7 +735,7 @@ const confirmDelete = () => {
           <div className="flex items-center gap-3">
             <Link
               to="/dealer-dashboard"
-              className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-extrabold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-extrabold bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Dashboard
