@@ -11,6 +11,7 @@ import {
   Lock,
   Key,
   CheckCircle2,
+  Check,
   Eye,
   EyeOff,
   Info,
@@ -85,6 +86,7 @@ export function ResetPassword() {
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
   } = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
@@ -94,6 +96,22 @@ export function ResetPassword() {
       confirmPassword: "",
     },
   });
+
+  // Watch password fields for real-time validation
+  const watchNewPassword = watch("newPassword");
+  const watchConfirmPassword = watch("confirmPassword");
+
+  // Password validation checks
+  const passwordChecks = {
+    minLength: (watchNewPassword?.length || 0) >= 8,
+    hasUppercase: /[A-Z]/.test(watchNewPassword || ''),
+    hasLowercase: /[a-z]/.test(watchNewPassword || ''),
+    hasNumber: /[0-9]/.test(watchNewPassword || ''),
+    hasSpecial: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(watchNewPassword || ''),
+    hasMatch: watchNewPassword && watchConfirmPassword && watchNewPassword === watchConfirmPassword,
+    allValid: false, // Will be calculated below
+  };
+  passwordChecks.allValid = passwordChecks.minLength && passwordChecks.hasUppercase && passwordChecks.hasLowercase && passwordChecks.hasNumber && passwordChecks.hasSpecial && passwordChecks.hasMatch;
 
   // Reset password mutation
   const resetPasswordMutation = useDataMutation<
@@ -369,9 +387,6 @@ export function ResetPassword() {
                   {errors.newPassword.message}
                 </p>
               )}
-              <p className="text-[10px] text-slate-500">
-                Must be at least 8 characters with uppercase, lowercase, number, and special character.
-              </p>
             </div>
 
             {/* Confirm Password */}
@@ -410,6 +425,75 @@ export function ResetPassword() {
                   {errors.confirmPassword.message}
                 </p>
               )}
+            </div>
+
+            {/* Password Requirements - Visual checklist */}
+            <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 space-y-2">
+              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Password Requirements
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                <div className="flex items-center gap-2">
+                  {passwordChecks.minLength ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.minLength ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    8+ characters
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasUppercase ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasUppercase ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    1 uppercase
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasLowercase ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasLowercase ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    1 lowercase
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasNumber ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasNumber ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    1 number
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasSpecial ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasSpecial ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    1 special char
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasMatch ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasMatch ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    Passwords match
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Info note */}
