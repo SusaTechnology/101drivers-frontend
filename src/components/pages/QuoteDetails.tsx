@@ -482,9 +482,10 @@ export function QuoteDetails() {
             </nav>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/landing#estimate" className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <Link to="/landing#estimate" className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
               <ArrowLeft className="w-4 h-4" />
-              Back to Estimate
+              <span className="hidden sm:inline">Back to Estimate</span>
+              <span className="sm:hidden">Back</span>
             </Link>
             <Button variant="outline" size="icon" className="md:hidden w-11 h-11 rounded-2xl border border-slate-200 dark:border-slate-700" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

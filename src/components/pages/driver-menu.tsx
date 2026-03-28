@@ -286,9 +286,10 @@ export default function DriverMenuPage() {
 
               <Link
                 to="/driver-dashboard"
-                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-2xl font-extrabold bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl font-extrabold bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition"
               >
-                Back to Home
+                <span className="hidden sm:inline">Back to Home</span>
+                <span className="sm:hidden">Back</span>
                 <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
