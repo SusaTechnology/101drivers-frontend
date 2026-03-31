@@ -632,9 +632,6 @@ export default function DriverDashboardPage() {
                         <div className="mt-2 text-sm font-black text-slate-900 dark:text-white">
                           {job.date} • {job.timeWindow}
                         </div>
-                        <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
-                          {job.id}
-                        </div>
                       </div>
 
                       {/* Route column */}
