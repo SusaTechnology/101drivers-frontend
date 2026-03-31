@@ -463,7 +463,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           if (data.modelOther) setValue('modelOther', data.modelOther);
           if (data.colorOther) setValue('colorOther', data.colorOther);
           
-          // Restore recipient (always enabled)
+          // Restore recipient (always required)
           if (data.recipientName) setValue('recipientName', data.recipientName);
           if (data.recipientEmail) setValue('recipientEmail', data.recipientEmail);
           if (data.recipientPhone) setValue('recipientPhone', data.recipientPhone);
@@ -478,6 +478,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           setPickupPlaceId(data.pickupPlaceId || null);
           setDropoffPlaceId(data.dropoffPlaceId || null);
           setPickupState(data.pickupState || null);
+          setPickupCity(data.pickupCity || null);
           setDropoffState(data.dropoffState || null);
           
           // Restore schedule windows
@@ -488,7 +489,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
               dropoffWindowStart: data.dropoffWindowStart,
               dropoffWindowEnd: data.dropoffWindowEnd,
             });
-            setCustomerChose("PICKUP_WINDOW");
+            setCustomerChose(data.customerChose || "PICKUP_WINDOW");
             setSelectedSlot({
               label: isoToTimeWindow(data.pickupWindowStart, data.pickupWindowEnd),
               start: data.pickupWindowStart,
@@ -503,7 +504,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
                 dropoffWindowStart: data.dropoffWindowStart,
                 dropoffWindowEnd: data.dropoffWindowEnd,
                 etaMinutes: data.etaMinutes,
-                bufferMinutes: 15,
+                bufferMinutes: data.bufferMinutes || 15,
                 sameDayEligible: false,
                 requiresOpsConfirmation: false,
                 afterHours: false,
@@ -530,6 +531,22 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           // Restore payment type
           if (data.paymentType) {
             setValue('paymentType', data.paymentType);
+          }
+          
+          // Restore saved address/vehicle state
+          if (data.useSavedAddresses !== undefined) {
+            setUseSavedAddresses(data.useSavedAddresses);
+          }
+          if (data.selectedSavedAddressId && savedAddresses.length > 0) {
+            const addr = savedAddresses.find(a => a.id === data.selectedSavedAddressId);
+            if (addr) setSelectedSavedAddress(addr);
+          }
+          if (data.useSavedVehicle !== undefined) {
+            setUseSavedVehicle(data.useSavedVehicle);
+          }
+          if (data.selectedSavedVehicleId && savedVehicles.length > 0) {
+            const vehicle = savedVehicles.find(v => v.id === data.selectedSavedVehicleId);
+            if (vehicle) setSelectedSavedVehicle(vehicle);
           }
           
           // Clear session storage after restoring
@@ -671,6 +688,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       pickupPlaceId: pickupPlaceId,
       dropoffPlaceId: dropoffPlaceId,
       pickupState: pickupState,
+      pickupCity: pickupCity,
       dropoffState: dropoffState,
 
       // Schedule
@@ -679,6 +697,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       dropoffWindowStart: validatedWindows?.dropoffWindowStart,
       dropoffWindowEnd: validatedWindows?.dropoffWindowEnd,
       etaMinutes: schedulePreviewData?.etaMinutes,
+      customerChose: customerChose,
+      bufferMinutes: schedulePreviewData?.bufferMinutes,
 
       // Vehicle
       licensePlate: data.licensePlate,
@@ -708,6 +728,12 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       // Payment
       paymentType: data.paymentType || "PREPAID",
       postpaidEnabled: postpaidEnabled,
+
+      // Saved address/vehicle state
+      useSavedAddresses: useSavedAddresses,
+      selectedSavedAddressId: selectedSavedAddress?.id,
+      useSavedVehicle: useSavedVehicle,
+      selectedSavedVehicleId: selectedSavedVehicle?.id,
 
       // Draft
       draftId: draftId,

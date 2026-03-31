@@ -57,6 +57,7 @@ interface ReviewDeliveryData {
   pickupPlaceId?: string;
   dropoffPlaceId?: string;
   pickupState?: string;
+  pickupCity?: string;
   dropoffState?: string;
 
   // Schedule
@@ -65,6 +66,8 @@ interface ReviewDeliveryData {
   dropoffWindowStart?: string;
   dropoffWindowEnd?: string;
   etaMinutes?: number;
+  customerChose?: "PICKUP_WINDOW" | "DROPOFF_WINDOW";
+  bufferMinutes?: number;
 
   // Vehicle
   licensePlate: string;
@@ -78,23 +81,28 @@ interface ReviewDeliveryData {
   transmission: string;
 
   // Recipient
-  enableRecipient: boolean;
   recipientName?: string;
   recipientEmail?: string;
   recipientPhone?: string;
 
   // Quote
-  quoteId: string;
-  miles: number;
-  total: number;
-  base: number;
-  distance: number;
-  insurance: number;
-  transaction: number;
+  quoteId?: string;
+  miles?: number;
+  total?: number;
+  base?: number;
+  distance?: number;
+  insurance?: number;
+  transaction?: number;
 
   // Payment
-  paymentType: string;
-  postpaidEnabled: boolean;
+  paymentType?: string;
+  postpaidEnabled?: boolean;
+
+  // Saved address/vehicle state
+  useSavedAddresses?: boolean;
+  selectedSavedAddressId?: string;
+  useSavedVehicle?: boolean;
+  selectedSavedVehicleId?: string;
 
   // Draft
   draftId?: string;
