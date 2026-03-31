@@ -71,8 +71,8 @@ const deliverySchema = z.object({
     "BETWEEN_LOCATIONS",
     "SERVICE_PICKUP_RETURN",
   ]),
-  pickupAddress: z.string().min(1, "Pickup address is required"),
-  dropoffAddress: z.string().min(1, "Drop-off address is required"),
+  pickupAddress: z.string().min(1, "From location is required"),
+  dropoffAddress: z.string().min(1, "To location is required"),
   rememberPickup: z.boolean().optional(),
   // Schedule fields - now populated from backend schedule-preview
   pickupWindowStart: z.string().optional(),
@@ -1681,7 +1681,7 @@ const handleQuotePreview = () => {
                       Step 2
                     </CardDescription>
                     <CardTitle className="text-2xl font-black mt-2">
-                      Pickup & drop-off
+                      Route
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                       CA-only addresses with autocomplete/search. Quote updates
@@ -1702,7 +1702,7 @@ const handleQuotePreview = () => {
                       htmlFor="pickupAddress"
                       className="text-xs font-bold"
                     >
-                      Pickup address
+                      From Where
                     </Label>
                     {useSavedAddresses ? (
                       <Select
@@ -1728,7 +1728,7 @@ const handleQuotePreview = () => {
                         onPlaceSelect={handlePickupSelect}
                         onClear={handlePickupClear}
                         isLoaded={isLoaded}
-                        placeholder="Search pickup location (California only)"
+                        placeholder="Search starting location (California only)"
                         icon={<MapPin className="h-5 w-5 text-slate-400" />}
                       />
                     )}
@@ -1818,7 +1818,7 @@ const handleQuotePreview = () => {
                       htmlFor="dropoffAddress"
                       className="text-xs font-bold"
                     >
-                      Drop-off address
+                      Where To
                     </Label>
                     <LocationAutocomplete
                       key="dropoff"
@@ -1827,7 +1827,7 @@ const handleQuotePreview = () => {
                       onPlaceSelect={handleDropoffSelect}
                       onClear={handleDropoffClear}
                       isLoaded={isLoaded}
-                      placeholder="Search drop-off location (California only)"
+                      placeholder="Search destination (California only)"
                       icon={<Flag className="h-5 w-5 text-slate-400" />}
                     />
                     {errors.dropoffAddress && (

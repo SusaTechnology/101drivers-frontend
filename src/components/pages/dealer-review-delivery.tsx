@@ -379,14 +379,14 @@ export default function ReviewDeliveryPage() {
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                   <MapPin className="h-5 w-5 text-lime-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-xs font-bold text-slate-500">Pickup</p>
+                    <p className="text-xs font-bold text-slate-500">From</p>
                     <p className="text-sm font-bold">{reviewData.pickupAddress}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                   <Flag className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-xs font-bold text-slate-500">Drop-off</p>
+                    <p className="text-xs font-bold text-slate-500">To</p>
                     <p className="text-sm font-bold">{reviewData.dropoffAddress}</p>
                   </div>
                 </div>
@@ -402,7 +402,7 @@ export default function ReviewDeliveryPage() {
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs font-bold text-slate-500">Pickup Window</p>
+                  <p className="text-xs font-bold text-slate-500">Pickup Time</p>
                   <p className="text-sm font-bold">{formatTimeRange(reviewData.pickupWindowStart, reviewData.pickupWindowEnd)}</p>
                   {reviewData.pickupWindowStart && (
                     <p className="text-xs text-slate-500 mt-1">
@@ -411,7 +411,7 @@ export default function ReviewDeliveryPage() {
                   )}
                 </div>
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs font-bold text-slate-500">Drop-off Window</p>
+                  <p className="text-xs font-bold text-slate-500">Delivery Time</p>
                   <p className="text-sm font-bold">{formatTimeRange(reviewData.dropoffWindowStart, reviewData.dropoffWindowEnd)}</p>
                   {reviewData.dropoffWindowStart && (
                     <p className="text-xs text-slate-500 mt-1">
