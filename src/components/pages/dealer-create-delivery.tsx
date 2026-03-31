@@ -426,123 +426,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     successMessage: undefined,
   });
 
-  // Effect to load draft data when editing
+  // Effect to load data - prioritizes session data (from review page) over draft data
   useEffect(() => {
-    const loadDraft = async () => {
-      if (!draftId) {
-        setIsLoadingDraft(false);
-        return;
-      }
-
-      try {
-        const draft = await authFetch(
-          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        // Populate form with draft data
-        setValue('serviceType', draft.serviceType || 'HOME_DELIVERY');
-        setValue('pickupAddress', draft.pickupAddress || '');
-        setValue('dropoffAddress', draft.dropoffAddress || '');
-        
-        // Set coordinates
-        if (draft.pickupLat && draft.pickupLng) {
-          setPickupCoords({ lat: draft.pickupLat, lng: draft.pickupLng });
-        }
-        if (draft.dropoffLat && draft.dropoffLng) {
-          setDropoffCoords({ lat: draft.dropoffLat, lng: draft.dropoffLng });
-        }
-        setPickupPlaceId(draft.pickupPlaceId || null);
-        setDropoffPlaceId(draft.dropoffPlaceId || null);
-        setPickupState(draft.pickupState || null);
-        setDropoffState(draft.dropoffState || null);
-
-        // Schedule - populate validatedWindows for new flow
-        if (draft.pickupWindowStart && draft.pickupWindowEnd && draft.dropoffWindowStart && draft.dropoffWindowEnd) {
-          setValidatedWindows({
-            pickupWindowStart: draft.pickupWindowStart,
-            pickupWindowEnd: draft.pickupWindowEnd,
-            dropoffWindowStart: draft.dropoffWindowStart,
-            dropoffWindowEnd: draft.dropoffWindowEnd,
-          });
-          // Also set customerChose based on which window was originally set
-          // Default to PICKUP_WINDOW if both exist
-          setCustomerChose("PICKUP_WINDOW");
-          // Create a synthetic selected slot for display
-          setSelectedSlot({
-            label: isoToTimeWindow(draft.pickupWindowStart, draft.pickupWindowEnd),
-            start: draft.pickupWindowStart,
-            end: draft.pickupWindowEnd,
-          });
-          // Set schedule preview data for badges
-          setSchedulePreviewData({
-            feasible: true,
-            message: null,
-            pickupWindowStart: draft.pickupWindowStart,
-            pickupWindowEnd: draft.pickupWindowEnd,
-            dropoffWindowStart: draft.dropoffWindowStart,
-            dropoffWindowEnd: draft.dropoffWindowEnd,
-            etaMinutes: draft.etaMinutes || 60,
-            bufferMinutes: draft.bufferMinutes || 15,
-            sameDayEligible: draft.sameDayEligible || false,
-            requiresOpsConfirmation: draft.requiresOpsConfirmation || false,
-            afterHours: draft.afterHours || false,
-          });
-        }
-
-        // Vehicle info
-        if (draft.licensePlate) setValue('licensePlate', draft.licensePlate);
-        if (draft.vinVerificationCode) setValue('vinVerification', draft.vinVerificationCode);
-        if (draft.vehicleMake) setValue('make', draft.vehicleMake);
-        if (draft.vehicleModel) setValue('model', draft.vehicleModel);
-        if (draft.vehicleColor) setValue('color', draft.vehicleColor);
-        if (draft.transmission) setValue('transmission', draft.transmission);
-
-        // Recipient
-        if (draft.recipientName || draft.recipientEmail || draft.recipientPhone) {
-          setValue('enableRecipient', true);
-          setShowRecipientFields(true);
-          if (draft.recipientName) setValue('recipientName', draft.recipientName);
-          if (draft.recipientEmail) setValue('recipientEmail', draft.recipientEmail);
-          if (draft.recipientPhone) setValue('recipientPhone', draft.recipientPhone);
-        }
-
-        // Quote data
-        if (draft.quoteId || draft.quote?.id) {
-          setQuoteId(draft.quoteId || draft.quote?.id);
-          setHasCalculated(true);
-        }
-        if (draft.quote) {
-          setQuoteData({
-            miles: draft.quote.distanceMiles || 0,
-            total: draft.quote.estimatedAmount || draft.quote.estimatedPrice || 0,
-            base: draft.quote.feesBreakdown?.baseFare || 0,
-            distance: draft.quote.feesBreakdown?.distanceCharge || 0,
-            insurance: draft.quote.feesBreakdown?.insuranceFee || 0,
-            transaction: draft.quote.feesBreakdown?.transactionFee || 0,
-          });
-        }
-
-        setIsLoadingDraft(false);
-      } catch (error) {
-        console.error('Failed to load draft:', error);
-        toast.error("Failed to load draft", {
-          description: "Redirecting to drafts page...",
-        });
-        navigate({ to: "/dealer-drafts" });
-      }
-    };
-
-    loadDraft();
-  }, [draftId]);
-
-  // Effect to restore data from sessionStorage when coming back from review page
-  useEffect(() => {
-    const restoreFromSession = () => {
+    const loadData = async () => {
+      // First check for session data (coming back from review page - highest priority)
       const stored = sessionStorage.getItem("reviewDeliveryData");
       if (stored) {
         try {
@@ -636,18 +523,124 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           
           // Clear session storage after restoring
           sessionStorage.removeItem("reviewDeliveryData");
+          setIsLoadingDraft(false);
           
           toast.success("Data restored", {
             description: "Your delivery details have been restored.",
           });
+          return; // Don't load draft if session data exists
         } catch (e) {
           console.error('Failed to restore from session:', e);
         }
       }
+      
+      // No session data - try loading draft if draftId exists
+      if (!draftId) {
+        setIsLoadingDraft(false);
+        return;
+      }
+
+      try {
+        const draft = await authFetch(
+          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        // Populate form with draft data
+        setValue('serviceType', draft.serviceType || 'HOME_DELIVERY');
+        setValue('pickupAddress', draft.pickupAddress || '');
+        setValue('dropoffAddress', draft.dropoffAddress || '');
+        
+        // Set coordinates
+        if (draft.pickupLat && draft.pickupLng) {
+          setPickupCoords({ lat: draft.pickupLat, lng: draft.pickupLng });
+        }
+        if (draft.dropoffLat && draft.dropoffLng) {
+          setDropoffCoords({ lat: draft.dropoffLat, lng: draft.dropoffLng });
+        }
+        setPickupPlaceId(draft.pickupPlaceId || null);
+        setDropoffPlaceId(draft.dropoffPlaceId || null);
+        setPickupState(draft.pickupState || null);
+        setDropoffState(draft.dropoffState || null);
+
+        // Schedule - populate validatedWindows for new flow
+        if (draft.pickupWindowStart && draft.pickupWindowEnd && draft.dropoffWindowStart && draft.dropoffWindowEnd) {
+          setValidatedWindows({
+            pickupWindowStart: draft.pickupWindowStart,
+            pickupWindowEnd: draft.pickupWindowEnd,
+            dropoffWindowStart: draft.dropoffWindowStart,
+            dropoffWindowEnd: draft.dropoffWindowEnd,
+          });
+          setCustomerChose("PICKUP_WINDOW");
+          setSelectedSlot({
+            label: isoToTimeWindow(draft.pickupWindowStart, draft.pickupWindowEnd),
+            start: draft.pickupWindowStart,
+            end: draft.pickupWindowEnd,
+          });
+          setSchedulePreviewData({
+            feasible: true,
+            message: null,
+            pickupWindowStart: draft.pickupWindowStart,
+            pickupWindowEnd: draft.pickupWindowEnd,
+            dropoffWindowStart: draft.dropoffWindowStart,
+            dropoffWindowEnd: draft.dropoffWindowEnd,
+            etaMinutes: draft.etaMinutes || 60,
+            bufferMinutes: draft.bufferMinutes || 15,
+            sameDayEligible: draft.sameDayEligible || false,
+            requiresOpsConfirmation: draft.requiresOpsConfirmation || false,
+            afterHours: draft.afterHours || false,
+          });
+        }
+
+        // Vehicle info
+        if (draft.licensePlate) setValue('licensePlate', draft.licensePlate);
+        if (draft.vinVerificationCode) setValue('vinVerification', draft.vinVerificationCode);
+        if (draft.vehicleMake) setValue('make', draft.vehicleMake);
+        if (draft.vehicleModel) setValue('model', draft.vehicleModel);
+        if (draft.vehicleColor) setValue('color', draft.vehicleColor);
+        if (draft.transmission) setValue('transmission', draft.transmission);
+
+        // Recipient
+        if (draft.recipientName || draft.recipientEmail || draft.recipientPhone) {
+          setValue('enableRecipient', true);
+          setShowRecipientFields(true);
+          if (draft.recipientName) setValue('recipientName', draft.recipientName);
+          if (draft.recipientEmail) setValue('recipientEmail', draft.recipientEmail);
+          if (draft.recipientPhone) setValue('recipientPhone', draft.recipientPhone);
+        }
+
+        // Quote data
+        if (draft.quoteId || draft.quote?.id) {
+          setQuoteId(draft.quoteId || draft.quote?.id);
+          setHasCalculated(true);
+        }
+        if (draft.quote) {
+          setQuoteData({
+            miles: draft.quote.distanceMiles || 0,
+            total: draft.quote.estimatedAmount || draft.quote.estimatedPrice || 0,
+            base: draft.quote.feesBreakdown?.baseFare || 0,
+            distance: draft.quote.feesBreakdown?.distanceCharge || 0,
+            insurance: draft.quote.feesBreakdown?.insuranceFee || 0,
+            transaction: draft.quote.feesBreakdown?.transactionFee || 0,
+          });
+        }
+
+        setIsLoadingDraft(false);
+      } catch (error) {
+        console.error('Failed to load draft:', error);
+        toast.error("Failed to load draft", {
+          description: "Redirecting to drafts page...",
+        });
+        navigate({ to: "/dealer-drafts" });
+      }
     };
-    
-    restoreFromSession();
-  }, []);
+
+    loadData();
+  }, [draftId]);
 
   // Handler for navigating to review page
   const handleGoToReview = () => {
