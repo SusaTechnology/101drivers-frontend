@@ -146,7 +146,7 @@ export function QuoteDetails() {
     preferredDate: z.string().min(1, "Date is required"),
     timeWindow: z.string().min(1, "Time window is required"),
     vehicleColor: z.string().min(1, "Color is required"), // Required
-    carMake: z.string().optional(), // Optional
+    carMake: z.string().min(1, "Make is required"), // Required
     carModel: z.string().min(1, "Model is required"), // Required
     transmission: z.string().optional(), // Optional - defaults to Automatic
     vinLast4: z.string().length(4, "VIN last 4 must be exactly 4 characters"), // Required
@@ -717,15 +717,15 @@ export function QuoteDetails() {
                         Vehicle Information
                       </Label>
                       <span className="text-[10px] text-slate-400 font-medium">
-                        Model, Color, VIN & Plate are required
+                        Make, Model, Color, VIN & Plate are required
                       </span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Make - OPTIONAL */}
+                      {/* Make - REQUIRED */}
                       <div className="flex flex-col gap-2">
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Make <span className="text-slate-400">(optional)</span>
+                          Make <span className="text-red-500">*</span>
                         </Label>
                         <Select
                           key={`carmake-${draftLoaded}`}
@@ -744,6 +744,7 @@ export function QuoteDetails() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {errors.carMake && <p className="text-xs text-red-500">{errors.carMake.message}</p>}
                       </div>
 
                       {/* Model - REQUIRED (depends on make) */}
