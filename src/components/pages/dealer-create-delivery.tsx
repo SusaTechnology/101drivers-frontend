@@ -1244,7 +1244,27 @@ const handleQuotePreview = () => {
       setSelectedSavedAddress(address);
       setValue("pickupAddress", address.address);
       setPickupCoords({ lat: address.lat, lng: address.lng });
-      setPickupPlaceId(address.placeId || null);
+      
+      // Check if placeId is a valid Google Place ID (starts with "ChIJ" or similar)
+      // If not, try to geocode to get a real placeId
+      if (address.placeId && address.placeId.startsWith("ChIJ")) {
+        setPickupPlaceId(address.placeId);
+      } else {
+        // Geocode the address to get a real placeId
+        if (isLoaded && address.address) {
+          const geocoder = new google.maps.Geocoder();
+          geocoder.geocode({ address: address.address }, (results, status) => {
+            if (status === "OK" && results && results[0]) {
+              setPickupPlaceId(results[0].place_id || null);
+            } else {
+              setPickupPlaceId(null);
+            }
+          });
+        } else {
+          setPickupPlaceId(null);
+        }
+      }
+      
       if (address.state) {
         setPickupState(address.state);
       }
