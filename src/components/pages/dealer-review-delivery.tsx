@@ -365,18 +365,7 @@ export default function ReviewDeliveryPage() {
           {/* Route */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-black">Route</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleGoBack}
-                  className="text-lime-600 hover:text-lime-700"
-                >
-                  <Edit2 className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-              </div>
+              <CardTitle className="text-lg font-black">Route</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-4">
@@ -401,18 +390,7 @@ export default function ReviewDeliveryPage() {
           {/* Schedule */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-black">Schedule</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleGoBack}
-                  className="text-lime-600 hover:text-lime-700"
-                >
-                  <Edit2 className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-              </div>
+              <CardTitle className="text-lg font-black">Schedule</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
@@ -448,15 +426,27 @@ export default function ReviewDeliveryPage() {
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-black">Vehicle</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleGoBack}
-                  className="text-lime-600 hover:text-lime-700"
-                >
-                  <Edit2 className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
+                {editField !== "vehicle" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditField("vehicle");
+                      setEditedValues({
+                        make: reviewData.make,
+                        model: reviewData.model,
+                        color: reviewData.color,
+                        transmission: reviewData.transmission,
+                        licensePlate: reviewData.licensePlate,
+                        vinVerification: reviewData.vinVerification,
+                      });
+                    }}
+                    className="text-lime-600 hover:text-lime-700"
+                  >
+                    <Edit2 className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -569,38 +559,92 @@ export default function ReviewDeliveryPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-black">Recipient</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleGoBack}
-                    className="text-lime-600 hover:text-lime-700"
-                  >
-                    <Edit2 className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
+                  {editField !== "recipient" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditField("recipient");
+                        setEditedValues({
+                          recipientName: reviewData.recipientName,
+                          recipientEmail: reviewData.recipientEmail,
+                          recipientPhone: reviewData.recipientPhone,
+                        });
+                      }}
+                      className="text-lime-600 hover:text-lime-700"
+                    >
+                      <Edit2 className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="p-4 rounded-xl bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-900/30">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Phone className="h-4 w-4 text-lime-600" />
-                    <span className="text-xs font-bold text-lime-700 dark:text-lime-400">Driver will contact recipient</span>
+                {editField === "recipient" ? (
+                  <div className="space-y-4 p-4 bg-lime-50 dark:bg-lime-900/10 rounded-xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold">Name</Label>
+                        <Input
+                          value={editedValues.recipientName ?? reviewData.recipientName ?? ""}
+                          onChange={(e) => setEditedValues({ ...editedValues, recipientName: e.target.value })}
+                          className="h-10"
+                          placeholder="Recipient name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold">Phone</Label>
+                        <Input
+                          value={editedValues.recipientPhone ?? reviewData.recipientPhone ?? ""}
+                          onChange={(e) => setEditedValues({ ...editedValues, recipientPhone: e.target.value })}
+                          className="h-10"
+                          placeholder="(555) 123-4567"
+                          type="tel"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 space-y-2">
+                        <Label className="text-xs font-bold">Email</Label>
+                        <Input
+                          value={editedValues.recipientEmail ?? reviewData.recipientEmail ?? ""}
+                          onChange={(e) => setEditedValues({ ...editedValues, recipientEmail: e.target.value })}
+                          className="h-10"
+                          placeholder="recipient@example.com"
+                          type="email"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={handleCancelEdit}>
+                        <X className="h-4 w-4 mr-1" />
+                        Cancel
+                      </Button>
+                      <Button size="sm" className="bg-lime-500 hover:bg-lime-600 text-slate-950" onClick={handleSaveEdit}>
+                        Save
+                      </Button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-bold text-slate-500">Name</p>
-                      <p className="text-sm font-bold">{reviewData.recipientName}</p>
+                ) : (
+                  <div className="p-4 rounded-xl bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-900/30">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Phone className="h-4 w-4 text-lime-600" />
+                      <span className="text-xs font-bold text-lime-700 dark:text-lime-400">Driver will contact recipient</span>
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-500">Phone</p>
-                      <p className="text-sm font-bold">{reviewData.recipientPhone}</p>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <p className="text-xs font-bold text-slate-500">Email</p>
-                      <p className="text-sm font-bold">{reviewData.recipientEmail || "Not provided"}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs font-bold text-slate-500">Name</p>
+                        <p className="text-sm font-bold">{reviewData.recipientName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-500">Phone</p>
+                        <p className="text-sm font-bold">{reviewData.recipientPhone}</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-xs font-bold text-slate-500">Email</p>
+                        <p className="text-sm font-bold">{reviewData.recipientEmail || "Not provided"}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           )}

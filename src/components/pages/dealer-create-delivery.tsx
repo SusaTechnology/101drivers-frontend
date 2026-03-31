@@ -540,6 +540,117 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     loadDraft();
   }, [draftId]);
 
+  // Effect to restore data from sessionStorage when coming back from review page
+  useEffect(() => {
+    const restoreFromSession = () => {
+      const stored = sessionStorage.getItem("reviewDeliveryData");
+      if (stored && !draftId) {
+        try {
+          const data = JSON.parse(stored);
+          
+          // Restore form values
+          setValue('serviceType', data.serviceType || 'HOME_DELIVERY');
+          setValue('pickupAddress', data.pickupAddress || '');
+          setValue('dropoffAddress', data.dropoffAddress || '');
+          setValue('licensePlate', data.licensePlate || '');
+          setValue('vinVerification', data.vinVerification || '');
+          setValue('make', data.make || '');
+          setValue('model', data.model || '');
+          setValue('color', data.color || '');
+          setValue('transmission', data.transmission || 'Automatic');
+          
+          if (data.makeOther) setValue('makeOther', data.makeOther);
+          if (data.modelOther) setValue('modelOther', data.modelOther);
+          if (data.colorOther) setValue('colorOther', data.colorOther);
+          
+          // Restore recipient
+          if (data.enableRecipient) {
+            setValue('enableRecipient', true);
+            setShowRecipientFields(true);
+            if (data.recipientName) setValue('recipientName', data.recipientName);
+            if (data.recipientEmail) setValue('recipientEmail', data.recipientEmail);
+            if (data.recipientPhone) setValue('recipientPhone', data.recipientPhone);
+          }
+          
+          // Restore coordinates
+          if (data.pickupLat && data.pickupLng) {
+            setPickupCoords({ lat: data.pickupLat, lng: data.pickupLng });
+          }
+          if (data.dropoffLat && data.dropoffLng) {
+            setDropoffCoords({ lat: data.dropoffLat, lng: data.dropoffLng });
+          }
+          setPickupPlaceId(data.pickupPlaceId || null);
+          setDropoffPlaceId(data.dropoffPlaceId || null);
+          setPickupState(data.pickupState || null);
+          setDropoffState(data.dropoffState || null);
+          
+          // Restore schedule windows
+          if (data.pickupWindowStart && data.pickupWindowEnd) {
+            setValidatedWindows({
+              pickupWindowStart: data.pickupWindowStart,
+              pickupWindowEnd: data.pickupWindowEnd,
+              dropoffWindowStart: data.dropoffWindowStart,
+              dropoffWindowEnd: data.dropoffWindowEnd,
+            });
+            setCustomerChose("PICKUP_WINDOW");
+            setSelectedSlot({
+              label: isoToTimeWindow(data.pickupWindowStart, data.pickupWindowEnd),
+              start: data.pickupWindowStart,
+              end: data.pickupWindowEnd,
+            });
+            if (data.etaMinutes) {
+              setSchedulePreviewData({
+                feasible: true,
+                message: null,
+                pickupWindowStart: data.pickupWindowStart,
+                pickupWindowEnd: data.pickupWindowEnd,
+                dropoffWindowStart: data.dropoffWindowStart,
+                dropoffWindowEnd: data.dropoffWindowEnd,
+                etaMinutes: data.etaMinutes,
+                bufferMinutes: 15,
+                sameDayEligible: false,
+                requiresOpsConfirmation: false,
+                afterHours: false,
+              });
+            }
+          }
+          
+          // Restore quote data
+          if (data.quoteId) {
+            setQuoteId(data.quoteId);
+            setHasCalculated(true);
+          }
+          if (data.miles !== undefined) {
+            setQuoteData({
+              miles: data.miles,
+              total: data.total,
+              base: data.base,
+              distance: data.distance,
+              insurance: data.insurance,
+              transaction: data.transaction,
+            });
+          }
+          
+          // Restore payment type
+          if (data.paymentType) {
+            setValue('paymentType', data.paymentType);
+          }
+          
+          // Clear session storage after restoring
+          sessionStorage.removeItem("reviewDeliveryData");
+          
+          toast.success("Data restored", {
+            description: "Your delivery details have been restored.",
+          });
+        } catch (e) {
+          console.error('Failed to restore from session:', e);
+        }
+      }
+    };
+    
+    restoreFromSession();
+  }, [draftId]);
+
   // Handler for navigating to review page
   const handleGoToReview = () => {
     if (!isFormValidForSubmission) {
