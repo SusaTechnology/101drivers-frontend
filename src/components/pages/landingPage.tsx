@@ -14,7 +14,6 @@ import {
   X,
   Verified,
   MapPin,
-  DollarSign,
   Mail,
   Bolt,
   Target,
@@ -422,11 +421,6 @@ export default function LandingPage() {
       title: "Route + Miles",
       description: "Map autocomplete (CA only).",
       icon: Map,
-    },
-    {
-      title: "Estimate",
-      description: "Transparent breakdown.",
-      icon: DollarSign,
     },
     {
       title: "Notifications",
