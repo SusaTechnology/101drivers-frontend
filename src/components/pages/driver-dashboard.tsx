@@ -183,8 +183,8 @@ export default function DriverDashboardPage() {
   // Filter state - maps directly to backend API params
   const [filters, setFilters] = useState({
     search: '',
-    radiusMiles: '25',
-    datePreset: 'TODAY',
+    radiusMiles: 'ANY',
+    datePreset: 'ALL',
     serviceType: 'ALL',
     sortBy: 'SOONEST',
   })
@@ -265,8 +265,8 @@ export default function DriverDashboardPage() {
   const clearFilters = () => {
     setFilters({
       search: '',
-      radiusMiles: '25',
-      datePreset: 'TODAY',
+      radiusMiles: 'ANY',
+      datePreset: 'ALL',
       serviceType: 'ALL',
       sortBy: 'SOONEST',
     })
