@@ -998,22 +998,6 @@ export function QuoteDetails() {
                     </div>
                   </div>
 
-                  {/* After Hours, Urgent, Save Vehicle */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Checkbox id="afterHours" {...register("afterHours")} />
-                      <Label htmlFor="afterHours" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                        After hours (may require Ops confirmation)
-                      </Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox id="isUrgent" {...register("isUrgent")} />
-                      <Label htmlFor="isUrgent" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                        Urgent (priority handling)
-                      </Label>
-                    </div>
-                  </div>
-
                   {/* Instructions */}
                   <div className="flex flex-col gap-2">
                     <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
