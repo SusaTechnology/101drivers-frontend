@@ -301,9 +301,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   // Release dialog state
   const [showReleaseDialog, setShowReleaseDialog] = useState(false);
   const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
-
-  // Review modal state
-  const [showReviewModal, setShowReviewModal] = useState(false);
   const customer = getUser();
 
   // Fetch customer data to check postpaidEnabled status
@@ -542,6 +539,78 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
     loadDraft();
   }, [draftId]);
+
+  // Handler for navigating to review page
+  const handleGoToReview = () => {
+    if (!isFormValidForSubmission) {
+      toast.error("Incomplete form", {
+        description: "Please complete all required fields before reviewing.",
+      });
+      return;
+    }
+
+    const data = watch();
+    const reviewData = {
+      // Service & Route
+      serviceType: data.serviceType,
+      pickupAddress: data.pickupAddress,
+      dropoffAddress: data.dropoffAddress,
+      pickupLat: pickupCoords?.lat,
+      pickupLng: pickupCoords?.lng,
+      dropoffLat: dropoffCoords?.lat,
+      dropoffLng: dropoffCoords?.lng,
+      pickupPlaceId: pickupPlaceId,
+      dropoffPlaceId: dropoffPlaceId,
+      pickupState: pickupState,
+      dropoffState: dropoffState,
+
+      // Schedule
+      pickupWindowStart: validatedWindows?.pickupWindowStart,
+      pickupWindowEnd: validatedWindows?.pickupWindowEnd,
+      dropoffWindowStart: validatedWindows?.dropoffWindowStart,
+      dropoffWindowEnd: validatedWindows?.dropoffWindowEnd,
+      etaMinutes: schedulePreviewData?.etaMinutes,
+
+      // Vehicle
+      licensePlate: data.licensePlate,
+      vinVerification: data.vinVerification,
+      make: data.make,
+      makeOther: data.makeOther,
+      model: data.model,
+      modelOther: data.modelOther,
+      color: data.color,
+      colorOther: data.colorOther,
+      transmission: data.transmission || "Automatic",
+
+      // Recipient
+      enableRecipient: showRecipientFields,
+      recipientName: data.recipientName,
+      recipientEmail: data.recipientEmail,
+      recipientPhone: data.recipientPhone,
+
+      // Quote
+      quoteId: quoteId,
+      miles: quoteData.miles,
+      total: quoteData.total,
+      base: quoteData.base,
+      distance: quoteData.distance,
+      insurance: quoteData.insurance,
+      transaction: quoteData.transaction,
+
+      // Payment
+      paymentType: data.paymentType || "PREPAID",
+      postpaidEnabled: postpaidEnabled,
+
+      // Draft
+      draftId: draftId,
+    };
+
+    // Store in sessionStorage
+    sessionStorage.setItem("reviewDeliveryData", JSON.stringify(reviewData));
+
+    // Navigate to review page
+    navigate({ to: "/dealer-review-delivery" });
+  };
 
   // Handler for saving as draft
   const handleSaveAsDraft = () => {
@@ -2611,10 +2680,10 @@ const handleQuotePreview = () => {
                 <Button
                   type="button"
                   className="w-full py-6 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => setShowReviewModal(true)}
+                  onClick={handleGoToReview}
                   disabled={createDelivery.isPending || !isFormValidForSubmission}
                 >
-                  {createDelivery.isPending ? "Submitting..." : "Review & Continue"}
+                  Review & Continue
                   <ChevronRight className="ml-2 h-5 w-5" />
                 </Button>
 
@@ -2702,217 +2771,6 @@ const handleQuotePreview = () => {
           </div>
         </div>
       </main>
-
-      {/* Review Modal */}
-      <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black">Review Delivery Request</DialogTitle>
-            <DialogDescription>
-              Please review all details before submitting. This information will be sent to the driver.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6 py-4">
-            {/* Service Type */}
-            <div className="space-y-2">
-              <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Service Type</h4>
-              <p className="text-base font-bold">
-                {serviceType === 'HOME_DELIVERY' ? 'Home Delivery' :
-                 serviceType === 'BETWEEN_LOCATIONS' ? 'Between Locations' :
-                 serviceType === 'SERVICE_PICKUP_RETURN' ? 'Service Pickup & Return' : serviceType}
-              </p>
-            </div>
-
-            {/* Route Information */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Route</h4>
-              <div className="grid grid-cols-1 gap-3">
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <MapPin className="h-5 w-5 text-lime-500 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">Pickup</p>
-                    <p className="text-sm font-bold">{pickupAddress || 'Not set'}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <Flag className="h-5 w-5 text-red-500 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">Drop-off</p>
-                    <p className="text-sm font-bold">{dropoffAddress || 'Not set'}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Schedule */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Schedule</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs font-bold text-slate-500">Pickup Window</p>
-                  <p className="text-sm font-bold">
-                    {validatedWindows?.pickupWindowStart && validatedWindows?.pickupWindowEnd
-                      ? `${formatTimeRange(validatedWindows.pickupWindowStart, validatedWindows.pickupWindowEnd)}`
-                      : 'Not set'}
-                  </p>
-                  {validatedWindows?.pickupWindowStart && (
-                    <p className="text-xs text-slate-500">
-                      {new Date(validatedWindows.pickupWindowStart).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs font-bold text-slate-500">Drop-off Window</p>
-                  <p className="text-sm font-bold">
-                    {validatedWindows?.dropoffWindowStart && validatedWindows?.dropoffWindowEnd
-                      ? `${formatTimeRange(validatedWindows.dropoffWindowStart, validatedWindows.dropoffWindowEnd)}`
-                      : 'Not set'}
-                  </p>
-                  {validatedWindows?.dropoffWindowStart && (
-                    <p className="text-xs text-slate-500">
-                      {new Date(validatedWindows.dropoffWindowStart).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {schedulePreviewData?.etaMinutes && (
-                <p className="text-xs text-slate-500">Estimated duration: {formatDuration(schedulePreviewData.etaMinutes)}</p>
-              )}
-            </div>
-
-            {/* Vehicle Details */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Vehicle</h4>
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 space-y-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">Make</p>
-                    <p className="text-sm font-bold">{make === 'Other' ? watch('makeOther') : make || 'Not set'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">Model</p>
-                    <p className="text-sm font-bold">{model === 'Other' ? watch('modelOther') : model || 'Not set'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">Color</p>
-                    <p className="text-sm font-bold">{color === 'Other' ? watch('colorOther') : color || 'Not set'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">Transmission</p>
-                    <p className="text-sm font-bold">{transmission || 'Automatic'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">License Plate</p>
-                    <p className="text-sm font-bold">{licensePlate || 'Not set'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">VIN Code (4 digits)</p>
-                    <p className="text-sm font-bold font-mono">{vinVerification || 'Not set'}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Recipient Information */}
-            {showRecipientFields && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Recipient</h4>
-                <div className="p-4 rounded-xl bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-900/30 space-y-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Phone className="h-4 w-4 text-lime-600" />
-                    <span className="text-xs font-bold text-lime-700 dark:text-lime-400">Driver will contact recipient</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-bold text-slate-500">Name</p>
-                      <p className="text-sm font-bold">{watch('recipientName') || 'Not set'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-500">Phone</p>
-                      <p className="text-sm font-bold">{watch('recipientPhone') || 'Not set'}</p>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <p className="text-xs font-bold text-slate-500">Email</p>
-                      <p className="text-sm font-bold">{watch('recipientEmail') || 'Not provided'}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Quote Summary */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Price Estimate</h4>
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs font-bold text-slate-500">Distance</p>
-                    <p className="text-sm font-bold">{quoteData.miles} miles</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-slate-500">Estimated Total</p>
-                    <p className="text-2xl font-black text-lime-600">{formatCurrency(quoteData.total)}</p>
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 space-y-1">
-                  <div className="flex justify-between"><span>Base fare:</span><span>{formatCurrency(quoteData.base)}</span></div>
-                  <div className="flex justify-between"><span>Distance charge:</span><span>{formatCurrency(quoteData.distance)}</span></div>
-                  <div className="flex justify-between"><span>Insurance fee:</span><span>{formatCurrency(quoteData.insurance)}</span></div>
-                  <div className="flex justify-between"><span>Transaction fee:</span><span>{formatCurrency(quoteData.transaction)}</span></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment Method */}
-            <div className="space-y-2">
-              <h4 className="text-sm font-black uppercase tracking-widest text-slate-400">Payment</h4>
-              <p className="text-base font-bold">
-                {postpaidEnabled ? (watch('paymentType') || 'PREPAID') : 'Prepaid'}
-              </p>
-              <p className="text-xs text-slate-500">
-                {postpaidEnabled
-                  ? watch('paymentType') === 'POSTPAID'
-                    ? 'Billed to your account after delivery completion'
-                    : 'Card authorized at booking, charged on completion'
-                  : 'Card authorized at booking, charged on completion'}
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowReviewModal(false)}
-              className="rounded-2xl font-bold"
-            >
-              Go Back & Edit
-            </Button>
-            <Button
-              type="button"
-              className="bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold rounded-2xl"
-              onClick={() => {
-                setShowReviewModal(false);
-                handleSubmit(onSubmit)();
-              }}
-              disabled={createDelivery.isPending}
-            >
-              {createDelivery.isPending ? (
-                <>
-                  <span className="animate-spin mr-2">⏳</span>
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  {draftId ? 'Submit Delivery Request' : 'Create Delivery Request'}
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Footer />
     </div>

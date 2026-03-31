@@ -35,6 +35,7 @@ import { Route as DealerSupportRequestIndexRouteImport } from './routes/dealer-s
 import { Route as DealerSupportListIndexRouteImport } from './routes/dealer-support-list/index'
 import { Route as DealerSupportDetailIndexRouteImport } from './routes/dealer-support-detail/index'
 import { Route as DealerSettingsIndexRouteImport } from './routes/dealer-settings/index'
+import { Route as DealerReviewDeliveryIndexRouteImport } from './routes/dealer-review-delivery/index'
 import { Route as DealerOnboardingIndexRouteImport } from './routes/dealer-onboarding/index'
 import { Route as DealerEditDraftIndexRouteImport } from './routes/dealer-edit-draft/index'
 import { Route as DealerEditDeliveryIndexRouteImport } from './routes/dealer-edit-delivery/index'
@@ -213,6 +214,12 @@ const DealerSettingsIndexRoute = DealerSettingsIndexRouteImport.update({
   path: '/dealer-settings/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DealerReviewDeliveryIndexRoute =
+  DealerReviewDeliveryIndexRouteImport.update({
+    id: '/dealer-review-delivery/',
+    path: '/dealer-review-delivery/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DealerOnboardingIndexRoute = DealerOnboardingIndexRouteImport.update({
   id: '/dealer-onboarding/',
   path: '/dealer-onboarding/',
@@ -481,6 +488,7 @@ export interface FileRoutesByFullPath {
   '/dealer-edit-delivery/': typeof DealerEditDeliveryIndexRoute
   '/dealer-edit-draft/': typeof DealerEditDraftIndexRoute
   '/dealer-onboarding/': typeof DealerOnboardingIndexRoute
+  '/dealer-review-delivery/': typeof DealerReviewDeliveryIndexRoute
   '/dealer-settings/': typeof DealerSettingsIndexRoute
   '/dealer-support-detail/': typeof DealerSupportDetailIndexRoute
   '/dealer-support-list/': typeof DealerSupportListIndexRoute
@@ -551,6 +559,7 @@ export interface FileRoutesByTo {
   '/dealer-edit-delivery': typeof DealerEditDeliveryIndexRoute
   '/dealer-edit-draft': typeof DealerEditDraftIndexRoute
   '/dealer-onboarding': typeof DealerOnboardingIndexRoute
+  '/dealer-review-delivery': typeof DealerReviewDeliveryIndexRoute
   '/dealer-settings': typeof DealerSettingsIndexRoute
   '/dealer-support-detail': typeof DealerSupportDetailIndexRoute
   '/dealer-support-list': typeof DealerSupportListIndexRoute
@@ -622,6 +631,7 @@ export interface FileRoutesById {
   '/dealer-edit-delivery/': typeof DealerEditDeliveryIndexRoute
   '/dealer-edit-draft/': typeof DealerEditDraftIndexRoute
   '/dealer-onboarding/': typeof DealerOnboardingIndexRoute
+  '/dealer-review-delivery/': typeof DealerReviewDeliveryIndexRoute
   '/dealer-settings/': typeof DealerSettingsIndexRoute
   '/dealer-support-detail/': typeof DealerSupportDetailIndexRoute
   '/dealer-support-list/': typeof DealerSupportListIndexRoute
@@ -694,6 +704,7 @@ export interface FileRouteTypes {
     | '/dealer-edit-delivery/'
     | '/dealer-edit-draft/'
     | '/dealer-onboarding/'
+    | '/dealer-review-delivery/'
     | '/dealer-settings/'
     | '/dealer-support-detail/'
     | '/dealer-support-list/'
@@ -764,6 +775,7 @@ export interface FileRouteTypes {
     | '/dealer-edit-delivery'
     | '/dealer-edit-draft'
     | '/dealer-onboarding'
+    | '/dealer-review-delivery'
     | '/dealer-settings'
     | '/dealer-support-detail'
     | '/dealer-support-list'
@@ -834,6 +846,7 @@ export interface FileRouteTypes {
     | '/dealer-edit-delivery/'
     | '/dealer-edit-draft/'
     | '/dealer-onboarding/'
+    | '/dealer-review-delivery/'
     | '/dealer-settings/'
     | '/dealer-support-detail/'
     | '/dealer-support-list/'
@@ -905,6 +918,7 @@ export interface RootRouteChildren {
   DealerEditDeliveryIndexRoute: typeof DealerEditDeliveryIndexRoute
   DealerEditDraftIndexRoute: typeof DealerEditDraftIndexRoute
   DealerOnboardingIndexRoute: typeof DealerOnboardingIndexRoute
+  DealerReviewDeliveryIndexRoute: typeof DealerReviewDeliveryIndexRoute
   DealerSettingsIndexRoute: typeof DealerSettingsIndexRoute
   DealerSupportDetailIndexRoute: typeof DealerSupportDetailIndexRoute
   DealerSupportListIndexRoute: typeof DealerSupportListIndexRoute
@@ -1116,6 +1130,13 @@ declare module '@tanstack/react-router' {
       path: '/dealer-settings'
       fullPath: '/dealer-settings/'
       preLoaderRoute: typeof DealerSettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dealer-review-delivery/': {
+      id: '/dealer-review-delivery/'
+      path: '/dealer-review-delivery'
+      fullPath: '/dealer-review-delivery/'
+      preLoaderRoute: typeof DealerReviewDeliveryIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dealer-onboarding/': {
@@ -1457,6 +1478,7 @@ const rootRouteChildren: RootRouteChildren = {
   DealerEditDeliveryIndexRoute: DealerEditDeliveryIndexRoute,
   DealerEditDraftIndexRoute: DealerEditDraftIndexRoute,
   DealerOnboardingIndexRoute: DealerOnboardingIndexRoute,
+  DealerReviewDeliveryIndexRoute: DealerReviewDeliveryIndexRoute,
   DealerSettingsIndexRoute: DealerSettingsIndexRoute,
   DealerSupportDetailIndexRoute: DealerSupportDetailIndexRoute,
   DealerSupportListIndexRoute: DealerSupportListIndexRoute,

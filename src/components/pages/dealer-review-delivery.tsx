@@ -1,0 +1,731 @@
+// app/pages/dealer/review-delivery.tsx
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  ArrowLeft,
+  MapPin,
+  Flag,
+  Car,
+  Clock,
+  Mail,
+  Phone,
+  User,
+  CreditCard,
+  Receipt,
+  Info,
+  AlertCircle,
+  ChevronRight,
+  Home,
+  Shuffle as SwapHorizontal,
+  Wrench,
+  Route,
+  CheckCircle,
+  Edit2,
+  X,
+} from "lucide-react";
+import { getUser, useCreate, authFetch } from "@/lib/tanstack/dataQuery";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+// Types for review data
+interface ReviewDeliveryData {
+  // Service & Route
+  serviceType: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  pickupLat?: number;
+  pickupLng?: number;
+  dropoffLat?: number;
+  dropoffLng?: number;
+  pickupPlaceId?: string;
+  dropoffPlaceId?: string;
+  pickupState?: string;
+  dropoffState?: string;
+
+  // Schedule
+  pickupWindowStart?: string;
+  pickupWindowEnd?: string;
+  dropoffWindowStart?: string;
+  dropoffWindowEnd?: string;
+  etaMinutes?: number;
+
+  // Vehicle
+  licensePlate: string;
+  vinVerification: string;
+  make: string;
+  makeOther?: string;
+  model: string;
+  modelOther?: string;
+  color: string;
+  colorOther?: string;
+  transmission: string;
+
+  // Recipient
+  enableRecipient: boolean;
+  recipientName?: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+
+  // Quote
+  quoteId: string;
+  miles: number;
+  total: number;
+  base: number;
+  distance: number;
+  insurance: number;
+  transaction: number;
+
+  // Payment
+  paymentType: string;
+  postpaidEnabled: boolean;
+
+  // Draft
+  draftId?: string;
+}
+
+const formatTimeRange = (startIso?: string, endIso?: string) => {
+  if (!startIso || !endIso) return "Not set";
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+};
+
+const formatDuration = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+};
+
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+};
+
+const serviceTypeLabels: Record<string, string> = {
+  HOME_DELIVERY: "Home Delivery",
+  BETWEEN_LOCATIONS: "Between Locations",
+  SERVICE_PICKUP_RETURN: "Service Pickup & Return",
+};
+
+export default function ReviewDeliveryPage() {
+  const navigate = useNavigate();
+  const [reviewData, setReviewData] = useState<ReviewDeliveryData | null>(null);
+  const [editField, setEditField] = useState<string | null>(null);
+  const [editedValues, setEditedValues] = useState<Partial<ReviewDeliveryData>>({});
+  const [showReleaseDialog, setShowReleaseDialog] = useState(false);
+  const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
+  const customer = getUser();
+
+  // Load review data from sessionStorage
+  useEffect(() => {
+    const stored = sessionStorage.getItem("reviewDeliveryData");
+    if (stored) {
+      try {
+        const data = JSON.parse(stored);
+        setReviewData(data);
+        setEditedValues({});
+      } catch (e) {
+        console.error("Failed to parse review data:", e);
+        toast.error("Failed to load delivery data");
+        navigate({ to: "/dealer-create-delivery" });
+      }
+    } else {
+      toast.error("No delivery data found");
+      navigate({ to: "/dealer-create-delivery" });
+    }
+  }, [navigate]);
+
+  // Mutation for creating delivery
+  const createDelivery = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`, {
+    onSuccess: async (data: any) => {
+      // If editing a draft, delete it after successful submission
+      if (reviewData?.draftId) {
+        try {
+          await authFetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${reviewData.draftId}`, {
+            method: 'DELETE',
+          });
+        } catch (e) {
+          console.error('Failed to delete draft after submission:', e);
+        }
+      }
+      // Clear session storage
+      sessionStorage.removeItem("reviewDeliveryData");
+      // Show release dialog
+      setCreatedDeliveryId(data?.id || data?.deliveryRequest?.id || null);
+      setShowReleaseDialog(true);
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to create delivery request";
+      const errorDetails = error?.response?.data?.details || error?.details;
+      toast.error("Failed to create delivery", {
+        description: errorDetails || errorMessage,
+      });
+      console.error("Delivery creation failed:", error);
+    },
+    successMessage: undefined,
+  });
+
+  // Mutation for releasing to marketplace
+  const releaseToMarketMutation = useMutation({
+    mutationFn: async (deliveryId: string) => {
+      return authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/release-to-marketplace`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    },
+    onSuccess: () => {
+      toast.success("Released to market", {
+        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
+      });
+      setShowReleaseDialog(false);
+      navigate({ to: "/dealer-dashboard" });
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to release to market", { description: error.message });
+    }
+  });
+
+  const handleEditField = (field: string) => {
+    setEditField(field);
+    setEditedValues({});
+  };
+
+  const handleCancelEdit = () => {
+    setEditField(null);
+    setEditedValues({});
+  };
+
+  const handleSaveEdit = () => {
+    if (!reviewData) return;
+
+    const updatedData = { ...reviewData, ...editedValues };
+    setReviewData(updatedData);
+    sessionStorage.setItem("reviewDeliveryData", JSON.stringify(updatedData));
+    setEditField(null);
+    setEditedValues({});
+    toast.success("Field updated");
+  };
+
+  const handleSubmit = () => {
+    if (!reviewData) return;
+
+    const finalMake = reviewData.make === "Other" ? reviewData.makeOther : reviewData.make;
+    const finalModel = reviewData.model === "Other" ? reviewData.modelOther : reviewData.model;
+    const finalColor = reviewData.color === "Other" ? reviewData.colorOther : reviewData.color;
+
+    const payload = {
+      quoteId: reviewData.quoteId,
+      serviceType: reviewData.serviceType,
+      pickupAddress: reviewData.pickupAddress,
+      pickupLat: reviewData.pickupLat,
+      pickupLng: reviewData.pickupLng,
+      pickupPlaceId: reviewData.pickupPlaceId,
+      pickupState: reviewData.pickupState,
+      dropoffAddress: reviewData.dropoffAddress,
+      dropoffLat: reviewData.dropoffLat,
+      dropoffLng: reviewData.dropoffLng,
+      dropoffPlaceId: reviewData.dropoffPlaceId,
+      dropoffState: reviewData.dropoffState,
+      pickupWindowStart: reviewData.pickupWindowStart,
+      pickupWindowEnd: reviewData.pickupWindowEnd,
+      dropoffWindowStart: reviewData.dropoffWindowStart,
+      dropoffWindowEnd: reviewData.dropoffWindowEnd,
+      licensePlate: reviewData.licensePlate,
+      vinVerificationCode: reviewData.vinVerification,
+      vehicleMake: finalMake,
+      vehicleModel: finalModel,
+      vehicleColor: finalColor,
+      transmission: reviewData.transmission,
+      recipientName: reviewData.enableRecipient ? reviewData.recipientName : undefined,
+      recipientEmail: reviewData.enableRecipient ? reviewData.recipientEmail : undefined,
+      recipientPhone: reviewData.enableRecipient ? reviewData.recipientPhone : undefined,
+      paymentType: reviewData.paymentType,
+    };
+
+    createDelivery.mutate(payload);
+  };
+
+  const handleGoBack = () => {
+    // Save data back to session storage so user can continue editing
+    if (reviewData) {
+      sessionStorage.setItem("reviewDeliveryData", JSON.stringify(reviewData));
+    }
+    navigate({ to: "/dealer-create-delivery", search: { draftId: reviewData?.draftId } });
+  };
+
+  if (!reviewData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+      {/* Top App Bar */}
+      <header className="sticky top-0 z-40 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleGoBack}
+              className="w-10 h-10 rounded-2xl"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="leading-tight">
+              <div className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">
+                Review
+              </div>
+              <div className="text-sm font-extrabold text-slate-900 dark:text-white">
+                Delivery Request
+              </div>
+            </div>
+          </div>
+          <Badge variant="outline" className="bg-lime-50 dark:bg-lime-900/20 border-lime-200 dark:border-lime-900/30 text-lime-700 dark:text-lime-400">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Ready to submit
+          </Badge>
+        </div>
+      </header>
+
+      <main className="w-full max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-8">
+        <div className="space-y-6">
+          {/* Header Card */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-lime-100 dark:bg-lime-900/20 flex items-center justify-center flex-shrink-0">
+                  <Route className="h-7 w-7 text-lime-600 dark:text-lime-400" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-black text-slate-900 dark:text-white">
+                    Review Your Delivery Request
+                  </h1>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    Please review all details below. Click "Edit" on any section to make changes, then submit when ready.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Service Type */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-black">Service Type</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                {reviewData.serviceType === "HOME_DELIVERY" && <Home className="h-5 w-5 text-lime-600" />}
+                {reviewData.serviceType === "BETWEEN_LOCATIONS" && <SwapHorizontal className="h-5 w-5 text-lime-600" />}
+                {reviewData.serviceType === "SERVICE_PICKUP_RETURN" && <Wrench className="h-5 w-5 text-lime-600" />}
+                <span className="font-bold">{serviceTypeLabels[reviewData.serviceType] || reviewData.serviceType}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Route */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-black">Route</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleGoBack}
+                  className="text-lime-600 hover:text-lime-700"
+                >
+                  <Edit2 className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                  <MapPin className="h-5 w-5 text-lime-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">Pickup</p>
+                    <p className="text-sm font-bold">{reviewData.pickupAddress}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                  <Flag className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">Drop-off</p>
+                    <p className="text-sm font-bold">{reviewData.dropoffAddress}</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Schedule */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-black">Schedule</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleGoBack}
+                  className="text-lime-600 hover:text-lime-700"
+                >
+                  <Edit2 className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                  <p className="text-xs font-bold text-slate-500">Pickup Window</p>
+                  <p className="text-sm font-bold">{formatTimeRange(reviewData.pickupWindowStart, reviewData.pickupWindowEnd)}</p>
+                  {reviewData.pickupWindowStart && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      {new Date(reviewData.pickupWindowStart).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                  <p className="text-xs font-bold text-slate-500">Drop-off Window</p>
+                  <p className="text-sm font-bold">{formatTimeRange(reviewData.dropoffWindowStart, reviewData.dropoffWindowEnd)}</p>
+                  {reviewData.dropoffWindowStart && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      {new Date(reviewData.dropoffWindowStart).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {reviewData.etaMinutes && (
+                <p className="text-xs text-slate-500 mt-3">
+                  Estimated trip duration: {formatDuration(reviewData.etaMinutes)}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Vehicle Details */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-black">Vehicle</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleGoBack}
+                  className="text-lime-600 hover:text-lime-700"
+                >
+                  <Edit2 className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {editField === "vehicle" ? (
+                <div className="space-y-4 p-4 bg-lime-50 dark:bg-lime-900/10 rounded-xl">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">Make</Label>
+                      <Input
+                        value={editedValues.make ?? reviewData.make}
+                        onChange={(e) => setEditedValues({ ...editedValues, make: e.target.value })}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">Model</Label>
+                      <Input
+                        value={editedValues.model ?? reviewData.model}
+                        onChange={(e) => setEditedValues({ ...editedValues, model: e.target.value })}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">Color</Label>
+                      <Input
+                        value={editedValues.color ?? reviewData.color}
+                        onChange={(e) => setEditedValues({ ...editedValues, color: e.target.value })}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">Transmission</Label>
+                      <Select
+                        value={editedValues.transmission ?? reviewData.transmission}
+                        onValueChange={(value) => setEditedValues({ ...editedValues, transmission: value })}
+                      >
+                        <SelectTrigger className="h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Automatic">Automatic</SelectItem>
+                          <SelectItem value="Manual">Manual</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">License Plate</Label>
+                      <Input
+                        value={editedValues.licensePlate ?? reviewData.licensePlate}
+                        onChange={(e) => setEditedValues({ ...editedValues, licensePlate: e.target.value })}
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold">VIN Code (4 digits)</Label>
+                      <Input
+                        value={editedValues.vinVerification ?? reviewData.vinVerification}
+                        onChange={(e) => setEditedValues({ ...editedValues, vinVerification: e.target.value })}
+                        maxLength={4}
+                        className="h-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={handleCancelEdit}>
+                      <X className="h-4 w-4 mr-1" />
+                      Cancel
+                    </Button>
+                    <Button size="sm" className="bg-lime-500 hover:bg-lime-600 text-slate-950" onClick={handleSaveEdit}>
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-slate-500">Make</p>
+                      <p className="text-sm font-bold">{reviewData.make === "Other" ? reviewData.makeOther : reviewData.make}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500">Model</p>
+                      <p className="text-sm font-bold">{reviewData.model === "Other" ? reviewData.modelOther : reviewData.model}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500">Color</p>
+                      <p className="text-sm font-bold">{reviewData.color === "Other" ? reviewData.colorOther : reviewData.color}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500">Transmission</p>
+                      <p className="text-sm font-bold">{reviewData.transmission || "Automatic"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500">License Plate</p>
+                      <p className="text-sm font-bold">{reviewData.licensePlate}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500">VIN Code</p>
+                      <p className="text-sm font-bold font-mono">{reviewData.vinVerification}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recipient */}
+          {reviewData.enableRecipient && (
+            <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-black">Recipient</CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGoBack}
+                    className="text-lime-600 hover:text-lime-700"
+                  >
+                    <Edit2 className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="p-4 rounded-xl bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-900/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Phone className="h-4 w-4 text-lime-600" />
+                    <span className="text-xs font-bold text-lime-700 dark:text-lime-400">Driver will contact recipient</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-bold text-slate-500">Name</p>
+                      <p className="text-sm font-bold">{reviewData.recipientName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-500">Phone</p>
+                      <p className="text-sm font-bold">{reviewData.recipientPhone}</p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="text-xs font-bold text-slate-500">Email</p>
+                      <p className="text-sm font-bold">{reviewData.recipientEmail || "Not provided"}</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Price Estimate */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-black">Price Estimate</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500">Distance</p>
+                    <p className="text-sm font-bold">{reviewData.miles} miles</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-slate-500">Estimated Total</p>
+                    <p className="text-2xl font-black text-lime-600">{formatCurrency(reviewData.total)}</p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 space-y-1">
+                  <div className="flex justify-between"><span>Base fare:</span><span>{formatCurrency(reviewData.base)}</span></div>
+                  <div className="flex justify-between"><span>Distance charge:</span><span>{formatCurrency(reviewData.distance)}</span></div>
+                  <div className="flex justify-between"><span>Insurance fee:</span><span>{formatCurrency(reviewData.insurance)}</span></div>
+                  <div className="flex justify-between"><span>Transaction fee:</span><span>{formatCurrency(reviewData.transaction)}</span></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Payment */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-black">Payment</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <CreditCard className="h-5 w-5 text-slate-400" />
+                <div>
+                  <p className="font-bold">
+                    {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID" ? "Postpaid (Credit)" : "Prepaid"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID"
+                      ? "Billed to your account after delivery completion"
+                      : "Card authorized at booking, charged on completion"}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Submit Section */}
+          <Card className="border-lime-200 dark:border-lime-900/30 shadow-lg bg-lime-50 dark:bg-lime-900/10">
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Button
+                  variant="outline"
+                  className="flex-1 py-4 rounded-2xl font-bold"
+                  onClick={handleGoBack}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Go Back & Edit
+                </Button>
+                <Button
+                  className="flex-1 py-4 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold text-lg"
+                  onClick={handleSubmit}
+                  disabled={createDelivery.isPending}
+                >
+                  {createDelivery.isPending ? (
+                    <>
+                      <span className="animate-spin mr-2">⏳</span>
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      Submit Delivery Request
+                      <ChevronRight className="ml-2 h-5 w-5" />
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500 text-center mt-4">
+                By submitting, you agree to the terms of service. Your delivery will be listed for drivers to book.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+
+      {/* Release Dialog */}
+      <Dialog open={showReleaseDialog} onOpenChange={setShowReleaseDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">Delivery Created!</DialogTitle>
+            <DialogDescription>
+              Your delivery request has been created successfully. Would you like to release it to the marketplace now?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Releasing to marketplace makes your delivery visible to drivers. You can also release it later from your dashboard.
+            </p>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowReleaseDialog(false);
+                navigate({ to: "/dealer-dashboard" });
+              }}
+            >
+              I'll Do It Later
+            </Button>
+            <Button
+              className="bg-lime-500 hover:bg-lime-600 text-slate-950"
+              onClick={() => createdDeliveryId && releaseToMarketMutation.mutate(createdDeliveryId)}
+              disabled={releaseToMarketMutation.isPending}
+            >
+              {releaseToMarketMutation.isPending ? "Releasing..." : "Release to Marketplace"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
