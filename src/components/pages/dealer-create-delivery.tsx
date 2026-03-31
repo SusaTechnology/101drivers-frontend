@@ -957,31 +957,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     if (savedAddressesQuery.data) {
       setSavedAddresses(savedAddressesQuery.data);
 
-      // Helper to validate and set placeId with geocoding fallback
-      const setValidPlaceId = (address: SavedAddress) => {
-        const isValidPlaceId = address.placeId &&
-          (address.placeId.startsWith('ChIJ') ||
-           (address.placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(address.placeId)));
-
-        if (isValidPlaceId) {
-          setPickupPlaceId(address.placeId);
-        } else if (isLoaded && address.address) {
-          // Geocode to get real placeId
-          const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ address: address.address }, (results, status) => {
-            if (status === "OK" && results && results[0]?.place_id) {
-              console.log('Geocoded placeId for address:', results[0].place_id);
-              setPickupPlaceId(results[0].place_id);
-            } else {
-              console.warn('Failed to geocode address:', status);
-              setPickupPlaceId(null);
-            }
-          });
-        } else {
-          setPickupPlaceId(null);
-        }
-      };
-
       // First check if we have a pending saved address to restore
       if (pendingSavedAddressId) {
         const addr = savedAddressesQuery.data.find(a => a.id === pendingSavedAddressId);
@@ -989,7 +964,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           setSelectedSavedAddress(addr);
           setValue('pickupAddress', addr.address);
           setPickupCoords({ lat: addr.lat, lng: addr.lng });
-          setValidPlaceId(addr);
           if (addr.state) setPickupState(addr.state);
           setPendingSavedAddressId(null);
           return;
@@ -1002,12 +976,37 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         setSelectedSavedAddress(defaultAddress);
         setValue('pickupAddress', defaultAddress.address);
         setPickupCoords({ lat: defaultAddress.lat, lng: defaultAddress.lng });
-        setValidPlaceId(defaultAddress);
         if (defaultAddress.state) setPickupState(defaultAddress.state);
         setUseSavedAddresses(true);
       }
     }
-  }, [savedAddressesQuery.data, pendingSavedAddressId, isLoaded]);
+  }, [savedAddressesQuery.data, pendingSavedAddressId]);
+
+  // Separate effect to handle placeId geocoding when we have a selected saved address
+  useEffect(() => {
+    if (!selectedSavedAddress || !isLoaded) return;
+
+    const address = selectedSavedAddress;
+    const isValidPlaceId = address.placeId &&
+      (address.placeId.startsWith('ChIJ') ||
+       (address.placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(address.placeId)));
+
+    if (isValidPlaceId) {
+      setPickupPlaceId(address.placeId);
+    } else if (address.address) {
+      // Geocode to get real placeId
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address: address.address }, (results, status) => {
+        if (status === "OK" && results && results[0]?.place_id) {
+          console.log('Geocoded placeId for saved address:', results[0].place_id);
+          setPickupPlaceId(results[0].place_id);
+        } else {
+          console.warn('Failed to geocode saved address:', status);
+          setPickupPlaceId(null);
+        }
+      });
+    }
+  }, [selectedSavedAddress, isLoaded]);
 
   // Fetch saved vehicles on page load - using useQuery directly to avoid pagination params
   const savedVehiclesQuery = useQuery<SavedVehicle[]>({
