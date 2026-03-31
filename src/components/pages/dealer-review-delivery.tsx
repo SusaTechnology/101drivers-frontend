@@ -451,31 +451,93 @@ export default function ReviewDeliveryPage() {
             </CardHeader>
             <CardContent>
               {editField === "vehicle" ? (
-                <div className="space-y-4 p-4 bg-lime-50 dark:bg-lime-900/10 rounded-xl">
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-5 p-5 bg-lime-50 dark:bg-lime-900/10 rounded-2xl border border-lime-200 dark:border-lime-900/30">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-xs font-bold">Make</Label>
-                      <Input
+                      <Select
                         value={editedValues.make ?? reviewData.make}
-                        onChange={(e) => setEditedValues({ ...editedValues, make: e.target.value })}
-                        className="h-10"
-                      />
+                        onValueChange={(value) => setEditedValues({ ...editedValues, make: value, makeOther: value === "Other" ? "" : undefined })}
+                      >
+                        <SelectTrigger className="h-14 rounded-2xl">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Toyota">Toyota</SelectItem>
+                          <SelectItem value="Honda">Honda</SelectItem>
+                          <SelectItem value="Ford">Ford</SelectItem>
+                          <SelectItem value="Chevrolet">Chevrolet</SelectItem>
+                          <SelectItem value="BMW">BMW</SelectItem>
+                          <SelectItem value="Mercedes">Mercedes</SelectItem>
+                          <SelectItem value="Tesla">Tesla</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {(editedValues.make ?? reviewData.make) === "Other" && (
+                        <Input
+                          value={editedValues.makeOther ?? reviewData.makeOther ?? ""}
+                          onChange={(e) => setEditedValues({ ...editedValues, makeOther: e.target.value })}
+                          className="h-14 rounded-2xl"
+                          placeholder="Enter make"
+                        />
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-bold">Model</Label>
-                      <Input
+                      <Select
                         value={editedValues.model ?? reviewData.model}
-                        onChange={(e) => setEditedValues({ ...editedValues, model: e.target.value })}
-                        className="h-10"
-                      />
+                        onValueChange={(value) => setEditedValues({ ...editedValues, model: value, modelOther: value === "Other" ? "" : undefined })}
+                      >
+                        <SelectTrigger className="h-14 rounded-2xl">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Camry">Camry</SelectItem>
+                          <SelectItem value="Corolla">Corolla</SelectItem>
+                          <SelectItem value="RAV4">RAV4</SelectItem>
+                          <SelectItem value="Civic">Civic</SelectItem>
+                          <SelectItem value="Accord">Accord</SelectItem>
+                          <SelectItem value="Model 3">Model 3</SelectItem>
+                          <SelectItem value="Model Y">Model Y</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {(editedValues.model ?? reviewData.model) === "Other" && (
+                        <Input
+                          value={editedValues.modelOther ?? reviewData.modelOther ?? ""}
+                          onChange={(e) => setEditedValues({ ...editedValues, modelOther: e.target.value })}
+                          className="h-14 rounded-2xl"
+                          placeholder="Enter model"
+                        />
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-bold">Color</Label>
-                      <Input
+                      <Select
                         value={editedValues.color ?? reviewData.color}
-                        onChange={(e) => setEditedValues({ ...editedValues, color: e.target.value })}
-                        className="h-10"
-                      />
+                        onValueChange={(value) => setEditedValues({ ...editedValues, color: value, colorOther: value === "Other" ? "" : undefined })}
+                      >
+                        <SelectTrigger className="h-14 rounded-2xl">
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Black">Black</SelectItem>
+                          <SelectItem value="White">White</SelectItem>
+                          <SelectItem value="Silver">Silver</SelectItem>
+                          <SelectItem value="Gray">Gray</SelectItem>
+                          <SelectItem value="Blue">Blue</SelectItem>
+                          <SelectItem value="Red">Red</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {(editedValues.color ?? reviewData.color) === "Other" && (
+                        <Input
+                          value={editedValues.colorOther ?? reviewData.colorOther ?? ""}
+                          onChange={(e) => setEditedValues({ ...editedValues, colorOther: e.target.value })}
+                          className="h-14 rounded-2xl"
+                          placeholder="Enter color"
+                        />
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-bold">Transmission</Label>
@@ -483,12 +545,13 @@ export default function ReviewDeliveryPage() {
                         value={editedValues.transmission ?? reviewData.transmission}
                         onValueChange={(value) => setEditedValues({ ...editedValues, transmission: value })}
                       >
-                        <SelectTrigger className="h-10">
-                          <SelectValue />
+                        <SelectTrigger className="h-14 rounded-2xl">
+                          <SelectValue placeholder="Select..." />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Automatic">Automatic</SelectItem>
                           <SelectItem value="Manual">Manual</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -497,7 +560,7 @@ export default function ReviewDeliveryPage() {
                       <Input
                         value={editedValues.licensePlate ?? reviewData.licensePlate}
                         onChange={(e) => setEditedValues({ ...editedValues, licensePlate: e.target.value })}
-                        className="h-10"
+                        className="h-14 rounded-2xl"
                       />
                     </div>
                     <div className="space-y-2">
@@ -506,17 +569,17 @@ export default function ReviewDeliveryPage() {
                         value={editedValues.vinVerification ?? reviewData.vinVerification}
                         onChange={(e) => setEditedValues({ ...editedValues, vinVerification: e.target.value })}
                         maxLength={4}
-                        className="h-10"
+                        className="h-14 rounded-2xl"
                       />
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" size="sm" onClick={handleCancelEdit}>
-                      <X className="h-4 w-4 mr-1" />
+                  <div className="flex justify-end gap-3 pt-2">
+                    <Button variant="outline" onClick={handleCancelEdit} className="h-11 px-5 rounded-xl">
+                      <X className="h-4 w-4 mr-2" />
                       Cancel
                     </Button>
-                    <Button size="sm" className="bg-lime-500 hover:bg-lime-600 text-slate-950" onClick={handleSaveEdit}>
-                      Save
+                    <Button onClick={handleSaveEdit} className="h-11 px-5 rounded-xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold">
+                      Save Changes
                     </Button>
                   </div>
                 </div>
@@ -581,45 +644,45 @@ export default function ReviewDeliveryPage() {
               </CardHeader>
               <CardContent>
                 {editField === "recipient" ? (
-                  <div className="space-y-4 p-4 bg-lime-50 dark:bg-lime-900/10 rounded-xl">
+                  <div className="space-y-5 p-5 bg-lime-50 dark:bg-lime-900/10 rounded-2xl border border-lime-200 dark:border-lime-900/30">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label className="text-xs font-bold">Name</Label>
+                        <Label className="text-xs font-bold">Name <span className="text-red-500">*</span></Label>
                         <Input
                           value={editedValues.recipientName ?? reviewData.recipientName ?? ""}
                           onChange={(e) => setEditedValues({ ...editedValues, recipientName: e.target.value })}
-                          className="h-10"
+                          className="h-14 rounded-2xl"
                           placeholder="Recipient name"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-xs font-bold">Phone</Label>
+                        <Label className="text-xs font-bold">Phone <span className="text-red-500">*</span></Label>
                         <Input
                           value={editedValues.recipientPhone ?? reviewData.recipientPhone ?? ""}
                           onChange={(e) => setEditedValues({ ...editedValues, recipientPhone: e.target.value })}
-                          className="h-10"
+                          className="h-14 rounded-2xl"
                           placeholder="(555) 123-4567"
                           type="tel"
                         />
                       </div>
                       <div className="sm:col-span-2 space-y-2">
-                        <Label className="text-xs font-bold">Email</Label>
+                        <Label className="text-xs font-bold">Email <span className="text-red-500">*</span></Label>
                         <Input
                           value={editedValues.recipientEmail ?? reviewData.recipientEmail ?? ""}
                           onChange={(e) => setEditedValues({ ...editedValues, recipientEmail: e.target.value })}
-                          className="h-10"
+                          className="h-14 rounded-2xl"
                           placeholder="recipient@example.com"
                           type="email"
                         />
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={handleCancelEdit}>
-                        <X className="h-4 w-4 mr-1" />
+                    <div className="flex justify-end gap-3 pt-2">
+                      <Button variant="outline" onClick={handleCancelEdit} className="h-11 px-5 rounded-xl">
+                        <X className="h-4 w-4 mr-2" />
                         Cancel
                       </Button>
-                      <Button size="sm" className="bg-lime-500 hover:bg-lime-600 text-slate-950" onClick={handleSaveEdit}>
-                        Save
+                      <Button onClick={handleSaveEdit} className="h-11 px-5 rounded-xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold">
+                        Save Changes
                       </Button>
                     </div>
                   </div>
