@@ -122,7 +122,6 @@ export function QuoteDetails() {
   });
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedService, setSelectedService] = useState<"home" | "dealer" | "service">("home");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -202,7 +201,7 @@ export function QuoteDetails() {
   } = useForm<QuoteDetailsFormData>({
     resolver: zodResolver(quoteDetailsSchema),
     defaultValues: {
-      serviceType: "home",
+      serviceType: "service",
       preferredDate: "",
       timeWindow: "Morning (8am–12pm)",
       vehicleColor: "",
@@ -238,7 +237,6 @@ export function QuoteDetails() {
             
             // Use reset with keepDefaultValues: false to ensure all values are replaced
             reset(draft.formData, { keepDefaultValues: false });
-            setSelectedService(draft.formData.serviceType || "home");
             setLoadedQuote(draft.quoteData || null);
             setDraftLoaded(true);
             setVerificationEmail(draft.formData.email || "");
@@ -672,37 +670,6 @@ export function QuoteDetails() {
 
               <CardContent className="p-0 mt-8 space-y-7">
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-7">
-                  {/* Service type */}
-                  <div>
-                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                      Service Type
-                    </Label>
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-100 dark:bg-slate-800/50 p-2 rounded-2xl">
-                      {[
-                        { id: "home", label: "Home" },
-                        { id: "dealer", label: "Dealer (B2B)" },
-                        { id: "service", label: "Service Pickup" },
-                      ].map((service) => (
-                        <Button
-                          key={service.id}
-                          type="button"
-                          variant={selectedService === service.id ? "default" : "ghost"}
-                          className={`pill h-auto py-3 text-[11px] font-black uppercase tracking-widest rounded-xl ${
-                            selectedService === service.id
-                              ? "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white shadow-sm"
-                              : "text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-900/60"
-                          }`}
-                          onClick={() => {
-                            setSelectedService(service.id as any);
-                            setValue("serviceType", service.id as any);
-                          }}
-                        >
-                          {service.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Schedule */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
