@@ -263,7 +263,7 @@ interface CreateDeliveryPageProps {
 export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps) {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showRecipientFields, setShowRecipientFields] = useState(false);
+  const [showRecipientFields, setShowRecipientFields] = useState(true);
   const [isDealerAuthorized, setIsDealerAuthorized] = useState(false);
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null);
@@ -821,7 +821,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       paymentType: "PREPAID",
       transmission: "Automatic",
       rememberPickup: false,
-      enableRecipient: false,
+      enableRecipient: true,
       dealerAuthorized: false,
       status: "DRAFT",
     },
@@ -937,10 +937,12 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     // VIN verification must be 4 digits
     if (!vinVerification || !/^\d{4}$/.test(vinVerification)) return false;
 
-    // If recipient is enabled, must have name and phone
+    // If recipient is enabled, must have name, phone, and email
     if (showRecipientFields) {
       if (!recipientName || recipientName.trim().length < 1) return false;
       if (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) return false;
+      const recipientEmailVal = watch("recipientEmail");
+      if (!recipientEmailVal || recipientEmailVal.trim().length < 1) return false;
     }
 
     return true;
@@ -2582,14 +2584,14 @@ const handleQuotePreview = () => {
               <CardHeader>
                 <div>
                   <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                    Optional
+                    Recommended
                   </CardDescription>
                   <CardTitle className="text-2xl font-black mt-2">
                     Recipient tracking
                   </CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    If provided, recipient gets secure tracking link and
-                    notifications (email by default).
+                    Recipient phone is essential for driver communication during delivery. 
+                    Email enables tracking notifications.
                   </p>
                 </div>
               </CardHeader>
@@ -2638,7 +2640,7 @@ const handleQuotePreview = () => {
                           htmlFor="recipientEmail"
                           className="text-xs font-bold"
                         >
-                          Recipient email
+                          Recipient email <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="recipientEmail"
@@ -2647,6 +2649,9 @@ const handleQuotePreview = () => {
                           placeholder="recipient@example.com"
                           type="email"
                         />
+                        {errors.recipientEmail && (
+                          <p className="text-xs text-red-500">{errors.recipientEmail.message}</p>
+                        )}
                       </div>
                     </div>
 
