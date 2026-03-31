@@ -652,7 +652,7 @@ export function QuoteDetails() {
                       Delivery details
                     </CardTitle>
                     <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      Service type + scheduling + vehicle + contact details (after estimate).
+                      Scheduling + vehicle + contact details (after estimate).
                     </CardDescription>
                   </div>
                   <div className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
