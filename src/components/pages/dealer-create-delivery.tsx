@@ -544,7 +544,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   useEffect(() => {
     const restoreFromSession = () => {
       const stored = sessionStorage.getItem("reviewDeliveryData");
-      if (stored && !draftId) {
+      if (stored) {
         try {
           const data = JSON.parse(stored);
           
@@ -563,14 +563,12 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           if (data.modelOther) setValue('modelOther', data.modelOther);
           if (data.colorOther) setValue('colorOther', data.colorOther);
           
-          // Restore recipient
-          if (data.enableRecipient) {
-            setValue('enableRecipient', true);
-            setShowRecipientFields(true);
-            if (data.recipientName) setValue('recipientName', data.recipientName);
-            if (data.recipientEmail) setValue('recipientEmail', data.recipientEmail);
-            if (data.recipientPhone) setValue('recipientPhone', data.recipientPhone);
-          }
+          // Restore recipient (always enabled now)
+          setShowRecipientFields(true);
+          setValue('enableRecipient', true);
+          if (data.recipientName) setValue('recipientName', data.recipientName);
+          if (data.recipientEmail) setValue('recipientEmail', data.recipientEmail);
+          if (data.recipientPhone) setValue('recipientPhone', data.recipientPhone);
           
           // Restore coordinates
           if (data.pickupLat && data.pickupLng) {
@@ -649,7 +647,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     };
     
     restoreFromSession();
-  }, [draftId]);
+  }, []);
 
   // Handler for navigating to review page
   const handleGoToReview = () => {
