@@ -4,7 +4,6 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -41,17 +40,9 @@ import {
   Edit2,
   X,
 } from "lucide-react";
-import { getUser, useCreate, authFetch } from "@/lib/tanstack/dataQuery";
+import { getUser, authFetch } from "@/lib/tanstack/dataQuery";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 // Types for review data
 interface ReviewDeliveryData {
@@ -154,8 +145,6 @@ export default function ReviewDeliveryPage() {
   const [reviewData, setReviewData] = useState<ReviewDeliveryData | null>(null);
   const [editField, setEditField] = useState<string | null>(null);
   const [editedValues, setEditedValues] = useState<Partial<ReviewDeliveryData>>({});
-  const [showReleaseDialog, setShowReleaseDialog] = useState(false);
-  const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
   const customer = getUser();
 
   // Load review data from sessionStorage
@@ -177,11 +166,58 @@ export default function ReviewDeliveryPage() {
     }
   }, [navigate]);
 
-  // Mutation for creating delivery
-  const createDelivery = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`, {
-    onSuccess: async (data: any) => {
-      // If editing a draft, delete it after successful submission
-      if (reviewData?.draftId) {
+  // Mutation for creating and releasing delivery
+  const createAndReleaseDelivery = useMutation({
+    mutationFn: async () => {
+      if (!reviewData) throw new Error('No review data');
+
+      const finalMake = reviewData.make === "Other" ? reviewData.makeOther : reviewData.make;
+      const finalModel = reviewData.model === "Other" ? reviewData.modelOther : reviewData.model;
+      const finalColor = reviewData.color === "Other" ? reviewData.colorOther : reviewData.color;
+
+      const payload = {
+        quoteId: reviewData.quoteId,
+        serviceType: reviewData.serviceType,
+        pickupAddress: reviewData.pickupAddress,
+        pickupLat: reviewData.pickupLat,
+        pickupLng: reviewData.pickupLng,
+        pickupPlaceId: reviewData.pickupPlaceId,
+        pickupState: reviewData.pickupState,
+        dropoffAddress: reviewData.dropoffAddress,
+        dropoffLat: reviewData.dropoffLat,
+        dropoffLng: reviewData.dropoffLng,
+        dropoffPlaceId: reviewData.dropoffPlaceId,
+        dropoffState: reviewData.dropoffState,
+        pickupWindowStart: reviewData.pickupWindowStart,
+        pickupWindowEnd: reviewData.pickupWindowEnd,
+        dropoffWindowStart: reviewData.dropoffWindowStart,
+        dropoffWindowEnd: reviewData.dropoffWindowEnd,
+        licensePlate: reviewData.licensePlate,
+        vinVerificationCode: reviewData.vinVerification,
+        vehicleMake: finalMake,
+        vehicleModel: finalModel,
+        vehicleColor: finalColor,
+        transmission: reviewData.transmission,
+        recipientName: reviewData.recipientName,
+        recipientEmail: reviewData.recipientEmail,
+        recipientPhone: reviewData.recipientPhone,
+        paymentType: reviewData.paymentType,
+      };
+
+      // Step 1: Create the delivery
+      const delivery = await authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const deliveryId = delivery?.id || delivery?.deliveryRequest?.id;
+
+      // Step 2: Delete draft if editing one
+      if (reviewData.draftId) {
         try {
           await authFetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${reviewData.draftId}`, {
             method: 'DELETE',
@@ -190,46 +226,38 @@ export default function ReviewDeliveryPage() {
           console.error('Failed to delete draft after submission:', e);
         }
       }
+
+      // Step 3: Release to marketplace
+      if (deliveryId) {
+        await authFetch(
+          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/release-to-marketplace`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      return delivery;
+    },
+    onSuccess: () => {
       // Clear session storage
       sessionStorage.removeItem("reviewDeliveryData");
-      // Show release dialog
-      setCreatedDeliveryId(data?.id || data?.deliveryRequest?.id || null);
-      setShowReleaseDialog(true);
+      
+      toast.success("Delivery submitted & released!", {
+        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
+      });
+      
+      navigate({ to: "/dealer-dashboard" });
     },
     onError: (error: any) => {
-      const errorMessage = error?.message || "Failed to create delivery request";
+      const errorMessage = error?.message || "Failed to create delivery";
       const errorDetails = error?.response?.data?.details || error?.details;
-      toast.error("Failed to create delivery", {
+      toast.error("Failed to submit delivery", {
         description: errorDetails || errorMessage,
       });
       console.error("Delivery creation failed:", error);
     },
-    successMessage: undefined,
-  });
-
-  // Mutation for releasing to marketplace
-  const releaseToMarketMutation = useMutation({
-    mutationFn: async (deliveryId: string) => {
-      return authFetch(
-        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/release-to-marketplace`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-    },
-    onSuccess: () => {
-      toast.success("Released to market", {
-        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
-      });
-      setShowReleaseDialog(false);
-      navigate({ to: "/dealer-dashboard" });
-    },
-    onError: (error: Error) => {
-      toast.error("Failed to release to market", { description: error.message });
-    }
   });
 
   const handleEditField = (field: string) => {
@@ -254,42 +282,7 @@ export default function ReviewDeliveryPage() {
   };
 
   const handleSubmit = () => {
-    if (!reviewData) return;
-
-    const finalMake = reviewData.make === "Other" ? reviewData.makeOther : reviewData.make;
-    const finalModel = reviewData.model === "Other" ? reviewData.modelOther : reviewData.model;
-    const finalColor = reviewData.color === "Other" ? reviewData.colorOther : reviewData.color;
-
-    const payload = {
-      quoteId: reviewData.quoteId,
-      serviceType: reviewData.serviceType,
-      pickupAddress: reviewData.pickupAddress,
-      pickupLat: reviewData.pickupLat,
-      pickupLng: reviewData.pickupLng,
-      pickupPlaceId: reviewData.pickupPlaceId,
-      pickupState: reviewData.pickupState,
-      dropoffAddress: reviewData.dropoffAddress,
-      dropoffLat: reviewData.dropoffLat,
-      dropoffLng: reviewData.dropoffLng,
-      dropoffPlaceId: reviewData.dropoffPlaceId,
-      dropoffState: reviewData.dropoffState,
-      pickupWindowStart: reviewData.pickupWindowStart,
-      pickupWindowEnd: reviewData.pickupWindowEnd,
-      dropoffWindowStart: reviewData.dropoffWindowStart,
-      dropoffWindowEnd: reviewData.dropoffWindowEnd,
-      licensePlate: reviewData.licensePlate,
-      vinVerificationCode: reviewData.vinVerification,
-      vehicleMake: finalMake,
-      vehicleModel: finalModel,
-      vehicleColor: finalColor,
-      transmission: reviewData.transmission,
-      recipientName: reviewData.recipientName,
-      recipientEmail: reviewData.recipientEmail,
-      recipientPhone: reviewData.recipientPhone,
-      paymentType: reviewData.paymentType,
-    };
-
-    createDelivery.mutate(payload);
+    createAndReleaseDelivery.mutate();
   };
 
   const handleGoBack = () => {
@@ -788,16 +781,16 @@ export default function ReviewDeliveryPage() {
                 <Button
                   className="flex-1 py-4 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold text-lg"
                   onClick={handleSubmit}
-                  disabled={createDelivery.isPending}
+                  disabled={createAndReleaseDelivery.isPending}
                 >
-                  {createDelivery.isPending ? (
+                  {createAndReleaseDelivery.isPending ? (
                     <>
                       <span className="animate-spin mr-2">⏳</span>
                       Submitting...
                     </>
                   ) : (
                     <>
-                      Submit Delivery Request
+                      Submit & Release to Market
                       <ChevronRight className="ml-2 h-5 w-5" />
                     </>
                   )}
@@ -810,41 +803,6 @@ export default function ReviewDeliveryPage() {
           </Card>
         </div>
       </main>
-
-      {/* Release Dialog */}
-      <Dialog open={showReleaseDialog} onOpenChange={setShowReleaseDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black">Delivery Created!</DialogTitle>
-            <DialogDescription>
-              Your delivery request has been created successfully. Would you like to release it to the marketplace now?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Releasing to marketplace makes your delivery visible to drivers. You can also release it later from your dashboard.
-            </p>
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowReleaseDialog(false);
-                navigate({ to: "/dealer-dashboard" });
-              }}
-            >
-              I'll Do It Later
-            </Button>
-            <Button
-              className="bg-lime-500 hover:bg-lime-600 text-slate-950"
-              onClick={() => createdDeliveryId && releaseToMarketMutation.mutate(createdDeliveryId)}
-              disabled={releaseToMarketMutation.isPending}
-            >
-              {releaseToMarketMutation.isPending ? "Releasing..." : "Release to Marketplace"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
