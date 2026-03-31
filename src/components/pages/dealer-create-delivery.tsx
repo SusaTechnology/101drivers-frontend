@@ -483,8 +483,63 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           if (data.dropoffLat && data.dropoffLng) {
             setDropoffCoords({ lat: data.dropoffLat, lng: data.dropoffLng });
           }
-          setPickupPlaceId(data.pickupPlaceId || null);
-          setDropoffPlaceId(data.dropoffPlaceId || null);
+
+          // Restore place IDs - validate and geocode if invalid
+          const isValidPlaceId = (placeId: string | undefined) =>
+            placeId && (placeId.startsWith('ChIJ') || (placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(placeId)));
+
+          if (isValidPlaceId(data.pickupPlaceId)) {
+            setPickupPlaceId(data.pickupPlaceId);
+          } else if (data.pickupAddress && isLoaded) {
+            // Geocode pickup address to get real placeId
+            try {
+              const geocoder = new google.maps.Geocoder();
+              const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+                geocoder.geocode({ address: data.pickupAddress }, (results, status) => {
+                  if (status === "OK" && results) resolve(results);
+                  else reject(new Error(`Geocoding failed: ${status}`));
+                });
+              });
+              if (results[0]?.place_id) {
+                console.log('Geocoded pickup placeId during restoration:', results[0].place_id);
+                setPickupPlaceId(results[0].place_id);
+              } else {
+                setPickupPlaceId(null);
+              }
+            } catch (e) {
+              console.error('Failed to geocode pickup address:', e);
+              setPickupPlaceId(null);
+            }
+          } else {
+            setPickupPlaceId(null);
+          }
+
+          if (isValidPlaceId(data.dropoffPlaceId)) {
+            setDropoffPlaceId(data.dropoffPlaceId);
+          } else if (data.dropoffAddress && isLoaded) {
+            // Geocode dropoff address to get real placeId
+            try {
+              const geocoder = new google.maps.Geocoder();
+              const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+                geocoder.geocode({ address: data.dropoffAddress }, (results, status) => {
+                  if (status === "OK" && results) resolve(results);
+                  else reject(new Error(`Geocoding failed: ${status}`));
+                });
+              });
+              if (results[0]?.place_id) {
+                console.log('Geocoded dropoff placeId during restoration:', results[0].place_id);
+                setDropoffPlaceId(results[0].place_id);
+              } else {
+                setDropoffPlaceId(null);
+              }
+            } catch (e) {
+              console.error('Failed to geocode dropoff address:', e);
+              setDropoffPlaceId(null);
+            }
+          } else {
+            setDropoffPlaceId(null);
+          }
+
           setPickupState(data.pickupState || null);
           setPickupCity(data.pickupCity || null);
           setDropoffState(data.dropoffState || null);
