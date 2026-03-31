@@ -93,7 +93,7 @@ const deliverySchema = z.object({
   contactName: z.string().min(1, "Contact name is required").optional(),
   contactEmail: z.string().email("Valid email is required").optional(),
   contactPhone: z.string().min(1, "Phone is required").optional(),
-  enableRecipient: z.boolean().optional(),
+  enableRecipient: z.boolean().optional(), // Kept for backward compatibility
   recipientName: z.string().min(1, "Recipient name is required").optional(),
   recipientEmail: z.string().email().optional().or(z.literal("")),
   recipientPhone: z.string().min(10, "Valid phone number is required").optional(),
@@ -263,7 +263,6 @@ interface CreateDeliveryPageProps {
 export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps) {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showRecipientFields, setShowRecipientFields] = useState(true);
   const [isDealerAuthorized, setIsDealerAuthorized] = useState(false);
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null);
@@ -450,9 +449,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           if (data.modelOther) setValue('modelOther', data.modelOther);
           if (data.colorOther) setValue('colorOther', data.colorOther);
           
-          // Restore recipient (always enabled now)
-          setShowRecipientFields(true);
-          setValue('enableRecipient', true);
+          // Restore recipient (always enabled)
           if (data.recipientName) setValue('recipientName', data.recipientName);
           if (data.recipientEmail) setValue('recipientEmail', data.recipientEmail);
           if (data.recipientPhone) setValue('recipientPhone', data.recipientPhone);
@@ -604,14 +601,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         if (draft.vehicleColor) setValue('color', draft.vehicleColor);
         if (draft.transmission) setValue('transmission', draft.transmission);
 
-        // Recipient
-        if (draft.recipientName || draft.recipientEmail || draft.recipientPhone) {
-          setValue('enableRecipient', true);
-          setShowRecipientFields(true);
-          if (draft.recipientName) setValue('recipientName', draft.recipientName);
-          if (draft.recipientEmail) setValue('recipientEmail', draft.recipientEmail);
-          if (draft.recipientPhone) setValue('recipientPhone', draft.recipientPhone);
-        }
+        // Recipient (always enabled)
+        if (draft.recipientName) setValue('recipientName', draft.recipientName);
+        if (draft.recipientEmail) setValue('recipientEmail', draft.recipientEmail);
+        if (draft.recipientPhone) setValue('recipientPhone', draft.recipientPhone);
 
         // Quote data
         if (draft.quoteId || draft.quote?.id) {
@@ -684,8 +677,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       colorOther: data.colorOther,
       transmission: data.transmission || "Automatic",
 
-      // Recipient
-      enableRecipient: showRecipientFields,
+      // Recipient (always required)
       recipientName: data.recipientName,
       recipientEmail: data.recipientEmail,
       recipientPhone: data.recipientPhone,
@@ -743,10 +735,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       vehicleModel: data.model === "Other" ? data.modelOther : data.model,
       vehicleColor: data.color === "Other" ? data.colorOther : data.color,
       transmission: data.transmission,
-      // Recipient (optional)
-      recipientName: data.enableRecipient ? data.recipientName : undefined,
-      recipientEmail: data.enableRecipient ? data.recipientEmail : undefined,
-      recipientPhone: data.enableRecipient ? data.recipientPhone : undefined,
+      recipientName: data.recipientName,
+      recipientEmail: data.recipientEmail,
+      recipientPhone: data.recipientPhone,
       // Coordinates
       pickupLat: pickupCoords?.lat,
       pickupLng: pickupCoords?.lng,
@@ -812,7 +803,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       paymentType: "PREPAID",
       transmission: "Automatic",
       rememberPickup: false,
-      enableRecipient: true,
+      enableRecipient: true, // Always enabled
       dealerAuthorized: false,
       status: "DRAFT",
     },
@@ -895,7 +886,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const serviceType = watch("serviceType");
   const pickupAddress = watch("pickupAddress");
   const dropoffAddress = watch("dropoffAddress");
-  const enableRecipient = watch("enableRecipient");
   const dealerAuthorized = watch("dealerAuthorized");
   const transmission = watch("transmission");
   const make = watch("make");
@@ -928,19 +918,15 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     // VIN verification must be 4 digits
     if (!vinVerification || !/^\d{4}$/.test(vinVerification)) return false;
 
-    // If recipient is enabled, must have name, phone, and email
-    if (showRecipientFields) {
-      if (!recipientName || recipientName.trim().length < 1) return false;
-      if (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) return false;
-      const recipientEmailVal = watch("recipientEmail");
-      if (!recipientEmailVal || recipientEmailVal.trim().length < 1) return false;
-    }
+    // Recipient is required - must have name, phone, and email
+    if (!recipientName || recipientName.trim().length < 1) return false;
+    if (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) return false;
+    const recipientEmailVal = watch("recipientEmail");
+    if (!recipientEmailVal || recipientEmailVal.trim().length < 1) return false;
 
     return true;
-  }, [quoteId, pickupCoords, dropoffCoords, validatedWindows, licensePlate, make, model, color, vinVerification, showRecipientFields, recipientName, recipientPhone]);
-  useEffect(() => {
-    setShowRecipientFields(!!enableRecipient);
-  }, [enableRecipient]);
+  }, [quoteId, pickupCoords, dropoffCoords, validatedWindows, licensePlate, make, model, color, vinVerification, recipientName, recipientPhone]);
+  // Removed - recipient is always shown now
 
   // Update dealer authorized state
   useEffect(() => {
@@ -1308,9 +1294,9 @@ const handleQuotePreview = () => {
       vehicleModel: finalModel,
       vehicleColor: finalColor,
       // specialInstructions: data.instructions,
-      recipientName: data.enableRecipient ? data.recipientName : undefined,
-      recipientEmail: data.enableRecipient ? data.recipientEmail : undefined,
-      recipientPhone: data.enableRecipient ? data.recipientPhone : undefined,
+      recipientName: data.recipientName,
+      recipientEmail: data.recipientEmail,
+      recipientPhone: data.recipientPhone,
       // paymentType: data.paymentType,
       // customerContact: {
       //   name: data.contactName,
@@ -2575,7 +2561,7 @@ const handleQuotePreview = () => {
               <CardHeader>
                 <div>
                   <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                    Recommended
+                    Required
                   </CardDescription>
                   <CardTitle className="text-2xl font-black mt-2">
                     Recipient tracking
@@ -2587,93 +2573,73 @@ const handleQuotePreview = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="enableRecipient"
-                    {...register("enableRecipient")}
-                    checked={showRecipientFields}
-                    onCheckedChange={(checked) => {
-                      setShowRecipientFields(!!checked);
-                      setValue("enableRecipient", !!checked);
-                    }}
-                  />
-                  <Label
-                    htmlFor="enableRecipient"
-                    className="text-xs font-bold cursor-pointer"
-                  >
-                    Add recipient contact
-                  </Label>
-                </div>
-
-                {showRecipientFields && (
-                  <div className="mt-5 space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="recipientName"
-                          className="text-xs font-bold"
-                        >
-                          Recipient name <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          id="recipientName"
-                          {...register("recipientName")}
-                          className="h-14 rounded-2xl"
-                          placeholder="Buyer / receiver"
-                        />
-                        {errors.recipientName && (
-                          <p className="text-xs text-red-500">{errors.recipientName.message}</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="recipientEmail"
-                          className="text-xs font-bold"
-                        >
-                          Recipient email <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          id="recipientEmail"
-                          {...register("recipientEmail")}
-                          className="h-14 rounded-2xl"
-                          placeholder="recipient@example.com"
-                          type="email"
-                        />
-                        {errors.recipientEmail && (
-                          <p className="text-xs text-red-500">{errors.recipientEmail.message}</p>
-                        )}
-                      </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="recipientName"
+                        className="text-xs font-bold"
+                      >
+                        Recipient name <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="recipientName"
+                        {...register("recipientName")}
+                        className="h-14 rounded-2xl"
+                        placeholder="Buyer / receiver"
+                      />
+                      {errors.recipientName && (
+                        <p className="text-xs text-red-500">{errors.recipientName.message}</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
                       <Label
-                        htmlFor="recipientPhone"
+                        htmlFor="recipientEmail"
                         className="text-xs font-bold"
                       >
-                        Recipient phone <span className="text-red-500">*</span>
+                        Recipient email <span className="text-red-500">*</span>
                       </Label>
                       <Input
-                        id="recipientPhone"
-                        {...register("recipientPhone")}
+                        id="recipientEmail"
+                        {...register("recipientEmail")}
                         className="h-14 rounded-2xl"
-                        placeholder="(555) 123-4567"
-                        type="tel"
+                        placeholder="recipient@example.com"
+                        type="email"
                       />
-                      {errors.recipientPhone && (
-                        <p className="text-xs text-red-500">{errors.recipientPhone.message}</p>
+                      {errors.recipientEmail && (
+                        <p className="text-xs text-red-500">{errors.recipientEmail.message}</p>
                       )}
-                      <p className="text-[11px] text-slate-500">
-                        Driver will communicate with recipient during delivery
-                      </p>
                     </div>
+                  </div>
 
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="recipientPhone"
+                      className="text-xs font-bold"
+                    >
+                      Recipient phone <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="recipientPhone"
+                      {...register("recipientPhone")}
+                      className="h-14 rounded-2xl"
+                      placeholder="(555) 123-4567"
+                      type="tel"
+                    />
+                    {errors.recipientPhone && (
+                      <p className="text-xs text-red-500">{errors.recipientPhone.message}</p>
+                    )}
                     <p className="text-[11px] text-slate-500">
-                      Tracking links are access-controlled and should expire
-                      after completion.
+                      Driver will communicate with recipient during delivery
                     </p>
                   </div>
-                )}
+
+                  <p className="text-[11px] text-slate-500">
+                    Tracking links are access-controlled and should expire
+                    after completion.
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
@@ -2796,7 +2762,7 @@ const handleQuotePreview = () => {
 
                 {!isFormValidForSubmission && !createDelivery.isPending && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 text-center">
-                    Please complete all required fields: addresses, schedule window, vehicle details{showRecipientFields && ', and recipient info'}.
+                    Please complete all required fields: addresses, schedule window, vehicle details, and recipient info.
                   </p>
                 )}
 

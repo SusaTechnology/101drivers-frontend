@@ -269,9 +269,9 @@ export default function ReviewDeliveryPage() {
       vehicleModel: finalModel,
       vehicleColor: finalColor,
       transmission: reviewData.transmission,
-      recipientName: reviewData.enableRecipient ? reviewData.recipientName : undefined,
-      recipientEmail: reviewData.enableRecipient ? reviewData.recipientEmail : undefined,
-      recipientPhone: reviewData.enableRecipient ? reviewData.recipientPhone : undefined,
+      recipientName: reviewData.recipientName,
+      recipientEmail: reviewData.recipientEmail,
+      recipientPhone: reviewData.recipientPhone,
       paymentType: reviewData.paymentType,
     };
 
@@ -617,8 +617,7 @@ export default function ReviewDeliveryPage() {
           </Card>
 
           {/* Recipient */}
-          {reviewData.enableRecipient && (
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-black">Recipient</CardTitle>
@@ -710,7 +709,6 @@ export default function ReviewDeliveryPage() {
                 )}
               </CardContent>
             </Card>
-          )}
 
           {/* Price Estimate */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
