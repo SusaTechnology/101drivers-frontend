@@ -1271,9 +1271,14 @@ const handleQuotePreview = () => {
       setValue("pickupAddress", address.address);
       setPickupCoords({ lat: address.lat, lng: address.lng });
       
-      // Check if placeId is a valid Google Place ID (starts with "ChIJ" or similar)
-      // If not, try to geocode to get a real placeId
-      if (address.placeId && address.placeId.startsWith("ChIJ")) {
+      // Check if placeId is a valid Google Place ID
+      // Valid Google Place IDs are typically 20+ characters alphanumeric
+      // Demo/fake IDs like "demo-business-main-lot" should be geocoded
+      const isValidGooglePlaceId = address.placeId && 
+        address.placeId.length >= 20 && 
+        /^[A-Za-z0-9_-]+$/.test(address.placeId);
+      
+      if (isValidGooglePlaceId) {
         setPickupPlaceId(address.placeId);
       } else {
         // Geocode the address to get a real placeId
