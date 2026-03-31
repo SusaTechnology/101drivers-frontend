@@ -187,7 +187,6 @@ export default function DriverDashboardPage() {
     datePreset: 'TODAY',
     serviceType: 'ALL',
     sortBy: 'SOONEST',
-    urgentOnly: false,
   })
 
   // Build query params from filter state
@@ -209,9 +208,6 @@ export default function DriverDashboardPage() {
     }
     if (filters.sortBy) {
       params.append('sortBy', filters.sortBy)
-    }
-    if (filters.urgentOnly) {
-      params.append('urgentOnly', 'true')
     }
     
     return params.toString()
@@ -273,7 +269,6 @@ export default function DriverDashboardPage() {
       datePreset: 'TODAY',
       serviceType: 'ALL',
       sortBy: 'SOONEST',
-      urgentOnly: false,
     })
     toast.success('Filters reset to defaults')
   }
@@ -287,11 +282,6 @@ export default function DriverDashboardPage() {
 
   const handleViewJob = (jobId: string) => {
     navigate({ to: `/driver-job-details`, search: { jobId }}) // adjust route as needed
-  }
-
-  // Toggle urgent filter
-  const toggleUrgent = () => {
-    setFilters(prev => ({ ...prev, urgentOnly: !prev.urgentOnly }))
   }
 
   // Transform API data to UI-friendly array
@@ -506,18 +496,6 @@ export default function DriverDashboardPage() {
                     <Map className="w-3.5 h-3.5 text-primary mr-1" />
                     CA Only
                   </Badge>
-                  <button
-                    onClick={toggleUrgent}
-                    className={cn(
-                      "cursor-pointer chip inline-flex items-center gap-1 px-3 py-1 rounded-full border text-[11px] font-semibold transition",
-                      filters.urgentOnly
-                        ? "bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200"
-                        : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200"
-                    )}
-                  >
-                    <BoltIcon className={cn("w-3.5 h-3.5 mr-1", filters.urgentOnly ? "text-amber-500" : "text-slate-400")} />
-                    Urgent only
-                  </button>
                 </div>
 
                 <div className="flex gap-2">
