@@ -129,6 +129,20 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+// Format phone number to US format: (XXX) XXX-XXXX
+function formatUSPhone(value: string): string {
+  // Remove all non-digits
+  const digits = value.replace(/\D/g, '');
+  
+  // Limit to 10 digits
+  const limited = digits.slice(0, 10);
+  
+  if (limited.length === 0) return '';
+  if (limited.length <= 3) return limited;
+  if (limited.length <= 6) return `(${limited.slice(0, 3)}) ${limited.slice(3)}`;
+  return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`;
+}
+
 const serviceTypeLabels: Record<string, string> = {
   HOME_DELIVERY: "Home Delivery",
   BETWEEN_LOCATIONS: "Between Locations",
@@ -658,7 +672,7 @@ export default function ReviewDeliveryPage() {
                         <Label className="text-xs font-bold">Phone <span className="text-red-500">*</span></Label>
                         <Input
                           value={editedValues.recipientPhone ?? reviewData.recipientPhone ?? ""}
-                          onChange={(e) => setEditedValues({ ...editedValues, recipientPhone: e.target.value })}
+                          onChange={(e) => setEditedValues({ ...editedValues, recipientPhone: formatUSPhone(e.target.value) })}
                           className="h-14 rounded-2xl"
                           placeholder="(555) 123-4567"
                           type="tel"
