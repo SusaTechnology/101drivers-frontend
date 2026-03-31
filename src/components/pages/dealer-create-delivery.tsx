@@ -1419,50 +1419,33 @@ const handleQuotePreview = () => {
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
           {/* LEFT COLUMN - Form */}
           <div className="xl:col-span-7 space-y-8">
-            {/* Step 1: Service Type (unchanged) */}
+            {/* Step 1: Service Type */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                      Step 1
-                    </CardDescription>
-                    <CardTitle className="text-2xl font-black mt-2">
-                      Service type
-                    </CardTitle>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      Choose the service type (used for guidance + stored on the
-                      request).
-                    </p>
-                  </div>
-                </div>
+              <CardHeader className="pb-3">
+                <CardDescription className="text-[11px] font-black uppercase tracking-widest">
+                  Step 1
+                </CardDescription>
+                <CardTitle className="text-xl font-black mt-1">
+                  Service type
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <RadioGroup
-                  defaultValue="HOME_DELIVERY"
-                  className="grid grid-cols-1 md:grid-cols-3 gap-3"
-                  onValueChange={(value) =>
-                    setValue("serviceType", value as any)
-                  }
-                >
+              <CardContent className="pt-0">
+                <div className="flex flex-wrap gap-2">
                   {[
                     {
                       value: "HOME_DELIVERY",
                       icon: Home,
-                      title: "Home Delivery",
-                      description: "Dealer ↔ customer delivery.",
+                      label: "Home Delivery",
                     },
                     {
                       value: "BETWEEN_LOCATIONS",
                       icon: SwapHorizontal,
-                      title: "Between Locations",
-                      description: "Any A → B relocation.",
+                      label: "Between Locations",
                     },
                     {
                       value: "SERVICE_PICKUP_RETURN",
                       icon: Wrench,
-                      title: "Service Pick-up & Return",
-                      description: "To service center and back.",
+                      label: "Service Pickup & Return",
                     },
                   ].map((item) => (
                     <Label
@@ -1470,23 +1453,29 @@ const handleQuotePreview = () => {
                       htmlFor={item.value}
                       className="cursor-pointer"
                     >
-                      <div className="flex flex-col space-y-3 rounded-lg border border-slate-200 dark:border-slate-700 p-5 hover:border-lime-500 hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between">
-                          <div className="w-11 h-11 rounded-2xl bg-lime-100 dark:bg-lime-900/20 flex items-center justify-center">
-                            <item.icon className="h-5 w-5 text-lime-600 dark:text-lime-400" />
-                          </div>
-                          <RadioGroupItem value={item.value} id={item.value} />
-                        </div>
-                        <div className="font-extrabold text-slate-900 dark:text-white">
-                          {item.title}
-                        </div>
-                        <div className="text-sm text-slate-600 dark:text-slate-400">
-                          {item.description}
-                        </div>
+                      <div
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${
+                          serviceType === item.value
+                            ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
+                            : "border-slate-200 dark:border-slate-700 hover:border-lime-300"
+                        }`}
+                      >
+                        <item.icon className={`h-4 w-4 ${serviceType === item.value ? "text-lime-600" : "text-slate-400"}`} />
+                        <span className={`text-sm font-bold ${serviceType === item.value ? "text-lime-700 dark:text-lime-400" : "text-slate-600 dark:text-slate-400"}`}>
+                          {item.label}
+                        </span>
                       </div>
+                      <Checkbox
+                        id={item.value}
+                        checked={serviceType === item.value}
+                        onCheckedChange={(checked) => {
+                          if (checked) setValue("serviceType", item.value as any);
+                        }}
+                        className="sr-only"
+                      />
                     </Label>
                   ))}
-                </RadioGroup>
+                </div>
               </CardContent>
             </Card>
 
