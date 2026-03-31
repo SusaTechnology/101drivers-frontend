@@ -1,5 +1,5 @@
 // app/pages/dealer/create-delivery.tsx
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -310,7 +310,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   
   const [isLoadingDraft, setIsLoadingDraft] = useState(!!draftId);
-  
+
+  // Ref to prevent quote reset during session restoration
+  const isRestoringFromSession = useRef(false);
+
   // Release dialog state
   const [showReleaseDialog, setShowReleaseDialog] = useState(false);
   const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
@@ -336,12 +339,14 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState<SavedAddress | null>(null);
   const [pickupLabel, setPickupLabel] = useState('');
+  const [pendingSavedAddressId, setPendingSavedAddressId] = useState<string | null>(null);
 
   // Saved vehicles state
   const [useSavedVehicle, setUseSavedVehicle] = useState(false);
   const [savedVehicles, setSavedVehicles] = useState<SavedVehicle[]>([]);
   const [selectedSavedVehicle, setSelectedSavedVehicle] = useState<SavedVehicle | null>(null);
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
+  const [pendingSavedVehicleId, setPendingSavedVehicleId] = useState<string | null>(null);
 
   // Mutation for creating delivery
   const createDelivery = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`, {
@@ -447,7 +452,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       if (stored) {
         try {
           const data = JSON.parse(stored);
-          
+
+          // Set flag to prevent reset effect from clearing restored data
+          isRestoringFromSession.current = true;
+
           // Restore form values
           setValue('serviceType', data.serviceType || 'HOME_DELIVERY');
           setValue('pickupAddress', data.pickupAddress || '');
@@ -537,28 +545,45 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           if (data.useSavedAddresses !== undefined) {
             setUseSavedAddresses(data.useSavedAddresses);
           }
-          if (data.selectedSavedAddressId && savedAddresses.length > 0) {
-            const addr = savedAddresses.find(a => a.id === data.selectedSavedAddressId);
-            if (addr) setSelectedSavedAddress(addr);
+          if (data.selectedSavedAddressId) {
+            // Store ID for later restoration when savedAddresses query completes
+            setPendingSavedAddressId(data.selectedSavedAddressId);
+            // Try immediate restoration if addresses are already loaded
+            if (savedAddresses.length > 0) {
+              const addr = savedAddresses.find(a => a.id === data.selectedSavedAddressId);
+              if (addr) setSelectedSavedAddress(addr);
+            }
           }
           if (data.useSavedVehicle !== undefined) {
             setUseSavedVehicle(data.useSavedVehicle);
           }
-          if (data.selectedSavedVehicleId && savedVehicles.length > 0) {
-            const vehicle = savedVehicles.find(v => v.id === data.selectedSavedVehicleId);
-            if (vehicle) setSelectedSavedVehicle(vehicle);
+          if (data.selectedSavedVehicleId) {
+            // Store ID for later restoration when savedVehicles query completes
+            setPendingSavedVehicleId(data.selectedSavedVehicleId);
+            // Try immediate restoration if vehicles are already loaded
+            if (savedVehicles.length > 0) {
+              const vehicle = savedVehicles.find(v => v.id === data.selectedSavedVehicleId);
+              if (vehicle) setSelectedSavedVehicle(vehicle);
+            }
           }
           
           // Clear session storage after restoring
           sessionStorage.removeItem("reviewDeliveryData");
           setIsLoadingDraft(false);
-          
+
+          // Reset the flag after restoration is complete
+          // Use setTimeout to ensure it happens after the reset effect would have run
+          setTimeout(() => {
+            isRestoringFromSession.current = false;
+          }, 0);
+
           toast.success("Data restored", {
             description: "Your delivery details have been restored.",
           });
           return; // Don't load draft if session data exists
         } catch (e) {
           console.error('Failed to restore from session:', e);
+          isRestoringFromSession.current = false;
         }
       }
       
@@ -876,7 +901,18 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   useEffect(() => {
     if (savedAddressesQuery.data) {
       setSavedAddresses(savedAddressesQuery.data);
-      // Auto-select default address if exists
+
+      // First check if we have a pending saved address to restore
+      if (pendingSavedAddressId) {
+        const addr = savedAddressesQuery.data.find(a => a.id === pendingSavedAddressId);
+        if (addr) {
+          setSelectedSavedAddress(addr);
+          setPendingSavedAddressId(null); // Clear pending after restoration
+          return; // Don't auto-select default if we're restoring
+        }
+      }
+
+      // Auto-select default address if exists and no address selected
       const defaultAddress = savedAddressesQuery.data.find(addr => addr.isDefault);
       if (defaultAddress && !selectedSavedAddress) {
         setSelectedSavedAddress(defaultAddress);
@@ -887,7 +923,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         setUseSavedAddresses(true);
       }
     }
-  }, [savedAddressesQuery.data]);
+  }, [savedAddressesQuery.data, pendingSavedAddressId]);
 
   // Fetch saved vehicles on page load - using useQuery directly to avoid pagination params
   const savedVehiclesQuery = useQuery<SavedVehicle[]>({
@@ -909,6 +945,17 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   useEffect(() => {
     if (savedVehiclesQuery.data) {
       setSavedVehicles(savedVehiclesQuery.data);
+
+      // First check if we have a pending saved vehicle to restore
+      if (pendingSavedVehicleId) {
+        const vehicle = savedVehiclesQuery.data.find(v => v.id === pendingSavedVehicleId);
+        if (vehicle) {
+          setSelectedSavedVehicle(vehicle);
+          setPendingSavedVehicleId(null); // Clear pending after restoration
+          return; // Don't auto-select if we're restoring
+        }
+      }
+
       // Auto-select first vehicle if exists and no vehicle selected
       if (savedVehiclesQuery.data.length > 0 && !selectedSavedVehicle) {
         const firstVehicle = savedVehiclesQuery.data[0];
@@ -920,7 +967,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         setUseSavedVehicle(true);
       }
     }
-  }, [savedVehiclesQuery.data]);
+  }, [savedVehiclesQuery.data, pendingSavedVehicleId]);
 
   // Watch form values for dynamic behavior
   const serviceType = watch("serviceType");
@@ -975,6 +1022,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Reset quote and schedule when location changes
   useEffect(() => {
+    // Don't reset if we're restoring from session
+    if (isRestoringFromSession.current) {
+      return;
+    }
     // Only reset if we have a previous quote (user has already calculated once)
     if (hasCalculated && quoteId) {
       console.log('Location changed, resetting quote and schedule...');
@@ -1041,6 +1092,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Auto-calculate quote when both addresses are set
   useEffect(() => {
+    // Don't auto-calculate if we're restoring from session (quote already exists)
+    if (isRestoringFromSession.current) {
+      return;
+    }
     if (pickupCoords && dropoffCoords && !hasCalculated && pickupAddress && dropoffAddress) {
       getQuotePreview.mutate({
         pickupAddress,
@@ -1264,38 +1319,51 @@ const handleQuotePreview = () => {
   }, []);
 
   // Handle saved address selection
-  const handleSavedAddressSelect = (addressId: string) => {
+  const handleSavedAddressSelect = async (addressId: string) => {
     const address = savedAddresses.find(a => a.id === addressId);
     if (address) {
       setSelectedSavedAddress(address);
       setValue("pickupAddress", address.address);
       setPickupCoords({ lat: address.lat, lng: address.lng });
-      
+
       // Check if placeId is a valid Google Place ID
-      // Valid Google Place IDs are typically 20+ characters alphanumeric
-      // Demo/fake IDs like "demo-business-main-lot" should be geocoded
-      const isValidGooglePlaceId = address.placeId && 
-        address.placeId.length >= 20 && 
-        /^[A-Za-z0-9_-]+$/.test(address.placeId);
-      
+      // Valid Google Place IDs typically start with "ChIJ" and are 20+ characters
+      const isValidGooglePlaceId = address.placeId &&
+        (address.placeId.startsWith('ChIJ') ||
+         (address.placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(address.placeId)));
+
       if (isValidGooglePlaceId) {
         setPickupPlaceId(address.placeId);
       } else {
         // Geocode the address to get a real placeId
         if (isLoaded && address.address) {
-          const geocoder = new google.maps.Geocoder();
-          geocoder.geocode({ address: address.address }, (results, status) => {
-            if (status === "OK" && results && results[0]) {
-              setPickupPlaceId(results[0].place_id || null);
+          try {
+            const geocoder = new google.maps.Geocoder();
+            const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+              geocoder.geocode({ address: address.address }, (results, status) => {
+                if (status === "OK" && results) {
+                  resolve(results);
+                } else {
+                  reject(new Error(`Geocoding failed: ${status}`));
+                }
+              });
+            });
+            if (results[0]?.place_id) {
+              console.log('Geocoded placeId for saved address:', results[0].place_id);
+              setPickupPlaceId(results[0].place_id);
             } else {
+              console.warn('No place_id found for address:', address.address);
               setPickupPlaceId(null);
             }
-          });
+          } catch (error) {
+            console.error('Geocoding error:', error);
+            setPickupPlaceId(null);
+          }
         } else {
           setPickupPlaceId(null);
         }
       }
-      
+
       if (address.state) {
         setPickupState(address.state);
       }
