@@ -145,7 +145,7 @@ export default function DealerSupportRequest() {
 
   const handleCancel = () => {
     if (deliveryId) {
-      navigate({ to: '/dealer-delivery-details', state: { id: deliveryId } })
+      navigate({ to: '/dealer-delivery-details', search: { id: deliveryId } })
     } else {
       navigate({ to: '/dealer-dashboard' })
     }

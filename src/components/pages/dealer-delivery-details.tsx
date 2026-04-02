@@ -1,6 +1,6 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react'
-import { Link, useParams, useNavigate, useLocation } from '@tanstack/react-router'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Link, useParams, useNavigate } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useJsApiLoader } from '@react-google-maps/api'
 import RouteMap from '@/components/map/RouteMap'
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import {
   ArrowLeft,
   Plus,
@@ -96,9 +97,12 @@ interface TipPayload {
   status: 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED'
 }
 
-export default function DealerDeliveryDetails() {
-  const { state } = useLocation()
-  const id = state?.id
+interface DealerDeliveryDetailsProps {
+  deliveryId?: string
+}
+
+export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDetailsProps) {
+  const id = deliveryId
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('details')
@@ -118,9 +122,9 @@ export default function DealerDeliveryDetails() {
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry', 'places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
   // Fetch delivery details

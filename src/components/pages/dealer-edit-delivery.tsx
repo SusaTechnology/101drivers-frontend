@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from "@/lib/google-maps-config";
 import {
   Card,
   CardContent,
@@ -170,9 +171,9 @@ export default function DealerEditDelivery() {
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry', 'places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   // Fetch existing delivery data
@@ -193,7 +194,7 @@ export default function DealerEditDelivery() {
       toast.success("Delivery updated successfully", {
         description: "Your changes have been saved.",
       });
-      navigate({ to: "/dealer-delivery-details", state: { id: deliveryId } });
+      navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } });
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to update delivery";
@@ -437,7 +438,7 @@ export default function DealerEditDelivery() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate({ to: "/dealer-delivery-details", state: { id: deliveryId } })}
+            onClick={() => navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } })}
             className="inline-flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -550,7 +551,7 @@ export default function DealerEditDelivery() {
             <p className="mt-2 text-slate-600 dark:text-slate-400">
               This delivery is {deliveryData.status?.toLowerCase()} and cannot be edited.
             </p>
-            <Button onClick={() => navigate({ to: "/dealer-delivery-details", state: { id: deliveryId } })} className="mt-6 bg-lime-500 text-slate-950">
+            <Button onClick={() => navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } })} className="mt-6 bg-lime-500 text-slate-950">
               Back to Details
             </Button>
           </Card>
@@ -1044,7 +1045,7 @@ export default function DealerEditDelivery() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => navigate({ to: "/dealer-delivery-details", state: { id: deliveryId } })}
+                      onClick={() => navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } })}
                       className="w-full font-extrabold"
                     >
                       Cancel

@@ -69,6 +69,7 @@ import { getUser, useDataQuery, authFetch, clearAuth, stopSessionKeepAlive } fro
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader } from '@react-google-maps/api'
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 
 // Helper functions
 const formatDate = (dateString: string) => {
@@ -151,9 +152,9 @@ export default function DealerDashboard() {
   const queryClient = useQueryClient()
 
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry', 'places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
   useEffect(() => {
@@ -374,7 +375,7 @@ export default function DealerDashboard() {
                     <div className="text-sm text-slate-500 mt-1">Click a delivery to track live</div>
                     <div className="mt-4 space-y-2">
                       {activeDeliveriesForMap.slice(0, 3).map(d => (
-                        <Link key={d.id} to="/dealer-delivery-details" state={{ id: d.id }} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-800 rounded-lg text-sm">
+                        <Link key={d.id} to="/dealer-delivery-details" search={{ id: d.id }} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-800 rounded-lg text-sm">
                           <div className="w-2 h-2 rounded-full bg-lime-500 animate-pulse" />
                           <span className="font-bold">{d.vehicle.make} {d.vehicle.model}</span>
                           <span className="text-slate-400">• {d.pickup} → {d.dropoff}</span>
@@ -521,13 +522,13 @@ export default function DealerDashboard() {
                     )}
                     <div className="mt-4 flex gap-2">
                       {delivery.status === 'ACTIVE' ? (
-                        <Link to="/dealer-delivery-details" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"><Navigation className="h-5 w-5" />Track Live<ChevronRight className="h-5 w-5" /></Link>
+                        <Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"><Navigation className="h-5 w-5" />Track Live<ChevronRight className="h-5 w-5" /></Link>
                       ) : delivery.status === 'BOOKED' ? (
-                        <><Link to="/dealer-delivery-details" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition"><Eye className="h-5 w-5" />View</Link>{delivery.driver && <a href={`tel:${delivery.driver.phone}`} className="w-12 h-12 rounded-2xl bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center text-lime-600 hover:bg-lime-200 transition"><Phone className="h-5 w-5" /></a>}</>
+                        <><Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition"><Eye className="h-5 w-5" />View</Link>{delivery.driver && <a href={`tel:${delivery.driver.phone}`} className="w-12 h-12 rounded-2xl bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center text-lime-600 hover:bg-lime-200 transition"><Phone className="h-5 w-5" /></a>}</>
                       ) : delivery.status === 'LISTED' || delivery.status === 'QUOTED' ? (
                         <><Link to="/dealer-create-delivery" search={{ draftId: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition"><Edit3 className="h-5 w-5" />Edit</Link><button onClick={() => { setSelectedDeliveryId(delivery.id); setCancelDialogOpen(true) }} className="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 flex items-center justify-center text-red-600 hover:bg-red-100 transition"><Ban className="h-5 w-5" /></button></>
                       ) : (
-                        <Link to="/dealer-delivery-details" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition"><Eye className="h-5 w-5" />View Details</Link>
+                        <Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition"><Eye className="h-5 w-5" />View Details</Link>
                       )}
                     </div>
                   </CardContent>
