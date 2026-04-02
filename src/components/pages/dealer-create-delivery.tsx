@@ -922,7 +922,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   };
 
   // Handler for saving as draft
-  const handleSaveAsDraft = () => {
+  const handleSaveAsDraft = async () => {
     // Minimum requirement: quote must be calculated
     if (!quoteId) {
       toast.error("Quote required", {
@@ -932,6 +932,27 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     }
 
     const data = watch();
+
+    // Ensure we have valid placeIds - use REVERSE geocoding with coordinates
+    let finalPickupPlaceId = pickupPlaceId;
+    let finalDropoffPlaceId = dropoffPlaceId;
+
+    if (!isValidPlaceId(pickupPlaceId) && pickupCoords) {
+      console.log('Draft: Pickup placeId invalid, reverse geocoding...');
+      finalPickupPlaceId = await reverseGeocodeForPlaceId(pickupCoords.lat, pickupCoords.lng);
+      if (finalPickupPlaceId) {
+        setPickupPlaceId(finalPickupPlaceId);
+      }
+    }
+
+    if (!isValidPlaceId(dropoffPlaceId) && dropoffCoords) {
+      console.log('Draft: Dropoff placeId invalid, reverse geocoding...');
+      finalDropoffPlaceId = await reverseGeocodeForPlaceId(dropoffCoords.lat, dropoffCoords.lng);
+      if (finalDropoffPlaceId) {
+        setDropoffPlaceId(finalDropoffPlaceId);
+      }
+    }
+
     const payload: any = {
       customerId: customer?.profileId,
       quoteId,
@@ -958,13 +979,15 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       pickupLng: pickupCoords?.lng,
       dropoffLat: dropoffCoords?.lat,
       dropoffLng: dropoffCoords?.lng,
-      pickupPlaceId: pickupPlaceId,
-      dropoffPlaceId: dropoffPlaceId,
+      pickupPlaceId: finalPickupPlaceId,
+      dropoffPlaceId: finalDropoffPlaceId,
       pickupState: pickupState,
       dropoffState: dropoffState,
       pickupAddress: data.pickupAddress,
       dropoffAddress: data.dropoffAddress,
     };
+
+    console.log('Saving draft with payload:', JSON.stringify(payload, null, 2));
 
     // If editing existing draft, update it; otherwise create new
     if (draftId) {
