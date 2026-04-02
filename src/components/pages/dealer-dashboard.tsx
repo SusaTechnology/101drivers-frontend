@@ -399,10 +399,54 @@ export default function DealerDashboard() {
       <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[980px] mx-auto">
           <div className="grid grid-cols-4 gap-2">
-            <div className="text-center p-3 rounded-2xl bg-lime-50 dark:bg-lime-950/30 border border-lime-200 dark:border-lime-800"><div className="text-2xl font-black text-lime-600 dark:text-lime-400">{stats.active}</div><div className="text-[10px] font-bold uppercase tracking-wider text-lime-700 dark:text-lime-500">Active</div></div>
-            <div className="text-center p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800"><div className="text-2xl font-black text-blue-600 dark:text-blue-400">{stats.booked}</div><div className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-500">Booked</div></div>
-            <div className="text-center p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"><div className="text-2xl font-black text-slate-600 dark:text-slate-400">{stats.listed}</div><div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Listed</div></div>
-            <div className="text-center p-3 rounded-2xl bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800"><div className="text-lg font-black text-green-600 dark:text-green-400">{formatCurrency(stats.todayRevenue)}</div><div className="text-[10px] font-bold uppercase tracking-wider text-green-700 dark:text-green-500">Today</div></div>
+            <button 
+              onClick={() => setActiveFilter('ACTIVE')} 
+              className={cn(
+                "text-center p-3 rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer", 
+                activeFilter === 'ACTIVE' 
+                  ? "bg-lime-100 dark:bg-lime-950/50 border-lime-400 dark:border-lime-600 ring-2 ring-lime-500" 
+                  : "bg-lime-50 dark:bg-lime-950/30 border-lime-200 dark:border-lime-800"
+              )}
+            >
+              <div className="text-2xl font-black text-lime-600 dark:text-lime-400">{stats.active}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-lime-700 dark:text-lime-500">Active</div>
+            </button>
+            <button 
+              onClick={() => setActiveFilter('BOOKED')} 
+              className={cn(
+                "text-center p-3 rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer", 
+                activeFilter === 'BOOKED' 
+                  ? "bg-blue-100 dark:bg-blue-950/50 border-blue-400 dark:border-blue-600 ring-2 ring-blue-500" 
+                  : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
+              )}
+            >
+              <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{stats.booked}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-500">Booked</div>
+            </button>
+            <button 
+              onClick={() => setActiveFilter('LISTED')} 
+              className={cn(
+                "text-center p-3 rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer", 
+                activeFilter === 'LISTED' 
+                  ? "bg-slate-200 dark:bg-slate-700 border-slate-400 dark:border-slate-500 ring-2 ring-slate-500" 
+                  : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+              )}
+            >
+              <div className="text-2xl font-black text-slate-600 dark:text-slate-400">{stats.listed}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Listed</div>
+            </button>
+            <button 
+              onClick={() => setActiveFilter('HISTORY')} 
+              className={cn(
+                "text-center p-3 rounded-2xl border transition-all hover:scale-105 hover:shadow-md cursor-pointer", 
+                activeFilter === 'HISTORY' 
+                  ? "bg-green-100 dark:bg-green-950/50 border-green-400 dark:border-green-600 ring-2 ring-green-500" 
+                  : "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800"
+              )}
+            >
+              <div className="text-lg font-black text-green-600 dark:text-green-400">{formatCurrency(stats.todayRevenue)}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-green-700 dark:text-green-500">Today</div>
+            </button>
           </div>
         </div>
       </div>
