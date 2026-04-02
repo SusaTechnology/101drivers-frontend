@@ -773,7 +773,7 @@ export default function EditDeliveryPage() {
     const finalColor = data.color === "Other" ? data.colorOther : data.color;
 
     return {
-      quoteId: quoteId,
+      quote: { id: quoteId },
       serviceType: data.serviceType,
       pickupAddress: data.pickupAddress,
       pickupLat: pickupCoords?.lat,
