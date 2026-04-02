@@ -656,6 +656,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       }
 
       try {
+        // Set flag to prevent reset effect from clearing draft data
+        isRestoringFromSession.current = true;
+
         const draft = await authFetch(
           `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`,
           {
@@ -670,12 +673,16 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         setValue('pickupAddress', draft.pickupAddress || '');
         setValue('dropoffAddress', draft.dropoffAddress || '');
         
-        // Set coordinates
+        // Set coordinates and initialize refs to prevent false change detection
         if (draft.pickupLat && draft.pickupLng) {
-          setPickupCoords({ lat: draft.pickupLat, lng: draft.pickupLng });
+          const coords = { lat: draft.pickupLat, lng: draft.pickupLng };
+          setPickupCoords(coords);
+          prevPickupCoordsRef.current = coords;
         }
         if (draft.dropoffLat && draft.dropoffLng) {
-          setDropoffCoords({ lat: draft.dropoffLat, lng: draft.dropoffLng });
+          const coords = { lat: draft.dropoffLat, lng: draft.dropoffLng };
+          setDropoffCoords(coords);
+          prevDropoffCoordsRef.current = coords;
         }
         setPickupPlaceId(draft.pickupPlaceId || null);
         setDropoffPlaceId(draft.dropoffPlaceId || null);
@@ -741,11 +748,17 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         }
 
         setIsLoadingDraft(false);
+
+        // Reset the flag after draft loading is complete
+        setTimeout(() => {
+          isRestoringFromSession.current = false;
+        }, 0);
       } catch (error) {
         console.error('Failed to load draft:', error);
         toast.error("Failed to load draft", {
           description: "Redirecting to drafts page...",
         });
+        isRestoringFromSession.current = false;
         navigate({ to: "/dealer-drafts" });
       }
     };
