@@ -165,13 +165,13 @@ export default function ReviewDeliveryPage() {
 
   // Helper to validate placeId
   const isValidPlaceId = (placeId: string | null | undefined) =>
-    placeId && (placeId.startsWith('ChIJ') || (placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(placeId)));
+    placeId && (placeId.startsWith('ChIJ') || placeId.startsWith('Eh'));
 
-  // Helper to geocode address and get placeId
-  const geocodeAddressForPlaceId = async (address: string): Promise<string | null> => {
+  // Helper to reverse geocode coordinates to get placeId
+  const reverseGeocodeForPlaceId = async (lat: number, lng: number): Promise<string | null> => {
     // Wait for Google Maps to be ready
     let attempts = 0;
-    while (!isLoaded && !window.google?.maps && attempts < 50) {
+    while (!window.google?.maps && attempts < 50) {
       await new Promise(r => setTimeout(r, 100));
       attempts++;
     }
@@ -183,12 +183,12 @@ export default function ReviewDeliveryPage() {
 
     return new Promise((resolve) => {
       const geocoder = new window.google.maps.Geocoder();
-      geocoder.geocode({ address }, (results, status) => {
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
         if (status === "OK" && results && results[0]?.place_id) {
-          console.log('Geocoded placeId for', address, ':', results[0].place_id);
+          console.log('Reverse geocoded placeId for', lat, lng, ':', results[0].place_id);
           resolve(results[0].place_id);
         } else {
-          console.warn('Failed to geocode:', address, status);
+          console.warn('Failed to reverse geocode:', lat, lng, status);
           resolve(null);
         }
       });
@@ -223,22 +223,23 @@ export default function ReviewDeliveryPage() {
       const finalModel = reviewData.model === "Other" ? reviewData.modelOther : reviewData.model;
       const finalColor = reviewData.color === "Other" ? reviewData.colorOther : reviewData.color;
 
-      // Geocode placeIds if they're invalid
+      // Geocode placeIds if they're invalid - use REVERSE geocoding with coordinates
       let finalPickupPlaceId = reviewData.pickupPlaceId;
       let finalDropoffPlaceId = reviewData.dropoffPlaceId;
 
       console.log('Review page - pickupPlaceId:', reviewData.pickupPlaceId, 'isValid:', isValidPlaceId(reviewData.pickupPlaceId));
+      console.log('Review page - pickupLat:', reviewData.pickupLat, 'pickupLng:', reviewData.pickupLng);
 
-      if (!isValidPlaceId(reviewData.pickupPlaceId) && reviewData.pickupAddress) {
-        console.log('Pickup placeId invalid, geocoding...');
-        finalPickupPlaceId = await geocodeAddressForPlaceId(reviewData.pickupAddress);
-        console.log('Geocoded pickup placeId:', finalPickupPlaceId);
+      if (!isValidPlaceId(reviewData.pickupPlaceId) && reviewData.pickupLat && reviewData.pickupLng) {
+        console.log('Pickup placeId invalid, reverse geocoding with coordinates...');
+        finalPickupPlaceId = await reverseGeocodeForPlaceId(reviewData.pickupLat, reviewData.pickupLng);
+        console.log('Reverse geocoded pickup placeId:', finalPickupPlaceId);
       }
 
-      if (!isValidPlaceId(reviewData.dropoffPlaceId) && reviewData.dropoffAddress) {
-        console.log('Dropoff placeId invalid, geocoding...');
-        finalDropoffPlaceId = await geocodeAddressForPlaceId(reviewData.dropoffAddress);
-        console.log('Geocoded dropoff placeId:', finalDropoffPlaceId);
+      if (!isValidPlaceId(reviewData.dropoffPlaceId) && reviewData.dropoffLat && reviewData.dropoffLng) {
+        console.log('Dropoff placeId invalid, reverse geocoding with coordinates...');
+        finalDropoffPlaceId = await reverseGeocodeForPlaceId(reviewData.dropoffLat, reviewData.dropoffLng);
+        console.log('Reverse geocoded dropoff placeId:', finalDropoffPlaceId);
       }
 
       const payload = {

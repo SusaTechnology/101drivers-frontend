@@ -748,15 +748,16 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Helper to validate placeId
   const isValidPlaceId = (placeId: string | null | undefined) => {
-    const valid = placeId && (placeId.startsWith('ChIJ') || (placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(placeId)));
+    // Valid Google Place IDs start with "ChIJ" or "Eh" (base64 encoded)
+    const valid = placeId && (placeId.startsWith('ChIJ') || placeId.startsWith('Eh'));
     console.log('isValidPlaceId check:', placeId, '-> ', valid);
     return valid;
   };
 
-  // Helper to geocode address and get placeId - waits for Google Maps to load
-  const geocodeAddressForPlaceId = async (address: string): Promise<string | null> => {
-    console.log('=== geocodeAddressForPlaceId START ===');
-    console.log('Address:', address);
+  // Helper to reverse geocode coordinates to get placeId
+  const reverseGeocodeForPlaceId = async (lat: number, lng: number): Promise<string | null> => {
+    console.log('=== reverseGeocodeForPlaceId START ===');
+    console.log('Coordinates:', lat, lng);
     console.log('isLoaded:', isLoaded);
     console.log('window.google?.maps:', !!window.google?.maps);
 
@@ -773,12 +774,12 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       return null;
     }
 
-    console.log('Google Maps ready, calling geocoder...');
+    console.log('Google Maps ready, calling reverse geocoder...');
 
     return new Promise((resolve) => {
       const geocoder = new window.google.maps.Geocoder();
-      geocoder.geocode({ address }, (results, status) => {
-        console.log('=== Geocoder callback ===');
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        console.log('=== Reverse Geocoder callback ===');
         console.log('Status:', status);
         console.log('Results count:', results?.length);
         if (results && results[0]) {
@@ -788,7 +789,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           console.log('SUCCESS - Got placeId:', results[0].place_id);
           resolve(results[0].place_id);
         } else {
-          console.error('FAILED to geocode:', address, 'status:', status);
+          console.error('FAILED to reverse geocode:', status);
           resolve(null);
         }
       });
@@ -811,33 +812,35 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     console.log('Current state:');
     console.log('  pickupPlaceId:', pickupPlaceId);
     console.log('  pickupAddress:', data.pickupAddress);
+    console.log('  pickupCoords:', pickupCoords);
     console.log('  dropoffPlaceId:', dropoffPlaceId);
     console.log('  dropoffAddress:', data.dropoffAddress);
+    console.log('  dropoffCoords:', dropoffCoords);
 
-    // Ensure we have valid placeIds - geocode if needed
+    // Ensure we have valid placeIds - use REVERSE geocoding with coordinates
     let finalPickupPlaceId = pickupPlaceId;
     let finalDropoffPlaceId = dropoffPlaceId;
 
-    if (!isValidPlaceId(pickupPlaceId) && data.pickupAddress) {
-      console.log('>>> Pickup placeId is INVALID, geocoding now...');
-      finalPickupPlaceId = await geocodeAddressForPlaceId(data.pickupAddress);
-      console.log('>>> Geocoded pickup placeId result:', finalPickupPlaceId);
+    if (!isValidPlaceId(pickupPlaceId) && pickupCoords) {
+      console.log('>>> Pickup placeId is INVALID, reverse geocoding with coordinates...');
+      finalPickupPlaceId = await reverseGeocodeForPlaceId(pickupCoords.lat, pickupCoords.lng);
+      console.log('>>> Reverse geocoded pickup placeId result:', finalPickupPlaceId);
       if (finalPickupPlaceId) {
         setPickupPlaceId(finalPickupPlaceId);
       }
     } else {
-      console.log('>>> Pickup placeId is VALID or no address');
+      console.log('>>> Pickup placeId is VALID or no coordinates');
     }
 
-    if (!isValidPlaceId(dropoffPlaceId) && data.dropoffAddress) {
-      console.log('>>> Dropoff placeId is INVALID, geocoding now...');
-      finalDropoffPlaceId = await geocodeAddressForPlaceId(data.dropoffAddress);
-      console.log('>>> Geocoded dropoff placeId result:', finalDropoffPlaceId);
+    if (!isValidPlaceId(dropoffPlaceId) && dropoffCoords) {
+      console.log('>>> Dropoff placeId is INVALID, reverse geocoding with coordinates...');
+      finalDropoffPlaceId = await reverseGeocodeForPlaceId(dropoffCoords.lat, dropoffCoords.lng);
+      console.log('>>> Reverse geocoded dropoff placeId result:', finalDropoffPlaceId);
       if (finalDropoffPlaceId) {
         setDropoffPlaceId(finalDropoffPlaceId);
       }
     } else {
-      console.log('>>> Dropoff placeId is VALID or no address');
+      console.log('>>> Dropoff placeId is VALID or no coordinates');
     }
 
     console.log('=== Final placeIds ===');
@@ -1087,8 +1090,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
     const address = selectedSavedAddress;
     const isValid = address.placeId &&
-      (address.placeId.startsWith('ChIJ') ||
-       (address.placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(address.placeId)));
+      (address.placeId.startsWith('ChIJ') || address.placeId.startsWith('Eh'));
 
     console.log('Saved address placeId:', address.placeId);
     console.log('Is valid placeId:', isValid);
@@ -1096,19 +1098,23 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     if (isValid) {
       console.log('Using existing valid placeId:', address.placeId);
       setPickupPlaceId(address.placeId);
-    } else if (address.address) {
-      console.log('Geocoding saved address:', address.address);
+    } else if (address.lat && address.lng) {
+      // Use REVERSE geocoding with coordinates (not address text which might be a label)
+      console.log('Using reverse geocoding with coordinates:', address.lat, address.lng);
       const geocoder = new google.maps.Geocoder();
-      geocoder.geocode({ address: address.address }, (results, status) => {
-        console.log('Geocode result for saved address - status:', status);
+      geocoder.geocode({ location: { lat: address.lat, lng: address.lng } }, (results, status) => {
+        console.log('Reverse geocode result - status:', status);
         if (status === "OK" && results && results[0]?.place_id) {
-          console.log('SUCCESS - Geocoded placeId for saved address:', results[0].place_id);
+          console.log('SUCCESS - Reverse geocoded placeId:', results[0].place_id);
           setPickupPlaceId(results[0].place_id);
         } else {
-          console.warn('FAILED to geocode saved address:', status);
+          console.warn('FAILED to reverse geocode:', status);
           setPickupPlaceId(null);
         }
       });
+    } else {
+      console.log('No coordinates available, cannot geocode');
+      setPickupPlaceId(null);
     }
   }, [selectedSavedAddress, isLoaded]);
 
@@ -2066,19 +2072,46 @@ const handleQuotePreview = () => {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => {
+                            onClick={async () => {
                               if (!pickupLabel.trim()) {
                                 toast.error("Label required", {
                                   description: "Please enter a label for this address.",
                                 });
                                 return;
                               }
+
+                              // Validate and geocode placeId if needed BEFORE saving
+                              let finalPlaceId = pickupPlaceId;
+                              const isValidPlaceId = pickupPlaceId &&
+                                (pickupPlaceId.startsWith('ChIJ') || pickupPlaceId.startsWith('Eh'));
+
+                              if (!isValidPlaceId && pickupCoords && isLoaded) {
+                                console.log('PlaceId invalid at save time, doing reverse geocoding...');
+                                // Use reverse geocoding with coordinates (more reliable than address text)
+                                try {
+                                  const geocoder = new google.maps.Geocoder();
+                                  const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+                                    geocoder.geocode({ location: pickupCoords }, (results, status) => {
+                                      if (status === "OK" && results) resolve(results);
+                                      else reject(new Error(status));
+                                    });
+                                  });
+                                  if (results[0]?.place_id) {
+                                    finalPlaceId = results[0].place_id;
+                                    console.log('Reverse geocoded placeId at save time:', finalPlaceId);
+                                    setPickupPlaceId(finalPlaceId);
+                                  }
+                                } catch (e) {
+                                  console.warn('Reverse geocoding failed at save time:', e);
+                                }
+                              }
+
                               const addressPayload = {
                                 label: pickupLabel.trim(),
                                 address: pickupAddress,
                                 lat: pickupCoords!.lat,
                                 lng: pickupCoords!.lng,
-                                placeId: pickupPlaceId || undefined,
+                                placeId: finalPlaceId || undefined,
                                 city: pickupCity || '',
                                 state: pickupState || '',
                                 country: 'USA',
@@ -2087,8 +2120,8 @@ const handleQuotePreview = () => {
                                 customer: { id: customer.profileId },
                               };
                               console.log('=== SAVING ADDRESS ===');
-                              console.log('Address payload:', JSON.stringify(addressPayload, null, 2));
-                              console.log('pickupPlaceId at save time:', pickupPlaceId);
+                              console.log('pickupCoords:', pickupCoords);
+                              console.log('finalPlaceId:', finalPlaceId);
                               saveAddressMutation.mutate(addressPayload);
                               setPickupLabel('');
                             }}
