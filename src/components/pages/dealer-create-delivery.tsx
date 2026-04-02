@@ -479,12 +479,16 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           if (data.recipientEmail) setValue('recipientEmail', data.recipientEmail);
           if (data.recipientPhone) setValue('recipientPhone', data.recipientPhone);
           
-          // Restore coordinates
+          // Restore coordinates and initialize refs to prevent false change detection
           if (data.pickupLat && data.pickupLng) {
-            setPickupCoords({ lat: data.pickupLat, lng: data.pickupLng });
+            const coords = { lat: data.pickupLat, lng: data.pickupLng };
+            setPickupCoords(coords);
+            prevPickupCoordsRef.current = coords; // Initialize ref to prevent false change detection
           }
           if (data.dropoffLat && data.dropoffLng) {
-            setDropoffCoords({ lat: data.dropoffLat, lng: data.dropoffLng });
+            const coords = { lat: data.dropoffLat, lng: data.dropoffLng };
+            setDropoffCoords(coords);
+            prevDropoffCoordsRef.current = coords; // Initialize ref to prevent false change detection
           }
 
           // Restore place IDs - validate and geocode if invalid
@@ -1202,6 +1206,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const vinVerification = watch("vinVerification");
   const recipientName = watch("recipientName");
   const recipientPhone = watch("recipientPhone");
+  const recipientEmail = watch("recipientEmail");
 
   // Check if form is valid for submission
   const isFormValidForSubmission = useMemo(() => {
@@ -1227,11 +1232,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     // Recipient is required - must have name, phone, and email
     if (!recipientName || recipientName.trim().length < 1) return false;
     if (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) return false;
-    const recipientEmailVal = watch("recipientEmail");
-    if (!recipientEmailVal || recipientEmailVal.trim().length < 1) return false;
+    if (!recipientEmail || recipientEmail.trim().length < 1) return false;
 
     return true;
-  }, [quoteId, pickupCoords, dropoffCoords, validatedWindows, licensePlate, make, model, color, vinVerification, recipientName, recipientPhone]);
+  }, [quoteId, pickupCoords, dropoffCoords, validatedWindows, licensePlate, make, model, color, vinVerification, recipientName, recipientPhone, recipientEmail]);
   // Removed - recipient is always shown now
 
   // Update dealer authorized state
