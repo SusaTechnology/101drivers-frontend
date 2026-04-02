@@ -313,6 +313,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Ref to prevent quote reset during session restoration
   const isRestoringFromSession = useRef(false);
+  // Ref to track previous coordinates for detecting actual changes
+  const prevPickupCoordsRef = useRef<google.maps.LatLngLiteral | null>(null);
+  const prevDropoffCoordsRef = useRef<google.maps.LatLngLiteral | null>(null);
 
   // Release dialog state
   const [showReleaseDialog, setShowReleaseDialog] = useState(false);
@@ -1240,11 +1243,31 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   useEffect(() => {
     // Don't reset if we're restoring from session
     if (isRestoringFromSession.current) {
+      // Update refs to track current coords
+      prevPickupCoordsRef.current = pickupCoords;
+      prevDropoffCoordsRef.current = dropoffCoords;
       return;
     }
-    // Only reset if we have a previous quote (user has already calculated once)
-    if (hasCalculated && quoteId) {
-      console.log('Location changed, resetting quote and schedule...');
+
+    // Check if coordinates actually changed (not just re-set to same values)
+    const pickupChanged = pickupCoords && (
+      !prevPickupCoordsRef.current ||
+      prevPickupCoordsRef.current.lat !== pickupCoords.lat ||
+      prevPickupCoordsRef.current.lng !== pickupCoords.lng
+    );
+    const dropoffChanged = dropoffCoords && (
+      !prevDropoffCoordsRef.current ||
+      prevDropoffCoordsRef.current.lat !== dropoffCoords.lat ||
+      prevDropoffCoordsRef.current.lng !== dropoffCoords.lng
+    );
+
+    // Update refs to current values
+    prevPickupCoordsRef.current = pickupCoords;
+    prevDropoffCoordsRef.current = dropoffCoords;
+
+    // Only reset if coordinates actually changed and we have a previous quote
+    if ((pickupChanged || dropoffChanged) && hasCalculated && quoteId) {
+      console.log('Location actually changed, resetting quote and schedule...');
       setQuoteId(null);
       setHasCalculated(false);
       setQuoteData({ miles: 0, total: 0, base: 0, distance: 0, insurance: 0, transaction: 0 });
