@@ -244,6 +244,7 @@ export default function ReviewDeliveryPage() {
 
       const payload = {
         quoteId: reviewData.quoteId,
+        customerId: customer?.profileId,
         serviceType: reviewData.serviceType,
         pickupAddress: reviewData.pickupAddress,
         pickupLat: reviewData.pickupLat,
