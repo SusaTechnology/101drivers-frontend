@@ -795,7 +795,6 @@ export default function EditDeliveryPage() {
       vehicleMake: finalMake,
       vehicleModel: finalModel,
       vehicleColor: finalColor,
-      transmission: data.transmission,
       recipientName: data.recipientName,
       recipientEmail: data.recipientEmail,
       recipientPhone: data.recipientPhone,
