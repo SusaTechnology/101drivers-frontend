@@ -40,6 +40,7 @@ import {
   CheckCircle,
   Edit2,
   X,
+  FileText,
 } from "lucide-react";
 import { getUser, authFetch } from "@/lib/tanstack/dataQuery";
 import { useMutation } from "@tanstack/react-query";
@@ -361,6 +362,104 @@ export default function ReviewDeliveryPage() {
       sessionStorage.setItem("reviewDeliveryData", JSON.stringify(reviewData));
     }
     navigate({ to: "/dealer-create-delivery", search: { draftId: reviewData?.draftId } });
+  };
+
+  // Mutation for saving as draft
+  const saveDraftMutation = useMutation({
+    mutationFn: async () => {
+      if (!reviewData) throw new Error('No review data');
+
+      const finalMake = reviewData.make === "Other" ? reviewData.makeOther : reviewData.make;
+      const finalModel = reviewData.model === "Other" ? reviewData.modelOther : reviewData.model;
+      const finalColor = reviewData.color === "Other" ? reviewData.colorOther : reviewData.color;
+
+      // Geocode placeIds if they're invalid - use REVERSE geocoding with coordinates
+      let finalPickupPlaceId = reviewData.pickupPlaceId;
+      let finalDropoffPlaceId = reviewData.dropoffPlaceId;
+
+      if (!isValidPlaceId(reviewData.pickupPlaceId) && reviewData.pickupLat && reviewData.pickupLng) {
+        finalPickupPlaceId = await reverseGeocodeForPlaceId(reviewData.pickupLat, reviewData.pickupLng);
+      }
+
+      if (!isValidPlaceId(reviewData.dropoffPlaceId) && reviewData.dropoffLat && reviewData.dropoffLng) {
+        finalDropoffPlaceId = await reverseGeocodeForPlaceId(reviewData.dropoffLat, reviewData.dropoffLng);
+      }
+
+      const payload = {
+        customerId: customer?.profileId,
+        quoteId: reviewData.quoteId,
+        serviceType: reviewData.serviceType,
+        pickupAddress: reviewData.pickupAddress,
+        pickupLat: reviewData.pickupLat,
+        pickupLng: reviewData.pickupLng,
+        pickupPlaceId: finalPickupPlaceId,
+        pickupState: reviewData.pickupState,
+        dropoffAddress: reviewData.dropoffAddress,
+        dropoffLat: reviewData.dropoffLat,
+        dropoffLng: reviewData.dropoffLng,
+        dropoffPlaceId: finalDropoffPlaceId,
+        dropoffState: reviewData.dropoffState,
+        pickupWindowStart: reviewData.pickupWindowStart,
+        pickupWindowEnd: reviewData.pickupWindowEnd,
+        dropoffWindowStart: reviewData.dropoffWindowStart,
+        dropoffWindowEnd: reviewData.dropoffWindowEnd,
+        afterHours: false,
+        isUrgent: false,
+        licensePlate: reviewData.licensePlate,
+        vinVerificationCode: reviewData.vinVerification,
+        vehicleMake: finalMake,
+        vehicleModel: finalModel,
+        vehicleColor: finalColor,
+        transmission: reviewData.transmission,
+        recipientName: reviewData.recipientName,
+        recipientEmail: reviewData.recipientEmail,
+        recipientPhone: reviewData.recipientPhone,
+        paymentType: reviewData.paymentType,
+      };
+
+      // If editing existing draft, update it; otherwise create new
+      if (reviewData.draftId) {
+        return authFetch(
+          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${reviewData.draftId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }
+        );
+      } else {
+        return authFetch(
+          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-draft-from-quote`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }
+        );
+      }
+    },
+    onSuccess: () => {
+      // Clear session storage
+      sessionStorage.removeItem("reviewDeliveryData");
+      
+      toast.success("Draft saved successfully", {
+        description: "You can continue editing this draft later from the Drafts page.",
+      });
+      
+      navigate({ to: "/dealer-drafts" });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to save draft";
+      const errorDetails = error?.response?.data?.details || error?.details;
+      toast.error("Failed to save draft", {
+        description: errorDetails || errorMessage,
+      });
+      console.error("Draft save failed:", error);
+    },
+  });
+
+  const handleSaveAsDraft = () => {
+    saveDraftMutation.mutate();
   };
 
   if (!reviewData) {
@@ -839,32 +938,60 @@ export default function ReviewDeliveryPage() {
           {/* Submit Section */}
           <Card className="border-lime-200 dark:border-lime-900/30 shadow-lg bg-lime-50 dark:bg-lime-900/10">
             <CardContent className="p-6">
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col gap-4">
+                {/* Primary actions row */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1 py-4 rounded-2xl font-bold"
+                    onClick={handleGoBack}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Go Back & Edit
+                  </Button>
+                  <Button
+                    className="flex-1 py-4 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold text-lg"
+                    onClick={handleSubmit}
+                    disabled={createAndReleaseDelivery.isPending}
+                  >
+                    {createAndReleaseDelivery.isPending ? (
+                      <>
+                        <span className="animate-spin mr-2">⏳</span>
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        Submit & Release to Market
+                        <ChevronRight className="ml-2 h-5 w-5" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Save as Draft button */}
                 <Button
                   variant="outline"
-                  className="flex-1 py-4 rounded-2xl font-bold"
-                  onClick={handleGoBack}
+                  className="w-full py-3 rounded-2xl font-bold border-slate-300 dark:border-slate-700"
+                  onClick={handleSaveAsDraft}
+                  disabled={saveDraftMutation.isPending}
                 >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Go Back & Edit
-                </Button>
-                <Button
-                  className="flex-1 py-4 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold text-lg"
-                  onClick={handleSubmit}
-                  disabled={createAndReleaseDelivery.isPending}
-                >
-                  {createAndReleaseDelivery.isPending ? (
+                  {saveDraftMutation.isPending ? (
                     <>
                       <span className="animate-spin mr-2">⏳</span>
-                      Submitting...
+                      Saving Draft...
                     </>
                   ) : (
                     <>
-                      Submit & Release to Market
-                      <ChevronRight className="ml-2 h-5 w-5" />
+                      <FileText className="h-4 w-4 mr-2" />
+                      {reviewData.draftId ? 'Update Draft' : 'Save as Draft'}
                     </>
                   )}
                 </Button>
+                <p className="text-xs text-slate-500 text-center">
+                  {reviewData.draftId 
+                    ? 'Save your changes to this draft. You can continue editing later.'
+                    : 'Save your progress and continue later from the Drafts page.'}
+                </p>
               </div>
               <p className="text-xs text-slate-500 text-center mt-4">
                 By submitting, you agree to the terms of service. Your delivery will be listed for drivers to book.
