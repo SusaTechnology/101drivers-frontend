@@ -746,8 +746,30 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     loadData();
   }, [draftId]);
 
+  // Helper to validate placeId
+  const isValidPlaceId = (placeId: string | null | undefined) =>
+    placeId && (placeId.startsWith('ChIJ') || (placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(placeId)));
+
+  // Helper to geocode address and get placeId
+  const geocodeAddressForPlaceId = async (address: string): Promise<string | null> => {
+    if (!isLoaded) return null;
+
+    return new Promise((resolve) => {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ address }, (results, status) => {
+        if (status === "OK" && results && results[0]?.place_id) {
+          console.log('Geocoded placeId for', address, ':', results[0].place_id);
+          resolve(results[0].place_id);
+        } else {
+          console.warn('Failed to geocode:', address, status);
+          resolve(null);
+        }
+      });
+    });
+  };
+
   // Handler for navigating to review page
-  const handleGoToReview = () => {
+  const handleGoToReview = async () => {
     if (!isFormValidForSubmission) {
       toast.error("Incomplete form", {
         description: "Please complete all required fields before reviewing.",
@@ -756,6 +778,25 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     }
 
     const data = watch();
+
+    // Ensure we have valid placeIds - geocode if needed
+    let finalPickupPlaceId = pickupPlaceId;
+    let finalDropoffPlaceId = dropoffPlaceId;
+
+    if (!isValidPlaceId(pickupPlaceId) && data.pickupAddress) {
+      finalPickupPlaceId = await geocodeAddressForPlaceId(data.pickupAddress);
+      if (finalPickupPlaceId) {
+        setPickupPlaceId(finalPickupPlaceId); // Update state for future use
+      }
+    }
+
+    if (!isValidPlaceId(dropoffPlaceId) && data.dropoffAddress) {
+      finalDropoffPlaceId = await geocodeAddressForPlaceId(data.dropoffAddress);
+      if (finalDropoffPlaceId) {
+        setDropoffPlaceId(finalDropoffPlaceId); // Update state for future use
+      }
+    }
+
     const reviewData = {
       // Service & Route
       serviceType: data.serviceType,
@@ -765,8 +806,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       pickupLng: pickupCoords?.lng,
       dropoffLat: dropoffCoords?.lat,
       dropoffLng: dropoffCoords?.lng,
-      pickupPlaceId: pickupPlaceId,
-      dropoffPlaceId: dropoffPlaceId,
+      pickupPlaceId: finalPickupPlaceId,
+      dropoffPlaceId: finalDropoffPlaceId,
       pickupState: pickupState,
       pickupCity: pickupCity,
       dropoffState: dropoffState,
