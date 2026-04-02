@@ -50,6 +50,7 @@ import {
   FileText,
   HelpCircle,
   Rocket,
+  RefreshCw,
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
@@ -298,6 +299,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     transaction: 0,
   });
   
+  // Track original delivery status when editing existing delivery
+  const [originalDeliveryStatus, setOriginalDeliveryStatus] = useState<string | null>(null);
+  
   // Schedule section - new one-side-at-a-time flow
   const [customerChose, setCustomerChose] = useState<"PICKUP_WINDOW" | "DROPOFF_WINDOW" | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SlotItem | null>(null);
@@ -444,6 +448,24 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         description: error?.message || "Please try again.",
       });
       console.error("Failed to update draft:", error);
+    },
+    successMessage: undefined,
+  });
+
+  // Mutation for updating existing LISTED/QUOTED delivery (PATCH - keep status)
+  const updateDeliveryMutation = usePatch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`, {
+    onSuccess: () => {
+      toast.success("Delivery updated successfully", {
+        description: "Your changes have been saved.",
+      });
+      // Navigate to delivery details or dashboard
+      navigate({ to: "/dealer-dashboard" });
+    },
+    onError: (error: any) => {
+      toast.error("Failed to update delivery", {
+        description: error?.message || "Please try again.",
+      });
+      console.error("Failed to update delivery:", error);
     },
     successMessage: undefined,
   });
@@ -668,6 +690,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
             },
           }
         );
+
+        // Store the original status to determine if we should PATCH or POST
+        setOriginalDeliveryStatus(draft.status || null);
 
         // Populate form with draft data
         setValue('serviceType', draft.serviceType || 'HOME_DELIVERY');
@@ -1728,8 +1753,16 @@ const handleQuotePreview = () => {
 
     const payload = buildPayload(data);
 
-    // Create the delivery request
-    createDelivery.mutate(payload);
+    // Check if we're editing an existing LISTED/QUOTED delivery
+    // If so, use PATCH to update (keep status) instead of POST (create new)
+    if (draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED')) {
+      // Remove status from payload - we want to keep the existing status
+      const { status, ...updatePayload } = payload;
+      updateDeliveryMutation.mutate(updatePayload);
+    } else {
+      // Create new delivery (or replace draft with new delivery)
+      createDelivery.mutate(payload);
+    }
   };
 
   // Header component
@@ -3167,10 +3200,16 @@ const handleQuotePreview = () => {
                     Submit
                   </CardDescription>
                   <CardTitle className="text-2xl font-black mt-2">
-                    {draftId ? 'Review & submit' : 'Review & create'}
+                    {draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED') 
+                      ? 'Update Delivery' 
+                      : draftId 
+                        ? 'Review & Submit Draft' 
+                        : 'Review & Create'}
                   </CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Review all details before submitting. You'll see a complete summary of your delivery request.
+                    {draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED')
+                      ? 'Your changes will update the existing delivery while keeping its current status.'
+                      : 'Review all details before submitting. You\'ll see a complete summary of your delivery request.'}
                   </p>
                 </div>
               </CardHeader>
@@ -3179,13 +3218,24 @@ const handleQuotePreview = () => {
                   type="button"
                   className="w-full py-6 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleGoToReview}
-                  disabled={createDelivery.isPending || !isFormValidForSubmission}
+                  disabled={createDelivery.isPending || updateDeliveryMutation.isPending || !isFormValidForSubmission}
                 >
-                  Review & Continue
-                  <ChevronRight className="ml-2 h-5 w-5" />
+                  {(createDelivery.isPending || updateDeliveryMutation.isPending) ? (
+                    <>
+                      {updateDeliveryMutation.isPending ? 'Updating...' : 'Creating...'}
+                      <RefreshCw className="ml-2 h-5 w-5 animate-spin" />
+                    </>
+                  ) : (
+                    <>
+                      {draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED') 
+                        ? 'Update Delivery' 
+                        : 'Review & Continue'}
+                      <ChevronRight className="ml-2 h-5 w-5" />
+                    </>
+                  )}
                 </Button>
 
-                {!isFormValidForSubmission && !createDelivery.isPending && (
+                {!isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 text-center">
                     Please complete all required fields: addresses, schedule window, vehicle details, and recipient info.
                   </p>
