@@ -750,15 +750,28 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const isValidPlaceId = (placeId: string | null | undefined) =>
     placeId && (placeId.startsWith('ChIJ') || (placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(placeId)));
 
-  // Helper to geocode address and get placeId
+  // Helper to geocode address and get placeId - waits for Google Maps to load
   const geocodeAddressForPlaceId = async (address: string): Promise<string | null> => {
-    if (!isLoaded) return null;
+    console.log('geocodeAddressForPlaceId called for:', address, 'isLoaded:', isLoaded);
+
+    // Wait for Google Maps to be ready (poll for up to 5 seconds)
+    let attempts = 0;
+    while (!isLoaded && !window.google?.maps && attempts < 50) {
+      await new Promise(r => setTimeout(r, 100));
+      attempts++;
+    }
+
+    if (!window.google?.maps) {
+      console.error('Google Maps not loaded after waiting');
+      return null;
+    }
 
     return new Promise((resolve) => {
-      const geocoder = new google.maps.Geocoder();
+      const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ address }, (results, status) => {
+        console.log('Geocode result for', address, '- status:', status, 'results:', results?.length);
         if (status === "OK" && results && results[0]?.place_id) {
-          console.log('Geocoded placeId for', address, ':', results[0].place_id);
+          console.log('Got placeId:', results[0].place_id);
           resolve(results[0].place_id);
         } else {
           console.warn('Failed to geocode:', address, status);
@@ -779,21 +792,28 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
     const data = watch();
 
+    console.log('handleGoToReview - pickupPlaceId:', pickupPlaceId, 'isValid:', isValidPlaceId(pickupPlaceId));
+    console.log('handleGoToReview - pickupAddress:', data.pickupAddress);
+
     // Ensure we have valid placeIds - geocode if needed
     let finalPickupPlaceId = pickupPlaceId;
     let finalDropoffPlaceId = dropoffPlaceId;
 
     if (!isValidPlaceId(pickupPlaceId) && data.pickupAddress) {
+      console.log('Pickup placeId invalid, geocoding...');
       finalPickupPlaceId = await geocodeAddressForPlaceId(data.pickupAddress);
+      console.log('Geocoded pickup placeId:', finalPickupPlaceId);
       if (finalPickupPlaceId) {
-        setPickupPlaceId(finalPickupPlaceId); // Update state for future use
+        setPickupPlaceId(finalPickupPlaceId);
       }
     }
 
     if (!isValidPlaceId(dropoffPlaceId) && data.dropoffAddress) {
+      console.log('Dropoff placeId invalid, geocoding...');
       finalDropoffPlaceId = await geocodeAddressForPlaceId(data.dropoffAddress);
+      console.log('Geocoded dropoff placeId:', finalDropoffPlaceId);
       if (finalDropoffPlaceId) {
-        setDropoffPlaceId(finalDropoffPlaceId); // Update state for future use
+        setDropoffPlaceId(finalDropoffPlaceId);
       }
     }
 
