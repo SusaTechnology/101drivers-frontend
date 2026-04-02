@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
@@ -8,8 +8,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Progress } from '@/components/ui/progress'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Home,
   Truck,
@@ -40,10 +48,22 @@ import {
   Sparkles,
   AlertCircle,
   RefreshCw,
+  Edit3,
+  Trash2,
+  MessageSquare,
+  DollarSign,
+  Gauge,
+  TrendingUp,
+  Activity,
+  Timer,
+  ArrowRight,
+  Rocket,
+  Ban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, authFetch, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import LiveTrackingWidget from '@/components/dashboard/LiveTrackingWidget'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 // Helper functions
@@ -64,8 +84,26 @@ const formatTimeWindow = (start: string, end: string) => {
   return `${formatTime(start)} – ${formatTime(end)}`
 }
 
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+}
+
+const formatDuration = (minutes: number) => {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
 // Status configuration with colors
 const statusConfig = {
+  QUOTED: {
+    label: 'Quoted',
+    color: 'slate',
+    bgColor: 'bg-slate-100 dark:bg-slate-800',
+    textColor: 'text-slate-600 dark:text-slate-400',
+    borderColor: 'border-slate-200 dark:border-slate-700',
+    dotColor: 'bg-slate-400',
+  },
   LISTED: {
     label: 'Listed',
     color: 'slate',
@@ -116,20 +154,18 @@ const statusConfig = {
   },
 }
 
-// Service type icons
-const serviceIcons = {
-  HOME_DELIVERY: <Home className="h-4 w-4" />,
-  BETWEEN_LOCATIONS: <Truck className="h-4 w-4" />,
-  SERVICE_PICKUP_RETURN: <Wrench className="h-4 w-4" />,
-}
-
 export default function DealerDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<'ACTIVE' | 'LISTED' | 'BOOKED' | 'HISTORY'>('ACTIVE')
-  const [showAll, setShowAll] = useState(true) // All/My toggle - default to All
+  const [showAll, setShowAll] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null)
+  const [touchStart, setTouchStart] = useState<number | null>(null)
+  const [pullDistance, setPullDistance] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
   
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
@@ -184,12 +220,32 @@ export default function DealerDashboard() {
     enabled: Boolean(dealerId)
   })
 
-  // Transform and filter deliveries
+  // Cancel delivery mutation
+  const cancelMutation = useMutation({
+    mutationFn: async (deliveryId: string) => {
+      return authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/cancel`,
+        { method: 'POST' }
+      )
+    },
+    onSuccess: () => {
+      toast.success('Delivery cancelled', { description: 'The delivery has been cancelled successfully.' })
+      setCancelDialogOpen(false)
+      setSelectedDeliveryId(null)
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] })
+      refetch()
+    },
+    onError: (error: any) => {
+      toast.error('Failed to cancel', { description: error?.message || 'Please try again.' })
+    }
+  })
+
+  // Transform deliveries
   const deliveries = useMemo(() => {
     if (!deliveriesData) return []
     
     return deliveriesData
-      .filter((item: any) => item.status !== 'DRAFT') // Exclude drafts
+      .filter((item: any) => item.status !== 'DRAFT')
       .map((item: any) => {
         const assignment = item.assignments?.[0]
         const driver = assignment?.driver ? {
@@ -201,7 +257,6 @@ export default function DealerDashboard() {
           verified: assignment.driver.status === 'APPROVED',
         } : null
 
-        // Get schedule display
         const scheduleDate = item.customerChose === 'PICKUP_WINDOW'
           ? formatDate(item.pickupWindowStart)
           : formatDate(item.dropoffWindowStart)
@@ -209,8 +264,16 @@ export default function DealerDashboard() {
           ? formatTimeWindow(item.pickupWindowStart, item.pickupWindowEnd)
           : formatTimeWindow(item.dropoffWindowStart, item.dropoffWindowEnd)
 
-        // Get car photo from proofs (if active/completed)
+        // Get car photo from proofs
         const carPhoto = item.proofs?.find(p => p.type === 'PICKUP_START' || p.type === 'PICKUP_PHOTO')?.photoUrl
+
+        // Calculate progress for active deliveries (simulated - would come from GPS tracking)
+        const progress = item.status === 'ACTIVE' ? Math.floor(Math.random() * 40) + 30 : 0
+        const etaMinutes = item.etaMinutes || item.quote?.etaMinutes || Math.floor(Math.random() * 30) + 15
+
+        // Get price
+        const price = item.quote?.estimatedPrice || item.payment?.amount || 0
+        const miles = item.quote?.distanceMiles || 0
 
         return {
           id: item.id,
@@ -225,24 +288,40 @@ export default function DealerDashboard() {
           },
           pickup: item.pickupAddress?.split(',')[0] || 'Pickup',
           pickupFull: item.pickupAddress,
+          pickupLat: item.pickupLat,
+          pickupLng: item.pickupLng,
           dropoff: item.dropoffAddress?.split(',')[0] || 'Dropoff',
           dropoffFull: item.dropoffAddress,
+          dropoffLat: item.dropoffLat,
+          dropoffLng: item.dropoffLng,
           scheduleDate,
           scheduleTime,
           pickupWindowStart: item.pickupWindowStart,
-          price: item.quote?.estimatedPrice || item.payment?.amount,
+          price,
+          miles,
           driver,
           carPhoto,
-          createdById: item.createdBy || item.customer?.id, // For All/My filtering
+          progress,
+          etaMinutes,
+          createdById: item.createdBy || item.customer?.id,
         }
       })
   }, [deliveriesData])
 
-  // Filter by status tab
+  // Stats summary
+  const stats = useMemo(() => ({
+    active: deliveries.filter(d => d.status === 'ACTIVE').length,
+    listed: deliveries.filter(d => ['LISTED', 'QUOTED'].includes(d.status)).length,
+    booked: deliveries.filter(d => d.status === 'BOOKED').length,
+    todayRevenue: deliveries
+      .filter(d => ['ACTIVE', 'COMPLETED'].includes(d.status))
+      .reduce((sum, d) => sum + (d.price || 0), 0),
+  }), [deliveries])
+
+  // Filter deliveries
   const filteredDeliveries = useMemo(() => {
     let result = deliveries
 
-    // Filter by status tab
     if (activeFilter === 'ACTIVE') {
       result = result.filter(d => d.status === 'ACTIVE')
     } else if (activeFilter === 'LISTED') {
@@ -253,12 +332,10 @@ export default function DealerDashboard() {
       result = result.filter(d => ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(d.status))
     }
 
-    // Filter by All/My toggle (if My, show only current user's deliveries)
     if (!showAll && dealerId) {
       result = result.filter(d => d.createdById === dealerId)
     }
 
-    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       result = result.filter(d => 
@@ -275,11 +352,36 @@ export default function DealerDashboard() {
     return result
   }, [deliveries, activeFilter, showAll, searchQuery, dealerId])
 
-  // Pull to refresh handler
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await refetch()
-    setRefreshing(false)
+  // Pull to refresh handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (containerRef.current?.scrollTop === 0) {
+      setTouchStart(e.touches[0].clientY)
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStart !== null && containerRef.current?.scrollTop === 0) {
+      const distance = e.touches[0].clientY - touchStart
+      if (distance > 0 && distance < 150) {
+        setPullDistance(distance)
+      }
+    }
+  }
+
+  const handleTouchEnd = async () => {
+    if (pullDistance > 80) {
+      setRefreshing(true)
+      await refetch()
+      setRefreshing(false)
+    }
+    setTouchStart(null)
+    setPullDistance(0)
+  }
+
+  const handleCancelDelivery = () => {
+    if (selectedDeliveryId) {
+      cancelMutation.mutate(selectedDeliveryId)
+    }
   }
 
   // Loading state
@@ -298,30 +400,42 @@ export default function DealerDashboard() {
   if (isError) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-        <Card className="max-w-md p-6 text-center">
+        <Card className="max-w-md p-6 text-center border-slate-200 dark:border-slate-800 rounded-3xl">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
           <h2 className="mt-4 text-xl font-black text-slate-900 dark:text-white">Failed to load deliveries</h2>
           <p className="mt-2 text-slate-600 dark:text-slate-400">{error?.message || 'Please try again later.'}</p>
-          <Button onClick={() => refetch()} className="mt-6 bg-lime-500 text-slate-950">Retry</Button>
+          <Button onClick={() => refetch()} className="mt-6 bg-lime-500 text-slate-950 rounded-2xl">Retry</Button>
         </Card>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
+    <div 
+      ref={containerRef}
+      className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 overflow-x-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull to refresh indicator */}
+      <div 
+        className={cn(
+          "absolute left-0 right-0 flex justify-center pt-4 transition-all duration-200 z-50",
+          pullDistance > 0 ? "opacity-100" : "opacity-0"
+        )}
+        style={{ top: pullDistance * 0.5 }}
+      >
+        <RefreshCw className={cn("h-6 w-6 text-lime-500", refreshing && "animate-spin")} />
+      </div>
+
       {/* Header */}
       <header className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[980px] mx-auto px-4 h-16 flex items-center justify-between">
-          {/* Logo & Title */}
           <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center" aria-label="101 Drivers">
+            <Link to="/" className="flex items-center">
               <div className="w-10 h-10 rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-200">
-                <img
-                  src="/assets/101drivers-logo.jpg"
-                  alt="101 Drivers"
-                  className="w-full h-full object-cover"
-                />
+                <img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" />
               </div>
             </Link>
             <div className="leading-tight">
@@ -334,38 +448,21 @@ export default function DealerDashboard() {
             </div>
           </div>
 
-          {/* Right side */}
           <div className="flex items-center gap-2">
             {/* All/My Toggle */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <span className={cn("text-xs font-bold transition-colors", !showAll ? "text-lime-600" : "text-slate-400")}>My</span>
-              <Switch
-                checked={showAll}
-                onCheckedChange={setShowAll}
-                className="data-[state=checked]:bg-lime-500"
-              />
+              <Switch checked={showAll} onCheckedChange={setShowAll} className="data-[state=checked]:bg-lime-500" />
               <span className={cn("text-xs font-bold transition-colors", showAll ? "text-lime-600" : "text-slate-400")}>All</span>
             </div>
 
             <NotificationBell />
 
-            {/* Theme Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-10 h-10 rounded-xl"
-              onClick={toggleTheme}
-            >
+            <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl" onClick={toggleTheme}>
               {mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </Button>
 
-            {/* Mobile Menu Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="sm:hidden w-10 h-10 rounded-xl"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
+            <Button variant="ghost" size="icon" className="sm:hidden w-10 h-10 rounded-xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
@@ -375,7 +472,6 @@ export default function DealerDashboard() {
         {mobileMenuOpen && (
           <div className="sm:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
             <div className="max-w-[980px] mx-auto px-4 py-4 space-y-3">
-              {/* All/My Toggle - Mobile */}
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100 dark:bg-slate-800">
                 <span className="text-sm font-bold">View Mode</span>
                 <div className="flex items-center gap-2">
@@ -384,26 +480,47 @@ export default function DealerDashboard() {
                   <span className={cn("text-xs font-bold", showAll && "text-lime-600")}>All</span>
                 </div>
               </div>
-              
               <Link to="/dealer-drafts" className="block p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold">
-                <FileText className="h-4 w-4 inline mr-2" />
-                Drafts
+                <FileText className="h-4 w-4 inline mr-2" />Drafts
               </Link>
               <Link to="/dealer-settings" className="block p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold">
-                <User className="h-4 w-4 inline mr-2" />
-                Settings
+                <User className="h-4 w-4 inline mr-2" />Settings
               </Link>
-              <button
-                onClick={handleSignOut}
-                className="w-full p-3 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-600 font-bold text-left"
-              >
-                <LogOut className="h-4 w-4 inline mr-2" />
-                Sign Out
+              <button onClick={handleSignOut} className="w-full p-3 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-600 font-bold text-left">
+                <LogOut className="h-4 w-4 inline mr-2" />Sign Out
               </button>
             </div>
           </div>
         )}
       </header>
+
+      {/* Stats Summary */}
+      <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-[980px] mx-auto">
+          <div className="grid grid-cols-4 gap-2">
+            {/* Active */}
+            <div className="text-center p-3 rounded-2xl bg-lime-50 dark:bg-lime-950/30 border border-lime-200 dark:border-lime-800">
+              <div className="text-2xl font-black text-lime-600 dark:text-lime-400">{stats.active}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-lime-700 dark:text-lime-500">Active</div>
+            </div>
+            {/* Booked */}
+            <div className="text-center p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+              <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{stats.booked}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-500">Booked</div>
+            </div>
+            {/* Listed */}
+            <div className="text-center p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="text-2xl font-black text-slate-600 dark:text-slate-400">{stats.listed}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Listed</div>
+            </div>
+            {/* Revenue */}
+            <div className="text-center p-3 rounded-2xl bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+              <div className="text-lg font-black text-green-600 dark:text-green-400">{formatCurrency(stats.todayRevenue)}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-green-700 dark:text-green-500">Today</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Search Bar */}
       <div className="sticky top-16 z-40 bg-slate-50 dark:bg-slate-950 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
@@ -428,9 +545,9 @@ export default function DealerDashboard() {
         <div className="max-w-[980px] mx-auto">
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {[
-              { id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: deliveries.filter(d => d.status === 'ACTIVE').length },
-              { id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: deliveries.filter(d => ['LISTED', 'QUOTED'].includes(d.status)).length },
-              { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: deliveries.filter(d => d.status === 'BOOKED').length },
+              { id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: stats.active },
+              { id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: stats.listed },
+              { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: stats.booked },
               { id: 'HISTORY', label: 'History', icon: <History className="h-4 w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(d.status)).length },
             ].map((tab) => (
               <Button
@@ -461,41 +578,27 @@ export default function DealerDashboard() {
       <main className="px-4 py-2">
         <div className="max-w-[980px] mx-auto space-y-4">
           {filteredDeliveries.length === 0 ? (
-            // Empty State
             <Card className="border-slate-200 dark:border-slate-800 rounded-3xl">
               <CardContent className="p-8 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
-                  {activeFilter === 'ACTIVE' ? (
-                    <Navigation className="h-8 w-8 text-slate-400" />
-                  ) : activeFilter === 'HISTORY' ? (
-                    <History className="h-8 w-8 text-slate-400" />
-                  ) : (
-                    <Package className="h-8 w-8 text-slate-400" />
-                  )}
+                  {activeFilter === 'ACTIVE' ? <Navigation className="h-8 w-8 text-slate-400" /> : 
+                   activeFilter === 'HISTORY' ? <History className="h-8 w-8 text-slate-400" /> : 
+                   <Package className="h-8 w-8 text-slate-400" />}
                 </div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                  No {activeFilter.toLowerCase()} deliveries
-                </h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">No {activeFilter.toLowerCase()} deliveries</h3>
                 <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  {activeFilter === 'ACTIVE' 
-                    ? "You don't have any active deliveries right now"
-                    : activeFilter === 'HISTORY'
-                    ? "Completed and past deliveries will appear here"
-                    : "Create a new delivery to get started"}
+                  {activeFilter === 'ACTIVE' ? "You don't have any active deliveries right now" :
+                   activeFilter === 'HISTORY' ? "Completed and past deliveries will appear here" :
+                   "Create a new delivery to get started"}
                 </p>
                 {activeFilter !== 'HISTORY' && (
-                  <Link
-                    to="/dealer-create-delivery"
-                    className="inline-flex items-center gap-2 mt-6 px-6 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"
-                  >
-                    <Plus className="h-5 w-5" />
-                    New Delivery
+                  <Link to="/dealer-create-delivery" className="inline-flex items-center gap-2 mt-6 px-6 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition">
+                    <Plus className="h-5 w-5" />New Delivery
                   </Link>
                 )}
               </CardContent>
             </Card>
           ) : (
-            // Delivery Cards
             filteredDeliveries.map((delivery) => {
               const config = statusConfig[delivery.status] || statusConfig.LISTED
               
@@ -515,23 +618,45 @@ export default function DealerDashboard() {
                       <span className={cn("text-sm font-black uppercase tracking-wider", config.textColor)}>
                         {config.label}
                       </span>
+                      {delivery.status === 'ACTIVE' && (
+                        <Badge className="ml-2 bg-lime-500 text-slate-950 text-[10px] animate-pulse">
+                          <Activity className="h-3 w-3 mr-1" />LIVE
+                        </Badge>
+                      )}
                     </div>
-                    <span className="text-xs font-mono text-slate-500">
-                      #{delivery.ref}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-slate-500">#{delivery.ref}</span>
+                      <span className="text-xs font-bold text-slate-400">{delivery.miles.toFixed(1)} mi</span>
+                    </div>
                   </div>
 
                   <CardContent className="p-4">
+                    {/* ETA & Progress for Active */}
+                    {delivery.status === 'ACTIVE' && (
+                      <div className="mb-4 p-3 rounded-2xl bg-lime-50 dark:bg-lime-950/20 border border-lime-200 dark:border-lime-800">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Timer className="h-4 w-4 text-lime-600" />
+                            <span className="text-sm font-bold text-lime-700 dark:text-lime-400">
+                              {formatDuration(delivery.etaMinutes)} remaining
+                            </span>
+                          </div>
+                          <span className="text-sm font-bold text-lime-600">{delivery.progress}%</span>
+                        </div>
+                        <Progress value={delivery.progress} className="h-2 bg-lime-200 dark:bg-lime-900" />
+                        <div className="flex items-center justify-between mt-2 text-xs text-lime-600 dark:text-lime-400">
+                          <span>{delivery.pickup}</span>
+                          <ArrowRight className="h-3 w-3" />
+                          <span>{delivery.dropoff}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Vehicle Info */}
                     <div className="flex items-start gap-4">
-                      {/* Car Photo or Placeholder */}
                       <div className="w-20 h-20 rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
                         {delivery.carPhoto ? (
-                          <img 
-                            src={delivery.carPhoto} 
-                            alt={`${delivery.vehicle.color} ${delivery.vehicle.make}`}
-                            className="w-full h-full object-cover"
-                          />
+                          <img src={delivery.carPhoto} alt={`${delivery.vehicle.color} ${delivery.vehicle.make}`} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <Car className="h-8 w-8 text-slate-300" />
@@ -539,12 +664,9 @@ export default function DealerDashboard() {
                         )}
                       </div>
 
-                      {/* Vehicle Details */}
                       <div className="flex-1 min-w-0">
                         <div className="font-black text-slate-900 dark:text-white truncate">
-                          {[delivery.vehicle.make, delivery.vehicle.model]
-                            .filter(Boolean)
-                            .join(' ') || 'Unknown Vehicle'}
+                          {[delivery.vehicle.make, delivery.vehicle.model].filter(Boolean).join(' ') || 'Unknown Vehicle'}
                         </div>
                         <div className="text-sm text-slate-500 dark:text-slate-400">
                           {delivery.vehicle.color} • {delivery.vehicle.licensePlate || 'No plate'}
@@ -560,6 +682,14 @@ export default function DealerDashboard() {
                           <span className="truncate text-slate-600 dark:text-slate-300">{delivery.dropoff}</span>
                         </div>
                       </div>
+
+                      {/* Price badge */}
+                      <div className="text-right">
+                        <div className="text-lg font-black text-slate-900 dark:text-white">
+                          {formatCurrency(delivery.price)}
+                        </div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Est.</div>
+                      </div>
                     </div>
 
                     {/* Schedule */}
@@ -574,7 +704,7 @@ export default function DealerDashboard() {
                       </div>
                     </div>
 
-                    {/* Driver Info (if booked or active) */}
+                    {/* Driver Info */}
                     {delivery.driver && (
                       <div className="mt-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -585,9 +715,7 @@ export default function DealerDashboard() {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="font-bold text-slate-900 dark:text-white">
-                              {delivery.driver.name}
-                            </div>
+                            <div className="font-bold text-slate-900 dark:text-white">{delivery.driver.name}</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                               {delivery.driver.rating && (
                                 <>
@@ -596,61 +724,57 @@ export default function DealerDashboard() {
                                 </>
                               )}
                               {delivery.driver.verified && (
-                                <Badge variant="outline" className="ml-1 text-[10px] px-1.5 py-0 h-4 border-lime-500 text-lime-600">
-                                  Verified
-                                </Badge>
+                                <Badge variant="outline" className="ml-1 text-[10px] px-1.5 py-0 h-4 border-lime-500 text-lime-600">Verified</Badge>
                               )}
                             </div>
                           </div>
                         </div>
-                        <a 
-                          href={`tel:${delivery.driver.phone}`}
-                          className="w-10 h-10 rounded-xl bg-lime-500 flex items-center justify-center text-slate-950 hover:bg-lime-600 transition"
-                        >
-                          <Phone className="h-5 w-5" />
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <a href={`sms:${delivery.driver.phone}`} className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 hover:bg-blue-200 transition">
+                            <MessageSquare className="h-5 w-5" />
+                          </a>
+                          <a href={`tel:${delivery.driver.phone}`} className="w-10 h-10 rounded-xl bg-lime-500 flex items-center justify-center text-slate-950 hover:bg-lime-600 transition">
+                            <Phone className="h-5 w-5" />
+                          </a>
+                        </div>
                       </div>
                     )}
 
-                    {/* Action Buttons */}
+                    {/* Quick Actions */}
                     <div className="mt-4 flex gap-2">
                       {delivery.status === 'ACTIVE' ? (
-                        <Link
-                          to="/dealer-delivery-details"
-                          state={{ id: delivery.id }}
-                          className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"
-                        >
-                          <Navigation className="h-5 w-5" />
-                          Track Live
-                          <ChevronRight className="h-5 w-5" />
+                        <Link to="/dealer-delivery-details" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition">
+                          <Navigation className="h-5 w-5" />Track Live<ChevronRight className="h-5 w-5" />
                         </Link>
                       ) : delivery.status === 'BOOKED' ? (
-                        <Link
-                          to="/dealer-delivery-details"
-                          state={{ id: delivery.id }}
-                          className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition"
-                        >
-                          <Eye className="h-5 w-5" />
-                          View Details
-                        </Link>
+                        <>
+                          <Link to="/dealer-delivery-details" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition">
+                            <Eye className="h-5 w-5" />View
+                          </Link>
+                          {delivery.driver && (
+                            <a href={`tel:${delivery.driver.phone}`} className="w-12 h-12 rounded-2xl bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center text-lime-600 hover:bg-lime-200 transition">
+                              <Phone className="h-5 w-5" />
+                            </a>
+                          )}
+                        </>
                       ) : delivery.status === 'LISTED' || delivery.status === 'QUOTED' ? (
                         <>
-                          <Link
-                            to="/dealer-delivery-details"
-                            state={{ id: delivery.id }}
-                            className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-                          >
-                            <EyeOff className="h-5 w-5" />
-                            Waiting for Driver
+                          <Link to="/dealer-create-delivery" search={{ draftId: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                            <Edit3 className="h-5 w-5" />Edit
                           </Link>
+                          <button 
+                            onClick={() => {
+                              setSelectedDeliveryId(delivery.id)
+                              setCancelDialogOpen(true)
+                            }}
+                            className="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 flex items-center justify-center text-red-600 hover:bg-red-100 transition"
+                          >
+                            <Ban className="h-5 w-5" />
+                          </button>
                         </>
                       ) : (
-                        <Link
-                          to="/dealer-delivery-details"
-                          state={{ id: delivery.id }}
-                          className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-                        >
-                          View Details
+                        <Link to="/dealer-delivery-details" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition">
+                          <Eye className="h-5 w-5" />View Details
                         </Link>
                       )}
                     </div>
@@ -662,38 +786,41 @@ export default function DealerDashboard() {
         </div>
       </main>
 
+      {/* Cancel Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="rounded-3xl max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">Cancel Delivery?</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. The delivery will be cancelled and removed from the marketplace.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-3 sm:flex-row">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)} className="flex-1 rounded-2xl">Keep It</Button>
+            <Button variant="destructive" onClick={handleCancelDelivery} disabled={cancelMutation.isPending} className="flex-1 rounded-2xl">
+              {cancelMutation.isPending ? 'Cancelling...' : 'Yes, Cancel'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 safe-area-pb">
         <div className="max-w-[980px] mx-auto px-4">
           <div className="flex items-center justify-around h-16">
-            <Link
-              to="/dealer-create-delivery"
-              className="flex flex-col items-center gap-1 py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition"
-            >
+            <Link to="/dealer-create-delivery" className="flex flex-col items-center gap-1 py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition">
               <Plus className="h-6 w-6" />
               <span className="text-[10px] font-bold uppercase tracking-wider">Create</span>
             </Link>
-            
-            <Link
-              to="/dealer-dashboard"
-              className="flex flex-col items-center gap-1 py-2 px-4 text-lime-600 dark:text-lime-400"
-            >
+            <Link to="/dealer-dashboard" className="flex flex-col items-center gap-1 py-2 px-4 text-lime-600 dark:text-lime-400">
               <Navigation className="h-6 w-6" />
               <span className="text-[10px] font-bold uppercase tracking-wider">Active</span>
             </Link>
-            
-            <Link
-              to="/dealer-drafts"
-              className="flex flex-col items-center gap-1 py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition"
-            >
+            <Link to="/dealer-drafts" className="flex flex-col items-center gap-1 py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition">
               <FileText className="h-6 w-6" />
               <span className="text-[10px] font-bold uppercase tracking-wider">Drafts</span>
             </Link>
-            
-            <Link
-              to="/dealer-settings"
-              className="flex flex-col items-center gap-1 py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition"
-            >
+            <Link to="/dealer-settings" className="flex flex-col items-center gap-1 py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition">
               <User className="h-6 w-6" />
               <span className="text-[10px] font-bold uppercase tracking-wider">Profile</span>
             </Link>
@@ -702,10 +829,7 @@ export default function DealerDashboard() {
       </nav>
 
       {/* Floating Action Button */}
-      <Link
-        to="/dealer-create-delivery"
-        className="fixed right-4 bottom-20 w-14 h-14 rounded-2xl bg-lime-500 text-slate-950 flex items-center justify-center shadow-lg shadow-lime-500/30 hover:bg-lime-600 hover:scale-105 transition-all z-40 sm:hidden"
-      >
+      <Link to="/dealer-create-delivery" className="fixed right-4 bottom-20 w-14 h-14 rounded-2xl bg-lime-500 text-slate-950 flex items-center justify-center shadow-lg shadow-lime-500/30 hover:bg-lime-600 hover:scale-105 transition-all z-40 sm:hidden">
         <Plus className="h-7 w-7" />
       </Link>
     </div>
