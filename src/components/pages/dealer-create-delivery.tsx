@@ -747,34 +747,48 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   }, [draftId]);
 
   // Helper to validate placeId
-  const isValidPlaceId = (placeId: string | null | undefined) =>
-    placeId && (placeId.startsWith('ChIJ') || (placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(placeId)));
+  const isValidPlaceId = (placeId: string | null | undefined) => {
+    const valid = placeId && (placeId.startsWith('ChIJ') || (placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(placeId)));
+    console.log('isValidPlaceId check:', placeId, '-> ', valid);
+    return valid;
+  };
 
   // Helper to geocode address and get placeId - waits for Google Maps to load
   const geocodeAddressForPlaceId = async (address: string): Promise<string | null> => {
-    console.log('geocodeAddressForPlaceId called for:', address, 'isLoaded:', isLoaded);
+    console.log('=== geocodeAddressForPlaceId START ===');
+    console.log('Address:', address);
+    console.log('isLoaded:', isLoaded);
+    console.log('window.google?.maps:', !!window.google?.maps);
 
     // Wait for Google Maps to be ready (poll for up to 5 seconds)
     let attempts = 0;
-    while (!isLoaded && !window.google?.maps && attempts < 50) {
+    while (!window.google?.maps && attempts < 50) {
+      console.log(`Waiting for Google Maps... attempt ${attempts + 1}`);
       await new Promise(r => setTimeout(r, 100));
       attempts++;
     }
 
     if (!window.google?.maps) {
-      console.error('Google Maps not loaded after waiting');
+      console.error('Google Maps not loaded after waiting 5 seconds');
       return null;
     }
+
+    console.log('Google Maps ready, calling geocoder...');
 
     return new Promise((resolve) => {
       const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ address }, (results, status) => {
-        console.log('Geocode result for', address, '- status:', status, 'results:', results?.length);
+        console.log('=== Geocoder callback ===');
+        console.log('Status:', status);
+        console.log('Results count:', results?.length);
+        if (results && results[0]) {
+          console.log('First result place_id:', results[0].place_id);
+        }
         if (status === "OK" && results && results[0]?.place_id) {
-          console.log('Got placeId:', results[0].place_id);
+          console.log('SUCCESS - Got placeId:', results[0].place_id);
           resolve(results[0].place_id);
         } else {
-          console.warn('Failed to geocode:', address, status);
+          console.error('FAILED to geocode:', address, 'status:', status);
           resolve(null);
         }
       });
@@ -783,6 +797,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Handler for navigating to review page
   const handleGoToReview = async () => {
+    console.log('=== handleGoToReview START ===');
+
     if (!isFormValidForSubmission) {
       toast.error("Incomplete form", {
         description: "Please complete all required fields before reviewing.",
@@ -792,30 +808,41 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
     const data = watch();
 
-    console.log('handleGoToReview - pickupPlaceId:', pickupPlaceId, 'isValid:', isValidPlaceId(pickupPlaceId));
-    console.log('handleGoToReview - pickupAddress:', data.pickupAddress);
+    console.log('Current state:');
+    console.log('  pickupPlaceId:', pickupPlaceId);
+    console.log('  pickupAddress:', data.pickupAddress);
+    console.log('  dropoffPlaceId:', dropoffPlaceId);
+    console.log('  dropoffAddress:', data.dropoffAddress);
 
     // Ensure we have valid placeIds - geocode if needed
     let finalPickupPlaceId = pickupPlaceId;
     let finalDropoffPlaceId = dropoffPlaceId;
 
     if (!isValidPlaceId(pickupPlaceId) && data.pickupAddress) {
-      console.log('Pickup placeId invalid, geocoding...');
+      console.log('>>> Pickup placeId is INVALID, geocoding now...');
       finalPickupPlaceId = await geocodeAddressForPlaceId(data.pickupAddress);
-      console.log('Geocoded pickup placeId:', finalPickupPlaceId);
+      console.log('>>> Geocoded pickup placeId result:', finalPickupPlaceId);
       if (finalPickupPlaceId) {
         setPickupPlaceId(finalPickupPlaceId);
       }
+    } else {
+      console.log('>>> Pickup placeId is VALID or no address');
     }
 
     if (!isValidPlaceId(dropoffPlaceId) && data.dropoffAddress) {
-      console.log('Dropoff placeId invalid, geocoding...');
+      console.log('>>> Dropoff placeId is INVALID, geocoding now...');
       finalDropoffPlaceId = await geocodeAddressForPlaceId(data.dropoffAddress);
-      console.log('Geocoded dropoff placeId:', finalDropoffPlaceId);
+      console.log('>>> Geocoded dropoff placeId result:', finalDropoffPlaceId);
       if (finalDropoffPlaceId) {
         setDropoffPlaceId(finalDropoffPlaceId);
       }
+    } else {
+      console.log('>>> Dropoff placeId is VALID or no address');
     }
+
+    console.log('=== Final placeIds ===');
+    console.log('  finalPickupPlaceId:', finalPickupPlaceId);
+    console.log('  finalDropoffPlaceId:', finalDropoffPlaceId);
 
     const reviewData = {
       // Service & Route
@@ -879,6 +906,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       // Draft
       draftId: draftId,
     };
+
+    console.log('=== SAVING TO SESSION STORAGE ===');
+    console.log('pickupPlaceId being saved:', reviewData.pickupPlaceId);
+    console.log('dropoffPlaceId being saved:', reviewData.dropoffPlaceId);
 
     // Store in sessionStorage
     sessionStorage.setItem("reviewDeliveryData", JSON.stringify(reviewData));
@@ -1045,24 +1076,36 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Separate effect to handle placeId geocoding when we have a selected saved address
   useEffect(() => {
-    if (!selectedSavedAddress || !isLoaded) return;
+    console.log('=== Saved Address Geocoding Effect ===');
+    console.log('selectedSavedAddress:', selectedSavedAddress);
+    console.log('isLoaded:', isLoaded);
+
+    if (!selectedSavedAddress || !isLoaded) {
+      console.log('Effect returning early - no address or maps not loaded');
+      return;
+    }
 
     const address = selectedSavedAddress;
-    const isValidPlaceId = address.placeId &&
+    const isValid = address.placeId &&
       (address.placeId.startsWith('ChIJ') ||
        (address.placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(address.placeId)));
 
-    if (isValidPlaceId) {
+    console.log('Saved address placeId:', address.placeId);
+    console.log('Is valid placeId:', isValid);
+
+    if (isValid) {
+      console.log('Using existing valid placeId:', address.placeId);
       setPickupPlaceId(address.placeId);
     } else if (address.address) {
-      // Geocode to get real placeId
+      console.log('Geocoding saved address:', address.address);
       const geocoder = new google.maps.Geocoder();
       geocoder.geocode({ address: address.address }, (results, status) => {
+        console.log('Geocode result for saved address - status:', status);
         if (status === "OK" && results && results[0]?.place_id) {
-          console.log('Geocoded placeId for saved address:', results[0].place_id);
+          console.log('SUCCESS - Geocoded placeId for saved address:', results[0].place_id);
           setPickupPlaceId(results[0].place_id);
         } else {
-          console.warn('Failed to geocode saved address:', status);
+          console.warn('FAILED to geocode saved address:', status);
           setPickupPlaceId(null);
         }
       });
@@ -2030,7 +2073,7 @@ const handleQuotePreview = () => {
                                 });
                                 return;
                               }
-                              saveAddressMutation.mutate({
+                              const addressPayload = {
                                 label: pickupLabel.trim(),
                                 address: pickupAddress,
                                 lat: pickupCoords!.lat,
@@ -2042,7 +2085,11 @@ const handleQuotePreview = () => {
                                 postalCode: '',
                                 isDefault: savedAddresses.length === 0,
                                 customer: { id: customer.profileId },
-                              });
+                              };
+                              console.log('=== SAVING ADDRESS ===');
+                              console.log('Address payload:', JSON.stringify(addressPayload, null, 2));
+                              console.log('pickupPlaceId at save time:', pickupPlaceId);
+                              saveAddressMutation.mutate(addressPayload);
                               setPickupLabel('');
                             }}
                             disabled={saveAddressMutation.isPending || !pickupLabel.trim()}
