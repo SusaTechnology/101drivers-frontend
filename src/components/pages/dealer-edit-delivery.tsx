@@ -400,8 +400,10 @@ export default function DealerEditDelivery() {
   };
 
   // Determine if editing is allowed based on status
-  const canEdit = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT';
-  const canEditSchedule = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'BOOKED';
+  // QUOTED, LISTED, DRAFT = full edit (no driver assigned yet)
+  // BOOKED = schedule edit only (driver assigned, but pickup not started)
+  const canEdit = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED';
+  const canEditSchedule = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED' || deliveryData?.status === 'BOOKED';
 
   // Header component
   const Header = () => (
@@ -1069,8 +1071,8 @@ export default function DealerEditDelivery() {
                       Editing restrictions
                     </p>
                     <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
-                      {canEdit 
-                        ? "You can edit all fields while status is LISTED or DRAFT."
+                      {canEdit
+                        ? "You can edit all fields while status is QUOTED, LISTED or DRAFT."
                         : "Only schedule can be modified after booking. Other fields are locked."}
                     </p>
                   </div>
