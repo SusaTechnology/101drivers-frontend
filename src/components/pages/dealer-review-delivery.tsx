@@ -1,6 +1,7 @@
 // app/pages/dealer/review-delivery.tsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useJsApiLoader } from "@react-google-maps/api";
 import {
   Card,
   CardContent,
@@ -155,6 +156,45 @@ export default function ReviewDeliveryPage() {
   const [editedValues, setEditedValues] = useState<Partial<ReviewDeliveryData>>({});
   const customer = getUser();
 
+  // Load Google Maps API
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries: ['geometry', 'places'],
+  });
+
+  // Helper to validate placeId
+  const isValidPlaceId = (placeId: string | null | undefined) =>
+    placeId && (placeId.startsWith('ChIJ') || (placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(placeId)));
+
+  // Helper to geocode address and get placeId
+  const geocodeAddressForPlaceId = async (address: string): Promise<string | null> => {
+    // Wait for Google Maps to be ready
+    let attempts = 0;
+    while (!isLoaded && !window.google?.maps && attempts < 50) {
+      await new Promise(r => setTimeout(r, 100));
+      attempts++;
+    }
+
+    if (!window.google?.maps) {
+      console.error('Google Maps not loaded');
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address }, (results, status) => {
+        if (status === "OK" && results && results[0]?.place_id) {
+          console.log('Geocoded placeId for', address, ':', results[0].place_id);
+          resolve(results[0].place_id);
+        } else {
+          console.warn('Failed to geocode:', address, status);
+          resolve(null);
+        }
+      });
+    });
+  };
+
   // Load review data from sessionStorage
   useEffect(() => {
     const stored = sessionStorage.getItem("reviewDeliveryData");
@@ -183,18 +223,36 @@ export default function ReviewDeliveryPage() {
       const finalModel = reviewData.model === "Other" ? reviewData.modelOther : reviewData.model;
       const finalColor = reviewData.color === "Other" ? reviewData.colorOther : reviewData.color;
 
+      // Geocode placeIds if they're invalid
+      let finalPickupPlaceId = reviewData.pickupPlaceId;
+      let finalDropoffPlaceId = reviewData.dropoffPlaceId;
+
+      console.log('Review page - pickupPlaceId:', reviewData.pickupPlaceId, 'isValid:', isValidPlaceId(reviewData.pickupPlaceId));
+
+      if (!isValidPlaceId(reviewData.pickupPlaceId) && reviewData.pickupAddress) {
+        console.log('Pickup placeId invalid, geocoding...');
+        finalPickupPlaceId = await geocodeAddressForPlaceId(reviewData.pickupAddress);
+        console.log('Geocoded pickup placeId:', finalPickupPlaceId);
+      }
+
+      if (!isValidPlaceId(reviewData.dropoffPlaceId) && reviewData.dropoffAddress) {
+        console.log('Dropoff placeId invalid, geocoding...');
+        finalDropoffPlaceId = await geocodeAddressForPlaceId(reviewData.dropoffAddress);
+        console.log('Geocoded dropoff placeId:', finalDropoffPlaceId);
+      }
+
       const payload = {
         quoteId: reviewData.quoteId,
         serviceType: reviewData.serviceType,
         pickupAddress: reviewData.pickupAddress,
         pickupLat: reviewData.pickupLat,
         pickupLng: reviewData.pickupLng,
-        pickupPlaceId: reviewData.pickupPlaceId,
+        pickupPlaceId: finalPickupPlaceId,
         pickupState: reviewData.pickupState,
         dropoffAddress: reviewData.dropoffAddress,
         dropoffLat: reviewData.dropoffLat,
         dropoffLng: reviewData.dropoffLng,
-        dropoffPlaceId: reviewData.dropoffPlaceId,
+        dropoffPlaceId: finalDropoffPlaceId,
         dropoffState: reviewData.dropoffState,
         pickupWindowStart: reviewData.pickupWindowStart,
         pickupWindowEnd: reviewData.pickupWindowEnd,
@@ -211,6 +269,8 @@ export default function ReviewDeliveryPage() {
         recipientPhone: reviewData.recipientPhone,
         paymentType: reviewData.paymentType,
       };
+
+      console.log('Submitting payload:', JSON.stringify(payload, null, 2));
 
       // Step 1: Create the delivery
       const delivery = await authFetch(
