@@ -1968,7 +1968,7 @@ const handleQuotePreview = () => {
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-2xl">
                   {draftId 
                     ? 'Continue editing your draft. Update addresses, schedule, and vehicle details, then submit when ready.'
-                    : 'Dealer flow: enter CA-only addresses → view map/miles/quote → set schedule → vehicle dropdowns → optional recipient tracking → payment (prepaid or postpaid if authorized).'}
+                    : 'Enter pickup and drop-off addresses. California only.'}
                 </p>
               </div>
             </div>
@@ -1980,20 +1980,6 @@ const handleQuotePreview = () => {
                   Editing Draft
                 </Badge>
               )}
-              <Badge
-                variant="secondary"
-                className="bg-lime-100 dark:bg-lime-900/20 text-lime-800 dark:text-lime-200 border-lime-200"
-              >
-                <MapPin className="h-3 w-3 mr-1" />
-                CA-only validation
-              </Badge>
-              <Badge
-                variant="outline"
-                className="bg-slate-100 dark:bg-slate-800/50"
-              >
-                <Mail className="h-3 w-3 mr-1" />
-                Email-first (SMS optional)
-              </Badge>
             </div>
           </div>
         </section>
@@ -2013,14 +1999,9 @@ const handleQuotePreview = () => {
                       Route
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      CA-only addresses with autocomplete/search. Quote updates
-                      when route changes. Service type defaults to Home Delivery.
+                      CA-only addresses with autocomplete. Quote updates when route changes.
                     </p>
                   </div>
-                  <Badge variant="outline" className="hidden sm:flex">
-                    <Route className="h-3 w-3 mr-1" />
-                    Route + miles + price
-                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
