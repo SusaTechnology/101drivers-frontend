@@ -1965,11 +1965,6 @@ const handleQuotePreview = () => {
                 <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
                   {draftId ? 'Edit draft delivery' : 'Create delivery request'}
                 </h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-2xl">
-                  {draftId 
-                    ? 'Continue editing your draft. Update addresses, schedule, and vehicle details, then submit when ready.'
-                    : 'Our service is currently available in California only. Please enter CA addresses below.'}
-                </p>
               </div>
             </div>
 
@@ -1998,6 +1993,9 @@ const handleQuotePreview = () => {
                     <CardTitle className="text-2xl font-black mt-2">
                       Route
                     </CardTitle>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      Our service is currently available in California only. Please enter CA addresses below.
+                    </p>
                   </div>
                 </div>
               </CardHeader>
