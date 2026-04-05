@@ -409,132 +409,104 @@ export default function LandingPage() {
 
   // Footer component
   const Footer = () => (
-    <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-14 pb-10">
+    <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-8">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl overflow-hidden bg-black border border-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+          {/* Brand blurb */}
+          <div className="md:col-span-1">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl overflow-hidden bg-black border border-slate-200">
                 <img
                   src="/assets/101drivers-logo.jpg"
                   alt="101 Drivers logo"
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-lg font-black tracking-tightest uppercase text-slate-900 dark:text-white">
+              <span className="text-base font-black tracking-tightest uppercase text-slate-900 dark:text-white">
                 101 Drivers
               </span>
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
-              Moving cars across Greater LA. Planned routes, clear pay, no surprises.
+            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+              101 Drivers is a platform that connects drivers with businesses and individuals who need drivers.
             </p>
           </div>
 
+          {/* Accounts — Business, Individual, Driver */}
           <div>
-            <h5 className="font-extrabold mb-6 uppercase text-[10px] tracking-widest text-slate-400">
-              Explore
-            </h5>
-            <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
-              <li>
-                <a
-                  href="#quote"
-                  className="hover:text-lime-500 transition-colors"
-                >
-                  Get a Quote
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#how"
-                  className="hover:text-lime-500 transition-colors"
-                >
-                  How it works
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#why"
-                  className="hover:text-lime-500 transition-colors"
-                >
-                  Why 101
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h5 className="font-extrabold mb-6 uppercase text-[10px] tracking-widest text-slate-400">
-              Accounts
-            </h5>
-            <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
+            <ul className="space-y-2.5 text-sm">
               <li>
                 <Link
                   to="/auth/dealer-signin"
-                  userType={"dealer"}
-                  className="hover:text-lime-500 transition-colors"
+                  className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
                 >
-                  Dealer Sign In
+                  Business
                 </Link>
+              </li>
+              <li>
+                <span className="text-slate-400 dark:text-slate-600 font-semibold cursor-default">
+                  Individual
+                </span>
               </li>
               <li>
                 <Link
                   to="/auth/dealer-signin"
-                  userType={"driver"}
-                  className="hover:text-lime-500 transition-colors"
+                  className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
                 >
-                  Driver Sign In
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/auth/dealer-signup"
-                  className="hover:text-lime-500 transition-colors"
-                >
-                  Become a Dealer
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/driver-onboarding"
-                  className="hover:text-lime-500 transition-colors"
-                >
-                  Become a Driver
+                  Driver
                 </Link>
               </li>
             </ul>
           </div>
 
+          {/* Help */}
           <div>
-            <h5 className="font-extrabold mb-6 uppercase text-[10px] tracking-widest text-slate-400">
-              Legal
-            </h5>
-            <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
+            <ul className="space-y-2.5 text-sm">
               <li>
                 <Link
-                  to="/privacy"
-                  className="hover:text-lime-500 transition-colors"
+                  to="/help/customer"
+                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
-                  Privacy Policy
+                  Customer Help
                 </Link>
               </li>
               <li>
                 <Link
-                  to="/terms"
-                  className="hover:text-lime-500 transition-colors"
+                  to="/help/driver"
+                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
-                  Terms of Service
+                  Driver Help
                 </Link>
               </li>
             </ul>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <Link
+              to="/contact"
+              className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+            >
+              Contact Us
+            </Link>
           </div>
         </div>
 
-        <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em]">
-            Greater LA Only
+        {/* Legal — pipe-separated, one line */}
+        <div className="mb-6">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            <Link to="/privacy" className="hover:text-lime-500 transition-colors">Privacy Policy</Link>
+            {" "}&bull;{" "}
+            <Link to="/terms" className="hover:text-lime-500 transition-colors">Terms of Service</Link>
+          </p>
+        </div>
+
+        {/* Bottom line */}
+        <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2">
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.25em]">
+            Strictly California-only operations
           </p>
           <p className="text-xs text-slate-500 font-medium">
-            © 2025 101 Drivers Inc. All rights reserved.
+            &copy; 2026 101 Drivers Inc. All rights reserved.
           </p>
         </div>
       </div>
