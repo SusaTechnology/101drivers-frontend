@@ -541,7 +541,7 @@ export function PricingConfigList({
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row gap-6" style={{ minHeight: '600px' }}>
             {/* Left panel skeleton */}
-            <div className="w-full lg:w-[380px] shrink-0 space-y-4">
+            <div className="w-full lg:w-[420px] shrink-0 space-y-4">
               <div className="flex gap-2">
                 <Skeleton className="h-11 flex-1 rounded-2xl" />
                 <Skeleton className="h-11 w-28 rounded-2xl" />
@@ -590,11 +590,11 @@ export function PricingConfigList({
             </div>
           ) : (
             /* ---------- Master-Detail Layout ---------- */
-            <div className="flex flex-col lg:flex-row" style={{ minHeight: '640px' }}>
+            <div className="flex flex-col lg:flex-row gap-0" style={{ minHeight: '640px' }}>
               {/* ===== LEFT PANEL: Config List ===== */}
-              <div className="w-full lg:w-[380px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col">
+              <div className="w-full lg:w-[420px] shrink-0 border-b lg:border-b-0 lg:border-r-2 border-slate-200 lg:border-slate-300 dark:border-slate-700 flex flex-col">
                 {/* Search + New Config */}
-                <div className="p-4 space-y-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="p-4 lg:p-5 space-y-3 border-b border-slate-100 dark:border-slate-800">
                   <div className="relative">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input
@@ -614,7 +614,7 @@ export function PricingConfigList({
 
                 {/* Scrollable List */}
                 <ScrollArea className="flex-1">
-                  <div className="p-3 space-y-2">
+                  <div className="p-3 lg:p-4 space-y-2">
                     {configs.map((config) => {
                       const modeInfo = modeBadgeStyles[config.pricingMode];
                       const ModeIcon = modeInfo.icon;
@@ -625,19 +625,19 @@ export function PricingConfigList({
                           key={config.id}
                           onClick={() => setSelectedConfigId(config.id)}
                           className={cn(
-                            "w-full text-left rounded-2xl p-4 transition-all duration-150 border",
+                            "w-full text-left rounded-2xl p-4 lg:p-5 transition-all duration-150 border",
                             isSelected
                               ? "ring-2 ring-primary bg-primary/5 border-primary/30 dark:bg-primary/10 dark:border-primary/40 shadow-sm"
                               : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700"
                           )}
                         >
-                          <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-start justify-between gap-3 mb-2.5">
                             <div className="flex items-center gap-2 min-w-0">
                               {config.isDefault && (
                                 <Crown className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
                               )}
                               <span className={cn(
-                                "font-extrabold text-slate-900 dark:text-white truncate text-sm",
+                                "font-extrabold text-slate-900 dark:text-white truncate text-[15px]",
                                 !config.isDefault && "pl-6"
                               )}>
                                 {config.name}
@@ -645,7 +645,7 @@ export function PricingConfigList({
                             </div>
                             <Badge
                               variant="outline"
-                              className={cn("inline-flex items-center gap-1 px-2 py-0.5 text-[10px] shrink-0", modeInfo.className)}
+                              className={cn("inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] shrink-0", modeInfo.className)}
                             >
                               <ModeIcon className="w-3 h-3" />
                               {modeInfo.label}
