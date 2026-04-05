@@ -522,12 +522,12 @@ export default function LandingPage() {
 
           {/* Contact */}
           <div>
-            <Link
-              to="/contact"
+            <a
+              href="#dealers"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
             >
               Contact Us
-            </Link>
+            </a>
           </div>
         </div>
 
