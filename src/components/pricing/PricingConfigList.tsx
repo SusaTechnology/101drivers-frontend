@@ -1,5 +1,5 @@
 // components/pricing/PricingConfigList.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -12,44 +12,26 @@ import {
   Layers,
   Calculator,
   DollarSign,
-  MoreVertical,
   CheckCircle,
   XCircle,
-  Star,
-  RefreshCw,
   AlertCircle,
   UserPlus,
   Users,
   Crown,
-  ToggleLeft,
-  ToggleRight,
+  Clock,
+  ArrowRight,
+  ShieldCheck,
+  Percent,
+  Receipt,
+  Route,
+  FileText,
+  CircleDot,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,8 +61,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   useDataQuery,
   useDataMutation,
@@ -90,7 +72,7 @@ import {
   useSetDefaultPricingConfig,
   useTogglePricingConfigStatus,
 } from '@/hooks/pricing/usePricingConfigs';
-import type { PricingConfig, PricingMode, PricingCustomer } from '@/types/pricing';
+import type { PricingConfig, PricingMode, PricingCustomer, PricingTier, CategoryRule } from '@/types/pricing';
 
 // Types for customers (simplified)
 interface Customer {
@@ -135,8 +117,194 @@ const modeBadgeStyles: Record<PricingMode, { icon: React.ElementType; className:
   },
 };
 
+// Category color mapping
+const categoryColors: Record<string, string> = {
+  A: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+  B: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  C: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800',
+};
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
+// ---------- Helper: format date ----------
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// ---------- Detail Field Row ----------
+function DetailField({ label, value, icon: Icon, children }: {
+  label: string;
+  value?: React.ReactNode;
+  icon?: React.ElementType;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 py-2">
+      <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm shrink-0">
+        {Icon && <Icon className="w-4 h-4" />}
+        <span className="font-medium">{label}</span>
+      </div>
+      <div className="text-right font-semibold text-slate-900 dark:text-white text-sm">
+        {children ?? value ?? <span className="text-slate-400">&mdash;</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Financial Detail Section ----------
+function FinancialSection({ config }: { config: PricingConfig }) {
+  return (
+    <div className="space-y-1">
+      <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Financial Details</h4>
+      <DetailField label="Base Fee" icon={DollarSign}>
+        <span className="text-lg font-black text-slate-900 dark:text-white">${config.baseFee.toFixed(2)}</span>
+      </DetailField>
+      <DetailField label="Insurance Fee" icon={ShieldCheck}>
+        <span>${config.insuranceFee.toFixed(2)}</span>
+      </DetailField>
+      {config.pricingMode === 'PER_MILE' && config.perMileRate && (
+        <DetailField label="Per-Mile Rate" icon={Route}>
+          <span className="text-lg font-black text-teal-600 dark:text-teal-400">${config.perMileRate.toFixed(2)}/mi</span>
+        </DetailField>
+      )}
+      <Separator className="my-2" />
+      <DetailField label="Transaction Fee %" icon={Percent}>
+        <span>{config.transactionFeePct}%</span>
+      </DetailField>
+      <DetailField label="Transaction Fee Fixed" icon={Receipt}>
+        <span>${config.transactionFeeFixed.toFixed(2)}</span>
+      </DetailField>
+      <DetailField label="Driver Share" icon={CircleDot}>
+        <span className="text-primary font-bold">{config.driverSharePct}%</span>
+      </DetailField>
+      <DetailField label="Fee Pass-Through" icon={ArrowRight}>
+        <Badge variant="outline" className={cn(
+          "text-xs",
+          config.feePassThrough
+            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800"
+            : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+        )}>
+          {config.feePassThrough ? 'Enabled' : 'Disabled'}
+        </Badge>
+      </DetailField>
+    </div>
+  );
+}
+
+// ---------- Mode-Specific Section ----------
+function ModeSpecificSection({ config }: { config: PricingConfig }) {
+  if (config.pricingMode === 'PER_MILE') {
+    return (
+      <div className="space-y-1">
+        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Per-Mile Pricing</h4>
+        <div className="rounded-2xl bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-900/30 p-5 text-center">
+          <Route className="w-8 h-8 text-teal-500 mx-auto mb-2" />
+          <div className="text-3xl font-black text-teal-700 dark:text-teal-300">${config.perMileRate?.toFixed(2)}</div>
+          <div className="text-sm text-teal-600 dark:text-teal-400 font-medium mt-1">per mile</div>
+          <div className="text-xs text-teal-500/70 mt-2">
+            Plus ${config.baseFee.toFixed(2)} base fee + ${config.insuranceFee.toFixed(2)} insurance
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (config.pricingMode === 'FLAT_TIER' && config.tiers.length > 0) {
+    return (
+      <div className="space-y-1">
+        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Flat Tiers ({config.tiers.length})</h4>
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="grid grid-cols-3 gap-0 bg-slate-50 dark:bg-slate-900 px-4 py-2.5">
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Min Miles</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Max Miles</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Flat Price</div>
+          </div>
+          {config.tiers.map((tier: PricingTier, idx: number) => (
+            <div
+              key={tier.id || idx}
+              className={cn(
+                "grid grid-cols-3 gap-0 px-4 py-3 text-sm",
+                idx < config.tiers.length - 1 ? "border-b border-slate-100 dark:border-slate-800" : ""
+              )}
+            >
+              <div className="font-medium text-slate-700 dark:text-slate-300">{tier.minMiles}</div>
+              <div className="font-medium text-slate-700 dark:text-slate-300">{tier.maxMiles ?? '∞'}</div>
+              <div className="font-black text-slate-900 dark:text-white text-right">${tier.flatPrice.toFixed(2)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (config.pricingMode === 'CATEGORY_ABC' && config.categoryRules.length > 0) {
+    return (
+      <div className="space-y-1">
+        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Category Rules</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {config.categoryRules.map((rule: CategoryRule) => (
+            <div
+              key={rule.id || rule.category}
+              className={cn(
+                "rounded-2xl border p-4",
+                categoryColors[rule.category] || "border-slate-200 dark:border-slate-800"
+              )}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Badge
+                  variant="outline"
+                  className={cn("text-lg font-black w-9 h-9 flex items-center justify-center p-0 rounded-xl", categoryColors[rule.category])}
+                >
+                  {rule.category}
+                </Badge>
+              </div>
+              <div className="space-y-2 text-sm">
+                <DetailField label="Mileage" icon={Route}>
+                  <span className="text-xs font-semibold">
+                    {rule.minMiles} &ndash; {rule.maxMiles ?? '∞'} mi
+                  </span>
+                </DetailField>
+                <DetailField label="Base Fee" icon={DollarSign}>
+                  <span className="text-xs font-semibold">${rule.baseFee?.toFixed(2) ?? '—'}</span>
+                </DetailField>
+                <DetailField label="Per Mile" icon={Calculator}>
+                  <span className="text-xs font-semibold">${rule.perMileRate?.toFixed(2) ?? '—'}/mi</span>
+                </DetailField>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+// ---------- Empty State ----------
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-center px-6">
+      <div className="w-20 h-20 rounded-3xl bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center mb-5">
+        <FileText className="w-10 h-10 text-slate-300 dark:text-slate-600" />
+      </div>
+      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+        Select a configuration
+      </h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed">
+        Choose a pricing configuration from the list to view its full details.
+      </p>
+    </div>
+  );
+}
+
+// ---------- Main Component ----------
 export function PricingConfigList({
   configs,
   isLoading = false,
@@ -149,9 +317,26 @@ export function PricingConfigList({
 }: PricingConfigListProps) {
   const navigate = useNavigate();
 
+  // Selected config state
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
+
+  // Auto-select first config when list changes
+  useEffect(() => {
+    if (configs.length > 0) {
+      const firstId = configs[0].id;
+      // Only auto-select if nothing is selected or the selected one no longer exists
+      if (!selectedConfigId || !configs.find(c => c.id === selectedConfigId)) {
+        setSelectedConfigId(firstId);
+      }
+    } else {
+      setSelectedConfigId(null);
+    }
+  }, [configs, selectedConfigId]);
+
+  const selectedConfig = configs.find(c => c.id === selectedConfigId) ?? null;
+
   // State for assignment modal
   const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
   const [selectedConfigName, setSelectedConfigName] = useState<string>('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [pricingModeOverride, setPricingModeOverride] = useState<string>('null');
@@ -277,24 +462,29 @@ export function PricingConfigList({
     return { name: currentConfig.name, id: currentConfig.id };
   };
 
-  // Loading skeleton for table
+  // ---------- Loading skeleton ----------
   if (isLoading) {
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-        <CardHeader className="border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Skeleton className="h-7 w-32 mb-2" />
-              <Skeleton className="h-4 w-64" />
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row gap-6" style={{ minHeight: '600px' }}>
+            {/* Left panel skeleton */}
+            <div className="w-full lg:w-[380px] shrink-0 space-y-4">
+              <div className="flex gap-2">
+                <Skeleton className="h-11 flex-1 rounded-2xl" />
+                <Skeleton className="h-11 w-28 rounded-2xl" />
+              </div>
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+              ))}
             </div>
-            <Skeleton className="h-11 w-80" />
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 sm:p-7">
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
+            {/* Right panel skeleton */}
+            <div className="flex-1 space-y-4">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-72" />
+              <Separator className="my-4" />
+              <Skeleton className="h-32 w-full rounded-2xl" />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -304,48 +494,17 @@ export function PricingConfigList({
   return (
     <>
       <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
-        <CardHeader className="border-b border-slate-100 dark:border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div>
-              <CardTitle className="text-xl font-black">Pricing Configurations</CardTitle>
-              <CardDescription className="text-sm mt-1">
-                Manage pricing configurations for the platform
-              </CardDescription>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => onSearchChange?.(e.target.value)}
-                  className="w-full sm:w-[320px] h-11 pl-12 pr-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
-                  placeholder="Search configurations..."
-                />
-              </div>
-
-              {/* Create button */}
-              <Link to="/admin-pricing-config/create">
-                <Button className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20 transition">
-                  <Plus className="w-4 h-4" />
-                  New Config
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-6 sm:p-7">
+        <CardContent className="p-0">
           {configs.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
-                <DollarSign className="w-8 h-8 text-slate-400" />
+            /* ---------- Empty configs state ---------- */
+            <div className="text-center py-16">
+              <div className="w-20 h-20 rounded-3xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-5">
+                <DollarSign className="w-10 h-10 text-slate-400" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
                 No pricing configurations found
               </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
                 {searchQuery
                   ? 'Try adjusting your search query'
                   : 'Get started by creating your first pricing configuration'}
@@ -358,249 +517,294 @@ export function PricingConfigList({
               </Link>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-slate-200 dark:border-slate-800">
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                      Name
-                    </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                      Mode
-                    </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                      Base Fee
-                    </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                      Driver Share
-                    </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                      Status
-                    </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 text-right">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {configs.map((config) => {
-                    const modeInfo = modeBadgeStyles[config.pricingMode];
-                    const ModeIcon = modeInfo.icon;
+            /* ---------- Master-Detail Layout ---------- */
+            <div className="flex flex-col lg:flex-row" style={{ minHeight: '640px' }}>
+              {/* ===== LEFT PANEL: Config List ===== */}
+              <div className="w-full lg:w-[380px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col">
+                {/* Search + New Config */}
+                <div className="p-4 space-y-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => onSearchChange?.(e.target.value)}
+                      className="w-full h-10 pl-10 pr-4 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                      placeholder="Search configurations..."
+                    />
+                  </div>
+                  <Link to="/admin-pricing-config/create" className="block">
+                    <Button className="w-full inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-primary text-slate-950 hover:shadow-lg hover:shadow-primary/20 transition text-sm font-bold">
+                      <Plus className="w-4 h-4" />
+                      New Config
+                    </Button>
+                  </Link>
+                </div>
 
-                    return (
-                      <TableRow
-                        key={config.id}
-                        className={cn(
-                          "border-slate-100 dark:border-slate-800 hover:bg-primary/5 transition",
-                          config.isDefault && "bg-amber-50/50 dark:bg-amber-900/10"
-                        )}
-                      >
-                        <TableCell className="py-4">
-                          <div className="flex items-center gap-2">
-                            {config.isDefault && (
-                              <Crown className="w-4 h-4 text-amber-500 fill-amber-500" title="Default configuration" />
-                            )}
-                            {!config.isDefault && config._count?.customers && config._count.customers > 0 && (
-                              <Star className="w-4 h-4 text-amber-500 fill-amber-500" title="Has assigned customers" />
-                            )}
-                            <div>
-                              <div className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                                {config.name}
-                                {config.isDefault && (
-                                  <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-[10px] font-bold">
-                                    DEFAULT
-                                  </Badge>
-                                )}
-                              </div>
-                              {config.description && (
-                                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[200px]">
-                                  {config.description}
-                                </div>
+                {/* Scrollable List */}
+                <ScrollArea className="flex-1">
+                  <div className="p-3 space-y-2">
+                    {configs.map((config) => {
+                      const modeInfo = modeBadgeStyles[config.pricingMode];
+                      const ModeIcon = modeInfo.icon;
+                      const isSelected = config.id === selectedConfigId;
+
+                      return (
+                        <button
+                          key={config.id}
+                          onClick={() => setSelectedConfigId(config.id)}
+                          className={cn(
+                            "w-full text-left rounded-2xl p-4 transition-all duration-150 border",
+                            isSelected
+                              ? "ring-2 ring-primary bg-primary/5 border-primary/30 dark:bg-primary/10 dark:border-primary/40 shadow-sm"
+                              : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {config.isDefault && (
+                                <Crown className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
                               )}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <Badge
-                            variant="outline"
-                            className={cn("inline-flex items-center gap-1.5 px-3 py-1.5", modeInfo.className)}
-                          >
-                            <ModeIcon className="w-3.5 h-3.5" />
-                            {modeInfo.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="font-black text-slate-900 dark:text-white">
-                            ${config.baseFee.toFixed(2)}
-                          </div>
-                          {config.insuranceFee ? (
-                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                              + ${config.insuranceFee.toFixed(2)} insurance
-                            </div>
-                          ) : null}
-                          {config.pricingMode === 'PER_MILE' && config.perMileRate && (
-                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                              ${config.perMileRate}/mi
-                            </div>
-                          )}
-                          {config.pricingMode === 'FLAT_TIER' && config.tiers.length > 0 && (
-                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                              {config.tiers.length} tier{config.tiers.length > 1 ? 's' : ''}
-                            </div>
-                          )}
-                          {config.pricingMode === 'CATEGORY_ABC' && config.categoryRules.length > 0 && (
-                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                              {config.categoryRules.length} categor{config.categoryRules.length > 1 ? 'ies' : 'y'}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="font-bold text-slate-700 dark:text-slate-300">
-                            {config.driverSharePct}%
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="flex items-center gap-3">
-                            {/* Quick Status Toggle */}
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleToggleStatus(config.id, config.active)}
-                                className="flex items-center gap-1.5"
-                                title={config.active ? 'Click to deactivate' : 'Click to activate'}
-                              >
-                                {config.active ? (
-                                  <ToggleRight className="w-6 h-6 text-green-500" />
-                                ) : (
-                                  <ToggleLeft className="w-6 h-6 text-slate-400" />
-                                )}
-                              </button>
                               <span className={cn(
-                                "text-xs font-medium",
-                                config.active ? "text-green-600 dark:text-green-400" : "text-slate-500"
+                                "font-extrabold text-slate-900 dark:text-white truncate text-sm",
+                                !config.isDefault && "pl-6"
                               )}>
-                                {config.active ? 'Active' : 'Inactive'}
+                                {config.name}
                               </span>
                             </div>
-                            {config._count?.customers && config._count.customers > 0 && (
-                              <button
-                                onClick={() => handleViewCustomers(config)}
-                                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition text-xs"
-                                title="View assigned customers"
-                              >
-                                <Users className="w-3.5 h-3.5" />
-                                {config._count.customers}
-                              </button>
+                            <Badge
+                              variant="outline"
+                              className={cn("inline-flex items-center gap-1 px-2 py-0.5 text-[10px] shrink-0", modeInfo.className)}
+                            >
+                              <ModeIcon className="w-3 h-3" />
+                              {modeInfo.label}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-black text-slate-900 dark:text-white">
+                                ${config.baseFee.toFixed(2)}
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
+                                {config.driverSharePct}% driver
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {config.active ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-600 dark:text-green-400">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Active
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400">
+                                  <XCircle className="w-3 h-3" />
+                                  Inactive
+                                </span>
+                              )}
+                              {config._count?.customers && config._count.customers > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full">
+                                  <Users className="w-3 h-3" />
+                                  {config._count.customers}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    <p className="text-xs text-slate-400 dark:text-slate-500 text-center pt-2 pb-1">
+                      {configs.length} configuration{configs.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </ScrollArea>
+              </div>
+
+              {/* ===== RIGHT PANEL: Detail View ===== */}
+              <div className="flex-1 min-w-0">
+                {selectedConfig ? (
+                  <ScrollArea className="h-full">
+                    <div className="p-6 lg:p-8 space-y-6">
+                      {/* ---- Header Section ---- */}
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            {selectedConfig.isDefault && (
+                              <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-[10px] font-bold gap-1">
+                                <Crown className="w-3 h-3" />
+                                DEFAULT
+                              </Badge>
+                            )}
+                            {selectedConfig.active ? (
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800 text-[10px] font-bold gap-1">
+                                <CheckCircle className="w-3 h-3" />
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700 text-[10px] font-bold gap-1">
+                                <XCircle className="w-3 h-3" />
+                                Inactive
+                              </Badge>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell className="py-4 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-9 w-9 p-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
-                              >
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  if (onEdit) onEdit(config.id);
-                                  else navigate({ to: `/admin-pricing-config/edit/${config.id}` });
-                                }}
-                                className="cursor-pointer"
-                              >
-                                <Edit className="w-4 h-4 mr-2 text-primary" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleAssign(config.id, config.name)}
-                                className="cursor-pointer"
-                              >
-                                <UserPlus className="w-4 h-4 mr-2 text-blue-500" />
-                                Assign to Customer
-                              </DropdownMenuItem>
-                              {config._count?.customers && config._count.customers > 0 && (
-                                <DropdownMenuItem
-                                  onClick={() => handleViewCustomers(config)}
-                                  className="cursor-pointer"
-                                >
-                                  <Users className="w-4 h-4 mr-2 text-slate-500" />
-                                  View Customers ({config._count.customers})
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              {!config.isDefault && (
-                                <DropdownMenuItem
-                                  onClick={() => handleSetDefault(config.id)}
-                                  className="cursor-pointer"
-                                  disabled={setDefaultMutation.isPending}
-                                >
-                                  <Crown className="w-4 h-4 mr-2 text-amber-500" />
-                                  Set as Default
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <DropdownMenuItem
-                                    className="text-red-600 dark:text-red-400 cursor-pointer"
-                                    onSelect={(e) => e.preventDefault()}
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Configuration</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete "{config.name}"? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => {
-                                        if (onDelete) onDelete(config.id);
-                                      }}
-                                      className="bg-red-600 hover:bg-red-700 text-white"
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                          <h2 className="text-2xl font-black text-slate-900 dark:text-white leading-tight">
+                            {selectedConfig.name}
+                          </h2>
+                          {selectedConfig.description && (
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                              {selectedConfig.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge
+                            variant="outline"
+                            className={cn("inline-flex items-center gap-1.5 px-3 py-1.5", modeBadgeStyles[selectedConfig.pricingMode].className)}
+                          >
+                            {React.createElement(modeBadgeStyles[selectedConfig.pricingMode].icon, { className: "w-4 h-4" })}
+                            {modeBadgeStyles[selectedConfig.pricingMode].label}
+                          </Badge>
+                        </div>
+                      </div>
 
-          {configs.length > 0 && (
-            <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Showing <span className="font-extrabold">{configs.length}</span> configuration{configs.length !== 1 ? 's' : ''}
-              </p>
+                      {/* Dates row */}
+                      <div className="flex flex-wrap gap-4 text-xs text-slate-400 dark:text-slate-500">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          Created: {formatDate(selectedConfig.createdAt)}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          Updated: {formatDate(selectedConfig.updatedAt)}
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* ---- Financial Section ---- */}
+                      <FinancialSection config={selectedConfig} />
+
+                      <Separator />
+
+                      {/* ---- Mode-Specific Section ---- */}
+                      <ModeSpecificSection config={selectedConfig} />
+
+                      <Separator />
+
+                      {/* ---- Customers Section ---- */}
+                      <div className="space-y-1">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Customers</h4>
+                        <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                              <Users className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <div className="text-lg font-black text-slate-900 dark:text-white">
+                                {selectedConfig._count?.customers ?? selectedConfig.customers?.length ?? 0}
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">assigned customers</div>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewCustomers(selectedConfig)}
+                            disabled={!selectedConfig._count?.customers && !selectedConfig.customers?.length}
+                            className="rounded-xl gap-1.5"
+                          >
+                            <Users className="w-3.5 h-3.5" />
+                            View Customers
+                          </Button>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* ---- Action Buttons ---- */}
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          onClick={() => {
+                            if (onEdit) onEdit(selectedConfig.id);
+                            else navigate({ to: `/admin-pricing-config/edit/${selectedConfig.id}` });
+                          }}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-slate-950 hover:shadow-lg hover:shadow-primary/20 transition font-bold text-sm"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          onClick={() => handleAssign(selectedConfig.id, selectedConfig.name)}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          Assign to Customer
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          onClick={() => handleSetDefault(selectedConfig.id)}
+                          disabled={selectedConfig.isDefault || setDefaultMutation.isPending}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
+                        >
+                          <Crown className="w-4 h-4" />
+                          {selectedConfig.isDefault ? 'Default' : 'Set as Default'}
+                        </Button>
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-700 dark:hover:text-red-300"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Configuration</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete &ldquo;{selectedConfig.name}&rdquo;? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => {
+                                  if (onDelete) onDelete(selectedConfig.id);
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  /* ---- Empty Detail State ---- */
+                  <div className="h-full min-h-[400px] lg:min-h-0">
+                    <EmptyState />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Assignment Modal */}
+      {/* ===== Assignment Modal ===== */}
       <Dialog open={assignModalOpen} onOpenChange={setAssignModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Assign Pricing Configuration</DialogTitle>
             <DialogDescription>
-              Assign "{selectedConfigName}" to a business customer.
+              Assign &ldquo;{selectedConfigName}&rdquo; to a business customer.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -665,7 +869,7 @@ export function PricingConfigList({
                 </SelectContent>
               </Select>
               <p className="text-xs text-slate-500">
-                Override the pricing mode for this customer. Leave as "No override" to use the configuration's mode.
+                Override the pricing mode for this customer. Leave as &ldquo;No override&rdquo; to use the configuration&rsquo;s mode.
               </p>
             </div>
 
@@ -709,13 +913,13 @@ export function PricingConfigList({
         </DialogContent>
       </Dialog>
 
-      {/* View Customers Modal */}
+      {/* ===== View Customers Modal ===== */}
       <Dialog open={viewCustomersModalOpen} onOpenChange={setViewCustomersModalOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Assigned Customers</DialogTitle>
             <DialogDescription>
-              Customers using "{viewingConfigName}" pricing configuration
+              Customers using &ldquo;{viewingConfigName}&rdquo; pricing configuration
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
