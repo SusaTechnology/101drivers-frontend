@@ -352,65 +352,65 @@ export default function LandingPage() {
     submitInvestorLead.mutate(investorLeadForm);
   };
 
-  // How it works steps
+  // How it works steps — driver perspective
   const howItWorks = [
     {
       step: 1,
-      title: "Get an estimate",
+      title: "Pick a route",
       description:
-        "Enter pickup & drop-off (CA only). See route, miles, and estimate.",
+        "Browse available deliveries. See the pay and distance before you commit.",
       icon: MapPinned,
     },
     {
       step: 2,
-      title: "Add details",
+      title: "Drive it there",
       description:
-        "Choose service type, scheduling, and provide contact details (after estimate).",
-      icon: Settings,
+        "Pick up the car, follow the planned route. No passengers, no rush.",
+      icon: Car,
     },
     {
       step: 3,
-      title: "Deliver with proof",
+      title: "Get paid",
       description:
-        "Compliance proofs captured by drivers; stakeholders receive updates (email-first).",
-      icon: Shield,
+        "Drop off, submit proof. Earnings hit your account. Keep all tips.",
+      icon: CheckCircle,
     },
   ];
 
-  // The 101 Standard features
+  // Why 101 features — plain language
   const standards = [
     {
-      title: "VIN last-4 verification",
+      title: "VIN check",
       description:
-        "Driver confirms the vehicle at pickup using the required VIN last-4.",
+        "Quick 4-digit check at pickup. Takes 10 seconds.",
       icon: QrCode,
     },
     {
-      title: "Photo documentation",
+      title: "Photos",
       description:
-        "Required pickup and drop-off photos captured as part of the delivery process.",
+        "Snap a few photos at pickup and drop-off. That's it.",
       icon: Camera,
     },
     {
-      title: "Odometer start/end",
-      description: "Mileage logging with photo evidence at both trip ends.",
+      title: "Mileage log",
+      description: "Start and end miles, captured automatically.",
       icon: Gauge,
     },
     {
-      title: "Start/stop tracking",
+      title: "Live tracking",
       description:
-        "Tracking begins when the driver taps Start and ends when delivery completes.",
+        "GPS runs while you drive. No extra steps.",
       icon: Navigation,
     },
     {
-      title: "Compliance checks",
-      description: "Verification checkpoints throughout relocation per policy.",
+      title: "Simple checks",
+      description: "A few quick taps along the way. No paperwork.",
       icon: CheckCircle,
     },
     {
-      title: "Post-trip report",
+      title: "Trip record",
       description:
-        "A complete digital record of delivery events and proofs for stakeholders.",
+        "Everything saved digitally. You get a copy too.",
       icon: FileText,
     },
   ];
@@ -448,12 +448,7 @@ export default function LandingPage() {
               </span>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
-              California vehicle delivery marketplace focused on
-              compliance-driven relocations and transparent delivery proofs.
-            </p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Email-first notifications; SMS optional when enabled by Admin
-              policy.
+              Moving cars across Greater LA. Planned routes, clear pay, no surprises.
             </p>
           </div>
 
@@ -467,7 +462,7 @@ export default function LandingPage() {
                   href="#quote"
                   className="hover:text-lime-500 transition-colors"
                 >
-                  Instant Quote
+                  Get a Quote
                 </a>
               </li>
               <li>
@@ -480,10 +475,10 @@ export default function LandingPage() {
               </li>
               <li>
                 <a
-                  href="#standard"
+                  href="#why"
                   className="hover:text-lime-500 transition-colors"
                 >
-                  Compliance
+                  Why 101
                 </a>
               </li>
             </ul>
@@ -533,7 +528,7 @@ export default function LandingPage() {
 
           <div>
             <h5 className="font-extrabold mb-6 uppercase text-[10px] tracking-widest text-slate-400">
-              Governance
+              Legal
             </h5>
             <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
               <li>
@@ -552,24 +547,16 @@ export default function LandingPage() {
                   Terms of Service
                 </Link>
               </li>
-              <li>
-                <a
-                  href="#standard"
-                  className="hover:text-lime-500 transition-colors"
-                >
-                  Carrier Policy
-                </a>
-              </li>
             </ul>
           </div>
         </div>
 
         <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em]">
-            Strictly California-Only Operations
+            Greater LA Only
           </p>
           <p className="text-xs text-slate-500 font-medium">
-            © 2024 101 Drivers Inc. All rights reserved.
+            © 2025 101 Drivers Inc. All rights reserved.
           </p>
         </div>
       </div>
@@ -577,196 +564,131 @@ export default function LandingPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950">
       <NavBar />
       <main className="w-full max-w-[1440px] mx-auto">
-        {/* Hero + Quote */}
-        <section
-          id="quote"
-          className="grid grid-cols-1 lg:grid-cols-2 gap-14 px-6 lg:px-8 py-16 lg:py-24 items-center"
-        >
-          <div className="flex flex-col gap-8">
-            <Badge variant="secondary" className="w-fit gap-2 px-4 py-1.5">
-              <Verified className="h-3 w-3" />
-              <span className="text-[10px] font-extrabold uppercase tracking-widest">
-                California Operations Only
-              </span>
-            </Badge>
 
-            <h1 className="text-5xl lg:text-6xl font-black leading-[1.06] text-slate-900 dark:text-white">
-              Get an instant estimate for
-              <span className="text-lime-500 italic"> vehicle delivery</span>
-              across California.
-            </h1>
-
-            <p className="text-lg lg:text-xl text-slate-600 dark:text-slate-400 leading-relaxed max-w-[640px]">
-              Quote-first: enter pickup + drop-off, review route, miles and
-              estimate.
-              <span className="font-bold">
-                {" "}
-                Service type and contact details come after
-              </span>{" "}
-              you see the price.
-            </p>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <a
-                href="#estimate"
-                onClick={handleCalculateEstimate}
-                className={`w-full py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                  isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError
-                    ? "opacity-50 pointer-events-none"
-                    : ""
-                }`}
-              >
-                {isLoadingQuote ? "Calculating..." : "Calculate Estimate"}
-                <ArrowRight className="h-4 w-4" />
-              </a>
-
-              <Link
-                to="/driver-onboarding"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold text-sm sm:text-base transition"
-              >
-                Become a Driver
-                <User className="h-4 w-4 text-lime-500" />
-              </Link>
-
-              <Link
-                to="/auth/dealer-signup"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold text-sm sm:text-base transition"
-              >
-                Become a Dealer
-                <Store className="h-4 w-4 text-lime-500" />
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-              {heroFeatures.map((feature, index) => {
-                const Icon = feature.icon;
-                return (
-                  <Card
-                    key={index}
-                    className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow"
-                  >
-                    <CardContent className="p-5">
-                      <div className="w-11 h-11 rounded-2xl bg-lime-500/15 flex items-center justify-center mb-4">
-                        <Icon className="h-5 w-5 text-lime-500 font-bold" />
-                      </div>
-                      <div className="font-extrabold text-slate-900 dark:text-white">
-                        {feature.title}
-                      </div>
-                      <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        {feature.description}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+        {/* ===== HERO — centered, driver-focused ===== */}
+        <section className="flex flex-col items-center justify-center text-center px-6 pt-12 pb-16 lg:pt-20 lg:pb-24 min-h-[60vh]">
+          {/* User icon in rounded square */}
+          <div className="w-20 h-20 rounded-2xl bg-lime-500/15 flex items-center justify-center mb-8">
+            <User className="h-10 w-10 text-lime-500" />
           </div>
 
-          {/* Quote card */}
-          <Card
-            id="quoteCard"
-            className="rounded-3xl shadow-xl border-slate-200/70 dark:border-slate-800 relative"
-          >
-            <div className="absolute -top-6 -right-6 w-28 h-28 bg-lime-500/10 rounded-full blur-3xl" />
-            <CardContent className="p-8 lg:p-10">
-              <div className="flex items-start justify-between gap-4 mb-8">
-                <div>
-                  <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest">
-                    <Bolt className="h-4 w-4" />
-                    Instant Quote
-                  </div>
-                  <CardTitle className="text-2xl font-extrabold mt-2 text-slate-900 dark:text-white">
-                    Enter addresses
-                  </CardTitle>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    We'll ask service type + contact details after you review
-                    the estimate.
-                  </p>
-                </div>
+          {/* Headline */}
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.1] text-slate-900 dark:text-white max-w-2xl tracking-tight">
+            Move Cars in LA – Schedule Ahead, Know Your Pay
+          </h1>
 
-                <Badge
-                  variant="outline"
-                  className="hidden sm:inline-flex gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-widest"
-                >
-                  <MapPin className="h-4 w-4 text-lime-500" />
-                  CA Only
-                </Badge>
-              </div>
+          {/* Subheadline with bullet separators */}
+          <p className="mt-6 text-base lg:text-lg text-slate-500 dark:text-slate-400 leading-relaxed max-w-lg">
+            25+, clean record {"\u2022"} Greater LA only {"\u2022"} No own car needed {"\u2022"} No passengers {"\u2022"} Plan routes, keep all tips
+          </p>
 
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="pickup" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Pickup Address
-                  </Label>
-                  <LocationAutocomplete
-                    key="pickup"
-                    value={pickupAddress}
-                    onChange={setPickupAddress}
-                    onPlaceSelect={handlePickupSelect}
-                    onClear={handlePickupClear}
-                    placeholder="Search and select pickup location (CA only)"
-                    isLoaded={isLoaded}
-                    icon={<Target className="h-4 w-4 text-slate-400" />}
-                  />
-                  {pickupError && (
-                    <p className="text-xs text-red-500 mt-1">{pickupError}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="dropoff" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Drop-off Address
-                  </Label>
-                  <LocationAutocomplete
-                    key="dropoff"
-                    value={dropoffAddress}
-                    onChange={setDropoffAddress}
-                    onPlaceSelect={handleDropoffSelect}
-                    onClear={handleDropoffClear}
-                    placeholder="Search and select drop-off location (CA only)"
-                    isLoaded={isLoaded}
-                    icon={<Flag className="h-4 w-4 text-slate-400" />}
-                  />
-                  {dropoffError && (
-                    <p className="text-xs text-red-500 mt-1">{dropoffError}</p>
-                  )}
-                </div>
-
-                <a
-                  href="#estimate"
-                  onClick={handleCalculateEstimate}
-                  className={`w-full py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                    isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError
-                      ? "opacity-50 pointer-events-none"
-                      : ""
-                  }`}
-                >
-                  {isLoadingQuote ? "Calculating..." : "Calculate Estimate"}
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Notifications are{" "}
-                  <span className="font-bold">email-first</span>. SMS may be
-                  used optionally if enabled by Admin policy.
-                </p>
-
-                {/* <div className="mt-2 flex gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30">
-                  <Info className="h-5 w-5 text-amber-500" />
-                  <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
-                    Prototype: map autocomplete + California-only enforcement
-                    will be implemented in the real app.
-                  </p>
-                </div> */}
-              </div>
-            </CardContent>
-          </Card>
+          {/* CTAs */}
+          <div className="w-full max-w-sm mt-10 flex flex-col gap-3">
+            <Link
+              to="/driver-onboarding"
+              className="w-full py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 text-lg"
+            >
+              Join the Waitlist
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+            <Link
+              to="/auth/dealer-signin"
+              className="w-full py-4 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition flex items-center justify-center gap-2 text-lg"
+            >
+              Already In? Log In
+              <LogIn className="h-5 w-5 text-lime-500" />
+            </Link>
+          </div>
         </section>
 
-        {/* Estimate output */}
+        {/* ===== QUOTE CALCULATOR — moved below hero ===== */}
+        <section id="quote" className="px-6 lg:px-8 pb-12">
+          <div className="max-w-lg mx-auto">
+            <Card className="rounded-3xl shadow-xl border-slate-200/70 dark:border-slate-800 relative">
+              <div className="absolute -top-6 -right-6 w-28 h-28 bg-lime-500/10 rounded-full blur-3xl" />
+              <CardContent className="p-8 lg:p-10">
+                <div className="mb-8">
+                  <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest">
+                    <Bolt className="h-4 w-4" />
+                    Quick Quote
+                  </div>
+                  <CardTitle className="text-2xl font-extrabold mt-2 text-slate-900 dark:text-white">
+                    See what a delivery costs
+                  </CardTitle>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    Enter pickup and drop-off. California only.
+                  </p>
+                </div>
+
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Pickup Address
+                    </Label>
+                    <LocationAutocomplete
+                      key="pickup"
+                      value={pickupAddress}
+                      onChange={setPickupAddress}
+                      onPlaceSelect={handlePickupSelect}
+                      onClear={handlePickupClear}
+                      placeholder="Search pickup location (CA only)"
+                      isLoaded={isLoaded}
+                      icon={<Target className="h-4 w-4 text-slate-400" />}
+                    />
+                    {pickupError && (
+                      <p className="text-xs text-red-500 mt-1">{pickupError}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dropoff" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Drop-off Address
+                    </Label>
+                    <LocationAutocomplete
+                      key="dropoff"
+                      value={dropoffAddress}
+                      onChange={setDropoffAddress}
+                      onPlaceSelect={handleDropoffSelect}
+                      onClear={handleDropoffClear}
+                      placeholder="Search drop-off location (CA only)"
+                      isLoaded={isLoaded}
+                      icon={<Flag className="h-4 w-4 text-slate-400" />}
+                    />
+                    {dropoffError && (
+                      <p className="text-xs text-red-500 mt-1">{dropoffError}</p>
+                    )}
+                  </div>
+
+                  <a
+                    href="#estimate"
+                    onClick={handleCalculateEstimate}
+                    className={`w-full py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
+                      isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError
+                        ? "opacity-50 pointer-events-none"
+                        : ""
+                    }`}
+                  >
+                    {isLoadingQuote ? "Calculating..." : "Get Estimate"}
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+
+                  <Badge
+                    variant="outline"
+                    className="w-fit gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-widest"
+                  >
+                    <MapPin className="h-4 w-4 text-lime-500" />
+                    CA Only
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {/* ===== ESTIMATE OUTPUT ===== */}
         <section id="estimate" className="px-6 lg:px-8 pb-16">
           <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="grid grid-cols-1 lg:grid-cols-12">
@@ -869,39 +791,38 @@ export default function LandingPage() {
                   <div className="mt-6 flex gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30">
                     <Info className="h-5 w-5 text-amber-500" />
                     <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
-                      Quote-first: service type + contact details are collected
-                      after estimate. Final scheduling depends on driver
+                      Estimate only. Final scheduling depends on driver
                       availability and operational policy.
                     </p>
                   </div>
                 </div>
 
                 <div className="hidden sm:flex mt-8 gap-3">
-<Link
-  to={quoteResult ? "/quote-details" : "#"}
-  state={
-    quoteResult
-      ? {
-          quote: quoteResult,
-          pickupCoords,
-          dropoffCoords,
-          pickupAddress,
-          dropoffAddress,
-        }
-      : undefined
-  }
-  onClick={(e) => {
-    if (!quoteResult) e.preventDefault();
-  }}
-  className={`flex-1 font-extrabold rounded-2xl py-4 text-center transition shadow-lg
-  ${
-    quoteResult
-      ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
-      : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
-  }`}
->
-  Continue
-</Link>
+                  <Link
+                    to={quoteResult ? "/quote-details" : "#"}
+                    state={
+                      quoteResult
+                        ? {
+                            quote: quoteResult,
+                            pickupCoords,
+                            dropoffCoords,
+                            pickupAddress,
+                            dropoffAddress,
+                          }
+                        : undefined
+                    }
+                    onClick={(e) => {
+                      if (!quoteResult) e.preventDefault();
+                    }}
+                    className={`flex-1 font-extrabold rounded-2xl py-4 text-center transition shadow-lg
+                    ${
+                      quoteResult
+                        ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
+                        : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
+                    }`}
+                  >
+                    Continue
+                  </Link>
                   <Button
                     variant="outline"
                     className="flex-1 py-4 rounded-2xl font-extrabold"
@@ -933,22 +854,21 @@ export default function LandingPage() {
                 </div>
 
                 <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Next step: choose service type, scheduling, and provide
-                  contact details (collected after estimate).
+                  Service type and scheduling come after you review the estimate.
                 </p>
               </div>
             </div>
           </Card>
         </section>
 
-        {/* How it works */}
+        {/* ===== HOW IT WORKS — driver perspective ===== */}
         <section id="how" className="px-6 lg:px-8 py-16 lg:py-20">
           <div className="max-w-2xl">
             <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white">
               How it works
             </h2>
-            <p className="text-lg text-slate-600 dark:text-slate-400 mt-4">
-              Quote-first, then details.
+            <p className="text-lg text-slate-500 dark:text-slate-400 mt-4">
+              Simple. Planned. On your time.
             </p>
           </div>
 
@@ -965,9 +885,9 @@ export default function LandingPage() {
                       <Icon className="h-6 w-6 text-lime-500 font-bold" />
                     </div>
                     <CardTitle className="text-xl font-extrabold text-slate-900 dark:text-white">
-                      {step.step}) {step.title}
+                      {step.step}. {step.title}
                     </CardTitle>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
                       {step.description}
                     </p>
                   </CardContent>
@@ -977,14 +897,14 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* The 101 Standard */}
-        <section id="standard" className="px-6 lg:px-8 py-16 lg:py-20">
+        {/* ===== WHY 101 — plain language features ===== */}
+        <section id="why" className="px-6 lg:px-8 py-16 lg:py-20">
           <div className="text-center mb-12 max-w-2xl mx-auto">
             <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white">
-              The 101 Standard
+              Why 101
             </h2>
-            <p className="text-lg text-slate-600 dark:text-slate-400 mt-4">
-              Transparency is our protocol.
+            <p className="text-lg text-slate-500 dark:text-slate-400 mt-4">
+              Clear process. No surprises.
             </p>
           </div>
 
@@ -1003,7 +923,7 @@ export default function LandingPage() {
                     <CardTitle className="font-extrabold text-xl text-slate-900 dark:text-white">
                       {standard.title}
                     </CardTitle>
-                    <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mt-2">
+                    <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mt-2">
                       {standard.description}
                     </p>
                   </CardContent>
@@ -1013,7 +933,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Dealer Lead Section - controlled by settings */}
+        {/* ===== DEALER LEAD SECTION — kept exactly as-is ===== */}
         {settings?.dealerLeadEnabled && (
         <section
           id="dealers"
@@ -1105,7 +1025,7 @@ export default function LandingPage() {
                   <CheckCircle className="h-6 w-6 text-emerald-500" />
                   <div>
                     <div className="font-extrabold text-slate-900 dark:text-white">Thank you!</div>
-                    <div className="text-sm text-slate-600 dark:text-slate-400">We\'ve received your request and will be in touch soon.</div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">We've received your request and will be in touch soon.</div>
                   </div>
                 </div>
               </div>
@@ -1141,7 +1061,7 @@ export default function LandingPage() {
         </section>
         )}
 
-        {/* Fundraising / Investor Section - controlled by settings */}
+        {/* ===== FUNDRAISING / INVESTOR SECTION — kept exactly as-is ===== */}
         {settings?.fundraisingEnabled && (
         <section
           id="fundraising"
@@ -1254,7 +1174,7 @@ export default function LandingPage() {
                           <CheckCircle className="h-5 w-5 text-emerald-500" />
                           <div>
                             <div className="font-extrabold text-slate-900 dark:text-white">Thank you!</div>
-                            <div className="text-sm text-slate-600 dark:text-slate-400">We\'ll be in touch soon.</div>
+                            <div className="text-sm text-slate-600 dark:text-slate-400">We'll be in touch soon.</div>
                           </div>
                         </div>
                       </div>
@@ -1266,40 +1186,6 @@ export default function LandingPage() {
           </div>
         </section>
         )}
-
-        {/* Drivers */}
-        <section
-          id="drivers"
-          className="px-6 lg:px-8 py-16 lg:py-20 text-center"
-        >
-          <div className="max-w-3xl mx-auto space-y-8">
-            <div className="w-20 h-20 bg-lime-500/15 text-lime-500 rounded-3xl flex items-center justify-center mx-auto">
-              <User className="h-8 w-8" />
-            </div>
-            <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white leading-tight">
-              Professional driving opportunities
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400 text-xl leading-relaxed">
-              Join a professional network that values protocol and reliability.
-              Help move California with 101 Drivers.
-            </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
-              <Link
-                to="/driver-onboarding"
-                className="inline-flex items-center justify-center px-12 py-5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-black text-lg transition-all"
-              >
-                Become a Certified Driver
-              </Link>
-              <Link
-                to="/auth/dealer-signin"
-                search={{ userType: "driver" }}
-                className="inline-flex items-center justify-center px-12 py-5 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-black text-lg transition"
-              >
-                Driver Sign In
-              </Link>
-            </div>
-          </div>
-        </section>
       </main>
 
       <Footer />
