@@ -343,10 +343,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const postpaidEnabled = isBusinessCustomer && (customerDataQuery.data?.postpaidEnabled ?? false);
 
   // Saved addresses state
-  const [useSavedAddresses, setUseSavedAddresses] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState<SavedAddress | null>(null);
-  const [pickupLabel, setPickupLabel] = useState('');
+  const [pickupSaved, setPickupSaved] = useState(false);
   const [pendingSavedAddressId, setPendingSavedAddressId] = useState<string | null>(null);
 
   // Saved vehicles state
@@ -627,9 +626,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           }
           
           // Restore saved address/vehicle state
-          if (data.useSavedAddresses !== undefined) {
-            setUseSavedAddresses(data.useSavedAddresses);
-          }
           if (data.selectedSavedAddressId) {
             // Store ID for later restoration when savedAddresses query completes
             setPendingSavedAddressId(data.selectedSavedAddressId);
@@ -947,7 +943,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       postpaidEnabled: postpaidEnabled,
 
       // Saved address/vehicle state
-      useSavedAddresses: useSavedAddresses,
       selectedSavedAddressId: selectedSavedAddress?.id,
       useSavedVehicle: useSavedVehicle,
       selectedSavedVehicleId: selectedSavedVehicle?.id,
@@ -1046,8 +1041,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   // Mutation for saving pickup address
   const saveAddressMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/savedAddresses`, {
     onSuccess: () => {
-      toast.success("Pickup address saved for future use");
+      toast.success("Location saved");
       savedAddressesQuery.refetch();
+      setPickupSaved(true);
     },
     onError: (error: any) => {
       toast.error("Failed to save address", { description: error?.message });
@@ -1136,12 +1132,12 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
       // Auto-select default address if exists and no address selected
       const defaultAddress = savedAddressesQuery.data.find(addr => addr.isDefault);
-      if (defaultAddress && !selectedSavedAddress) {
+      if (defaultAddress && !selectedSavedAddress && !pickupAddress) {
         setSelectedSavedAddress(defaultAddress);
         setValue('pickupAddress', defaultAddress.address);
         setPickupCoords({ lat: defaultAddress.lat, lng: defaultAddress.lng });
         if (defaultAddress.state) setPickupState(defaultAddress.state);
-        setUseSavedAddresses(true);
+        setPickupSaved(true);
       }
     }
   }, [savedAddressesQuery.data, pendingSavedAddressId]);
@@ -1529,6 +1525,8 @@ const handleQuotePreview = () => {
       setPickupCoords({ lat, lng });
       setPickupPlaceId(place.place_id || null);
       setValue("pickupAddress", place.formatted_address || "");
+      setSelectedSavedAddress(null);
+      setPickupSaved(false);
 
 
         if (place.address_components) {
@@ -2001,7 +1999,7 @@ const handleQuotePreview = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  {/* Pickup Address - with saved addresses toggle */}
+                  {/* Pickup Address */}
                   <div className="space-y-2">
                     <Label
                       htmlFor="pickupAddress"
@@ -2009,143 +2007,97 @@ const handleQuotePreview = () => {
                     >
                       From Where
                     </Label>
-                    {useSavedAddresses ? (
-                      <Select
-                        onValueChange={handleSavedAddressSelect}
-                        value={selectedSavedAddress?.id || ""}
-                      >
-                        <SelectTrigger className="h-14 rounded-2xl w-full">
-                          <SelectValue placeholder="Select saved address" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {savedAddresses.map((addr) => (
-                            <SelectItem key={addr.id} value={addr.id}>
-                              {addr.label ? `${addr.label}: ${addr.address}` : addr.address}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <LocationAutocomplete
-                        key="pickup"
-                        value={pickupAddress || ""}
-                        onChange={(val) => setValue("pickupAddress", val)}
-                        onPlaceSelect={handlePickupSelect}
-                        onClear={handlePickupClear}
-                        isLoaded={isLoaded}
-                        placeholder="Search Pickup (California Only)"
-                        icon={<MapPin className="h-5 w-5 text-slate-400" />}
-                      />
-                    )}
+                    <LocationAutocomplete
+                      key="pickup"
+                      value={pickupAddress || ""}
+                      onChange={(val) => {
+                        setValue("pickupAddress", val);
+                        // If user clears or types new text, reset saved state
+                        if (!val) {
+                          setSelectedSavedAddress(null);
+                          setPickupSaved(false);
+                        }
+                      }}
+                      onPlaceSelect={handlePickupSelect}
+                      onClear={() => {
+                        handlePickupClear();
+                        setSelectedSavedAddress(null);
+                        setPickupSaved(false);
+                      }}
+                      isLoaded={isLoaded}
+                      placeholder="Search Pickup (California Only)"
+                      icon={<MapPin className="h-5 w-5 text-slate-400" />}
+                    />
                     {errors.pickupAddress && (
                       <p className="text-xs text-red-500">
                         {errors.pickupAddress.message}
                       </p>
                     )}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="useSavedAddresses"
-                          checked={useSavedAddresses}
-                          onCheckedChange={(checked) => {
-                            setUseSavedAddresses(!!checked);
-                            if (!checked) {
-                              // Reset to autocomplete mode
-                              setSelectedSavedAddress(null);
-                              setValue("pickupAddress", "");
-                              setPickupCoords(null);
-                              setPickupPlaceId(null);
-                              setPickupState(null);
-                              setPickupCity(null);
-                            }
-                          }}
-                        />
-                        <Label
-                          htmlFor="useSavedAddresses"
-                          className="text-xs font-bold cursor-pointer"
-                        >
-                          Use saved addresses
-                        </Label>
-                      </div>
-                    </div>
-                    {/* Save pickup for future - only show when user entered a NEW address (not using saved, has valid address selected) */}
-                    {!useSavedAddresses && !selectedSavedAddress && pickupAddress && pickupCoords && (
-                      <div className="space-y-2 p-3 rounded-xl bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800">
-                        <div className="text-xs font-bold text-lime-700 dark:text-lime-300 mb-2">
-                          Save this address for future deliveries?
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <Input
-                            placeholder="Label (e.g., Main Lot, Storage Unit)"
-                            value={pickupLabel}
-                            onChange={(e) => setPickupLabel(e.target.value)}
-                            className="h-10 rounded-xl flex-1"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              if (!pickupLabel.trim()) {
-                                toast.error("Label required", {
-                                  description: "Please enter a label for this address.",
+                    {/* Save location checkbox */}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="savePickupLocation"
+                        checked={pickupSaved}
+                        disabled={!pickupAddress || !pickupCoords}
+                        onCheckedChange={async (checked) => {
+                          if (!checked) {
+                            // Unchecking = unsaving — just uncheck
+                            setPickupSaved(false);
+                            setSelectedSavedAddress(null);
+                            return;
+                          }
+                          // Check if this address is already saved
+                          const alreadySaved = savedAddresses.find(
+                            (a) => a.address === pickupAddress
+                          );
+                          if (alreadySaved) {
+                            setSelectedSavedAddress(alreadySaved);
+                            setPickupSaved(true);
+                            return;
+                          }
+                          // Save new address — reverse geocode placeId if needed
+                          let finalPlaceId = pickupPlaceId;
+                          const isValid = pickupPlaceId &&
+                            (pickupPlaceId.startsWith('ChIJ') || pickupPlaceId.startsWith('Eh'));
+                          if (!isValid && pickupCoords && isLoaded) {
+                            try {
+                              const geocoder = new google.maps.Geocoder();
+                              const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+                                geocoder.geocode({ location: pickupCoords }, (results, status) => {
+                                  if (status === "OK" && results) resolve(results);
+                                  else reject(new Error(status));
                                 });
-                                return;
+                              });
+                              if (results[0]?.place_id) {
+                                finalPlaceId = results[0].place_id;
+                                setPickupPlaceId(finalPlaceId);
                               }
-
-                              // Validate and geocode placeId if needed BEFORE saving
-                              let finalPlaceId = pickupPlaceId;
-                              const isValidPlaceId = pickupPlaceId &&
-                                (pickupPlaceId.startsWith('ChIJ') || pickupPlaceId.startsWith('Eh'));
-
-                              if (!isValidPlaceId && pickupCoords && isLoaded) {
-                                console.log('PlaceId invalid at save time, doing reverse geocoding...');
-                                // Use reverse geocoding with coordinates (more reliable than address text)
-                                try {
-                                  const geocoder = new google.maps.Geocoder();
-                                  const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-                                    geocoder.geocode({ location: pickupCoords }, (results, status) => {
-                                      if (status === "OK" && results) resolve(results);
-                                      else reject(new Error(status));
-                                    });
-                                  });
-                                  if (results[0]?.place_id) {
-                                    finalPlaceId = results[0].place_id;
-                                    console.log('Reverse geocoded placeId at save time:', finalPlaceId);
-                                    setPickupPlaceId(finalPlaceId);
-                                  }
-                                } catch (e) {
-                                  console.warn('Reverse geocoding failed at save time:', e);
-                                }
-                              }
-
-                              const addressPayload = {
-                                label: pickupLabel.trim(),
-                                address: pickupAddress,
-                                lat: pickupCoords!.lat,
-                                lng: pickupCoords!.lng,
-                                placeId: finalPlaceId || undefined,
-                                city: pickupCity || '',
-                                state: pickupState || '',
-                                country: 'USA',
-                                postalCode: '',
-                                isDefault: savedAddresses.length === 0,
-                                customer: { id: customer.profileId },
-                              };
-                              console.log('=== SAVING ADDRESS ===');
-                              console.log('pickupCoords:', pickupCoords);
-                              console.log('finalPlaceId:', finalPlaceId);
-                              saveAddressMutation.mutate(addressPayload);
-                              setPickupLabel('');
-                            }}
-                            disabled={saveAddressMutation.isPending || !pickupLabel.trim()}
-                            className="h-10"
-                          >
-                            {saveAddressMutation.isPending ? "Saving..." : "Save Address"}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+                            } catch (e) {
+                              console.warn('Reverse geocoding failed:', e);
+                            }
+                          }
+                          saveAddressMutation.mutate({
+                            label: '',
+                            address: pickupAddress,
+                            lat: pickupCoords!.lat,
+                            lng: pickupCoords!.lng,
+                            placeId: finalPlaceId || undefined,
+                            city: pickupCity || '',
+                            state: pickupState || '',
+                            country: 'USA',
+                            postalCode: '',
+                            isDefault: savedAddresses.length === 0,
+                            customer: { id: customer.profileId },
+                          });
+                        }}
+                      />
+                      <Label
+                        htmlFor="savePickupLocation"
+                        className={`text-xs font-bold cursor-pointer ${!pickupAddress || !pickupCoords ? 'text-slate-400 cursor-not-allowed' : ''}`}
+                      >
+                        {pickupSaved ? 'Saved' : 'Save location'}
+                      </Label>
+                    </div>
                   </div>
 
                   {/* Drop-off Address - unchanged */}
