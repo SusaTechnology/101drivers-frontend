@@ -522,12 +522,21 @@ export default function LandingPage() {
 
           {/* Contact */}
           <div>
-            <a
-              href="#dealers"
-              className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-            >
-              Contact Us
-            </a>
+            {settings?.dealerLeadEnabled ? (
+              <a
+                href="#dealers"
+                className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+              >
+                Contact Us
+              </a>
+            ) : (
+              <a
+                href="mailto:ops@101drivers.techbee.et?subject=Inquiry from 101 Drivers website"
+                className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+              >
+                Contact Us
+              </a>
+            )}
           </div>
         </div>
 
