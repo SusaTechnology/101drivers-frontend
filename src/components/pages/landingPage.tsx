@@ -98,7 +98,15 @@ export default function LandingPage() {
   const [distance, setDistance] = useState<number | null>(null);
   const [quoteResult, setQuoteResult] = useState<any>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
-  
+
+  // Rate limit quote calculations to 2 per session
+  const QUOTE_MAX_ATTEMPTS = 2;
+  const [quoteAttempts, setQuoteAttempts] = useState<number>(() => {
+    const stored = sessionStorage.getItem("quoteAttempts");
+    return stored ? parseInt(stored, 10) : 0;
+  });
+  const quoteLimitReached = quoteAttempts >= QUOTE_MAX_ATTEMPTS;
+
   // Error states for CA validation
   const [pickupError, setPickupError] = useState("");
   const [dropoffError, setDropoffError] = useState("");
@@ -174,6 +182,10 @@ export default function LandingPage() {
     onSuccess: (data) => {
       setQuoteResult(data);
       setIsLoadingQuote(false);
+      // Increment attempt counter
+      const newCount = quoteAttempts + 1;
+      setQuoteAttempts(newCount);
+      sessionStorage.setItem("quoteAttempts", String(newCount));
       setDistance(data.distanceMiles);
       if (data.pickupLat && data.pickupLng) {
         setPickupCoords({ lat: data.pickupLat, lng: data.pickupLng });
@@ -313,6 +325,12 @@ export default function LandingPage() {
   }, [pickupCoords, dropoffCoords]);
 
   const handleCalculateEstimate = () => {
+    if (quoteLimitReached) {
+      toast.error("Quote limit reached", {
+        description: `You've used all ${QUOTE_MAX_ATTEMPTS} free quote calculations. Please sign up for a dealer account to get unlimited quotes.`,
+      });
+      return;
+    }
     if (!pickupAddress || !dropoffAddress) {
       if (!pickupAddress) setPickupError("Pickup address is required");
       if (!dropoffAddress) setDropoffError("Drop-off address is required");
@@ -638,13 +656,18 @@ export default function LandingPage() {
                     href="#estimate"
                     onClick={handleCalculateEstimate}
                     className={`w-full py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                      isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError
+                      isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError || quoteLimitReached
                         ? "opacity-50 pointer-events-none"
                         : ""
                     }`}
                   >
-                    {isLoadingQuote ? "Calculating..." : "Get Estimate"}
-                    <ArrowRight className="h-4 w-4" />
+                    {isLoadingQuote
+                      ? "Calculating..."
+                      : quoteLimitReached
+                        ? `Limit reached (${QUOTE_MAX_ATTEMPTS}/${QUOTE_MAX_ATTEMPTS})`
+                        : `Get Estimate (${QUOTE_MAX_ATTEMPTS - quoteAttempts} left)`
+                    }
+                    {!quoteLimitReached && <ArrowRight className="h-4 w-4" />}
                   </a>
 
                   <Badge
