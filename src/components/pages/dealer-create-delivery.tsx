@@ -2001,80 +2001,20 @@ const handleQuotePreview = () => {
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
           {/* LEFT COLUMN - Form */}
           <div className="xl:col-span-7 space-y-8">
-            {/* Step 1: Service Type */}
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader className="pb-3">
-                <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                  Step 1
-                </CardDescription>
-                <CardTitle className="text-xl font-black mt-1">
-                  Service type
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    {
-                      value: "HOME_DELIVERY",
-                      icon: Home,
-                      label: "Home Delivery",
-                    },
-                    {
-                      value: "BETWEEN_LOCATIONS",
-                      icon: SwapHorizontal,
-                      label: "Between Locations",
-                    },
-                    {
-                      value: "SERVICE_PICKUP_RETURN",
-                      icon: Wrench,
-                      label: "Service Pickup & Return",
-                    },
-                  ].map((item) => (
-                    <Label
-                      key={item.value}
-                      htmlFor={item.value}
-                      className="cursor-pointer"
-                    >
-                      <div
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${
-                          serviceType === item.value
-                            ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
-                            : "border-slate-200 dark:border-slate-700 hover:border-lime-300"
-                        }`}
-                      >
-                        <item.icon className={`h-4 w-4 ${serviceType === item.value ? "text-lime-600" : "text-slate-400"}`} />
-                        <span className={`text-sm font-bold ${serviceType === item.value ? "text-lime-700 dark:text-lime-400" : "text-slate-600 dark:text-slate-400"}`}>
-                          {item.label}
-                        </span>
-                      </div>
-                      <Checkbox
-                        id={item.value}
-                        checked={serviceType === item.value}
-                        onCheckedChange={(checked) => {
-                          if (checked) setValue("serviceType", item.value as any);
-                        }}
-                        className="sr-only"
-                      />
-                    </Label>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Step 2: Addresses & Quote */}
+            {/* Step 1: Addresses & Quote */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
                     <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                      Step 2
+                      Step 1
                     </CardDescription>
                     <CardTitle className="text-2xl font-black mt-2">
                       Route
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                       CA-only addresses with autocomplete/search. Quote updates
-                      when route changes.
+                      when route changes. Service type defaults to Home Delivery.
                     </p>
                   </div>
                   <Badge variant="outline" className="hidden sm:flex">
@@ -2299,8 +2239,7 @@ const handleQuotePreview = () => {
                             </span>
                           </CardTitle>
                           <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                            Itemized breakdown updates if addresses or service
-                            type change.
+                            Itemized breakdown updates if addresses change.
                           </p>
                         </div>
                         <Button
@@ -2354,15 +2293,14 @@ const handleQuotePreview = () => {
                           </span>
                         </div>
                       </div>: <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal">
-                            Click "Calculate" to get a real‑time quote based on the addresses and service type.
+                            Click "Calculate" to get a real-time quote based on the addresses.
                           </p>}
 
 
                       <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 flex gap-3">
                         <Info className="h-5 w-5 text-amber-500 flex-shrink-0" />
                         <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal">
-                          Real‑time quote from backend – updates automatically
-                          when addresses or service type change.
+                          Real-time quote updates automatically when address or service type changes.
                         </p>
                       </div>
                     </CardContent>
@@ -2371,13 +2309,13 @@ const handleQuotePreview = () => {
               </CardContent>
             </Card>
 
-            {/* Step 3: Scheduling */}
+            {/* Step 2: Scheduling */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
                     <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                      Step 3
+                      Step 2
                     </CardDescription>
                     <CardTitle className="text-2xl font-black mt-2">
                       Schedule window
@@ -2579,7 +2517,7 @@ const handleQuotePreview = () => {
                 {!quoteId && (
                   <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
                     <Info className="h-3 w-3 inline mr-1" />
-                    Calculate a quote first to set the schedule.
+                    Please select your Schedule Window.
                   </div>
                 )}
 
@@ -2599,13 +2537,13 @@ const handleQuotePreview = () => {
             </Card>
 
 
-            {/* Step 4: Vehicle Details */}
+            {/* Step 3: Vehicle Details */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
                     <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                      Step 4
+                      Step 3
                     </CardDescription>
                     <CardTitle className="text-2xl font-black mt-2">
                       Vehicle details
@@ -2876,12 +2814,12 @@ const handleQuotePreview = () => {
               </CardContent>
             </Card>
 
-            {/* Step 5: Instructions */}
+            {/* Step 4: Instructions */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div>
                   <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                    Step 5
+                    Step 4
                   </CardDescription>
                   <CardTitle className="text-2xl font-black mt-2">
                     Instructions
@@ -3098,97 +3036,6 @@ const handleQuotePreview = () => {
                     after completion.
                   </p>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Payment */}
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader>
-                <div>
-                  <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                    Payment
-                  </CardDescription>
-                  <CardTitle className="text-2xl font-black mt-2">
-                    Payment option
-                  </CardTitle>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    {isPrivateCustomer
-                      ? "Individual accounts use prepaid payment. Your card will be authorized now and charged upon delivery completion."
-                      : postpaidEnabled
-                        ? "You are authorized for postpaid billing. Choose prepaid or postpaid."
-                        : "Your account is set to prepaid only. Contact admin for postpaid authorization."}
-                  </p>
-                </div>
-                {postpaidEnabled && (
-                  <Badge variant="secondary" className="bg-sky-500/10 text-sky-700 border-sky-500/20 mt-2">
-                    <CreditCard className="h-3 w-3 mr-1" />
-                    Postpaid Authorized
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <RadioGroup
-                  defaultValue="PREPAID"
-                  className="space-y-3"
-                  onValueChange={(value) =>
-                    setValue("paymentType", value as any)
-                  }
-                >
-                  <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="h-5 w-5 text-lime-500" />
-                      <div>
-                        <div className="font-extrabold">Prepaid</div>
-                        <div className="text-[11px] text-slate-500">
-                          Authorize now (capture rules per policy).
-                        </div>
-                      </div>
-                    </div>
-                    <RadioGroupItem value="PREPAID" id="PREPAID" />
-                  </div>
-
-                  {/* Only show postpaid option if enabled in customer config */}
-                  {postpaidEnabled && (
-                    <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                      <div className="flex items-center gap-3">
-                        <Receipt className="h-5 w-5 text-lime-500" />
-                        <div>
-                          <div className="font-extrabold">Postpaid (credit)</div>
-                          <div className="text-[11px] text-slate-500">
-                            Bill to your account after delivery completion.
-                          </div>
-                        </div>
-                      </div>
-                      <RadioGroupItem value="POSTPAID" id="POSTPAID" />
-                    </div>
-                  )}
-                </RadioGroup>
-
-                {!postpaidEnabled && (
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-start gap-3">
-                      <Info className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                      <div className="flex-1">
-                        <div className="text-sm font-extrabold">
-                          {isPrivateCustomer ? 'Prepaid Payment' : 'Prepaid Only'}
-                        </div>
-                        <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
-                          {isPrivateCustomer 
-                            ? "Your delivery will be prepaid. Payment authorization happens at booking, with capture on completion."
-                            : "Your account is configured for prepaid payments only. Contact your administrator if you need postpaid billing access."}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <p className="text-[11px] text-slate-500">
-                  {isPrivateCustomer
-                    ? "Individual accounts are prepaid only. Authorization at booking, capture on completion."
-                    : postpaidEnabled
-                      ? "Authorized: you can choose prepaid or postpaid billing."
-                      : "Not authorized: only prepaid payment is available."}
-                </p>
               </CardContent>
             </Card>
 
