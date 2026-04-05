@@ -157,13 +157,23 @@ function DetailField({ label, value, icon: Icon, children }: {
   );
 }
 
-// ---------- Financial Detail Section ----------
+// ---------- Financial Detail Section (mode-aware) ----------
 function FinancialSection({ config }: { config: PricingConfig }) {
+  const isCategoryABC = config.pricingMode === 'CATEGORY_ABC';
+  const isFlatTier = config.pricingMode === 'FLAT_TIER';
+
   return (
     <div className="space-y-1">
-      <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Financial Details</h4>
-      <DetailField label="Base Fee" icon={DollarSign}>
-        <span className="text-lg font-black text-slate-900 dark:text-white">${config.baseFee.toFixed(2)}</span>
+      <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">
+        {isCategoryABC ? 'Common Fees & Settings' : 'Financial Details'}
+      </h4>
+      <DetailField label={isCategoryABC ? 'Base Fee (global)' : 'Base Fee'} icon={DollarSign}>
+        <span className={cn(
+          "font-black text-slate-900 dark:text-white",
+          isCategoryABC ? "text-sm" : "text-lg"
+        )}>
+          ${config.baseFee.toFixed(2)}
+        </span>
       </DetailField>
       <DetailField label="Insurance Fee" icon={ShieldCheck}>
         <span>${config.insuranceFee.toFixed(2)}</span>
@@ -193,22 +203,47 @@ function FinancialSection({ config }: { config: PricingConfig }) {
           {config.feePassThrough ? 'Enabled' : 'Disabled'}
         </Badge>
       </DetailField>
+      {isCategoryABC && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
+          Category-specific base fees and per-mile rates are shown in the Category A/B/C Rules section above.
+        </p>
+      )}
+      {isFlatTier && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3 leading-relaxed">
+          Tier-specific flat prices are shown in the Flat Tiers section above.
+        </p>
+      )}
     </div>
   );
 }
 
-// ---------- Mode-Specific Section ----------
+// ---------- Mode-Specific Section (full detail per type) ----------
 function ModeSpecificSection({ config }: { config: PricingConfig }) {
   if (config.pricingMode === 'PER_MILE') {
     return (
       <div className="space-y-1">
-        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Per-Mile Pricing</h4>
-        <div className="rounded-2xl bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-900/30 p-5 text-center">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+            <Calculator className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+          </div>
+          <h4 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">Per-Mile Pricing</h4>
+        </div>
+        <div className="rounded-2xl bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-900/30 p-6 text-center">
           <Route className="w-8 h-8 text-teal-500 mx-auto mb-2" />
-          <div className="text-3xl font-black text-teal-700 dark:text-teal-300">${config.perMileRate?.toFixed(2)}</div>
-          <div className="text-sm text-teal-600 dark:text-teal-400 font-medium mt-1">per mile</div>
-          <div className="text-xs text-teal-500/70 mt-2">
-            Plus ${config.baseFee.toFixed(2)} base fee + ${config.insuranceFee.toFixed(2)} insurance
+          <div className="text-4xl font-black text-teal-700 dark:text-teal-300">${config.perMileRate?.toFixed(2)}</div>
+          <div className="text-sm text-teal-600 dark:text-teal-400 font-bold mt-1">per mile</div>
+          <div className="mt-4 pt-4 border-t border-teal-200 dark:border-teal-900/30 grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs text-teal-500/70">Base Fee</div>
+              <div className="text-lg font-bold text-teal-800 dark:text-teal-200">${config.baseFee.toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-teal-500/70">Insurance Fee</div>
+              <div className="text-lg font-bold text-teal-800 dark:text-teal-200">${config.insuranceFee.toFixed(2)}</div>
+            </div>
+          </div>
+          <div className="text-xs text-teal-500/70 mt-3">
+            Total for 50 mi example: ${((config.perMileRate || 0) * 50 + config.baseFee + config.insuranceFee).toFixed(2)}
           </div>
         </div>
       </div>
@@ -218,24 +253,38 @@ function ModeSpecificSection({ config }: { config: PricingConfig }) {
   if (config.pricingMode === 'FLAT_TIER' && config.tiers.length > 0) {
     return (
       <div className="space-y-1">
-        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Flat Tiers ({config.tiers.length})</h4>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+            <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h4 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">Flat Tiers ({config.tiers.length})</h4>
+        </div>
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-          <div className="grid grid-cols-3 gap-0 bg-slate-50 dark:bg-slate-900 px-4 py-2.5">
+          {/* Header row */}
+          <div className="grid grid-cols-4 gap-0 bg-slate-50 dark:bg-slate-900 px-5 py-3">
+            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Tier</div>
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Min Miles</div>
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Max Miles</div>
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Flat Price</div>
           </div>
+          {/* Tier rows */}
           {config.tiers.map((tier: PricingTier, idx: number) => (
             <div
               key={tier.id || idx}
               className={cn(
-                "grid grid-cols-3 gap-0 px-4 py-3 text-sm",
-                idx < config.tiers.length - 1 ? "border-b border-slate-100 dark:border-slate-800" : ""
+                "grid grid-cols-4 gap-0 px-5 py-4 text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/30",
+                idx < config.tiers.length - 1 ? "border-b border-slate-100 dark:border-slate-800" : "",
+                idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""
               )}
             >
-              <div className="font-medium text-slate-700 dark:text-slate-300">{tier.minMiles}</div>
-              <div className="font-medium text-slate-700 dark:text-slate-300">{tier.maxMiles ?? '∞'}</div>
-              <div className="font-black text-slate-900 dark:text-white text-right">${tier.flatPrice.toFixed(2)}</div>
+              <div className="flex items-center">
+                <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800 text-[10px] font-bold px-2 py-0.5">
+                  {idx + 1}
+                </Badge>
+              </div>
+              <div className="flex items-center font-medium text-slate-700 dark:text-slate-300">{tier.minMiles} mi</div>
+              <div className="flex items-center font-medium text-slate-700 dark:text-slate-300">{tier.maxMiles != null ? `${tier.maxMiles} mi` : <span className="text-slate-400">Unlimited</span>}</div>
+              <div className="flex items-center justify-end font-black text-slate-900 dark:text-white text-base">${tier.flatPrice.toFixed(2)}</div>
             </div>
           ))}
         </div>
@@ -246,39 +295,62 @@ function ModeSpecificSection({ config }: { config: PricingConfig }) {
   if (config.pricingMode === 'CATEGORY_ABC' && config.categoryRules.length > 0) {
     return (
       <div className="space-y-1">
-        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-3">Category Rules</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {config.categoryRules.map((rule: CategoryRule) => (
-            <div
-              key={rule.id || rule.category}
-              className={cn(
-                "rounded-2xl border p-4",
-                categoryColors[rule.category] || "border-slate-200 dark:border-slate-800"
-              )}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <Badge
-                  variant="outline"
-                  className={cn("text-lg font-black w-9 h-9 flex items-center justify-center p-0 rounded-xl", categoryColors[rule.category])}
-                >
-                  {rule.category}
-                </Badge>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+            <Tag className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          </div>
+          <h4 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">Category A/B/C Rules</h4>
+        </div>
+        <div className="space-y-4">
+          {config.categoryRules.map((rule: CategoryRule) => {
+            const colorClass = categoryColors[rule.category] || 'border-slate-200 dark:border-slate-800';
+            const bgLight = rule.category === 'A' ? 'bg-emerald-50 dark:bg-emerald-900/5'
+              : rule.category === 'B' ? 'bg-amber-50 dark:bg-amber-900/5'
+              : 'bg-rose-50 dark:bg-rose-900/5';
+            const badgeBg = rule.category === 'A' ? 'bg-emerald-500 text-white'
+              : rule.category === 'B' ? 'bg-amber-500 text-white'
+              : 'bg-rose-500 text-white';
+
+            return (
+              <div
+                key={rule.id || rule.category}
+                className={cn(
+                  "rounded-2xl border p-5 transition-all",
+                  colorClass
+                )}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <Badge className={cn("text-base font-black w-10 h-10 flex items-center justify-center p-0 rounded-xl border-0 shrink-0", badgeBg)}>
+                    {rule.category}
+                  </Badge>
+                  <div>
+                    <div className="font-bold text-slate-900 dark:text-white text-sm">Category {rule.category}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      {rule.minMiles} mi {rule.maxMiles != null ? `– ${rule.maxMiles} mi` : 'and above'}
+                    </div>
+                  </div>
+                </div>
+                <div className={cn("grid grid-cols-2 sm:grid-cols-4 gap-3", bgLight, "rounded-xl p-3 -mx-1")}>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Base Fee</div>
+                    <div className="text-lg font-black text-slate-900 dark:text-white">${rule.baseFee?.toFixed(2) ?? '—'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Per Mile</div>
+                    <div className="text-lg font-black text-slate-900 dark:text-white">${rule.perMileRate?.toFixed(2) ?? '—'}<span className="text-xs font-medium text-slate-400">/mi</span></div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Min Miles</div>
+                    <div className="text-lg font-bold text-slate-900 dark:text-white">{rule.minMiles}<span className="text-xs font-medium text-slate-400"> mi</span></div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Max Miles</div>
+                    <div className="text-lg font-bold text-slate-900 dark:text-white">{rule.maxMiles != null ? `${rule.maxMiles}` : '∞'}<span className="text-xs font-medium text-slate-400"> mi</span></div>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2 text-sm">
-                <DetailField label="Mileage" icon={Route}>
-                  <span className="text-xs font-semibold">
-                    {rule.minMiles} &ndash; {rule.maxMiles ?? '∞'} mi
-                  </span>
-                </DetailField>
-                <DetailField label="Base Fee" icon={DollarSign}>
-                  <span className="text-xs font-semibold">${rule.baseFee?.toFixed(2) ?? '—'}</span>
-                </DetailField>
-                <DetailField label="Per Mile" icon={Calculator}>
-                  <span className="text-xs font-semibold">${rule.perMileRate?.toFixed(2) ?? '—'}/mi</span>
-                </DetailField>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -582,12 +654,21 @@ export function PricingConfigList({
 
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-black text-slate-900 dark:text-white">
-                                ${config.baseFee.toFixed(2)}
-                              </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                {config.driverSharePct}% driver
-                              </span>
+                              {config.pricingMode === 'PER_MILE' && (
+                                <span className="text-sm font-black text-slate-900 dark:text-white">
+                                  ${config.baseFee.toFixed(2)} + ${config.perMileRate?.toFixed(2) ?? '—'}/mi
+                                </span>
+                              )}
+                              {config.pricingMode === 'FLAT_TIER' && (
+                                <span className="text-sm font-black text-slate-900 dark:text-white">
+                                  {config._count?.tiers ?? config.tiers?.length ?? 0} tier{(config._count?.tiers ?? config.tiers?.length ?? 0) !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {config.pricingMode === 'CATEGORY_ABC' && (
+                                <span className="text-sm font-black text-slate-900 dark:text-white">
+                                  {config._count?.categoryRules ?? config.categoryRules?.length ?? 0} categories
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               {config.active ? (
@@ -681,13 +762,13 @@ export function PricingConfigList({
 
                       <Separator />
 
-                      {/* ---- Financial Section ---- */}
-                      <FinancialSection config={selectedConfig} />
+                      {/* ---- Mode-Specific Section (shown first, most important) ---- */}
+                      <ModeSpecificSection config={selectedConfig} />
 
                       <Separator />
 
-                      {/* ---- Mode-Specific Section ---- */}
-                      <ModeSpecificSection config={selectedConfig} />
+                      {/* ---- Common Fees & Settings ---- */}
+                      <FinancialSection config={selectedConfig} />
 
                       <Separator />
 
