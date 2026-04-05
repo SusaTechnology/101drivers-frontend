@@ -1998,9 +1998,6 @@ const handleQuotePreview = () => {
                     <CardTitle className="text-2xl font-black mt-2">
                       Route
                     </CardTitle>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      CA-only addresses with autocomplete. Quote updates when route changes.
-                    </p>
                   </div>
                 </div>
               </CardHeader>
