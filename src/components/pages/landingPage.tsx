@@ -77,8 +77,9 @@ interface LandingPageSettings {
 // Types for lead submissions
 interface DealerLeadForm {
   businessName: string;
-  email: string;
+  contactName: string;
   phone: string;
+  email: string;
   message: string;
 }
 
@@ -105,8 +106,9 @@ export default function LandingPage() {
   // Lead form states
   const [dealerLeadForm, setDealerLeadForm] = useState<DealerLeadForm>({
     businessName: '',
-    email: '',
+    contactName: '',
     phone: '',
+    email: '',
     message: '',
   });
   const [investorLeadForm, setInvestorLeadForm] = useState<InvestorLeadForm>({
@@ -315,7 +317,7 @@ export default function LandingPage() {
     publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint
     onSuccess: () => {
       setDealerLeadSuccess(true);
-      setDealerLeadForm({ businessName: '', email: '', phone: '', message: '' });
+      setDealerLeadForm({ businessName: '', contactName: '', email: '', phone: '', message: '' });
       toast.success('Thank you! We\'ll be in touch soon.');
     },
     onError: (error: Error) => {
@@ -917,50 +919,60 @@ export default function LandingPage() {
           <div className="space-y-7">
             <div>
               <h2 className="text-4xl font-black text-slate-900 dark:text-white">
-                {settings?.dealerLeadCtaTitle || 'Onboard your dealership'}
+                Get Started
               </h2>
               <p className="text-slate-600 dark:text-slate-400 text-lg mt-3">
-                {settings?.dealerLeadCtaDescription || 'Create a dealer account and submit for Admin approval. Business details are selected from a directory.'}
+                Request a quick call—get onboarded fast.
               </p>
             </div>
 
             {/* Dealer Lead Form */}
             {!dealerLeadSuccess ? (
               <form onSubmit={handleDealerLeadSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="businessName" className="text-xs font-bold">Business Name *</Label>
-                    <Input
-                      id="businessName"
-                      value={dealerLeadForm.businessName}
-                      onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, businessName: e.target.value })}
-                      placeholder="ABC Motors"
-                      className="h-12 rounded-2xl"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dealerEmail" className="text-xs font-bold">Email *</Label>
-                    <Input
-                      id="dealerEmail"
-                      type="email"
-                      value={dealerLeadForm.email}
-                      onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, email: e.target.value })}
-                      placeholder="owner@abcmotors.com"
-                      className="h-12 rounded-2xl"
-                      required
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="businessName" className="text-xs font-bold">Business Name *</Label>
+                  <Input
+                    id="businessName"
+                    value={dealerLeadForm.businessName}
+                    onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, businessName: e.target.value })}
+                    placeholder="e.g., ABC Motors"
+                    className="h-12 rounded-2xl"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dealerPhone" className="text-xs font-bold">Phone</Label>
+                  <Label htmlFor="contactName" className="text-xs font-bold">Contact Name *</Label>
+                  <Input
+                    id="contactName"
+                    value={dealerLeadForm.contactName}
+                    onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, contactName: e.target.value })}
+                    placeholder="Who we call—e.g., Jane Doe"
+                    className="h-12 rounded-2xl"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dealerPhone" className="text-xs font-bold">Phone *</Label>
                   <Input
                     id="dealerPhone"
                     type="tel"
                     value={dealerLeadForm.phone}
                     onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, phone: e.target.value })}
-                    placeholder="+1-555-100-2000"
+                    placeholder="555-555-5555"
                     className="h-12 rounded-2xl"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dealerEmail" className="text-xs font-bold">Email *</Label>
+                  <Input
+                    id="dealerEmail"
+                    type="email"
+                    value={dealerLeadForm.email}
+                    onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, email: e.target.value })}
+                    placeholder="owner@abcmotors.com"
+                    className="h-12 rounded-2xl"
+                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -982,7 +994,7 @@ export default function LandingPage() {
                     {submitDealerLead.isPending ? (
                       <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
                     ) : (
-                      <><Send className="h-4 w-4" /> Submit Request</>
+                      <><Send className="h-4 w-4" /> Get Started</>
                     )}
                   </Button>
                   <Link

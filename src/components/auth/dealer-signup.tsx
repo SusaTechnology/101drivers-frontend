@@ -34,6 +34,11 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  Camera,
+  KeyRound,
+  FileText,
+  CreditCard,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -670,6 +675,47 @@ export function DealerSignUp() {
               <span className="font-extrabold">Stays Pending Approval</span>{" "}
               till an admin approves.
             </p>
+          </div>
+        </section>
+
+        {/* ===== HOW IT WORKS — 5 delivery steps ===== */}
+        <section className="mt-8 mb-2">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white">
+              How it works
+            </h2>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-2 max-w-md mx-auto">
+              We handle every mile like it's ours.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {[
+              { title: "Pickup", desc: "6 photos, mileage, instant.", icon: Camera },
+              { title: "Drop-Off", desc: "6 more photos. Keys handed over.", icon: KeyRound },
+              { title: "Proof", desc: "Before/after shots, mileage, times.", icon: FileText },
+              { title: "Payment", desc: "Only after delivery—no upfront risk.", icon: CreditCard },
+              { title: "Insurance", desc: "Mile-for-mile coverage on the road.", icon: Shield },
+            ].map((step, i) => {
+              const Icon = step.icon;
+              return (
+                <div
+                  key={i}
+                  className="flex flex-col items-center gap-2 p-4 rounded-xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 text-center"
+                >
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-[#00C853]" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                      {step.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      {step.desc}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 
