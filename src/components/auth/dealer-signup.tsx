@@ -21,6 +21,7 @@ import {
   Menu,
   X,
   Info,
+  Settings,
   Headset as SupportAgent,
   Badge,
   Sparkles as AutoFixHigh,
