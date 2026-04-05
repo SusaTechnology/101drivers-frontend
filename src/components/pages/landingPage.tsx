@@ -815,59 +815,6 @@ export default function LandingPage() {
           </Card>
         </section>
 
-        {/* ===== QUICK STEPS — 3-step overview (same card style as delivery process) ===== */}
-        <section className="px-6 lg:px-8 py-16 lg:py-20 bg-white dark:bg-slate-950">
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest">
-              <ClipboardCheck className="h-4 w-4" />
-              Quick Steps
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-3 max-w-5xl mx-auto">
-            {[
-              {
-                step: 1,
-                title: "Get quote",
-                description: "Pickup/drop-off (CA only). See route + price.",
-                icon: MapPin,
-              },
-              {
-                step: 2,
-                title: "Add info",
-                description: "Vehicle details, schedule, contacts.",
-                icon: Settings,
-              },
-              {
-                step: 3,
-                title: "Track live & pay",
-                description: "Real-time vehicle tracking for all, secure payment, proof delivered.",
-                icon: Shield,
-              },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.step}
-                  className="flex md:flex-col items-start md:items-center gap-4 md:gap-3 p-5 md:p-6 rounded-xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 md:text-center"
-                >
-                  <div className="w-10 h-10 md:w-9 md:h-9 rounded-lg flex items-center justify-center shrink-0">
-                    <Icon className="h-5 w-5 md:h-5 md:w-5 text-[#00C853]" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
-                      {item.title}
-                    </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                      {item.description}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
         {/* ===== WE MOVE YOUR CAR — delivery process ===== */}
         <section id="how" className="px-6 lg:px-8 py-16 lg:py-20 bg-white dark:bg-slate-950">
           <div className="text-center mb-12">
