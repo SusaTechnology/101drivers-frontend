@@ -58,7 +58,7 @@ const dealerSignupSchema = z
     // Contact fields - Contact Person is now the primary account holder
     contactName: z.string().min(1, "Contact name is required"),
     contactEmail: z.string().email("Valid email is required"),
-    contactPhone: z.string().optional(), // Optional
+    contactPhone: z.string().min(1, "Mobile number is required"),
     
     // Account fields
     password: z
@@ -231,7 +231,7 @@ export function DealerSignUp() {
         toast.error("Email already registered", {
           description: "This email is already associated with an account. Please sign in instead.",
           action: {
-            label: "Sign In",
+            label: "Log In",
             onClick: () => navigate({ to: "/auth/dealer-signin" }),
           },
           duration: 8000,
@@ -256,7 +256,7 @@ export function DealerSignUp() {
     publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint
     onSuccess: (data, variables) => {
       toast.success("Application submitted successfully!", {
-        description: "Your dealer account is pending admin approval.",
+        description: "Your account is pending admin approval.",
       });
       // Clear draft from localStorage
       localStorage.removeItem(DEALER_SIGNUP_DRAFT_KEY);
@@ -275,8 +275,8 @@ export function DealerSignUp() {
         description: error.message || "Invalid code or server error.",
       });
     },
-    successMessage: "Dealer signup submitted successfully",
-    errorMessage: "Failed to submit dealer signup",
+    successMessage: "Signup submitted successfully",
+    errorMessage: "Failed to submit signup",
   });
 
   // Mutation for resending code
@@ -585,7 +585,7 @@ export function DealerSignUp() {
               className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
             >
               <LoginIcon className="w-4 h-4" />
-              Dealer Sign In
+              Log In
             </Link>
 
             <Button
@@ -635,7 +635,7 @@ export function DealerSignUp() {
                   className="text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors py-1"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Dealer Sign In
+                  Log In
                 </Link>
               </div>
             </div>
@@ -645,48 +645,36 @@ export function DealerSignUp() {
 
       <main className="w-full max-w-[1100px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
         {/* Title Section (unchanged) */}
-        <section className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-4">
+        <section className="flex flex-col gap-6 mb-2">
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/25 text-slate-800 dark:text-slate-200 text-xs font-extrabold">
                 <Store className="w-3 h-3 text-primary" />
-                Dealer (Business) Signup
+                Business Signup
               </div>
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold">
                 <Verified className="w-3 h-3 text-primary" />
-                Pending approval after signup
+                Pending approval
               </div>
             </div>
 
             <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
-              Create your dealership account
+              Create your account
             </h1>
             <p className="text-slate-600 dark:text-slate-400 text-lg max-w-2xl">
-              Dealers must{" "}
+              Need drivers for vehicle delivery?{" "}
               <span className="font-extrabold">
-                select their business from a directory
+                Pick your company from our directory
               </span>{" "}
-              so details can be auto-filled. A{" "}
-              <span className="font-extrabold">contact person</span> is
-              required. After submission, your account will be{" "}
-              <span className="font-extrabold">Pending Approval</span> until an
-              Admin approves it.
+              —it auto-fills everything. Add a contact person. Submitted?{" "}
+              <span className="font-extrabold">Stays Pending Approval</span>{" "}
+              till an admin approves.
             </p>
-          </div>
-
-          <div className="flex gap-3 mb-3">
-            <Link
-              to="/auth/dealer-signin"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl text-sm font-black bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            >
-              <LoginIcon className="w-4 h-4" />
-              Already have an account?
-            </Link>
           </div>
         </section>
 
         {!registrationComplete ? (
-          <section className="mt-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <section className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Left: Directory search + autofill (unchanged) */}
             <div className="lg:col-span-7">
               <Card className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 hover-lift">
@@ -697,11 +685,10 @@ export function DealerSignUp() {
                         Step 1
                       </p>
                       <CardTitle className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-                        Find your business
+                        Pick your company
                       </CardTitle>
                       <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                        Directory search (Google Places). Business info is
-                        auto-filled; manual entry is disabled for data accuracy.
+                        Directory search (Google Places). Info auto-fills—no manual edits for accuracy.
                       </CardDescription>
                     </div>
 
@@ -742,7 +729,7 @@ export function DealerSignUp() {
                           }
                         }}
                         className="w-full h-14 pl-12 pr-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
-                        placeholder="Search dealership name (e.g., 'Cali Motors')"
+                        placeholder="Search: Your company name here…"
                         autoComplete="off"
                         disabled={!isLoaded}
                       />
@@ -820,7 +807,7 @@ export function DealerSignUp() {
                     )}
 
                     <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Powered by Google Places. Select your business to auto‑fill details.
+                      Powered by Google Places. Select your business to auto-fill.
                     </p>
                   </div>
 
@@ -842,7 +829,7 @@ export function DealerSignUp() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            Business Name
+                            Name
                           </Label>
                           <div className="relative">
                             <Input
@@ -861,7 +848,7 @@ export function DealerSignUp() {
 
                         <div className="space-y-2">
                           <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            Business Phone
+                            Phone
                           </Label>
                           <div className="relative">
                             <Input
@@ -881,7 +868,7 @@ export function DealerSignUp() {
 
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Business Address
+                          Address
                         </Label>
                         <div className="relative">
                           <Input
@@ -957,7 +944,7 @@ export function DealerSignUp() {
                         Business not found?
                       </div>
                       <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        Dealers must be selected from a business directory.
+                        Businesses must be selected from a directory.
                         If missing, contact support to onboard your business.
                       </div>
                     </div>
@@ -966,7 +953,7 @@ export function DealerSignUp() {
               </Card>
             </div>
 
-            {/* Right: Account & Contact Information + OTP */}
+            {/* Right: Contact Details + OTP */}
             <div className="lg:col-span-5">
               <Card className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 hover-lift">
                 <CardHeader className="p-0">
@@ -979,7 +966,7 @@ export function DealerSignUp() {
                         Account & Contact Information
                       </CardTitle>
                       <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                        Required for Dealer accounts. After submission, status
+                        Required for accounts. After submission, status
                         becomes{" "}
                         <span className="font-extrabold">Pending Approval</span>.
                       </CardDescription>
@@ -1000,73 +987,11 @@ export function DealerSignUp() {
                     {/* Hidden field for placeId */}
                     <input type="hidden" {...registerSignup("placeId")} />
 
-                    {/* Business Primary Contact Info */}
-                    <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-                        <Building className="w-4 h-4" />
-                        Business Primary Contact
-                      </h4>
-                      
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="fullName"
-                          className="text-xs font-bold text-slate-700 dark:text-slate-300"
-                        >
-                          Business Contact Full Name
-                        </Label>
-                        <div className="relative">
-                          <Person className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <Input
-                            id="fullName"
-                            {...registerSignup("fullName")}
-                            className="w-full h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
-                            placeholder="Business contact person name"
-                            disabled={isPending || !!selectedBusiness}
-                          />
-                        </div>
-                        {signupErrors.fullName && (
-                          <p className="text-sm text-red-500">
-                            {signupErrors.fullName.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label
-                          htmlFor="businessPhone"
-                          className="text-xs font-bold text-slate-700 dark:text-slate-300"
-                        >
-                          Business Phone
-                        </Label>
-                        <div className="relative">
-                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                          <Input
-                            id="businessPhone"
-                            name="businessPhone"
-                            value={businessPhoneDisplay}
-                            onChange={handleBusinessPhoneChange}
-                            type="tel"
-                            autoComplete="tel-national"
-                            inputMode="tel"
-                            maxLength={14}
-                            className="w-full h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
-                            placeholder="(555) 123-4567"
-                            disabled={isPending || !!selectedBusiness}
-                          />
-                        </div>
-                        {signupErrors.businessPhone && (
-                          <p className="text-sm text-red-500">
-                            {signupErrors.businessPhone.message}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Contact Person - Primary Account Holder */}
-                    <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {/* Your Contact Details */}
+                    <div className="space-y-4">
                       <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                         <UserCircle className="w-4 h-4" />
-                        Contact Person
+                        Your Contact Details
                       </h4>
                       
                       <div className="space-y-2">
@@ -1074,7 +999,7 @@ export function DealerSignUp() {
                           htmlFor="contactName"
                           className="text-xs font-bold text-slate-700 dark:text-slate-300"
                         >
-                          Contact Person Name
+                          Name <span className="text-red-500">*</span>
                         </Label>
                         <div className="relative">
                           <Person className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1098,7 +1023,7 @@ export function DealerSignUp() {
                           htmlFor="contactEmail"
                           className="text-xs font-bold text-slate-700 dark:text-slate-300"
                         >
-                          Contact Person Email <span className="text-red-500">*</span>
+                          Email <span className="text-red-500">*</span>
                         </Label>
                         <div className="relative">
                           <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1124,7 +1049,7 @@ export function DealerSignUp() {
                           htmlFor="contactPhone"
                           className="text-xs font-bold text-slate-700 dark:text-slate-300"
                         >
-                          Contact Person Phone <span className="text-slate-400">(optional)</span>
+                          Mobile <span className="text-red-500">*</span>
                         </Label>
                         <div className="relative">
                           <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1335,7 +1260,7 @@ export function DealerSignUp() {
                           id="otp"
                           value={otpValue}
                           onChange={(e) => setOtpValue(e.target.value)}
-                          className="h-14 rounded-2xl text-center text-lg tracking-widest font-mono"
+                          className="h-14 rounded-2xl text-center text-lg tracking-widest font-mono border-2 border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-red-200 focus:ring-2"
                           placeholder="123456"
                           maxLength={6}
                           disabled={isPending}
@@ -1391,8 +1316,8 @@ export function DealerSignUp() {
                     <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 flex gap-3">
                       <Info className="w-5 h-5 text-amber-500 shrink-0" />
                       <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
-                        Dealer accounts require Admin approval before accessing
-                        dealer features. You'll receive updates by{" "}
+                        Accounts require Admin approval before accessing
+                        dashboard features. You'll receive updates by{" "}
                         <span className="font-black">email-first</span> (SMS
                         optional if enabled by Admin policy).
                       </p>
@@ -1465,7 +1390,7 @@ export function DealerSignUp() {
                     Application Submitted!
                   </h2>
                   <p className="text-lg text-slate-600 dark:text-slate-400 mt-3 max-w-md">
-                    Your dealership account application has been received and is pending admin approval.
+                    Your account application has been received and is pending admin approval.
                   </p>
                   
                   {/* Status Badge */}
@@ -1505,7 +1430,7 @@ export function DealerSignUp() {
                         <span className="text-lg font-black text-green-600 dark:text-green-400">3</span>
                       </div>
                       <h4 className="font-bold text-slate-900 dark:text-white text-sm">Start Delivering</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Access your dealer dashboard and start creating deliveries!</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Access your dashboard and start creating deliveries!</p>
                     </div>
                   </div>
                 </div>
@@ -1517,7 +1442,7 @@ export function DealerSignUp() {
                     <div>
                       <p className="text-sm font-bold text-slate-900 dark:text-white">While You Wait</p>
                       <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        You can bookmark the sign-in page. Once approved, you'll use your email and password to access your dealer dashboard.
+                        You can bookmark the sign-in page. Once approved, you'll use your email and password to access your dashboard.
                       </p>
                     </div>
                   </div>
@@ -1530,7 +1455,7 @@ export function DealerSignUp() {
                     className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-bold hover:opacity-90 transition shadow-lg"
                   >
                     <LoginIcon className="w-5 h-5" />
-                    Go to Sign In
+                    Go to Log In
                   </Link>
 
                   <Link
@@ -1567,7 +1492,7 @@ export function DealerSignUp() {
                 />
               </div>
               <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-                Dealer signup • Pending approval • Email-first
+                Business signup • Pending approval • Email-first
               </p>
             </div>
             <p className="text-xs text-slate-500 font-medium">
