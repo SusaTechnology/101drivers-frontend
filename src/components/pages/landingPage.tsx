@@ -123,9 +123,10 @@ export default function LandingPage() {
   };
 
   const handleDealerPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setDealerPhoneDisplay(formatted);
-    setDealerLeadForm({ ...dealerLeadForm, phone: formatted.replace(/\D/g, '') });
+    // Strip everything except digits immediately
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setDealerLeadForm({ ...dealerLeadForm, phone: raw });
+    setDealerPhoneDisplay(formatPhoneNumber(raw));
   };
   const [investorLeadForm, setInvestorLeadForm] = useState<InvestorLeadForm>({
     name: '',
@@ -920,7 +921,8 @@ export default function LandingPage() {
                   <Input
                     id="dealerPhone"
                     type="tel"
-                    inputMode="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]{10}"
                     maxLength={14}
                     value={dealerPhoneDisplay}
                     onChange={handleDealerPhoneChange}
