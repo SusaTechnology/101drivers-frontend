@@ -44,6 +44,8 @@ import {
   Car,
   Building,
   Briefcase,
+  KeyRound,
+  CreditCard,
   Sparkles,
   Download,
   Send,
@@ -352,66 +354,42 @@ export default function LandingPage() {
     submitInvestorLead.mutate(investorLeadForm);
   };
 
-  // How it works steps — driver perspective
-  const howItWorks = [
+  // Delivery process steps — customer-facing
+  const deliverySteps = [
     {
       step: 1,
-      title: "Pick a route",
+      title: "Pickup",
       description:
-        "Browse available deliveries. See the pay and distance before you commit.",
-      icon: MapPinned,
-    },
-    {
-      step: 2,
-      title: "Drive it there",
-      description:
-        "Pick up the car, follow the planned route. No passengers, no rush.",
-      icon: Car,
-    },
-    {
-      step: 3,
-      title: "Get paid",
-      description:
-        "Drop off, submit proof. Earnings hit your account. Keep all tips.",
-      icon: CheckCircle,
-    },
-  ];
-
-  // Why 101 features — plain language
-  const standards = [
-    {
-      title: "VIN check",
-      description:
-        "Quick 4-digit check at pickup. Takes 10 seconds.",
-      icon: QrCode,
-    },
-    {
-      title: "Photos",
-      description:
-        "Snap a few photos at pickup and drop-off. That's it.",
+        "Driver takes 6 photos, logs mileage, you see instantly.",
       icon: Camera,
     },
     {
-      title: "Mileage log",
-      description: "Start and end miles, captured automatically.",
-      icon: Gauge,
-    },
-    {
-      title: "Live tracking",
+      step: 2,
+      title: "Drop-Off",
       description:
-        "GPS runs while you drive. No extra steps.",
-      icon: Navigation,
+        "Six more photos. Final mileage check. Keys handed over.",
+      icon: KeyRound,
     },
     {
-      title: "Simple checks",
-      description: "A few quick taps along the way. No paperwork.",
-      icon: CheckCircle,
-    },
-    {
-      title: "Trip record",
+      step: 3,
+      title: "Proof",
       description:
-        "Everything saved digitally. You get a copy too.",
+        "Email report: before/after shots, mileage, times.",
       icon: FileText,
+    },
+    {
+      step: 4,
+      title: "Payment",
+      description:
+        "Only after delivery—no upfront risk.",
+      icon: CreditCard,
+    },
+    {
+      step: 5,
+      title: "Insurance",
+      description:
+        "Mile-for-mile coverage while on the road.",
+      icon: Shield,
     },
   ];
 
@@ -861,76 +839,46 @@ export default function LandingPage() {
           </Card>
         </section>
 
-        {/* ===== HOW IT WORKS — driver perspective ===== */}
-        <section id="how" className="px-6 lg:px-8 py-16 lg:py-20">
-          <div className="max-w-2xl">
+        {/* ===== WE MOVE YOUR CAR — delivery process ===== */}
+        <section id="how" className="px-6 lg:px-8 py-16 lg:py-20 bg-white dark:bg-slate-950">
+          <div className="text-center mb-12">
             <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white">
-              How it works
+              We Move Your Car — Safe &amp; Sound
             </h2>
-            <p className="text-lg text-slate-500 dark:text-slate-400 mt-4">
-              Simple. Planned. On your time.
+            <p className="text-lg text-slate-400 dark:text-slate-500 mt-4 italic max-w-md mx-auto">
+              We handle every mile like it's ours.
             </p>
           </div>
 
-          <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-            {howItWorks.map((step) => {
+          {/* Mobile: vertical stack. Desktop: 5 boxes side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-3 max-w-5xl mx-auto">
+            {deliverySteps.map((step) => {
               const Icon = step.icon;
               return (
-                <Card
+                <div
                   key={step.step}
-                  className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow"
+                  className="flex md:flex-col items-start md:items-center gap-4 md:gap-3 p-5 md:p-6 rounded-xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 md:text-center"
                 >
-                  <CardContent className="p-7">
-                    <div className="w-12 h-12 rounded-2xl bg-lime-500/15 flex items-center justify-center mb-5">
-                      <Icon className="h-6 w-6 text-lime-500 font-bold" />
-                    </div>
-                    <CardTitle className="text-xl font-extrabold text-slate-900 dark:text-white">
-                      {step.step}. {step.title}
-                    </CardTitle>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                  <div className="w-10 h-10 md:w-9 md:h-9 rounded-lg flex items-center justify-center shrink-0">
+                    <Icon className="h-5 w-5 md:h-5 md:w-5 text-[#00C853]" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      {step.title}
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                       {step.description}
                     </p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               );
             })}
           </div>
-        </section>
 
-        {/* ===== WHY 101 — plain language features ===== */}
-        <section id="why" className="px-6 lg:px-8 py-16 lg:py-20">
-          <div className="text-center mb-12 max-w-2xl mx-auto">
-            <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white">
-              Why 101
-            </h2>
-            <p className="text-lg text-slate-500 dark:text-slate-400 mt-4">
-              Clear process. No surprises.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {standards.map((standard, index) => {
-              const Icon = standard.icon;
-              return (
-                <Card
-                  key={index}
-                  className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow"
-                >
-                  <CardContent className="p-7">
-                    <div className="w-12 h-12 rounded-2xl bg-lime-500/15 flex items-center justify-center mb-5">
-                      <Icon className="h-6 w-6 text-lime-500 font-bold" />
-                    </div>
-                    <CardTitle className="font-extrabold text-xl text-slate-900 dark:text-white">
-                      {standard.title}
-                    </CardTitle>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mt-2">
-                      {standard.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          {/* Footer text */}
+          <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-10 font-medium">
+            Greater LA only {"\u2022"} 25+ drivers {"\u2022"} No passengers
+          </p>
         </section>
 
         {/* ===== DEALER LEAD SECTION — kept exactly as-is ===== */}
