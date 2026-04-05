@@ -2038,7 +2038,7 @@ const handleQuotePreview = () => {
                         onPlaceSelect={handlePickupSelect}
                         onClear={handlePickupClear}
                         isLoaded={isLoaded}
-                        placeholder="Search starting location (California only)"
+                        placeholder="Search Pickup (California Only)"
                         icon={<MapPin className="h-5 w-5 text-slate-400" />}
                       />
                     )}
@@ -2168,7 +2168,7 @@ const handleQuotePreview = () => {
                       onPlaceSelect={handleDropoffSelect}
                       onClear={handleDropoffClear}
                       isLoaded={isLoaded}
-                      placeholder="Search destination (California only)"
+                      placeholder="Search Destination (California Only)"
                       icon={<Flag className="h-5 w-5 text-slate-400" />}
                     />
                     {errors.dropoffAddress && (
