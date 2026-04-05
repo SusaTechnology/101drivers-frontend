@@ -17,6 +17,8 @@ import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
 import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as LandingIndexRouteImport } from './routes/landing/index'
+import { Route as HelpDriverIndexRouteImport } from './routes/help-driver/index'
+import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/index'
 import { Route as DriverWalletIndexRouteImport } from './routes/driver-wallet/index'
 import { Route as DriverSupportListIndexRouteImport } from './routes/driver-support-list/index'
 import { Route as DriverSupportDetailIndexRouteImport } from './routes/driver-support-detail/index'
@@ -117,6 +119,16 @@ const LiveTrackIndexRoute = LiveTrackIndexRouteImport.update({
 const LandingIndexRoute = LandingIndexRouteImport.update({
   id: '/landing/',
   path: '/landing/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpDriverIndexRoute = HelpDriverIndexRouteImport.update({
+  id: '/help-driver/',
+  path: '/help-driver/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpCustomerIndexRoute = HelpCustomerIndexRouteImport.update({
+  id: '/help-customer/',
+  path: '/help-customer/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DriverWalletIndexRoute = DriverWalletIndexRouteImport.update({
@@ -507,6 +519,8 @@ export interface FileRoutesByFullPath {
   '/driver-support-detail/': typeof DriverSupportDetailIndexRoute
   '/driver-support-list/': typeof DriverSupportListIndexRoute
   '/driver-wallet/': typeof DriverWalletIndexRoute
+  '/help-customer/': typeof HelpCustomerIndexRoute
+  '/help-driver/': typeof HelpDriverIndexRoute
   '/landing/': typeof LandingIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -578,6 +592,8 @@ export interface FileRoutesByTo {
   '/driver-support-detail': typeof DriverSupportDetailIndexRoute
   '/driver-support-list': typeof DriverSupportListIndexRoute
   '/driver-wallet': typeof DriverWalletIndexRoute
+  '/help-customer': typeof HelpCustomerIndexRoute
+  '/help-driver': typeof HelpDriverIndexRoute
   '/landing': typeof LandingIndexRoute
   '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
@@ -650,6 +666,8 @@ export interface FileRoutesById {
   '/driver-support-detail/': typeof DriverSupportDetailIndexRoute
   '/driver-support-list/': typeof DriverSupportListIndexRoute
   '/driver-wallet/': typeof DriverWalletIndexRoute
+  '/help-customer/': typeof HelpCustomerIndexRoute
+  '/help-driver/': typeof HelpDriverIndexRoute
   '/landing/': typeof LandingIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -723,6 +741,8 @@ export interface FileRouteTypes {
     | '/driver-support-detail/'
     | '/driver-support-list/'
     | '/driver-wallet/'
+    | '/help-customer/'
+    | '/help-driver/'
     | '/landing/'
     | '/live-track/'
     | '/map-test/'
@@ -794,6 +814,8 @@ export interface FileRouteTypes {
     | '/driver-support-detail'
     | '/driver-support-list'
     | '/driver-wallet'
+    | '/help-customer'
+    | '/help-driver'
     | '/landing'
     | '/live-track'
     | '/map-test'
@@ -865,6 +887,8 @@ export interface FileRouteTypes {
     | '/driver-support-detail/'
     | '/driver-support-list/'
     | '/driver-wallet/'
+    | '/help-customer/'
+    | '/help-driver/'
     | '/landing/'
     | '/live-track/'
     | '/map-test/'
@@ -937,6 +961,8 @@ export interface RootRouteChildren {
   DriverSupportDetailIndexRoute: typeof DriverSupportDetailIndexRoute
   DriverSupportListIndexRoute: typeof DriverSupportListIndexRoute
   DriverWalletIndexRoute: typeof DriverWalletIndexRoute
+  HelpCustomerIndexRoute: typeof HelpCustomerIndexRoute
+  HelpDriverIndexRoute: typeof HelpDriverIndexRoute
   LandingIndexRoute: typeof LandingIndexRoute
   LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
@@ -1004,6 +1030,20 @@ declare module '@tanstack/react-router' {
       path: '/landing'
       fullPath: '/landing/'
       preLoaderRoute: typeof LandingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help-driver/': {
+      id: '/help-driver/'
+      path: '/help-driver'
+      fullPath: '/help-driver/'
+      preLoaderRoute: typeof HelpDriverIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help-customer/': {
+      id: '/help-customer/'
+      path: '/help-customer'
+      fullPath: '/help-customer/'
+      preLoaderRoute: typeof HelpCustomerIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/driver-wallet/': {
@@ -1497,6 +1537,8 @@ const rootRouteChildren: RootRouteChildren = {
   DriverSupportDetailIndexRoute: DriverSupportDetailIndexRoute,
   DriverSupportListIndexRoute: DriverSupportListIndexRoute,
   DriverWalletIndexRoute: DriverWalletIndexRoute,
+  HelpCustomerIndexRoute: HelpCustomerIndexRoute,
+  HelpDriverIndexRoute: HelpDriverIndexRoute,
   LandingIndexRoute: LandingIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,
