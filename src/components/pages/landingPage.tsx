@@ -450,6 +450,7 @@ export default function LandingPage() {
               <li>
                 <Link
                   to="/auth/dealer-signin"
+                  search={{ userType: 'driver' }}
                   className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
                 >
                   Driver
