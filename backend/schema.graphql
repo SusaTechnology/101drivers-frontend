@@ -1,0 +1,4392 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type AdminAuditLog {
+  action: EnumAdminAuditLogAction
+  actor: User
+  actorType: EnumAdminAuditLogActorType
+  afterJson: JSON
+  beforeJson: JSON
+  createdAt: DateTime!
+  customer: Customer
+  delivery: DeliveryRequest
+  driver: Driver
+  id: String!
+  reason: String
+  updatedAt: DateTime!
+  user: User
+}
+
+input AdminAuditLogCreateInput {
+  action: EnumAdminAuditLogAction!
+  actor: UserWhereUniqueInput
+  actorType: EnumAdminAuditLogActorType!
+  afterJson: JSON
+  beforeJson: JSON
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  reason: String
+  user: UserWhereUniqueInput
+}
+
+input AdminAuditLogCreateNestedManyWithoutCustomersInput {
+  connect: [AdminAuditLogWhereUniqueInput!]
+}
+
+input AdminAuditLogCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [AdminAuditLogWhereUniqueInput!]
+}
+
+input AdminAuditLogCreateNestedManyWithoutDriversInput {
+  connect: [AdminAuditLogWhereUniqueInput!]
+}
+
+input AdminAuditLogCreateNestedManyWithoutUsersInput {
+  connect: [AdminAuditLogWhereUniqueInput!]
+}
+
+input AdminAuditLogListRelationFilter {
+  every: AdminAuditLogWhereInput
+  none: AdminAuditLogWhereInput
+  some: AdminAuditLogWhereInput
+}
+
+input AdminAuditLogOrderByInput {
+  action: SortOrder
+  actorType: SortOrder
+  actorUserId: SortOrder
+  afterJson: SortOrder
+  beforeJson: SortOrder
+  createdAt: SortOrder
+  customerId: SortOrder
+  deliveryId: SortOrder
+  driverId: SortOrder
+  id: SortOrder
+  reason: SortOrder
+  updatedAt: SortOrder
+  userId: SortOrder
+}
+
+input AdminAuditLogUpdateInput {
+  action: EnumAdminAuditLogAction
+  actor: UserWhereUniqueInput
+  actorType: EnumAdminAuditLogActorType
+  afterJson: JSON
+  beforeJson: JSON
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  reason: String
+  user: UserWhereUniqueInput
+}
+
+input AdminAuditLogUpdateManyWithoutCustomersInput {
+  connect: [AdminAuditLogWhereUniqueInput!]
+  disconnect: [AdminAuditLogWhereUniqueInput!]
+  set: [AdminAuditLogWhereUniqueInput!]
+}
+
+input AdminAuditLogUpdateManyWithoutDeliveryRequestsInput {
+  connect: [AdminAuditLogWhereUniqueInput!]
+  disconnect: [AdminAuditLogWhereUniqueInput!]
+  set: [AdminAuditLogWhereUniqueInput!]
+}
+
+input AdminAuditLogUpdateManyWithoutDriversInput {
+  connect: [AdminAuditLogWhereUniqueInput!]
+  disconnect: [AdminAuditLogWhereUniqueInput!]
+  set: [AdminAuditLogWhereUniqueInput!]
+}
+
+input AdminAuditLogUpdateManyWithoutUsersInput {
+  connect: [AdminAuditLogWhereUniqueInput!]
+  disconnect: [AdminAuditLogWhereUniqueInput!]
+  set: [AdminAuditLogWhereUniqueInput!]
+}
+
+input AdminAuditLogWhereInput {
+  action: EnumAdminAuditLogAction
+  actor: UserWhereUniqueInput
+  actorType: EnumAdminAuditLogActorType
+  afterJson: JsonFilter
+  beforeJson: JsonFilter
+  createdAt: DateTimeFilter
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  id: StringFilter
+  reason: StringNullableFilter
+  updatedAt: DateTimeFilter
+  user: UserWhereUniqueInput
+}
+
+input AdminAuditLogWhereUniqueInput {
+  id: String!
+}
+
+type AppSetting {
+  createdAt: DateTime!
+  id: String!
+  key: String!
+  updatedAt: DateTime!
+  value: JSON!
+}
+
+input AppSettingCreateInput {
+  key: String!
+  value: JSON!
+}
+
+input AppSettingOrderByInput {
+  createdAt: SortOrder
+  id: SortOrder
+  key: SortOrder
+  updatedAt: SortOrder
+  value: SortOrder
+}
+
+input AppSettingUpdateInput {
+  key: String
+  value: JSON
+}
+
+input AppSettingWhereInput {
+  createdAt: DateTimeFilter
+  id: StringFilter
+  key: StringFilter
+  updatedAt: DateTimeFilter
+  value: JsonFilter
+}
+
+input AppSettingWhereUniqueInput {
+  id: String!
+}
+
+input BooleanFilter {
+  equals: Boolean
+  not: Boolean
+}
+
+input BooleanNullableFilter {
+  equals: Boolean
+  not: Boolean
+}
+
+input Credentials {
+  password: String!
+  username: String!
+}
+
+type Customer {
+  addresses(orderBy: [SavedAddressOrderByInput!], skip: Float, take: Float, where: SavedAddressWhereInput): [SavedAddress!]!
+  approvalStatus: EnumCustomerApprovalStatus
+  approvedAt: DateTime
+  approvedBy: User
+  audits(orderBy: [AdminAuditLogOrderByInput!], skip: Float, take: Float, where: AdminAuditLogWhereInput): [AdminAuditLog!]!
+  businessAddress: String
+  businessName: String
+  businessPhone: String
+  businessPlaceId: String
+  businessWebsite: String
+  contactEmail: String
+  contactName: String
+  contactPhone: String
+  createdAt: DateTime!
+  customerType: EnumCustomerCustomerType
+  defaultPickup: SavedAddress
+  deliveries(orderBy: [DeliveryRequestOrderByInput!], skip: Float, take: Float, where: DeliveryRequestWhereInput): [DeliveryRequest!]!
+  id: String!
+  notifications(orderBy: [NotificationEventOrderByInput!], skip: Float, take: Float, where: NotificationEventWhereInput): [NotificationEvent!]!
+  phone: String
+  postpaidEnabled: Boolean!
+  pricingConfig: PricingConfig
+  pricingModeOverride: EnumCustomerPricingModeOverride
+  ratings(orderBy: [DeliveryRatingOrderByInput!], skip: Float, take: Float, where: DeliveryRatingWhereInput): [DeliveryRating!]!
+  suspendedAt: DateTime
+  suspensionReason: String
+  updatedAt: DateTime!
+  user: User
+  vehicles(orderBy: [SavedVehicleOrderByInput!], skip: Float, take: Float, where: SavedVehicleWhereInput): [SavedVehicle!]!
+}
+
+input CustomerCreateInput {
+  addresses: SavedAddressCreateNestedManyWithoutCustomersInput
+  approvalStatus: EnumCustomerApprovalStatus!
+  approvedAt: DateTime
+  approvedBy: UserWhereUniqueInput
+  audits: AdminAuditLogCreateNestedManyWithoutCustomersInput
+  businessAddress: String
+  businessName: String
+  businessPhone: String
+  businessPlaceId: String
+  businessWebsite: String
+  contactEmail: String
+  contactName: String
+  contactPhone: String
+  customerType: EnumCustomerCustomerType!
+  defaultPickup: SavedAddressWhereUniqueInput
+  deliveries: DeliveryRequestCreateNestedManyWithoutCustomersInput
+  notifications: NotificationEventCreateNestedManyWithoutCustomersInput
+  phone: String
+  postpaidEnabled: Boolean!
+  pricingConfig: PricingConfigWhereUniqueInput
+  pricingModeOverride: EnumCustomerPricingModeOverride
+  ratings: DeliveryRatingCreateNestedManyWithoutCustomersInput
+  suspendedAt: DateTime
+  suspensionReason: String
+  user: UserWhereUniqueInput!
+  vehicles: SavedVehicleCreateNestedManyWithoutCustomersInput
+}
+
+input CustomerCreateNestedManyWithoutPricingConfigsInput {
+  connect: [CustomerWhereUniqueInput!]
+}
+
+input CustomerCreateNestedManyWithoutSavedAddressesInput {
+  connect: [CustomerWhereUniqueInput!]
+}
+
+input CustomerCreateNestedManyWithoutUsersInput {
+  connect: [CustomerWhereUniqueInput!]
+}
+
+input CustomerListRelationFilter {
+  every: CustomerWhereInput
+  none: CustomerWhereInput
+  some: CustomerWhereInput
+}
+
+input CustomerOrderByInput {
+  approvalStatus: SortOrder
+  approvedAt: SortOrder
+  approvedByUserId: SortOrder
+  businessAddress: SortOrder
+  businessName: SortOrder
+  businessPhone: SortOrder
+  businessPlaceId: SortOrder
+  businessWebsite: SortOrder
+  contactEmail: SortOrder
+  contactName: SortOrder
+  contactPhone: SortOrder
+  createdAt: SortOrder
+  customerType: SortOrder
+  defaultPickupId: SortOrder
+  id: SortOrder
+  phone: SortOrder
+  postpaidEnabled: SortOrder
+  pricingConfigId: SortOrder
+  pricingModeOverride: SortOrder
+  suspendedAt: SortOrder
+  suspensionReason: SortOrder
+  updatedAt: SortOrder
+  userId: SortOrder
+}
+
+input CustomerUpdateInput {
+  addresses: SavedAddressUpdateManyWithoutCustomersInput
+  approvalStatus: EnumCustomerApprovalStatus
+  approvedAt: DateTime
+  approvedBy: UserWhereUniqueInput
+  audits: AdminAuditLogUpdateManyWithoutCustomersInput
+  businessAddress: String
+  businessName: String
+  businessPhone: String
+  businessPlaceId: String
+  businessWebsite: String
+  contactEmail: String
+  contactName: String
+  contactPhone: String
+  customerType: EnumCustomerCustomerType
+  defaultPickup: SavedAddressWhereUniqueInput
+  deliveries: DeliveryRequestUpdateManyWithoutCustomersInput
+  notifications: NotificationEventUpdateManyWithoutCustomersInput
+  phone: String
+  postpaidEnabled: Boolean
+  pricingConfig: PricingConfigWhereUniqueInput
+  pricingModeOverride: EnumCustomerPricingModeOverride
+  ratings: DeliveryRatingUpdateManyWithoutCustomersInput
+  suspendedAt: DateTime
+  suspensionReason: String
+  user: UserWhereUniqueInput
+  vehicles: SavedVehicleUpdateManyWithoutCustomersInput
+}
+
+input CustomerUpdateManyWithoutPricingConfigsInput {
+  connect: [CustomerWhereUniqueInput!]
+  disconnect: [CustomerWhereUniqueInput!]
+  set: [CustomerWhereUniqueInput!]
+}
+
+input CustomerUpdateManyWithoutSavedAddressesInput {
+  connect: [CustomerWhereUniqueInput!]
+  disconnect: [CustomerWhereUniqueInput!]
+  set: [CustomerWhereUniqueInput!]
+}
+
+input CustomerUpdateManyWithoutUsersInput {
+  connect: [CustomerWhereUniqueInput!]
+  disconnect: [CustomerWhereUniqueInput!]
+  set: [CustomerWhereUniqueInput!]
+}
+
+input CustomerWhereInput {
+  addresses: SavedAddressListRelationFilter
+  approvalStatus: EnumCustomerApprovalStatus
+  approvedAt: DateTimeNullableFilter
+  approvedBy: UserWhereUniqueInput
+  audits: AdminAuditLogListRelationFilter
+  businessAddress: StringNullableFilter
+  businessName: StringNullableFilter
+  businessPhone: StringNullableFilter
+  businessPlaceId: StringNullableFilter
+  businessWebsite: StringNullableFilter
+  contactEmail: StringNullableFilter
+  contactName: StringNullableFilter
+  contactPhone: StringNullableFilter
+  createdAt: DateTimeFilter
+  customerType: EnumCustomerCustomerType
+  defaultPickup: SavedAddressWhereUniqueInput
+  deliveries: DeliveryRequestListRelationFilter
+  id: StringFilter
+  notifications: NotificationEventListRelationFilter
+  phone: StringNullableFilter
+  postpaidEnabled: BooleanFilter
+  pricingConfig: PricingConfigWhereUniqueInput
+  pricingModeOverride: EnumCustomerPricingModeOverride
+  ratings: DeliveryRatingListRelationFilter
+  suspendedAt: DateTimeNullableFilter
+  suspensionReason: StringNullableFilter
+  updatedAt: DateTimeFilter
+  user: UserWhereUniqueInput
+  vehicles: SavedVehicleListRelationFilter
+}
+
+input CustomerWhereUniqueInput {
+  id: String!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+input DateTimeFilter {
+  equals: DateTime
+  gt: DateTime
+  gte: DateTime
+  in: [DateTime!]
+  lt: DateTime
+  lte: DateTime
+  not: DateTime
+  notIn: [DateTime!]
+}
+
+input DateTimeNullableFilter {
+  equals: DateTime
+  gt: DateTime
+  gte: DateTime
+  in: [DateTime!]
+  lt: DateTime
+  lte: DateTime
+  not: DateTime
+  notIn: [DateTime!]
+}
+
+type DealerLead {
+  businessName: String!
+  createdAt: DateTime!
+  email: String!
+  id: String!
+  message: String
+  phone: String
+  updatedAt: DateTime!
+}
+
+input DealerLeadCreateInput {
+  businessName: String!
+  email: String!
+  message: String
+  phone: String
+}
+
+input DealerLeadOrderByInput {
+  businessName: SortOrder
+  createdAt: SortOrder
+  email: SortOrder
+  id: SortOrder
+  message: SortOrder
+  phone: SortOrder
+  updatedAt: SortOrder
+}
+
+input DealerLeadUpdateInput {
+  businessName: String
+  email: String
+  message: String
+  phone: String
+}
+
+input DealerLeadWhereInput {
+  businessName: StringFilter
+  createdAt: DateTimeFilter
+  email: StringFilter
+  id: StringFilter
+  message: StringNullableFilter
+  phone: StringNullableFilter
+  updatedAt: DateTimeFilter
+}
+
+input DealerLeadWhereUniqueInput {
+  id: String!
+}
+
+type DeliveryAssignment {
+  assignedAt: DateTime!
+  assignedBy: User
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  driver: Driver
+  id: String!
+  reason: String
+  unassignedAt: DateTime
+  updatedAt: DateTime!
+}
+
+input DeliveryAssignmentCreateInput {
+  assignedBy: UserWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput!
+  driver: DriverWhereUniqueInput!
+  reason: String
+  unassignedAt: DateTime
+}
+
+input DeliveryAssignmentCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [DeliveryAssignmentWhereUniqueInput!]
+}
+
+input DeliveryAssignmentCreateNestedManyWithoutDriversInput {
+  connect: [DeliveryAssignmentWhereUniqueInput!]
+}
+
+input DeliveryAssignmentCreateNestedManyWithoutUsersInput {
+  connect: [DeliveryAssignmentWhereUniqueInput!]
+}
+
+input DeliveryAssignmentListRelationFilter {
+  every: DeliveryAssignmentWhereInput
+  none: DeliveryAssignmentWhereInput
+  some: DeliveryAssignmentWhereInput
+}
+
+input DeliveryAssignmentOrderByInput {
+  assignedAt: SortOrder
+  assignedByUserId: SortOrder
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  driverId: SortOrder
+  id: SortOrder
+  reason: SortOrder
+  unassignedAt: SortOrder
+  updatedAt: SortOrder
+}
+
+input DeliveryAssignmentUpdateInput {
+  assignedBy: UserWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  reason: String
+  unassignedAt: DateTime
+}
+
+input DeliveryAssignmentUpdateManyWithoutDeliveryRequestsInput {
+  connect: [DeliveryAssignmentWhereUniqueInput!]
+  disconnect: [DeliveryAssignmentWhereUniqueInput!]
+  set: [DeliveryAssignmentWhereUniqueInput!]
+}
+
+input DeliveryAssignmentUpdateManyWithoutDriversInput {
+  connect: [DeliveryAssignmentWhereUniqueInput!]
+  disconnect: [DeliveryAssignmentWhereUniqueInput!]
+  set: [DeliveryAssignmentWhereUniqueInput!]
+}
+
+input DeliveryAssignmentUpdateManyWithoutUsersInput {
+  connect: [DeliveryAssignmentWhereUniqueInput!]
+  disconnect: [DeliveryAssignmentWhereUniqueInput!]
+  set: [DeliveryAssignmentWhereUniqueInput!]
+}
+
+input DeliveryAssignmentWhereInput {
+  assignedAt: DateTimeFilter
+  assignedBy: UserWhereUniqueInput
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  id: StringFilter
+  reason: StringNullableFilter
+  unassignedAt: DateTimeNullableFilter
+  updatedAt: DateTimeFilter
+}
+
+input DeliveryAssignmentWhereUniqueInput {
+  id: String!
+}
+
+type DeliveryCompliance {
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  dropoffCompletedAt: DateTime
+  id: String!
+  odometerEnd: Float
+  odometerStart: Float
+  pickupCompletedAt: DateTime
+  updatedAt: DateTime!
+  verifiedBy: User
+  verifiedByAdminAt: DateTime
+  vinConfirmed: Boolean!
+  vinVerificationCode: String
+}
+
+input DeliveryComplianceCreateInput {
+  delivery: DeliveryRequestWhereUniqueInput!
+  dropoffCompletedAt: DateTime
+  odometerEnd: Float
+  odometerStart: Float
+  pickupCompletedAt: DateTime
+  verifiedBy: UserWhereUniqueInput
+  verifiedByAdminAt: DateTime
+  vinConfirmed: Boolean!
+  vinVerificationCode: String
+}
+
+input DeliveryComplianceCreateNestedManyWithoutUsersInput {
+  connect: [DeliveryComplianceWhereUniqueInput!]
+}
+
+input DeliveryComplianceListRelationFilter {
+  every: DeliveryComplianceWhereInput
+  none: DeliveryComplianceWhereInput
+  some: DeliveryComplianceWhereInput
+}
+
+input DeliveryComplianceOrderByInput {
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  dropoffCompletedAt: SortOrder
+  id: SortOrder
+  odometerEnd: SortOrder
+  odometerStart: SortOrder
+  pickupCompletedAt: SortOrder
+  updatedAt: SortOrder
+  verifiedByAdminAt: SortOrder
+  verifiedByUserId: SortOrder
+  vinConfirmed: SortOrder
+  vinVerificationCode: SortOrder
+}
+
+input DeliveryComplianceUpdateInput {
+  delivery: DeliveryRequestWhereUniqueInput
+  dropoffCompletedAt: DateTime
+  odometerEnd: Float
+  odometerStart: Float
+  pickupCompletedAt: DateTime
+  verifiedBy: UserWhereUniqueInput
+  verifiedByAdminAt: DateTime
+  vinConfirmed: Boolean
+  vinVerificationCode: String
+}
+
+input DeliveryComplianceUpdateManyWithoutUsersInput {
+  connect: [DeliveryComplianceWhereUniqueInput!]
+  disconnect: [DeliveryComplianceWhereUniqueInput!]
+  set: [DeliveryComplianceWhereUniqueInput!]
+}
+
+input DeliveryComplianceWhereInput {
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  dropoffCompletedAt: DateTimeNullableFilter
+  id: StringFilter
+  odometerEnd: IntNullableFilter
+  odometerStart: IntNullableFilter
+  pickupCompletedAt: DateTimeNullableFilter
+  updatedAt: DateTimeFilter
+  verifiedBy: UserWhereUniqueInput
+  verifiedByAdminAt: DateTimeNullableFilter
+  vinConfirmed: BooleanFilter
+  vinVerificationCode: StringNullableFilter
+}
+
+input DeliveryComplianceWhereUniqueInput {
+  id: String!
+}
+
+type DeliveryEvidence {
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  id: String!
+  imageUrl: String
+  phase: EnumDeliveryEvidencePhase
+  slotIndex: Float
+  type: EnumDeliveryEvidenceType
+  updatedAt: DateTime!
+  value: String
+}
+
+input DeliveryEvidenceCreateInput {
+  delivery: DeliveryRequestWhereUniqueInput!
+  imageUrl: String
+  phase: EnumDeliveryEvidencePhase
+  slotIndex: Float
+  type: EnumDeliveryEvidenceType!
+  value: String
+}
+
+input DeliveryEvidenceCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [DeliveryEvidenceWhereUniqueInput!]
+}
+
+input DeliveryEvidenceListRelationFilter {
+  every: DeliveryEvidenceWhereInput
+  none: DeliveryEvidenceWhereInput
+  some: DeliveryEvidenceWhereInput
+}
+
+input DeliveryEvidenceOrderByInput {
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  id: SortOrder
+  imageUrl: SortOrder
+  phase: SortOrder
+  slotIndex: SortOrder
+  type: SortOrder
+  updatedAt: SortOrder
+  value: SortOrder
+}
+
+input DeliveryEvidenceUpdateInput {
+  delivery: DeliveryRequestWhereUniqueInput
+  imageUrl: String
+  phase: EnumDeliveryEvidencePhase
+  slotIndex: Float
+  type: EnumDeliveryEvidenceType
+  value: String
+}
+
+input DeliveryEvidenceUpdateManyWithoutDeliveryRequestsInput {
+  connect: [DeliveryEvidenceWhereUniqueInput!]
+  disconnect: [DeliveryEvidenceWhereUniqueInput!]
+  set: [DeliveryEvidenceWhereUniqueInput!]
+}
+
+input DeliveryEvidenceWhereInput {
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  id: StringFilter
+  imageUrl: StringNullableFilter
+  phase: EnumDeliveryEvidencePhase
+  slotIndex: IntNullableFilter
+  type: EnumDeliveryEvidenceType
+  updatedAt: DateTimeFilter
+  value: StringNullableFilter
+}
+
+input DeliveryEvidenceWhereUniqueInput {
+  id: String!
+}
+
+type DeliveryRating {
+  comment: String
+  createdAt: DateTime!
+  customer: Customer
+  delivery: DeliveryRequest
+  driver: Driver
+  id: String!
+  stars: Float!
+  target: EnumDeliveryRatingTarget
+  updatedAt: DateTime!
+}
+
+input DeliveryRatingCreateInput {
+  comment: String
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput!
+  driver: DriverWhereUniqueInput
+  stars: Float!
+  target: EnumDeliveryRatingTarget!
+}
+
+input DeliveryRatingCreateNestedManyWithoutCustomersInput {
+  connect: [DeliveryRatingWhereUniqueInput!]
+}
+
+input DeliveryRatingCreateNestedManyWithoutDriversInput {
+  connect: [DeliveryRatingWhereUniqueInput!]
+}
+
+input DeliveryRatingListRelationFilter {
+  every: DeliveryRatingWhereInput
+  none: DeliveryRatingWhereInput
+  some: DeliveryRatingWhereInput
+}
+
+input DeliveryRatingOrderByInput {
+  comment: SortOrder
+  createdAt: SortOrder
+  customerId: SortOrder
+  deliveryId: SortOrder
+  driverId: SortOrder
+  id: SortOrder
+  stars: SortOrder
+  target: SortOrder
+  updatedAt: SortOrder
+}
+
+input DeliveryRatingUpdateInput {
+  comment: String
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  stars: Float
+  target: EnumDeliveryRatingTarget
+}
+
+input DeliveryRatingUpdateManyWithoutCustomersInput {
+  connect: [DeliveryRatingWhereUniqueInput!]
+  disconnect: [DeliveryRatingWhereUniqueInput!]
+  set: [DeliveryRatingWhereUniqueInput!]
+}
+
+input DeliveryRatingUpdateManyWithoutDriversInput {
+  connect: [DeliveryRatingWhereUniqueInput!]
+  disconnect: [DeliveryRatingWhereUniqueInput!]
+  set: [DeliveryRatingWhereUniqueInput!]
+}
+
+input DeliveryRatingWhereInput {
+  comment: StringNullableFilter
+  createdAt: DateTimeFilter
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  id: StringFilter
+  stars: IntFilter
+  target: EnumDeliveryRatingTarget
+  updatedAt: DateTimeFilter
+}
+
+input DeliveryRatingWhereUniqueInput {
+  id: String!
+}
+
+type DeliveryRequest {
+  afterHours: Boolean!
+  assignments(orderBy: [DeliveryAssignmentOrderByInput!], skip: Float, take: Float, where: DeliveryAssignmentWhereInput): [DeliveryAssignment!]!
+  audits(orderBy: [AdminAuditLogOrderByInput!], skip: Float, take: Float, where: AdminAuditLogWhereInput): [AdminAuditLog!]!
+  bufferMinutes: Float
+  compliance: DeliveryCompliance
+  createdAt: DateTime!
+  createdBy: User
+  createdByRole: EnumDeliveryRequestCreatedByRole
+  customer: Customer
+  customerChose: EnumDeliveryRequestCustomerChose
+  dispute: DisputeCase
+  dropoffAddress: String!
+  dropoffLat: Float
+  dropoffLng: Float
+  dropoffPlaceId: String
+  dropoffState: String
+  dropoffWindowEnd: DateTime
+  dropoffWindowStart: DateTime
+  etaMinutes: Float
+  evidence(orderBy: [DeliveryEvidenceOrderByInput!], skip: Float, take: Float, where: DeliveryEvidenceWhereInput): [DeliveryEvidence!]!
+  evidenceExports(orderBy: [EvidenceExportOrderByInput!], skip: Float, take: Float, where: EvidenceExportWhereInput): [EvidenceExport!]!
+  id: String!
+  isUrgent: Boolean!
+  licensePlate: String
+  notifications(orderBy: [NotificationEventOrderByInput!], skip: Float, take: Float, where: NotificationEventWhereInput): [NotificationEvent!]!
+  payment: Payment
+  payout: DriverPayout
+  pickupAddress: String!
+  pickupLat: Float
+  pickupLng: Float
+  pickupPlaceId: String
+  pickupState: String
+  pickupWindowEnd: DateTime
+  pickupWindowStart: DateTime
+  quote: Quote
+  rating: DeliveryRating
+  recipientEmail: String
+  recipientName: String
+  recipientPhone: String
+  requiresOpsConfirmation: Boolean!
+  resubmissions(orderBy: [DeliveryRequestOrderByInput!], skip: Float, take: Float, where: DeliveryRequestWhereInput): [DeliveryRequest!]!
+  resubmittedFrom: DeliveryRequest
+  sameDayEligible: Boolean
+  scheduleChanges(orderBy: [ScheduleChangeRequestOrderByInput!], skip: Float, take: Float, where: ScheduleChangeRequestWhereInput): [ScheduleChangeRequest!]!
+  serviceType: EnumDeliveryRequestServiceType
+  status: EnumDeliveryRequestStatus
+  statusHistory(orderBy: [DeliveryStatusHistoryOrderByInput!], skip: Float, take: Float, where: DeliveryStatusHistoryWhereInput): [DeliveryStatusHistory!]!
+  supportRequests(orderBy: [SupportRequestOrderByInput!], skip: Float, take: Float, where: SupportRequestWhereInput): [SupportRequest!]!
+  tip: Tip
+  trackingSession: TrackingSession
+  trackingShareExpiresAt: DateTime
+  trackingShareToken: String
+  updatedAt: DateTime!
+  urgentBonusAmount: Float
+  vehicleColor: String
+  vehicleMake: String
+  vehicleModel: String
+  vinVerificationCode: String
+}
+
+input DeliveryRequestCreateInput {
+  afterHours: Boolean!
+  assignments: DeliveryAssignmentCreateNestedManyWithoutDeliveryRequestsInput
+  audits: AdminAuditLogCreateNestedManyWithoutDeliveryRequestsInput
+  bufferMinutes: Float
+  compliance: DeliveryComplianceWhereUniqueInput
+  createdBy: UserWhereUniqueInput
+  createdByRole: EnumDeliveryRequestCreatedByRole
+  customer: CustomerWhereUniqueInput!
+  customerChose: EnumDeliveryRequestCustomerChose
+  dispute: DisputeCaseWhereUniqueInput
+  dropoffAddress: String!
+  dropoffLat: Float
+  dropoffLng: Float
+  dropoffPlaceId: String
+  dropoffState: String
+  dropoffWindowEnd: DateTime
+  dropoffWindowStart: DateTime
+  etaMinutes: Float
+  evidence: DeliveryEvidenceCreateNestedManyWithoutDeliveryRequestsInput
+  evidenceExports: EvidenceExportCreateNestedManyWithoutDeliveryRequestsInput
+  isUrgent: Boolean!
+  licensePlate: String
+  notifications: NotificationEventCreateNestedManyWithoutDeliveryRequestsInput
+  payment: PaymentWhereUniqueInput
+  payout: DriverPayoutWhereUniqueInput
+  pickupAddress: String!
+  pickupLat: Float
+  pickupLng: Float
+  pickupPlaceId: String
+  pickupState: String
+  pickupWindowEnd: DateTime
+  pickupWindowStart: DateTime
+  quote: QuoteWhereUniqueInput
+  rating: DeliveryRatingWhereUniqueInput
+  recipientEmail: String
+  recipientName: String
+  recipientPhone: String
+  requiresOpsConfirmation: Boolean!
+  resubmissions: DeliveryRequestCreateNestedManyWithoutDeliveryRequestsInput
+  resubmittedFrom: DeliveryRequestWhereUniqueInput
+  sameDayEligible: Boolean
+  scheduleChanges: ScheduleChangeRequestCreateNestedManyWithoutDeliveryRequestsInput
+  serviceType: EnumDeliveryRequestServiceType!
+  status: EnumDeliveryRequestStatus!
+  statusHistory: DeliveryStatusHistoryCreateNestedManyWithoutDeliveryRequestsInput
+  supportRequests: SupportRequestCreateNestedManyWithoutDeliveryRequestsInput
+  tip: TipWhereUniqueInput
+  trackingSession: TrackingSessionWhereUniqueInput
+  trackingShareExpiresAt: DateTime
+  trackingShareToken: String
+  urgentBonusAmount: Float
+  vehicleColor: String
+  vehicleMake: String
+  vehicleModel: String
+  vinVerificationCode: String
+}
+
+input DeliveryRequestCreateNestedManyWithoutCustomersInput {
+  connect: [DeliveryRequestWhereUniqueInput!]
+}
+
+input DeliveryRequestCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [DeliveryRequestWhereUniqueInput!]
+}
+
+input DeliveryRequestCreateNestedManyWithoutUsersInput {
+  connect: [DeliveryRequestWhereUniqueInput!]
+}
+
+input DeliveryRequestListRelationFilter {
+  every: DeliveryRequestWhereInput
+  none: DeliveryRequestWhereInput
+  some: DeliveryRequestWhereInput
+}
+
+input DeliveryRequestOrderByInput {
+  afterHours: SortOrder
+  bufferMinutes: SortOrder
+  complianceId: SortOrder
+  createdAt: SortOrder
+  createdByRole: SortOrder
+  createdByUserId: SortOrder
+  customerChose: SortOrder
+  customerId: SortOrder
+  disputeId: SortOrder
+  dropoffAddress: SortOrder
+  dropoffLat: SortOrder
+  dropoffLng: SortOrder
+  dropoffPlaceId: SortOrder
+  dropoffState: SortOrder
+  dropoffWindowEnd: SortOrder
+  dropoffWindowStart: SortOrder
+  etaMinutes: SortOrder
+  id: SortOrder
+  isUrgent: SortOrder
+  licensePlate: SortOrder
+  paymentId: SortOrder
+  payoutId: SortOrder
+  pickupAddress: SortOrder
+  pickupLat: SortOrder
+  pickupLng: SortOrder
+  pickupPlaceId: SortOrder
+  pickupState: SortOrder
+  pickupWindowEnd: SortOrder
+  pickupWindowStart: SortOrder
+  quoteId: SortOrder
+  ratingId: SortOrder
+  recipientEmail: SortOrder
+  recipientName: SortOrder
+  recipientPhone: SortOrder
+  requiresOpsConfirmation: SortOrder
+  resubmittedFromId: SortOrder
+  sameDayEligible: SortOrder
+  serviceType: SortOrder
+  status: SortOrder
+  tipId: SortOrder
+  trackingSessionId: SortOrder
+  trackingShareExpiresAt: SortOrder
+  trackingShareToken: SortOrder
+  updatedAt: SortOrder
+  urgentBonusAmount: SortOrder
+  vehicleColor: SortOrder
+  vehicleMake: SortOrder
+  vehicleModel: SortOrder
+  vinVerificationCode: SortOrder
+}
+
+input DeliveryRequestUpdateInput {
+  afterHours: Boolean
+  assignments: DeliveryAssignmentUpdateManyWithoutDeliveryRequestsInput
+  audits: AdminAuditLogUpdateManyWithoutDeliveryRequestsInput
+  bufferMinutes: Float
+  compliance: DeliveryComplianceWhereUniqueInput
+  createdBy: UserWhereUniqueInput
+  createdByRole: EnumDeliveryRequestCreatedByRole
+  customer: CustomerWhereUniqueInput
+  customerChose: EnumDeliveryRequestCustomerChose
+  dispute: DisputeCaseWhereUniqueInput
+  dropoffAddress: String
+  dropoffLat: Float
+  dropoffLng: Float
+  dropoffPlaceId: String
+  dropoffState: String
+  dropoffWindowEnd: DateTime
+  dropoffWindowStart: DateTime
+  etaMinutes: Float
+  evidence: DeliveryEvidenceUpdateManyWithoutDeliveryRequestsInput
+  evidenceExports: EvidenceExportUpdateManyWithoutDeliveryRequestsInput
+  isUrgent: Boolean
+  licensePlate: String
+  notifications: NotificationEventUpdateManyWithoutDeliveryRequestsInput
+  payment: PaymentWhereUniqueInput
+  payout: DriverPayoutWhereUniqueInput
+  pickupAddress: String
+  pickupLat: Float
+  pickupLng: Float
+  pickupPlaceId: String
+  pickupState: String
+  pickupWindowEnd: DateTime
+  pickupWindowStart: DateTime
+  quote: QuoteWhereUniqueInput
+  rating: DeliveryRatingWhereUniqueInput
+  recipientEmail: String
+  recipientName: String
+  recipientPhone: String
+  requiresOpsConfirmation: Boolean
+  resubmissions: DeliveryRequestUpdateManyWithoutDeliveryRequestsInput
+  resubmittedFrom: DeliveryRequestWhereUniqueInput
+  sameDayEligible: Boolean
+  scheduleChanges: ScheduleChangeRequestUpdateManyWithoutDeliveryRequestsInput
+  serviceType: EnumDeliveryRequestServiceType
+  status: EnumDeliveryRequestStatus
+  statusHistory: DeliveryStatusHistoryUpdateManyWithoutDeliveryRequestsInput
+  supportRequests: SupportRequestUpdateManyWithoutDeliveryRequestsInput
+  tip: TipWhereUniqueInput
+  trackingSession: TrackingSessionWhereUniqueInput
+  trackingShareExpiresAt: DateTime
+  trackingShareToken: String
+  urgentBonusAmount: Float
+  vehicleColor: String
+  vehicleMake: String
+  vehicleModel: String
+  vinVerificationCode: String
+}
+
+input DeliveryRequestUpdateManyWithoutCustomersInput {
+  connect: [DeliveryRequestWhereUniqueInput!]
+  disconnect: [DeliveryRequestWhereUniqueInput!]
+  set: [DeliveryRequestWhereUniqueInput!]
+}
+
+input DeliveryRequestUpdateManyWithoutDeliveryRequestsInput {
+  connect: [DeliveryRequestWhereUniqueInput!]
+  disconnect: [DeliveryRequestWhereUniqueInput!]
+  set: [DeliveryRequestWhereUniqueInput!]
+}
+
+input DeliveryRequestUpdateManyWithoutUsersInput {
+  connect: [DeliveryRequestWhereUniqueInput!]
+  disconnect: [DeliveryRequestWhereUniqueInput!]
+  set: [DeliveryRequestWhereUniqueInput!]
+}
+
+input DeliveryRequestWhereInput {
+  afterHours: BooleanFilter
+  assignments: DeliveryAssignmentListRelationFilter
+  audits: AdminAuditLogListRelationFilter
+  bufferMinutes: IntNullableFilter
+  compliance: DeliveryComplianceWhereUniqueInput
+  createdAt: DateTimeFilter
+  createdBy: UserWhereUniqueInput
+  createdByRole: EnumDeliveryRequestCreatedByRole
+  customer: CustomerWhereUniqueInput
+  customerChose: EnumDeliveryRequestCustomerChose
+  dispute: DisputeCaseWhereUniqueInput
+  dropoffAddress: StringFilter
+  dropoffLat: FloatNullableFilter
+  dropoffLng: FloatNullableFilter
+  dropoffPlaceId: StringNullableFilter
+  dropoffState: StringNullableFilter
+  dropoffWindowEnd: DateTimeNullableFilter
+  dropoffWindowStart: DateTimeNullableFilter
+  etaMinutes: IntNullableFilter
+  evidence: DeliveryEvidenceListRelationFilter
+  evidenceExports: EvidenceExportListRelationFilter
+  id: StringFilter
+  isUrgent: BooleanFilter
+  licensePlate: StringNullableFilter
+  notifications: NotificationEventListRelationFilter
+  payment: PaymentWhereUniqueInput
+  payout: DriverPayoutWhereUniqueInput
+  pickupAddress: StringFilter
+  pickupLat: FloatNullableFilter
+  pickupLng: FloatNullableFilter
+  pickupPlaceId: StringNullableFilter
+  pickupState: StringNullableFilter
+  pickupWindowEnd: DateTimeNullableFilter
+  pickupWindowStart: DateTimeNullableFilter
+  quote: QuoteWhereUniqueInput
+  rating: DeliveryRatingWhereUniqueInput
+  recipientEmail: StringNullableFilter
+  recipientName: StringNullableFilter
+  recipientPhone: StringNullableFilter
+  requiresOpsConfirmation: BooleanFilter
+  resubmissions: DeliveryRequestListRelationFilter
+  resubmittedFrom: DeliveryRequestWhereUniqueInput
+  sameDayEligible: BooleanNullableFilter
+  scheduleChanges: ScheduleChangeRequestListRelationFilter
+  serviceType: EnumDeliveryRequestServiceType
+  status: EnumDeliveryRequestStatus
+  statusHistory: DeliveryStatusHistoryListRelationFilter
+  supportRequests: SupportRequestListRelationFilter
+  tip: TipWhereUniqueInput
+  trackingSession: TrackingSessionWhereUniqueInput
+  trackingShareExpiresAt: DateTimeNullableFilter
+  trackingShareToken: StringNullableFilter
+  updatedAt: DateTimeFilter
+  urgentBonusAmount: FloatNullableFilter
+  vehicleColor: StringNullableFilter
+  vehicleMake: StringNullableFilter
+  vehicleModel: StringNullableFilter
+  vinVerificationCode: StringNullableFilter
+}
+
+input DeliveryRequestWhereUniqueInput {
+  id: String!
+}
+
+type DeliveryStatusHistory {
+  actor: User
+  actorRole: EnumDeliveryStatusHistoryActorRole
+  actorType: EnumDeliveryStatusHistoryActorType
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  fromStatus: EnumDeliveryStatusHistoryFromStatus
+  id: String!
+  note: String
+  toStatus: EnumDeliveryStatusHistoryToStatus
+  updatedAt: DateTime!
+}
+
+input DeliveryStatusHistoryCreateInput {
+  actor: UserWhereUniqueInput
+  actorRole: EnumDeliveryStatusHistoryActorRole
+  actorType: EnumDeliveryStatusHistoryActorType!
+  delivery: DeliveryRequestWhereUniqueInput!
+  fromStatus: EnumDeliveryStatusHistoryFromStatus
+  note: String
+  toStatus: EnumDeliveryStatusHistoryToStatus!
+}
+
+input DeliveryStatusHistoryCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [DeliveryStatusHistoryWhereUniqueInput!]
+}
+
+input DeliveryStatusHistoryCreateNestedManyWithoutUsersInput {
+  connect: [DeliveryStatusHistoryWhereUniqueInput!]
+}
+
+input DeliveryStatusHistoryListRelationFilter {
+  every: DeliveryStatusHistoryWhereInput
+  none: DeliveryStatusHistoryWhereInput
+  some: DeliveryStatusHistoryWhereInput
+}
+
+input DeliveryStatusHistoryOrderByInput {
+  actorRole: SortOrder
+  actorType: SortOrder
+  actorUserId: SortOrder
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  fromStatus: SortOrder
+  id: SortOrder
+  note: SortOrder
+  toStatus: SortOrder
+  updatedAt: SortOrder
+}
+
+input DeliveryStatusHistoryUpdateInput {
+  actor: UserWhereUniqueInput
+  actorRole: EnumDeliveryStatusHistoryActorRole
+  actorType: EnumDeliveryStatusHistoryActorType
+  delivery: DeliveryRequestWhereUniqueInput
+  fromStatus: EnumDeliveryStatusHistoryFromStatus
+  note: String
+  toStatus: EnumDeliveryStatusHistoryToStatus
+}
+
+input DeliveryStatusHistoryUpdateManyWithoutDeliveryRequestsInput {
+  connect: [DeliveryStatusHistoryWhereUniqueInput!]
+  disconnect: [DeliveryStatusHistoryWhereUniqueInput!]
+  set: [DeliveryStatusHistoryWhereUniqueInput!]
+}
+
+input DeliveryStatusHistoryUpdateManyWithoutUsersInput {
+  connect: [DeliveryStatusHistoryWhereUniqueInput!]
+  disconnect: [DeliveryStatusHistoryWhereUniqueInput!]
+  set: [DeliveryStatusHistoryWhereUniqueInput!]
+}
+
+input DeliveryStatusHistoryWhereInput {
+  actor: UserWhereUniqueInput
+  actorRole: EnumDeliveryStatusHistoryActorRole
+  actorType: EnumDeliveryStatusHistoryActorType
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  fromStatus: EnumDeliveryStatusHistoryFromStatus
+  id: StringFilter
+  note: StringNullableFilter
+  toStatus: EnumDeliveryStatusHistoryToStatus
+  updatedAt: DateTimeFilter
+}
+
+input DeliveryStatusHistoryWhereUniqueInput {
+  id: String!
+}
+
+type DisputeCase {
+  closedAt: DateTime
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  id: String!
+  legalHold: Boolean!
+  notes(orderBy: [DisputeNoteOrderByInput!], skip: Float, take: Float, where: DisputeNoteWhereInput): [DisputeNote!]!
+  openedAt: DateTime!
+  reason: String!
+  resolvedAt: DateTime
+  status: EnumDisputeCaseStatus
+  updatedAt: DateTime!
+}
+
+input DisputeCaseCreateInput {
+  closedAt: DateTime
+  delivery: DeliveryRequestWhereUniqueInput!
+  legalHold: Boolean!
+  notes: DisputeNoteCreateNestedManyWithoutDisputeCasesInput
+  reason: String!
+  resolvedAt: DateTime
+  status: EnumDisputeCaseStatus!
+}
+
+input DisputeCaseOrderByInput {
+  closedAt: SortOrder
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  id: SortOrder
+  legalHold: SortOrder
+  openedAt: SortOrder
+  reason: SortOrder
+  resolvedAt: SortOrder
+  status: SortOrder
+  updatedAt: SortOrder
+}
+
+input DisputeCaseUpdateInput {
+  closedAt: DateTime
+  delivery: DeliveryRequestWhereUniqueInput
+  legalHold: Boolean
+  notes: DisputeNoteUpdateManyWithoutDisputeCasesInput
+  reason: String
+  resolvedAt: DateTime
+  status: EnumDisputeCaseStatus
+}
+
+input DisputeCaseWhereInput {
+  closedAt: DateTimeNullableFilter
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  id: StringFilter
+  legalHold: BooleanFilter
+  notes: DisputeNoteListRelationFilter
+  openedAt: DateTimeFilter
+  reason: StringFilter
+  resolvedAt: DateTimeNullableFilter
+  status: EnumDisputeCaseStatus
+  updatedAt: DateTimeFilter
+}
+
+input DisputeCaseWhereUniqueInput {
+  id: String!
+}
+
+type DisputeNote {
+  author: User
+  createdAt: DateTime!
+  dispute: DisputeCase
+  id: String!
+  note: String!
+  updatedAt: DateTime!
+}
+
+input DisputeNoteCreateInput {
+  author: UserWhereUniqueInput
+  dispute: DisputeCaseWhereUniqueInput!
+  note: String!
+}
+
+input DisputeNoteCreateNestedManyWithoutDisputeCasesInput {
+  connect: [DisputeNoteWhereUniqueInput!]
+}
+
+input DisputeNoteCreateNestedManyWithoutUsersInput {
+  connect: [DisputeNoteWhereUniqueInput!]
+}
+
+input DisputeNoteListRelationFilter {
+  every: DisputeNoteWhereInput
+  none: DisputeNoteWhereInput
+  some: DisputeNoteWhereInput
+}
+
+input DisputeNoteOrderByInput {
+  authorUserId: SortOrder
+  createdAt: SortOrder
+  disputeId: SortOrder
+  id: SortOrder
+  note: SortOrder
+  updatedAt: SortOrder
+}
+
+input DisputeNoteUpdateInput {
+  author: UserWhereUniqueInput
+  dispute: DisputeCaseWhereUniqueInput
+  note: String
+}
+
+input DisputeNoteUpdateManyWithoutDisputeCasesInput {
+  connect: [DisputeNoteWhereUniqueInput!]
+  disconnect: [DisputeNoteWhereUniqueInput!]
+  set: [DisputeNoteWhereUniqueInput!]
+}
+
+input DisputeNoteUpdateManyWithoutUsersInput {
+  connect: [DisputeNoteWhereUniqueInput!]
+  disconnect: [DisputeNoteWhereUniqueInput!]
+  set: [DisputeNoteWhereUniqueInput!]
+}
+
+input DisputeNoteWhereInput {
+  author: UserWhereUniqueInput
+  createdAt: DateTimeFilter
+  dispute: DisputeCaseWhereUniqueInput
+  id: StringFilter
+  note: StringFilter
+  updatedAt: DateTimeFilter
+}
+
+input DisputeNoteWhereUniqueInput {
+  id: String!
+}
+
+type Driver {
+  alerts: DriverAlertPreference
+  approvedAt: DateTime
+  approvedBy: User
+  assignments(orderBy: [DeliveryAssignmentOrderByInput!], skip: Float, take: Float, where: DeliveryAssignmentWhereInput): [DeliveryAssignment!]!
+  audits(orderBy: [AdminAuditLogOrderByInput!], skip: Float, take: Float, where: AdminAuditLogWhereInput): [AdminAuditLog!]!
+  createdAt: DateTime!
+  districts(orderBy: [DriverDistrictPreferenceOrderByInput!], skip: Float, take: Float, where: DriverDistrictPreferenceWhereInput): [DriverDistrictPreference!]!
+  id: String!
+  location: DriverLocation
+  notifications(orderBy: [NotificationEventOrderByInput!], skip: Float, take: Float, where: NotificationEventWhereInput): [NotificationEvent!]!
+  payouts(orderBy: [DriverPayoutOrderByInput!], skip: Float, take: Float, where: DriverPayoutWhereInput): [DriverPayout!]!
+  phone: String
+  preferences: DriverPreference
+  profilePhotoUrl: String
+  ratingsReceived(orderBy: [DeliveryRatingOrderByInput!], skip: Float, take: Float, where: DeliveryRatingWhereInput): [DeliveryRating!]!
+  status: EnumDriverStatus
+  updatedAt: DateTime!
+  user: User
+}
+
+type DriverAlertPreference {
+  createdAt: DateTime!
+  driver: Driver
+  emailEnabled: Boolean!
+  enabled: Boolean!
+  id: String!
+  smsEnabled: Boolean!
+  updatedAt: DateTime!
+}
+
+input DriverAlertPreferenceCreateInput {
+  driver: DriverWhereUniqueInput!
+  emailEnabled: Boolean!
+  enabled: Boolean!
+  smsEnabled: Boolean!
+}
+
+input DriverAlertPreferenceOrderByInput {
+  createdAt: SortOrder
+  driverId: SortOrder
+  emailEnabled: SortOrder
+  enabled: SortOrder
+  id: SortOrder
+  smsEnabled: SortOrder
+  updatedAt: SortOrder
+}
+
+input DriverAlertPreferenceUpdateInput {
+  driver: DriverWhereUniqueInput
+  emailEnabled: Boolean
+  enabled: Boolean
+  smsEnabled: Boolean
+}
+
+input DriverAlertPreferenceWhereInput {
+  createdAt: DateTimeFilter
+  driver: DriverWhereUniqueInput
+  emailEnabled: BooleanFilter
+  enabled: BooleanFilter
+  id: StringFilter
+  smsEnabled: BooleanFilter
+  updatedAt: DateTimeFilter
+}
+
+input DriverAlertPreferenceWhereUniqueInput {
+  id: String!
+}
+
+input DriverCreateInput {
+  alerts: DriverAlertPreferenceWhereUniqueInput
+  approvedAt: DateTime
+  approvedBy: UserWhereUniqueInput
+  assignments: DeliveryAssignmentCreateNestedManyWithoutDriversInput
+  audits: AdminAuditLogCreateNestedManyWithoutDriversInput
+  districts: DriverDistrictPreferenceCreateNestedManyWithoutDriversInput
+  location: DriverLocationWhereUniqueInput
+  notifications: NotificationEventCreateNestedManyWithoutDriversInput
+  payouts: DriverPayoutCreateNestedManyWithoutDriversInput
+  phone: String
+  preferences: DriverPreferenceWhereUniqueInput
+  profilePhotoUrl: String
+  ratingsReceived: DeliveryRatingCreateNestedManyWithoutDriversInput
+  status: EnumDriverStatus!
+  user: UserWhereUniqueInput!
+}
+
+input DriverCreateNestedManyWithoutUsersInput {
+  connect: [DriverWhereUniqueInput!]
+}
+
+type DriverDistrictPreference {
+  createdAt: DateTime!
+  district: ServiceDistrict
+  driver: Driver
+  id: String!
+  updatedAt: DateTime!
+}
+
+input DriverDistrictPreferenceCreateInput {
+  district: ServiceDistrictWhereUniqueInput!
+  driver: DriverWhereUniqueInput!
+}
+
+input DriverDistrictPreferenceCreateNestedManyWithoutDriversInput {
+  connect: [DriverDistrictPreferenceWhereUniqueInput!]
+}
+
+input DriverDistrictPreferenceCreateNestedManyWithoutServiceDistrictsInput {
+  connect: [DriverDistrictPreferenceWhereUniqueInput!]
+}
+
+input DriverDistrictPreferenceListRelationFilter {
+  every: DriverDistrictPreferenceWhereInput
+  none: DriverDistrictPreferenceWhereInput
+  some: DriverDistrictPreferenceWhereInput
+}
+
+input DriverDistrictPreferenceOrderByInput {
+  createdAt: SortOrder
+  districtId: SortOrder
+  driverId: SortOrder
+  id: SortOrder
+  updatedAt: SortOrder
+}
+
+input DriverDistrictPreferenceUpdateInput {
+  district: ServiceDistrictWhereUniqueInput
+  driver: DriverWhereUniqueInput
+}
+
+input DriverDistrictPreferenceUpdateManyWithoutDriversInput {
+  connect: [DriverDistrictPreferenceWhereUniqueInput!]
+  disconnect: [DriverDistrictPreferenceWhereUniqueInput!]
+  set: [DriverDistrictPreferenceWhereUniqueInput!]
+}
+
+input DriverDistrictPreferenceUpdateManyWithoutServiceDistrictsInput {
+  connect: [DriverDistrictPreferenceWhereUniqueInput!]
+  disconnect: [DriverDistrictPreferenceWhereUniqueInput!]
+  set: [DriverDistrictPreferenceWhereUniqueInput!]
+}
+
+input DriverDistrictPreferenceWhereInput {
+  createdAt: DateTimeFilter
+  district: ServiceDistrictWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  id: StringFilter
+  updatedAt: DateTimeFilter
+}
+
+input DriverDistrictPreferenceWhereUniqueInput {
+  id: String!
+}
+
+input DriverListRelationFilter {
+  every: DriverWhereInput
+  none: DriverWhereInput
+  some: DriverWhereInput
+}
+
+type DriverLocation {
+  createdAt: DateTime!
+  currentAt: DateTime
+  currentLat: Float
+  currentLng: Float
+  driver: Driver
+  homeBaseCity: String
+  homeBaseLat: Float
+  homeBaseLng: Float
+  homeBaseState: String
+  id: String!
+  updatedAt: DateTime!
+}
+
+input DriverLocationCreateInput {
+  currentAt: DateTime
+  currentLat: Float
+  currentLng: Float
+  driver: DriverWhereUniqueInput!
+  homeBaseCity: String
+  homeBaseLat: Float
+  homeBaseLng: Float
+  homeBaseState: String
+}
+
+input DriverLocationOrderByInput {
+  createdAt: SortOrder
+  currentAt: SortOrder
+  currentLat: SortOrder
+  currentLng: SortOrder
+  driverId: SortOrder
+  homeBaseCity: SortOrder
+  homeBaseLat: SortOrder
+  homeBaseLng: SortOrder
+  homeBaseState: SortOrder
+  id: SortOrder
+  updatedAt: SortOrder
+}
+
+input DriverLocationUpdateInput {
+  currentAt: DateTime
+  currentLat: Float
+  currentLng: Float
+  driver: DriverWhereUniqueInput
+  homeBaseCity: String
+  homeBaseLat: Float
+  homeBaseLng: Float
+  homeBaseState: String
+}
+
+input DriverLocationWhereInput {
+  createdAt: DateTimeFilter
+  currentAt: DateTimeNullableFilter
+  currentLat: FloatNullableFilter
+  currentLng: FloatNullableFilter
+  driver: DriverWhereUniqueInput
+  homeBaseCity: StringNullableFilter
+  homeBaseLat: FloatNullableFilter
+  homeBaseLng: FloatNullableFilter
+  homeBaseState: StringNullableFilter
+  id: StringFilter
+  updatedAt: DateTimeFilter
+}
+
+input DriverLocationWhereUniqueInput {
+  id: String!
+}
+
+input DriverOrderByInput {
+  alertsId: SortOrder
+  approvedAt: SortOrder
+  approvedByUserId: SortOrder
+  createdAt: SortOrder
+  id: SortOrder
+  locationId: SortOrder
+  phone: SortOrder
+  preferencesId: SortOrder
+  profilePhotoUrl: SortOrder
+  status: SortOrder
+  updatedAt: SortOrder
+  userId: SortOrder
+}
+
+type DriverPayout {
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  driver: Driver
+  driverSharePct: Float!
+  failedAt: DateTime
+  failureMessage: String
+  grossAmount: Float!
+  id: String!
+  insuranceFee: Float!
+  netAmount: Float!
+  paidAt: DateTime
+  platformFee: Float!
+  providerTransferId: String
+  status: EnumDriverPayoutStatus
+  updatedAt: DateTime!
+}
+
+input DriverPayoutCreateInput {
+  delivery: DeliveryRequestWhereUniqueInput!
+  driver: DriverWhereUniqueInput!
+  driverSharePct: Float!
+  failedAt: DateTime
+  failureMessage: String
+  grossAmount: Float!
+  insuranceFee: Float!
+  netAmount: Float!
+  paidAt: DateTime
+  platformFee: Float!
+  providerTransferId: String
+  status: EnumDriverPayoutStatus!
+}
+
+input DriverPayoutCreateNestedManyWithoutDriversInput {
+  connect: [DriverPayoutWhereUniqueInput!]
+}
+
+input DriverPayoutListRelationFilter {
+  every: DriverPayoutWhereInput
+  none: DriverPayoutWhereInput
+  some: DriverPayoutWhereInput
+}
+
+input DriverPayoutOrderByInput {
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  driverId: SortOrder
+  driverSharePct: SortOrder
+  failedAt: SortOrder
+  failureMessage: SortOrder
+  grossAmount: SortOrder
+  id: SortOrder
+  insuranceFee: SortOrder
+  netAmount: SortOrder
+  paidAt: SortOrder
+  platformFee: SortOrder
+  providerTransferId: SortOrder
+  status: SortOrder
+  updatedAt: SortOrder
+}
+
+input DriverPayoutUpdateInput {
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  driverSharePct: Float
+  failedAt: DateTime
+  failureMessage: String
+  grossAmount: Float
+  insuranceFee: Float
+  netAmount: Float
+  paidAt: DateTime
+  platformFee: Float
+  providerTransferId: String
+  status: EnumDriverPayoutStatus
+}
+
+input DriverPayoutUpdateManyWithoutDriversInput {
+  connect: [DriverPayoutWhereUniqueInput!]
+  disconnect: [DriverPayoutWhereUniqueInput!]
+  set: [DriverPayoutWhereUniqueInput!]
+}
+
+input DriverPayoutWhereInput {
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  driver: DriverWhereUniqueInput
+  driverSharePct: FloatFilter
+  failedAt: DateTimeNullableFilter
+  failureMessage: StringNullableFilter
+  grossAmount: FloatFilter
+  id: StringFilter
+  insuranceFee: FloatFilter
+  netAmount: FloatFilter
+  paidAt: DateTimeNullableFilter
+  platformFee: FloatFilter
+  providerTransferId: StringNullableFilter
+  status: EnumDriverPayoutStatus
+  updatedAt: DateTimeFilter
+}
+
+input DriverPayoutWhereUniqueInput {
+  id: String!
+}
+
+type DriverPreference {
+  city: String
+  createdAt: DateTime!
+  driver: Driver
+  id: String!
+  radiusMiles: Float
+  updatedAt: DateTime!
+}
+
+input DriverPreferenceCreateInput {
+  city: String
+  driver: DriverWhereUniqueInput!
+  radiusMiles: Float
+}
+
+input DriverPreferenceOrderByInput {
+  city: SortOrder
+  createdAt: SortOrder
+  driverId: SortOrder
+  id: SortOrder
+  radiusMiles: SortOrder
+  updatedAt: SortOrder
+}
+
+input DriverPreferenceUpdateInput {
+  city: String
+  driver: DriverWhereUniqueInput
+  radiusMiles: Float
+}
+
+input DriverPreferenceWhereInput {
+  city: StringNullableFilter
+  createdAt: DateTimeFilter
+  driver: DriverWhereUniqueInput
+  id: StringFilter
+  radiusMiles: FloatNullableFilter
+  updatedAt: DateTimeFilter
+}
+
+input DriverPreferenceWhereUniqueInput {
+  id: String!
+}
+
+input DriverUpdateInput {
+  alerts: DriverAlertPreferenceWhereUniqueInput
+  approvedAt: DateTime
+  approvedBy: UserWhereUniqueInput
+  assignments: DeliveryAssignmentUpdateManyWithoutDriversInput
+  audits: AdminAuditLogUpdateManyWithoutDriversInput
+  districts: DriverDistrictPreferenceUpdateManyWithoutDriversInput
+  location: DriverLocationWhereUniqueInput
+  notifications: NotificationEventUpdateManyWithoutDriversInput
+  payouts: DriverPayoutUpdateManyWithoutDriversInput
+  phone: String
+  preferences: DriverPreferenceWhereUniqueInput
+  profilePhotoUrl: String
+  ratingsReceived: DeliveryRatingUpdateManyWithoutDriversInput
+  status: EnumDriverStatus
+  user: UserWhereUniqueInput
+}
+
+input DriverUpdateManyWithoutUsersInput {
+  connect: [DriverWhereUniqueInput!]
+  disconnect: [DriverWhereUniqueInput!]
+  set: [DriverWhereUniqueInput!]
+}
+
+input DriverWhereInput {
+  alerts: DriverAlertPreferenceWhereUniqueInput
+  approvedAt: DateTimeNullableFilter
+  approvedBy: UserWhereUniqueInput
+  assignments: DeliveryAssignmentListRelationFilter
+  audits: AdminAuditLogListRelationFilter
+  createdAt: DateTimeFilter
+  districts: DriverDistrictPreferenceListRelationFilter
+  id: StringFilter
+  location: DriverLocationWhereUniqueInput
+  notifications: NotificationEventListRelationFilter
+  payouts: DriverPayoutListRelationFilter
+  phone: StringNullableFilter
+  preferences: DriverPreferenceWhereUniqueInput
+  profilePhotoUrl: StringNullableFilter
+  ratingsReceived: DeliveryRatingListRelationFilter
+  status: EnumDriverStatus
+  updatedAt: DateTimeFilter
+  user: UserWhereUniqueInput
+}
+
+input DriverWhereUniqueInput {
+  id: String!
+}
+
+enum EnumAdminAuditLogAction {
+  DealerApprove
+  DealerReject
+  DeliveryCancel
+  DeliveryReassign
+  DisputeUpdate
+  DriverApprove
+  DriverSuspend
+  DriverUnsuspend
+  Other
+  PaymentOverride
+  PayoutOverride
+  PolicyUpdate
+  PricingUpdate
+  UserDisable
+  UserEnable
+}
+
+enum EnumAdminAuditLogActorType {
+  System
+  User
+}
+
+enum EnumCustomerApprovalStatus {
+  Approved
+  Pending
+  Rejected
+  Suspended
+}
+
+enum EnumCustomerCustomerType {
+  Business
+  Private
+}
+
+enum EnumCustomerPricingModeOverride {
+  CategoryAbc
+  FlatTier
+  PerMile
+}
+
+enum EnumDeliveryEvidencePhase {
+  Dropoff
+  Pickup
+}
+
+enum EnumDeliveryEvidenceType {
+  DropoffPhoto
+  OdometerEnd
+  OdometerStart
+  PickupPhoto
+  VinConfirmation
+}
+
+enum EnumDeliveryRatingTarget {
+  Driver
+}
+
+enum EnumDeliveryRequestCreatedByRole {
+  Admin
+  BusinessCustomer
+  Driver
+  PrivateCustomer
+}
+
+enum EnumDeliveryRequestCustomerChose {
+  DropoffWindow
+  PickupWindow
+}
+
+enum EnumDeliveryRequestServiceType {
+  BetweenLocations
+  HomeDelivery
+  ServicePickupReturn
+}
+
+enum EnumDeliveryRequestStatus {
+  Active
+  Booked
+  Cancelled
+  Completed
+  Disputed
+  Draft
+  Expired
+  Listed
+  Quoted
+}
+
+enum EnumDeliveryStatusHistoryActorRole {
+  Admin
+  BusinessCustomer
+  Driver
+  PrivateCustomer
+}
+
+enum EnumDeliveryStatusHistoryActorType {
+  System
+  User
+}
+
+enum EnumDeliveryStatusHistoryFromStatus {
+  Active
+  Booked
+  Cancelled
+  Completed
+  Disputed
+  Draft
+  Expired
+  Listed
+  Quoted
+}
+
+enum EnumDeliveryStatusHistoryToStatus {
+  Active
+  Booked
+  Cancelled
+  Completed
+  Disputed
+  Draft
+  Expired
+  Listed
+  Quoted
+}
+
+enum EnumDisputeCaseStatus {
+  Closed
+  Open
+  Resolved
+  UnderReview
+}
+
+enum EnumDriverPayoutStatus {
+  Cancelled
+  Eligible
+  Failed
+  Paid
+  Pending
+}
+
+enum EnumDriverStatus {
+  Approved
+  Pending
+  Suspended
+}
+
+enum EnumNotificationEventChannel {
+  Email
+  Sms
+}
+
+enum EnumNotificationEventStatus {
+  Failed
+  Queued
+  Sent
+}
+
+enum EnumNotificationEventType {
+  DealerApproved
+  DealerSignup
+  DeliveryAssigned
+  DeliveryBooked
+  DeliveryCancelled
+  DeliveryReassigned
+  DeliveryStatusChanged
+  DisputeOpened
+  DisputeUpdated
+  DriverApproved
+  DriverSignup
+  PaymentAuthorized
+  PaymentCaptured
+  PaymentFailed
+  Reminder
+  ScheduleChangeDecided
+  ScheduleChangeRequested
+  SupportRequestAssigned
+  SupportRequestClosed
+  SupportRequestCreated
+  SupportRequestReplied
+  SupportRequestResolved
+  TrackingStarted
+  TrackingStopped
+  UserSignup
+}
+
+enum EnumPaymentEventStatus {
+  Authorized
+  Captured
+  Failed
+  Invoiced
+  Paid
+  Refunded
+  Voided
+}
+
+enum EnumPaymentEventType {
+  Authorize
+  Capture
+  Fail
+  Invoice
+  MarkPaid
+  Refund
+  Void
+}
+
+enum EnumPaymentPaymentType {
+  Postpaid
+  Prepaid
+}
+
+enum EnumPaymentProvider {
+  Manual
+  Other
+  Stripe
+}
+
+enum EnumPaymentStatus {
+  Authorized
+  Captured
+  Failed
+  Invoiced
+  Paid
+  Refunded
+  Voided
+}
+
+enum EnumPricingCategoryRuleCategory {
+  A
+  B
+  C
+}
+
+enum EnumPricingConfigPricingMode {
+  CategoryAbc
+  FlatTier
+  PerMile
+}
+
+enum EnumQuoteMileageCategory {
+  A
+  B
+  C
+}
+
+enum EnumQuotePricingMode {
+  CategoryAbc
+  FlatTier
+  PerMile
+}
+
+enum EnumQuoteServiceType {
+  BetweenLocations
+  HomeDelivery
+  ServicePickupReturn
+}
+
+enum EnumScheduleChangeRequestRequestedByRole {
+  Admin
+  BusinessCustomer
+  Driver
+  PrivateCustomer
+}
+
+enum EnumScheduleChangeRequestStatus {
+  Approved
+  Cancelled
+  Declined
+  Pending
+}
+
+enum EnumSchedulingPolicyCustomerType {
+  Business
+  Private
+}
+
+enum EnumSchedulingPolicyDefaultMode {
+  NextDay
+  SameDay
+}
+
+enum EnumSchedulingPolicyServiceType {
+  BetweenLocations
+  HomeDelivery
+  ServicePickupReturn
+}
+
+enum EnumSupportRequestActorRole {
+  Admin
+  Dealer
+  Driver
+  Ops
+  PrivateCustomer
+}
+
+enum EnumSupportRequestActorType {
+  System
+  User
+}
+
+enum EnumSupportRequestCategory {
+  AccountIssue
+  CancellationRequest
+  DeliveryIssue
+  DisputeHelp
+  DriverIssue
+  General
+  Other
+  PaymentIssue
+  ScheduleChange
+}
+
+enum EnumSupportRequestNoteAuthorRole {
+  Admin
+  Dealer
+  Driver
+  Ops
+  PrivateCustomer
+}
+
+enum EnumSupportRequestPriority {
+  High
+  Low
+  Normal
+  Urgent
+}
+
+enum EnumSupportRequestStatus {
+  Closed
+  InProgress
+  Open
+  Resolved
+}
+
+enum EnumTipProvider {
+  Manual
+  Other
+  Stripe
+}
+
+enum EnumTipStatus {
+  Authorized
+  Captured
+  Failed
+  Refunded
+}
+
+enum EnumTrackingSessionStatus {
+  NotStarted
+  Started
+  Stopped
+}
+
+enum EnumUserRoles {
+  Admin
+  BusinessCustomer
+  Driver
+  PrivateCustomer
+}
+
+type EvidenceExport {
+  createdAt: DateTime!
+  createdBy: User
+  delivery: DeliveryRequest
+  id: String!
+  metaJson: JSON
+  updatedAt: DateTime!
+  url: String
+}
+
+input EvidenceExportCreateInput {
+  createdBy: UserWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput!
+  metaJson: JSON
+  url: String
+}
+
+input EvidenceExportCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [EvidenceExportWhereUniqueInput!]
+}
+
+input EvidenceExportCreateNestedManyWithoutUsersInput {
+  connect: [EvidenceExportWhereUniqueInput!]
+}
+
+input EvidenceExportListRelationFilter {
+  every: EvidenceExportWhereInput
+  none: EvidenceExportWhereInput
+  some: EvidenceExportWhereInput
+}
+
+input EvidenceExportOrderByInput {
+  createdAt: SortOrder
+  createdByUserId: SortOrder
+  deliveryId: SortOrder
+  id: SortOrder
+  metaJson: SortOrder
+  updatedAt: SortOrder
+  url: SortOrder
+}
+
+input EvidenceExportUpdateInput {
+  createdBy: UserWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  metaJson: JSON
+  url: String
+}
+
+input EvidenceExportUpdateManyWithoutDeliveryRequestsInput {
+  connect: [EvidenceExportWhereUniqueInput!]
+  disconnect: [EvidenceExportWhereUniqueInput!]
+  set: [EvidenceExportWhereUniqueInput!]
+}
+
+input EvidenceExportUpdateManyWithoutUsersInput {
+  connect: [EvidenceExportWhereUniqueInput!]
+  disconnect: [EvidenceExportWhereUniqueInput!]
+  set: [EvidenceExportWhereUniqueInput!]
+}
+
+input EvidenceExportWhereInput {
+  createdAt: DateTimeFilter
+  createdBy: UserWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  id: StringFilter
+  metaJson: JsonFilter
+  updatedAt: DateTimeFilter
+  url: StringNullableFilter
+}
+
+input EvidenceExportWhereUniqueInput {
+  id: String!
+}
+
+input FloatFilter {
+  equals: Float
+  gt: Float
+  gte: Float
+  in: [Float!]
+  lt: Float
+  lte: Float
+  not: Float
+  notIn: [Float!]
+}
+
+input FloatNullableFilter {
+  equals: Float
+  gt: Float
+  gte: Float
+  in: [Float!]
+  lt: Float
+  lte: Float
+  not: Float
+  notIn: [Float!]
+}
+
+input IntFilter {
+  equals: Int
+  gt: Int
+  gte: Int
+  in: [Int!]
+  lt: Int
+  lte: Int
+  not: Int
+  notIn: [Int!]
+}
+
+input IntNullableFilter {
+  equals: Int
+  gt: Int
+  gte: Int
+  in: [Int!]
+  lt: Int
+  lte: Int
+  not: Int
+  notIn: [Int!]
+}
+
+type InvestorLead {
+  createdAt: DateTime!
+  email: String!
+  id: String!
+  message: String
+  name: String!
+  updatedAt: DateTime!
+}
+
+input InvestorLeadCreateInput {
+  email: String!
+  message: String
+  name: String!
+}
+
+input InvestorLeadOrderByInput {
+  createdAt: SortOrder
+  email: SortOrder
+  id: SortOrder
+  message: SortOrder
+  name: SortOrder
+  updatedAt: SortOrder
+}
+
+input InvestorLeadUpdateInput {
+  email: String
+  message: String
+  name: String
+}
+
+input InvestorLeadWhereInput {
+  createdAt: DateTimeFilter
+  email: StringFilter
+  id: StringFilter
+  message: StringNullableFilter
+  name: StringFilter
+  updatedAt: DateTimeFilter
+}
+
+input InvestorLeadWhereUniqueInput {
+  id: String!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
+"""
+The `JSONObject` scalar type represents JSON objects as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSONObject
+
+input JsonFilter {
+  equals: JSONObject
+  not: JSONObject
+}
+
+type MetaQueryPayload {
+  count: Float!
+}
+
+type Mutation {
+  createAdminAuditLog(data: AdminAuditLogCreateInput!): AdminAuditLog!
+  createAppSetting(data: AppSettingCreateInput!): AppSetting!
+  createCustomer(data: CustomerCreateInput!): Customer!
+  createDealerLead(data: DealerLeadCreateInput!): DealerLead!
+  createDeliveryAssignment(data: DeliveryAssignmentCreateInput!): DeliveryAssignment!
+  createDeliveryCompliance(data: DeliveryComplianceCreateInput!): DeliveryCompliance!
+  createDeliveryEvidence(data: DeliveryEvidenceCreateInput!): DeliveryEvidence!
+  createDeliveryRating(data: DeliveryRatingCreateInput!): DeliveryRating!
+  createDeliveryRequest(data: DeliveryRequestCreateInput!): DeliveryRequest!
+  createDeliveryStatusHistory(data: DeliveryStatusHistoryCreateInput!): DeliveryStatusHistory!
+  createDisputeCase(data: DisputeCaseCreateInput!): DisputeCase!
+  createDisputeNote(data: DisputeNoteCreateInput!): DisputeNote!
+  createDriver(data: DriverCreateInput!): Driver!
+  createDriverAlertPreference(data: DriverAlertPreferenceCreateInput!): DriverAlertPreference!
+  createDriverDistrictPreference(data: DriverDistrictPreferenceCreateInput!): DriverDistrictPreference!
+  createDriverLocation(data: DriverLocationCreateInput!): DriverLocation!
+  createDriverPayout(data: DriverPayoutCreateInput!): DriverPayout!
+  createDriverPreference(data: DriverPreferenceCreateInput!): DriverPreference!
+  createEvidenceExport(data: EvidenceExportCreateInput!): EvidenceExport!
+  createInvestorLead(data: InvestorLeadCreateInput!): InvestorLead!
+  createNotificationEvent(data: NotificationEventCreateInput!): NotificationEvent!
+  createOperatingHour(data: OperatingHourCreateInput!): OperatingHour!
+  createPayment(data: PaymentCreateInput!): Payment!
+  createPaymentEvent(data: PaymentEventCreateInput!): PaymentEvent!
+  createPricingCategoryRule(data: PricingCategoryRuleCreateInput!): PricingCategoryRule!
+  createPricingConfig(data: PricingConfigCreateInput!): PricingConfig!
+  createPricingTier(data: PricingTierCreateInput!): PricingTier!
+  createQuote(data: QuoteCreateInput!): Quote!
+  createSavedAddress(data: SavedAddressCreateInput!): SavedAddress!
+  createSavedVehicle(data: SavedVehicleCreateInput!): SavedVehicle!
+  createScheduleChangeRequest(data: ScheduleChangeRequestCreateInput!): ScheduleChangeRequest!
+  createSchedulingPolicy(data: SchedulingPolicyCreateInput!): SchedulingPolicy!
+  createServiceDistrict(data: ServiceDistrictCreateInput!): ServiceDistrict!
+  createSupportRequest(data: SupportRequestCreateInput!): SupportRequest!
+  createSupportRequestNote(data: SupportRequestNoteCreateInput!): SupportRequestNote!
+  createTimeSlotTemplate(data: TimeSlotTemplateCreateInput!): TimeSlotTemplate!
+  createTip(data: TipCreateInput!): Tip!
+  createTrackingPoint(data: TrackingPointCreateInput!): TrackingPoint!
+  createTrackingSession(data: TrackingSessionCreateInput!): TrackingSession!
+  createUser(data: UserCreateInput!): User!
+  deleteAdminAuditLog(where: AdminAuditLogWhereUniqueInput!): AdminAuditLog!
+  deleteAppSetting(where: AppSettingWhereUniqueInput!): AppSetting!
+  deleteCustomer(where: CustomerWhereUniqueInput!): Customer!
+  deleteDealerLead(where: DealerLeadWhereUniqueInput!): DealerLead!
+  deleteDeliveryAssignment(where: DeliveryAssignmentWhereUniqueInput!): DeliveryAssignment!
+  deleteDeliveryCompliance(where: DeliveryComplianceWhereUniqueInput!): DeliveryCompliance!
+  deleteDeliveryEvidence(where: DeliveryEvidenceWhereUniqueInput!): DeliveryEvidence!
+  deleteDeliveryRating(where: DeliveryRatingWhereUniqueInput!): DeliveryRating!
+  deleteDeliveryRequest(where: DeliveryRequestWhereUniqueInput!): DeliveryRequest!
+  deleteDeliveryStatusHistory(where: DeliveryStatusHistoryWhereUniqueInput!): DeliveryStatusHistory!
+  deleteDisputeCase(where: DisputeCaseWhereUniqueInput!): DisputeCase!
+  deleteDisputeNote(where: DisputeNoteWhereUniqueInput!): DisputeNote!
+  deleteDriver(where: DriverWhereUniqueInput!): Driver!
+  deleteDriverAlertPreference(where: DriverAlertPreferenceWhereUniqueInput!): DriverAlertPreference!
+  deleteDriverDistrictPreference(where: DriverDistrictPreferenceWhereUniqueInput!): DriverDistrictPreference!
+  deleteDriverLocation(where: DriverLocationWhereUniqueInput!): DriverLocation!
+  deleteDriverPayout(where: DriverPayoutWhereUniqueInput!): DriverPayout!
+  deleteDriverPreference(where: DriverPreferenceWhereUniqueInput!): DriverPreference!
+  deleteEvidenceExport(where: EvidenceExportWhereUniqueInput!): EvidenceExport!
+  deleteInvestorLead(where: InvestorLeadWhereUniqueInput!): InvestorLead!
+  deleteNotificationEvent(where: NotificationEventWhereUniqueInput!): NotificationEvent!
+  deleteOperatingHour(where: OperatingHourWhereUniqueInput!): OperatingHour!
+  deletePayment(where: PaymentWhereUniqueInput!): Payment!
+  deletePaymentEvent(where: PaymentEventWhereUniqueInput!): PaymentEvent!
+  deletePricingCategoryRule(where: PricingCategoryRuleWhereUniqueInput!): PricingCategoryRule!
+  deletePricingConfig(where: PricingConfigWhereUniqueInput!): PricingConfig!
+  deletePricingTier(where: PricingTierWhereUniqueInput!): PricingTier!
+  deleteQuote(where: QuoteWhereUniqueInput!): Quote!
+  deleteSavedAddress(where: SavedAddressWhereUniqueInput!): SavedAddress!
+  deleteSavedVehicle(where: SavedVehicleWhereUniqueInput!): SavedVehicle!
+  deleteScheduleChangeRequest(where: ScheduleChangeRequestWhereUniqueInput!): ScheduleChangeRequest!
+  deleteSchedulingPolicy(where: SchedulingPolicyWhereUniqueInput!): SchedulingPolicy!
+  deleteServiceDistrict(where: ServiceDistrictWhereUniqueInput!): ServiceDistrict!
+  deleteSupportRequest(where: SupportRequestWhereUniqueInput!): SupportRequest!
+  deleteSupportRequestNote(where: SupportRequestNoteWhereUniqueInput!): SupportRequestNote!
+  deleteTimeSlotTemplate(where: TimeSlotTemplateWhereUniqueInput!): TimeSlotTemplate!
+  deleteTip(where: TipWhereUniqueInput!): Tip!
+  deleteTrackingPoint(where: TrackingPointWhereUniqueInput!): TrackingPoint!
+  deleteTrackingSession(where: TrackingSessionWhereUniqueInput!): TrackingSession!
+  deleteUser(where: UserWhereUniqueInput!): User!
+  login(credentials: Credentials!): UserInfo!
+  updateAdminAuditLog(data: AdminAuditLogUpdateInput!, where: AdminAuditLogWhereUniqueInput!): AdminAuditLog!
+  updateAppSetting(data: AppSettingUpdateInput!, where: AppSettingWhereUniqueInput!): AppSetting!
+  updateCustomer(data: CustomerUpdateInput!, where: CustomerWhereUniqueInput!): Customer!
+  updateDealerLead(data: DealerLeadUpdateInput!, where: DealerLeadWhereUniqueInput!): DealerLead!
+  updateDeliveryAssignment(data: DeliveryAssignmentUpdateInput!, where: DeliveryAssignmentWhereUniqueInput!): DeliveryAssignment!
+  updateDeliveryCompliance(data: DeliveryComplianceUpdateInput!, where: DeliveryComplianceWhereUniqueInput!): DeliveryCompliance!
+  updateDeliveryEvidence(data: DeliveryEvidenceUpdateInput!, where: DeliveryEvidenceWhereUniqueInput!): DeliveryEvidence!
+  updateDeliveryRating(data: DeliveryRatingUpdateInput!, where: DeliveryRatingWhereUniqueInput!): DeliveryRating!
+  updateDeliveryRequest(data: DeliveryRequestUpdateInput!, where: DeliveryRequestWhereUniqueInput!): DeliveryRequest!
+  updateDeliveryStatusHistory(data: DeliveryStatusHistoryUpdateInput!, where: DeliveryStatusHistoryWhereUniqueInput!): DeliveryStatusHistory!
+  updateDisputeCase(data: DisputeCaseUpdateInput!, where: DisputeCaseWhereUniqueInput!): DisputeCase!
+  updateDisputeNote(data: DisputeNoteUpdateInput!, where: DisputeNoteWhereUniqueInput!): DisputeNote!
+  updateDriver(data: DriverUpdateInput!, where: DriverWhereUniqueInput!): Driver!
+  updateDriverAlertPreference(data: DriverAlertPreferenceUpdateInput!, where: DriverAlertPreferenceWhereUniqueInput!): DriverAlertPreference!
+  updateDriverDistrictPreference(data: DriverDistrictPreferenceUpdateInput!, where: DriverDistrictPreferenceWhereUniqueInput!): DriverDistrictPreference!
+  updateDriverLocation(data: DriverLocationUpdateInput!, where: DriverLocationWhereUniqueInput!): DriverLocation!
+  updateDriverPayout(data: DriverPayoutUpdateInput!, where: DriverPayoutWhereUniqueInput!): DriverPayout!
+  updateDriverPreference(data: DriverPreferenceUpdateInput!, where: DriverPreferenceWhereUniqueInput!): DriverPreference!
+  updateEvidenceExport(data: EvidenceExportUpdateInput!, where: EvidenceExportWhereUniqueInput!): EvidenceExport!
+  updateInvestorLead(data: InvestorLeadUpdateInput!, where: InvestorLeadWhereUniqueInput!): InvestorLead!
+  updateNotificationEvent(data: NotificationEventUpdateInput!, where: NotificationEventWhereUniqueInput!): NotificationEvent!
+  updateOperatingHour(data: OperatingHourUpdateInput!, where: OperatingHourWhereUniqueInput!): OperatingHour!
+  updatePayment(data: PaymentUpdateInput!, where: PaymentWhereUniqueInput!): Payment!
+  updatePaymentEvent(data: PaymentEventUpdateInput!, where: PaymentEventWhereUniqueInput!): PaymentEvent!
+  updatePricingCategoryRule(data: PricingCategoryRuleUpdateInput!, where: PricingCategoryRuleWhereUniqueInput!): PricingCategoryRule!
+  updatePricingConfig(data: PricingConfigUpdateInput!, where: PricingConfigWhereUniqueInput!): PricingConfig!
+  updatePricingTier(data: PricingTierUpdateInput!, where: PricingTierWhereUniqueInput!): PricingTier!
+  updateQuote(data: QuoteUpdateInput!, where: QuoteWhereUniqueInput!): Quote!
+  updateSavedAddress(data: SavedAddressUpdateInput!, where: SavedAddressWhereUniqueInput!): SavedAddress!
+  updateSavedVehicle(data: SavedVehicleUpdateInput!, where: SavedVehicleWhereUniqueInput!): SavedVehicle!
+  updateScheduleChangeRequest(data: ScheduleChangeRequestUpdateInput!, where: ScheduleChangeRequestWhereUniqueInput!): ScheduleChangeRequest!
+  updateSchedulingPolicy(data: SchedulingPolicyUpdateInput!, where: SchedulingPolicyWhereUniqueInput!): SchedulingPolicy!
+  updateServiceDistrict(data: ServiceDistrictUpdateInput!, where: ServiceDistrictWhereUniqueInput!): ServiceDistrict!
+  updateSupportRequest(data: SupportRequestUpdateInput!, where: SupportRequestWhereUniqueInput!): SupportRequest!
+  updateSupportRequestNote(data: SupportRequestNoteUpdateInput!, where: SupportRequestNoteWhereUniqueInput!): SupportRequestNote!
+  updateTimeSlotTemplate(data: TimeSlotTemplateUpdateInput!, where: TimeSlotTemplateWhereUniqueInput!): TimeSlotTemplate!
+  updateTip(data: TipUpdateInput!, where: TipWhereUniqueInput!): Tip!
+  updateTrackingPoint(data: TrackingPointUpdateInput!, where: TrackingPointWhereUniqueInput!): TrackingPoint!
+  updateTrackingSession(data: TrackingSessionUpdateInput!, where: TrackingSessionWhereUniqueInput!): TrackingSession!
+  updateUser(data: UserUpdateInput!, where: UserWhereUniqueInput!): User!
+}
+
+type NotificationEvent {
+  actor: User
+  archivedAt: DateTime
+  body: String
+  channel: EnumNotificationEventChannel
+  clickedAt: DateTime
+  createdAt: DateTime!
+  customer: Customer
+  delivery: DeliveryRequest
+  dismissedAt: DateTime
+  driver: Driver
+  errorMessage: String
+  expiresAt: DateTime
+  failedAt: DateTime
+  id: String!
+  isRead: Boolean!
+  openedAt: DateTime
+  payload: JSON
+  readAt: DateTime
+  seenInListAt: DateTime
+  sentAt: DateTime
+  status: EnumNotificationEventStatus
+  subject: String
+  templateCode: String
+  toEmail: String
+  toPhone: String
+  type: EnumNotificationEventType
+  updatedAt: DateTime!
+}
+
+input NotificationEventCreateInput {
+  actor: UserWhereUniqueInput
+  archivedAt: DateTime
+  body: String
+  channel: EnumNotificationEventChannel!
+  clickedAt: DateTime
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  dismissedAt: DateTime
+  driver: DriverWhereUniqueInput
+  errorMessage: String
+  expiresAt: DateTime
+  failedAt: DateTime
+  isRead: Boolean!
+  openedAt: DateTime
+  payload: JSON
+  readAt: DateTime
+  seenInListAt: DateTime
+  sentAt: DateTime
+  status: EnumNotificationEventStatus!
+  subject: String
+  templateCode: String
+  toEmail: String
+  toPhone: String
+  type: EnumNotificationEventType!
+}
+
+input NotificationEventCreateNestedManyWithoutCustomersInput {
+  connect: [NotificationEventWhereUniqueInput!]
+}
+
+input NotificationEventCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [NotificationEventWhereUniqueInput!]
+}
+
+input NotificationEventCreateNestedManyWithoutDriversInput {
+  connect: [NotificationEventWhereUniqueInput!]
+}
+
+input NotificationEventCreateNestedManyWithoutUsersInput {
+  connect: [NotificationEventWhereUniqueInput!]
+}
+
+input NotificationEventListRelationFilter {
+  every: NotificationEventWhereInput
+  none: NotificationEventWhereInput
+  some: NotificationEventWhereInput
+}
+
+input NotificationEventOrderByInput {
+  actorUserId: SortOrder
+  archivedAt: SortOrder
+  body: SortOrder
+  channel: SortOrder
+  clickedAt: SortOrder
+  createdAt: SortOrder
+  customerId: SortOrder
+  deliveryId: SortOrder
+  dismissedAt: SortOrder
+  driverId: SortOrder
+  errorMessage: SortOrder
+  expiresAt: SortOrder
+  failedAt: SortOrder
+  id: SortOrder
+  isRead: SortOrder
+  openedAt: SortOrder
+  payload: SortOrder
+  readAt: SortOrder
+  seenInListAt: SortOrder
+  sentAt: SortOrder
+  status: SortOrder
+  subject: SortOrder
+  templateCode: SortOrder
+  toEmail: SortOrder
+  toPhone: SortOrder
+  type: SortOrder
+  updatedAt: SortOrder
+}
+
+input NotificationEventUpdateInput {
+  actor: UserWhereUniqueInput
+  archivedAt: DateTime
+  body: String
+  channel: EnumNotificationEventChannel
+  clickedAt: DateTime
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  dismissedAt: DateTime
+  driver: DriverWhereUniqueInput
+  errorMessage: String
+  expiresAt: DateTime
+  failedAt: DateTime
+  isRead: Boolean
+  openedAt: DateTime
+  payload: JSON
+  readAt: DateTime
+  seenInListAt: DateTime
+  sentAt: DateTime
+  status: EnumNotificationEventStatus
+  subject: String
+  templateCode: String
+  toEmail: String
+  toPhone: String
+  type: EnumNotificationEventType
+}
+
+input NotificationEventUpdateManyWithoutCustomersInput {
+  connect: [NotificationEventWhereUniqueInput!]
+  disconnect: [NotificationEventWhereUniqueInput!]
+  set: [NotificationEventWhereUniqueInput!]
+}
+
+input NotificationEventUpdateManyWithoutDeliveryRequestsInput {
+  connect: [NotificationEventWhereUniqueInput!]
+  disconnect: [NotificationEventWhereUniqueInput!]
+  set: [NotificationEventWhereUniqueInput!]
+}
+
+input NotificationEventUpdateManyWithoutDriversInput {
+  connect: [NotificationEventWhereUniqueInput!]
+  disconnect: [NotificationEventWhereUniqueInput!]
+  set: [NotificationEventWhereUniqueInput!]
+}
+
+input NotificationEventUpdateManyWithoutUsersInput {
+  connect: [NotificationEventWhereUniqueInput!]
+  disconnect: [NotificationEventWhereUniqueInput!]
+  set: [NotificationEventWhereUniqueInput!]
+}
+
+input NotificationEventWhereInput {
+  actor: UserWhereUniqueInput
+  archivedAt: DateTimeNullableFilter
+  body: StringNullableFilter
+  channel: EnumNotificationEventChannel
+  clickedAt: DateTimeNullableFilter
+  createdAt: DateTimeFilter
+  customer: CustomerWhereUniqueInput
+  delivery: DeliveryRequestWhereUniqueInput
+  dismissedAt: DateTimeNullableFilter
+  driver: DriverWhereUniqueInput
+  errorMessage: StringNullableFilter
+  expiresAt: DateTimeNullableFilter
+  failedAt: DateTimeNullableFilter
+  id: StringFilter
+  isRead: BooleanFilter
+  openedAt: DateTimeNullableFilter
+  payload: JsonFilter
+  readAt: DateTimeNullableFilter
+  seenInListAt: DateTimeNullableFilter
+  sentAt: DateTimeNullableFilter
+  status: EnumNotificationEventStatus
+  subject: StringNullableFilter
+  templateCode: StringNullableFilter
+  toEmail: StringNullableFilter
+  toPhone: StringNullableFilter
+  type: EnumNotificationEventType
+  updatedAt: DateTimeFilter
+}
+
+input NotificationEventWhereUniqueInput {
+  id: String!
+}
+
+type OperatingHour {
+  active: Boolean!
+  createdAt: DateTime!
+  dayOfWeek: Float!
+  endTime: String!
+  id: String!
+  startTime: String!
+  updatedAt: DateTime!
+}
+
+input OperatingHourCreateInput {
+  active: Boolean!
+  dayOfWeek: Float!
+  endTime: String!
+  startTime: String!
+}
+
+input OperatingHourOrderByInput {
+  active: SortOrder
+  createdAt: SortOrder
+  dayOfWeek: SortOrder
+  endTime: SortOrder
+  id: SortOrder
+  startTime: SortOrder
+  updatedAt: SortOrder
+}
+
+input OperatingHourUpdateInput {
+  active: Boolean
+  dayOfWeek: Float
+  endTime: String
+  startTime: String
+}
+
+input OperatingHourWhereInput {
+  active: BooleanFilter
+  createdAt: DateTimeFilter
+  dayOfWeek: IntFilter
+  endTime: StringFilter
+  id: StringFilter
+  startTime: StringFilter
+  updatedAt: DateTimeFilter
+}
+
+input OperatingHourWhereUniqueInput {
+  id: String!
+}
+
+type Payment {
+  amount: Float!
+  authorizedAt: DateTime
+  capturedAt: DateTime
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  events(orderBy: [PaymentEventOrderByInput!], skip: Float, take: Float, where: PaymentEventWhereInput): [PaymentEvent!]!
+  failedAt: DateTime
+  failureCode: String
+  failureMessage: String
+  id: String!
+  invoiceId: String
+  paidAt: DateTime
+  paymentType: EnumPaymentPaymentType
+  provider: EnumPaymentProvider
+  providerChargeId: String
+  providerPaymentIntentId: String
+  refundedAt: DateTime
+  status: EnumPaymentStatus
+  updatedAt: DateTime!
+  voidedAt: DateTime
+}
+
+input PaymentCreateInput {
+  amount: Float!
+  authorizedAt: DateTime
+  capturedAt: DateTime
+  delivery: DeliveryRequestWhereUniqueInput!
+  events: PaymentEventCreateNestedManyWithoutPaymentsInput
+  failedAt: DateTime
+  failureCode: String
+  failureMessage: String
+  invoiceId: String
+  paidAt: DateTime
+  paymentType: EnumPaymentPaymentType!
+  provider: EnumPaymentProvider!
+  providerChargeId: String
+  providerPaymentIntentId: String
+  refundedAt: DateTime
+  status: EnumPaymentStatus!
+  voidedAt: DateTime
+}
+
+type PaymentEvent {
+  amount: Float
+  createdAt: DateTime!
+  id: String!
+  message: String
+  payment: Payment
+  providerRef: String
+  raw: JSON
+  status: EnumPaymentEventStatus
+  type: EnumPaymentEventType
+  updatedAt: DateTime!
+}
+
+input PaymentEventCreateInput {
+  amount: Float
+  message: String
+  payment: PaymentWhereUniqueInput!
+  providerRef: String
+  raw: JSON
+  status: EnumPaymentEventStatus
+  type: EnumPaymentEventType!
+}
+
+input PaymentEventCreateNestedManyWithoutPaymentsInput {
+  connect: [PaymentEventWhereUniqueInput!]
+}
+
+input PaymentEventListRelationFilter {
+  every: PaymentEventWhereInput
+  none: PaymentEventWhereInput
+  some: PaymentEventWhereInput
+}
+
+input PaymentEventOrderByInput {
+  amount: SortOrder
+  createdAt: SortOrder
+  id: SortOrder
+  message: SortOrder
+  paymentId: SortOrder
+  providerRef: SortOrder
+  raw: SortOrder
+  status: SortOrder
+  type: SortOrder
+  updatedAt: SortOrder
+}
+
+input PaymentEventUpdateInput {
+  amount: Float
+  message: String
+  payment: PaymentWhereUniqueInput
+  providerRef: String
+  raw: JSON
+  status: EnumPaymentEventStatus
+  type: EnumPaymentEventType
+}
+
+input PaymentEventUpdateManyWithoutPaymentsInput {
+  connect: [PaymentEventWhereUniqueInput!]
+  disconnect: [PaymentEventWhereUniqueInput!]
+  set: [PaymentEventWhereUniqueInput!]
+}
+
+input PaymentEventWhereInput {
+  amount: FloatNullableFilter
+  createdAt: DateTimeFilter
+  id: StringFilter
+  message: StringNullableFilter
+  payment: PaymentWhereUniqueInput
+  providerRef: StringNullableFilter
+  raw: JsonFilter
+  status: EnumPaymentEventStatus
+  type: EnumPaymentEventType
+  updatedAt: DateTimeFilter
+}
+
+input PaymentEventWhereUniqueInput {
+  id: String!
+}
+
+input PaymentOrderByInput {
+  amount: SortOrder
+  authorizedAt: SortOrder
+  capturedAt: SortOrder
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  failedAt: SortOrder
+  failureCode: SortOrder
+  failureMessage: SortOrder
+  id: SortOrder
+  invoiceId: SortOrder
+  paidAt: SortOrder
+  paymentType: SortOrder
+  provider: SortOrder
+  providerChargeId: SortOrder
+  providerPaymentIntentId: SortOrder
+  refundedAt: SortOrder
+  status: SortOrder
+  updatedAt: SortOrder
+  voidedAt: SortOrder
+}
+
+input PaymentUpdateInput {
+  amount: Float
+  authorizedAt: DateTime
+  capturedAt: DateTime
+  delivery: DeliveryRequestWhereUniqueInput
+  events: PaymentEventUpdateManyWithoutPaymentsInput
+  failedAt: DateTime
+  failureCode: String
+  failureMessage: String
+  invoiceId: String
+  paidAt: DateTime
+  paymentType: EnumPaymentPaymentType
+  provider: EnumPaymentProvider
+  providerChargeId: String
+  providerPaymentIntentId: String
+  refundedAt: DateTime
+  status: EnumPaymentStatus
+  voidedAt: DateTime
+}
+
+input PaymentWhereInput {
+  amount: FloatFilter
+  authorizedAt: DateTimeNullableFilter
+  capturedAt: DateTimeNullableFilter
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  events: PaymentEventListRelationFilter
+  failedAt: DateTimeNullableFilter
+  failureCode: StringNullableFilter
+  failureMessage: StringNullableFilter
+  id: StringFilter
+  invoiceId: StringNullableFilter
+  paidAt: DateTimeNullableFilter
+  paymentType: EnumPaymentPaymentType
+  provider: EnumPaymentProvider
+  providerChargeId: StringNullableFilter
+  providerPaymentIntentId: StringNullableFilter
+  refundedAt: DateTimeNullableFilter
+  status: EnumPaymentStatus
+  updatedAt: DateTimeFilter
+  voidedAt: DateTimeNullableFilter
+}
+
+input PaymentWhereUniqueInput {
+  id: String!
+}
+
+type PricingCategoryRule {
+  baseFee: Float
+  category: EnumPricingCategoryRuleCategory
+  createdAt: DateTime!
+  flatPrice: Float
+  id: String!
+  maxMiles: Float
+  minMiles: Float!
+  perMileRate: Float
+  pricingConfig: PricingConfig
+  updatedAt: DateTime!
+}
+
+input PricingCategoryRuleCreateInput {
+  baseFee: Float
+  category: EnumPricingCategoryRuleCategory!
+  flatPrice: Float
+  maxMiles: Float
+  minMiles: Float!
+  perMileRate: Float
+  pricingConfig: PricingConfigWhereUniqueInput!
+}
+
+input PricingCategoryRuleCreateNestedManyWithoutPricingConfigsInput {
+  connect: [PricingCategoryRuleWhereUniqueInput!]
+}
+
+input PricingCategoryRuleListRelationFilter {
+  every: PricingCategoryRuleWhereInput
+  none: PricingCategoryRuleWhereInput
+  some: PricingCategoryRuleWhereInput
+}
+
+input PricingCategoryRuleOrderByInput {
+  baseFee: SortOrder
+  category: SortOrder
+  createdAt: SortOrder
+  flatPrice: SortOrder
+  id: SortOrder
+  maxMiles: SortOrder
+  minMiles: SortOrder
+  perMileRate: SortOrder
+  pricingConfigId: SortOrder
+  updatedAt: SortOrder
+}
+
+input PricingCategoryRuleUpdateInput {
+  baseFee: Float
+  category: EnumPricingCategoryRuleCategory
+  flatPrice: Float
+  maxMiles: Float
+  minMiles: Float
+  perMileRate: Float
+  pricingConfig: PricingConfigWhereUniqueInput
+}
+
+input PricingCategoryRuleUpdateManyWithoutPricingConfigsInput {
+  connect: [PricingCategoryRuleWhereUniqueInput!]
+  disconnect: [PricingCategoryRuleWhereUniqueInput!]
+  set: [PricingCategoryRuleWhereUniqueInput!]
+}
+
+input PricingCategoryRuleWhereInput {
+  baseFee: FloatNullableFilter
+  category: EnumPricingCategoryRuleCategory
+  createdAt: DateTimeFilter
+  flatPrice: FloatNullableFilter
+  id: StringFilter
+  maxMiles: FloatNullableFilter
+  minMiles: FloatFilter
+  perMileRate: FloatNullableFilter
+  pricingConfig: PricingConfigWhereUniqueInput
+  updatedAt: DateTimeFilter
+}
+
+input PricingCategoryRuleWhereUniqueInput {
+  id: String!
+}
+
+type PricingConfig {
+  active: Boolean!
+  baseFee: Float!
+  categoryRules(orderBy: [PricingCategoryRuleOrderByInput!], skip: Float, take: Float, where: PricingCategoryRuleWhereInput): [PricingCategoryRule!]!
+  createdAt: DateTime!
+  customers(orderBy: [CustomerOrderByInput!], skip: Float, take: Float, where: CustomerWhereInput): [Customer!]!
+  description: String
+  driverSharePct: Float!
+  feePassThrough: Boolean!
+  id: String!
+  insuranceFee: Float!
+  name: String
+  perMileRate: Float
+  pricingMode: EnumPricingConfigPricingMode
+  tiers(orderBy: [PricingTierOrderByInput!], skip: Float, take: Float, where: PricingTierWhereInput): [PricingTier!]!
+  transactionFeeFixed: Float
+  transactionFeePct: Float
+  updatedAt: DateTime!
+}
+
+input PricingConfigCreateInput {
+  active: Boolean!
+  baseFee: Float!
+  categoryRules: PricingCategoryRuleCreateNestedManyWithoutPricingConfigsInput
+  customers: CustomerCreateNestedManyWithoutPricingConfigsInput
+  description: String
+  driverSharePct: Float!
+  feePassThrough: Boolean!
+  insuranceFee: Float!
+  name: String
+  perMileRate: Float
+  pricingMode: EnumPricingConfigPricingMode!
+  tiers: PricingTierCreateNestedManyWithoutPricingConfigsInput
+  transactionFeeFixed: Float
+  transactionFeePct: Float
+}
+
+input PricingConfigOrderByInput {
+  active: SortOrder
+  baseFee: SortOrder
+  createdAt: SortOrder
+  description: SortOrder
+  driverSharePct: SortOrder
+  feePassThrough: SortOrder
+  id: SortOrder
+  insuranceFee: SortOrder
+  name: SortOrder
+  perMileRate: SortOrder
+  pricingMode: SortOrder
+  transactionFeeFixed: SortOrder
+  transactionFeePct: SortOrder
+  updatedAt: SortOrder
+}
+
+input PricingConfigUpdateInput {
+  active: Boolean
+  baseFee: Float
+  categoryRules: PricingCategoryRuleUpdateManyWithoutPricingConfigsInput
+  customers: CustomerUpdateManyWithoutPricingConfigsInput
+  description: String
+  driverSharePct: Float
+  feePassThrough: Boolean
+  insuranceFee: Float
+  name: String
+  perMileRate: Float
+  pricingMode: EnumPricingConfigPricingMode
+  tiers: PricingTierUpdateManyWithoutPricingConfigsInput
+  transactionFeeFixed: Float
+  transactionFeePct: Float
+}
+
+input PricingConfigWhereInput {
+  active: BooleanFilter
+  baseFee: FloatFilter
+  categoryRules: PricingCategoryRuleListRelationFilter
+  createdAt: DateTimeFilter
+  customers: CustomerListRelationFilter
+  description: StringNullableFilter
+  driverSharePct: FloatFilter
+  feePassThrough: BooleanFilter
+  id: StringFilter
+  insuranceFee: FloatFilter
+  name: StringNullableFilter
+  perMileRate: FloatNullableFilter
+  pricingMode: EnumPricingConfigPricingMode
+  tiers: PricingTierListRelationFilter
+  transactionFeeFixed: FloatNullableFilter
+  transactionFeePct: FloatNullableFilter
+  updatedAt: DateTimeFilter
+}
+
+input PricingConfigWhereUniqueInput {
+  id: String!
+}
+
+type PricingTier {
+  createdAt: DateTime!
+  flatPrice: Float!
+  id: String!
+  maxMiles: Float
+  minMiles: Float!
+  pricingConfig: PricingConfig
+  updatedAt: DateTime!
+}
+
+input PricingTierCreateInput {
+  flatPrice: Float!
+  maxMiles: Float
+  minMiles: Float!
+  pricingConfig: PricingConfigWhereUniqueInput!
+}
+
+input PricingTierCreateNestedManyWithoutPricingConfigsInput {
+  connect: [PricingTierWhereUniqueInput!]
+}
+
+input PricingTierListRelationFilter {
+  every: PricingTierWhereInput
+  none: PricingTierWhereInput
+  some: PricingTierWhereInput
+}
+
+input PricingTierOrderByInput {
+  createdAt: SortOrder
+  flatPrice: SortOrder
+  id: SortOrder
+  maxMiles: SortOrder
+  minMiles: SortOrder
+  pricingConfigId: SortOrder
+  updatedAt: SortOrder
+}
+
+input PricingTierUpdateInput {
+  flatPrice: Float
+  maxMiles: Float
+  minMiles: Float
+  pricingConfig: PricingConfigWhereUniqueInput
+}
+
+input PricingTierUpdateManyWithoutPricingConfigsInput {
+  connect: [PricingTierWhereUniqueInput!]
+  disconnect: [PricingTierWhereUniqueInput!]
+  set: [PricingTierWhereUniqueInput!]
+}
+
+input PricingTierWhereInput {
+  createdAt: DateTimeFilter
+  flatPrice: FloatFilter
+  id: StringFilter
+  maxMiles: FloatNullableFilter
+  minMiles: FloatFilter
+  pricingConfig: PricingConfigWhereUniqueInput
+  updatedAt: DateTimeFilter
+}
+
+input PricingTierWhereUniqueInput {
+  id: String!
+}
+
+type Query {
+  _adminAuditLogsMeta(where: AdminAuditLogWhereInput): MetaQueryPayload!
+  _appSettingsMeta(where: AppSettingWhereInput): MetaQueryPayload!
+  _customersMeta(where: CustomerWhereInput): MetaQueryPayload!
+  _dealerLeadsMeta(where: DealerLeadWhereInput): MetaQueryPayload!
+  _deliveryAssignmentsMeta(where: DeliveryAssignmentWhereInput): MetaQueryPayload!
+  _deliveryCompliancesMeta(where: DeliveryComplianceWhereInput): MetaQueryPayload!
+  _deliveryEvidencesMeta(where: DeliveryEvidenceWhereInput): MetaQueryPayload!
+  _deliveryRatingsMeta(where: DeliveryRatingWhereInput): MetaQueryPayload!
+  _deliveryRequestsMeta(where: DeliveryRequestWhereInput): MetaQueryPayload!
+  _deliveryStatusHistoriesMeta(where: DeliveryStatusHistoryWhereInput): MetaQueryPayload!
+  _disputeCasesMeta(where: DisputeCaseWhereInput): MetaQueryPayload!
+  _disputeNotesMeta(where: DisputeNoteWhereInput): MetaQueryPayload!
+  _driverAlertPreferencesMeta(where: DriverAlertPreferenceWhereInput): MetaQueryPayload!
+  _driverDistrictPreferencesMeta(where: DriverDistrictPreferenceWhereInput): MetaQueryPayload!
+  _driverLocationsMeta(where: DriverLocationWhereInput): MetaQueryPayload!
+  _driverPayoutsMeta(where: DriverPayoutWhereInput): MetaQueryPayload!
+  _driverPreferencesMeta(where: DriverPreferenceWhereInput): MetaQueryPayload!
+  _driversMeta(where: DriverWhereInput): MetaQueryPayload!
+  _evidenceExportsMeta(where: EvidenceExportWhereInput): MetaQueryPayload!
+  _investorLeadsMeta(where: InvestorLeadWhereInput): MetaQueryPayload!
+  _notificationEventsMeta(where: NotificationEventWhereInput): MetaQueryPayload!
+  _operatingHoursMeta(where: OperatingHourWhereInput): MetaQueryPayload!
+  _paymentEventsMeta(where: PaymentEventWhereInput): MetaQueryPayload!
+  _paymentsMeta(where: PaymentWhereInput): MetaQueryPayload!
+  _pricingCategoryRulesMeta(where: PricingCategoryRuleWhereInput): MetaQueryPayload!
+  _pricingConfigsMeta(where: PricingConfigWhereInput): MetaQueryPayload!
+  _pricingTiersMeta(where: PricingTierWhereInput): MetaQueryPayload!
+  _quotesMeta(where: QuoteWhereInput): MetaQueryPayload!
+  _savedAddressesMeta(where: SavedAddressWhereInput): MetaQueryPayload!
+  _savedVehiclesMeta(where: SavedVehicleWhereInput): MetaQueryPayload!
+  _scheduleChangeRequestsMeta(where: ScheduleChangeRequestWhereInput): MetaQueryPayload!
+  _schedulingPoliciesMeta(where: SchedulingPolicyWhereInput): MetaQueryPayload!
+  _serviceDistrictsMeta(where: ServiceDistrictWhereInput): MetaQueryPayload!
+  _supportRequestNotesMeta(where: SupportRequestNoteWhereInput): MetaQueryPayload!
+  _supportRequestsMeta(where: SupportRequestWhereInput): MetaQueryPayload!
+  _timeSlotTemplatesMeta(where: TimeSlotTemplateWhereInput): MetaQueryPayload!
+  _tipsMeta(where: TipWhereInput): MetaQueryPayload!
+  _trackingPointsMeta(where: TrackingPointWhereInput): MetaQueryPayload!
+  _trackingSessionsMeta(where: TrackingSessionWhereInput): MetaQueryPayload!
+  _usersMeta(where: UserWhereInput): MetaQueryPayload!
+  adminAuditLog(where: AdminAuditLogWhereUniqueInput!): AdminAuditLog
+  adminAuditLogs(orderBy: [AdminAuditLogOrderByInput!], skip: Float, take: Float, where: AdminAuditLogWhereInput): [AdminAuditLog!]!
+  appSetting(where: AppSettingWhereUniqueInput!): AppSetting
+  appSettings(orderBy: [AppSettingOrderByInput!], skip: Float, take: Float, where: AppSettingWhereInput): [AppSetting!]!
+  customer(where: CustomerWhereUniqueInput!): Customer
+  customers(orderBy: [CustomerOrderByInput!], skip: Float, take: Float, where: CustomerWhereInput): [Customer!]!
+  dealerLead(where: DealerLeadWhereUniqueInput!): DealerLead
+  dealerLeads(orderBy: [DealerLeadOrderByInput!], skip: Float, take: Float, where: DealerLeadWhereInput): [DealerLead!]!
+  deliveryAssignment(where: DeliveryAssignmentWhereUniqueInput!): DeliveryAssignment
+  deliveryAssignments(orderBy: [DeliveryAssignmentOrderByInput!], skip: Float, take: Float, where: DeliveryAssignmentWhereInput): [DeliveryAssignment!]!
+  deliveryCompliance(where: DeliveryComplianceWhereUniqueInput!): DeliveryCompliance
+  deliveryCompliances(orderBy: [DeliveryComplianceOrderByInput!], skip: Float, take: Float, where: DeliveryComplianceWhereInput): [DeliveryCompliance!]!
+  deliveryEvidence(where: DeliveryEvidenceWhereUniqueInput!): DeliveryEvidence
+  deliveryEvidences(orderBy: [DeliveryEvidenceOrderByInput!], skip: Float, take: Float, where: DeliveryEvidenceWhereInput): [DeliveryEvidence!]!
+  deliveryRating(where: DeliveryRatingWhereUniqueInput!): DeliveryRating
+  deliveryRatings(orderBy: [DeliveryRatingOrderByInput!], skip: Float, take: Float, where: DeliveryRatingWhereInput): [DeliveryRating!]!
+  deliveryRequest(where: DeliveryRequestWhereUniqueInput!): DeliveryRequest
+  deliveryRequests(orderBy: [DeliveryRequestOrderByInput!], skip: Float, take: Float, where: DeliveryRequestWhereInput): [DeliveryRequest!]!
+  deliveryStatusHistories(orderBy: [DeliveryStatusHistoryOrderByInput!], skip: Float, take: Float, where: DeliveryStatusHistoryWhereInput): [DeliveryStatusHistory!]!
+  deliveryStatusHistory(where: DeliveryStatusHistoryWhereUniqueInput!): DeliveryStatusHistory
+  disputeCase(where: DisputeCaseWhereUniqueInput!): DisputeCase
+  disputeCases(orderBy: [DisputeCaseOrderByInput!], skip: Float, take: Float, where: DisputeCaseWhereInput): [DisputeCase!]!
+  disputeNote(where: DisputeNoteWhereUniqueInput!): DisputeNote
+  disputeNotes(orderBy: [DisputeNoteOrderByInput!], skip: Float, take: Float, where: DisputeNoteWhereInput): [DisputeNote!]!
+  driver(where: DriverWhereUniqueInput!): Driver
+  driverAlertPreference(where: DriverAlertPreferenceWhereUniqueInput!): DriverAlertPreference
+  driverAlertPreferences(orderBy: [DriverAlertPreferenceOrderByInput!], skip: Float, take: Float, where: DriverAlertPreferenceWhereInput): [DriverAlertPreference!]!
+  driverDistrictPreference(where: DriverDistrictPreferenceWhereUniqueInput!): DriverDistrictPreference
+  driverDistrictPreferences(orderBy: [DriverDistrictPreferenceOrderByInput!], skip: Float, take: Float, where: DriverDistrictPreferenceWhereInput): [DriverDistrictPreference!]!
+  driverLocation(where: DriverLocationWhereUniqueInput!): DriverLocation
+  driverLocations(orderBy: [DriverLocationOrderByInput!], skip: Float, take: Float, where: DriverLocationWhereInput): [DriverLocation!]!
+  driverPayout(where: DriverPayoutWhereUniqueInput!): DriverPayout
+  driverPayouts(orderBy: [DriverPayoutOrderByInput!], skip: Float, take: Float, where: DriverPayoutWhereInput): [DriverPayout!]!
+  driverPreference(where: DriverPreferenceWhereUniqueInput!): DriverPreference
+  driverPreferences(orderBy: [DriverPreferenceOrderByInput!], skip: Float, take: Float, where: DriverPreferenceWhereInput): [DriverPreference!]!
+  drivers(orderBy: [DriverOrderByInput!], skip: Float, take: Float, where: DriverWhereInput): [Driver!]!
+  evidenceExport(where: EvidenceExportWhereUniqueInput!): EvidenceExport
+  evidenceExports(orderBy: [EvidenceExportOrderByInput!], skip: Float, take: Float, where: EvidenceExportWhereInput): [EvidenceExport!]!
+  investorLead(where: InvestorLeadWhereUniqueInput!): InvestorLead
+  investorLeads(orderBy: [InvestorLeadOrderByInput!], skip: Float, take: Float, where: InvestorLeadWhereInput): [InvestorLead!]!
+  notificationEvent(where: NotificationEventWhereUniqueInput!): NotificationEvent
+  notificationEvents(orderBy: [NotificationEventOrderByInput!], skip: Float, take: Float, where: NotificationEventWhereInput): [NotificationEvent!]!
+  operatingHour(where: OperatingHourWhereUniqueInput!): OperatingHour
+  operatingHours(orderBy: [OperatingHourOrderByInput!], skip: Float, take: Float, where: OperatingHourWhereInput): [OperatingHour!]!
+  payment(where: PaymentWhereUniqueInput!): Payment
+  paymentEvent(where: PaymentEventWhereUniqueInput!): PaymentEvent
+  paymentEvents(orderBy: [PaymentEventOrderByInput!], skip: Float, take: Float, where: PaymentEventWhereInput): [PaymentEvent!]!
+  payments(orderBy: [PaymentOrderByInput!], skip: Float, take: Float, where: PaymentWhereInput): [Payment!]!
+  pricingCategoryRule(where: PricingCategoryRuleWhereUniqueInput!): PricingCategoryRule
+  pricingCategoryRules(orderBy: [PricingCategoryRuleOrderByInput!], skip: Float, take: Float, where: PricingCategoryRuleWhereInput): [PricingCategoryRule!]!
+  pricingConfig(where: PricingConfigWhereUniqueInput!): PricingConfig
+  pricingConfigs(orderBy: [PricingConfigOrderByInput!], skip: Float, take: Float, where: PricingConfigWhereInput): [PricingConfig!]!
+  pricingTier(where: PricingTierWhereUniqueInput!): PricingTier
+  pricingTiers(orderBy: [PricingTierOrderByInput!], skip: Float, take: Float, where: PricingTierWhereInput): [PricingTier!]!
+  quote(where: QuoteWhereUniqueInput!): Quote
+  quotes(orderBy: [QuoteOrderByInput!], skip: Float, take: Float, where: QuoteWhereInput): [Quote!]!
+  savedAddress(where: SavedAddressWhereUniqueInput!): SavedAddress
+  savedAddresses(orderBy: [SavedAddressOrderByInput!], skip: Float, take: Float, where: SavedAddressWhereInput): [SavedAddress!]!
+  savedVehicle(where: SavedVehicleWhereUniqueInput!): SavedVehicle
+  savedVehicles(orderBy: [SavedVehicleOrderByInput!], skip: Float, take: Float, where: SavedVehicleWhereInput): [SavedVehicle!]!
+  scheduleChangeRequest(where: ScheduleChangeRequestWhereUniqueInput!): ScheduleChangeRequest
+  scheduleChangeRequests(orderBy: [ScheduleChangeRequestOrderByInput!], skip: Float, take: Float, where: ScheduleChangeRequestWhereInput): [ScheduleChangeRequest!]!
+  schedulingPolicies(orderBy: [SchedulingPolicyOrderByInput!], skip: Float, take: Float, where: SchedulingPolicyWhereInput): [SchedulingPolicy!]!
+  schedulingPolicy(where: SchedulingPolicyWhereUniqueInput!): SchedulingPolicy
+  serviceDistrict(where: ServiceDistrictWhereUniqueInput!): ServiceDistrict
+  serviceDistricts(orderBy: [ServiceDistrictOrderByInput!], skip: Float, take: Float, where: ServiceDistrictWhereInput): [ServiceDistrict!]!
+  supportRequest(where: SupportRequestWhereUniqueInput!): SupportRequest
+  supportRequestNote(where: SupportRequestNoteWhereUniqueInput!): SupportRequestNote
+  supportRequestNotes(orderBy: [SupportRequestNoteOrderByInput!], skip: Float, take: Float, where: SupportRequestNoteWhereInput): [SupportRequestNote!]!
+  supportRequests(orderBy: [SupportRequestOrderByInput!], skip: Float, take: Float, where: SupportRequestWhereInput): [SupportRequest!]!
+  timeSlotTemplate(where: TimeSlotTemplateWhereUniqueInput!): TimeSlotTemplate
+  timeSlotTemplates(orderBy: [TimeSlotTemplateOrderByInput!], skip: Float, take: Float, where: TimeSlotTemplateWhereInput): [TimeSlotTemplate!]!
+  tip(where: TipWhereUniqueInput!): Tip
+  tips(orderBy: [TipOrderByInput!], skip: Float, take: Float, where: TipWhereInput): [Tip!]!
+  trackingPoint(where: TrackingPointWhereUniqueInput!): TrackingPoint
+  trackingPoints(orderBy: [TrackingPointOrderByInput!], skip: Float, take: Float, where: TrackingPointWhereInput): [TrackingPoint!]!
+  trackingSession(where: TrackingSessionWhereUniqueInput!): TrackingSession
+  trackingSessions(orderBy: [TrackingSessionOrderByInput!], skip: Float, take: Float, where: TrackingSessionWhereInput): [TrackingSession!]!
+  user(where: UserWhereUniqueInput!): User
+  userInfo: UserInfo!
+  users(orderBy: [UserOrderByInput!], skip: Float, take: Float, where: UserWhereInput): [User!]!
+}
+
+enum QueryMode {
+  Default
+  Insensitive
+}
+
+type Quote {
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  distanceMiles: Float!
+  dropoffAddress: String!
+  dropoffLat: Float
+  dropoffLng: Float
+  dropoffPlaceId: String
+  dropoffState: String
+  estimatedPrice: Float!
+  feesBreakdown: JSON
+  id: String!
+  mileageCategory: EnumQuoteMileageCategory
+  pickupAddress: String!
+  pickupLat: Float
+  pickupLng: Float
+  pickupPlaceId: String
+  pickupState: String
+  pricingMode: EnumQuotePricingMode
+  pricingSnapshot: JSON!
+  routePolyline: String
+  serviceType: EnumQuoteServiceType
+  updatedAt: DateTime!
+}
+
+input QuoteCreateInput {
+  delivery: DeliveryRequestWhereUniqueInput
+  distanceMiles: Float!
+  dropoffAddress: String!
+  dropoffLat: Float
+  dropoffLng: Float
+  dropoffPlaceId: String
+  dropoffState: String
+  estimatedPrice: Float!
+  feesBreakdown: JSON
+  mileageCategory: EnumQuoteMileageCategory
+  pickupAddress: String!
+  pickupLat: Float
+  pickupLng: Float
+  pickupPlaceId: String
+  pickupState: String
+  pricingMode: EnumQuotePricingMode!
+  pricingSnapshot: JSON!
+  routePolyline: String
+  serviceType: EnumQuoteServiceType!
+}
+
+input QuoteOrderByInput {
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  distanceMiles: SortOrder
+  dropoffAddress: SortOrder
+  dropoffLat: SortOrder
+  dropoffLng: SortOrder
+  dropoffPlaceId: SortOrder
+  dropoffState: SortOrder
+  estimatedPrice: SortOrder
+  feesBreakdown: SortOrder
+  id: SortOrder
+  mileageCategory: SortOrder
+  pickupAddress: SortOrder
+  pickupLat: SortOrder
+  pickupLng: SortOrder
+  pickupPlaceId: SortOrder
+  pickupState: SortOrder
+  pricingMode: SortOrder
+  pricingSnapshot: SortOrder
+  routePolyline: SortOrder
+  serviceType: SortOrder
+  updatedAt: SortOrder
+}
+
+input QuoteUpdateInput {
+  delivery: DeliveryRequestWhereUniqueInput
+  distanceMiles: Float
+  dropoffAddress: String
+  dropoffLat: Float
+  dropoffLng: Float
+  dropoffPlaceId: String
+  dropoffState: String
+  estimatedPrice: Float
+  feesBreakdown: JSON
+  mileageCategory: EnumQuoteMileageCategory
+  pickupAddress: String
+  pickupLat: Float
+  pickupLng: Float
+  pickupPlaceId: String
+  pickupState: String
+  pricingMode: EnumQuotePricingMode
+  pricingSnapshot: JSON
+  routePolyline: String
+  serviceType: EnumQuoteServiceType
+}
+
+input QuoteWhereInput {
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  distanceMiles: FloatFilter
+  dropoffAddress: StringFilter
+  dropoffLat: FloatNullableFilter
+  dropoffLng: FloatNullableFilter
+  dropoffPlaceId: StringNullableFilter
+  dropoffState: StringNullableFilter
+  estimatedPrice: FloatFilter
+  feesBreakdown: JsonFilter
+  id: StringFilter
+  mileageCategory: EnumQuoteMileageCategory
+  pickupAddress: StringFilter
+  pickupLat: FloatNullableFilter
+  pickupLng: FloatNullableFilter
+  pickupPlaceId: StringNullableFilter
+  pickupState: StringNullableFilter
+  pricingMode: EnumQuotePricingMode
+  pricingSnapshot: JsonFilter
+  routePolyline: StringNullableFilter
+  serviceType: EnumQuoteServiceType
+  updatedAt: DateTimeFilter
+}
+
+input QuoteWhereUniqueInput {
+  id: String!
+}
+
+type SavedAddress {
+  address: String!
+  city: String
+  country: String
+  createdAt: DateTime!
+  customer: Customer
+  defaultForCustomers(orderBy: [CustomerOrderByInput!], skip: Float, take: Float, where: CustomerWhereInput): [Customer!]!
+  id: String!
+  isDefault: Boolean!
+  label: String
+  lat: Float
+  lng: Float
+  placeId: String
+  postalCode: String
+  state: String
+  updatedAt: DateTime!
+}
+
+input SavedAddressCreateInput {
+  address: String!
+  city: String
+  country: String
+  customer: CustomerWhereUniqueInput!
+  defaultForCustomers: CustomerCreateNestedManyWithoutSavedAddressesInput
+  isDefault: Boolean!
+  label: String
+  lat: Float
+  lng: Float
+  placeId: String
+  postalCode: String
+  state: String
+}
+
+input SavedAddressCreateNestedManyWithoutCustomersInput {
+  connect: [SavedAddressWhereUniqueInput!]
+}
+
+input SavedAddressListRelationFilter {
+  every: SavedAddressWhereInput
+  none: SavedAddressWhereInput
+  some: SavedAddressWhereInput
+}
+
+input SavedAddressOrderByInput {
+  address: SortOrder
+  city: SortOrder
+  country: SortOrder
+  createdAt: SortOrder
+  customerId: SortOrder
+  id: SortOrder
+  isDefault: SortOrder
+  label: SortOrder
+  lat: SortOrder
+  lng: SortOrder
+  placeId: SortOrder
+  postalCode: SortOrder
+  state: SortOrder
+  updatedAt: SortOrder
+}
+
+input SavedAddressUpdateInput {
+  address: String
+  city: String
+  country: String
+  customer: CustomerWhereUniqueInput
+  defaultForCustomers: CustomerUpdateManyWithoutSavedAddressesInput
+  isDefault: Boolean
+  label: String
+  lat: Float
+  lng: Float
+  placeId: String
+  postalCode: String
+  state: String
+}
+
+input SavedAddressUpdateManyWithoutCustomersInput {
+  connect: [SavedAddressWhereUniqueInput!]
+  disconnect: [SavedAddressWhereUniqueInput!]
+  set: [SavedAddressWhereUniqueInput!]
+}
+
+input SavedAddressWhereInput {
+  address: StringFilter
+  city: StringNullableFilter
+  country: StringNullableFilter
+  createdAt: DateTimeFilter
+  customer: CustomerWhereUniqueInput
+  defaultForCustomers: CustomerListRelationFilter
+  id: StringFilter
+  isDefault: BooleanFilter
+  label: StringNullableFilter
+  lat: FloatNullableFilter
+  lng: FloatNullableFilter
+  placeId: StringNullableFilter
+  postalCode: StringNullableFilter
+  state: StringNullableFilter
+  updatedAt: DateTimeFilter
+}
+
+input SavedAddressWhereUniqueInput {
+  id: String!
+}
+
+type SavedVehicle {
+  color: String!
+  createdAt: DateTime!
+  customer: Customer
+  id: String!
+  licensePlate: String!
+  make: String
+  model: String
+  updatedAt: DateTime!
+}
+
+input SavedVehicleCreateInput {
+  color: String!
+  customer: CustomerWhereUniqueInput!
+  licensePlate: String!
+  make: String
+  model: String
+}
+
+input SavedVehicleCreateNestedManyWithoutCustomersInput {
+  connect: [SavedVehicleWhereUniqueInput!]
+}
+
+input SavedVehicleListRelationFilter {
+  every: SavedVehicleWhereInput
+  none: SavedVehicleWhereInput
+  some: SavedVehicleWhereInput
+}
+
+input SavedVehicleOrderByInput {
+  color: SortOrder
+  createdAt: SortOrder
+  customerId: SortOrder
+  id: SortOrder
+  licensePlate: SortOrder
+  make: SortOrder
+  model: SortOrder
+  updatedAt: SortOrder
+}
+
+input SavedVehicleUpdateInput {
+  color: String
+  customer: CustomerWhereUniqueInput
+  licensePlate: String
+  make: String
+  model: String
+}
+
+input SavedVehicleUpdateManyWithoutCustomersInput {
+  connect: [SavedVehicleWhereUniqueInput!]
+  disconnect: [SavedVehicleWhereUniqueInput!]
+  set: [SavedVehicleWhereUniqueInput!]
+}
+
+input SavedVehicleWhereInput {
+  color: StringFilter
+  createdAt: DateTimeFilter
+  customer: CustomerWhereUniqueInput
+  id: StringFilter
+  licensePlate: StringFilter
+  make: StringNullableFilter
+  model: StringNullableFilter
+  updatedAt: DateTimeFilter
+}
+
+input SavedVehicleWhereUniqueInput {
+  id: String!
+}
+
+type ScheduleChangeRequest {
+  createdAt: DateTime!
+  decidedAt: DateTime
+  decidedBy: User
+  decisionNote: String
+  delivery: DeliveryRequest
+  id: String!
+  proposedDropoffWindowEnd: DateTime
+  proposedDropoffWindowStart: DateTime
+  proposedPickupWindowEnd: DateTime
+  proposedPickupWindowStart: DateTime
+  reason: String
+  requestedBy: User
+  requestedByRole: EnumScheduleChangeRequestRequestedByRole
+  status: EnumScheduleChangeRequestStatus
+  updatedAt: DateTime!
+}
+
+input ScheduleChangeRequestCreateInput {
+  decidedAt: DateTime
+  decidedBy: UserWhereUniqueInput
+  decisionNote: String
+  delivery: DeliveryRequestWhereUniqueInput!
+  proposedDropoffWindowEnd: DateTime
+  proposedDropoffWindowStart: DateTime
+  proposedPickupWindowEnd: DateTime
+  proposedPickupWindowStart: DateTime
+  reason: String
+  requestedBy: UserWhereUniqueInput
+  requestedByRole: EnumScheduleChangeRequestRequestedByRole
+  status: EnumScheduleChangeRequestStatus!
+}
+
+input ScheduleChangeRequestCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [ScheduleChangeRequestWhereUniqueInput!]
+}
+
+input ScheduleChangeRequestCreateNestedManyWithoutUsersInput {
+  connect: [ScheduleChangeRequestWhereUniqueInput!]
+}
+
+input ScheduleChangeRequestListRelationFilter {
+  every: ScheduleChangeRequestWhereInput
+  none: ScheduleChangeRequestWhereInput
+  some: ScheduleChangeRequestWhereInput
+}
+
+input ScheduleChangeRequestOrderByInput {
+  createdAt: SortOrder
+  decidedAt: SortOrder
+  decidedByUserId: SortOrder
+  decisionNote: SortOrder
+  deliveryId: SortOrder
+  id: SortOrder
+  proposedDropoffWindowEnd: SortOrder
+  proposedDropoffWindowStart: SortOrder
+  proposedPickupWindowEnd: SortOrder
+  proposedPickupWindowStart: SortOrder
+  reason: SortOrder
+  requestedByRole: SortOrder
+  requestedByUserId: SortOrder
+  status: SortOrder
+  updatedAt: SortOrder
+}
+
+input ScheduleChangeRequestUpdateInput {
+  decidedAt: DateTime
+  decidedBy: UserWhereUniqueInput
+  decisionNote: String
+  delivery: DeliveryRequestWhereUniqueInput
+  proposedDropoffWindowEnd: DateTime
+  proposedDropoffWindowStart: DateTime
+  proposedPickupWindowEnd: DateTime
+  proposedPickupWindowStart: DateTime
+  reason: String
+  requestedBy: UserWhereUniqueInput
+  requestedByRole: EnumScheduleChangeRequestRequestedByRole
+  status: EnumScheduleChangeRequestStatus
+}
+
+input ScheduleChangeRequestUpdateManyWithoutDeliveryRequestsInput {
+  connect: [ScheduleChangeRequestWhereUniqueInput!]
+  disconnect: [ScheduleChangeRequestWhereUniqueInput!]
+  set: [ScheduleChangeRequestWhereUniqueInput!]
+}
+
+input ScheduleChangeRequestUpdateManyWithoutUsersInput {
+  connect: [ScheduleChangeRequestWhereUniqueInput!]
+  disconnect: [ScheduleChangeRequestWhereUniqueInput!]
+  set: [ScheduleChangeRequestWhereUniqueInput!]
+}
+
+input ScheduleChangeRequestWhereInput {
+  createdAt: DateTimeFilter
+  decidedAt: DateTimeNullableFilter
+  decidedBy: UserWhereUniqueInput
+  decisionNote: StringNullableFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  id: StringFilter
+  proposedDropoffWindowEnd: DateTimeNullableFilter
+  proposedDropoffWindowStart: DateTimeNullableFilter
+  proposedPickupWindowEnd: DateTimeNullableFilter
+  proposedPickupWindowStart: DateTimeNullableFilter
+  reason: StringNullableFilter
+  requestedBy: UserWhereUniqueInput
+  requestedByRole: EnumScheduleChangeRequestRequestedByRole
+  status: EnumScheduleChangeRequestStatus
+  updatedAt: DateTimeFilter
+}
+
+input ScheduleChangeRequestWhereUniqueInput {
+  id: String!
+}
+
+type SchedulingPolicy {
+  active: Boolean!
+  afterHoursEnabled: Boolean!
+  bufferMinutes: Float!
+  createdAt: DateTime!
+  customerType: EnumSchedulingPolicyCustomerType
+  defaultMode: EnumSchedulingPolicyDefaultMode
+  id: String!
+  maxSameDayMiles: Float
+  requiresOpsConfirmation: Boolean!
+  sameDayCutoffTime: String
+  serviceType: EnumSchedulingPolicyServiceType
+  updatedAt: DateTime!
+}
+
+input SchedulingPolicyCreateInput {
+  active: Boolean!
+  afterHoursEnabled: Boolean!
+  bufferMinutes: Float!
+  customerType: EnumSchedulingPolicyCustomerType!
+  defaultMode: EnumSchedulingPolicyDefaultMode!
+  maxSameDayMiles: Float
+  requiresOpsConfirmation: Boolean!
+  sameDayCutoffTime: String
+  serviceType: EnumSchedulingPolicyServiceType
+}
+
+input SchedulingPolicyOrderByInput {
+  active: SortOrder
+  afterHoursEnabled: SortOrder
+  bufferMinutes: SortOrder
+  createdAt: SortOrder
+  customerType: SortOrder
+  defaultMode: SortOrder
+  id: SortOrder
+  maxSameDayMiles: SortOrder
+  requiresOpsConfirmation: SortOrder
+  sameDayCutoffTime: SortOrder
+  serviceType: SortOrder
+  updatedAt: SortOrder
+}
+
+input SchedulingPolicyUpdateInput {
+  active: Boolean
+  afterHoursEnabled: Boolean
+  bufferMinutes: Float
+  customerType: EnumSchedulingPolicyCustomerType
+  defaultMode: EnumSchedulingPolicyDefaultMode
+  maxSameDayMiles: Float
+  requiresOpsConfirmation: Boolean
+  sameDayCutoffTime: String
+  serviceType: EnumSchedulingPolicyServiceType
+}
+
+input SchedulingPolicyWhereInput {
+  active: BooleanFilter
+  afterHoursEnabled: BooleanFilter
+  bufferMinutes: IntFilter
+  createdAt: DateTimeFilter
+  customerType: EnumSchedulingPolicyCustomerType
+  defaultMode: EnumSchedulingPolicyDefaultMode
+  id: StringFilter
+  maxSameDayMiles: FloatNullableFilter
+  requiresOpsConfirmation: BooleanFilter
+  sameDayCutoffTime: StringNullableFilter
+  serviceType: EnumSchedulingPolicyServiceType
+  updatedAt: DateTimeFilter
+}
+
+input SchedulingPolicyWhereUniqueInput {
+  id: String!
+}
+
+type ServiceDistrict {
+  active: Boolean!
+  code: String!
+  createdAt: DateTime!
+  driverPrefs(orderBy: [DriverDistrictPreferenceOrderByInput!], skip: Float, take: Float, where: DriverDistrictPreferenceWhereInput): [DriverDistrictPreference!]!
+  geoJson: JSON
+  id: String!
+  name: String!
+  updatedAt: DateTime!
+}
+
+input ServiceDistrictCreateInput {
+  active: Boolean!
+  code: String!
+  driverPrefs: DriverDistrictPreferenceCreateNestedManyWithoutServiceDistrictsInput
+  geoJson: JSON
+  name: String!
+}
+
+input ServiceDistrictOrderByInput {
+  active: SortOrder
+  code: SortOrder
+  createdAt: SortOrder
+  geoJson: SortOrder
+  id: SortOrder
+  name: SortOrder
+  updatedAt: SortOrder
+}
+
+input ServiceDistrictUpdateInput {
+  active: Boolean
+  code: String
+  driverPrefs: DriverDistrictPreferenceUpdateManyWithoutServiceDistrictsInput
+  geoJson: JSON
+  name: String
+}
+
+input ServiceDistrictWhereInput {
+  active: BooleanFilter
+  code: StringFilter
+  createdAt: DateTimeFilter
+  driverPrefs: DriverDistrictPreferenceListRelationFilter
+  geoJson: JsonFilter
+  id: StringFilter
+  name: StringFilter
+  updatedAt: DateTimeFilter
+}
+
+input ServiceDistrictWhereUniqueInput {
+  id: String!
+}
+
+enum SortOrder {
+  Asc
+  Desc
+}
+
+input StringFilter {
+  contains: String
+  endsWith: String
+  equals: String
+  gt: String
+  gte: String
+  in: [String!]
+  lt: String
+  lte: String
+  mode: QueryMode
+  not: String
+  notIn: [String!]
+  startsWith: String
+}
+
+input StringNullableFilter {
+  contains: String
+  endsWith: String
+  equals: String
+  gt: String
+  gte: String
+  in: [String!]
+  lt: String
+  lte: String
+  mode: QueryMode
+  not: String
+  notIn: [String!]
+  startsWith: String
+}
+
+type SupportRequest {
+  actorRole: EnumSupportRequestActorRole
+  actorType: EnumSupportRequestActorType
+  assignedTo: User
+  category: EnumSupportRequestCategory
+  closedAt: DateTime
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  id: String!
+  message: String!
+  notes(orderBy: [SupportRequestNoteOrderByInput!], skip: Float, take: Float, where: SupportRequestNoteWhereInput): [SupportRequestNote!]!
+  priority: EnumSupportRequestPriority
+  resolvedAt: DateTime
+  status: EnumSupportRequestStatus
+  subject: String
+  updatedAt: DateTime!
+  user: User
+}
+
+input SupportRequestCreateInput {
+  actorRole: EnumSupportRequestActorRole!
+  actorType: EnumSupportRequestActorType!
+  assignedTo: UserWhereUniqueInput
+  category: EnumSupportRequestCategory!
+  closedAt: DateTime
+  delivery: DeliveryRequestWhereUniqueInput
+  message: String!
+  notes: SupportRequestNoteCreateNestedManyWithoutSupportRequestsInput
+  priority: EnumSupportRequestPriority!
+  resolvedAt: DateTime
+  status: EnumSupportRequestStatus!
+  subject: String
+  user: UserWhereUniqueInput
+}
+
+input SupportRequestCreateNestedManyWithoutDeliveryRequestsInput {
+  connect: [SupportRequestWhereUniqueInput!]
+}
+
+input SupportRequestCreateNestedManyWithoutUsersInput {
+  connect: [SupportRequestWhereUniqueInput!]
+}
+
+input SupportRequestListRelationFilter {
+  every: SupportRequestWhereInput
+  none: SupportRequestWhereInput
+  some: SupportRequestWhereInput
+}
+
+type SupportRequestNote {
+  authorRole: EnumSupportRequestNoteAuthorRole
+  authorUser: User
+  createdAt: DateTime!
+  id: String!
+  isInternal: Boolean!
+  message: String!
+  supportRequest: SupportRequest
+}
+
+input SupportRequestNoteCreateInput {
+  authorRole: EnumSupportRequestNoteAuthorRole!
+  authorUser: UserWhereUniqueInput
+  isInternal: Boolean!
+  message: String!
+  supportRequest: SupportRequestWhereUniqueInput!
+}
+
+input SupportRequestNoteCreateNestedManyWithoutSupportRequestsInput {
+  connect: [SupportRequestNoteWhereUniqueInput!]
+}
+
+input SupportRequestNoteCreateNestedManyWithoutUsersInput {
+  connect: [SupportRequestNoteWhereUniqueInput!]
+}
+
+input SupportRequestNoteListRelationFilter {
+  every: SupportRequestNoteWhereInput
+  none: SupportRequestNoteWhereInput
+  some: SupportRequestNoteWhereInput
+}
+
+input SupportRequestNoteOrderByInput {
+  authorRole: SortOrder
+  authorUserId: SortOrder
+  createdAt: SortOrder
+  id: SortOrder
+  isInternal: SortOrder
+  message: SortOrder
+  supportRequestId: SortOrder
+}
+
+input SupportRequestNoteUpdateInput {
+  authorRole: EnumSupportRequestNoteAuthorRole
+  authorUser: UserWhereUniqueInput
+  isInternal: Boolean
+  message: String
+  supportRequest: SupportRequestWhereUniqueInput
+}
+
+input SupportRequestNoteUpdateManyWithoutSupportRequestsInput {
+  connect: [SupportRequestNoteWhereUniqueInput!]
+  disconnect: [SupportRequestNoteWhereUniqueInput!]
+  set: [SupportRequestNoteWhereUniqueInput!]
+}
+
+input SupportRequestNoteUpdateManyWithoutUsersInput {
+  connect: [SupportRequestNoteWhereUniqueInput!]
+  disconnect: [SupportRequestNoteWhereUniqueInput!]
+  set: [SupportRequestNoteWhereUniqueInput!]
+}
+
+input SupportRequestNoteWhereInput {
+  authorRole: EnumSupportRequestNoteAuthorRole
+  authorUser: UserWhereUniqueInput
+  createdAt: DateTimeFilter
+  id: StringFilter
+  isInternal: BooleanFilter
+  message: StringFilter
+  supportRequest: SupportRequestWhereUniqueInput
+}
+
+input SupportRequestNoteWhereUniqueInput {
+  id: String!
+}
+
+input SupportRequestOrderByInput {
+  actorRole: SortOrder
+  actorType: SortOrder
+  assignedToUserId: SortOrder
+  category: SortOrder
+  closedAt: SortOrder
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  id: SortOrder
+  message: SortOrder
+  priority: SortOrder
+  resolvedAt: SortOrder
+  status: SortOrder
+  subject: SortOrder
+  updatedAt: SortOrder
+  userId: SortOrder
+}
+
+input SupportRequestUpdateInput {
+  actorRole: EnumSupportRequestActorRole
+  actorType: EnumSupportRequestActorType
+  assignedTo: UserWhereUniqueInput
+  category: EnumSupportRequestCategory
+  closedAt: DateTime
+  delivery: DeliveryRequestWhereUniqueInput
+  message: String
+  notes: SupportRequestNoteUpdateManyWithoutSupportRequestsInput
+  priority: EnumSupportRequestPriority
+  resolvedAt: DateTime
+  status: EnumSupportRequestStatus
+  subject: String
+  user: UserWhereUniqueInput
+}
+
+input SupportRequestUpdateManyWithoutDeliveryRequestsInput {
+  connect: [SupportRequestWhereUniqueInput!]
+  disconnect: [SupportRequestWhereUniqueInput!]
+  set: [SupportRequestWhereUniqueInput!]
+}
+
+input SupportRequestUpdateManyWithoutUsersInput {
+  connect: [SupportRequestWhereUniqueInput!]
+  disconnect: [SupportRequestWhereUniqueInput!]
+  set: [SupportRequestWhereUniqueInput!]
+}
+
+input SupportRequestWhereInput {
+  actorRole: EnumSupportRequestActorRole
+  actorType: EnumSupportRequestActorType
+  assignedTo: UserWhereUniqueInput
+  category: EnumSupportRequestCategory
+  closedAt: DateTimeNullableFilter
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  id: StringFilter
+  message: StringFilter
+  notes: SupportRequestNoteListRelationFilter
+  priority: EnumSupportRequestPriority
+  resolvedAt: DateTimeNullableFilter
+  status: EnumSupportRequestStatus
+  subject: StringNullableFilter
+  updatedAt: DateTimeFilter
+  user: UserWhereUniqueInput
+}
+
+input SupportRequestWhereUniqueInput {
+  id: String!
+}
+
+type TimeSlotTemplate {
+  active: Boolean!
+  createdAt: DateTime!
+  endTime: String!
+  id: String!
+  label: String!
+  startTime: String!
+  updatedAt: DateTime!
+}
+
+input TimeSlotTemplateCreateInput {
+  active: Boolean!
+  endTime: String!
+  label: String!
+  startTime: String!
+}
+
+input TimeSlotTemplateOrderByInput {
+  active: SortOrder
+  createdAt: SortOrder
+  endTime: SortOrder
+  id: SortOrder
+  label: SortOrder
+  startTime: SortOrder
+  updatedAt: SortOrder
+}
+
+input TimeSlotTemplateUpdateInput {
+  active: Boolean
+  endTime: String
+  label: String
+  startTime: String
+}
+
+input TimeSlotTemplateWhereInput {
+  active: BooleanFilter
+  createdAt: DateTimeFilter
+  endTime: StringFilter
+  id: StringFilter
+  label: StringFilter
+  startTime: StringFilter
+  updatedAt: DateTimeFilter
+}
+
+input TimeSlotTemplateWhereUniqueInput {
+  id: String!
+}
+
+type Tip {
+  amount: Float!
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  id: String!
+  provider: EnumTipProvider
+  providerRef: String
+  status: EnumTipStatus
+  updatedAt: DateTime!
+}
+
+input TipCreateInput {
+  amount: Float!
+  delivery: DeliveryRequestWhereUniqueInput!
+  provider: EnumTipProvider!
+  providerRef: String
+  status: EnumTipStatus!
+}
+
+input TipOrderByInput {
+  amount: SortOrder
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  id: SortOrder
+  provider: SortOrder
+  providerRef: SortOrder
+  status: SortOrder
+  updatedAt: SortOrder
+}
+
+input TipUpdateInput {
+  amount: Float
+  delivery: DeliveryRequestWhereUniqueInput
+  provider: EnumTipProvider
+  providerRef: String
+  status: EnumTipStatus
+}
+
+input TipWhereInput {
+  amount: FloatFilter
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  id: StringFilter
+  provider: EnumTipProvider
+  providerRef: StringNullableFilter
+  status: EnumTipStatus
+  updatedAt: DateTimeFilter
+}
+
+input TipWhereUniqueInput {
+  id: String!
+}
+
+type TrackingPoint {
+  createdAt: DateTime!
+  id: String!
+  lat: Float!
+  lng: Float!
+  recordedAt: DateTime!
+  session: TrackingSession
+  updatedAt: DateTime!
+}
+
+input TrackingPointCreateInput {
+  lat: Float!
+  lng: Float!
+  session: TrackingSessionWhereUniqueInput!
+}
+
+input TrackingPointCreateNestedManyWithoutTrackingSessionsInput {
+  connect: [TrackingPointWhereUniqueInput!]
+}
+
+input TrackingPointListRelationFilter {
+  every: TrackingPointWhereInput
+  none: TrackingPointWhereInput
+  some: TrackingPointWhereInput
+}
+
+input TrackingPointOrderByInput {
+  createdAt: SortOrder
+  id: SortOrder
+  lat: SortOrder
+  lng: SortOrder
+  recordedAt: SortOrder
+  sessionId: SortOrder
+  updatedAt: SortOrder
+}
+
+input TrackingPointUpdateInput {
+  lat: Float
+  lng: Float
+  session: TrackingSessionWhereUniqueInput
+}
+
+input TrackingPointUpdateManyWithoutTrackingSessionsInput {
+  connect: [TrackingPointWhereUniqueInput!]
+  disconnect: [TrackingPointWhereUniqueInput!]
+  set: [TrackingPointWhereUniqueInput!]
+}
+
+input TrackingPointWhereInput {
+  createdAt: DateTimeFilter
+  id: StringFilter
+  lat: FloatFilter
+  lng: FloatFilter
+  recordedAt: DateTimeFilter
+  session: TrackingSessionWhereUniqueInput
+  updatedAt: DateTimeFilter
+}
+
+input TrackingPointWhereUniqueInput {
+  id: String!
+}
+
+type TrackingSession {
+  createdAt: DateTime!
+  delivery: DeliveryRequest
+  drivenMiles: Float
+  id: String!
+  points(orderBy: [TrackingPointOrderByInput!], skip: Float, take: Float, where: TrackingPointWhereInput): [TrackingPoint!]!
+  startedAt: DateTime
+  status: EnumTrackingSessionStatus
+  stoppedAt: DateTime
+  updatedAt: DateTime!
+}
+
+input TrackingSessionCreateInput {
+  delivery: DeliveryRequestWhereUniqueInput!
+  drivenMiles: Float
+  points: TrackingPointCreateNestedManyWithoutTrackingSessionsInput
+  startedAt: DateTime
+  status: EnumTrackingSessionStatus!
+  stoppedAt: DateTime
+}
+
+input TrackingSessionOrderByInput {
+  createdAt: SortOrder
+  deliveryId: SortOrder
+  drivenMiles: SortOrder
+  id: SortOrder
+  startedAt: SortOrder
+  status: SortOrder
+  stoppedAt: SortOrder
+  updatedAt: SortOrder
+}
+
+input TrackingSessionUpdateInput {
+  delivery: DeliveryRequestWhereUniqueInput
+  drivenMiles: Float
+  points: TrackingPointUpdateManyWithoutTrackingSessionsInput
+  startedAt: DateTime
+  status: EnumTrackingSessionStatus
+  stoppedAt: DateTime
+}
+
+input TrackingSessionWhereInput {
+  createdAt: DateTimeFilter
+  delivery: DeliveryRequestWhereUniqueInput
+  drivenMiles: FloatNullableFilter
+  id: StringFilter
+  points: TrackingPointListRelationFilter
+  startedAt: DateTimeNullableFilter
+  status: EnumTrackingSessionStatus
+  stoppedAt: DateTimeNullableFilter
+  updatedAt: DateTimeFilter
+}
+
+input TrackingSessionWhereUniqueInput {
+  id: String!
+}
+
+type User {
+  adminActions(orderBy: [AdminAuditLogOrderByInput!], skip: Float, take: Float, where: AdminAuditLogWhereInput): [AdminAuditLog!]!
+  assignmentsMade(orderBy: [DeliveryAssignmentOrderByInput!], skip: Float, take: Float, where: DeliveryAssignmentWhereInput): [DeliveryAssignment!]!
+  auditTargets(orderBy: [AdminAuditLogOrderByInput!], skip: Float, take: Float, where: AdminAuditLogWhereInput): [AdminAuditLog!]!
+  compliancesVerified(orderBy: [DeliveryComplianceOrderByInput!], skip: Float, take: Float, where: DeliveryComplianceWhereInput): [DeliveryCompliance!]!
+  createdAt: DateTime!
+  customer: Customer
+  customersApproved(orderBy: [CustomerOrderByInput!], skip: Float, take: Float, where: CustomerWhereInput): [Customer!]!
+  deliveriesCreated(orderBy: [DeliveryRequestOrderByInput!], skip: Float, take: Float, where: DeliveryRequestWhereInput): [DeliveryRequest!]!
+  disabledAt: DateTime
+  disabledReason: String
+  disputeNotesAuthored(orderBy: [DisputeNoteOrderByInput!], skip: Float, take: Float, where: DisputeNoteWhereInput): [DisputeNote!]!
+  driver: Driver
+  driversApproved(orderBy: [DriverOrderByInput!], skip: Float, take: Float, where: DriverWhereInput): [Driver!]!
+  email: String!
+  emailVerifiedAt: DateTime
+  exportsCreated(orderBy: [EvidenceExportOrderByInput!], skip: Float, take: Float, where: EvidenceExportWhereInput): [EvidenceExport!]!
+  fullName: String
+  id: String!
+  isActive: Boolean!
+  lastLoginAt: DateTime
+  notifEvents(orderBy: [NotificationEventOrderByInput!], skip: Float, take: Float, where: NotificationEventWhereInput): [NotificationEvent!]!
+  password: String!
+  passwordHash: String
+  phone: String
+  roles: EnumUserRoles
+  scheduleChangesDecided(orderBy: [ScheduleChangeRequestOrderByInput!], skip: Float, take: Float, where: ScheduleChangeRequestWhereInput): [ScheduleChangeRequest!]!
+  scheduleChangesRequested(orderBy: [ScheduleChangeRequestOrderByInput!], skip: Float, take: Float, where: ScheduleChangeRequestWhereInput): [ScheduleChangeRequest!]!
+  statusActions(orderBy: [DeliveryStatusHistoryOrderByInput!], skip: Float, take: Float, where: DeliveryStatusHistoryWhereInput): [DeliveryStatusHistory!]!
+  supportRequestNotesAuthored(orderBy: [SupportRequestNoteOrderByInput!], skip: Float, take: Float, where: SupportRequestNoteWhereInput): [SupportRequestNote!]!
+  supportRequestsAssigned(orderBy: [SupportRequestOrderByInput!], skip: Float, take: Float, where: SupportRequestWhereInput): [SupportRequest!]!
+  supportRequestsRaised(orderBy: [SupportRequestOrderByInput!], skip: Float, take: Float, where: SupportRequestWhereInput): [SupportRequest!]!
+  updatedAt: DateTime!
+  username: String!
+}
+
+input UserCreateInput {
+  adminActions: AdminAuditLogCreateNestedManyWithoutUsersInput
+  assignmentsMade: DeliveryAssignmentCreateNestedManyWithoutUsersInput
+  auditTargets: AdminAuditLogCreateNestedManyWithoutUsersInput
+  compliancesVerified: DeliveryComplianceCreateNestedManyWithoutUsersInput
+  customer: CustomerWhereUniqueInput
+  customersApproved: CustomerCreateNestedManyWithoutUsersInput
+  deliveriesCreated: DeliveryRequestCreateNestedManyWithoutUsersInput
+  disabledAt: DateTime
+  disabledReason: String
+  disputeNotesAuthored: DisputeNoteCreateNestedManyWithoutUsersInput
+  driver: DriverWhereUniqueInput
+  driversApproved: DriverCreateNestedManyWithoutUsersInput
+  email: String!
+  emailVerifiedAt: DateTime
+  exportsCreated: EvidenceExportCreateNestedManyWithoutUsersInput
+  fullName: String
+  isActive: Boolean!
+  lastLoginAt: DateTime
+  notifEvents: NotificationEventCreateNestedManyWithoutUsersInput
+  password: String!
+  passwordHash: String
+  phone: String
+  roles: EnumUserRoles!
+  scheduleChangesDecided: ScheduleChangeRequestCreateNestedManyWithoutUsersInput
+  scheduleChangesRequested: ScheduleChangeRequestCreateNestedManyWithoutUsersInput
+  statusActions: DeliveryStatusHistoryCreateNestedManyWithoutUsersInput
+  supportRequestNotesAuthored: SupportRequestNoteCreateNestedManyWithoutUsersInput
+  supportRequestsAssigned: SupportRequestCreateNestedManyWithoutUsersInput
+  supportRequestsRaised: SupportRequestCreateNestedManyWithoutUsersInput
+  username: String!
+}
+
+type UserInfo {
+  accessToken: String
+  email: String
+  id: String!
+  profileId: String
+  refreshToken: String
+  roles: [String!]!
+  username: String!
+}
+
+input UserOrderByInput {
+  createdAt: SortOrder
+  customerId: SortOrder
+  disabledAt: SortOrder
+  disabledReason: SortOrder
+  driverId: SortOrder
+  email: SortOrder
+  emailVerifiedAt: SortOrder
+  fullName: SortOrder
+  id: SortOrder
+  isActive: SortOrder
+  lastLoginAt: SortOrder
+  password: SortOrder
+  passwordHash: SortOrder
+  phone: SortOrder
+  roles: SortOrder
+  updatedAt: SortOrder
+  username: SortOrder
+}
+
+input UserUpdateInput {
+  adminActions: AdminAuditLogUpdateManyWithoutUsersInput
+  assignmentsMade: DeliveryAssignmentUpdateManyWithoutUsersInput
+  auditTargets: AdminAuditLogUpdateManyWithoutUsersInput
+  compliancesVerified: DeliveryComplianceUpdateManyWithoutUsersInput
+  customer: CustomerWhereUniqueInput
+  customersApproved: CustomerUpdateManyWithoutUsersInput
+  deliveriesCreated: DeliveryRequestUpdateManyWithoutUsersInput
+  disabledAt: DateTime
+  disabledReason: String
+  disputeNotesAuthored: DisputeNoteUpdateManyWithoutUsersInput
+  driver: DriverWhereUniqueInput
+  driversApproved: DriverUpdateManyWithoutUsersInput
+  email: String
+  emailVerifiedAt: DateTime
+  exportsCreated: EvidenceExportUpdateManyWithoutUsersInput
+  fullName: String
+  isActive: Boolean
+  lastLoginAt: DateTime
+  notifEvents: NotificationEventUpdateManyWithoutUsersInput
+  password: String
+  passwordHash: String
+  phone: String
+  roles: EnumUserRoles
+  scheduleChangesDecided: ScheduleChangeRequestUpdateManyWithoutUsersInput
+  scheduleChangesRequested: ScheduleChangeRequestUpdateManyWithoutUsersInput
+  statusActions: DeliveryStatusHistoryUpdateManyWithoutUsersInput
+  supportRequestNotesAuthored: SupportRequestNoteUpdateManyWithoutUsersInput
+  supportRequestsAssigned: SupportRequestUpdateManyWithoutUsersInput
+  supportRequestsRaised: SupportRequestUpdateManyWithoutUsersInput
+  username: String
+}
+
+input UserWhereInput {
+  adminActions: AdminAuditLogListRelationFilter
+  assignmentsMade: DeliveryAssignmentListRelationFilter
+  auditTargets: AdminAuditLogListRelationFilter
+  compliancesVerified: DeliveryComplianceListRelationFilter
+  createdAt: DateTimeFilter
+  customer: CustomerWhereUniqueInput
+  customersApproved: CustomerListRelationFilter
+  deliveriesCreated: DeliveryRequestListRelationFilter
+  disabledAt: DateTimeNullableFilter
+  disabledReason: StringNullableFilter
+  disputeNotesAuthored: DisputeNoteListRelationFilter
+  driver: DriverWhereUniqueInput
+  driversApproved: DriverListRelationFilter
+  email: StringFilter
+  emailVerifiedAt: DateTimeNullableFilter
+  exportsCreated: EvidenceExportListRelationFilter
+  fullName: StringNullableFilter
+  id: StringFilter
+  isActive: BooleanFilter
+  lastLoginAt: DateTimeNullableFilter
+  notifEvents: NotificationEventListRelationFilter
+  password: StringFilter
+  passwordHash: StringNullableFilter
+  phone: StringNullableFilter
+  roles: EnumUserRoles
+  scheduleChangesDecided: ScheduleChangeRequestListRelationFilter
+  scheduleChangesRequested: ScheduleChangeRequestListRelationFilter
+  statusActions: DeliveryStatusHistoryListRelationFilter
+  supportRequestNotesAuthored: SupportRequestNoteListRelationFilter
+  supportRequestsAssigned: SupportRequestListRelationFilter
+  supportRequestsRaised: SupportRequestListRelationFilter
+  updatedAt: DateTimeFilter
+  username: StringFilter
+}
+
+input UserWhereUniqueInput {
+  id: String!
+}

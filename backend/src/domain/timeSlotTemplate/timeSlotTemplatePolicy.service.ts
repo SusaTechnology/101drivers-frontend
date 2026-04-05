@@ -1,0 +1,194 @@
+// src/domain/timeSlotTemplate/timeSlotTemplatePolicy.service.ts
+
+import { HttpStatus, Injectable } from "@nestjs/common";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { AppException } from "../../errors/app.exception";
+import { ErrorCodes } from "../../errors/error-codes";
+
+@Injectable()
+export class TimeSlotTemplatePolicyService {
+  async beforeCreate(
+    client: PrismaClient,
+    data: Prisma.TimeSlotTemplateCreateArgs["data"]
+  ): Promise<void> {
+    const row = data as any;
+
+    this.ensureRequiredString(row.label, "label is required");
+    this.ensureTimeString(row.startTime, "startTime");
+    this.ensureTimeString(row.endTime, "endTime");
+    this.ensureEndAfterStart(row.startTime, row.endTime);
+
+    await this.ensureUniqueLabel(client, row.label.trim());
+    await this.ensureUniqueTimeRange(client, row.startTime, row.endTime);
+  }
+
+  async beforeUpdate(
+    client: PrismaClient,
+    id: string | undefined,
+    data: Prisma.TimeSlotTemplateUpdateArgs["data"]
+  ): Promise<void> {
+    this.ensureId(id, "TimeSlotTemplate id is required for update");
+
+    const existing = await client.timeSlotTemplate.findUnique({
+      where: { id: id! },
+      select: {
+        id: true,
+        active: true,
+        label: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    this.ensureFound(existing, `TimeSlotTemplate '${id}' not found`);
+
+    const merged = {
+      active: this.resolveUpdatedValue(data.active, existing!.active),
+      label: this.resolveUpdatedValue(data.label, existing!.label),
+      startTime: this.resolveUpdatedValue(data.startTime, existing!.startTime),
+      endTime: this.resolveUpdatedValue(data.endTime, existing!.endTime),
+    };
+
+    this.ensureRequiredString(merged.label, "label is required");
+    this.ensureTimeString(merged.startTime, "startTime");
+    this.ensureTimeString(merged.endTime, "endTime");
+    this.ensureEndAfterStart(merged.startTime, merged.endTime);
+
+    if (merged.label !== existing!.label) {
+      await this.ensureUniqueLabel(client, String(merged.label).trim(), id!);
+    }
+
+    if (
+      merged.startTime !== existing!.startTime ||
+      merged.endTime !== existing!.endTime
+    ) {
+      await this.ensureUniqueTimeRange(
+        client,
+        String(merged.startTime),
+        String(merged.endTime),
+        id!
+      );
+    }
+  }
+
+  async beforeDelete(
+    client: PrismaClient,
+    id: string | undefined
+  ): Promise<void> {
+    this.ensureId(id, "TimeSlotTemplate id is required for delete");
+
+    const existing = await client.timeSlotTemplate.findUnique({
+      where: { id: id! },
+      select: { id: true },
+    });
+
+    this.ensureFound(existing, `TimeSlotTemplate '${id}' not found`);
+  }
+
+  private async ensureUniqueLabel(
+    client: PrismaClient,
+    label: string,
+    excludeId?: string
+  ): Promise<void> {
+    const existing = await client.timeSlotTemplate.findFirst({
+      where: {
+        label,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new AppException(
+        "TimeSlotTemplate label already exists",
+        ErrorCodes.DUPLICATE_TITLE,
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private async ensureUniqueTimeRange(
+    client: PrismaClient,
+    startTime: string,
+    endTime: string,
+    excludeId?: string
+  ): Promise<void> {
+    const existing = await client.timeSlotTemplate.findFirst({
+      where: {
+        startTime,
+        endTime,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new AppException(
+        "TimeSlotTemplate time range already exists",
+        ErrorCodes.DUPLICATE_ENTRY,
+        HttpStatus.CONFLICT
+      );
+    }
+  }
+
+  private ensureId(id: string | undefined, message: string): void {
+    if (!id) {
+      throw new AppException(message, ErrorCodes.INVALID_PARAMS);
+    }
+  }
+
+  private ensureFound(record: any, message: string): void {
+    if (!record) {
+      throw new AppException(message, ErrorCodes.NOT_FOUND, HttpStatus.NOT_FOUND);
+    }
+  }
+
+  private ensureRequiredString(value: unknown, message: string): void {
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new AppException(message, ErrorCodes.VALIDATION_ERROR);
+    }
+  }
+
+  private ensureTimeString(value: unknown, field: string): void {
+    if (typeof value !== "string") {
+      throw new AppException(
+        `${field} is invalid`,
+        ErrorCodes.VALIDATION_ERROR
+      );
+    }
+
+    const hhmm = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    if (!hhmm.test(value.trim())) {
+      throw new AppException(
+        `${field} must be in HH:mm format`,
+        ErrorCodes.VALIDATION_ERROR
+      );
+    }
+  }
+
+  private ensureEndAfterStart(startTime: string, endTime: string): void {
+    if (this.toMinutes(endTime) <= this.toMinutes(startTime)) {
+      throw new AppException(
+        "endTime must be greater than startTime",
+        ErrorCodes.VALIDATION_ERROR
+      );
+    }
+  }
+
+  private toMinutes(value: string): number {
+    const [hh, mm] = value.split(":").map(Number);
+    return hh * 60 + mm;
+  }
+
+  private resolveUpdatedValue(nextValue: any, currentValue: any): any {
+    if (nextValue === undefined) {
+      return currentValue;
+    }
+
+    if (nextValue && typeof nextValue === "object" && "set" in nextValue) {
+      return nextValue.set;
+    }
+
+    return nextValue;
+  }
+}

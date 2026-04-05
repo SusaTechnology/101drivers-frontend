@@ -1,0 +1,1182 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DB_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  adminActions                AdminAuditLog[]         @relation(name: "adminActions")
+  assignmentsMade             DeliveryAssignment[]
+  auditTargets                AdminAuditLog[]         @relation(name: "auditTargets")
+  compliancesVerified         DeliveryCompliance[]
+  createdAt                   DateTime                @default(now())
+  customer                    Customer?               @relation(name: "CustomerOnUser")
+  customersApproved           Customer[]              @relation(name: "customersApproved")
+  deliveriesCreated           DeliveryRequest[]
+  disabledAt                  DateTime?
+  disabledReason              String?
+  disputeNotesAuthored        DisputeNote[]
+  driver                      Driver?                 @relation(name: "DriverOnUser")
+  driversApproved             Driver[]                @relation(name: "driversApproved")
+  email                       String                  @unique
+  emailVerifiedAt             DateTime?
+  exportsCreated              EvidenceExport[]
+  fullName                    String?
+  id                          String                  @id @default(cuid())
+  isActive                    Boolean                 @default(true)
+  lastLoginAt                 DateTime?
+  notifEvents                 NotificationEvent[]
+  password                    String
+  passwordHash                String?
+  phone                       String?
+  roles                       EnumUserRoles           @default(DRIVER)
+  scheduleChangesDecided      ScheduleChangeRequest[] @relation(name: "decidedBy")
+  scheduleChangesRequested    ScheduleChangeRequest[] @relation(name: "requestedBy")
+  statusActions               DeliveryStatusHistory[]
+  updatedAt                   DateTime                @updatedAt
+  username                    String                  @unique
+  supportRequestsRaised       SupportRequest[]        @relation(name: "supportRequestsRaised")
+  supportRequestsAssigned     SupportRequest[]        @relation(name: "supportRequestsAssigned")
+  supportRequestNotesAuthored SupportRequestNote[]    @relation(name: "supportRequestNotesAuthored")
+}
+
+model Customer {
+  addresses           SavedAddress[]                   @relation(name: "addresses")
+  approvalStatus      EnumCustomerApprovalStatus       @default(PENDING)
+  approvedAt          DateTime?
+  approvedBy          User?                            @relation(name: "customersApproved", fields: [approvedByUserId], references: [id])
+  approvedByUserId    String?
+  audits              AdminAuditLog[]
+  businessAddress     String?
+  businessName        String?
+  businessPhone       String?
+  businessPlaceId     String?                          @unique
+  businessWebsite     String?
+  contactEmail        String?
+  contactName         String?
+  contactPhone        String?
+  createdAt           DateTime                         @default(now())
+  customerType        EnumCustomerCustomerType
+  defaultPickup       SavedAddress?                    @relation(name: "defaultForCustomers", fields: [defaultPickupId], references: [id])
+  defaultPickupId     String?
+  deliveries          DeliveryRequest[]
+  id                  String                           @id @default(cuid())
+  notifications       NotificationEvent[]
+  phone               String?
+  postpaidEnabled     Boolean                          @default(false)
+  pricingConfig       PricingConfig?                   @relation(fields: [pricingConfigId], references: [id])
+  pricingConfigId     String?
+  pricingModeOverride EnumCustomerPricingModeOverride?
+  ratings             DeliveryRating[]
+  suspendedAt         DateTime?
+  suspensionReason    String?
+  updatedAt           DateTime                         @updatedAt
+  user                User                             @relation(name: "CustomerOnUser", fields: [userId], references: [id])
+  userId              String                           @unique
+  vehicles            SavedVehicle[]
+
+  @@index([customerType, approvalStatus])
+}
+
+model Driver {
+  alerts           DriverAlertPreference?
+  approvedAt       DateTime?
+  approvedBy       User?                      @relation(name: "driversApproved", fields: [approvedByUserId], references: [id])
+  approvedByUserId String?
+  assignments      DeliveryAssignment[]
+  location         DriverLocation?
+  audits           AdminAuditLog[]
+  createdAt        DateTime                   @default(now())
+  districts        DriverDistrictPreference[]
+  id               String                     @id @default(cuid())
+  notifications    NotificationEvent[]
+  payouts          DriverPayout[]
+  phone            String?
+  preferences      DriverPreference?
+  profilePhotoUrl  String?
+  ratingsReceived  DeliveryRating[]
+  status           EnumDriverStatus           @default(PENDING)
+  updatedAt        DateTime                   @updatedAt
+  user             User                       @relation(name: "DriverOnUser", fields: [userId], references: [id])
+  userId           String                     @unique
+
+  @@index([status])
+}
+
+model DriverLocation {
+  id       String @id @default(cuid())
+  driver   Driver @relation(fields: [driverId], references: [id])
+  driverId String @unique
+
+  currentLat Float?
+  currentLng Float?
+  currentAt  DateTime?
+
+  homeBaseLat   Float?
+  homeBaseLng   Float?
+  homeBaseCity  String?
+  homeBaseState String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([currentAt])
+}
+
+model SavedAddress {
+  address             String
+  city                String?
+  country             String?
+  createdAt           DateTime   @default(now())
+  customer            Customer   @relation(name: "addresses", fields: [customerId], references: [id])
+  customerId          String
+  defaultForCustomers Customer[] @relation(name: "defaultForCustomers")
+  id                  String     @id @default(cuid())
+  isDefault           Boolean    @default(false)
+  label               String?
+  lat                 Float?
+  lng                 Float?
+  placeId             String?
+  postalCode          String?
+  state               String?
+  updatedAt           DateTime   @updatedAt
+
+  @@index([customerId, isDefault])
+  @@index([customerId, createdAt])
+}
+
+model SavedVehicle {
+  color        String
+  createdAt    DateTime @default(now())
+  customer     Customer @relation(fields: [customerId], references: [id])
+  customerId   String
+  id           String   @id @default(cuid())
+  licensePlate String
+  make         String?
+  model        String?
+  updatedAt    DateTime @updatedAt
+
+  @@index([customerId])
+}
+
+model PricingConfig {
+  active              Boolean                      @default(true)
+  baseFee             Float
+  categoryRules       PricingCategoryRule[]
+  createdAt           DateTime                     @default(now())
+  customers           Customer[]
+  description         String?
+  driverSharePct      Float
+  feePassThrough      Boolean                      @default(true)
+  id                  String                       @id @default(cuid())
+  insuranceFee        Float
+  name                String?
+  perMileRate         Float?
+  pricingMode         EnumPricingConfigPricingMode
+  tiers               PricingTier[]
+  transactionFeeFixed Float?
+  transactionFeePct   Float?
+  updatedAt           DateTime                     @updatedAt
+}
+
+model PricingTier {
+  createdAt       DateTime      @default(now())
+  flatPrice       Float
+  id              String        @id @default(cuid())
+  maxMiles        Float?
+  minMiles        Float
+  pricingConfig   PricingConfig @relation(fields: [pricingConfigId], references: [id])
+  pricingConfigId String
+  updatedAt       DateTime      @updatedAt
+
+  @@index([pricingConfigId, minMiles])
+}
+
+model PricingCategoryRule {
+  baseFee         Float?
+  category        EnumPricingCategoryRuleCategory
+  createdAt       DateTime                        @default(now())
+  flatPrice       Float?
+  id              String                          @id @default(cuid())
+  maxMiles        Float?
+  minMiles        Float
+  perMileRate     Float?
+  pricingConfig   PricingConfig                   @relation(fields: [pricingConfigId], references: [id])
+  pricingConfigId String
+  updatedAt       DateTime                        @updatedAt
+
+  @@unique([pricingConfigId, category])
+  @@index([pricingConfigId, minMiles])
+}
+
+model Quote {
+  createdAt       DateTime                  @default(now())
+  delivery        DeliveryRequest?
+  distanceMiles   Float
+  dropoffAddress  String
+  dropoffLat      Float?
+  dropoffLng      Float?
+  dropoffPlaceId  String?
+  dropoffState    String?
+  estimatedPrice  Float
+  feesBreakdown   Json?
+  id              String                    @id @default(cuid())
+  mileageCategory EnumQuoteMileageCategory?
+  pickupAddress   String
+  pickupLat       Float?
+  pickupLng       Float?
+  pickupPlaceId   String?
+  pickupState     String?
+  pricingMode     EnumQuotePricingMode
+  pricingSnapshot Json
+  routePolyline   String?
+  serviceType     EnumQuoteServiceType
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([serviceType, createdAt])
+}
+
+model SchedulingPolicy {
+  active                  Boolean                          @default(true)
+  afterHoursEnabled       Boolean                          @default(false)
+  bufferMinutes           Int                              @default(30)
+  createdAt               DateTime                         @default(now())
+  customerType            EnumSchedulingPolicyCustomerType
+  defaultMode             EnumSchedulingPolicyDefaultMode  @default(NEXT_DAY)
+  id                      String                           @id @default(cuid())
+  maxSameDayMiles         Float?
+  requiresOpsConfirmation Boolean                          @default(false)
+  sameDayCutoffTime       String?
+  serviceType             EnumSchedulingPolicyServiceType?
+  updatedAt               DateTime                         @updatedAt
+
+  @@index([customerType, active])
+  @@index([customerType, serviceType, active])
+}
+
+model OperatingHour {
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  dayOfWeek Int
+  endTime   String
+  id        String   @id @default(cuid())
+  startTime String
+  updatedAt DateTime @updatedAt
+
+  @@index([dayOfWeek, active])
+}
+
+model TimeSlotTemplate {
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  endTime   String
+  id        String   @id @default(cuid())
+  label     String
+  startTime String
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}
+
+model DeliveryRequest {
+  afterHours         Boolean                           @default(false)
+  assignments        DeliveryAssignment[]
+  audits             AdminAuditLog[]
+  bufferMinutes      Int?
+  compliance         DeliveryCompliance?
+  createdAt          DateTime                          @default(now())
+  createdBy          User?                             @relation(fields: [createdByUserId], references: [id])
+  createdByUserId    String?
+  createdByRole      EnumDeliveryRequestCreatedByRole?
+  customer           Customer                          @relation(fields: [customerId], references: [id])
+  customerId         String
+  customerChose      EnumDeliveryRequestCustomerChose?
+  dispute            DisputeCase?
+  dropoffAddress     String
+  dropoffLat         Float?
+  dropoffLng         Float?
+  dropoffPlaceId     String?
+  dropoffState       String?
+  dropoffWindowEnd   DateTime?
+  dropoffWindowStart DateTime?
+  etaMinutes         Int?
+  evidence           DeliveryEvidence[]
+  evidenceExports    EvidenceExport[]
+  id                 String                            @id @default(cuid())
+  isUrgent           Boolean                           @default(false)
+  supportRequests    SupportRequest[]
+
+  // UPDATED ↓
+  licensePlate String?
+
+  notifications           NotificationEvent[]
+  payment                 Payment?
+  payout                  DriverPayout?
+  pickupAddress           String
+  pickupLat               Float?
+  pickupLng               Float?
+  pickupPlaceId           String?
+  pickupState             String?
+  pickupWindowEnd         DateTime?
+  pickupWindowStart       DateTime?
+  quote                   Quote?              @relation(fields: [quoteId], references: [id])
+  quoteId                 String?             @unique
+  rating                  DeliveryRating?
+  recipientEmail          String?
+  recipientName           String?
+  recipientPhone          String?
+  requiresOpsConfirmation Boolean             @default(false)
+  resubmissions           DeliveryRequest[]   @relation(name: "resubmissions")
+  resubmittedFrom         DeliveryRequest?    @relation(name: "resubmissions", fields: [resubmittedFromId], references: [id])
+  resubmittedFromId       String?
+
+  // UPDATED ↓
+  sameDayEligible Boolean? @default(false)
+
+  scheduleChanges        ScheduleChangeRequest[]
+  serviceType            EnumDeliveryRequestServiceType
+  status                 EnumDeliveryRequestStatus      @default(DRAFT)
+  statusHistory          DeliveryStatusHistory[]
+  tip                    Tip?
+  trackingSession        TrackingSession?
+  trackingShareExpiresAt DateTime?
+  trackingShareToken     String?                        @unique
+  updatedAt              DateTime                       @updatedAt
+  urgentBonusAmount      Float?
+
+  // UPDATED ↓
+  vehicleColor        String?
+  vehicleMake         String?
+  vehicleModel        String?
+  vinVerificationCode String?
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([isUrgent, status])
+}
+
+model DeliveryAssignment {
+  assignedAt       DateTime        @default(now())
+  assignedBy       User?           @relation(fields: [assignedByUserId], references: [id])
+  assignedByUserId String?
+  createdAt        DateTime        @default(now())
+  delivery         DeliveryRequest @relation(fields: [deliveryId], references: [id])
+  deliveryId       String
+  driver           Driver          @relation(fields: [driverId], references: [id])
+  driverId         String
+  id               String          @id @default(cuid())
+  reason           String?
+  unassignedAt     DateTime?
+  updatedAt        DateTime        @updatedAt
+
+  @@index([deliveryId, assignedAt])
+  @@index([driverId, assignedAt])
+}
+
+model TrackingSession {
+  createdAt   DateTime                  @default(now())
+  delivery    DeliveryRequest           @relation(fields: [deliveryId], references: [id])
+  deliveryId  String                    @unique
+  drivenMiles Float?
+  id          String                    @id @default(cuid())
+  points      TrackingPoint[]
+  startedAt   DateTime?
+  status      EnumTrackingSessionStatus @default(NOT_STARTED)
+  stoppedAt   DateTime?
+  updatedAt   DateTime                  @updatedAt
+
+  @@index([status, startedAt])
+}
+
+model TrackingPoint {
+  createdAt  DateTime        @default(now())
+  id         String          @id @default(cuid())
+  lat        Float
+  lng        Float
+  recordedAt DateTime        @default(now())
+  session    TrackingSession @relation(fields: [sessionId], references: [id])
+  sessionId  String
+  updatedAt  DateTime        @updatedAt
+
+  @@index([sessionId, recordedAt])
+}
+
+model DeliveryEvidence {
+  createdAt  DateTime                   @default(now())
+  delivery   DeliveryRequest            @relation(fields: [deliveryId], references: [id])
+  deliveryId String
+  id         String                     @id @default(cuid())
+  imageUrl   String?
+  phase      EnumDeliveryEvidencePhase?
+  slotIndex  Int?
+  type       EnumDeliveryEvidenceType
+  updatedAt  DateTime                   @updatedAt
+  value      String?
+
+  @@unique([deliveryId, phase, type, slotIndex])
+  @@index([deliveryId, type, createdAt])
+  @@index([deliveryId, phase, slotIndex])
+}
+
+model DeliveryCompliance {
+  createdAt           DateTime        @default(now())
+  delivery            DeliveryRequest @relation(fields: [deliveryId], references: [id])
+  deliveryId          String          @unique
+  dropoffCompletedAt  DateTime?
+  id                  String          @id @default(cuid())
+  odometerEnd         Int?
+  odometerStart       Int?
+  pickupCompletedAt   DateTime?
+  updatedAt           DateTime        @updatedAt
+  verifiedBy          User?           @relation(fields: [verifiedByUserId], references: [id])
+  verifiedByUserId    String?
+  verifiedByAdminAt   DateTime?
+  vinConfirmed        Boolean         @default(false)
+  vinVerificationCode String?
+
+  @@index([verifiedByAdminAt])
+}
+
+model EvidenceExport {
+  createdAt       DateTime        @default(now())
+  createdBy       User?           @relation(fields: [createdByUserId], references: [id])
+  createdByUserId String?
+  delivery        DeliveryRequest @relation(fields: [deliveryId], references: [id])
+  deliveryId      String
+  id              String          @id @default(cuid())
+  metaJson        Json?
+  updatedAt       DateTime        @updatedAt
+  url             String?
+
+  @@index([deliveryId, createdAt])
+}
+
+model DeliveryStatusHistory {
+  actor       User?                                @relation(fields: [actorUserId], references: [id])
+  actorUserId String?
+  actorRole   EnumDeliveryStatusHistoryActorRole?
+  actorType   EnumDeliveryStatusHistoryActorType   @default(USER)
+  createdAt   DateTime                             @default(now())
+  delivery    DeliveryRequest                      @relation(fields: [deliveryId], references: [id])
+  deliveryId  String
+  fromStatus  EnumDeliveryStatusHistoryFromStatus?
+  id          String                               @id @default(cuid())
+  note        String?
+  toStatus    EnumDeliveryStatusHistoryToStatus
+  updatedAt   DateTime                             @updatedAt
+
+  @@index([deliveryId, createdAt])
+  @@index([toStatus, createdAt])
+}
+
+model ScheduleChangeRequest {
+  createdAt                  DateTime                                  @default(now())
+  decidedAt                  DateTime?
+  decidedBy                  User?                                     @relation(name: "decidedBy", fields: [decidedByUserId], references: [id])
+  decidedByUserId            String?
+  decisionNote               String?
+  delivery                   DeliveryRequest                           @relation(fields: [deliveryId], references: [id])
+  deliveryId                 String
+  id                         String                                    @id @default(cuid())
+  proposedDropoffWindowEnd   DateTime?
+  proposedDropoffWindowStart DateTime?
+  proposedPickupWindowEnd    DateTime?
+  proposedPickupWindowStart  DateTime?
+  reason                     String?
+  requestedBy                User?                                     @relation(name: "requestedBy", fields: [requestedByUserId], references: [id])
+  requestedByUserId          String?
+  requestedByRole            EnumScheduleChangeRequestRequestedByRole?
+  status                     EnumScheduleChangeRequestStatus           @default(PENDING)
+  updatedAt                  DateTime                                  @updatedAt
+
+  @@index([deliveryId, status, createdAt])
+}
+
+model Payment {
+  amount                  Float
+  authorizedAt            DateTime?
+  capturedAt              DateTime?
+  createdAt               DateTime               @default(now())
+  delivery                DeliveryRequest        @relation(fields: [deliveryId], references: [id])
+  deliveryId              String                 @unique
+  events                  PaymentEvent[]
+  failedAt                DateTime?
+  failureCode             String?
+  failureMessage          String?
+  id                      String                 @id @default(cuid())
+  invoiceId               String?
+  paidAt                  DateTime?
+  paymentType             EnumPaymentPaymentType
+  provider                EnumPaymentProvider    @default(STRIPE)
+  providerChargeId        String?
+  providerPaymentIntentId String?
+  refundedAt              DateTime?
+  status                  EnumPaymentStatus
+  updatedAt               DateTime               @updatedAt
+  voidedAt                DateTime?
+
+  @@index([status, createdAt])
+  @@index([paymentType, status])
+}
+
+model PaymentEvent {
+  amount      Float?
+  createdAt   DateTime                @default(now())
+  id          String                  @id @default(cuid())
+  message     String?
+  payment     Payment                 @relation(fields: [paymentId], references: [id])
+  paymentId   String
+  providerRef String?
+  raw         Json?
+  status      EnumPaymentEventStatus?
+  type        EnumPaymentEventType
+  updatedAt   DateTime                @updatedAt
+
+  @@index([paymentId, createdAt])
+  @@index([type, createdAt])
+}
+
+model DriverPayout {
+  createdAt          DateTime               @default(now())
+  delivery           DeliveryRequest        @relation(fields: [deliveryId], references: [id])
+  deliveryId         String                 @unique
+  driver             Driver                 @relation(fields: [driverId], references: [id])
+  driverId           String
+  driverSharePct     Float
+  failedAt           DateTime?
+  failureMessage     String?
+  grossAmount        Float
+  id                 String                 @id @default(cuid())
+  insuranceFee       Float
+  netAmount          Float
+  paidAt             DateTime?
+  platformFee        Float
+  providerTransferId String?
+  status             EnumDriverPayoutStatus @default(PENDING)
+  updatedAt          DateTime               @updatedAt
+
+  @@index([driverId, status, createdAt])
+}
+
+model DriverPreference {
+  city        String?
+  createdAt   DateTime @default(now())
+  driver      Driver   @relation(fields: [driverId], references: [id])
+  driverId    String   @unique
+  id          String   @id @default(cuid())
+  radiusMiles Float?
+  updatedAt   DateTime @updatedAt
+}
+
+model ServiceDistrict {
+  active      Boolean                    @default(true)
+  code        String                     @unique
+  createdAt   DateTime                   @default(now())
+  driverPrefs DriverDistrictPreference[]
+  geoJson     Json?
+  id          String                     @id @default(cuid())
+  name        String
+  updatedAt   DateTime                   @updatedAt
+}
+
+model DriverDistrictPreference {
+  createdAt  DateTime        @default(now())
+  district   ServiceDistrict @relation(fields: [districtId], references: [id])
+  districtId String
+  driver     Driver          @relation(fields: [driverId], references: [id])
+  driverId   String
+  id         String          @id @default(cuid())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([driverId, districtId])
+  @@index([districtId])
+}
+
+model DriverAlertPreference {
+  createdAt    DateTime @default(now())
+  driver       Driver   @relation(fields: [driverId], references: [id])
+  driverId     String   @unique
+  emailEnabled Boolean  @default(true)
+  enabled      Boolean  @default(true)
+  id           String   @id @default(cuid())
+  smsEnabled   Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+}
+
+model DisputeCase {
+  closedAt   DateTime?
+  createdAt  DateTime              @default(now())
+  delivery   DeliveryRequest       @relation(fields: [deliveryId], references: [id])
+  deliveryId String                @unique
+  id         String                @id @default(cuid())
+  legalHold  Boolean               @default(false)
+  notes      DisputeNote[]
+  openedAt   DateTime              @default(now())
+  reason     String
+  resolvedAt DateTime?
+  status     EnumDisputeCaseStatus @default(OPEN)
+  updatedAt  DateTime              @updatedAt
+
+  @@index([status, openedAt])
+}
+
+model DisputeNote {
+  author       User?       @relation(fields: [authorUserId], references: [id])
+  authorUserId String?
+  createdAt    DateTime    @default(now())
+  dispute      DisputeCase @relation(fields: [disputeId], references: [id])
+  disputeId    String
+  id           String      @id @default(cuid())
+  note         String
+  updatedAt    DateTime    @updatedAt
+
+  @@index([disputeId, createdAt])
+}
+
+model DeliveryRating {
+  comment    String?
+  createdAt  DateTime                 @default(now())
+  customer   Customer?                @relation(fields: [customerId], references: [id])
+  customerId String?
+  delivery   DeliveryRequest          @relation(fields: [deliveryId], references: [id])
+  deliveryId String                   @unique
+  driver     Driver?                  @relation(fields: [driverId], references: [id])
+  driverId   String?
+  id         String                   @id @default(cuid())
+  stars      Int
+  target     EnumDeliveryRatingTarget @default(DRIVER)
+  updatedAt  DateTime                 @updatedAt
+
+  @@index([driverId, createdAt])
+}
+
+model Tip {
+  amount      Float
+  createdAt   DateTime        @default(now())
+  delivery    DeliveryRequest @relation(fields: [deliveryId], references: [id])
+  deliveryId  String          @unique
+  id          String          @id @default(cuid())
+  provider    EnumTipProvider @default(STRIPE)
+  providerRef String?
+  status      EnumTipStatus   @default(AUTHORIZED)
+  updatedAt   DateTime        @updatedAt
+}
+
+model NotificationEvent {
+  actor        User?                        @relation(fields: [actorUserId], references: [id])
+  actorUserId  String?
+  body         String?
+  channel      EnumNotificationEventChannel
+  createdAt    DateTime                     @default(now())
+  customer     Customer?                    @relation(fields: [customerId], references: [id])
+  customerId   String?
+  delivery     DeliveryRequest?             @relation(fields: [deliveryId], references: [id])
+  deliveryId   String?
+  driver       Driver?                      @relation(fields: [driverId], references: [id])
+  driverId     String?
+  errorMessage String?
+  failedAt     DateTime?
+  id           String                       @id @default(cuid())
+  payload      Json?
+  sentAt       DateTime?
+  status       EnumNotificationEventStatus  @default(QUEUED)
+  subject      String?
+  templateCode String?
+  toEmail      String?
+  toPhone      String?
+  type         EnumNotificationEventType
+  updatedAt    DateTime                     @updatedAt
+  isRead       Boolean                      @default(false)
+  seenInListAt DateTime?
+  openedAt     DateTime?
+  readAt       DateTime?
+  clickedAt    DateTime?
+  archivedAt   DateTime?
+  dismissedAt  DateTime?
+  expiresAt    DateTime?
+
+  @@index([customerId, isRead, createdAt])
+  @@index([driverId, isRead, createdAt])
+  @@index([deliveryId, createdAt])
+  @@index([status, createdAt])
+  @@index([type, status, createdAt])
+}
+
+model AdminAuditLog {
+  action      EnumAdminAuditLogAction
+  actor       User?                      @relation(name: "adminActions", fields: [actorUserId], references: [id])
+  actorUserId String?
+  actorType   EnumAdminAuditLogActorType @default(USER)
+  afterJson   Json?
+  beforeJson  Json?
+  createdAt   DateTime                   @default(now())
+  customer    Customer?                  @relation(fields: [customerId], references: [id])
+  customerId  String?
+  delivery    DeliveryRequest?           @relation(fields: [deliveryId], references: [id])
+  deliveryId  String?
+  driver      Driver?                    @relation(fields: [driverId], references: [id])
+  driverId    String?
+  id          String                     @id @default(cuid())
+  reason      String?
+  updatedAt   DateTime                   @updatedAt
+  user        User?                      @relation(name: "auditTargets", fields: [userId], references: [id])
+  userId      String?
+
+  @@index([action, createdAt])
+  @@index([deliveryId, createdAt])
+}
+
+model AppSetting {
+  createdAt DateTime @default(now())
+  id        String   @id @default(cuid())
+  key       String   @unique
+  updatedAt DateTime @updatedAt
+  value     Json
+}
+
+model DealerLead {
+  businessName String
+  createdAt    DateTime @default(now())
+  email        String
+  id           String   @id @default(cuid())
+  message      String?
+  phone        String?
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model InvestorLead {
+  createdAt DateTime @default(now())
+  email     String
+  id        String   @id @default(cuid())
+  message   String?
+  name      String
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model SupportRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String?
+  user   User?   @relation(name: "supportRequestsRaised", fields: [userId], references: [id])
+
+  actorRole EnumSupportActorRole
+  actorType EnumSupportActorType @default(USER)
+
+  deliveryId String?
+  delivery   DeliveryRequest? @relation(fields: [deliveryId], references: [id])
+
+  category EnumSupportCategory
+  priority EnumSupportPriority @default(NORMAL)
+
+  subject String?
+  message String
+
+  status EnumSupportStatus @default(OPEN)
+
+  assignedToUserId String?
+  assignedTo       User?   @relation(name: "supportRequestsAssigned", fields: [assignedToUserId], references: [id])
+
+  resolvedAt DateTime?
+  closedAt   DateTime?
+
+  notes SupportRequestNote[]
+
+  @@index([deliveryId, status])
+  @@index([userId, createdAt])
+  @@index([assignedToUserId, status])
+  @@index([category, status, createdAt])
+}
+
+model SupportRequestNote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  supportRequestId String
+  supportRequest   SupportRequest @relation(fields: [supportRequestId], references: [id], onDelete: Cascade)
+
+  authorUserId String?
+  authorUser   User?   @relation(name: "supportRequestNotesAuthored", fields: [authorUserId], references: [id])
+
+  authorRole EnumSupportActorRole
+  message    String
+  isInternal Boolean              @default(false)
+
+  @@index([supportRequestId, createdAt])
+  @@index([authorUserId, createdAt])
+}
+
+enum EnumEmailVerificationPurpose {
+  SIGNUP
+  PASSWORD_RESET
+}
+
+model EmailVerificationToken {
+  id         String                       @id @default(cuid())
+  email      String
+  tokenHash  String
+  purpose    EnumEmailVerificationPurpose @default(SIGNUP)
+  createdAt  DateTime                     @default(now())
+  expiresAt  DateTime
+  verifiedAt DateTime?
+
+  @@index([email, purpose])
+}
+
+enum EnumUserRoles {
+  PRIVATE_CUSTOMER
+  BUSINESS_CUSTOMER
+  DRIVER
+  ADMIN
+}
+
+enum EnumCustomerApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum EnumCustomerCustomerType {
+  BUSINESS
+  PRIVATE
+}
+
+enum EnumCustomerPricingModeOverride {
+  PER_MILE
+  FLAT_TIER
+  CATEGORY_ABC
+}
+
+enum EnumDriverStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+enum EnumPricingConfigPricingMode {
+  PER_MILE
+  FLAT_TIER
+  CATEGORY_ABC
+}
+
+enum EnumPricingCategoryRuleCategory {
+  A
+  B
+  C
+}
+
+enum EnumQuoteMileageCategory {
+  A
+  B
+  C
+}
+
+enum EnumQuotePricingMode {
+  PER_MILE
+  FLAT_TIER
+  CATEGORY_ABC
+}
+
+enum EnumQuoteServiceType {
+  HOME_DELIVERY
+  BETWEEN_LOCATIONS
+  SERVICE_PICKUP_RETURN
+}
+
+enum EnumSchedulingPolicyCustomerType {
+  BUSINESS
+  PRIVATE
+}
+
+enum EnumSchedulingPolicyDefaultMode {
+  SAME_DAY
+  NEXT_DAY
+}
+
+enum EnumSchedulingPolicyServiceType {
+  HOME_DELIVERY
+  BETWEEN_LOCATIONS
+  SERVICE_PICKUP_RETURN
+}
+
+enum EnumDeliveryRequestCreatedByRole {
+  PRIVATE_CUSTOMER
+  BUSINESS_CUSTOMER
+  DRIVER
+  ADMIN
+}
+
+enum EnumDeliveryRequestCustomerChose {
+  PICKUP_WINDOW
+  DROPOFF_WINDOW
+}
+
+enum EnumDeliveryRequestServiceType {
+  HOME_DELIVERY
+  BETWEEN_LOCATIONS
+  SERVICE_PICKUP_RETURN
+}
+
+enum EnumDeliveryRequestStatus {
+  DRAFT
+  QUOTED
+  LISTED
+  BOOKED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  DISPUTED
+}
+
+enum EnumTrackingSessionStatus {
+  NOT_STARTED
+  STARTED
+  STOPPED
+}
+
+enum EnumDeliveryEvidencePhase {
+  PICKUP
+  DROPOFF
+}
+
+enum EnumDeliveryEvidenceType {
+  PICKUP_PHOTO
+  DROPOFF_PHOTO
+  ODOMETER_START
+  ODOMETER_END
+  VIN_CONFIRMATION
+}
+
+enum EnumDeliveryStatusHistoryActorRole {
+  PRIVATE_CUSTOMER
+  BUSINESS_CUSTOMER
+  DRIVER
+  ADMIN
+}
+
+enum EnumDeliveryStatusHistoryActorType {
+  USER
+  SYSTEM
+}
+
+enum EnumDeliveryStatusHistoryFromStatus {
+  DRAFT
+  QUOTED
+  LISTED
+  BOOKED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  DISPUTED
+}
+
+enum EnumDeliveryStatusHistoryToStatus {
+  DRAFT
+  QUOTED
+  LISTED
+  BOOKED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  DISPUTED
+}
+
+enum EnumScheduleChangeRequestRequestedByRole {
+  PRIVATE_CUSTOMER
+  BUSINESS_CUSTOMER
+  DRIVER
+  ADMIN
+}
+
+enum EnumScheduleChangeRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+}
+
+enum EnumPaymentPaymentType {
+  PREPAID
+  POSTPAID
+}
+
+enum EnumPaymentProvider {
+  STRIPE
+  MANUAL
+  OTHER
+}
+
+enum EnumPaymentStatus {
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  INVOICED
+  PAID
+  VOIDED
+  REFUNDED
+}
+
+enum EnumPaymentEventStatus {
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  INVOICED
+  PAID
+  VOIDED
+  REFUNDED
+}
+
+enum EnumPaymentEventType {
+  AUTHORIZE
+  CAPTURE
+  INVOICE
+  MARK_PAID
+  FAIL
+  VOID
+  REFUND
+}
+
+enum EnumDriverPayoutStatus {
+  PENDING
+  ELIGIBLE
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum EnumDisputeCaseStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum EnumDeliveryRatingTarget {
+  DRIVER
+}
+
+enum EnumTipProvider {
+  STRIPE
+  MANUAL
+  OTHER
+}
+
+enum EnumTipStatus {
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum EnumNotificationEventChannel {
+  EMAIL
+  SMS
+}
+
+enum EnumNotificationEventStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum EnumNotificationEventType {
+  USER_SIGNUP
+  DEALER_SIGNUP
+  DRIVER_SIGNUP
+  DEALER_APPROVED
+  DRIVER_APPROVED
+  DELIVERY_STATUS_CHANGED
+  DELIVERY_BOOKED
+  DELIVERY_ASSIGNED
+  DELIVERY_REASSIGNED
+  DELIVERY_CANCELLED
+  TRACKING_STARTED
+  TRACKING_STOPPED
+  PAYMENT_AUTHORIZED
+  PAYMENT_CAPTURED
+  PAYMENT_FAILED
+  DISPUTE_OPENED
+  DISPUTE_UPDATED
+  SCHEDULE_CHANGE_REQUESTED
+  SCHEDULE_CHANGE_DECIDED
+  REMINDER
+  SUPPORT_REQUEST_CREATED
+  SUPPORT_REQUEST_ASSIGNED
+  SUPPORT_REQUEST_REPLIED
+  SUPPORT_REQUEST_RESOLVED
+  SUPPORT_REQUEST_CLOSED
+}
+
+enum EnumAdminAuditLogAction {
+  USER_DISABLE
+  USER_ENABLE
+  DEALER_APPROVE
+  DEALER_REJECT
+  DRIVER_APPROVE
+  DRIVER_SUSPEND
+  DRIVER_UNSUSPEND
+  DELIVERY_CANCEL
+  DELIVERY_REASSIGN
+  PRICING_UPDATE
+  POLICY_UPDATE
+  DISPUTE_UPDATE
+  PAYMENT_OVERRIDE
+  PAYOUT_OVERRIDE
+  OTHER
+}
+
+enum EnumAdminAuditLogActorType {
+  USER
+  SYSTEM
+}
+
+enum EnumSupportActorRole {
+  DRIVER
+  DEALER
+  PRIVATE_CUSTOMER
+  ADMIN
+  OPS
+}
+
+enum EnumSupportActorType {
+  USER
+  SYSTEM
+}
+
+enum EnumSupportCategory {
+  GENERAL
+  DELIVERY_ISSUE
+  SCHEDULE_CHANGE
+  CANCELLATION_REQUEST
+  PAYMENT_ISSUE
+  DRIVER_ISSUE
+  ACCOUNT_ISSUE
+  DISPUTE_HELP
+  OTHER
+}
+
+enum EnumSupportPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum EnumSupportStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
