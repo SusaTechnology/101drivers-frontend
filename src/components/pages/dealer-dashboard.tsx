@@ -346,6 +346,7 @@ export default function DealerDashboard() {
             <Button variant={showMapView ? "default" : "outline"} size="icon" className={cn("w-10 h-10 rounded-xl", showMapView && "bg-lime-500 text-slate-950")} onClick={() => setShowMapView(!showMapView)}><Map className="h-5 w-5" /></Button>
             <NotificationBell />
             <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl" onClick={toggleTheme}>{mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</Button>
+            <Button variant="ghost" size="icon" className="hidden sm:flex w-10 h-10 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={handleSignOut} title="Sign Out"><LogOut className="w-5 h-5" /></Button>
             <Button variant="ghost" size="icon" className="sm:hidden w-10 h-10 rounded-xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</Button>
           </div>
         </div>
