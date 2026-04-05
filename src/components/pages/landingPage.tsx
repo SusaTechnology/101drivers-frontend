@@ -111,6 +111,22 @@ export default function LandingPage() {
     email: '',
     message: '',
   });
+  const [dealerPhoneDisplay, setDealerPhoneDisplay] = useState('');
+
+  // Format phone to (555) 555-5555
+  const formatPhoneNumber = (value: string): string => {
+    const digits = value.replace(/\D/g, '').slice(0, 10);
+    if (digits.length === 0) return '';
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  };
+
+  const handleDealerPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setDealerPhoneDisplay(formatted);
+    setDealerLeadForm({ ...dealerLeadForm, phone: formatted.replace(/\D/g, '') });
+  };
   const [investorLeadForm, setInvestorLeadForm] = useState<InvestorLeadForm>({
     name: '',
     email: '',
@@ -318,6 +334,7 @@ export default function LandingPage() {
     onSuccess: () => {
       setDealerLeadSuccess(true);
       setDealerLeadForm({ businessName: '', contactName: '', email: '', phone: '', message: '' });
+      setDealerPhoneDisplay('');
       toast.success('Thank you! We\'ll be in touch soon.');
     },
     onError: (error: Error) => {
@@ -903,9 +920,11 @@ export default function LandingPage() {
                   <Input
                     id="dealerPhone"
                     type="tel"
-                    value={dealerLeadForm.phone}
-                    onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, phone: e.target.value })}
-                    placeholder="555-555-5555"
+                    inputMode="tel"
+                    maxLength={14}
+                    value={dealerPhoneDisplay}
+                    onChange={handleDealerPhoneChange}
+                    placeholder="(555) 555-5555"
                     className="h-12 rounded-2xl"
                     required
                   />
