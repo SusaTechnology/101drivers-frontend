@@ -1968,7 +1968,7 @@ const handleQuotePreview = () => {
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-2xl">
                   {draftId 
                     ? 'Continue editing your draft. Update addresses, schedule, and vehicle details, then submit when ready.'
-                    : 'Enter pickup and drop-off addresses. California only.'}
+                    : 'Our service is currently available in California only. Please enter CA addresses below.'}
                 </p>
               </div>
             </div>
