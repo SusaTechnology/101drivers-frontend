@@ -618,6 +618,13 @@ export default function LandingPage() {
                     placeholder="Anywhere in SoCal"
                     isLoaded={isLoaded}
                     icon={<Flag className="h-4 w-4 text-slate-400" />}
+                    strictBounds={true}
+                    bounds={{
+                      north: 35.2,
+                      south: 32.5,
+                      east: -114.8,
+                      west: -120.8,
+                    }}
                   />
                   {dropoffError && (
                     <p className="text-xs text-red-500 mt-1">{dropoffError}</p>
