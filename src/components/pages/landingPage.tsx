@@ -530,7 +530,7 @@ export default function LandingPage() {
           </div>
 
           {/* Full-width map card */}
-          <div className="relative w-full h-[65vh] min-h-[480px] lg:min-h-[560px] overflow-hidden">
+          <div className="relative w-full h-[50vh] min-h-[380px] max-h-[480px] overflow-hidden">
             <RouteMap
               isLoaded={isLoaded}
               zones={zones}
@@ -564,7 +564,7 @@ export default function LandingPage() {
             </div>
 
             {/* Pickup Zone legend — bottom-right, above input panel */}
-            <div className="absolute bottom-[180px] lg:bottom-[160px] right-5 z-10">
+            <div className="absolute bottom-[160px] lg:bottom-[140px] right-5 z-10">
               <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-xl text-[10px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700">
                 <span className="w-3 h-3 rounded-sm bg-[#39FF14] inline-block shrink-0" />
                 Green area = Pickup Zone
