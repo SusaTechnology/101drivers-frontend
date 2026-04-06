@@ -538,8 +538,8 @@ export default function LandingPage() {
                 zones={zones}
                 initialCenter={{ lat: 33.98, lng: -118.45 }}
                 initialZoom={13}
-                lockViewport={!quoteResult}
-                showMapTypeControl={false}
+                fitZonesBounds={true}
+                showMapTypeControl={true}
               />
             </div>
 

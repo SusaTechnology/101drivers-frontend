@@ -59,6 +59,11 @@ interface RouteMapProps {
    * When true, disable user pan/zoom until a route is calculated
    */
   lockViewport?: boolean;
+  /**
+   * When true, auto-fit map bounds to all service district zones.
+   * Takes priority over initialCenter/initialZoom once zones are loaded.
+   */
+  fitZonesBounds?: boolean;
 }
 
 export default function RouteMap({
@@ -78,6 +83,7 @@ export default function RouteMap({
   initialZoom,
   showCaliforniaDefault = false,
   lockViewport = false,
+  fitZonesBounds = false,
 }: RouteMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [internalDirections, setInternalDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -155,6 +161,37 @@ export default function RouteMap({
     }
     // else: keep the initial center/zoom set in GoogleMap props
   }, [map, directions, pickup, dropoff]);
+
+  // Auto-fit map to service district zones when they load
+  useEffect(() => {
+    if (!map || !fitZonesBounds || !zones || zones.length === 0) return;
+    // Don't override if directions are showing or user has pickup/dropoff
+    if (directions || pickup || dropoff) return;
+
+    const bounds = new google.maps.LatLngBounds();
+    let hasCoords = false;
+
+    zones.forEach((zone: any) => {
+      try {
+        const geoJson = typeof zone.geoJson === 'string' ? JSON.parse(zone.geoJson) : zone.geoJson;
+        if (geoJson?.coordinates) {
+          const coords = geoJson.type === 'Polygon'
+            ? geoJson.coordinates[0]
+            : geoJson.coordinates.flatMap((ring: any) => ring);
+          coords.forEach((c: [number, number]) => {
+            bounds.extend({ lat: c[1], lng: c[0] });
+            hasCoords = true;
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to parse zone geoJson:', e);
+      }
+    });
+
+    if (hasCoords) {
+      map.fitBounds(bounds, { top: 60, right: 40, bottom: 180, left: 40 }); // extra bottom padding for input panel
+    }
+  }, [map, fitZonesBounds, zones, directions, pickup, dropoff]);
 
   // Draw historical points as a polyline with a distinct color
   useEffect(() => {
