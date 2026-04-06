@@ -553,8 +553,8 @@ export default function LandingPage() {
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-8 lg:pt-12 pb-6">
           {/* Hero heading */}
           <div>
-            <h2 className="text-4xl sm:text-5xl lg:text-[44px] font-black text-[#a9ce42] leading-tight">
-              We Move Your Car
+            <h2 className="text-4xl sm:text-5xl lg:text-[44px] font-black leading-tight text-slate-900 dark:text-white">
+              <span className="text-slate-900 dark:text-white">We </span><span className="text-[#a9ce42]">Move Your Car</span>
             </h2>
             <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest mt-2">
               <Bolt className="h-4 w-4" />
