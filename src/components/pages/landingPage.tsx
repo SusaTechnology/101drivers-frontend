@@ -833,7 +833,7 @@ export default function LandingPage() {
 
         {/* ===== SECTION 5 — How the Service Works ===== */}
         <section id="how" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <div className="max-w-3xl">
+          <div>
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
               How It Works
             </h2>
@@ -841,36 +841,34 @@ export default function LandingPage() {
               We handle every mile like it&apos;s ours.
             </p>
 
-            {/* Delivery step cards */}
-            <div className="mt-8 space-y-3">
+            {/* Delivery step cards — grid on desktop, stack on mobile */}
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {deliverySteps.map((step) => {
                 const Icon = step.icon;
                 return (
                   <div
                     key={step.step}
-                    className="flex items-start gap-3.5 p-4 rounded-xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800"
+                    className="flex flex-col items-center text-center p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800"
                   >
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                      <Icon className="h-4 w-4 text-[#00C853]" />
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <Icon className="h-5 w-5 text-[#00C853]" />
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Step {step.step}</span>
-                        <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                          {step.title}
-                        </h3>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                        {step.description}
-                      </p>
-                    </div>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-3">
+                      Step {step.step}
+                    </span>
+                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-1">
+                      {step.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                      {step.description}
+                    </p>
                   </div>
                 );
               })}
             </div>
 
             {/* Footer text */}
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-6 font-medium">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-6 font-medium text-center">
               Greater LA only {"\u2022"} 25+ drivers {"\u2022"} No passengers
             </p>
           </div>
