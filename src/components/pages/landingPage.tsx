@@ -55,7 +55,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavBar } from "../shared/layout/navbar";
-import { DealerSignupForm } from "../auth/DealerSignupForm";
 import RouteMap from '@/components/map/RouteMap';
 import LocationAutocomplete from "../map/LocationAutocomplete";
 import { useJsApiLoader } from "@react-google-maps/api";
@@ -514,710 +513,661 @@ export default function LandingPage() {
       <NavBar />
       <main className="w-full">
 
-        {/* ===== 3-COLUMN GRID ===== */}
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-8 lg:pt-12 pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
-
-            {/* ========== LEFT COLUMN ========== */}
-            <div id="quote" className="space-y-5">
-              {/* Hero heading */}
-              <div>
-                <h2 className="text-4xl sm:text-5xl lg:text-[44px] font-black text-[#39FF14] leading-tight">
-                  We Move Your Car
-                </h2>
-                <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest mt-2">
-                  <Bolt className="h-4 w-4" />
-                  Instant Quote
-                </div>
-                <p className="text-sm lg:text-base text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
-                  Pickup from our Westside zone. Drop-off anywhere in Southern California.
-                </p>
-              </div>
-
-              {/* Map in rounded container */}
-              <div className="relative w-full h-[340px] sm:h-[380px] lg:h-[420px] rounded-3xl overflow-hidden">
-                <RouteMap
-                  isLoaded={isLoaded}
-                  zones={zones}
-                  initialCenter={{ lat: 33.98, lng: -118.45 }}
-                  initialZoom={13}
-                  fitZonesBounds={true}
-                  showMapTypeControl={true}
-                />
-
-                {/* Gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 z-[1] pointer-events-none" />
-
-                {/* "Pickup Area Only" centered overlay */}
-                <div className="absolute inset-0 flex items-center justify-center z-[2] pointer-events-none px-4">
-                  <div className="text-center mt-[-50px]">
-                    <p className="text-white font-black text-xl sm:text-2xl lg:text-3xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
-                      Pickup Area Only
-                    </p>
-                    <p className="text-white/80 text-[10px] sm:text-xs mt-1.5 max-w-xs mx-auto drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)] leading-relaxed">
-                      Westside LA: Santa Monica, Venice, Marina del Rey, Playa del Rey, Culver City, Westchester, West LA &amp; nearby
-                    </p>
-                  </div>
-                </div>
-
-                {/* Dealerships Welcome badge — top-right */}
-                <div className="absolute top-3 right-3 z-10">
-                  <div className="bg-lime-100/95 dark:bg-lime-900/80 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-1.5 border border-lime-200 dark:border-lime-700">
-                    <Car className="h-3.5 w-3.5 text-lime-600 dark:text-lime-400" />
-                    Dealerships Welcome
-                  </div>
-                </div>
-
-                {/* Zone legend — bottom-right */}
-                <div className="absolute bottom-3 right-3 z-10">
-                  <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-[9px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-[#39FF14] inline-block shrink-0" />
-                    Green area = Pickup Zone
-                  </div>
-                </div>
-              </div>
-
-              {/* Input panel card — below map (not floating) */}
-              <Card className="rounded-2xl shadow-lg border-slate-200/70 dark:border-slate-800">
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    {/* From input */}
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        From Where
-                      </Label>
-                      <LocationAutocomplete
-                        key="pickup"
-                        value={pickupAddress}
-                        onChange={setPickupAddress}
-                        onPlaceSelect={handlePickupSelect}
-                        onClear={handlePickupClear}
-                        placeholder="Enter address in pickup area"
-                        isLoaded={isLoaded}
-                        icon={<Target className="h-4 w-4 text-slate-400" />}
-                      />
-                      {pickupError && (
-                        <p className={cn(
-                          "text-xs mt-1 font-semibold",
-                          pickupInZone === false ? "text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg" : "text-red-500"
-                        )}>
-                          {pickupInZone === false
-                            ? "Must be in our Westside zone."
-                            : pickupError
-                          }
-                        </p>
-                      )}
-                    </div>
-
-                    {/* To input */}
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        To Where
-                      </Label>
-                      <LocationAutocomplete
-                        key="dropoff"
-                        value={dropoffAddress}
-                        onChange={setDropoffAddress}
-                        onPlaceSelect={handleDropoffSelect}
-                        onClear={handleDropoffClear}
-                        placeholder="Anywhere in SoCal"
-                        isLoaded={isLoaded}
-                        icon={<Flag className="h-4 w-4 text-slate-400" />}
-                      />
-                      {dropoffError && (
-                        <p className="text-xs text-red-500 mt-1">{dropoffError}</p>
-                      )}
-                    </div>
-
-                    {/* Get Estimate button */}
-                    <a
-                      href="#estimate"
-                      onClick={handleCalculateEstimate}
-                      className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                        isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError || quoteLimitReached
-                          ? "opacity-50 pointer-events-none"
-                          : ""
-                      }`}
-                    >
-                      {isLoadingQuote
-                        ? "Calculating..."
-                        : quoteLimitReached
-                          ? `Limit (${QUOTE_MAX_ATTEMPTS}/${QUOTE_MAX_ATTEMPTS})`
-                          : `Get Estimate`}
-                      {!isLoadingQuote && !quoteLimitReached && <ArrowRight className="h-4 w-4" />}
-                    </a>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Estimated Price panel (below inputs) */}
-              <Card className="rounded-2xl border-slate-200/70 dark:border-slate-800 overflow-hidden">
-                <CardContent className="p-5">
-                  {!quoteResult ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                        <Ruler className="h-5 w-5 text-slate-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 dark:text-white">Estimated Price</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          Enter locations for estimate
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                            Estimated Price
-                          </h3>
-                          <Badge variant="secondary" className="mt-1.5 gap-1.5 px-2.5 py-1">
-                            <Ruler className="h-3.5 w-3.5 text-lime-500" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">
-                              {Math.round(quoteResult.distanceMiles)} miles
-                            </span>
-                          </Badge>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-black text-lime-500">
-                            ${quoteResult.estimatedPrice.toFixed(2)}
-                          </p>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                            Total Estimate
-                          </p>
-                        </div>
-                      </div>
-                      {quoteResult?.feesBreakdown && (
-                        <div className="flex justify-between items-center py-3 border-t border-slate-100 dark:border-slate-800">
-                          <span className="text-slate-600 dark:text-slate-400 text-xs font-semibold">
-                            Base Transportation
-                          </span>
-                          <span className="font-black text-sm text-slate-900 dark:text-white">
-                            ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                      {/* Disclaimer */}
-                      <div className="flex gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-900/30">
-                        <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                        <p className="text-[10px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
-                          Estimate only. Final scheduling depends on driver availability and operational policy.
-                        </p>
-                      </div>
-                      {/* Out of zone error */}
-                      {pickupInZone === false && (
-                        <div className="p-3 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-200 dark:border-red-900/30">
-                          <div className="flex gap-2">
-                            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-                            <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-normal">
-                              Pickup is outside our Westside zone. Service isn&apos;t available here yet.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      <a
-                        href="#estimate"
-                        className="block w-full py-3 rounded-2xl bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90 font-extrabold text-center transition shadow-lg text-sm"
-                      >
-                        View Full Breakdown
-                      </a>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+        {/* ===== SECTION 1 — Instant Quote Entry ===== */}
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-8 lg:pt-12 pb-6">
+          {/* Hero heading */}
+          <div>
+            <h2 className="text-4xl sm:text-5xl lg:text-[44px] font-black text-[#39FF14] leading-tight">
+              We Move Your Car
+            </h2>
+            <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest mt-2">
+              <Bolt className="h-4 w-4" />
+              Instant Quote
             </div>
-
-            {/* ========== RIGHT COLUMN (sticky) ========== */}
-            <div className="lg:sticky lg:top-24 space-y-5 order-3 lg:order-none">
-              {/* Get Started card — conditional on dealerLeadEnabled */}
-              {settings?.dealerLeadEnabled && (
-                <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                  <CardContent className="p-6">
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white">
-                      Get Started
-                    </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
-                      {settings?.dealerLeadCtaDescription || 'Request a quick call—get onboarded fast.'}
-                    </p>
-
-                    {!dealerLeadSuccess ? (
-                      <form onSubmit={handleDealerLeadSubmit} className="mt-5 space-y-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="dlBusinessName" className="text-xs font-bold">Business Name *</Label>
-                          <div className="relative">
-                            <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <Input
-                              id="dlBusinessName"
-                              value={dealerLeadForm.businessName}
-                              onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, businessName: e.target.value })}
-                              placeholder="ABC Motors"
-                              className="h-11 pl-10 rounded-2xl text-sm"
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label htmlFor="dlContactName" className="text-xs font-bold">Contact Name</Label>
-                          <div className="relative">
-                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <Input
-                              id="dlContactName"
-                              value={dealerLeadForm.contactName}
-                              onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, contactName: e.target.value })}
-                              placeholder="who we call—e.g., Jane Doe"
-                              className="h-11 pl-10 rounded-2xl text-sm"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="dlPhone" className="text-xs font-bold">Phone</Label>
-                            <div className="relative">
-                              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                              <Input
-                                id="dlPhone"
-                                type="tel"
-                                value={dealerPhoneDisplay}
-                                onChange={handleDealerPhoneChange}
-                                placeholder="555-555-5555"
-                                className="h-11 pl-10 rounded-2xl text-sm"
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="dlEmail" className="text-xs font-bold">Email *</Label>
-                            <div className="relative">
-                              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                              <Input
-                                id="dlEmail"
-                                type="email"
-                                value={dealerLeadForm.email}
-                                onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, email: e.target.value })}
-                                placeholder="owner@abcmotors.com"
-                                className="h-11 pl-10 rounded-2xl text-sm"
-                                required
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label htmlFor="dlMessage" className="text-xs font-bold">Message</Label>
-                          <Textarea
-                            id="dlMessage"
-                            value={dealerLeadForm.message}
-                            onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, message: e.target.value })}
-                            placeholder="Tell us about your needs..."
-                            className="rounded-2xl min-h-[70px] text-sm"
-                          />
-                        </div>
-
-                        <Button
-                          type="submit"
-                          disabled={submitDealerLead.isPending}
-                          className="w-full bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold gap-2 h-11 rounded-2xl text-sm"
-                        >
-                          {submitDealerLead.isPending ? (
-                            <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
-                          ) : (
-                            <><Send className="h-4 w-4" /> Get Started</>
-                          )}
-                        </Button>
-                      </form>
-                    ) : (
-                      <div className="mt-5 p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30">
-                        <div className="flex items-center gap-3">
-                          <CheckCircle className="h-6 w-6 text-emerald-500 shrink-0" />
-                          <div>
-                            <div className="font-extrabold text-lg text-slate-900 dark:text-white">Thank you!</div>
-                            <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">We&apos;ve received your request and will be in touch soon.</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Signup link below form */}
-                    <div className="mt-4 text-center">
-                      <Link
-                        to="/auth/dealer-signin"
-                        className="text-sm font-bold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
-                      >
-                        Signup &rarr;
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Driver CTA card */}
-              <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                <CardContent className="p-6">
-                  {/* User icon in rounded square */}
-                  <div className="w-12 h-12 rounded-xl bg-lime-500/15 flex items-center justify-center mb-4">
-                    <User className="h-6 w-6 text-lime-500" />
-                  </div>
-
-                  <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white">
-                    Move Cars in LA – Schedule Ahead, Know Your Pay
-                  </h3>
-
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
-                    25+, clean record {"\u2022"} Greater LA only {"\u2022"} No own car needed {"\u2022"} No passengers {"\u2022"} Plan routes, keep all tips
-                  </p>
-
-                  <div className="mt-5 space-y-2.5">
-                    <Link
-                      to="/driver-onboarding"
-                      className="w-full py-3 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 text-sm"
-                    >
-                      Join the Waitlist
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                    <Link
-                      to="/auth/dealer-signin"
-                      className="w-full py-3 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition flex items-center justify-center gap-2 text-sm"
-                    >
-                      Already In? Log In
-                      <LogIn className="h-4 w-4 text-lime-500" />
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* ========== MIDDLE COLUMN ========== */}
-            <div className="space-y-8 order-2 lg:order-none">
-              {/* Account info */}
-              <div>
-                <Badge variant="secondary" className="gap-2 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
-                  <Building className="h-3 w-3 text-lime-500" />
-                  Business Signup
-                </Badge>
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white leading-tight mt-4">
-                  Create your account
-                </h2>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-3 leading-relaxed">
-                  Need drivers for vehicle delivery? Pick your company from our directory—it auto-fills everything. Add a contact person. Submitted? Stays Pending Approval till an admin approves.
-                </p>
-              </div>
-
-              {/* Feature highlights */}
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                    <ClipboardCheck className="h-5 w-5 text-lime-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                      Directory-based Onboarding
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                      Select your dealership from search results. We auto-fill business details and capture a contact person.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                    <Lock className="h-5 w-5 text-lime-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                      Admin Approval
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                      Dealer access is granted after Admin review. Notifications are email-first (SMS optional).
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                    <Truck className="h-5 w-5 text-lime-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                      Schedule Drivers Instantly
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                      Once approved, create delivery requests with instant price estimates and real-time tracking.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* How It Works */}
-              <div id="how">
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white leading-tight">
-                  We Move Your Car — Safe &amp; Sound
-                </h2>
-                <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
-                  We handle every mile like it&apos;s ours.
-                </p>
-
-                {/* Delivery step cards */}
-                <div className="mt-6 space-y-3">
-                  {deliverySteps.map((step) => {
-                    const Icon = step.icon;
-                    return (
-                      <div
-                        key={step.step}
-                        className="flex items-start gap-3.5 p-4 rounded-xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800"
-                      >
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                          <Icon className="h-4 w-4 text-[#00C853]" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Step {step.step}</span>
-                            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                              {step.title}
-                            </h3>
-                          </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                            {step.description}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Footer text */}
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-6 font-medium">
-                  Greater LA only {"\u2022"} 25+ drivers {"\u2022"} No passengers
-                </p>
-
-                {/* Signup link */}
-                <div className="mt-3">
-                  <Link
-                    to="/auth/dealer-signin"
-                    className="text-sm font-bold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
-                  >
-                    Signup &rarr;
-                  </Link>
-                </div>
-              </div>
-            </div>
-
+            <p className="text-sm lg:text-base text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
+              Pickup from our Westside zone. Drop-off anywhere in Southern California.
+            </p>
           </div>
-        </div>
 
-        {/* ===== QUOTE RESULT (full width, conditional) ===== */}
-        {quoteResult && (
-        <section id="estimate" className="relative w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 z-10">
-          <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="grid grid-cols-1 lg:grid-cols-12">
-              {/* Route Preview Map */}
-              <div className="lg:col-span-7 min-h-[380px] lg:min-h-[520px] relative overflow-hidden bg-slate-50 dark:bg-slate-950">
-                <RouteMap
-                  pickup={pickupCoords}
-                  dropoff={dropoffCoords}
-                  isLoaded={isLoaded}
-                  zones={zones}
-                  initialCenter={{ lat: 33.98, lng: -118.45 }}
-                  initialZoom={13}
-                  showMapTypeControl={true}
-                />
-
-                {/* Distance badge — top-left */}
-                <div className="absolute top-5 left-5 z-10">
-                  <Badge variant="secondary" className="gap-2 px-4 py-2 backdrop-blur bg-white/95 dark:bg-slate-900/95 shadow-lg border border-slate-200 dark:border-slate-700">
-                    <Ruler className="h-4 w-4 text-lime-500" />
-                    <span className="text-[11px] font-black uppercase tracking-widest">
-                      {quoteResult ? `${Math.round(quoteResult.distanceMiles)} miles` : '— miles'}
-                    </span>
-                  </Badge>
+          {/* Input panel card */}
+          <Card className="mt-5 rounded-2xl shadow-lg border-slate-200/70 dark:border-slate-800">
+            <CardContent className="p-4 sm:p-5">
+              <div className="space-y-3">
+                {/* From input */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    From Where
+                  </Label>
+                  <LocationAutocomplete
+                    key="pickup"
+                    value={pickupAddress}
+                    onChange={setPickupAddress}
+                    onPlaceSelect={handlePickupSelect}
+                    onClear={handlePickupClear}
+                    placeholder="Enter address in pickup area"
+                    isLoaded={isLoaded}
+                    icon={<Target className="h-4 w-4 text-slate-400" />}
+                  />
+                  {pickupError && (
+                    <p className={cn(
+                      "text-xs mt-1 font-semibold",
+                      pickupInZone === false ? "text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg" : "text-red-500"
+                    )}>
+                      {pickupInZone === false
+                        ? "Must be in our Westside zone."
+                        : pickupError
+                      }
+                    </p>
+                  )}
                 </div>
 
-                {/* Route label — bottom-left */}
-                <div className="absolute bottom-5 left-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
-                  <Navigation className="h-4 w-4 text-lime-500" />
-                  {pickupAddress || 'From'} → {dropoffAddress || 'To'}
+                {/* To input */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    To Where
+                  </Label>
+                  <LocationAutocomplete
+                    key="dropoff"
+                    value={dropoffAddress}
+                    onChange={setDropoffAddress}
+                    onPlaceSelect={handleDropoffSelect}
+                    onClear={handleDropoffClear}
+                    placeholder="Anywhere in SoCal"
+                    isLoaded={isLoaded}
+                    icon={<Flag className="h-4 w-4 text-slate-400" />}
+                  />
+                  {dropoffError && (
+                    <p className="text-xs text-red-500 mt-1">{dropoffError}</p>
+                  )}
                 </div>
 
-                {/* Pickup Zone legend — bottom-right */}
-                <div className="absolute bottom-5 right-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-xl text-[10px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
-                  <span className="w-3 h-3 rounded-sm bg-[#39FF14] inline-block shrink-0" />
-                  Green area = Pickup Zone
+                {/* Get Estimate button */}
+                <a
+                  href="#estimate"
+                  onClick={handleCalculateEstimate}
+                  className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
+                    isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError || quoteLimitReached
+                      ? "opacity-50 pointer-events-none"
+                      : ""
+                  }`}
+                >
+                  {isLoadingQuote
+                    ? "Calculating..."
+                    : quoteLimitReached
+                      ? `Limit (${QUOTE_MAX_ATTEMPTS}/${QUOTE_MAX_ATTEMPTS})`
+                      : `Get Estimate`}
+                  {!isLoadingQuote && !quoteLimitReached && <ArrowRight className="h-4 w-4" />}
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* ===== SECTION 2 — Map View ===== */}
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+          <div className="relative w-full h-[340px] sm:h-[420px] lg:h-[500px] rounded-3xl overflow-hidden">
+            <RouteMap
+              pickup={pickupCoords}
+              dropoff={dropoffCoords}
+              isLoaded={isLoaded}
+              zones={zones}
+              initialCenter={{ lat: 33.98, lng: -118.45 }}
+              initialZoom={13}
+              fitZonesBounds={!pickupCoords && !dropoffCoords}
+              showMapTypeControl={true}
+            />
+
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 z-[1] pointer-events-none" />
+
+            {/* "Pickup Area Only" centered overlay — only when no route */}
+            {!quoteResult && (
+              <div className="absolute inset-0 flex items-center justify-center z-[2] pointer-events-none px-4">
+                <div className="text-center mt-[-50px]">
+                  <p className="text-white font-black text-xl sm:text-2xl lg:text-3xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+                    Pickup Area Only
+                  </p>
+                  <p className="text-white/80 text-[10px] sm:text-xs mt-1.5 max-w-xs mx-auto drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)] leading-relaxed">
+                    Westside LA: Santa Monica, Venice, Marina del Rey, Playa del Rey, Culver City, Westchester, West LA &amp; nearby
+                  </p>
                 </div>
               </div>
+            )}
 
-              {/* Price Estimate Panel */}
-              <div className="lg:col-span-5 p-7 sm:p-8 lg:p-10 flex flex-col justify-between">
-                <div>
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-7">
+            {/* Dealerships Welcome badge — top-right */}
+            <div className="absolute top-3 right-3 z-10">
+              <div className="bg-lime-100/95 dark:bg-lime-900/80 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-1.5 border border-lime-200 dark:border-lime-700">
+                <Car className="h-3.5 w-3.5 text-lime-600 dark:text-lime-400" />
+                Dealerships Welcome
+              </div>
+            </div>
+
+            {/* Distance badge — top-left (when route available) */}
+            {quoteResult && (
+              <div className="absolute top-3 left-3 z-10">
+                <Badge variant="secondary" className="gap-2 px-3 py-1.5 backdrop-blur bg-white/95 dark:bg-slate-900/95 shadow-lg border border-slate-200 dark:border-slate-700">
+                  <Ruler className="h-3.5 w-3.5 text-lime-500" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    {Math.round(quoteResult.distanceMiles)} miles
+                  </span>
+                </Badge>
+              </div>
+            )}
+
+            {/* Route label — bottom-left (when route available) */}
+            {quoteResult && (
+              <div className="absolute bottom-3 left-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
+                <Navigation className="h-4 w-4 text-lime-500" />
+                {pickupAddress || 'From'} → {dropoffAddress || 'To'}
+              </div>
+            )}
+
+            {/* Zone legend — bottom-right */}
+            <div className="absolute bottom-3 right-3 z-10">
+              <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-[9px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
+                <span className="w-2.5 h-2.5 rounded-sm bg-[#39FF14] inline-block shrink-0" />
+                Green area = Pickup Zone
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== SECTION 3 — Price Estimate ===== */}
+        <section id="estimate" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+          <Card className="rounded-2xl border-slate-200/70 dark:border-slate-800 overflow-hidden">
+            <CardContent className="p-5 sm:p-6">
+              {!quoteResult ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                    <Ruler className="h-5 w-5 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">Estimated Price</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Enter locations above for estimate
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div className="flex items-start justify-between gap-4">
                     <div>
-                      <h3 className="text-2xl font-black text-slate-900 dark:text-white">
+                      <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                         Estimated Price
                       </h3>
-                      <div className="flex items-center gap-2 mt-2 text-slate-500 dark:text-slate-400 font-semibold text-sm">
-                        <span>From</span>
-                        <ArrowRight className="h-3 w-3" />
-                        <span>To</span>
-                      </div>
-
-                      <Badge variant="secondary" className="mt-4 gap-2 px-3 py-2">
-                        <Ruler className="h-4 w-4 text-lime-500" />
+                      <Badge variant="secondary" className="mt-2 gap-1.5 px-3 py-1.5">
+                        <Ruler className="h-3.5 w-3.5 text-lime-500" />
                         <span className="text-[11px] font-black uppercase tracking-widest">
-                          {quoteResult ? `${Math.round(quoteResult.distanceMiles)} miles` : '— miles'}
+                          {Math.round(quoteResult.distanceMiles)} miles
                         </span>
                       </Badge>
                     </div>
-
-                    <div className="text-left sm:text-right">
-                      <p className="text-4xl font-black text-lime-500">
-                        {quoteResult ? `$${quoteResult.estimatedPrice.toFixed(2)}` : ''}
+                    <div className="text-right shrink-0">
+                      <p className="text-3xl sm:text-4xl font-black text-lime-500">
+                        ${quoteResult.estimatedPrice.toFixed(2)}
                       </p>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
                         Total Estimate
                       </p>
                     </div>
                   </div>
 
-                  <div className="space-y-4 py-6 border-y border-slate-100 dark:border-slate-800">
-                    {quoteResult?.feesBreakdown && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                          Base Transportation
-                        </span>
-                        <span className="font-black text-slate-900 dark:text-white">
-                          ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  {quoteResult?.feesBreakdown && (
+                    <div className="flex justify-between items-center py-3 border-t border-slate-100 dark:border-slate-800">
+                      <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
+                        Base Transportation
+                      </span>
+                      <span className="font-black text-sm text-slate-900 dark:text-white">
+                        ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Disclaimer */}
-                  <div className="mt-6 flex gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30">
-                    <Info className="h-5 w-5 text-amber-500 shrink-0" />
-                    <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
+                  <div className="flex gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                    <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
                       Estimate only. Final scheduling depends on driver availability and operational policy.
                     </p>
                   </div>
-                </div>
 
-                {/* Out of zone — red error overlay */}
-                {pickupInZone === false && quoteResult && (
-                  <div className="mt-6 p-5 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-200 dark:border-red-900/30">
-                    <div className="flex gap-3">
-                      <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                          Pickup Outside Our Current Zones
-                        </h4>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-normal mt-1">
-                          Must be in our Westside zone. Service isn&apos;t available for this pickup area yet — we&apos;re expanding soon!
+                  {/* Out of zone error */}
+                  {pickupInZone === false && (
+                    <div className="p-3 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-200 dark:border-red-900/30">
+                      <div className="flex gap-2">
+                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-normal">
+                          Pickup is outside our Westside zone. Service isn&apos;t available here yet.
                         </p>
-                        <div className="flex flex-col sm:flex-row gap-2 mt-4">
-                          <a
-                            href="#dealers"
-                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition text-sm"
-                          >
-                            Join Waitlist
-                            <ArrowRight className="h-4 w-4" />
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handlePickupClear();
-                              handleDropoffClear();
-                            }}
-                            className="inline-flex items-center justify-center gap-1 px-4 py-2.5 rounded-2xl text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
-                          >
-                            Try a Different Pickup
-                          </button>
-                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Link
+                      to={pickupInZone !== false ? "/quote-details" : "#"}
+                      state={
+                        pickupInZone !== false
+                          ? { quote: quoteResult, pickupCoords, dropoffCoords, pickupAddress, dropoffAddress }
+                          : undefined
+                      }
+                      onClick={(e) => { if (pickupInZone === false) e.preventDefault(); }}
+                      className={`flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm ${
+                        pickupInZone !== false
+                          ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
+                          : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
+                      }`}
+                    >
+                      Continue
+                    </Link>
+                    <Button variant="outline" className="flex-1 py-3.5 rounded-2xl font-extrabold text-sm">
+                      Save Quote
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* ===== SECTION 4 — Business Account Introduction ===== */}
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <div className="max-w-3xl">
+            <Badge variant="secondary" className="gap-2 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+              <Building className="h-3 w-3 text-lime-500" />
+              Business Signup
+            </Badge>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight mt-4">
+              Create your account
+            </h2>
+            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 mt-3 leading-relaxed">
+              Need drivers for vehicle delivery? Pick your company from our directory — it auto-fills everything. Add a contact person. Submitted? Stays Pending Approval till an admin approves.
+            </p>
+
+            {/* Feature highlights */}
+            <div className="mt-8 space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                  <ClipboardCheck className="h-5 w-5 text-lime-500" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Directory-based Onboarding
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                    Select your dealership from search results. We auto-fill business details and capture a contact person.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                  <Lock className="h-5 w-5 text-lime-500" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Admin Approval
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                    Dealer access is granted after Admin review. Notifications are email-first (SMS optional).
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                  <Truck className="h-5 w-5 text-lime-500" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    Schedule Drivers Instantly
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                    Once approved, create delivery requests with instant price estimates and real-time tracking.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== SECTION 5 — How the Service Works ===== */}
+        <section id="how" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <div className="max-w-3xl">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
+              How It Works
+            </h2>
+            <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
+              We handle every mile like it&apos;s ours.
+            </p>
+
+            {/* Delivery step cards */}
+            <div className="mt-8 space-y-3">
+              {deliverySteps.map((step) => {
+                const Icon = step.icon;
+                return (
+                  <div
+                    key={step.step}
+                    className="flex items-start gap-3.5 p-4 rounded-xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800"
+                  >
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <Icon className="h-4 w-4 text-[#00C853]" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Step {step.step}</span>
+                        <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                          {step.title}
+                        </h3>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                        {step.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer text */}
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-6 font-medium">
+              Greater LA only {"\u2022"} 25+ drivers {"\u2022"} No passengers
+            </p>
+          </div>
+        </section>
+
+        {/* ===== SECTION 6 — Signup Form ===== */}
+        <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <div className="max-w-lg mx-auto">
+            <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <CardContent className="p-6 sm:p-8">
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+                  Signup
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                  Create an account and start using the service.
+                </p>
+
+                {!dealerLeadSuccess ? (
+                  <form onSubmit={handleDealerLeadSubmit} className="mt-6 space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sec6BusinessName" className="text-xs font-bold">Business Name *</Label>
+                      <div className="relative">
+                        <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                          id="sec6BusinessName"
+                          value={dealerLeadForm.businessName}
+                          onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, businessName: e.target.value })}
+                          placeholder="ABC Motors"
+                          className="h-11 pl-10 rounded-2xl text-sm"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sec6ContactName" className="text-xs font-bold">Contact Name</Label>
+                      <div className="relative">
+                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                          id="sec6ContactName"
+                          value={dealerLeadForm.contactName}
+                          onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, contactName: e.target.value })}
+                          placeholder="Jane Doe"
+                          className="h-11 pl-10 rounded-2xl text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sec6Phone" className="text-xs font-bold">Phone</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                          id="sec6Phone"
+                          type="tel"
+                          value={dealerPhoneDisplay}
+                          onChange={handleDealerPhoneChange}
+                          placeholder="(555) 555-5555"
+                          className="h-11 pl-10 rounded-2xl text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sec6Email" className="text-xs font-bold">Email *</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                          id="sec6Email"
+                          type="email"
+                          value={dealerLeadForm.email}
+                          onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, email: e.target.value })}
+                          placeholder="owner@abcmotors.com"
+                          className="h-11 pl-10 rounded-2xl text-sm"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sec6Message" className="text-xs font-bold">Message</Label>
+                      <Textarea
+                        id="sec6Message"
+                        value={dealerLeadForm.message}
+                        onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, message: e.target.value })}
+                        placeholder="Tell us about your needs..."
+                        className="rounded-2xl min-h-[80px] text-sm"
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={submitDealerLead.isPending}
+                      className="w-full bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold gap-2 h-12 rounded-2xl text-sm"
+                    >
+                      {submitDealerLead.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
+                      ) : (
+                        <><Send className="h-4 w-4" /> Get Started</>
+                      )}
+                    </Button>
+                  </form>
+                ) : (
+                  <div className="mt-6 p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="h-6 w-6 text-emerald-500 shrink-0" />
+                      <div>
+                        <div className="font-extrabold text-lg text-slate-900 dark:text-white">Thank you!</div>
+                        <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">We&apos;ve received your request and will be in touch soon.</div>
                       </div>
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </div>
+        </section>
 
-                {/* Desktop action buttons */}
-                <div className="hidden sm:flex mt-8 gap-3">
-                  <Link
-                    to={quoteResult && pickupInZone !== false ? "/quote-details" : "#"}
-                    state={
-                      quoteResult && pickupInZone !== false
-                        ? {
-                            quote: quoteResult,
-                            pickupCoords,
-                            dropoffCoords,
-                            pickupAddress,
-                            dropoffAddress,
-                          }
-                        : undefined
-                    }
-                    onClick={(e) => {
-                      if (!quoteResult || pickupInZone === false) e.preventDefault();
-                    }}
-                    className={`flex-1 font-extrabold rounded-2xl py-4 text-center transition shadow-lg
-                    ${
-                      quoteResult && pickupInZone !== false
-                        ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
-                        : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
-                    }`}
-                  >
-                    Continue
-                  </Link>
-                  <Button
-                    variant="outline"
-                    className="flex-1 py-4 rounded-2xl font-extrabold"
-                  >
-                    Save Quote
-                  </Button>
+        {/* ===== SECTION 7 — Driver Recruitment ===== */}
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <div className="max-w-lg mx-auto">
+            <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <CardContent className="p-6 sm:p-8">
+                <div className="w-12 h-12 rounded-xl bg-lime-500/15 flex items-center justify-center mb-4">
+                  <User className="h-6 w-6 text-lime-500" />
                 </div>
 
-                {/* Mobile action buttons */}
-                <div className="sm:hidden mt-8 flex flex-col gap-3">
-                  <Link
-                    to={quoteResult && pickupInZone !== false ? "/quote-details" : "#"}
-                    state={
-                      quoteResult && pickupInZone !== false
-                        ? {
-                            quote: quoteResult,
-                            pickupCoords,
-                            dropoffCoords,
-                            pickupAddress,
-                            dropoffAddress,
-                          }
-                        : undefined
-                    }
-                    onClick={(e) => {
-                      if (!quoteResult || pickupInZone === false) e.preventDefault();
-                    }}
-                    className={`font-extrabold rounded-2xl py-4 text-center transition shadow-lg ${
-                      quoteResult && pickupInZone !== false
-                        ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
-                        : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
-                    }`}
-                  >
-                    Continue
-                  </Link>
-                  <Button
-                    variant="outline"
-                    className="py-4 rounded-2xl font-extrabold"
-                  >
-                    Save Quote
-                  </Button>
+                <h2 className="text-2xl font-black leading-tight text-slate-900 dark:text-white">
+                  Drivers
+                </h2>
+                <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mt-2">
+                  Move Cars in LA — Schedule Ahead, Know Your Pay
+                </h3>
+
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">25+ years old, clean driving record</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Greater LA area only</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">No own car needed — use the customer&apos;s vehicle</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">No passengers — just you and the car</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Plan your routes, keep all tips</p>
+                  </div>
                 </div>
 
-                <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Service type and scheduling come after you review the estimate.
-                </p>
-              </div>
+                <div className="mt-6 space-y-2.5">
+                  <Link
+                    to="/driver-onboarding"
+                    className="w-full py-3 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    Join the Waitlist
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <Link
+                    to="/auth/dealer-signin"
+                    className="w-full py-3 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    Already In? Log In
+                    <LogIn className="h-4 w-4 text-lime-500" />
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {/* ===== CONDITIONAL: Dealer Lead (separate from 7 sections) ===== */}
+        {settings?.dealerLeadEnabled && (
+          <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 border-t border-slate-200 dark:border-slate-800">
+            <div className="max-w-lg mx-auto">
+              <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <CardContent className="p-6 sm:p-8">
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                    Get Started
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                    {settings?.dealerLeadCtaDescription || 'Request a quick call — get onboarded fast.'}
+                  </p>
+
+                  {!dealerLeadSuccess ? (
+                    <form onSubmit={handleDealerLeadSubmit} className="mt-5 space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="dlBusinessName" className="text-xs font-bold">Business Name *</Label>
+                        <div className="relative">
+                          <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Input
+                            id="dlBusinessName"
+                            value={dealerLeadForm.businessName}
+                            onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, businessName: e.target.value })}
+                            placeholder="ABC Motors"
+                            className="h-11 pl-10 rounded-2xl text-sm"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="dlContactName" className="text-xs font-bold">Contact Name</Label>
+                        <div className="relative">
+                          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Input
+                            id="dlContactName"
+                            value={dealerLeadForm.contactName}
+                            onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, contactName: e.target.value })}
+                            placeholder="who we call — e.g., Jane Doe"
+                            className="h-11 pl-10 rounded-2xl text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="dlPhone" className="text-xs font-bold">Phone</Label>
+                          <div className="relative">
+                            <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                              id="dlPhone"
+                              type="tel"
+                              value={dealerPhoneDisplay}
+                              onChange={handleDealerPhoneChange}
+                              placeholder="(555) 555-5555"
+                              className="h-11 pl-10 rounded-2xl text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="dlEmail" className="text-xs font-bold">Email *</Label>
+                          <div className="relative">
+                            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                              id="dlEmail"
+                              type="email"
+                              value={dealerLeadForm.email}
+                              onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, email: e.target.value })}
+                              placeholder="owner@abcmotors.com"
+                              className="h-11 pl-10 rounded-2xl text-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="dlMessage" className="text-xs font-bold">Message</Label>
+                        <Textarea
+                          id="dlMessage"
+                          value={dealerLeadForm.message}
+                          onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, message: e.target.value })}
+                          placeholder="Tell us about your needs..."
+                          className="rounded-2xl min-h-[70px] text-sm"
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        disabled={submitDealerLead.isPending}
+                        className="w-full bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold gap-2 h-11 rounded-2xl text-sm"
+                      >
+                        {submitDealerLead.isPending ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
+                        ) : (
+                          <><Send className="h-4 w-4" /> Get Started</>
+                        )}
+                      </Button>
+                    </form>
+                  ) : (
+                    <div className="mt-5 p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="h-6 w-6 text-emerald-500 shrink-0" />
+                        <div>
+                          <div className="font-extrabold text-lg text-slate-900 dark:text-white">Thank you!</div>
+                          <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">We&apos;ve received your request and will be in touch soon.</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 text-center">
+                    <Link
+                      to="/auth/dealer-signin"
+                      className="text-sm font-bold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                    >
+                      Signup &rarr;
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </Card>
-        </section>
+          </section>
         )}
-
-        {/* ===== DEALER SIGNUP (embedded, unconditional) ===== */}
-        <section id="dealers" className="relative w-full max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <DealerSignupForm isLoaded={isLoaded} embedded={true} />
-        </section>
 
         {/* ===== FUNDRAISING / INVESTOR SECTION ===== */}
         {settings?.fundraisingEnabled && (
@@ -1240,7 +1190,6 @@ export default function LandingPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Investor Deck Download */}
               {settings?.investorDeckUrl && (
                 <Card className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow">
                   <CardContent className="p-8">
@@ -1268,7 +1217,6 @@ export default function LandingPage() {
                 </Card>
               )}
 
-              {/* Investor Lead Form */}
               {settings?.investorLeadEnabled && (
                 <Card className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow">
                   <CardContent className="p-8">
