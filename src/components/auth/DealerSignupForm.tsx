@@ -616,7 +616,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       </section>}
 
       {!registrationComplete ? (
-        <section className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <section className={embedded ? "grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start" : "mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"}>
           {/* Left: Directory search + autofill */}
           <div className="lg:col-span-7">
             <Card className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 hover-lift">

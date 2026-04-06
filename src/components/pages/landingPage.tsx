@@ -877,13 +877,13 @@ export default function LandingPage() {
         </section>
 
         {/* ===== SECTION 6 — Signup Form (Dealer Signup) ===== */}
-        <section id="dealers" className="max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+        <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <DealerSignupForm isLoaded={isLoaded} embedded={true} />
         </section>
 
         {/* ===== SECTION 7 — Driver Recruitment ===== */}
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <div className="max-w-lg mx-auto">
+          <div className="max-w-3xl mx-auto">
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <CardContent className="p-6 sm:p-8">
                 <div className="w-12 h-12 rounded-xl bg-lime-500/15 flex items-center justify-center mb-4">
@@ -944,10 +944,10 @@ export default function LandingPage() {
         {/* ===== CONDITIONAL: Dealer Lead (separate from 7 sections) ===== */}
         {settings?.dealerLeadEnabled && (
           <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14 border-t border-slate-200 dark:border-slate-800">
-            <div className="max-w-lg mx-auto">
+            <div className="max-w-3xl mx-auto">
               <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                 <CardContent className="p-6 sm:p-8">
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
                     Get Started
                   </h3>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
