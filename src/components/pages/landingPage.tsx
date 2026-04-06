@@ -657,7 +657,7 @@ export default function LandingPage() {
 
         {/* ===== SECTION 2 — Map View ===== */}
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-6">
-          <div className="relative w-full h-[340px] sm:h-[420px] lg:h-[500px] rounded-3xl overflow-hidden">
+          <div className="relative w-full h-[340px] sm:h-[420px] lg:h-[560px] rounded-2xl overflow-hidden">
             <RouteMap
               pickup={pickupCoords}
               dropoff={dropoffCoords}

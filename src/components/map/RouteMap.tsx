@@ -189,7 +189,13 @@ export default function RouteMap({
     });
 
     if (hasCoords) {
-      map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
+      // Use proportional padding based on container size so polygon is never clipped
+      const mapDiv = map.getDiv();
+      const w = mapDiv.clientWidth;
+      const h = mapDiv.clientHeight;
+      const padV = Math.round(h * 0.12); // 12% vertical padding
+      const padH = Math.round(w * 0.08); // 8% horizontal padding
+      map.fitBounds(bounds, { top: padV, right: padH, bottom: padV, left: padH });
     }
   }, [map, fitZonesBounds, zones, directions, pickup, dropoff]);
 
