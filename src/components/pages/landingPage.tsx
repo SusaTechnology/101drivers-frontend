@@ -790,22 +790,17 @@ export default function LandingPage() {
 
                   {/* Action buttons */}
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <Link
-                      to={pickupInZone !== false ? "/quote-details" : "#"}
-                      state={
-                        pickupInZone !== false
-                          ? { quote: quoteResult, pickupCoords, dropoffCoords, pickupAddress, dropoffAddress }
-                          : undefined
-                      }
+                    <a
+                      href="#dealers"
                       onClick={(e) => { if (pickupInZone === false) e.preventDefault(); }}
-                      className={`flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm ${
+                      className={`flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm block ${
                         pickupInZone !== false
                           ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
                           : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
                       }`}
                     >
-                      Continue
-                    </Link>
+                      Continue — Sign Up
+                    </a>
                     <Button variant="outline" className="flex-1 py-3.5 rounded-2xl font-extrabold text-sm">
                       Save Quote
                     </Button>
