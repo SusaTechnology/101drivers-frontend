@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavBar } from "../shared/layout/navbar";
+import { DealerSignupForm } from "../auth/DealerSignupForm";
 import RouteMap from '@/components/map/RouteMap';
 import LocationAutocomplete from "../map/LocationAutocomplete";
 import { useJsApiLoader } from "@react-google-maps/api";
@@ -867,7 +868,7 @@ export default function LandingPage() {
             <div className="space-y-5">
               <Badge variant="secondary" className="gap-2 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest">
                 <Building className="h-3.5 w-3.5 text-lime-500" />
-                Business Accounts
+                Business Signup
               </Badge>
               <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white leading-tight">
                 Create Your Account
@@ -984,146 +985,10 @@ export default function LandingPage() {
           </p>
         </section>
 
-        {/* ===== SECTION 6: DEALER LEAD FORM (Get Started) ===== */}
-        {settings?.dealerLeadEnabled && (
-        <section
-          id="dealers"
-          className="relative grid grid-cols-1 lg:grid-cols-2 gap-8 px-6 lg:px-8 py-16 lg:py-20 bg-white/60 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800"
-        >
-          <div className="space-y-7">
-            <div>
-              <h2 className="text-4xl font-black text-slate-900 dark:text-white">
-                Get Started
-              </h2>
-              <p className="text-slate-600 dark:text-slate-400 text-lg mt-3">
-                Request a quick call—get onboarded fast.
-              </p>
-            </div>
-
-            {/* Dealer Lead Form */}
-            {!dealerLeadSuccess ? (
-              <form onSubmit={handleDealerLeadSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="businessName" className="text-xs font-bold">Business Name *</Label>
-                  <Input
-                    id="businessName"
-                    value={dealerLeadForm.businessName}
-                    onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, businessName: e.target.value })}
-                    placeholder="e.g., ABC Motors"
-                    className="h-12 rounded-2xl"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contactName" className="text-xs font-bold">Contact Name *</Label>
-                  <Input
-                    id="contactName"
-                    value={dealerLeadForm.contactName}
-                    onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, contactName: e.target.value })}
-                    placeholder="Who we call—e.g., Jane Doe"
-                    className="h-12 rounded-2xl"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dealerPhone" className="text-xs font-bold">Phone *</Label>
-                  <Input
-                    id="dealerPhone"
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]{10}"
-                    maxLength={14}
-                    value={dealerPhoneDisplay}
-                    onChange={handleDealerPhoneChange}
-                    placeholder="(555) 555-5555"
-                    className="h-12 rounded-2xl"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dealerEmail" className="text-xs font-bold">Email *</Label>
-                  <Input
-                    id="dealerEmail"
-                    type="email"
-                    value={dealerLeadForm.email}
-                    onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, email: e.target.value })}
-                    placeholder="owner@abcmotors.com"
-                    className="h-12 rounded-2xl"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dealerMessage" className="text-xs font-bold">Message</Label>
-                  <Textarea
-                    id="dealerMessage"
-                    value={dealerLeadForm.message}
-                    onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, message: e.target.value })}
-                    placeholder="Tell us about your dealership..."
-                    className="rounded-2xl min-h-[80px]"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button
-                    type="submit"
-                    disabled={submitDealerLead.isPending}
-                    className="bg-lime-500 text-slate-950 hover:bg-lime-600 font-extrabold gap-2"
-                  >
-                    {submitDealerLead.isPending ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
-                    ) : (
-                      <><Send className="h-4 w-4" /> Get Started</>
-                    )}
-                  </Button>
-                  <Link
-                    to="/auth/dealer-signin"
-                    className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold text-base transition"
-                  >
-                    Dealer Sign In
-                    <LogIn className="h-4 w-4 text-lime-500" />
-                  </Link>
-                </div>
-              </form>
-            ) : (
-              <div className="p-6 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="h-6 w-6 text-emerald-500" />
-                  <div>
-                    <div className="font-extrabold text-slate-900 dark:text-white">Thank you!</div>
-                    <div className="text-sm text-slate-600 dark:text-slate-400">We've received your request and will be in touch soon.</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Dealer access is granted after Admin approval. Notifications are
-              email-first (SMS optional if enabled by policy).
-            </p>
-          </div>
-
-          <Card className="bg-slate-50 dark:bg-slate-950 p-10 rounded-3xl relative overflow-hidden border-slate-200 dark:border-slate-800">
-            <div className="absolute -bottom-10 -right-10 opacity-10 text-slate-900 dark:text-white transform rotate-12">
-              <Store className="h-64 w-64" />
-            </div>
-
-            <div className="relative z-10">
-              <Badge
-                variant="secondary"
-                className="gap-2 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest"
-              >
-                Dealer workflow
-              </Badge>
-              <h3 className="text-3xl font-black mt-5 text-slate-900 dark:text-white">
-                Directory-based onboarding
-              </h3>
-              <p className="text-slate-600 dark:text-slate-400 text-lg leading-relaxed mt-3 max-w-md">
-                Select your dealership from search results. We auto-fill
-                business details and capture a contact person.
-              </p>
-            </div>
-          </Card>
+        {/* ===== SECTION 6: DEALER SIGNUP (embedded) ===== */}
+        <section id="dealers" className="relative w-full max-w-[1100px] mx-auto px-6 lg:px-8 py-14 lg:py-20">
+          <DealerSignupForm isLoaded={isLoaded} embedded={true} />
         </section>
-        )}
 
         {/* ===== SECTION 7: DRIVER CTA (moved from top hero) ===== */}
         <section className="relative flex flex-col items-center justify-center text-center px-6 py-16 lg:py-24 min-h-[50vh]">
