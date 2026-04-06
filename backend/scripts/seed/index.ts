@@ -69,9 +69,11 @@ type DemoRefs = {
   driver3UserId: string;
   driver3Id: string;
   pricingConfigId: string;
-  sfDistrictId: string;
+  westsideDistrictId: string;
+  pasadenaDistrictId: string;
+  midtownDistrictId: string;
   southBayDistrictId: string;
-  eastBayDistrictId: string;
+  greaterLaDistrictId: string;
 };
 
 export async function seedAll(bcryptSalt: Salt) {
@@ -265,18 +267,90 @@ async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {
     licensePlate: "CA-GGA-303",
   });
 
-  const sfDistrict = await prisma.serviceDistrict.upsert({
-    where: { code: "SF_BAY" },
+  const westsideDistrict = await prisma.serviceDistrict.upsert({
+    where: { code: "WESTSIDE" },
     update: {
-      name: "San Francisco Bay",
+      name: "West Side LA",
       active: true,
-      geoJson: { label: "Demo SF Bay polygon" },
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "West Side LA" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.52, 34.02], [-118.40, 34.02], [-118.40, 34.08], [-118.52, 34.08], [-118.52, 34.02]]],
+        },
+      },
     },
     create: {
-      code: "SF_BAY",
-      name: "San Francisco Bay",
+      code: "WESTSIDE",
+      name: "West Side LA",
       active: true,
-      geoJson: { label: "Demo SF Bay polygon" },
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "West Side LA" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.52, 34.02], [-118.40, 34.02], [-118.40, 34.08], [-118.52, 34.08], [-118.52, 34.02]]],
+        },
+      },
+    },
+  });
+
+  const pasadenaDistrict = await prisma.serviceDistrict.upsert({
+    where: { code: "PASADENA" },
+    update: {
+      name: "Pasadena",
+      active: true,
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "Pasadena" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.18, 34.13], [-118.08, 34.13], [-118.08, 34.22], [-118.18, 34.22], [-118.18, 34.13]]],
+        },
+      },
+    },
+    create: {
+      code: "PASADENA",
+      name: "Pasadena",
+      active: true,
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "Pasadena" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.18, 34.13], [-118.08, 34.13], [-118.08, 34.22], [-118.18, 34.22], [-118.18, 34.13]]],
+        },
+      },
+    },
+  });
+
+  const midtownDistrict = await prisma.serviceDistrict.upsert({
+    where: { code: "MIDTOWN" },
+    update: {
+      name: "Midtown LA",
+      active: true,
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "Midtown LA" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.35, 34.04], [-118.25, 34.04], [-118.25, 34.10], [-118.35, 34.10], [-118.35, 34.04]]],
+        },
+      },
+    },
+    create: {
+      code: "MIDTOWN",
+      name: "Midtown LA",
+      active: true,
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "Midtown LA" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.35, 34.04], [-118.25, 34.04], [-118.25, 34.10], [-118.35, 34.10], [-118.35, 34.04]]],
+        },
+      },
     },
   });
 
@@ -285,51 +359,79 @@ async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {
     update: {
       name: "South Bay",
       active: true,
-      geoJson: { label: "Demo South Bay polygon" },
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "South Bay" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.42, 33.82], [-118.33, 33.82], [-118.33, 33.90], [-118.42, 33.90], [-118.42, 33.82]]],
+        },
+      },
     },
     create: {
       code: "SOUTH_BAY",
       name: "South Bay",
       active: true,
-      geoJson: { label: "Demo South Bay polygon" },
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "South Bay" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.42, 33.82], [-118.33, 33.82], [-118.33, 33.90], [-118.42, 33.90], [-118.42, 33.82]]],
+        },
+      },
     },
   });
 
-  const eastBayDistrict = await prisma.serviceDistrict.upsert({
-    where: { code: "EAST_BAY" },
+  const greaterLaDistrict = await prisma.serviceDistrict.upsert({
+    where: { code: "GREATER_LA" },
     update: {
-      name: "East Bay",
+      name: "Greater LA Core",
       active: true,
-      geoJson: { label: "Demo East Bay polygon" },
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "Greater LA Core" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.35, 33.90], [-118.20, 33.90], [-118.20, 34.10], [-118.35, 34.10], [-118.35, 33.90]]],
+        },
+      },
     },
     create: {
-      code: "EAST_BAY",
-      name: "East Bay",
+      code: "GREATER_LA",
+      name: "Greater LA Core",
       active: true,
-      geoJson: { label: "Demo East Bay polygon" },
+      geoJson: {
+        type: "Feature",
+        properties: { type: "pickup_zone", zone: "Greater LA Core" },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[-118.35, 33.90], [-118.20, 33.90], [-118.20, 34.10], [-118.35, 34.10], [-118.35, 33.90]]],
+        },
+      },
     },
   });
 
   await ensureDriverPreferences(driver1.id, {
-    city: "San Francisco",
+    city: "Santa Monica",
     radiusMiles: 40,
-    districts: [sfDistrict.id, southBayDistrict.id],
+    districts: [westsideDistrict.id, midtownDistrict.id, greaterLaDistrict.id],
     emailEnabled: true,
     smsEnabled: true,
   });
 
   await ensureDriverPreferences(driver2.id, {
-    city: "San Jose",
+    city: "Torrance",
     radiusMiles: 50,
-    districts: [southBayDistrict.id],
+    districts: [southBayDistrict.id, greaterLaDistrict.id],
     emailEnabled: true,
     smsEnabled: false,
   });
 
   await ensureDriverPreferences(driver3.id, {
-    city: "Oakland",
+    city: "Pasadena",
     radiusMiles: 45,
-    districts: [eastBayDistrict.id, sfDistrict.id],
+    districts: [pasadenaDistrict.id, midtownDistrict.id],
     emailEnabled: true,
     smsEnabled: true,
   });
@@ -351,9 +453,11 @@ async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {
     driver3UserId: driver3User.id,
     driver3Id: driver3.id,
     pricingConfigId: pricingConfig.id,
-    sfDistrictId: sfDistrict.id,
+    westsideDistrictId: westsideDistrict.id,
+    pasadenaDistrictId: pasadenaDistrict.id,
+    midtownDistrictId: midtownDistrict.id,
     southBayDistrictId: southBayDistrict.id,
-    eastBayDistrictId: eastBayDistrict.id,
+    greaterLaDistrictId: greaterLaDistrict.id,
   };
 }
 

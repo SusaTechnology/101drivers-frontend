@@ -132,6 +132,48 @@ export class ServiceDistrictService extends ServiceDistrictServiceBase {
     target[field] = this.trimRequiredString(raw).toUpperCase();
   }
 
+  async checkPointInPickupZones(
+    lat: number,
+    lng: number,
+  ): Promise<{ inZone: boolean; zones: Array<{ id: string; code: string; name: string }> }> {
+    const districts = await this.prisma.serviceDistrict.findMany({
+      where: { active: true },
+      select: { id: true, code: true, name: true, geoJson: true },
+    });
+
+    const matchingZones: Array<{ id: string; code: string; name: string }> = [];
+
+    // GeoJSON coordinates use [lng, lat] order; our API uses (lat, lng)
+    const point: [number, number] = [lng, lat];
+
+    for (const district of districts) {
+      if (!district.geoJson) continue;
+
+      const geo = district.geoJson as any;
+
+      try {
+        const polygon: [number, number][] = geo?.geometry?.coordinates?.[0];
+        if (!polygon || !Array.isArray(polygon)) continue;
+
+        if (pointInPolygon(point, polygon)) {
+          matchingZones.push({
+            id: district.id,
+            code: district.code,
+            name: district.name,
+          });
+        }
+      } catch {
+        // Skip districts with malformed geoJson
+        continue;
+      }
+    }
+
+    return {
+      inZone: matchingZones.length > 0,
+      zones: matchingZones,
+    };
+  }
+
   private normalizeUpdateStringField(
     target: Record<string, any>,
     field: string
@@ -152,4 +194,16 @@ export class ServiceDistrictService extends ServiceDistrictServiceBase {
 
     target[field] = this.trimRequiredString(raw);
   }
+}
+
+function pointInPolygon(point: [number, number], polygon: [number, number][]): boolean {
+  const [x, y] = point;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }

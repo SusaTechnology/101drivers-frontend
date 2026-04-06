@@ -32,4 +32,14 @@ export class ServiceDistrictPublicController {
       },
     });
   }
+
+  @common.Get('check')
+  @swagger.ApiQuery({ name: 'lat', type: Number, required: true })
+  @swagger.ApiQuery({ name: 'lng', type: Number, required: true })
+  async checkPickupZone(
+    @common.Query('lat') lat: number,
+    @common.Query('lng') lng: number,
+  ): Promise<{ inZone: boolean; zones: Array<{ id: string; code: string; name: string }> }> {
+    return this.service.checkPointInPickupZones(lat, lng);
+  }
 }

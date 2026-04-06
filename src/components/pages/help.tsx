@@ -172,7 +172,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
         {/* Tab switcher */}
         <div className="flex gap-2 mb-8">
           <Link
-            to="/help/customer"
+            to="/help-customer"
             className={`px-5 py-3 rounded-2xl text-sm font-bold transition-all ${
               isCustomer
                 ? 'bg-lime-500 text-slate-950 shadow-lg shadow-lime-500/20'
@@ -183,7 +183,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
             Customer Help
           </Link>
           <Link
-            to="/help/driver"
+            to="/help-driver"
             className={`px-5 py-3 rounded-2xl text-sm font-bold transition-all ${
               isDriver
                 ? 'bg-lime-500 text-slate-950 shadow-lg shadow-lime-500/20'

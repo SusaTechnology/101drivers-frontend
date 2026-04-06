@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import PickupZoneOverlay from './PickupZoneOverlay';
 
 const containerStyle = {
   width: '100%',
@@ -19,6 +20,7 @@ interface RouteMapProps {
   selectedRouteIndex?: number; // which route to highlight (default 0)
   isLoaded: boolean;
   onLoad?: (map: google.maps.Map) => void;
+  zones?: any[];
   /**
    * Set to true if you want to display alternative routes (only used when directionsResult is not provided).
    */
@@ -46,6 +48,7 @@ export default function RouteMap({
   selectedRouteIndex = 0,
   isLoaded,
   onLoad,
+  zones,
   showAlternatives = false,
   points = [],
   mapType = 'roadmap',
@@ -249,6 +252,9 @@ export default function RouteMap({
           }}
         />
       )}
+
+      {/* Pickup zone overlay polygons */}
+      {zones && zones.length > 0 && <PickupZoneOverlay zones={zones} />}
     </GoogleMap>
   );
 }

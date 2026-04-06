@@ -14,37 +14,6 @@ interface LocationAutocompleteProps {
   disabled?: boolean;
 }
 
-// California bounds for strict filtering
-const CALIFORNIA_BOUNDS = {
-  north: 42.0095,
-  south: 32.5288,
-  east: -114.1312,
-  west: -124.4820,
-};
-
-// Check if prediction is in California
-function isCaliforniaPrediction(prediction: google.maps.places.AutocompletePrediction): boolean {
-  // Check the full description first (most reliable)
-  const description = prediction.description || '';
-  if (description.includes(', CA,') || description.includes(', CA ') || description.includes(', California')) {
-    return true;
-  }
-  
-  // Check if any term contains CA or California
-  const hasCA = prediction.terms.some(
-    (term) => term.value === 'CA' || term.value === 'California'
-  );
-  if (hasCA) return true;
-  
-  // Also check structured formatting
-  const secondaryText = prediction.structured_formatting?.secondary_text || '';
-  if (secondaryText.includes('CA') || secondaryText.includes('California')) {
-    return true;
-  }
-  
-  return false;
-}
-
 export default function LocationAutocomplete({
   value,
   onChange,
@@ -106,7 +75,7 @@ export default function LocationAutocomplete({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch predictions with CA-only filtering
+  // Fetch predictions (US addresses only, no state restriction)
   const fetchPredictions = useCallback((input: string) => {
     if (!autocompleteServiceRef.current || !input.trim()) {
       setPredictions([]);
@@ -119,12 +88,8 @@ export default function LocationAutocomplete({
     autocompleteServiceRef.current.getPlacePredictions(
       {
         input,
-        types: ['geocode', 'establishment'], // Include both addresses and businesses
+        types: ['geocode', 'establishment'],
         componentRestrictions: { country: 'us' },
-        bounds: new google.maps.LatLngBounds(
-          { lat: CALIFORNIA_BOUNDS.south, lng: CALIFORNIA_BOUNDS.west },
-          { lat: CALIFORNIA_BOUNDS.north, lng: CALIFORNIA_BOUNDS.east }
-        ),
       },
       (results, status) => {
         setIsLoading(false);
@@ -135,13 +100,8 @@ export default function LocationAutocomplete({
           return;
         }
 
-        // Filter to ONLY California addresses
-        const caPredictions = results.filter(isCaliforniaPrediction);
-        
-        console.log(`Fetched ${results.length} predictions, ${caPredictions.length} in California`);
-        
-        setPredictions(caPredictions);
-        setShowDropdown(caPredictions.length > 0);
+        setPredictions(results);
+        setShowDropdown(results.length > 0);
       }
     );
   }, [types]);
@@ -186,7 +146,7 @@ export default function LocationAutocomplete({
 
         const formattedAddress = place.formatted_address || prediction.description;
         
-        console.log('Selected CA address:', formattedAddress);
+        console.log('Selected address:', formattedAddress);
         
         setInputValue(formattedAddress);
         onChangeRef.current(formattedAddress);
@@ -279,7 +239,7 @@ export default function LocationAutocomplete({
             ))
           ) : (
             <div className="p-4 text-center text-sm text-slate-500">
-              No California addresses found
+              No addresses found
             </div>
           )}
         </div>

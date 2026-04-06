@@ -31,6 +31,7 @@ import {
   Gauge,
   FileText,
   CheckCircle,
+  AlertTriangle,
   Settings,
   QrCode,
   Truck,
@@ -60,6 +61,8 @@ import LocationAutocomplete from "../map/LocationAutocomplete";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { useCreate, useDataQuery } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
+import { usePickupZones } from "@/hooks/usePickupZones";
+import { isInPickupZone } from "@/lib/geo-utils";
 
 // Types for landing page settings
 interface LandingPageSettings {
@@ -107,9 +110,12 @@ export default function LandingPage() {
   });
   const quoteLimitReached = quoteAttempts >= QUOTE_MAX_ATTEMPTS;
 
-  // Error states for CA validation
+  // Error states for validation
   const [pickupError, setPickupError] = useState("");
   const [dropoffError, setDropoffError] = useState("");
+
+  // Pickup zone check state (null = not checked yet)
+  const [pickupInZone, setPickupInZone] = useState<boolean | null>(null);
 
   // Lead form states
   const [dealerLeadForm, setDealerLeadForm] = useState<DealerLeadForm>({
@@ -144,6 +150,9 @@ export default function LandingPage() {
   const [dealerLeadSuccess, setDealerLeadSuccess] = useState(false);
   const [investorLeadSuccess, setInvestorLeadSuccess] = useState(false);
 
+  // Fetch pickup zones (public endpoint)
+  const { zones } = usePickupZones();
+
   // Fetch landing page settings (public endpoint, no auth)
   const { data: settings, isLoading: settingsLoading, isError: settingsError, error: settingsErrorMsg } = useDataQuery<LandingPageSettings>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/public/landing-page`,
@@ -165,16 +174,6 @@ export default function LandingPage() {
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
     libraries: ['geometry', 'places'], 
   });
-
-  // Helper to check if address is in California
-  const isAddressInCA = (place: google.maps.places.PlaceResult): boolean => {
-    if (!place.address_components) return false;
-    return place.address_components.some(
-      (comp) =>
-        comp.types.includes('administrative_area_level_1') &&
-        (comp.short_name === 'CA' || comp.long_name === 'California')
-    );
-  };
 
   const getQuote = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/individual/quote-preview`, {
     fetchWithoutRefresh: true,
@@ -201,34 +200,8 @@ export default function LandingPage() {
   });
 
   const handlePickupSelect = useCallback((place: google.maps.places.PlaceResult) => {
-    // Check if this is a NOT_CA error from autocomplete
-    const addressComponents = place.address_components || [];
-    const isNotCAError = addressComponents.some(
-      (comp) => comp.types.includes('non_ca_error')
-    );
-    
-    if (isNotCAError) {
-      setPickupError("Address must be in California");
-      setPickupAddress("");
-      setPickupCoords(null);
-      return;
-    }
-    
-    // Double-check CA validation
-    const isInCalifornia = addressComponents.some(
-      (comp) =>
-        comp.types.includes('administrative_area_level_1') &&
-        (comp.short_name === 'CA' || comp.long_name === 'California')
-    );
-    
-    if (!isInCalifornia) {
-      setPickupError("Address must be in California");
-      setPickupAddress("");
-      setPickupCoords(null);
-      return;
-    }
-    
     setPickupError("");
+    setPickupInZone(null); // reset zone check for new pickup
     if (place.geometry?.location) {
       const lat = place.geometry.location.lat();
       const lng = place.geometry.location.lng();
@@ -240,33 +213,6 @@ export default function LandingPage() {
   }, []);
 
   const handleDropoffSelect = useCallback((place: google.maps.places.PlaceResult) => {
-    // Check if this is a NOT_CA error from autocomplete
-    const addressComponents = place.address_components || [];
-    const isNotCAError = addressComponents.some(
-      (comp) => comp.types.includes('non_ca_error')
-    );
-    
-    if (isNotCAError) {
-      setDropoffError("Address must be in California");
-      setDropoffAddress("");
-      setDropoffCoords(null);
-      return;
-    }
-    
-    // Double-check CA validation
-    const isInCalifornia = addressComponents.some(
-      (comp) =>
-        comp.types.includes('administrative_area_level_1') &&
-        (comp.short_name === 'CA' || comp.long_name === 'California')
-    );
-    
-    if (!isInCalifornia) {
-      setDropoffError("Address must be in California");
-      setDropoffAddress("");
-      setDropoffCoords(null);
-      return;
-    }
-    
     setDropoffError("");
     if (place.geometry?.location) {
       const lat = place.geometry.location.lat();
@@ -285,6 +231,7 @@ export default function LandingPage() {
     setPickupError("");
     setDistance(null);
     setQuoteResult(null);
+    setPickupInZone(null);
   }, []);
 
   // Handle clearing dropoff address
@@ -294,7 +241,16 @@ export default function LandingPage() {
     setDropoffError("");
     setDistance(null);
     setQuoteResult(null);
+    setPickupInZone(null);
   }, []);
+
+  // Check if pickup is in a service zone after quote result
+  useEffect(() => {
+    if (quoteResult && pickupCoords && zones.length > 0) {
+      const { inZone } = isInPickupZone(pickupCoords.lat, pickupCoords.lng, zones);
+      setPickupInZone(inZone);
+    }
+  }, [quoteResult, pickupCoords, zones]);
 
   const calculateDistance = () => {
     if (!pickupCoords || !dropoffCoords) return;
@@ -503,7 +459,7 @@ export default function LandingPage() {
             <ul className="space-y-2.5 text-sm">
               <li>
                 <Link
-                  to="/help/customer"
+                  to="/help-customer"
                   className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
                   Customer Help
@@ -511,7 +467,7 @@ export default function LandingPage() {
               </li>
               <li>
                 <Link
-                  to="/help/driver"
+                  to="/help-driver"
                   className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
                   Driver Help
@@ -523,7 +479,7 @@ export default function LandingPage() {
           {/* Contact */}
           <div>
             <Link
-              to="/help/customer"
+              to="/help-customer"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
             >
               Contact Us
@@ -609,7 +565,7 @@ export default function LandingPage() {
                     See what a delivery costs
                   </CardTitle>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    Enter pickup and drop-off. California only.
+                    Enter pickup and drop-off. Pickup zones in Greater LA.
                   </p>
                 </div>
 
@@ -624,7 +580,7 @@ export default function LandingPage() {
                       onChange={setPickupAddress}
                       onPlaceSelect={handlePickupSelect}
                       onClear={handlePickupClear}
-                      placeholder="Search pickup location (CA only)"
+                      placeholder="Search pickup location"
                       isLoaded={isLoaded}
                       icon={<Target className="h-4 w-4 text-slate-400" />}
                     />
@@ -643,7 +599,7 @@ export default function LandingPage() {
                       onChange={setDropoffAddress}
                       onPlaceSelect={handleDropoffSelect}
                       onClear={handleDropoffClear}
-                      placeholder="Search drop-off location (CA only)"
+                      placeholder="Search drop-off location"
                       isLoaded={isLoaded}
                       icon={<Flag className="h-4 w-4 text-slate-400" />}
                     />
@@ -675,7 +631,7 @@ export default function LandingPage() {
                     className="w-fit gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-widest"
                   >
                     <MapPin className="h-4 w-4 text-lime-500" />
-                    CA Only
+                    Greater LA Pickup Zones
                   </Badge>
                 </div>
               </CardContent>
@@ -688,7 +644,15 @@ export default function LandingPage() {
           <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="grid grid-cols-1 lg:grid-cols-12">
               <div className="lg:col-span-7 min-h-[340px] lg:min-h-[520px] relative overflow-hidden bg-slate-50 dark:bg-slate-950">
-                <RouteMap pickup={pickupCoords} dropoff={dropoffCoords} isLoaded={isLoaded}/>
+                <RouteMap pickup={pickupCoords} dropoff={dropoffCoords} isLoaded={isLoaded} zones={zones}/>
+
+                {/* Dealerships Welcome badge */}
+                <div className="absolute top-5 right-5 z-10">
+                  <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700">
+                    <Car className="h-4 w-4 text-lime-500" />
+                    Dealerships Welcome
+                  </div>
+                </div>
 
                 <div className="absolute top-5 left-5 flex flex-col gap-2 z-10">
                   <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700">
@@ -792,11 +756,47 @@ export default function LandingPage() {
                   </div>
                 </div>
 
+                {/* Out of zone overlay - show above Continue buttons */}
+                {pickupInZone === false && quoteResult && (
+                  <div className="mt-6 p-5 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-200 dark:border-orange-900/30">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                          Pickup Outside Our Current Zones
+                        </h4>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-normal mt-1">
+                          Service isn't available for this pickup area yet — our drivers start from Greater LA. We're expanding soon!
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                          <a
+                            href="#dealers"
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition text-sm"
+                          >
+                            Join Waitlist
+                            <ArrowRight className="h-4 w-4" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handlePickupClear();
+                              handleDropoffClear();
+                            }}
+                            className="inline-flex items-center justify-center gap-1 px-4 py-2.5 rounded-2xl text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                          >
+                            Try a Different Pickup
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="hidden sm:flex mt-8 gap-3">
                   <Link
-                    to={quoteResult ? "/quote-details" : "#"}
+                    to={quoteResult && pickupInZone !== false ? "/quote-details" : "#"}
                     state={
-                      quoteResult
+                      quoteResult && pickupInZone !== false
                         ? {
                             quote: quoteResult,
                             pickupCoords,
@@ -807,11 +807,11 @@ export default function LandingPage() {
                         : undefined
                     }
                     onClick={(e) => {
-                      if (!quoteResult) e.preventDefault();
+                      if (!quoteResult || pickupInZone === false) e.preventDefault();
                     }}
                     className={`flex-1 font-extrabold rounded-2xl py-4 text-center transition shadow-lg
                     ${
-                      quoteResult
+                      quoteResult && pickupInZone !== false
                         ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
                         : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
                     }`}
@@ -828,15 +828,26 @@ export default function LandingPage() {
 
                 <div className="sm:hidden mt-8 flex flex-col gap-3">
                   <Link
-                    to="/quote-details"
-                    state={{
-                      quote: quoteResult,
-                      pickupCoords,
-                      dropoffCoords,
-                      pickupAddress,
-                      dropoffAddress,
+                    to={quoteResult && pickupInZone !== false ? "/quote-details" : "#"}
+                    state={
+                      quoteResult && pickupInZone !== false
+                        ? {
+                            quote: quoteResult,
+                            pickupCoords,
+                            dropoffCoords,
+                            pickupAddress,
+                            dropoffAddress,
+                          }
+                        : undefined
+                    }
+                    onClick={(e) => {
+                      if (!quoteResult || pickupInZone === false) e.preventDefault();
                     }}
-                    className="bg-slate-900 text-white font-extrabold rounded-2xl py-4 text-center hover:opacity-90 transition shadow-lg"
+                    className={`font-extrabold rounded-2xl py-4 text-center transition shadow-lg ${
+                      quoteResult && pickupInZone !== false
+                        ? "bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
+                        : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
+                    }`}
                   >
                     Continue
                   </Link>
