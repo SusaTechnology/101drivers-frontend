@@ -189,7 +189,7 @@ export default function RouteMap({
     });
 
     if (hasCoords) {
-      map.fitBounds(bounds, { top: 60, right: 40, bottom: 180, left: 40 }); // extra bottom padding for input panel
+      map.fitBounds(bounds, { top: 40, right: 30, bottom: 60, left: 30 });
     }
   }, [map, fitZonesBounds, zones, directions, pickup, dropoff]);
 
