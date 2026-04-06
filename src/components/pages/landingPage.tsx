@@ -818,58 +818,56 @@ export default function LandingPage() {
           </Card>
         </section>
 
-        {/* ===== SECTION 4 — Business Account Introduction ===== */}
+        {/* ===== SECTION 4 — Quick Steps ===== */}
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="max-w-3xl">
-            <Badge variant="secondary" className="gap-2 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
-              <Building className="h-3 w-3 text-lime-500" />
-              Business Signup
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight mt-4">
-              Create your account
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
+              Quick Steps
             </h2>
-            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 mt-3 leading-relaxed">
-              Need drivers for vehicle delivery? Pick your company from our directory — it auto-fills everything. Add a contact person. Submitted? Stays Pending Approval till an admin approves.
-            </p>
 
-            {/* Feature highlights */}
-            <div className="mt-8 space-y-5">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
+            {/* Three step cards */}
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Card 1 — Get a quote */}
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0">
+                  <MapPinned className="h-5 w-5 text-lime-500" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white leading-snug">
+                    Get a quote
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Pickup &amp; drop-off (CA only). See route and price.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 2 — Add details */}
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0">
                   <ClipboardCheck className="h-5 w-5 text-lime-500" />
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                    Directory-based Onboarding
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white leading-snug">
+                    Add details
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Select your dealership from search results. We auto-fill business details and capture a contact person.
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Vehicle details, schedule, and contacts.
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                  <Lock className="h-5 w-5 text-lime-500" />
+
+              {/* Card 3 — Track & pay */}
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0">
+                  <CreditCard className="h-5 w-5 text-lime-500" />
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                    Admin Approval
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white leading-snug">
+                    Track &amp; pay
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Dealer access is granted after Admin review. Notifications are email-first (SMS optional).
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                  <Truck className="h-5 w-5 text-lime-500" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                    Schedule Drivers Instantly
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Once approved, create delivery requests with instant price estimates and real-time tracking.
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Track your delivery in real time, pay securely, and receive proof.
                   </p>
                 </div>
               </div>
