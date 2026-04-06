@@ -511,140 +511,151 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950">
       <NavBar />
-      <main className="w-full max-w-[1440px] mx-auto">
+      <main className="w-full">
 
-        {/* ===== HERO — centered, driver-focused ===== */}
-        <section className="flex flex-col items-center justify-center text-center px-6 pt-12 pb-16 lg:pt-20 lg:pb-24 min-h-[60vh]">
-          {/* User icon in rounded square */}
-          <div className="w-20 h-20 rounded-2xl bg-lime-500/15 flex items-center justify-center mb-8">
-            <User className="h-10 w-10 text-lime-500" />
+        {/* ===== SECTION 1: HERO MAP CARD ===== */}
+        <section id="quote" className="relative w-full">
+          {/* Headline above map */}
+          <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 pt-8 lg:pt-12 pb-5">
+            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#39FF14] leading-tight">
+              We Move Your Car
+            </h2>
+            <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest mt-2">
+              <Bolt className="h-4 w-4" />
+              Instant Quote
+            </div>
+            <p className="text-sm lg:text-base text-slate-500 dark:text-slate-400 mt-3 leading-relaxed max-w-xl">
+              Pickup from our Westside zone. Drop-off anywhere in Southern California.
+            </p>
           </div>
 
-          {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.1] text-slate-900 dark:text-white max-w-2xl tracking-tight">
-            Move Cars in LA – Schedule Ahead, Know Your Pay
-          </h1>
+          {/* Full-width map card */}
+          <div className="relative w-full h-[65vh] min-h-[480px] lg:min-h-[560px] overflow-hidden">
+            <RouteMap
+              isLoaded={isLoaded}
+              zones={zones}
+              initialCenter={{ lat: 33.98, lng: -118.45 }}
+              initialZoom={13}
+              lockViewport={!quoteResult}
+              showMapTypeControl={false}
+            />
 
-          {/* Subheadline with bullet separators */}
-          <p className="mt-6 text-base lg:text-lg text-slate-500 dark:text-slate-400 leading-relaxed max-w-lg">
-            25+, clean record {"\u2022"} Greater LA only {"\u2022"} No own car needed {"\u2022"} No passengers {"\u2022"} Plan routes, keep all tips
-          </p>
+            {/* Semi-transparent overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 z-[1] pointer-events-none" />
 
-          {/* CTAs */}
-          <div className="w-full max-w-sm mt-10 flex flex-col gap-3">
-            <Link
-              to="/driver-onboarding"
-              className="w-full py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 text-lg"
-            >
-              Join the Waitlist
-              <ArrowRight className="h-5 w-5" />
-            </Link>
-            <Link
-              to="/auth/dealer-signin"
-              className="w-full py-4 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition flex items-center justify-center gap-2 text-lg"
-            >
-              Already In? Log In
-              <LogIn className="h-5 w-5 text-lime-500" />
-            </Link>
+            {/* Centered "Pickup Area Only" text overlay */}
+            <div className="absolute inset-0 flex items-center justify-center z-[2] pointer-events-none px-6">
+              <div className="text-center mt-[-60px]">
+                <p className="text-white font-black text-2xl sm:text-3xl lg:text-4xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+                  Pickup Area Only
+                </p>
+                <p className="text-white/80 text-xs sm:text-sm mt-2 max-w-md mx-auto drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)] leading-relaxed">
+                  Westside LA: Santa Monica, Venice, Marina del Rey, Playa del Rey, Culver City, Westchester, West LA &amp; nearby
+                </p>
+              </div>
+            </div>
+
+            {/* Dealerships Welcome badge — top-right, overlapping map */}
+            <div className="absolute top-5 right-5 z-10">
+              <div className="bg-lime-100/95 dark:bg-lime-900/80 backdrop-blur px-4 py-2 rounded-full text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-lime-200 dark:border-lime-700">
+                <Car className="h-4 w-4 text-lime-600 dark:text-lime-400" />
+                Dealerships Welcome
+              </div>
+            </div>
+
+            {/* Pickup Zone legend — bottom-right, above input panel */}
+            <div className="absolute bottom-[180px] lg:bottom-[160px] right-5 z-10">
+              <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-xl text-[10px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700">
+                <span className="w-3 h-3 rounded-sm bg-[#39FF14] inline-block shrink-0" />
+                Green area = Pickup Zone
+              </div>
+            </div>
+
+            {/* Floating input panel at bottom of map */}
+            <div className="absolute bottom-0 left-0 right-0 z-10">
+              <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-5 lg:pb-7">
+                <Card className="rounded-3xl shadow-2xl border-slate-200/70 dark:border-slate-800">
+                  <CardContent className="p-4 sm:p-5 lg:p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                      {/* From input */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          From Where
+                        </Label>
+                        <LocationAutocomplete
+                          key="pickup"
+                          value={pickupAddress}
+                          onChange={setPickupAddress}
+                          onPlaceSelect={handlePickupSelect}
+                          onClear={handlePickupClear}
+                          placeholder="Enter address in pickup area"
+                          isLoaded={isLoaded}
+                          icon={<Target className="h-4 w-4 text-slate-400" />}
+                        />
+                        {pickupError && (
+                          <p className={cn(
+                            "text-xs mt-1 font-semibold",
+                            pickupInZone === false ? "text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg" : "text-red-500"
+                          )}>
+                            {pickupInZone === false
+                              ? "Must be in our Westside zone."
+                              : pickupError
+                            }
+                          </p>
+                        )}
+                      </div>
+
+                      {/* To input */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          To Where
+                        </Label>
+                        <LocationAutocomplete
+                          key="dropoff"
+                          value={dropoffAddress}
+                          onChange={setDropoffAddress}
+                          onPlaceSelect={handleDropoffSelect}
+                          onClear={handleDropoffClear}
+                          placeholder="Anywhere in SoCal"
+                          isLoaded={isLoaded}
+                          icon={<Flag className="h-4 w-4 text-slate-400" />}
+                        />
+                        {dropoffError && (
+                          <p className="text-xs text-red-500 mt-1">{dropoffError}</p>
+                        )}
+                      </div>
+
+                      {/* Get Estimate button */}
+                      <a
+                        href="#estimate"
+                        onClick={handleCalculateEstimate}
+                        className={`px-6 sm:px-8 py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 whitespace-nowrap ${
+                          isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError || quoteLimitReached
+                            ? "opacity-50 pointer-events-none"
+                            : ""
+                        }`}
+                      >
+                        {isLoadingQuote
+                          ? "Calculating..."
+                          : quoteLimitReached
+                            ? `Limit (${QUOTE_MAX_ATTEMPTS}/${QUOTE_MAX_ATTEMPTS})`
+                            : `Get Estimate`}
+                        {!isLoadingQuote && !quoteLimitReached && <ArrowRight className="h-4 w-4" />}
+                      </a>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* ===== INSTANT QUOTE — rebuilt with Westside zone focus ===== */}
-        <section id="quote" className="px-6 lg:px-8 pb-12">
-          <div className="max-w-lg mx-auto">
-            <Card className="rounded-3xl shadow-xl border-slate-200/70 dark:border-slate-800 relative">
-              <div className="absolute -top-6 -right-6 w-28 h-28 bg-lime-500/10 rounded-full blur-3xl" />
-              <CardContent className="p-8 lg:p-10">
-                <div className="mb-8">
-                  <h2 className="text-3xl font-black text-[#39FF14] leading-tight">
-                    We Move Your Car
-                  </h2>
-                  <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest mt-2">
-                    <Bolt className="h-4 w-4" />
-                    Instant Quote
-                  </div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
-                    Pickup from our Westside zone. Drop-off anywhere in Southern California.
-                  </p>
-                </div>
-
-                <div className="space-y-5">
-                  {/* From input */}
-                  <div className="space-y-2">
-                    <Label htmlFor="pickup" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      From Where
-                    </Label>
-                    <LocationAutocomplete
-                      key="pickup"
-                      value={pickupAddress}
-                      onChange={setPickupAddress}
-                      onPlaceSelect={handlePickupSelect}
-                      onClear={handlePickupClear}
-                      placeholder="Enter address in pickup area"
-                      isLoaded={isLoaded}
-                      icon={<Target className="h-4 w-4 text-slate-400" />}
-                    />
-                    {pickupError && (
-                      <p className={cn(
-                        "text-xs mt-1 font-semibold",
-                        pickupInZone === false ? "text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg" : "text-red-500"
-                      )}>
-                        {pickupInZone === false
-                          ? "Must be in our Westside zone."
-                          : pickupError
-                        }
-                      </p>
-                    )}
-                  </div>
-
-                  {/* To input */}
-                  <div className="space-y-2">
-                    <Label htmlFor="dropoff" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      To Where
-                    </Label>
-                    <LocationAutocomplete
-                      key="dropoff"
-                      value={dropoffAddress}
-                      onChange={setDropoffAddress}
-                      onPlaceSelect={handleDropoffSelect}
-                      onClear={handleDropoffClear}
-                      placeholder="Anywhere in SoCal"
-                      isLoaded={isLoaded}
-                      icon={<Flag className="h-4 w-4 text-slate-400" />}
-                    />
-                    {dropoffError && (
-                      <p className="text-xs text-red-500 mt-1">{dropoffError}</p>
-                    )}
-                  </div>
-
-                  <a
-                    href="#estimate"
-                    onClick={handleCalculateEstimate}
-                    className={`w-full py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                      isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError || quoteLimitReached
-                        ? "opacity-50 pointer-events-none"
-                        : ""
-                    }`}
-                  >
-                    {isLoadingQuote
-                      ? "Calculating..."
-                      : quoteLimitReached
-                        ? `Limit reached (${QUOTE_MAX_ATTEMPTS}/${QUOTE_MAX_ATTEMPTS})`
-                        : `Get Estimate (${QUOTE_MAX_ATTEMPTS - quoteAttempts} left)`
-                    }
-                    {!quoteLimitReached && <ArrowRight className="h-4 w-4" />}
-                  </a>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* ===== ESTIMATE OUTPUT — route map + price ===== */}
-        <section id="estimate" className="px-6 lg:px-8 pb-16">
-          <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm">
+        {/* ===== SECTION 2+3: ROUTE PREVIEW MAP + PRICE ESTIMATE (only after quote) ===== */}
+        {quoteResult && (
+        <section id="estimate" className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+          <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="grid grid-cols-1 lg:grid-cols-12">
-              {/* Map panel — starts zoomed to Westside coastal area */}
+              {/* Section 2: Route Preview Map */}
               <div className="lg:col-span-7 min-h-[380px] lg:min-h-[520px] relative overflow-hidden bg-slate-50 dark:bg-slate-950">
                 <RouteMap
                   pickup={pickupCoords}
@@ -656,28 +667,14 @@ export default function LandingPage() {
                   showMapTypeControl={true}
                 />
 
-                {/* Dealerships Welcome badge — top-right, overlapping green zone */}
-                <div className="absolute top-5 right-5 z-10">
-                  <div className="bg-lime-100/95 dark:bg-lime-900/80 backdrop-blur px-4 py-2 rounded-full text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-lime-200 dark:border-lime-700">
-                    <Car className="h-4 w-4 text-lime-600 dark:text-lime-400" />
-                    Dealerships Welcome
-                  </div>
-                </div>
-
-                {/* Pickup zone label — top-left */}
-                <div className="absolute top-5 left-5 flex flex-col gap-2 z-10">
-                  <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700">
-                    <Map className="h-4 w-6 text-lime-500" />
-                    Westside LA
-                  </div>
-                  {distance && (
-                    <Badge variant="secondary" className="w-fit gap-2 px-4 py-2 backdrop-blur">
-                      <Ruler className="h-4 w-4 text-lime-500" />
-                      <span className="text-[11px] font-black uppercase tracking-widest">
-                        {quoteResult ? `${Math.round(quoteResult.distanceMiles)} miles` : '— miles'}
-                      </span>
-                    </Badge>
-                  )}
+                {/* Distance badge — top-left */}
+                <div className="absolute top-5 left-5 z-10">
+                  <Badge variant="secondary" className="gap-2 px-4 py-2 backdrop-blur bg-white/95 dark:bg-slate-900/95 shadow-lg border border-slate-200 dark:border-slate-700">
+                    <Ruler className="h-4 w-4 text-lime-500" />
+                    <span className="text-[11px] font-black uppercase tracking-widest">
+                      {quoteResult ? `${Math.round(quoteResult.distanceMiles)} miles` : '— miles'}
+                    </span>
+                  </Badge>
                 </div>
 
                 {/* Route label — bottom-left */}
@@ -693,7 +690,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Price panel */}
+              {/* Section 3: Price Estimate Panel */}
               <div className="lg:col-span-5 p-7 sm:p-8 lg:p-10 flex flex-col justify-between">
                 <div>
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-7">
@@ -740,7 +737,7 @@ export default function LandingPage() {
 
                   {/* Disclaimer */}
                   <div className="mt-6 flex gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30">
-                    <Info className="h-5 w-5 text-amber-500" />
+                    <Info className="h-5 w-5 text-amber-500 shrink-0" />
                     <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
                       Estimate only. Final scheduling depends on driver availability and operational policy.
                     </p>
@@ -859,9 +856,91 @@ export default function LandingPage() {
             </div>
           </Card>
         </section>
+        )}
 
-        {/* ===== WE MOVE YOUR CAR — delivery process ===== */}
-        <section id="how" className="px-6 lg:px-8 py-16 lg:py-20 bg-white dark:bg-slate-950">
+        {/* ===== SECTION 4: BUSINESS ACCOUNT ===== */}
+        <section className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-14 lg:py-20">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+            <div className="space-y-5">
+              <Badge variant="secondary" className="gap-2 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest">
+                <Building className="h-3.5 w-3.5 text-lime-500" />
+                Business Accounts
+              </Badge>
+              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white leading-tight">
+                Create Your Account
+              </h2>
+              <p className="text-slate-600 dark:text-slate-400 text-lg leading-relaxed max-w-md">
+                Need drivers? Create a dealer account. We auto-fill everything from our directory. Pending Admin approval after signup.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Link
+                  to="/auth/dealer-signin"
+                  className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition text-base"
+                >
+                  Sign Up as a Dealer
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  to="/auth/dealer-signin"
+                  className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold text-base transition"
+                >
+                  Dealer Sign In
+                  <LogIn className="h-4 w-4 text-lime-500" />
+                </Link>
+              </div>
+            </div>
+
+            <Card className="bg-slate-50 dark:bg-slate-950 p-8 lg:p-10 rounded-3xl relative overflow-hidden border-slate-200 dark:border-slate-800">
+              <div className="absolute -bottom-10 -right-10 opacity-10 text-slate-900 dark:text-white transform rotate-12">
+                <Briefcase className="h-64 w-64" />
+              </div>
+              <div className="relative z-10 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                    <ClipboardCheck className="h-5 w-5 text-lime-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      Directory-based Onboarding
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                      Select your dealership from search results. We auto-fill business details and capture a contact person.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                    <Lock className="h-5 w-5 text-lime-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      Admin Approval
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                      Dealer access is granted after Admin review. Notifications are email-first (SMS optional).
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-lime-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                    <Truck className="h-5 w-5 text-lime-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      Schedule Drivers Instantly
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                      Once approved, create delivery requests with instant price estimates and real-time tracking.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </section>
+
+        {/* ===== SECTION 5: HOW IT WORKS — delivery process ===== */}
+        <section id="how" className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-14 lg:py-20 bg-white dark:bg-slate-950">
           <div className="text-center mb-12">
             <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white">
               We Move Your Car — Safe &amp; Sound
@@ -902,7 +981,7 @@ export default function LandingPage() {
           </p>
         </section>
 
-        {/* ===== DEALER LEAD SECTION — kept exactly as-is ===== */}
+        {/* ===== SECTION 6: DEALER LEAD FORM (Get Started) ===== */}
         {settings?.dealerLeadEnabled && (
         <section
           id="dealers"
@@ -1043,11 +1122,47 @@ export default function LandingPage() {
         </section>
         )}
 
-        {/* ===== FUNDRAISING / INVESTOR SECTION — kept exactly as-is ===== */}
+        {/* ===== SECTION 7: DRIVER CTA (moved from top hero) ===== */}
+        <section className="flex flex-col items-center justify-center text-center px-6 py-16 lg:py-24 min-h-[50vh]">
+          {/* User icon in rounded square */}
+          <div className="w-20 h-20 rounded-2xl bg-lime-500/15 flex items-center justify-center mb-8">
+            <User className="h-10 w-10 text-lime-500" />
+          </div>
+
+          {/* Headline */}
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.1] text-slate-900 dark:text-white max-w-2xl tracking-tight">
+            Move Cars in LA – Schedule Ahead, Know Your Pay
+          </h2>
+
+          {/* Subheadline with bullet separators */}
+          <p className="mt-6 text-base lg:text-lg text-slate-500 dark:text-slate-400 leading-relaxed max-w-lg">
+            25+, clean record {"\u2022"} Greater LA only {"\u2022"} No own car needed {"\u2022"} No passengers {"\u2022"} Plan routes, keep all tips
+          </p>
+
+          {/* CTAs */}
+          <div className="w-full max-w-sm mt-10 flex flex-col gap-3">
+            <Link
+              to="/driver-onboarding"
+              className="w-full py-4 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 text-lg"
+            >
+              Join the Waitlist
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+            <Link
+              to="/auth/dealer-signin"
+              className="w-full py-4 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition flex items-center justify-center gap-2 text-lg"
+            >
+              Already In? Log In
+              <LogIn className="h-5 w-5 text-lime-500" />
+            </Link>
+          </div>
+        </section>
+
+        {/* ===== FUNDRAISING / INVESTOR SECTION ===== */}
         {settings?.fundraisingEnabled && (
         <section
           id="fundraising"
-          className="px-6 lg:px-8 py-16 lg:py-20 bg-slate-50 dark:bg-slate-950 border-y border-slate-200 dark:border-slate-800"
+          className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-16 lg:py-20 bg-slate-50 dark:bg-slate-950 border-y border-slate-200 dark:border-slate-800"
         >
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-12">
