@@ -201,16 +201,38 @@ export default function LandingPage() {
 
   const handlePickupSelect = useCallback((place: google.maps.places.PlaceResult) => {
     setPickupError("");
-    setPickupInZone(null); // reset zone check for new pickup
+    setPickupInZone(null);
     if (place.geometry?.location) {
       const lat = place.geometry.location.lat();
       const lng = place.geometry.location.lng();
-      setPickupCoords({ lat, lng });
       const address = place.formatted_address || '';
+
+      // Immediately check if pickup is inside a service zone
+      if (zones.length > 0) {
+        const { inZone } = isInPickupZone(lat, lng, zones);
+        if (!inZone) {
+          // Reject out-of-zone pickup immediately
+          setPickupAddress("");
+          setPickupCoords(null);
+          setPickupInZone(false);
+          setPickupError("This address is outside our Westside pickup zone.");
+          setDropoffAddress("");
+          setDropoffCoords(null);
+          setQuoteResult(null);
+          setDistance(null);
+          toast.error("Outside service area", {
+            description: "Pickup must be in our Westside LA zone. See the green area on the map.",
+          });
+          return;
+        }
+      }
+
+      setPickupCoords({ lat, lng });
       setPickupAddress(address);
+      setPickupInZone(true);
       console.log('Pickup address set:', address, 'Coords:', { lat, lng });
     }
-  }, []);
+  }, [zones]);
 
   const handleDropoffSelect = useCallback((place: google.maps.places.PlaceResult) => {
     setDropoffError("");
@@ -244,7 +266,7 @@ export default function LandingPage() {
     setPickupInZone(null);
   }, []);
 
-  // Check if pickup is in a service zone after quote result
+  // Double-check zone after quote result (server-side validation)
   useEffect(() => {
     if (quoteResult && pickupCoords && zones.length > 0) {
       const { inZone } = isInPickupZone(pickupCoords.lat, pickupCoords.lng, zones);
@@ -290,6 +312,11 @@ export default function LandingPage() {
     if (!pickupAddress || !dropoffAddress) {
       if (!pickupAddress) setPickupError("From address is required");
       if (!dropoffAddress) setDropoffError("To address is required");
+      return;
+    }
+    // Block if pickup is already confirmed out of zone
+    if (pickupInZone === false) {
+      setPickupError("This address is outside our Westside pickup zone.");
       return;
     }
     // Clear any previous errors
