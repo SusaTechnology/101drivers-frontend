@@ -973,7 +973,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             id="contactEmail"
                             {...registerSignup("contactEmail")}
                             type="email"
-                            autoComplete="email"
+                            autoComplete="off"
                             className="w-full h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                             placeholder="your@email.com"
                             disabled={isPending}
@@ -1001,7 +1001,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             value={contactPhoneDisplay}
                             onChange={handleContactPhoneChange}
                             type="tel"
-                            autoComplete="tel-national"
+                            autoComplete="off"
                             inputMode="tel"
                             maxLength={14}
                             className="w-full h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
