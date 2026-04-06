@@ -554,9 +554,9 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   const isPending = sendOtpMutation.isPending || verifyOtpMutation.isPending || resendCodeMutation.isPending;
 
   return (
-    <div className={embedded ? "" : "w-full max-w-[1100px] mx-auto px-6 lg:px-8 " + (embedded ? "py-6" : "py-10 lg:py-14")}>
-      {/* Title Section */}
-      <section className="flex flex-col gap-6 mb-2">
+    <div className={embedded ? "w-full" : "w-full max-w-[1100px] mx-auto px-6 lg:px-8 py-10 lg:py-14"}>
+      {/* Title Section — skip when embedded (landing page has its own intro) */}
+      {!embedded && <section className="flex flex-col gap-6 mb-2">
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/25 text-slate-800 dark:text-slate-200 text-xs font-extrabold">
@@ -582,10 +582,10 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
             till an admin approves.
           </p>
         </div>
-      </section>
+      </section>}
 
-      {/* ===== QUICK STEPS — 3-card overview ===== */}
-      <section className="mt-6 mb-2">
+      {/* ===== QUICK STEPS — skip when embedded ===== */}
+      {!embedded && <section className="mt-6 mb-2">
         <div className="flex items-center gap-2 mb-4">
           <ClipboardCheck className="h-4 w-4 text-[#00C853]" />
           <span className="text-[11px] font-black uppercase tracking-widest text-[#00C853]">Quick Steps</span>
@@ -613,7 +613,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
             );
           })}
         </div>
-      </section>
+      </section>}
 
       {!registrationComplete ? (
         <section className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -876,8 +876,8 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                 </CardContent>
               </Card>
 
-              {/* Support note */}
-              <Card className="mt-6 bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7">
+                      {/* Support note — skip when embedded */}
+              {!embedded && <Card className="mt-6 bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7">
                 <CardContent className="p-0">
                   <div className="flex gap-3">
                     <SupportAgent className="w-5 h-5 text-primary shrink-0 mt-0.5" />
@@ -892,7 +892,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     </div>
                   </div>
                 </CardContent>
-              </Card>
+              </Card>}
             </div>
 
             {/* Right: Contact Details + OTP */}

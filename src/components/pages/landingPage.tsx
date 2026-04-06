@@ -877,10 +877,8 @@ export default function LandingPage() {
         </section>
 
         {/* ===== SECTION 6 — Signup Form (Dealer Signup) ===== */}
-        <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <div className="max-w-lg mx-auto">
-            <DealerSignupForm isLoaded={isLoaded} embedded={true} />
-          </div>
+        <section id="dealers" className="max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <DealerSignupForm isLoaded={isLoaded} embedded={true} />
         </section>
 
         {/* ===== SECTION 7 — Driver Recruitment ===== */}
