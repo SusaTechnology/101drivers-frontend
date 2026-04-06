@@ -1026,6 +1026,138 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ===== DEALER LEAD FORM (separate conditional section) ===== */}
+        {settings?.dealerLeadEnabled && (
+        <section
+          id="dealer-lead"
+          className="relative w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-16 lg:py-20 bg-slate-50 dark:bg-slate-950 border-y border-slate-200 dark:border-slate-800"
+        >
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <Badge variant="secondary" className="gap-2 px-4 py-1.5 mb-4">
+                <Store className="h-3 w-3 text-lime-500" />
+                Interested in Our Service?
+              </Badge>
+              <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white">
+                {settings?.dealerLeadCtaTitle || 'Get In Touch'}
+              </h2>
+              <p className="text-lg text-slate-600 dark:text-slate-400 mt-4 max-w-2xl mx-auto">
+                {settings?.dealerLeadCtaDescription || 'Want to learn more about our vehicle delivery service? Leave your details and we\'ll reach out.'}
+              </p>
+            </div>
+
+            <div className="max-w-lg mx-auto">
+              <Card className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow">
+                <CardContent className="p-8">
+                  {!dealerLeadSuccess ? (
+                    <form onSubmit={handleDealerLeadSubmit} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="dlBusinessName" className="text-xs font-bold">Business Name *</Label>
+                        <div className="relative">
+                          <Building className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Input
+                            id="dlBusinessName"
+                            value={dealerLeadForm.businessName}
+                            onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, businessName: e.target.value })}
+                            placeholder="Acme Motors"
+                            className="h-12 pl-12 rounded-2xl"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="dlContactName" className="text-xs font-bold">Contact Name</Label>
+                        <div className="relative">
+                          <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <Input
+                            id="dlContactName"
+                            value={dealerLeadForm.contactName}
+                            onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, contactName: e.target.value })}
+                            placeholder="Jane Doe"
+                            className="h-12 pl-12 rounded-2xl"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="dlEmail" className="text-xs font-bold">Email *</Label>
+                          <div className="relative">
+                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                              id="dlEmail"
+                              type="email"
+                              value={dealerLeadForm.email}
+                              onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, email: e.target.value })}
+                              placeholder="jane@example.com"
+                              className="h-12 pl-12 rounded-2xl"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="dlPhone" className="text-xs font-bold">Phone</Label>
+                          <div className="relative">
+                            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                              id="dlPhone"
+                              type="tel"
+                              value={dealerPhoneDisplay}
+                              onChange={handleDealerPhoneChange}
+                              placeholder="(555) 555-5555"
+                              className="h-12 pl-12 rounded-2xl"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="dlMessage" className="text-xs font-bold">Message</Label>
+                        <Textarea
+                          id="dlMessage"
+                          value={dealerLeadForm.message}
+                          onChange={(e) => setDealerLeadForm({ ...dealerLeadForm, message: e.target.value })}
+                          placeholder="Tell us about your needs..."
+                          className="rounded-2xl min-h-[80px]"
+                        />
+                      </div>
+
+                      <Button
+                        type="submit"
+                        disabled={submitDealerLead.isPending}
+                        className="w-full bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold gap-2 h-12"
+                      >
+                        {submitDealerLead.isPending ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
+                        ) : (
+                          <><Send className="h-4 w-4" /> Submit Request</>
+                        )}
+                      </Button>
+
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center mt-2">
+                        By submitting, you agree to our{" "}
+                        <Link to="/privacy" className="underline hover:text-lime-500">Privacy Policy</Link>.
+                      </p>
+                    </form>
+                  ) : (
+                    <div className="p-6 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="h-6 w-6 text-emerald-500 shrink-0" />
+                        <div>
+                          <div className="font-extrabold text-lg text-slate-900 dark:text-white">Thank you!</div>
+                          <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">We've received your request and will be in touch soon.</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </section>
+        )}
+
         {/* ===== FUNDRAISING / INVESTOR SECTION ===== */}
         {settings?.fundraisingEnabled && (
         <section
