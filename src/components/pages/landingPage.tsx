@@ -302,7 +302,8 @@ export default function LandingPage() {
     }
   }, [pickupCoords, dropoffCoords]);
 
-  const handleCalculateEstimate = () => {
+  // Fire estimate automatically once both addresses are confirmed
+  const handleCalculateEstimate = useCallback(() => {
     if (quoteLimitReached) {
       toast.error("Quote limit reached", {
         description: `You've used all ${QUOTE_MAX_ATTEMPTS} free quote calculations. Please sign up for a dealer account to get unlimited quotes.`,
@@ -327,7 +328,14 @@ export default function LandingPage() {
       pickupAddress,
       dropoffAddress,
     });
-  };
+  }, [pickupAddress, dropoffAddress, pickupInZone, quoteLimitReached, getQuote]);
+
+  // Auto-trigger estimate as soon as both addresses are set and pickup is in zone
+  useEffect(() => {
+    if (pickupAddress && dropoffAddress && pickupInZone === true && !quoteLimitReached && !isLoadingQuote) {
+      handleCalculateEstimate();
+    }
+  }, [pickupAddress, dropoffAddress, pickupInZone, handleCalculateEstimate, quoteLimitReached, isLoadingQuote]);
 
   // Dealer lead submission
   const submitDealerLead = useCreate(`${import.meta.env.VITE_API_URL}/api/dealerLeads/public`, {
@@ -616,21 +624,23 @@ export default function LandingPage() {
                   )}
                 </div>
 
-                {/* Get Estimate button */}
+                {/* Recalculate button — estimate auto-fires when both addresses are set */}
                 <a
                   href="#estimate"
-                  onClick={handleCalculateEstimate}
+                  onClick={(e) => { e.preventDefault(); handleCalculateEstimate(); }}
                   className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                    isLoadingQuote || !pickupAddress || !dropoffAddress || pickupError || dropoffError || quoteLimitReached
+                    isLoadingQuote || !pickupAddress || !dropoffAddress || pickupInZone === false || quoteLimitReached
                       ? "opacity-50 pointer-events-none"
                       : ""
                   }`}
                 >
                   {isLoadingQuote
                     ? "Calculating..."
-                    : quoteLimitReached
-                      ? `Limit (${QUOTE_MAX_ATTEMPTS}/${QUOTE_MAX_ATTEMPTS})`
-                      : `Get Estimate`}
+                    : quoteResult
+                      ? "Recalculate"
+                      : quoteLimitReached
+                        ? `Limit (${QUOTE_MAX_ATTEMPTS}/${QUOTE_MAX_ATTEMPTS})`
+                        : "Get Estimate"}
                   {!isLoadingQuote && !quoteLimitReached && <ArrowRight className="h-4 w-4" />}
                 </a>
               </div>
