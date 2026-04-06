@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavBar } from "../shared/layout/navbar";
+import { DealerSignupForm } from "../auth/DealerSignupForm";
 import RouteMap from '@/components/map/RouteMap';
 import LocationAutocomplete from "../map/LocationAutocomplete";
 import { useJsApiLoader } from "@react-google-maps/api";
@@ -875,7 +876,14 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ===== SECTION 6 — Driver Recruitment ===== */}
+        {/* ===== SECTION 6 — Signup Form (Dealer Signup) ===== */}
+        <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <div className="max-w-lg mx-auto">
+            <DealerSignupForm isLoaded={isLoaded} embedded={true} />
+          </div>
+        </section>
+
+        {/* ===== SECTION 7 — Driver Recruitment ===== */}
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="max-w-lg mx-auto">
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
