@@ -12,7 +12,7 @@ const containerStyle = {
 
 // Default: zoomed into Westside LA pickup zones
 const defaultCenter = { lat: 33.98, lng: -118.45 }; // Marina del Rey area
-const defaultZoom = 12;
+const defaultZoom = 11;
 
 // Full California fallback (used when no override)
 const californiaCenter = { lat: 36.7783, lng: -119.4179 };
@@ -189,7 +189,7 @@ export default function RouteMap({
     });
 
     if (hasCoords) {
-      map.fitBounds(bounds, { top: 60, right: 60, bottom: 80, left: 60 });
+      map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
     }
   }, [map, fitZonesBounds, zones, directions, pickup, dropoff]);
 
