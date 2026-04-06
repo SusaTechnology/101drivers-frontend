@@ -12,6 +12,10 @@ interface LocationAutocompleteProps {
   types?: string[];
   label?: string;
   disabled?: boolean;
+  /** If true + bounds set, autocomplete only returns results inside bounds */
+  strictBounds?: boolean;
+  /** LatLngBoundsLiteral to bias or restrict autocomplete results */
+  bounds?: google.maps.LatLngBoundsLiteral;
 }
 
 export default function LocationAutocomplete({
@@ -26,6 +30,8 @@ export default function LocationAutocomplete({
   types = ['address'],
   label,
   disabled = false,
+  strictBounds = false,
+  bounds,
 }: LocationAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -85,12 +91,19 @@ export default function LocationAutocomplete({
 
     setIsLoading(true);
 
-    autocompleteServiceRef.current.getPlacePredictions(
-      {
+    const request: google.maps.places.AutocompletionRequest = {
         input,
         types: ['geocode', 'establishment'],
         componentRestrictions: { country: 'us' },
-      },
+      };
+
+    // Apply bounds restriction when provided
+    if (bounds) {
+      request.bounds = bounds;
+      request.strictBounds = strictBounds;
+    }
+
+    autocompleteServiceRef.current.getPlacePredictions(request,
       (results, status) => {
         setIsLoading(false);
         
@@ -104,7 +117,7 @@ export default function LocationAutocomplete({
         setShowDropdown(results.length > 0);
       }
     );
-  }, [types]);
+  }, [types, strictBounds, bounds]);
 
   // Handle input change with debounce
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

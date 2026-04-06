@@ -548,6 +548,13 @@ export default function LandingPage() {
                     placeholder="Enter address in pickup area"
                     isLoaded={isLoaded}
                     icon={<Target className="h-4 w-4 text-slate-400" />}
+                    strictBounds={true}
+                    bounds={{
+                      north: 34.050,
+                      south: 33.930,
+                      east: -118.350,
+                      west: -118.520,
+                    }}
                   />
                   {pickupError && (
                     <p className={cn(
