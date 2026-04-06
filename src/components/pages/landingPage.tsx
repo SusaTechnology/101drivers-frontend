@@ -818,11 +818,11 @@ export default function LandingPage() {
           </Card>
         </section>
 
-        {/* ===== SECTION 4 — Quick Steps ===== */}
+        {/* ===== SECTION 4 — Create Your Account ===== */}
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="max-w-3xl">
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
-              Quick Steps
+              Create your account
             </h2>
 
             {/* Three step cards */}
