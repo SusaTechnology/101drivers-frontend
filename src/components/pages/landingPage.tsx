@@ -514,7 +514,7 @@ export default function LandingPage() {
       <main className="w-full">
 
         {/* ===== SECTION 1: HERO MAP CARD ===== */}
-        <section id="quote" className="relative w-full">
+        <section id="quote" className="relative w-full mb-28 lg:mb-36">
           {/* Headline above map */}
           <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 pt-8 lg:pt-12 pb-5">
             <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#39FF14] leading-tight">
@@ -530,15 +530,18 @@ export default function LandingPage() {
           </div>
 
           {/* Full-width map card */}
-          <div className="relative w-full h-[50vh] min-h-[380px] max-h-[480px] overflow-hidden">
-            <RouteMap
-              isLoaded={isLoaded}
-              zones={zones}
-              initialCenter={{ lat: 33.98, lng: -118.45 }}
-              initialZoom={13}
-              lockViewport={!quoteResult}
-              showMapTypeControl={false}
-            />
+          <div className="relative w-full h-[50vh] min-h-[380px] max-h-[480px]">
+            {/* Map tiles - overflow hidden to clip map, but allow dropdown to escape */}
+            <div className="absolute inset-0 overflow-hidden">
+              <RouteMap
+                isLoaded={isLoaded}
+                zones={zones}
+                initialCenter={{ lat: 33.98, lng: -118.45 }}
+                initialZoom={13}
+                lockViewport={!quoteResult}
+                showMapTypeControl={false}
+              />
+            </div>
 
             {/* Semi-transparent overlay for text readability */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 z-[1] pointer-events-none" />
@@ -652,7 +655,7 @@ export default function LandingPage() {
 
         {/* ===== SECTION 2+3: ROUTE PREVIEW MAP + PRICE ESTIMATE (only after quote) ===== */}
         {quoteResult && (
-        <section id="estimate" className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+        <section id="estimate" className="relative w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14 z-10">
           <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="grid grid-cols-1 lg:grid-cols-12">
               {/* Section 2: Route Preview Map */}
@@ -859,7 +862,7 @@ export default function LandingPage() {
         )}
 
         {/* ===== SECTION 4: BUSINESS ACCOUNT ===== */}
-        <section className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-14 lg:py-20">
+        <section className="relative w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-14 lg:py-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             <div className="space-y-5">
               <Badge variant="secondary" className="gap-2 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest">
@@ -940,7 +943,7 @@ export default function LandingPage() {
         </section>
 
         {/* ===== SECTION 5: HOW IT WORKS — delivery process ===== */}
-        <section id="how" className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-14 lg:py-20 bg-white dark:bg-slate-950">
+        <section id="how" className="relative w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-14 lg:py-20 bg-white dark:bg-slate-950">
           <div className="text-center mb-12">
             <h2 className="text-4xl lg:text-5xl font-black text-slate-900 dark:text-white">
               We Move Your Car — Safe &amp; Sound
@@ -985,7 +988,7 @@ export default function LandingPage() {
         {settings?.dealerLeadEnabled && (
         <section
           id="dealers"
-          className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-6 lg:px-8 py-16 lg:py-20 bg-white/60 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800"
+          className="relative grid grid-cols-1 lg:grid-cols-2 gap-8 px-6 lg:px-8 py-16 lg:py-20 bg-white/60 dark:bg-slate-900/40 border-y border-slate-200 dark:border-slate-800"
         >
           <div className="space-y-7">
             <div>
@@ -1123,7 +1126,7 @@ export default function LandingPage() {
         )}
 
         {/* ===== SECTION 7: DRIVER CTA (moved from top hero) ===== */}
-        <section className="flex flex-col items-center justify-center text-center px-6 py-16 lg:py-24 min-h-[50vh]">
+        <section className="relative flex flex-col items-center justify-center text-center px-6 py-16 lg:py-24 min-h-[50vh]">
           {/* User icon in rounded square */}
           <div className="w-20 h-20 rounded-2xl bg-lime-500/15 flex items-center justify-center mb-8">
             <User className="h-10 w-10 text-lime-500" />
@@ -1162,7 +1165,7 @@ export default function LandingPage() {
         {settings?.fundraisingEnabled && (
         <section
           id="fundraising"
-          className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-16 lg:py-20 bg-slate-50 dark:bg-slate-950 border-y border-slate-200 dark:border-slate-800"
+          className="relative w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-16 lg:py-20 bg-slate-50 dark:bg-slate-950 border-y border-slate-200 dark:border-slate-800"
         >
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-12">
