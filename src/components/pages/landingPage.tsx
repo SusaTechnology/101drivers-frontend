@@ -974,6 +974,7 @@ export default function LandingPage() {
                   </Link>
                   <Link
                     to="/auth/dealer-signin"
+                    search={{ userType: 'driver' }}
                     className="w-full py-3 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition flex items-center justify-center gap-2 text-sm"
                   >
                     Already In? Log In
