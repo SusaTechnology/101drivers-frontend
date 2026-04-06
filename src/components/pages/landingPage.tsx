@@ -664,7 +664,7 @@ export default function LandingPage() {
               isLoaded={isLoaded}
               zones={zones}
               initialCenter={{ lat: 33.98, lng: -118.45 }}
-              initialZoom={11}
+              initialZoom={12}
               fitZonesBounds={!pickupCoords && !dropoffCoords}
               showMapTypeControl={true}
             />
