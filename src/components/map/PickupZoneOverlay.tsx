@@ -21,19 +21,34 @@ export default function PickupZoneOverlay({ zones }: PickupZoneOverlayProps) {
         }));
 
         return (
-          <Polygon
-            key={zone.id || zone.code}
-            paths={paths}
-            options={{
-              fillColor: '#39FF14',
-              fillOpacity: 0.15,
-              strokeColor: '#39FF14',
-              strokeOpacity: 0.8,
-              strokeWeight: 2,
-              clickable: false,
-              zIndex: 1,
-            }}
-          />
+          <React.Fragment key={zone.id || zone.code}>
+            {/* Outer glow border */}
+            <Polygon
+              paths={paths}
+              options={{
+                fillColor: '#39FF14',
+                fillOpacity: 0,
+                strokeColor: '#39FF14',
+                strokeOpacity: 0.3,
+                strokeWeight: 8,
+                clickable: false,
+                zIndex: 1,
+              }}
+            />
+            {/* Main zone fill */}
+            <Polygon
+              paths={paths}
+              options={{
+                fillColor: '#39FF14',
+                fillOpacity: 0.20,
+                strokeColor: '#39FF14',
+                strokeOpacity: 0.9,
+                strokeWeight: 3,
+                clickable: false,
+                zIndex: 2,
+              }}
+            />
+          </React.Fragment>
         );
       })}
     </>

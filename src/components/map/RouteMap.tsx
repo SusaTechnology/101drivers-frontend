@@ -10,7 +10,13 @@ const containerStyle = {
   left: 0,
 };
 
-const defaultCenter = { lat: 36.7783, lng: -119.4179 }; // California center
+// Default: zoomed into Westside LA pickup zones
+const defaultCenter = { lat: 33.98, lng: -118.45 }; // Marina del Rey area
+const defaultZoom = 12;
+
+// Full California fallback (used when no override)
+const californiaCenter = { lat: 36.7783, lng: -119.4179 };
+const californiaZoom = 6;
 
 interface RouteMapProps {
   pickup?: google.maps.LatLngLiteral | null;
@@ -38,6 +44,21 @@ interface RouteMapProps {
    * Whether to show map type control for users to switch views
    */
   showMapTypeControl?: boolean;
+  /**
+   * Override the initial center and zoom for the map.
+   * When provided, the map starts at this location instead of the default Westside LA.
+   * Set showCaliforniaDefault to override this.
+   */
+  initialCenter?: google.maps.LatLngLiteral;
+  initialZoom?: number;
+  /**
+   * When true, use full California view as default (e.g. for non-LA contexts).
+   */
+  showCaliforniaDefault?: boolean;
+  /**
+   * When true, disable user pan/zoom until a route is calculated
+   */
+  lockViewport?: boolean;
 }
 
 export default function RouteMap({
@@ -53,6 +74,10 @@ export default function RouteMap({
   points = [],
   mapType = 'roadmap',
   showMapTypeControl = true,
+  initialCenter,
+  initialZoom,
+  showCaliforniaDefault = false,
+  lockViewport = false,
 }: RouteMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [internalDirections, setInternalDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -60,6 +85,10 @@ export default function RouteMap({
 
   // Use external directions if provided, otherwise use internal
   const directions = externalDirections ?? internalDirections;
+
+  // Determine the effective initial center/zoom
+  const mapCenter = showCaliforniaDefault ? californiaCenter : (initialCenter || defaultCenter);
+  const mapZoom = showCaliforniaDefault ? californiaZoom : (initialZoom || defaultZoom);
 
   const handleLoad = (map: google.maps.Map) => {
     setMap(map);
@@ -119,14 +148,12 @@ export default function RouteMap({
       map.fitBounds(bounds);
     } else if (pickup) {
       map.setCenter(pickup);
-      map.setZoom(12);
+      map.setZoom(13);
     } else if (dropoff) {
       map.setCenter(dropoff);
-      map.setZoom(12);
-    } else {
-      map.setCenter(defaultCenter);
-      map.setZoom(6);
+      map.setZoom(13);
     }
+    // else: keep the initial center/zoom set in GoogleMap props
   }, [map, directions, pickup, dropoff]);
 
   // Draw historical points as a polyline with a distinct color
@@ -170,12 +197,12 @@ export default function RouteMap({
   return (
     <GoogleMap
       mapContainerStyle={containerStyle}
-      center={defaultCenter}
-      zoom={6}
+      center={mapCenter}
+      zoom={mapZoom}
       onLoad={handleLoad}
       onUnmount={handleUnmount}
       options={{
-        fullscreenControl: true,
+        fullscreenControl: !lockViewport,
         streetViewControl: false,
         mapTypeControl: showMapTypeControl,
         mapTypeControlOptions: {
@@ -183,7 +210,8 @@ export default function RouteMap({
           position: google.maps.ControlPosition.TOP_RIGHT,
           mapTypeIds: ['roadmap', 'satellite', 'hybrid', 'terrain'],
         },
-        zoomControl: true,
+        zoomControl: !lockViewport,
+        gestureHandling: lockViewport && !directions ? 'none' : 'auto',
         mapTypeId: mapType,
         // Enable place names and POI labels
         styles: [
@@ -201,10 +229,10 @@ export default function RouteMap({
       }}
     >
       {/* Pickup marker */}
-      {pickup && <Marker position={pickup} label="P" />}
+      {pickup && <Marker position={pickup} label="A" />}
 
       {/* Dropoff marker */}
-      {dropoff && <Marker position={dropoff} label="D" />}
+      {dropoff && <Marker position={dropoff} label="B" />}
 
       {/* Driver position marker - custom car icon */}
       {driverPosition && (
@@ -246,9 +274,8 @@ export default function RouteMap({
           directions={directions}
           options={{
             suppressMarkers: true, // we already have our own markers
-            preserveViewport: false, // let the map adjust to the route
+            preserveViewport: false, // auto-zoom to fit route on submit
             routeIndex: selectedRouteIndex,
-            //  polylineOptions: {} // optional, defaults to blue for selected route
           }}
         />
       )}

@@ -1,7 +1,7 @@
 //@ts-nocheck
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,6 @@ import {
   Menu,
   X,
   Verified,
-  MapPin,
   Mail,
   Bolt,
   Target,
@@ -550,29 +549,30 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ===== QUOTE CALCULATOR — moved below hero ===== */}
+        {/* ===== INSTANT QUOTE — rebuilt with Westside zone focus ===== */}
         <section id="quote" className="px-6 lg:px-8 pb-12">
           <div className="max-w-lg mx-auto">
             <Card className="rounded-3xl shadow-xl border-slate-200/70 dark:border-slate-800 relative">
               <div className="absolute -top-6 -right-6 w-28 h-28 bg-lime-500/10 rounded-full blur-3xl" />
               <CardContent className="p-8 lg:p-10">
                 <div className="mb-8">
-                  <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest">
+                  <h2 className="text-3xl font-black text-[#39FF14] leading-tight">
+                    We Move Your Car
+                  </h2>
+                  <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest mt-2">
                     <Bolt className="h-4 w-4" />
-                    Quick Quote
+                    Instant Quote
                   </div>
-                  <CardTitle className="text-2xl font-extrabold mt-2 text-slate-900 dark:text-white">
-                    See what a delivery costs
-                  </CardTitle>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    Enter from and to. Pickup zones in Greater LA.
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
+                    Pickup from our Westside zone. Drop-off anywhere in Southern California.
                   </p>
                 </div>
 
                 <div className="space-y-5">
+                  {/* From input */}
                   <div className="space-y-2">
                     <Label htmlFor="pickup" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      From
+                      From Where
                     </Label>
                     <LocationAutocomplete
                       key="pickup"
@@ -580,18 +580,27 @@ export default function LandingPage() {
                       onChange={setPickupAddress}
                       onPlaceSelect={handlePickupSelect}
                       onClear={handlePickupClear}
-                      placeholder="From where?"
+                      placeholder="Enter address in pickup area"
                       isLoaded={isLoaded}
                       icon={<Target className="h-4 w-4 text-slate-400" />}
                     />
                     {pickupError && (
-                      <p className="text-xs text-red-500 mt-1">{pickupError}</p>
+                      <p className={cn(
+                        "text-xs mt-1 font-semibold",
+                        pickupInZone === false ? "text-red-600 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-lg" : "text-red-500"
+                      )}>
+                        {pickupInZone === false
+                          ? "Must be in our Westside zone."
+                          : pickupError
+                        }
+                      </p>
                     )}
                   </div>
 
+                  {/* To input */}
                   <div className="space-y-2">
                     <Label htmlFor="dropoff" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      To
+                      To Where
                     </Label>
                     <LocationAutocomplete
                       key="dropoff"
@@ -599,7 +608,7 @@ export default function LandingPage() {
                       onChange={setDropoffAddress}
                       onPlaceSelect={handleDropoffSelect}
                       onClear={handleDropoffClear}
-                      placeholder="Where to?"
+                      placeholder="Anywhere in SoCal"
                       isLoaded={isLoaded}
                       icon={<Flag className="h-4 w-4 text-slate-400" />}
                     />
@@ -625,56 +634,66 @@ export default function LandingPage() {
                     }
                     {!quoteLimitReached && <ArrowRight className="h-4 w-4" />}
                   </a>
-
-                  <Badge
-                    variant="outline"
-                    className="w-fit gap-2 px-3 py-2 text-[11px] font-black uppercase tracking-widest"
-                  >
-                    <MapPin className="h-4 w-4 text-lime-500" />
-                    Greater LA Pickup Zones
-                  </Badge>
                 </div>
               </CardContent>
             </Card>
           </div>
         </section>
 
-        {/* ===== ESTIMATE OUTPUT ===== */}
+        {/* ===== ESTIMATE OUTPUT — route map + price ===== */}
         <section id="estimate" className="px-6 lg:px-8 pb-16">
           <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="grid grid-cols-1 lg:grid-cols-12">
-              <div className="lg:col-span-7 min-h-[340px] lg:min-h-[520px] relative overflow-hidden bg-slate-50 dark:bg-slate-950">
-                <RouteMap pickup={pickupCoords} dropoff={dropoffCoords} isLoaded={isLoaded} zones={zones}/>
+              {/* Map panel — starts zoomed to Westside coastal area */}
+              <div className="lg:col-span-7 min-h-[380px] lg:min-h-[520px] relative overflow-hidden bg-slate-50 dark:bg-slate-950">
+                <RouteMap
+                  pickup={pickupCoords}
+                  dropoff={dropoffCoords}
+                  isLoaded={isLoaded}
+                  zones={zones}
+                  initialCenter={{ lat: 33.98, lng: -118.45 }}
+                  initialZoom={13}
+                  showMapTypeControl={true}
+                />
 
-                {/* Dealerships Welcome badge */}
+                {/* Dealerships Welcome badge — top-right, overlapping green zone */}
                 <div className="absolute top-5 right-5 z-10">
-                  <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700">
-                    <Car className="h-4 w-4 text-lime-500" />
+                  <div className="bg-lime-100/95 dark:bg-lime-900/80 backdrop-blur px-4 py-2 rounded-full text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-lime-200 dark:border-lime-700">
+                    <Car className="h-4 w-4 text-lime-600 dark:text-lime-400" />
                     Dealerships Welcome
                   </div>
                 </div>
 
+                {/* Pickup zone label — top-left */}
                 <div className="absolute top-5 left-5 flex flex-col gap-2 z-10">
                   <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700">
                     <Map className="h-4 w-6 text-lime-500" />
-                    Route Preview
+                    Westside LA
                   </div>
                   {distance && (
                     <Badge variant="secondary" className="w-fit gap-2 px-4 py-2 backdrop-blur">
                       <Ruler className="h-4 w-4 text-lime-500" />
                       <span className="text-[11px] font-black uppercase tracking-widest">
-                        Distance: {quoteResult ? `${Math.round(quoteResult.distanceMiles)} miles` : '— miles'}
+                        {quoteResult ? `${Math.round(quoteResult.distanceMiles)} miles` : '— miles'}
                       </span>
                     </Badge>
                   )}
                 </div>
 
+                {/* Route label — bottom-left */}
                 <div className="absolute bottom-5 left-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
                   <Navigation className="h-4 w-4 text-lime-500" />
                   {pickupAddress || 'From'} → {dropoffAddress || 'To'}
                 </div>
+
+                {/* Pickup Zone legend — bottom-right */}
+                <div className="absolute bottom-5 right-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-xl text-[10px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
+                  <span className="w-3 h-3 rounded-sm bg-[#39FF14] inline-block shrink-0" />
+                  Green area = Pickup Zone
+                </div>
               </div>
 
+              {/* Price panel */}
               <div className="lg:col-span-5 p-7 sm:p-8 lg:p-10 flex flex-col justify-between">
                 <div>
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-7">
@@ -708,65 +727,37 @@ export default function LandingPage() {
 
                   <div className="space-y-4 py-6 border-y border-slate-100 dark:border-slate-800">
                     {quoteResult?.feesBreakdown && (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                            Base Transportation
-                          </span>
-                          <span className="font-black text-slate-900 dark:text-white">
-                            ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
-                          </span>
-                        </div>
-                        {/* <div className="flex justify-between items-center">
-                          <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                            Insurance Fee
-                          </span>
-                          <span className="font-black text-slate-900 dark:text-white">
-                            ${quoteResult.feesBreakdown.insuranceFee.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                            Transaction Fee
-                          </span>
-                          <span className="font-black text-slate-900 dark:text-white">
-                            ${quoteResult.feesBreakdown.transactionFee.toFixed(2)}
-                          </span>
-                        </div>
-                        {quoteResult.feesBreakdown.distanceCharge > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                              Distance Charge
-                            </span>
-                            <span className="font-black text-slate-900 dark:text-white">
-                              ${quoteResult.feesBreakdown.distanceCharge.toFixed(2)}
-                            </span>
-                          </div>
-                        )} */}
-                      </>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
+                          Base Transportation
+                        </span>
+                        <span className="font-black text-slate-900 dark:text-white">
+                          ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
+                        </span>
+                      </div>
                     )}
                   </div>
 
+                  {/* Disclaimer */}
                   <div className="mt-6 flex gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30">
                     <Info className="h-5 w-5 text-amber-500" />
                     <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
-                      Estimate only. Final scheduling depends on driver
-                      availability and operational policy.
+                      Estimate only. Final scheduling depends on driver availability and operational policy.
                     </p>
                   </div>
                 </div>
 
-                {/* Out of zone overlay - show above Continue buttons */}
+                {/* Out of zone — red error overlay */}
                 {pickupInZone === false && quoteResult && (
-                  <div className="mt-6 p-5 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-200 dark:border-orange-900/30">
+                  <div className="mt-6 p-5 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-200 dark:border-red-900/30">
                     <div className="flex gap-3">
-                      <AlertTriangle className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+                      <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                       <div>
                         <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
                           Pickup Outside Our Current Zones
                         </h4>
                         <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-normal mt-1">
-                          Service isn't available for this pickup area yet — our drivers start from Greater LA. We're expanding soon!
+                          Must be in our Westside zone. Service isn't available for this pickup area yet — we're expanding soon!
                         </p>
                         <div className="flex flex-col sm:flex-row gap-2 mt-4">
                           <a
@@ -792,6 +783,7 @@ export default function LandingPage() {
                   </div>
                 )}
 
+                {/* Desktop action buttons */}
                 <div className="hidden sm:flex mt-8 gap-3">
                   <Link
                     to={quoteResult && pickupInZone !== false ? "/quote-details" : "#"}
@@ -826,6 +818,7 @@ export default function LandingPage() {
                   </Button>
                 </div>
 
+                {/* Mobile action buttons */}
                 <div className="sm:hidden mt-8 flex flex-col gap-3">
                   <Link
                     to={quoteResult && pickupInZone !== false ? "/quote-details" : "#"}
