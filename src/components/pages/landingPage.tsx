@@ -288,8 +288,8 @@ export default function LandingPage() {
       return;
     }
     if (!pickupAddress || !dropoffAddress) {
-      if (!pickupAddress) setPickupError("Pickup address is required");
-      if (!dropoffAddress) setDropoffError("Drop-off address is required");
+      if (!pickupAddress) setPickupError("From address is required");
+      if (!dropoffAddress) setDropoffError("To address is required");
       return;
     }
     // Clear any previous errors
@@ -565,14 +565,14 @@ export default function LandingPage() {
                     See what a delivery costs
                   </CardTitle>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    Enter pickup and drop-off. Pickup zones in Greater LA.
+                    Enter from and to. Pickup zones in Greater LA.
                   </p>
                 </div>
 
                 <div className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="pickup" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Pickup Address
+                      From
                     </Label>
                     <LocationAutocomplete
                       key="pickup"
@@ -580,7 +580,7 @@ export default function LandingPage() {
                       onChange={setPickupAddress}
                       onPlaceSelect={handlePickupSelect}
                       onClear={handlePickupClear}
-                      placeholder="Search pickup location"
+                      placeholder="From where?"
                       isLoaded={isLoaded}
                       icon={<Target className="h-4 w-4 text-slate-400" />}
                     />
@@ -591,7 +591,7 @@ export default function LandingPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="dropoff" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      Drop-off Address
+                      To
                     </Label>
                     <LocationAutocomplete
                       key="dropoff"
@@ -599,7 +599,7 @@ export default function LandingPage() {
                       onChange={setDropoffAddress}
                       onPlaceSelect={handleDropoffSelect}
                       onClear={handleDropoffClear}
-                      placeholder="Search drop-off location"
+                      placeholder="Where to?"
                       isLoaded={isLoaded}
                       icon={<Flag className="h-4 w-4 text-slate-400" />}
                     />
@@ -671,7 +671,7 @@ export default function LandingPage() {
 
                 <div className="absolute bottom-5 left-5 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
                   <Navigation className="h-4 w-4 text-lime-500" />
-                  {pickupAddress || 'Pickup'} → {dropoffAddress || 'Drop-off'}
+                  {pickupAddress || 'From'} → {dropoffAddress || 'To'}
                 </div>
               </div>
 
@@ -683,9 +683,9 @@ export default function LandingPage() {
                         Estimated Price
                       </h3>
                       <div className="flex items-center gap-2 mt-2 text-slate-500 dark:text-slate-400 font-semibold text-sm">
-                        <span>Pickup</span>
+                        <span>From</span>
                         <ArrowRight className="h-3 w-3" />
-                        <span>Drop-off</span>
+                        <span>To</span>
                       </div>
 
                       <Badge variant="secondary" className="mt-4 gap-2 px-3 py-2">
