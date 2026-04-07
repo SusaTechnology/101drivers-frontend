@@ -111,7 +111,7 @@ export default function AdminServiceDistrictsPage() {
 
   const handleUpdateDistrict = useCallback(
     (id: string, data: { name?: string; active?: boolean; geoJson?: any }) => {
-      updateDistrict.mutate({ id, data });
+      updateDistrict.mutate({ id, data, pathParams: { id } });
     },
     [updateDistrict],
   );
@@ -121,6 +121,7 @@ export default function AdminServiceDistrictsPage() {
       updateDistrict.mutate({
         id: district.id,
         data: { active: !district.active },
+        pathParams: { id: district.id },
       });
     },
     [updateDistrict],
@@ -133,7 +134,7 @@ export default function AdminServiceDistrictsPage() {
 
   const confirmDelete = useCallback(() => {
     if (!districtToDelete) return;
-    deleteDistrict.mutate({ id: districtToDelete.id });
+    deleteDistrict.mutate({ id: districtToDelete.id, pathParams: { id: districtToDelete.id } });
   }, [districtToDelete, deleteDistrict]);
 
   // Filter districts

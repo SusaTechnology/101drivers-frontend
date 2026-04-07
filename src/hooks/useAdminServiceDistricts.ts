@@ -1,4 +1,4 @@
-import { useDataQuery, useCreate, usePatch, useDelete } from '@/lib/tanstack/dataQuery';
+import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery';
 import { useQueryClient } from '@tanstack/react-query';
 
 const BASE_URL = `${import.meta.env.VITE_API_URL}/api/serviceDistricts`;
@@ -37,7 +37,10 @@ export function useCreateServiceDistrict(options?: {
 }) {
   const queryClient = useQueryClient();
 
-  return useCreate<any, Partial<ServiceDistrict>>(BASE_URL, {
+  return useDataMutation<any, Partial<ServiceDistrict>>({
+    apiEndPoint: BASE_URL,
+    method: 'POST',
+    getBody: (variables) => JSON.stringify(variables),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['data', BASE_URL] });
       options?.onSuccess?.(data);
@@ -53,16 +56,22 @@ export function useUpdateServiceDistrict(options?: {
 }) {
   const queryClient = useQueryClient();
 
-  return usePatch<any, { id: string; data: Partial<ServiceDistrict> }>(
-    `${BASE_URL}/:id`,
-    {
-      onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ['data', BASE_URL] });
-        options?.onSuccess?.(data);
-      },
-      onError: options?.onError,
+  return useDataMutation<
+    any,
+    { id: string; data: Partial<ServiceDistrict> } & { pathParams?: Record<string, string> }
+  >({
+    apiEndPoint: `${BASE_URL}/:id`,
+    method: 'PATCH',
+    getBody: (variables) => {
+      const { data, pathParams: _pp, ...rest } = variables as any;
+      return JSON.stringify(data);
     },
-  );
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['data', BASE_URL] });
+      options?.onSuccess?.(data);
+    },
+    onError: options?.onError,
+  });
 }
 
 /** Delete a service district */
@@ -72,7 +81,13 @@ export function useDeleteServiceDistrict(options?: {
 }) {
   const queryClient = useQueryClient();
 
-  return useDelete<any, { id: string }>(`${BASE_URL}/:id`, {
+  return useDataMutation<
+    any,
+    { id: string } & { pathParams?: Record<string, string> }
+  >({
+    apiEndPoint: `${BASE_URL}/:id`,
+    method: 'DELETE',
+    getBody: () => null as any,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data', BASE_URL] });
       options?.onSuccess?.();
