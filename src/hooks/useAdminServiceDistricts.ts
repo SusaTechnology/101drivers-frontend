@@ -105,7 +105,10 @@ export function polygonToGeoJson(
   const path = 'getArray' in paths ? paths.getArray() : paths;
 
   path.forEach((latLng) => {
-    coords.push([latLng.lng(), latLng.lat()]);
+    // Handle both google.maps.LatLng (has .lat() method) and LatLngLiteral (has .lat property)
+    const lat = typeof latLng.lat === 'function' ? (latLng as any).lat() : latLng.lat;
+    const lng = typeof latLng.lng === 'function' ? (latLng as any).lng() : latLng.lng;
+    coords.push([lng, lat]);
   });
 
   // Close the ring if not already closed
