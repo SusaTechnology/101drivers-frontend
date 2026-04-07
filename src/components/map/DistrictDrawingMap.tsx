@@ -1,9 +1,9 @@
 // @ts-nocheck
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { GoogleMap, DrawingManager, Polygon } from '@react-google-maps/api';
+import { GoogleMap, DrawingManager, Polygon, InfoWindow } from '@react-google-maps/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Edit3, Check, X, Undo2 } from 'lucide-react';
+import { Trash2, Check, X, Undo2, MousePointerClick, Plus, GripVertical, Move } from 'lucide-react';
 import { geoJsonToPaths, polygonToGeoJson } from '@/hooks/useAdminServiceDistricts';
 
 const CONTAINER_STYLE: React.CSSProperties = {
@@ -52,6 +52,11 @@ export default function DistrictDrawingMap({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [hoveredDistrict, setHoveredDistrict] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editVertexCount, setEditVertexCount] = useState(0);
+
+  // For the click-to-edit tooltip
+  const [tooltipDistrict, setTooltipDistrict] = useState<District | null>(null);
+  const [tooltipAnchor, setTooltipAnchor] = useState<google.maps.LatLng | null>(null);
 
   const totalVertices = draftPolygons.reduce((sum, dp) => sum + dp.paths.length, 0);
 
@@ -69,6 +74,7 @@ export default function DistrictDrawingMap({
     } else {
       setDrawingMode(true);
       setEditingId(null);
+      editPolygonRef.current = null;
       if (drawingManagerRef.current) {
         drawingManagerRef.current.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
       }
@@ -133,19 +139,25 @@ export default function DistrictDrawingMap({
   );
 
   // Start editing existing district polygon
-  const startEdit = useCallback((district: District) => {
-    setEditingId(district.id || null);
-    setEditingName(district.name);
-    setDrawingMode(false);
-    if (drawingManagerRef.current) {
-      drawingManagerRef.current.setDrawingMode(null);
-    }
-  }, []);
+  const startEdit = useCallback(
+    (district: District) => {
+      setEditingId(district.id || null);
+      setEditingName(district.name);
+      setTooltipDistrict(null);
+      setTooltipAnchor(null);
+      setDrawingMode(false);
+      if (drawingManagerRef.current) {
+        drawingManagerRef.current.setDrawingMode(null);
+      }
+    },
+    [],
+  );
 
   const cancelEdit = useCallback(() => {
     setEditingId(null);
     setEditingName('');
     editPolygonRef.current = null;
+    setEditVertexCount(0);
   }, []);
 
   // Save edited polygon — reads from the edit polygon ref
@@ -168,7 +180,30 @@ export default function DistrictDrawingMap({
     setEditingId(null);
     setEditingName('');
     editPolygonRef.current = null;
+    setEditVertexCount(0);
   }, [editingId, editingName, onUpdate]);
+
+  // Track vertex count on the edit polygon
+  const handleEditPolygonLoad = useCallback(
+    (poly: google.maps.Polygon) => {
+      editPolygonRef.current = poly;
+      const count = poly.getPath().getLength();
+      setEditVertexCount(count);
+
+      // Listen for vertex changes
+      google.maps.event.clearListeners(poly, 'dragend');
+      google.maps.event.addListener(poly.getPath(), 'insert_at', () => {
+        setEditVertexCount(poly.getPath().getLength());
+      });
+      google.maps.event.addListener(poly.getPath(), 'remove_at', () => {
+        setEditVertexCount(poly.getPath().getLength());
+      });
+      google.maps.event.addListener(poly.getPath(), 'set_at', () => {
+        setEditVertexCount(poly.getPath().getLength());
+      });
+    },
+    [],
+  );
 
   // Fit map to show all polygons
   const fitAllBounds = useCallback(() => {
@@ -212,6 +247,34 @@ export default function DistrictDrawingMap({
     ? geoJsonToPaths(districts.find((d) => d.id === editingId)?.geoJson)
     : [];
 
+  // Click on polygon to start editing
+  const handlePolygonClick = useCallback(
+    (e: google.maps.MapMouseEvent, district: District) => {
+      if (drawingMode) return;
+      startEdit(district);
+    },
+    [drawingMode, startEdit],
+  );
+
+  // Hover to show tooltip
+  const handlePolygonMouseOver = useCallback(
+    (e: google.maps.MapMouseEvent, district: District) => {
+      if (drawingMode) return;
+      setHoveredDistrict(district.id || null);
+      setTooltipDistrict(district);
+      if (e.latLng) {
+        setTooltipAnchor(e.latLng);
+      }
+    },
+    [drawingMode],
+  );
+
+  const handlePolygonMouseOut = useCallback(() => {
+    setHoveredDistrict(null);
+    setTooltipDistrict(null);
+    setTooltipAnchor(null);
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
@@ -220,6 +283,7 @@ export default function DistrictDrawingMap({
           size="sm"
           variant={drawingMode ? 'default' : 'outline'}
           onClick={toggleDrawing}
+          disabled={!!editingId}
           className="rounded-xl font-extrabold text-xs gap-1.5"
         >
           {drawingMode ? (
@@ -229,7 +293,7 @@ export default function DistrictDrawingMap({
             </>
           ) : (
             <>
-              <Edit3 className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5" />
               Draw New Zone
             </>
           )}
@@ -251,15 +315,29 @@ export default function DistrictDrawingMap({
           </Badge>
         )}
 
+        {editingId && (
+          <Badge className="bg-amber-50 dark:bg-amber-900/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-black">
+            <GripVertical className="h-3 w-3 mr-1" />
+            Drag vertices to reshape · Click edge to add vertex · Right-click vertex to delete
+          </Badge>
+        )}
+
+        {!drawingMode && !editingId && (
+          <Badge variant="secondary" className="text-[10px] font-black text-slate-500">
+            <MousePointerClick className="h-3 w-3 mr-1" />
+            Click any zone on the map to edit it
+          </Badge>
+        )}
+
         {draftPolygons.length > 0 && (
           <Badge variant="secondary" className="text-[10px] font-black">
             {draftPolygons.length} unsaved zone{draftPolygons.length > 1 ? 's' : ''}
           </Badge>
         )}
 
-        {totalVertices > 0 && (
+        {(totalVertices > 0 || editVertexCount > 0) && (
           <span className="text-[10px] text-slate-400 font-medium">
-            {totalVertices} vertices total
+            {totalVertices + editVertexCount} vertices total
           </span>
         )}
       </div>
@@ -300,7 +378,7 @@ export default function DistrictDrawingMap({
               }}
             />
 
-            {/* Existing districts */}
+            {/* Existing districts (non-editing) */}
             {districts.map((district) => {
               const paths = geoJsonToPaths(district.geoJson);
               if (paths.length === 0) return null;
@@ -308,8 +386,7 @@ export default function DistrictDrawingMap({
               const isEditing = editingId === district.id;
               const isHovered = hoveredDistrict === district.id;
 
-              // If editing, show amber; otherwise green
-              if (isEditing) return null; // handled by separate edit overlay below
+              if (isEditing) return null;
 
               return (
                 <React.Fragment key={district.id}>
@@ -324,6 +401,7 @@ export default function DistrictDrawingMap({
                       strokeWeight: 8,
                       clickable: !drawingMode,
                       zIndex: 1,
+                      cursor: drawingMode ? 'default' : 'pointer',
                     }}
                   />
                   {/* Main fill */}
@@ -331,30 +409,64 @@ export default function DistrictDrawingMap({
                     paths={paths}
                     options={{
                       fillColor: '#a9ce42',
-                      fillOpacity: isHovered ? 0.3 : 0.2,
+                      fillOpacity: isHovered ? 0.35 : 0.2,
                       strokeColor: '#a9ce42',
                       strokeOpacity: isHovered ? 1 : 0.9,
-                      strokeWeight: 3,
+                      strokeWeight: isHovered ? 4 : 3,
                       clickable: !drawingMode,
                       zIndex: 2,
+                      cursor: drawingMode ? 'default' : 'pointer',
                     }}
-                    onMouseover={() => !drawingMode && setHoveredDistrict(district.id || null)}
-                    onMouseout={() => setHoveredDistrict(null)}
+                    onMouseover={(e) => handlePolygonMouseOver(e, district)}
+                    onMouseout={handlePolygonMouseOut}
+                    onClick={(e) => handlePolygonClick(e, district)}
                   />
                 </React.Fragment>
               );
             })}
 
+            {/* Click-to-edit tooltip */}
+            {tooltipDistrict && tooltipAnchor && !editingId && !drawingMode && (
+              <InfoWindow
+                position={tooltipAnchor}
+                options={{
+                  pixelOffset: new google.maps.Size(0, -10),
+                  maxWidth: 200,
+                  closeIcon: { url: '' } as any,
+                  disableAutoPan: true,
+                }}
+              >
+                <div
+                  style={{
+                    background: '#fff',
+                    borderRadius: '12px',
+                    padding: '8px 12px',
+                    fontFamily: 'system-ui, sans-serif',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    margin: '-8px -12px',
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: '12px', color: '#1e293b', marginBottom: '2px' }}>
+                    {tooltipDistrict.name}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>
+                    {tooltipDistrict.code} · {tooltipDistrict.active ? '● Active' : '○ Inactive'}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#f59e0b', fontWeight: 700 }}>
+                    ✏️ Click to edit this zone
+                  </div>
+                </div>
+              </InfoWindow>
+            )}
+
             {/* Edit polygon overlay (when editing existing) */}
             {editingId && editPaths.length > 0 && (
               <Polygon
-                onLoad={(poly) => {
-                  editPolygonRef.current = poly;
-                }}
+                onLoad={handleEditPolygonLoad}
                 paths={editPaths}
                 options={{
                   fillColor: '#f59e0b',
-                  fillOpacity: 0.2,
+                  fillOpacity: 0.15,
                   strokeColor: '#f59e0b',
                   strokeOpacity: 0.9,
                   strokeWeight: 3,
@@ -365,7 +477,7 @@ export default function DistrictDrawingMap({
               />
             )}
 
-            {/* Draft polygons (unsaved) — blue dashed */}
+            {/* Draft polygons (unsaved) — blue */}
             {draftPolygons.map((draft, index) => (
               <React.Fragment key={`draft-${index}`}>
                 {/* Glow */}
@@ -381,7 +493,7 @@ export default function DistrictDrawingMap({
                     zIndex: 3,
                   }}
                 />
-                {/* Main dashed */}
+                {/* Main */}
                 <Polygon
                   paths={draft.paths}
                   options={{
@@ -401,23 +513,48 @@ export default function DistrictDrawingMap({
 
         {/* Side Panel - Edit/Draft cards */}
         {(draftPolygons.length > 0 || editingId) && (
-          <div className="absolute top-3 right-3 z-10 w-72 max-h-[calc(100%-24px)] overflow-y-auto space-y-2">
+          <div className="absolute top-3 right-3 z-10 w-80 max-h-[calc(100%-24px)] overflow-y-auto space-y-2">
             {/* Editing existing */}
             {editingId && (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-lg p-3">
-                <div className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-2">
-                  Editing Zone
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-lg p-4">
+                <div className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-3">
+                  ✏️ Editing Zone
                 </div>
                 <input
                   type="text"
                   value={editingName}
                   onChange={(e) => setEditingName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl mb-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full px-3 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl mb-3 focus:outline-none focus:ring-2 focus:ring-amber-400"
                   placeholder="Zone name"
                 />
-                <p className="text-[10px] text-slate-500 mb-2">
-                  Drag vertices or the whole shape to edit the polygon boundary.
-                </p>
+                
+                {/* Edit instructions */}
+                <div className="bg-amber-50 dark:bg-amber-900/10 rounded-xl p-3 mb-3 space-y-2">
+                  <div className="text-[10px] font-black text-amber-700 dark:text-amber-300">
+                    How to edit:
+                  </div>
+                  <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                    <GripVertical className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                    <span><strong>Drag vertices</strong> — white dots on the boundary to reshape the zone</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                    <Move className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                    <span><strong>Drag the whole shape</strong> — click inside and drag to reposition</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                    <Plus className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                    <span><strong>Click an edge</strong> — between two vertices to add a new point</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                    <Trash2 className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                    <span><strong>Right-click a vertex</strong> — to remove it from the polygon</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] text-slate-500 mb-3">
+                  <span>{editVertexCount} vertices</span>
+                </div>
+
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -426,7 +563,7 @@ export default function DistrictDrawingMap({
                     className="flex-1 rounded-xl font-extrabold text-xs gap-1 bg-amber-500 hover:bg-amber-600 text-white"
                   >
                     <Check className="h-3.5 w-3.5" />
-                    Save
+                    Save Changes
                   </Button>
                   <Button
                     size="sm"
@@ -445,10 +582,10 @@ export default function DistrictDrawingMap({
             {draftPolygons.map((draft, index) => (
               <div
                 key={`draft-panel-${index}`}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-blue-200 dark:border-blue-800 shadow-lg p-3"
+                className="bg-white dark:bg-slate-900 rounded-2xl border border-blue-200 dark:border-blue-800 shadow-lg p-4"
               >
                 <div className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-2">
-                  New Zone {index + 1}
+                  🆕 New Zone {index + 1}
                 </div>
                 <div className="space-y-1.5 mb-2">
                   <input
@@ -470,9 +607,7 @@ export default function DistrictDrawingMap({
                     placeholder="ZONE_CODE"
                   />
                 </div>
-                <p className="text-[10px] text-slate-500 mb-2">
-                  {draft.paths.length} vertices
-                </p>
+                <p className="text-[10px] text-slate-500 mb-2">{draft.paths.length} vertices</p>
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -497,31 +632,17 @@ export default function DistrictDrawingMap({
           </div>
         )}
 
-        {/* District labels on map */}
-        {districts
-          .filter((d) => d.id !== editingId)
-          .map((district) => {
-            const paths = geoJsonToPaths(district.geoJson);
-            if (paths.length === 0) return null;
-            // Compute centroid for label
-            const avgLat = paths.reduce((s, p) => s + p.lat, 0) / paths.length;
-            const avgLng = paths.reduce((s, p) => s + p.lng, 0) / paths.length;
-            return (
-              <div
-                key={`label-${district.id}`}
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  pointerEvents: 'none',
-                  zIndex: 5,
-                }}
-              >
-                {/* We skip inline labels — the side panel list shows names */}
-              </div>
-            );
-          })}
+        {/* Quick-help overlay when map is idle (no edit, no draw) */}
+        {!editingId && !drawingMode && draftPolygons.length === 0 && districts.length > 0 && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg px-4 py-2.5 flex items-center gap-3">
+              <MousePointerClick className="h-4 w-4 text-amber-500 shrink-0" />
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                Click any zone to edit · Drag vertices to reshape · Right-click vertex to delete
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
