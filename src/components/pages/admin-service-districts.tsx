@@ -45,7 +45,7 @@ import {
   useCreateServiceDistrict,
   useUpdateServiceDistrict,
   useDeleteServiceDistrict,
-  ServiceDistrict,
+  type ServiceDistrict,
 } from '@/hooks/useAdminServiceDistricts';
 
 export default function AdminServiceDistrictsPage() {
