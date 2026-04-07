@@ -122,10 +122,19 @@ export class ServiceDistrictService extends ServiceDistrictServiceBase {
     const raw = target[field];
 
     if (raw && typeof raw === "object" && "set" in raw) {
+      if (raw.set == null) {
+        delete target[field];
+        return;
+      }
       target[field] = {
         ...raw,
         set: this.trimRequiredString(raw.set).toUpperCase(),
       };
+      return;
+    }
+
+    if (raw == null) {
+      delete target[field];
       return;
     }
 
@@ -185,10 +194,19 @@ export class ServiceDistrictService extends ServiceDistrictServiceBase {
     const raw = target[field];
 
     if (raw && typeof raw === "object" && "set" in raw) {
+      if (raw.set == null) {
+        delete target[field];
+        return;
+      }
       target[field] = {
         ...raw,
         set: this.trimRequiredString(raw.set),
       };
+      return;
+    }
+
+    if (raw == null) {
+      delete target[field];
       return;
     }
 
