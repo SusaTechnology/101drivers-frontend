@@ -54,9 +54,9 @@ export default function DistrictDrawingMap({
   const [editingName, setEditingName] = useState('');
   const [editVertexCount, setEditVertexCount] = useState(0);
 
-  // For the click-to-edit tooltip
-  const [tooltipDistrict, setTooltipDistrict] = useState<District | null>(null);
-  const [tooltipAnchor, setTooltipAnchor] = useState<google.maps.LatLng | null>(null);
+  // For the click popup (shows Edit/Delete actions)
+  const [popupDistrict, setPopupDistrict] = useState<District | null>(null);
+  const [popupAnchor, setPopupAnchor] = useState<google.maps.LatLng | null>(null);
 
   const totalVertices = draftPolygons.reduce((sum, dp) => sum + dp.paths.length, 0);
 
@@ -247,32 +247,60 @@ export default function DistrictDrawingMap({
     ? geoJsonToPaths(districts.find((d) => d.id === editingId)?.geoJson)
     : [];
 
-  // Click on polygon to start editing
+  // Click on polygon to show action popup (Edit/Delete)
   const handlePolygonClick = useCallback(
     (e: google.maps.MapMouseEvent, district: District) => {
       if (drawingMode) return;
-      startEdit(district);
+      // Toggle popup: if same district clicked again, close it; otherwise open
+      if (popupDistrict?.id === district.id) {
+        setPopupDistrict(null);
+        setPopupAnchor(null);
+      } else {
+        setPopupDistrict(district);
+        if (e.latLng) {
+          setPopupAnchor(e.latLng);
+        }
+      }
     },
-    [drawingMode, startEdit],
+    [drawingMode, popupDistrict],
   );
 
-  // Hover to show tooltip
+  const closePopup = useCallback(() => {
+    setPopupDistrict(null);
+    setPopupAnchor(null);
+  }, []);
+
+  const handlePopupEdit = useCallback(
+    (district: District) => {
+ setPopupDistrict(null);
+      setPopupAnchor(null);
+      startEdit(district);
+    },
+    [startEdit],
+  );
+
+  const handlePopupDelete = useCallback(
+    (district: District) => {
+      if (district.id) {
+        onDelete?.(district.id);
+      }
+      setPopupDistrict(null);
+      setPopupAnchor(null);
+    },
+    [onDelete],
+  );
+
+  // Hover to show tooltip (lighter, just name hint)
   const handlePolygonMouseOver = useCallback(
     (e: google.maps.MapMouseEvent, district: District) => {
       if (drawingMode) return;
       setHoveredDistrict(district.id || null);
-      setTooltipDistrict(district);
-      if (e.latLng) {
-        setTooltipAnchor(e.latLng);
-      }
     },
     [drawingMode],
   );
 
   const handlePolygonMouseOut = useCallback(() => {
     setHoveredDistrict(null);
-    setTooltipDistrict(null);
-    setTooltipAnchor(null);
   }, []);
 
   return (
@@ -425,35 +453,98 @@ export default function DistrictDrawingMap({
               );
             })}
 
-            {/* Click-to-edit tooltip */}
-            {tooltipDistrict && tooltipAnchor && !editingId && !drawingMode && (
+            {/* Click action popup — Edit / Delete */}
+            {popupDistrict && popupAnchor && !editingId && !drawingMode && (
               <InfoWindow
-                position={tooltipAnchor}
+                position={popupAnchor}
                 options={{
                   pixelOffset: new google.maps.Size(0, -10),
-                  maxWidth: 200,
+                  maxWidth: 240,
                   closeIcon: { url: '' } as any,
                   disableAutoPan: true,
                 }}
+                onCloseClick={closePopup}
               >
                 <div
                   style={{
                     background: '#fff',
-                    borderRadius: '12px',
-                    padding: '8px 12px',
+                    borderRadius: '14px',
+                    padding: '0',
                     fontFamily: 'system-ui, sans-serif',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
                     margin: '-8px -12px',
+                    overflow: 'hidden',
                   }}
                 >
-                  <div style={{ fontWeight: 800, fontSize: '12px', color: '#1e293b', marginBottom: '2px' }}>
-                    {tooltipDistrict.name}
+                  {/* Header */}
+                  <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ fontWeight: 800, fontSize: '13px', color: '#1e293b', marginBottom: '2px' }}>
+                      {popupDistrict.name}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace' }}>
+                      {popupDistrict.code}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>
-                    {tooltipDistrict.code} · {tooltipDistrict.active ? '● Active' : '○ Inactive'}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#f59e0b', fontWeight: 700 }}>
-                    ✏️ Click to edit this zone
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '6px', padding: '8px 10px 10px' }}>
+                    <button
+                      onClick={() => handlePopupEdit(popupDistrict)}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '5px',
+                        padding: '7px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        background: '#fffbeb',
+                        color: '#92400e',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = '#fef3c7';
+                        e.currentTarget.style.borderColor = '#fbbf24';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = '#fffbeb';
+                        e.currentTarget.style.borderColor = '#e2e8f0';
+                      }}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      onClick={() => handlePopupDelete(popupDistrict)}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '5px',
+                        padding: '7px 12px',
+                        borderRadius: '10px',
+                        border: '1px solid #fecaca',
+                        background: '#fef2f2',
+                        color: '#991b1b',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = '#fee2e2';
+                        e.currentTarget.style.borderColor = '#f87171';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = '#fef2f2';
+                        e.currentTarget.style.borderColor = '#fecaca';
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
                   </div>
                 </div>
               </InfoWindow>
@@ -638,7 +729,7 @@ export default function DistrictDrawingMap({
             <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg px-4 py-2.5 flex items-center gap-3">
               <MousePointerClick className="h-4 w-4 text-amber-500 shrink-0" />
               <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                Click any zone to edit · Drag vertices to reshape · Right-click vertex to delete
+                Click any zone to Edit or Delete · Hover to highlight
               </span>
             </div>
           </div>
