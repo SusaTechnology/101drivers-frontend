@@ -38,7 +38,9 @@ import {
   Ban,
   MailCheck,
  MessageSquare as Sms,
-  Flag
+  Flag,
+  Edit3,
+  Power,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -111,6 +113,17 @@ const configCards = [
       { icon: MailCheck, label: "Email" },
       { icon: Sms, label: "SMS" },
       { icon: Route, label: "Routing" },
+    ]
+  },
+  {
+    href: "/admin-service-districts",
+    icon: MapPin,
+    title: "Service Districts",
+    description: "Draw and manage pickup/drop-off zones on the map. Define coverage areas with polygon boundaries.",
+    chips: [
+      { icon: MapPin, label: "Zones" },
+      { icon: Edit3, label: "Draw" },
+      { icon: Power, label: "Toggle" },
     ]
   },
   {
