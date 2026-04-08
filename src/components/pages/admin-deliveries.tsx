@@ -531,7 +531,7 @@ export default function AdminDeliveriesPage() {
         </section>
 
         {/* KPI Row - Interactive status cards */}
-        <section className="grid grid-cols-5 md:grid-cols-9 gap-2 mb-6">
+        <section className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 mb-6">
           {Object.entries(STATUS_CONFIG).map(([status, config]) => (
             <button
               key={status}

@@ -523,7 +523,7 @@ export default function AdminPaymentsPage() {
         </section>
 
         {/* KPI Row - Status Cards */}
-        <section className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-6">
           {Object.entries(STATUS_CONFIG).map(([status, config]) => (
             <button
               key={status}

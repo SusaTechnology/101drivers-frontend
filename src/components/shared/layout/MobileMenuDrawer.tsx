@@ -1,5 +1,5 @@
 // components/layout/MobileMenuDrawer.tsx
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -23,17 +23,19 @@ export function MobileMenuDrawer({
   title = 'Admin',
   logo = '/assets/101drivers-logo.jpg',
 }: MobileMenuDrawerProps) {
+  const location = useLocation();
+
   if (!isOpen) return null;
 
   return (
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 z-40 md:hidden"
+        className="fixed inset-0 bg-black/40 z-40 lg:hidden"
         onClick={onClose}
       />
       {/* Drawer */}
-      <div className="fixed top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 z-50 md:hidden overflow-y-auto">
+      <div className="fixed top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 z-50 lg:hidden overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl overflow-hidden bg-black border border-slate-200">

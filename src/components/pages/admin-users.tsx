@@ -922,8 +922,8 @@ export default function AdminUsersPage() {
                 )}
               </div>
             ) : (
-              <>
-                <Table>
+              <div className="overflow-x-auto">
+              <Table>
                   <TableHeader>
                     <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">User</TableHead>
@@ -1100,6 +1100,7 @@ export default function AdminUsersPage() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
 
                 {/* Pagination */}
                 {pagination && pagination.totalPages > 1 && (
@@ -1134,7 +1135,6 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
                 )}
-              </>
             )}
           </CardContent>
         </Card>
