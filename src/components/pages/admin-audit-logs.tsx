@@ -1,11 +1,13 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
-import { useTheme } from 'next-themes'
+import React, { useState, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { getAccessToken, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { Navbar } from '../shared/layout/testNavbar'
+import { navItems } from '@/lib/items/navItems'
+import { Brand } from '@/lib/items/brand'
+import { useAdminActions } from '@/hooks/useAdminActions'
 import { useCustomerLookup } from '@/hooks/useAdminDashboard'
 import { useDriverLookup, useDeliveryLookup, useUserLookup } from '@/hooks/useAdminDeliveries'
 import { useDebouncedValue } from '@/hooks/useDebounce'
@@ -36,34 +38,18 @@ import {
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import {
   History,
-  Menu,
-  X,
-  Sun,
-  Moon,
-  LogOut,
-  Search,
   RefreshCw,
   User,
   Building2,
   Truck,
   Package,
   Settings,
-  Shield,
   AlertCircle,
   Clock,
   Eye,
   FileJson,
   Activity,
   Database,
-  Zap,
-  Users,
-  BarChart3,
-  CreditCard,
-  Gavel,
-  Bell,
-  TrendingUp as PriceChange,
-  Calendar as CalendarMonth,
-  SlidersHorizontal as Tune,
   ChevronLeft,
   ChevronRight,
   Filter,
@@ -1213,23 +1199,6 @@ const ActionSummaryCard = ({
   )
 }
 
-// Sidebar navigation items
-const sidebarItems = [
-  { href: '/admin-dashboard', label: 'Dashboard', icon: BarChart3 },
-  { href: '/admin-users', label: 'Users', icon: Users },
-  { href: '/admin-deliveries', label: 'Deliveries', icon: Truck },
-  { href: '/admin-payments', label: 'Payments', icon: CreditCard },
-  { href: '/admin-disputes', label: 'Disputes', icon: Gavel },
-  { href: '/admin-reports', label: 'Reports', icon: BarChart3 },
-  { section: 'Config', items: [
-    { href: '/admin-config', label: 'Config Hub', icon: Tune },
-    { href: '/admin-pricing', label: 'Pricing', icon: PriceChange },
-    { href: '/admin-scheduling-policy', label: 'Scheduling Policy', icon: CalendarMonth },
-    { href: '/admin-notification-policy', label: 'Notification Policy', icon: Bell },
-    { href: '/admin-audit-logs', label: 'Audit Logs', icon: History, active: true },
-  ]},
-]
-
 // All available actions for filter
 const ALL_ACTIONS: AuditAction[] = [
   'USER_DISABLE', 'USER_ENABLE', 'DEALER_APPROVE', 'DEALER_REJECT',
@@ -1242,11 +1211,7 @@ const ALL_ACTIONS: AuditAction[] = [
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 export default function AdminAuditLogsPage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const { theme, setTheme } = useTheme()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const { actionItems, signOut } = useAdminActions()
 
   // Filter states (immediate values for inputs)
   const [filterInputs, setFilterInputs] = useState<{
@@ -1351,32 +1316,6 @@ export default function AdminAuditLogsPage() {
         : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
     })),
   ], [drivers])
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Mobile menu handling
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = 'unset'
-    }
-    return () => {
-      document.body.style.overflow = 'unset'
-    }
-  }, [mobileMenuOpen])
-
-  const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark')
-    toast.success(`${theme === 'dark' ? 'Light' : 'Dark'} mode activated`)
-  }
-
-  const handleSignOut = () => {
-    toast.success('Signed out successfully')
-    navigate({ to: '/auth/admin-signin' })
-  }
 
   // Build search request from filters
   const buildSearchRequest = useCallback((): AuditLogSearchRequest => {
@@ -1498,78 +1437,17 @@ export default function AdminAuditLogsPage() {
     setDetailDialogOpen(true)
   }
 
-  // Sidebar component
-  const Sidebar = ({ isMobile = false }: { isMobile?: boolean }) => (
-    <aside
-      className={cn(
-        'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 lg:p-5 h-fit',
-        isMobile && 'h-full overflow-y-auto pb-20'
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div className="text-xs font-black uppercase tracking-widest text-slate-400">Admin</div>
-        <Badge variant="outline" className="chip-gray">
-          <Shield className="w-3.5 h-3.5 text-primary mr-1" />
-          SYS
-        </Badge>
-      </div>
-
-      <nav className="mt-4 space-y-1.5">
-        {sidebarItems.slice(0, 6).map((item) => (
-          <Link
-            key={item.href}
-            to={item.href}
-            className={cn(
-              'flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-extrabold transition',
-              'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-            )}
-            onClick={() => isMobile && setMobileMenuOpen(false)}
-          >
-            <item.icon className="w-5 h-5 text-primary" />
-            {item.label}
-          </Link>
-        ))}
-
-        <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-800">
-          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 mb-2">Config</div>
-          {sidebarItems[6].items.map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={cn(
-                'flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-extrabold transition',
-                item.active
-                  ? 'bg-primary/15 text-slate-950 dark:text-white border border-primary/25'
-                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-              )}
-              onClick={() => isMobile && setMobileMenuOpen(false)}
-            >
-              <item.icon className="w-5 h-5 text-primary" />
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </nav>
-    </aside>
-  )
-
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased">
-        <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md">
-          <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl overflow-hidden bg-black border border-slate-200 dark:border-slate-700">
-                <img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" />
-              </div>
-              <div className="leading-tight hidden sm:block">
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Admin</div>
-                <div className="text-sm font-extrabold text-slate-900 dark:text-white">Audit Logs</div>
-              </div>
-            </div>
-          </div>
-        </header>
+      <div className="min-h-screen bg-background-light dark:bg-background-dark">
+        <Navbar
+          brand={<Brand />}
+          items={navItems}
+          actions={actionItems}
+          onSignOut={signOut}
+          title="Admin"
+        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div>
@@ -1583,16 +1461,14 @@ export default function AdminAuditLogsPage() {
   // Error state
   if (isError) {
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased">
-        <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md">
-          <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl overflow-hidden bg-black border border-slate-200 dark:border-slate-700">
-                <img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" />
-              </div>
-            </div>
-          </div>
-        </header>
+      <div className="min-h-screen bg-background-light dark:bg-background-dark">
+        <Navbar
+          brand={<Brand />}
+          items={navItems}
+          actions={actionItems}
+          onSignOut={signOut}
+          title="Admin"
+        />
         <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14 flex items-center justify-center">
           <Card className="max-w-md p-6 text-center border-slate-200 dark:border-slate-800">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
@@ -1606,90 +1482,18 @@ export default function AdminAuditLogsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-      {/* Top Bar */}
-      <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md">
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              className="xl:hidden w-11 h-11 rounded-2xl"
-              onClick={() => setMobileMenuOpen(true)}
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
+    <div className="min-h-screen bg-background-light dark:bg-background-dark">
+      <Navbar
+        brand={<Brand />}
+        items={navItems}
+        actions={actionItems}
+        onSignOut={signOut}
+        title="Admin"
+      />
 
-            <Link to="/admin-dashboard" className="flex items-center gap-3" aria-label="101 Drivers Admin">
-              <div className="w-11 h-11 rounded-2xl overflow-hidden bg-black flex items-center justify-center border border-slate-200 dark:border-slate-700">
-                <img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" />
-              </div>
-              <div className="leading-tight hidden sm:block">
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Admin Portal</div>
-                <div className="text-sm font-extrabold text-slate-900 dark:text-white">Audit Logs</div>
-              </div>
-            </Link>
-
-            <Badge variant="secondary" className="hidden lg:inline-flex gap-1 ml-2">
-              <Shield className="h-3 w-3" />
-              Read Only
-            </Badge>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              size="icon"
-              className="w-11 h-11 rounded-2xl"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-            >
-              {mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </Button>
-
-            <Button
-              onClick={handleSignOut}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition text-sm font-extrabold"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Mobile sidebar backdrop */}
-      {mobileMenuOpen && (
-        <div className="xl:hidden fixed inset-0 bg-black/40 z-40" onClick={() => setMobileMenuOpen(false)} />
-      )}
-
-      {/* Mobile sidebar drawer */}
-      <div
-        className={cn(
-          'xl:hidden fixed z-50 top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 overflow-y-auto transition-transform duration-300',
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        )}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <div className="text-xs font-black uppercase tracking-widest text-slate-400">Admin</div>
-          <Button variant="outline" size="icon" className="w-11 h-11 rounded-2xl" onClick={() => setMobileMenuOpen(false)}>
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
-        <Sidebar isMobile />
-      </div>
-
-      <div className="max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
-          {/* Desktop sidebar */}
-          <div className="hidden xl:block xl:col-span-3">
-            <Sidebar />
-          </div>
-
-          {/* Main content */}
-          <main className="lg:col-span-9 space-y-6">
-            {/* Page header */}
-            <section className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+      <main className="max-w-[1440px] mx-auto px-6 lg:px-8 py-6 lg:py-8">
+        {/* Page header */}
+        <section className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-6">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
                   <History className="h-6 w-6 text-purple-600 dark:text-purple-400" />
@@ -2021,8 +1825,6 @@ export default function AdminAuditLogsPage() {
               </Card>
             </section>
           </main>
-        </div>
-      </div>
 
       {/* Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
