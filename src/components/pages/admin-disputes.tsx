@@ -537,9 +537,9 @@ export default function AdminDisputesPage() {
         )}
 
         {/* Main Grid */}
-        <section className="grid grid-cols-1 xl:grid-cols-[300px_minmax(0,1fr)] gap-6">
+        <section className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
           {/* Filters Sidebar */}
-          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 h-fit xl:sticky xl:top-24">
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 h-fit lg:sticky lg:top-20">
             <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

@@ -447,11 +447,12 @@ export default function AdminPricingPage() {
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <Input
                         {...filterForm.register("search")}
-                        className="w-full sm:w-[320px] h-11 pl-12 pr-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                        className="w-full sm:w-full h-11 pl-12 pr-4 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
                         placeholder="Search rules (name, class, tags)"
                       />
                     </div>
 
+                    <div className="flex gap-2">
                     <Select
                       onValueChange={(value) =>
                         filterForm.setValue("classFilter", value)
@@ -489,6 +490,7 @@ export default function AdminPricingPage() {
                     <Button type="submit" size="sm" className="h-11 px-4">
                       Apply
                     </Button>
+                    </div>
                   </form>
                 </div>
               </CardHeader>

@@ -56,14 +56,14 @@ export function Navbar({
       "sticky top-0 z-50 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md",
       className
     )}>
-      <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-20 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           {/* Mobile menu button */}
           {onMenuClick && (
             <Button
               variant="outline"
               size="icon"
-              className="lg:hidden w-11 h-11 rounded-2xl"
+              className="xl:hidden w-11 h-11 rounded-2xl"
               onClick={onMenuClick}
             >
               <Menu className="w-5 h-5" />

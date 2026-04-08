@@ -671,7 +671,7 @@ export default function AdminNotificationPolicyPage() {
             <Button
               variant="outline"
               size="icon"
-              className="lg:hidden w-11 h-11 rounded-2xl"
+              className="xl:hidden w-11 h-11 rounded-2xl"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu className="w-5 h-5" />
@@ -745,7 +745,7 @@ export default function AdminNotificationPolicyPage() {
       {/* Mobile sidebar backdrop */}
       {mobileMenuOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/40 z-40"
+          className="xl:hidden fixed inset-0 bg-black/40 z-40"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -753,7 +753,7 @@ export default function AdminNotificationPolicyPage() {
       {/* Mobile sidebar drawer */}
       <div
         className={cn(
-          "lg:hidden fixed z-50 top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 overflow-y-auto transition-transform duration-300",
+          "xl:hidden fixed z-50 top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 overflow-y-auto transition-transform duration-300",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -776,7 +776,7 @@ export default function AdminNotificationPolicyPage() {
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
           {/* Desktop sidebar */}
-          <div className="hidden lg:block lg:col-span-3">
+          <div className="hidden xl:block xl:col-span-3">
             <Sidebar />
           </div>
 

@@ -110,7 +110,7 @@ const ToggleButton = ({
     type="button"
     onClick={onClick}
     className={cn(
-      "inline-flex items-center justify-center px-2.5 py-1 text-[10px] font-semibold rounded-md border transition-all duration-150",
+      "inline-flex items-center justify-center px-3 py-2 min-h-[36px] text-[11px] font-semibold rounded-lg border transition-all duration-150",
       active 
         ? activeColor 
         : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -531,7 +531,7 @@ export default function AdminDeliveriesPage() {
         </section>
 
         {/* KPI Row - Interactive status cards */}
-        <section className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 mb-6">
+        <section className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-5 xl:grid-cols-9 gap-2 mb-6">
           {Object.entries(STATUS_CONFIG).map(([status, config]) => (
             <button
               key={status}
@@ -554,9 +554,9 @@ export default function AdminDeliveriesPage() {
         </section>
 
         {/* Main Grid */}
-        <section className="grid grid-cols-1 xl:grid-cols-[300px_minmax(0,1fr)] gap-6">
+        <section className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
           {/* Filters Sidebar */}
-          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 h-fit xl:sticky xl:top-24">
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 h-fit lg:sticky lg:top-20">
             <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

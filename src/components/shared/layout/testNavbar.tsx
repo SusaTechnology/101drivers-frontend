@@ -57,14 +57,14 @@ export function Navbar({
           className
         )}
       >
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-20 flex items-center justify-between gap-4">
           {/* Left section: mobile menu + brand + navigation */}
-          <div className="flex items-center gap-4 flex-1">
-            {/* Mobile menu button (internal toggle) */}
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            {/* Mobile menu button (internal toggle) — visible up to xl on tablets */}
             <Button
               variant="outline"
               size="icon"
-              className="lg:hidden w-11 h-11 rounded-2xl"
+              className="xl:hidden w-11 h-11 rounded-2xl"
               onClick={toggleMenu}
             >
               <Menu className="w-5 h-5" />
@@ -72,9 +72,9 @@ export function Navbar({
 
             {brand && <div className="flex items-center">{brand}</div>}
 
-            {/* Desktop navigation links */}
+            {/* Desktop navigation links — only show on xl+ (tablets use drawer) */}
             {items.length > 0 && (
-              <nav className="hidden lg:flex items-center gap-1">
+              <nav className="hidden xl:flex items-center gap-1">
                 {items.map((item) => (
                   <Link
                     key={item.href}
@@ -112,7 +112,7 @@ export function Navbar({
         </div>
       </header>
 
-      {/* Mobile drawer – rendered only when open */}
+      {/* Mobile/tablet drawer – rendered only when open (hidden at xl+) */}
       <MobileMenuDrawer
         isOpen={mobileMenuOpen}
         onClose={closeMenu}

@@ -151,7 +151,7 @@ export default function AdminServiceDistrictsPage() {
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/85 dark:bg-slate-950/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-14 lg:h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -276,7 +276,7 @@ export default function AdminServiceDistrictsPage() {
         {activeTab === 'map' && (
           <Card className="border-slate-200 dark:border-slate-800 overflow-hidden">
             <CardContent className="p-0">
-              <div className="h-[600px] lg:h-[700px]">
+              <div className="h-[400px] sm:h-[500px] lg:h-[600px] xl:h-[700px]">
                 {!isLoaded ? (
                   <div className="h-full flex items-center justify-center bg-slate-50 dark:bg-slate-950">
                     <div className="text-center">

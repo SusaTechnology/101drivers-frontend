@@ -253,8 +253,8 @@ const AdminDeliveries: React.FC = () => {
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-10">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4 min-w-0">
             <a className="flex items-center" href="#" aria-label="101 Drivers">
               <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200 dark:border-slate-700">
                 <img
@@ -264,7 +264,7 @@ const AdminDeliveries: React.FC = () => {
                 />
               </div>
             </a>
-            <nav className="hidden md:flex items-center gap-7">
+            <nav className="hidden xl:flex items-center gap-7">
               <a className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">
                 Dashboard
               </a>
@@ -337,7 +337,7 @@ const AdminDeliveries: React.FC = () => {
         </section>
 
         {/* Main Grid */}
-        <section className="mt-8 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-6">
+        <section className="mt-8 grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
           {/* Filters Sidebar */}
           <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
             <CardHeader className="px-6 sm:px-7 py-5 border-b border-slate-100 dark:border-slate-800">

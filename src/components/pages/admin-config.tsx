@@ -239,14 +239,14 @@ export default function AdminConfigHubPage() {
       {/* Mobile sidebar backdrop */}
       {mobileSidebarOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/40 z-40"
+          className="xl:hidden fixed inset-0 bg-black/40 z-40"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
 
       {/* Mobile sidebar drawer */}
       <div className={cn(
-        "lg:hidden fixed z-50 top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 overflow-y-auto transition-transform duration-300",
+        "xl:hidden fixed z-50 top-0 left-0 h-full w-[88%] max-w-sm bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 overflow-y-auto transition-transform duration-300",
         mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="flex items-center justify-between mb-5">
@@ -268,7 +268,7 @@ export default function AdminConfigHubPage() {
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
           {/* Desktop sidebar */}
-          <div className="hidden lg:block lg:col-span-3">
+          <div className="hidden xl:block xl:col-span-3">
             <Sidebar />
           </div>
 

@@ -251,7 +251,7 @@ const AdminPayments: React.FC = () => {
         </section>
 
         {/* Main Grid */}
-        <section className="mt-8 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-6">
+        <section className="mt-8 grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
           {/* Filters Sidebar */}
           <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
             <CardHeader className="px-6 sm:px-7 py-5 border-b border-slate-100 dark:border-slate-800">
