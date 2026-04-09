@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   Truck,
+  Car,
   MapPin,
   Ruler,
   Clock,
@@ -82,10 +83,10 @@ const formatDateTime = (dateString: string) => {
 
 // Map service type to icon and label
 const serviceTypeMap: Record<string, { icon: React.ReactNode; label: string }> = {
-  BETWEEN_LOCATIONS: { icon: <Truck className="h-4 w-4" />, label: 'Between Locations' },
-  HOME_DELIVERY: { icon: <Home className="h-4 w-4" />, label: 'Home Delivery' },
-  SERVICE_PICKUP_RETURN: { icon: <Wrench className="h-4 w-4" />, label: 'Service Pick-up & Return' },
-  default: { icon: <Truck className="h-4 w-4" />, label: 'Delivery' },
+  BETWEEN_LOCATIONS: { icon: <Car className="h-4 w-4" />, label: 'Car Transfer' },
+  HOME_DELIVERY: { icon: <Car className="h-4 w-4" />, label: 'Car Transfer' },
+  SERVICE_PICKUP_RETURN: { icon: <Car className="h-4 w-4" />, label: 'Car Transfer' },
+  default: { icon: <Car className="h-4 w-4" />, label: 'Car Transfer' },
 }
 
 // Tip payload type

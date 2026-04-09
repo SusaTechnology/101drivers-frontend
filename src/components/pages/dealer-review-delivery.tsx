@@ -146,9 +146,9 @@ function formatUSPhone(value: string): string {
 }
 
 const serviceTypeLabels: Record<string, string> = {
-  HOME_DELIVERY: "Home Delivery",
-  BETWEEN_LOCATIONS: "Between Locations",
-  SERVICE_PICKUP_RETURN: "Service Pickup & Return",
+  HOME_DELIVERY: "Car Transfer",
+  BETWEEN_LOCATIONS: "Car Transfer",
+  SERVICE_PICKUP_RETURN: "Car Transfer",
 };
 
 export default function ReviewDeliveryPage() {
@@ -522,19 +522,20 @@ export default function ReviewDeliveryPage() {
             </CardContent>
           </Card>
 
-          {/* Service Type */}
+          {/* Car Transfer */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-black">Service Type</CardTitle>
+                <CardTitle className="text-lg font-black">Car Transfer</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-3">
-                {reviewData.serviceType === "HOME_DELIVERY" && <Home className="h-5 w-5 text-lime-600" />}
-                {reviewData.serviceType === "BETWEEN_LOCATIONS" && <SwapHorizontal className="h-5 w-5 text-lime-600" />}
-                {reviewData.serviceType === "SERVICE_PICKUP_RETURN" && <Wrench className="h-5 w-5 text-lime-600" />}
-                <span className="font-bold">{serviceTypeLabels[reviewData.serviceType] || reviewData.serviceType}</span>
+                <Car className="h-5 w-5 text-lime-600" />
+                <span className="font-bold">Car Transfer</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">
+                  Book 101 Drivers to move your car in Southern California.
+                </span>
               </div>
             </CardContent>
           </Card>

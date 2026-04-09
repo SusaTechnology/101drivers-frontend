@@ -1980,20 +1980,26 @@ const handleQuotePreview = () => {
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
           {/* LEFT COLUMN - Form */}
           <div className="xl:col-span-7 space-y-8">
-            {/* Step 1: Addresses & Quote */}
+            {/* Step 1: Car Transfer — Route & Quote */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
                     <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                      Step 1
+                      Car Transfer
                     </CardDescription>
                     <CardTitle className="text-2xl font-black mt-2">
                       Route
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      Our service is currently available in California only. Please enter CA addresses below.
+                      Book 101 Drivers to move your car in Southern California.
                     </p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-2xl bg-lime-50 dark:bg-lime-900/10 border border-lime-200 dark:border-lime-900/30">
+                    <Car className="h-5 w-5 text-lime-600 dark:text-lime-400" />
+                    <span className="text-[11px] font-black uppercase tracking-widest text-lime-700 dark:text-lime-300">
+                      Car Transfer
+                    </span>
                   </div>
                 </div>
               </CardHeader>
@@ -2175,7 +2181,7 @@ const handleQuotePreview = () => {
                           variant="outline"
                           size="sm"
                           onClick={handleQuotePreview}
-                          disabled={!pickupAddress || !dropoffAddress || !serviceType || getQuotePreview.isPending}
+                          disabled={!pickupAddress || !dropoffAddress || getQuotePreview.isPending}
                         >
                           <Settings className="h-3 w-3 mr-1" />
                           {getQuotePreview.isPending
@@ -2228,7 +2234,7 @@ const handleQuotePreview = () => {
                       <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 flex gap-3">
                         <Info className="h-5 w-5 text-amber-500 flex-shrink-0" />
                         <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal">
-                          Real-time quote updates automatically when address or service type changes.
+                          Real-time quote updates automatically when addresses change.
                         </p>
                       </div>
                     </CardContent>

@@ -142,7 +142,7 @@ function AboutPage() {
                       Transparent pricing flow
                     </div>
                     <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                      Quote first, then select service type and scheduling.
+                      Quote first, then choose your schedule.
                     </div>
                   </div>
                 </div>
