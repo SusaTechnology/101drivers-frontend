@@ -102,8 +102,8 @@ export default function LandingPage() {
   const [quoteResult, setQuoteResult] = useState<any>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
 
-  // Rate limit quote calculations to 2 per session
-  const QUOTE_MAX_ATTEMPTS = 2;
+  // Rate limit quote calculations to 3 per session
+  const QUOTE_MAX_ATTEMPTS = 3;
   const [quoteAttempts, setQuoteAttempts] = useState<number>(() => {
     const stored = sessionStorage.getItem("quoteAttempts");
     return stored ? parseInt(stored, 10) : 0;
@@ -276,6 +276,8 @@ export default function LandingPage() {
 
   const calculateDistance = () => {
     if (!pickupCoords || !dropoffCoords) return;
+    // P0 FIX: Don't burn Google Directions API calls when quote limit is reached
+    if (quoteLimitReached) return;
 
     const directionsService = new google.maps.DirectionsService();
     directionsService.route(
@@ -632,24 +634,32 @@ export default function LandingPage() {
                 </div>
 
                 {/* Recalculate button — estimate auto-fires when both addresses are set */}
-                <a
-                  href="#estimate"
-                  onClick={(e) => { e.preventDefault(); handleCalculateEstimate(); }}
-                  className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
-                    isLoadingQuote || !pickupAddress || !dropoffAddress || pickupInZone === false || quoteLimitReached
-                      ? "opacity-50 pointer-events-none"
-                      : ""
-                  }`}
-                >
-                  {isLoadingQuote
-                    ? "Calculating..."
-                    : quoteResult
-                      ? "Recalculate"
-                      : quoteLimitReached
-                        ? `Limit (${QUOTE_MAX_ATTEMPTS}/${QUOTE_MAX_ATTEMPTS})`
+                {!quoteLimitReached ? (
+                  <a
+                    href="#estimate"
+                    onClick={(e) => { e.preventDefault(); handleCalculateEstimate(); }}
+                    className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
+                      isLoadingQuote || !pickupAddress || !dropoffAddress || pickupInZone === false
+                        ? "opacity-50 pointer-events-none"
+                        : ""
+                    }`}
+                  >
+                    {isLoadingQuote
+                      ? "Calculating..."
+                      : quoteResult
+                        ? "Recalculate"
                         : "Get Estimate"}
-                  {!isLoadingQuote && !quoteLimitReached && <ArrowRight className="h-4 w-4" />}
-                </a>
+                    {!isLoadingQuote && <ArrowRight className="h-4 w-4" />}
+                  </a>
+                ) : (
+                  <a
+                    href="#dealers"
+                    className="w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2"
+                  >
+                    <Lock className="h-4 w-4" />
+                    Free Previews Used — Sign Up
+                  </a>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -726,6 +736,43 @@ export default function LandingPage() {
 
         {/* ===== SECTION 3 — Price Estimate ===== */}
         <section id="estimate" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+          {quoteLimitReached && !quoteResult ? (
+            <Card className="rounded-2xl border-lime-200 dark:border-lime-900/40 bg-lime-50/50 dark:bg-lime-900/5 overflow-hidden">
+              <CardContent className="p-6 sm:p-8 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-lime-100 dark:bg-lime-900/20 flex items-center justify-center mx-auto mb-4">
+                  <Lock className="h-7 w-7 text-lime-600 dark:text-lime-400" />
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                  Free Previews Used
+                </h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
+                  You&apos;ve used all {QUOTE_MAX_ATTEMPTS} free estimates. Sign up for a business account to get unlimited quotes and schedule deliveries.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 mt-6 max-w-sm mx-auto">
+                  <a
+                    href="#dealers"
+                    className="flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm block bg-slate-900 dark:bg-white dark:text-slate-950 text-white hover:opacity-90"
+                  >
+                    Sign Up as Business
+                  </a>
+                  <a
+                    href="/driver-onboarding"
+                    className="flex-1 font-extrabold rounded-2xl py-3.5 text-center transition text-sm block border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600"
+                  >
+                    <Truck className="h-4 w-4 inline mr-1.5" />
+                    I&apos;m a Driver
+                  </a>
+                </div>
+                <a
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  className="mt-4 inline-block text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition font-semibold"
+                >
+                  Back to Home
+                </a>
+              </CardContent>
+            </Card>
+          ) : (
           <Card className="rounded-2xl border-slate-200/70 dark:border-slate-800 overflow-hidden">
             <CardContent className="p-5 sm:p-6">
               {!quoteResult ? (
@@ -806,16 +853,21 @@ export default function LandingPage() {
                           : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
                       }`}
                     >
-                      Continue — Sign Up
+                      Sign Up as Business
                     </a>
-                    <Button variant="outline" className="flex-1 py-3.5 rounded-2xl font-extrabold text-sm">
-                      Save Quote
-                    </Button>
+                    <a
+                      href="/driver-onboarding"
+                      className="flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm block border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600"
+                    >
+                      <Truck className="h-4 w-4 inline mr-1.5" />
+                      I&apos;m a Driver
+                    </a>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
+          )}
         </section>
 
         {/* ===== SECTION 4 — Create Your Account ===== */}
