@@ -237,6 +237,18 @@ export default function DriverDashboardPage() {
   })
   const unreadCount = inboxData?.unreadCount || 0
 
+  // Proof cam onboarding guard: redirect first-time drivers
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem('hasSeenProofCam')
+      if (seen !== 'true') {
+        navigate({ to: '/driver-proof-cam' })
+      }
+    } catch {
+      // localStorage may not be available (SSR, private browsing, etc.)
+    }
+  }, [navigate])
+
   // Theme handling
   useEffect(() => {
     setMounted(true)
