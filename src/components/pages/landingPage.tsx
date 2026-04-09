@@ -668,69 +668,105 @@ export default function LandingPage() {
         {/* ===== SECTION 2 — Map View ===== */}
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-6">
           <div className="relative w-full h-[340px] sm:h-[420px] lg:h-[560px] rounded-2xl overflow-hidden">
-            <RouteMap
-              pickup={pickupCoords}
-              dropoff={dropoffCoords}
-              isLoaded={isLoaded}
-              zones={zones}
-              initialCenter={{ lat: 33.98, lng: -118.45 }}
-              initialZoom={12}
-              fitZonesBounds={!pickupCoords && !dropoffCoords}
-              showMapTypeControl={true}
-            />
 
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 z-[1] pointer-events-none" />
-
-            {/* "Pickup Area Only" centered overlay — only when no route */}
-            {!quoteResult && (
-              <div className="absolute inset-0 flex items-center justify-center z-[2] pointer-events-none px-4">
-                <div className="text-center mt-[-50px]">
-                  <p className="text-white font-black text-xl sm:text-2xl lg:text-3xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
-                    Pickup Area Only
-                  </p>
-                  <p className="text-white/80 text-[10px] sm:text-xs mt-1.5 max-w-xs mx-auto drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)] leading-relaxed">
-                    Westside LA: Santa Monica, Venice, Marina del Rey, Playa del Rey, Culver City, Westchester, West LA &amp; nearby
-                  </p>
+            {quoteLimitReached && !quoteResult ? (
+              <>
+                {/* Blurred static placeholder — no Google Maps API calls */}
+                <div className="absolute inset-0 bg-slate-200 dark:bg-slate-800 backdrop-blur-[2px] flex items-center justify-center">
+                  <div className="text-center px-4">
+                    <div className="w-14 h-14 rounded-2xl bg-white/80 dark:bg-slate-700/80 flex items-center justify-center mx-auto mb-4 shadow-lg">
+                      <Map className="h-7 w-7 text-slate-400" />
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                      Free Previews Used
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
+                      Sign up for a business account to get unlimited route previews and estimates.
+                    </p>
+                    <a
+                      href="#dealers"
+                      className="inline-flex items-center gap-2 mt-4 px-6 py-3 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition text-sm"
+                    >
+                      Sign Up
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
+                  </div>
                 </div>
-              </div>
+                {/* Zone legend still visible */}
+                <div className="absolute bottom-3 right-3 z-10">
+                  <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-[9px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-[#39FF14] inline-block shrink-0" />
+                    Green area = Pickup Zone
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <RouteMap
+                  pickup={pickupCoords}
+                  dropoff={dropoffCoords}
+                  isLoaded={isLoaded}
+                  zones={zones}
+                  initialCenter={{ lat: 33.98, lng: -118.45 }}
+                  initialZoom={12}
+                  fitZonesBounds={!pickupCoords && !dropoffCoords}
+                  showMapTypeControl={true}
+                />
+
+                {/* Gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 z-[1] pointer-events-none" />
+
+                {/* "Pickup Area Only" centered overlay — only when no route */}
+                {!quoteResult && (
+                  <div className="absolute inset-0 flex items-center justify-center z-[2] pointer-events-none px-4">
+                    <div className="text-center mt-[-50px]">
+                      <p className="text-white font-black text-xl sm:text-2xl lg:text-3xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
+                        Pickup Area Only
+                      </p>
+                      <p className="text-white/80 text-[10px] sm:text-xs mt-1.5 max-w-xs mx-auto drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)] leading-relaxed">
+                        Westside LA: Santa Monica, Venice, Marina del Rey, Playa del Rey, Culver City, Westchester, West LA &amp; nearby
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dealerships Welcome badge — top-right */}
+                <div className="absolute top-3 right-3 z-10">
+                  <div className="bg-lime-100/95 dark:bg-lime-900/80 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-1.5 border border-lime-200 dark:border-lime-700">
+                    <Car className="h-3.5 w-3.5 text-lime-600 dark:text-lime-400" />
+                    Dealerships Welcome
+                  </div>
+                </div>
+
+                {/* Distance badge — top-left (when route available) */}
+                {quoteResult && (
+                  <div className="absolute top-3 left-3 z-10">
+                    <Badge variant="secondary" className="gap-2 px-3 py-1.5 backdrop-blur bg-white/95 dark:bg-slate-900/95 shadow-lg border border-slate-200 dark:border-slate-700">
+                      <Ruler className="h-3.5 w-3.5 text-lime-500" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">
+                        {Math.round(quoteResult.distanceMiles)} miles
+                      </span>
+                    </Badge>
+                  </div>
+                )}
+
+                {/* Route label — bottom-left (when route available) */}
+                {quoteResult && (
+                  <div className="absolute bottom-3 left-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
+                    <Navigation className="h-4 w-4 text-lime-500" />
+                    {pickupAddress || 'From'} → {dropoffAddress || 'To'}
+                  </div>
+                )}
+
+                {/* Zone legend — bottom-right */}
+                <div className="absolute bottom-3 right-3 z-10">
+                  <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-[9px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-[#39FF14] inline-block shrink-0" />
+                    Green area = Pickup Zone
+                  </div>
+                </div>
+              </>
             )}
-
-            {/* Dealerships Welcome badge — top-right */}
-            <div className="absolute top-3 right-3 z-10">
-              <div className="bg-lime-100/95 dark:bg-lime-900/80 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-1.5 border border-lime-200 dark:border-lime-700">
-                <Car className="h-3.5 w-3.5 text-lime-600 dark:text-lime-400" />
-                Dealerships Welcome
-              </div>
-            </div>
-
-            {/* Distance badge — top-left (when route available) */}
-            {quoteResult && (
-              <div className="absolute top-3 left-3 z-10">
-                <Badge variant="secondary" className="gap-2 px-3 py-1.5 backdrop-blur bg-white/95 dark:bg-slate-900/95 shadow-lg border border-slate-200 dark:border-slate-700">
-                  <Ruler className="h-3.5 w-3.5 text-lime-500" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">
-                    {Math.round(quoteResult.distanceMiles)} miles
-                  </span>
-                </Badge>
-              </div>
-            )}
-
-            {/* Route label — bottom-left (when route available) */}
-            {quoteResult && (
-              <div className="absolute bottom-3 left-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-3 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
-                <Navigation className="h-4 w-4 text-lime-500" />
-                {pickupAddress || 'From'} → {dropoffAddress || 'To'}
-              </div>
-            )}
-
-            {/* Zone legend — bottom-right */}
-            <div className="absolute bottom-3 right-3 z-10">
-              <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-2.5 py-1.5 rounded-xl text-[9px] font-bold text-slate-700 dark:text-slate-300 shadow-lg flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
-                <span className="w-2.5 h-2.5 rounded-sm bg-[#39FF14] inline-block shrink-0" />
-                Green area = Pickup Zone
-              </div>
-            </div>
           </div>
         </section>
 
