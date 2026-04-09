@@ -22,8 +22,10 @@ import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/in
 import { Route as DriverWalletIndexRouteImport } from './routes/driver-wallet/index'
 import { Route as DriverSupportListIndexRouteImport } from './routes/driver-support-list/index'
 import { Route as DriverSupportDetailIndexRouteImport } from './routes/driver-support-detail/index'
+import { Route as DriverStartingLocationIndexRouteImport } from './routes/driver-starting-location/index'
 import { Route as DriverSigninIndexRouteImport } from './routes/driver-signin/index'
 import { Route as DriverRepositioningIndexRouteImport } from './routes/driver-repositioning/index'
+import { Route as DriverProofCamIndexRouteImport } from './routes/driver-proof-cam/index'
 import { Route as DriverPreferencesIndexRouteImport } from './routes/driver-preferences/index'
 import { Route as DriverPickupChecklistIndexRouteImport } from './routes/driver-pickup-checklist/index'
 import { Route as DriverOnboardingIndexRouteImport } from './routes/driver-onboarding/index'
@@ -49,6 +51,7 @@ import { Route as AdminUsersIndexRouteImport } from './routes/admin-users/index'
 import { Route as AdminSupportListIndexRouteImport } from './routes/admin-support-list/index'
 import { Route as AdminSupportDetailIndexRouteImport } from './routes/admin-support-detail/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin-settings/index'
+import { Route as AdminServiceDistrictsIndexRouteImport } from './routes/admin-service-districts/index'
 import { Route as AdminSchedulingPolicyIndexRouteImport } from './routes/admin-scheduling-policy/index'
 import { Route as AdminReportsIndexRouteImport } from './routes/admin-reports/index'
 import { Route as AdminReportPayoutsIndexRouteImport } from './routes/admin-report-payouts/index'
@@ -147,6 +150,12 @@ const DriverSupportDetailIndexRoute =
     path: '/driver-support-detail/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DriverStartingLocationIndexRoute =
+  DriverStartingLocationIndexRouteImport.update({
+    id: '/driver-starting-location/',
+    path: '/driver-starting-location/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DriverSigninIndexRoute = DriverSigninIndexRouteImport.update({
   id: '/driver-signin/',
   path: '/driver-signin/',
@@ -158,6 +167,11 @@ const DriverRepositioningIndexRoute =
     path: '/driver-repositioning/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DriverProofCamIndexRoute = DriverProofCamIndexRouteImport.update({
+  id: '/driver-proof-cam/',
+  path: '/driver-proof-cam/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DriverPreferencesIndexRoute = DriverPreferencesIndexRouteImport.update({
   id: '/driver-preferences/',
   path: '/driver-preferences/',
@@ -289,6 +303,12 @@ const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
   path: '/admin-settings/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminServiceDistrictsIndexRoute =
+  AdminServiceDistrictsIndexRouteImport.update({
+    id: '/admin-service-districts/',
+    path: '/admin-service-districts/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminSchedulingPolicyIndexRoute =
   AdminSchedulingPolicyIndexRouteImport.update({
     id: '/admin-scheduling-policy/',
@@ -489,6 +509,7 @@ export interface FileRoutesByFullPath {
   '/admin-report-payouts/': typeof AdminReportPayoutsIndexRoute
   '/admin-reports/': typeof AdminReportsIndexRoute
   '/admin-scheduling-policy/': typeof AdminSchedulingPolicyIndexRoute
+  '/admin-service-districts/': typeof AdminServiceDistrictsIndexRoute
   '/admin-settings/': typeof AdminSettingsIndexRoute
   '/admin-support-detail/': typeof AdminSupportDetailIndexRoute
   '/admin-support-list/': typeof AdminSupportListIndexRoute
@@ -514,8 +535,10 @@ export interface FileRoutesByFullPath {
   '/driver-onboarding/': typeof DriverOnboardingIndexRoute
   '/driver-pickup-checklist/': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences/': typeof DriverPreferencesIndexRoute
+  '/driver-proof-cam/': typeof DriverProofCamIndexRoute
   '/driver-repositioning/': typeof DriverRepositioningIndexRoute
   '/driver-signin/': typeof DriverSigninIndexRoute
+  '/driver-starting-location/': typeof DriverStartingLocationIndexRoute
   '/driver-support-detail/': typeof DriverSupportDetailIndexRoute
   '/driver-support-list/': typeof DriverSupportListIndexRoute
   '/driver-wallet/': typeof DriverWalletIndexRoute
@@ -562,6 +585,7 @@ export interface FileRoutesByTo {
   '/admin-report-payouts': typeof AdminReportPayoutsIndexRoute
   '/admin-reports': typeof AdminReportsIndexRoute
   '/admin-scheduling-policy': typeof AdminSchedulingPolicyIndexRoute
+  '/admin-service-districts': typeof AdminServiceDistrictsIndexRoute
   '/admin-settings': typeof AdminSettingsIndexRoute
   '/admin-support-detail': typeof AdminSupportDetailIndexRoute
   '/admin-support-list': typeof AdminSupportListIndexRoute
@@ -587,8 +611,10 @@ export interface FileRoutesByTo {
   '/driver-onboarding': typeof DriverOnboardingIndexRoute
   '/driver-pickup-checklist': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences': typeof DriverPreferencesIndexRoute
+  '/driver-proof-cam': typeof DriverProofCamIndexRoute
   '/driver-repositioning': typeof DriverRepositioningIndexRoute
   '/driver-signin': typeof DriverSigninIndexRoute
+  '/driver-starting-location': typeof DriverStartingLocationIndexRoute
   '/driver-support-detail': typeof DriverSupportDetailIndexRoute
   '/driver-support-list': typeof DriverSupportListIndexRoute
   '/driver-wallet': typeof DriverWalletIndexRoute
@@ -636,6 +662,7 @@ export interface FileRoutesById {
   '/admin-report-payouts/': typeof AdminReportPayoutsIndexRoute
   '/admin-reports/': typeof AdminReportsIndexRoute
   '/admin-scheduling-policy/': typeof AdminSchedulingPolicyIndexRoute
+  '/admin-service-districts/': typeof AdminServiceDistrictsIndexRoute
   '/admin-settings/': typeof AdminSettingsIndexRoute
   '/admin-support-detail/': typeof AdminSupportDetailIndexRoute
   '/admin-support-list/': typeof AdminSupportListIndexRoute
@@ -661,8 +688,10 @@ export interface FileRoutesById {
   '/driver-onboarding/': typeof DriverOnboardingIndexRoute
   '/driver-pickup-checklist/': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences/': typeof DriverPreferencesIndexRoute
+  '/driver-proof-cam/': typeof DriverProofCamIndexRoute
   '/driver-repositioning/': typeof DriverRepositioningIndexRoute
   '/driver-signin/': typeof DriverSigninIndexRoute
+  '/driver-starting-location/': typeof DriverStartingLocationIndexRoute
   '/driver-support-detail/': typeof DriverSupportDetailIndexRoute
   '/driver-support-list/': typeof DriverSupportListIndexRoute
   '/driver-wallet/': typeof DriverWalletIndexRoute
@@ -711,6 +740,7 @@ export interface FileRouteTypes {
     | '/admin-report-payouts/'
     | '/admin-reports/'
     | '/admin-scheduling-policy/'
+    | '/admin-service-districts/'
     | '/admin-settings/'
     | '/admin-support-detail/'
     | '/admin-support-list/'
@@ -736,8 +766,10 @@ export interface FileRouteTypes {
     | '/driver-onboarding/'
     | '/driver-pickup-checklist/'
     | '/driver-preferences/'
+    | '/driver-proof-cam/'
     | '/driver-repositioning/'
     | '/driver-signin/'
+    | '/driver-starting-location/'
     | '/driver-support-detail/'
     | '/driver-support-list/'
     | '/driver-wallet/'
@@ -784,6 +816,7 @@ export interface FileRouteTypes {
     | '/admin-report-payouts'
     | '/admin-reports'
     | '/admin-scheduling-policy'
+    | '/admin-service-districts'
     | '/admin-settings'
     | '/admin-support-detail'
     | '/admin-support-list'
@@ -809,8 +842,10 @@ export interface FileRouteTypes {
     | '/driver-onboarding'
     | '/driver-pickup-checklist'
     | '/driver-preferences'
+    | '/driver-proof-cam'
     | '/driver-repositioning'
     | '/driver-signin'
+    | '/driver-starting-location'
     | '/driver-support-detail'
     | '/driver-support-list'
     | '/driver-wallet'
@@ -857,6 +892,7 @@ export interface FileRouteTypes {
     | '/admin-report-payouts/'
     | '/admin-reports/'
     | '/admin-scheduling-policy/'
+    | '/admin-service-districts/'
     | '/admin-settings/'
     | '/admin-support-detail/'
     | '/admin-support-list/'
@@ -882,8 +918,10 @@ export interface FileRouteTypes {
     | '/driver-onboarding/'
     | '/driver-pickup-checklist/'
     | '/driver-preferences/'
+    | '/driver-proof-cam/'
     | '/driver-repositioning/'
     | '/driver-signin/'
+    | '/driver-starting-location/'
     | '/driver-support-detail/'
     | '/driver-support-list/'
     | '/driver-wallet/'
@@ -931,6 +969,7 @@ export interface RootRouteChildren {
   AdminReportPayoutsIndexRoute: typeof AdminReportPayoutsIndexRoute
   AdminReportsIndexRoute: typeof AdminReportsIndexRoute
   AdminSchedulingPolicyIndexRoute: typeof AdminSchedulingPolicyIndexRoute
+  AdminServiceDistrictsIndexRoute: typeof AdminServiceDistrictsIndexRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
   AdminSupportDetailIndexRoute: typeof AdminSupportDetailIndexRoute
   AdminSupportListIndexRoute: typeof AdminSupportListIndexRoute
@@ -956,8 +995,10 @@ export interface RootRouteChildren {
   DriverOnboardingIndexRoute: typeof DriverOnboardingIndexRoute
   DriverPickupChecklistIndexRoute: typeof DriverPickupChecklistIndexRoute
   DriverPreferencesIndexRoute: typeof DriverPreferencesIndexRoute
+  DriverProofCamIndexRoute: typeof DriverProofCamIndexRoute
   DriverRepositioningIndexRoute: typeof DriverRepositioningIndexRoute
   DriverSigninIndexRoute: typeof DriverSigninIndexRoute
+  DriverStartingLocationIndexRoute: typeof DriverStartingLocationIndexRoute
   DriverSupportDetailIndexRoute: typeof DriverSupportDetailIndexRoute
   DriverSupportListIndexRoute: typeof DriverSupportListIndexRoute
   DriverWalletIndexRoute: typeof DriverWalletIndexRoute
@@ -1067,6 +1108,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DriverSupportDetailIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/driver-starting-location/': {
+      id: '/driver-starting-location/'
+      path: '/driver-starting-location'
+      fullPath: '/driver-starting-location/'
+      preLoaderRoute: typeof DriverStartingLocationIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/driver-signin/': {
       id: '/driver-signin/'
       path: '/driver-signin'
@@ -1079,6 +1127,13 @@ declare module '@tanstack/react-router' {
       path: '/driver-repositioning'
       fullPath: '/driver-repositioning/'
       preLoaderRoute: typeof DriverRepositioningIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/driver-proof-cam/': {
+      id: '/driver-proof-cam/'
+      path: '/driver-proof-cam'
+      fullPath: '/driver-proof-cam/'
+      preLoaderRoute: typeof DriverProofCamIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/driver-preferences/': {
@@ -1254,6 +1309,13 @@ declare module '@tanstack/react-router' {
       path: '/admin-settings'
       fullPath: '/admin-settings/'
       preLoaderRoute: typeof AdminSettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-service-districts/': {
+      id: '/admin-service-districts/'
+      path: '/admin-service-districts'
+      fullPath: '/admin-service-districts/'
+      preLoaderRoute: typeof AdminServiceDistrictsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-scheduling-policy/': {
@@ -1507,6 +1569,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminReportPayoutsIndexRoute: AdminReportPayoutsIndexRoute,
   AdminReportsIndexRoute: AdminReportsIndexRoute,
   AdminSchedulingPolicyIndexRoute: AdminSchedulingPolicyIndexRoute,
+  AdminServiceDistrictsIndexRoute: AdminServiceDistrictsIndexRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
   AdminSupportDetailIndexRoute: AdminSupportDetailIndexRoute,
   AdminSupportListIndexRoute: AdminSupportListIndexRoute,
@@ -1532,8 +1595,10 @@ const rootRouteChildren: RootRouteChildren = {
   DriverOnboardingIndexRoute: DriverOnboardingIndexRoute,
   DriverPickupChecklistIndexRoute: DriverPickupChecklistIndexRoute,
   DriverPreferencesIndexRoute: DriverPreferencesIndexRoute,
+  DriverProofCamIndexRoute: DriverProofCamIndexRoute,
   DriverRepositioningIndexRoute: DriverRepositioningIndexRoute,
   DriverSigninIndexRoute: DriverSigninIndexRoute,
+  DriverStartingLocationIndexRoute: DriverStartingLocationIndexRoute,
   DriverSupportDetailIndexRoute: DriverSupportDetailIndexRoute,
   DriverSupportListIndexRoute: DriverSupportListIndexRoute,
   DriverWalletIndexRoute: DriverWalletIndexRoute,

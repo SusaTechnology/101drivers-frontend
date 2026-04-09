@@ -49,3 +49,24 @@ Successfully refactored the edit delivery page to match the create delivery page
 - Pre-populates all fields from existing delivery data on load
 - Quote recalculation works when addresses change
 - Schedule preview API integration matches create page flow
+
+---
+
+## [Task: Driver Starting Location Screen]
+
+**Date:** $(date -u +%Y-%m-%d)
+
+### Files Created
+1. `src/routes/driver-starting-location/index.tsx` — TanStack Router route definition for `/driver-starting-location/`
+2. `src/components/pages/driver-starting-location.tsx` — Main page component (Step 2 of driver onboarding)
+
+### Files Modified
+1. `src/components/pages/driverOnboarding.tsx` — Added `useEffect` redirect to `/driver-starting-location` when `registrationComplete` becomes true
+
+### Implementation Details
+- **Map Section**: Uses `RouteMap` with service district zones from public API, `fitZonesBounds={true}` to auto-zoom. Shows driver position as blue car dot when GPS enabled.
+- **GPS Toggle**: Default ON, uses `navigator.geolocation.getCurrentPosition()`. When OFF, shows `LocationAutocomplete` for manual address entry.
+- **Gig Preview Cards**: 3 dummy gigs with pickup/dropoff, distance from user (calculated via haversine), payout, estimated time. "View Details" shows signup-required toast.
+- **Bottom Buttons**: Fixed gradient fade (matching proof-cam pattern). "Continue" saves location to localStorage and navigates to `/driver-proof-cam`. "Skip for now" navigates without saving.
+- **Design**: Mobile-first, matches existing design system (lime-btn, rounded-2xl, font-black headings, dark mode support).
+- **Route**: Auto-generated in `routeTree.gen.ts` by TanStack Router.

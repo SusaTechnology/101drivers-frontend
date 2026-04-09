@@ -144,6 +144,13 @@ export default function DriverOnboardingPage() {
   
   const navigate = useNavigate();
 
+  // Redirect to starting location screen after registration completes
+  useEffect(() => {
+    if (registrationComplete) {
+      navigate({ to: '/driver-starting-location' })
+    }
+  }, [registrationComplete, navigate])
+
   // Handle phone input with formatting
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhoneNumber(e.target.value);
