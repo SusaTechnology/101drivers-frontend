@@ -853,8 +853,11 @@ export default function LandingPage() {
                           : "bg-gray-400 text-gray-600 cursor-not-allowed pointer-events-none"
                       }`}
                     >
-                      Sign Up as Business
+                      Continue — Sign Up
                     </a>
+                    <Button variant="outline" className="flex-1 py-3.5 rounded-2xl font-extrabold text-sm">
+                      Save Quote
+                    </Button>
                     <a
                       href="/driver-onboarding"
                       className="flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm block border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600"
