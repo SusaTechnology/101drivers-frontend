@@ -1130,7 +1130,14 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                           </Label>
                           <div className="text-sm font-medium flex items-center gap-2">
                             <Phone className="w-4 h-4 text-slate-400" />
-                            {user.phone || '—'}
+                            {user.phone ? (
+                              <a
+                                href={`tel:${user.phone.replace(/[^+\d]/g, '')}`}
+                                className="text-primary hover:underline"
+                              >
+                                {user.phone}
+                              </a>
+                            ) : '—'}
                           </div>
                         </div>
 
@@ -1346,7 +1353,14 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                           {user.customer.contactPhone && (
                             <div>
                               <Label className="text-xs font-bold text-slate-500">Contact Phone</Label>
-                              <div className="text-sm">{user.customer.contactPhone}</div>
+                              <div className="text-sm">
+                                <a
+                                  href={`tel:${user.customer.contactPhone.replace(/[^+\d]/g, '')}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {user.customer.contactPhone}
+                                </a>
+                              </div>
                             </div>
                           )}
                           <div className="flex items-center gap-4">
