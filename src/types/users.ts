@@ -412,14 +412,14 @@ export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
 };
 
 export const CUSTOMER_APPROVAL_STATUS_LABELS: Record<CustomerApprovalStatus, string> = {
-  PENDING: 'Pending',
+  PENDING: 'Pending Approval',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   SUSPENDED: 'Suspended',
 };
 
 export const DRIVER_STATUS_LABELS: Record<DriverStatus, string> = {
-  PENDING: 'Pending',
+  PENDING: 'Pending Approval',
   APPROVED: 'Approved',
   SUSPENDED: 'Suspended',
 };

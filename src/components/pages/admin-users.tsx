@@ -961,17 +961,20 @@ export default function AdminUsersPage() {
                           <RoleBadge role={user.roles} />
                         </TableCell>
                         <TableCell className="px-4 py-3">
-                          <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
+                          {user.customer ? (
+                            <CustomerStatusBadge status={user.customer.approvalStatus} />
+                          ) : user.driver ? (
+                            <DriverStatusBadge status={user.driver.status} />
+                          ) : (
+                            <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
+                          )}
                         </TableCell>
                         <TableCell className="px-4 py-3">
                           {user.customer ? (
                             <div className="space-y-1">
-                              <div className="flex items-center gap-1.5">
-                                <Badge variant="outline" className="text-[9px] font-bold">
-                                  {CUSTOMER_TYPE_LABELS[user.customer.customerType]}
-                                </Badge>
-                                <CustomerStatusBadge status={user.customer.approvalStatus} />
-                              </div>
+                              <Badge variant="outline" className="text-[9px] font-bold">
+                                {CUSTOMER_TYPE_LABELS[user.customer.customerType]}
+                              </Badge>
                               {user.customer.businessName && (
                                 <div className="text-xs text-slate-500">{user.customer.businessName}</div>
                               )}
@@ -983,7 +986,7 @@ export default function AdminUsersPage() {
                         <TableCell className="px-4 py-3">
                           {user.driver ? (
                             <div className="space-y-1">
-                              <DriverStatusBadge status={user.driver.status} />
+                              <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Driver</span>
                               <div className="text-xs text-slate-500">
                                 {user._count.scheduleChangesRequested} schedule requests
                               </div>

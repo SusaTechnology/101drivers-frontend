@@ -303,8 +303,11 @@ export default function NotificationBell({ className, userType }: NotificationBe
 
       <PopoverContent
         align="end"
+        alignOffset={-8}
         sideOffset={12}
-        className="w-[390px] p-0 shadow-xl rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
+        collisionPadding={16}
+        avoidCollisions={true}
+        className="w-[calc(100vw-2rem)] sm:w-[390px] max-w-[390px] p-0 shadow-xl rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950"
       >
         {/* Header */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
