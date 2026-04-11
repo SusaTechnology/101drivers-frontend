@@ -456,19 +456,12 @@ export default function EditDraftPage() {
             {/* Service Type */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardHeader>
-                <CardTitle className="text-xl font-black">Service Type</CardTitle>
+                <CardTitle className="text-xl font-black">Car Transfer</CardTitle>
               </CardHeader>
               <CardContent>
-                <Select value={serviceType} onValueChange={(value) => setValue("serviceType", value as any)}>
-                  <SelectTrigger className="h-14 rounded-2xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="HOME_DELIVERY">Home Delivery</SelectItem>
-                    <SelectItem value="BETWEEN_LOCATIONS">Between Locations</SelectItem>
-                    <SelectItem value="SERVICE_PICKUP_RETURN">Service Pickup & Return</SelectItem>
-                  </SelectContent>
-                </Select>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Book 101 Drivers to move your car in Southern California.
+                </p>
               </CardContent>
             </Card>
 
@@ -669,7 +662,7 @@ export default function EditDraftPage() {
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-500">Service Type</span>
-                    <span className="font-bold">{serviceType?.replace(/_/g, ' ')}</span>
+                    <span className="font-bold">Car Transfer</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-500">Status</span>

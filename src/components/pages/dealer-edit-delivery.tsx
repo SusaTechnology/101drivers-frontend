@@ -1034,63 +1034,20 @@ export default function EditDeliveryPage() {
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
             {/* LEFT COLUMN - Form */}
             <div className="xl:col-span-7 space-y-8">
-              {/* Step 1: Service Type */}
+              {/* Step 1: Car Transfer */}
               <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
                 <CardHeader className="pb-3">
                   <CardDescription className="text-[11px] font-black uppercase tracking-widest">
                     Step 1
                   </CardDescription>
                   <CardTitle className="text-xl font-black mt-1">
-                    Service type
+                    Car Transfer
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      {
-                        value: "HOME_DELIVERY",
-                        icon: Home,
-                        label: "Home Delivery",
-                      },
-                      {
-                        value: "BETWEEN_LOCATIONS",
-                        icon: SwapHorizontal,
-                        label: "Between Locations",
-                      },
-                      {
-                        value: "SERVICE_PICKUP_RETURN",
-                        icon: Wrench,
-                        label: "Service Pickup & Return",
-                      },
-                    ].map((item) => (
-                      <Label
-                        key={item.value}
-                        htmlFor={item.value}
-                        className="cursor-pointer"
-                      >
-                        <div
-                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${
-                            serviceType === item.value
-                              ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
-                              : "border-slate-200 dark:border-slate-700 hover:border-lime-300"
-                          }`}
-                        >
-                          <item.icon className={`h-4 w-4 ${serviceType === item.value ? "text-lime-600" : "text-slate-400"}`} />
-                          <span className={`text-sm font-bold ${serviceType === item.value ? "text-lime-700 dark:text-lime-400" : "text-slate-600 dark:text-slate-400"}`}>
-                            {item.label}
-                          </span>
-                        </div>
-                        <Checkbox
-                          id={item.value}
-                          checked={serviceType === item.value}
-                          onCheckedChange={(checked) => {
-                            if (checked) setValue("serviceType", item.value as any);
-                          }}
-                          className="sr-only"
-                        />
-                      </Label>
-                    ))}
-                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Book 101 Drivers to move your car in Southern California.
+                  </p>
                 </CardContent>
               </Card>
 

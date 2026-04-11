@@ -75,9 +75,9 @@ export default function QuoteConfirmation() {
   const customerName = formData?.fullName || "";
 
   const serviceTypeDisplay: Record<string, string> = {
-    home: "Home Delivery",
-    dealer: "Dealer (B2B)",
-    service: "Service Pickup",
+    home: "Car Transfer",
+    dealer: "Car Transfer",
+    service: "Car Transfer",
   };
 
   const nextSteps = [

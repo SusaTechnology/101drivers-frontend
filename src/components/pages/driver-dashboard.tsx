@@ -105,10 +105,7 @@ const FILTER_OPTIONS = {
     { value: 'ALL', label: 'Any date' },
   ],
   serviceTypeOptions: [
-    { value: 'ALL', label: 'All services' },
-    { value: 'HOME_DELIVERY', label: 'Home Delivery' },
-    { value: 'BETWEEN_LOCATIONS', label: 'Between Locations' },
-    { value: 'SERVICE_PICKUP_RETURN', label: 'Pickup & Return' },
+    { value: 'ALL', label: 'All transfers' },
   ],
   sortOptions: [
     { value: 'SOONEST', label: 'Soonest' },
@@ -159,9 +156,9 @@ const formatCurrency = (amount?: number | null): string => {
 
 // Service type to display name mapping
 const serviceTypeLabels: Record<string, string> = {
-  HOME_DELIVERY: 'Home Delivery',
-  BETWEEN_LOCATIONS: 'Between Locations',
-  SERVICE_PICKUP_RETURN: 'Pickup & Return',
+  HOME_DELIVERY: 'Car Transfer',
+  BETWEEN_LOCATIONS: 'Car Transfer',
+  SERVICE_PICKUP_RETURN: 'Car Transfer',
 }
 
 // Bottom nav items

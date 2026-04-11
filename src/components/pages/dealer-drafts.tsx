@@ -35,9 +35,9 @@ const formatDate = (dateString: string) => {
 
 // Service type labels
 const serviceTypeLabels: Record<string, string> = {
-  HOME_DELIVERY: 'Home Delivery',
-  BETWEEN_LOCATIONS: 'Between Locations',
-  SERVICE_PICKUP_RETURN: 'Service Pickup & Return',
+  HOME_DELIVERY: 'Car Transfer',
+  BETWEEN_LOCATIONS: 'Car Transfer',
+  SERVICE_PICKUP_RETURN: 'Car Transfer',
 };
 
 export default function DealerDrafts() {
