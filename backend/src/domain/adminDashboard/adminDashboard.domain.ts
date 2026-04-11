@@ -913,7 +913,34 @@ export class AdminDashboardDomain {
 
     const staleTrackingCount = await this.countStaleTrackingDeliveries(deliveryWhere);
 
+    // Count new dealer signups (business customers pending approval)
+    const pendingDealerCount = await this.prisma.customer.count({
+      where: {
+        customerType: EnumCustomerCustomerType.BUSINESS,
+        approvalStatus: EnumCustomerApprovalStatus.PENDING,
+      },
+    });
+
     const items = [
+      {
+        severity:
+          pendingDealerCount > 0
+            ? EnumAdminDashboardAlertSeverity.CRITICAL
+            : EnumAdminDashboardAlertSeverity.WARNING,
+        code: EnumAdminDashboardAttentionType.DEALER_APPROVAL_PENDING,
+        title: "New Dealer Signups",
+        subtitle: "New dealers awaiting approval and verification.",
+        count: pendingDealerCount,
+        action: {
+          type: EnumAdminDashboardActionType.NAVIGATE,
+          label: "Review new dealers",
+          target: "users",
+          filters: {
+            roles: "BUSINESS_CUSTOMER",
+            customerApprovalStatus: "PENDING",
+          },
+        },
+      },
       {
         severity:
           operations.activeWithoutTracking > 0

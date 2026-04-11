@@ -965,6 +965,8 @@ export default function AdminUsersPage() {
                             <CustomerStatusBadge status={user.customer.approvalStatus} />
                           ) : user.driver ? (
                             <DriverStatusBadge status={user.driver.status} />
+                          ) : (user.roles === 'BUSINESS_CUSTOMER' || user.roles === 'PRIVATE_CUSTOMER') ? (
+                            <CustomerStatusBadge status="PENDING" />
                           ) : (
                             <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
                           )}

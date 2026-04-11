@@ -289,12 +289,12 @@ export default function NotificationBell({ className, userType }: NotificationBe
         <Button
           variant="ghost"
           size="icon"
-          className={cn('relative rounded-full', className)}
+          className={cn('relative shrink-0 rounded-full h-9 w-9', className)}
           aria-label="Notifications"
         >
-          <Bell className="h-5 w-5" />
+          <Bell className="h-[18px] w-[18px]" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white border-2 border-white dark:border-slate-900">
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none border-2 border-white dark:border-slate-900">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}

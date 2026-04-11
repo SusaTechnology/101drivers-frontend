@@ -94,7 +94,7 @@ export function Navbar({
           {children && <div className="hidden md:block">{children}</div>}
 
           {/* Right section: actions + back button */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {actions.map((action) => (
               <React.Fragment key={action.key}>{action.component}</React.Fragment>
             ))}
