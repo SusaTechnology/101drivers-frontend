@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
+import { usePickupZones } from "@/hooks/usePickupZones";
 import { getUser, useCreate, useDataQuery, usePatch, authFetch } from "@/lib/tanstack/dataQuery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -326,6 +327,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [showReleaseDialog, setShowReleaseDialog] = useState(false);
   const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
   const customer = getUser();
+
+  // Fetch service area zones for map overlay (like landing page)
+  const { zones: pickupZones } = usePickupZones();
 
   // Fetch customer data to check postpaidEnabled status
   const customerDataQuery = useDataQuery<CustomerData>({
@@ -2144,6 +2148,8 @@ const handleQuotePreview = () => {
                       pickup={pickupCoords}
                       dropoff={dropoffCoords}
                       isLoaded={isLoaded}
+                      zones={pickupZones}
+                      fitZonesBounds={!pickupCoords && !dropoffCoords}
                     />
                     {/* Overlay badges */}
                     <div className="absolute bottom-5 left-5 flex flex-wrap gap-2 z-10">
@@ -2255,7 +2261,7 @@ const handleQuotePreview = () => {
                       Schedule window
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      Choose which time you want to set. The other will be calculated automatically.
+                      Set Pickup or Arrival Time
                     </p>
                   </div>
                   <div className="hidden sm:flex flex-col gap-2">
@@ -2275,7 +2281,7 @@ const handleQuotePreview = () => {
                 {/* Step 1: Choose which side to set */}
                 <div className="space-y-3">
                   <Label className="text-xs font-black uppercase tracking-widest">
-                    Which time do you want to set?
+                    Set Pickup or Arrival Time
                   </Label>
                   <RadioGroup
                     value={customerChose || ""}
@@ -2289,7 +2295,7 @@ const handleQuotePreview = () => {
                           <MapPin className="h-4 w-4 text-lime-500" />
                           I want to set pickup time
                         </span>
-                        <span className="text-xs text-slate-500 font-normal">Dropoff will be calculated</span>
+                        <span className="text-xs text-slate-500 font-normal">Arrival will be calculated</span>
                       </Label>
                     </div>
                     <div className="flex items-center space-x-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-lime-500 transition-colors cursor-pointer">
@@ -2297,7 +2303,7 @@ const handleQuotePreview = () => {
                       <Label htmlFor="dropoff-choice" className="cursor-pointer font-medium">
                         <span className="flex items-center gap-2">
                           <Flag className="h-4 w-4 text-lime-500" />
-                          I want to set dropoff time
+                          I want to set arrival time
                         </span>
                         <span className="text-xs text-slate-500 font-normal">Pickup will be calculated</span>
                       </Label>
@@ -2317,7 +2323,7 @@ const handleQuotePreview = () => {
                 {customerChose && !isLoadingSlots && (
                   <div className="space-y-3">
                     <Label className="text-xs font-black uppercase tracking-widest">
-                      {customerChose === "PICKUP_WINDOW" ? "Select pickup window" : "Select dropoff window"}
+                      {customerChose === "PICKUP_WINDOW" ? "Select pickup window" : "Select arrival window"}
                     </Label>
                     
                     {suggestedSlots[customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff"].length > 0 ? (
@@ -2383,7 +2389,7 @@ const handleQuotePreview = () => {
                         )}
                       </div>
                       <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">Dropoff Window</div>
+                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">Arrival Window</div>
                         <div className="text-sm font-medium">
                           {customerChose === "DROPOFF_WINDOW" ? (
                             <span className="text-lime-600 dark:text-lime-400">🎯 {selectedSlot?.label}</span>
@@ -2455,18 +2461,6 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                {/* Info box explaining the flow */}
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-start gap-3">
-                    <Info className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                    <div>
-                      <div className="text-sm font-extrabold text-slate-700 dark:text-slate-300">How it works</div>
-                      <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
-                        Choose whether you want to set the pickup or dropoff time. Select an available slot, and we'll automatically calculate the other window based on transit time and verify feasibility.
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
@@ -2480,16 +2474,15 @@ const handleQuotePreview = () => {
                       Step 3
                     </CardDescription>
                     <CardTitle className="text-2xl font-black mt-2">
-                      Vehicle details
+                      Vehicle Details
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      Make/model/color from dropdowns; "Other" unlocks
-                      free-text. VIN verification required.
+                      Enter License Plate, last 4 numbers of VIN, then select Make, Model, and Color from the dropdowns.
                     </p>
                   </div>
                   <Badge variant="outline" className="hidden sm:flex">
                     <Car className="h-3 w-3 mr-1" />
-                    Dropdown-driven
+                    Vehicle Info
                   </Badge>
                 </div>
               </CardHeader>
@@ -2542,56 +2535,23 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                {/* Save vehicle for future - only show when user entered NEW vehicle details (not using saved, has required fields filled) */}
-                {!useSavedVehicle && !selectedSavedVehicle && make && model && color && watch('licensePlate') && (
-                  <div className="p-3 rounded-xl bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800">
-                    <div className="text-xs font-bold text-lime-700 dark:text-lime-300 mb-2">
-                      Save this vehicle for future deliveries?
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const finalMake = make === "Other" ? watch('makeOther') : make;
-                        const finalModel = model === "Other" ? watch('modelOther') : model;
-                        const finalColor = color === "Other" ? watch('colorOther') : color;
-
-                        if (!finalMake || !finalModel || !finalColor || !watch('licensePlate')) {
-                          toast.error("Missing information", {
-                            description: "Please fill in all vehicle details.",
-                          });
-                          return;
-                        }
-
-                        saveVehicleMutation.mutate({
-                          make: finalMake,
-                          model: finalModel,
-                          color: finalColor,
-                          licensePlate: watch('licensePlate'),
-                          customer: { id: customer.profileId },
-                        });
-                      }}
-                      disabled={saveVehicleMutation.isPending}
-                      className="h-10"
-                    >
-                      {saveVehicleMutation.isPending ? "Saving..." : "Save Vehicle"}
-                    </Button>
-                  </div>
-                )}
-
                 {/* Basic Vehicle Info */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="licensePlate" className="text-xs font-bold">
-                      License Plate
+                      License Plate <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="licensePlate"
                       {...register("licensePlate")}
                       className="h-14 rounded-2xl"
-                      placeholder="7ABC123"
+                      placeholder="ABC101"
                     />
+                    {errors.licensePlate && (
+                      <p className="text-xs text-red-500">
+                        {errors.licensePlate.message}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -2599,7 +2559,7 @@ const handleQuotePreview = () => {
                       htmlFor="vinVerification"
                       className="text-xs font-bold"
                     >
-                      VIN verification code{" "}
+                      Last 4 numbers of VIN{" "}
                       <span className="text-red-500">*</span>
                     </Label>
                     <Input
@@ -2624,7 +2584,7 @@ const handleQuotePreview = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="make" className="text-xs font-bold">
-                      Make
+                      Make <span className="text-red-500">*</span>
                     </Label>
                     <Select
                       value={make}
@@ -2657,7 +2617,7 @@ const handleQuotePreview = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="model" className="text-xs font-bold">
-                      Model
+                      Model <span className="text-red-500">*</span>
                     </Label>
                     <Select
                       value={model}
@@ -2687,7 +2647,7 @@ const handleQuotePreview = () => {
                   </div>
                 </div>
 
-                {/* Color & Transmission */}
+                {/* Color & Save Vehicle */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="color" className="text-xs font-bold">
@@ -2719,68 +2679,63 @@ const handleQuotePreview = () => {
                     )}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="transmission" className="text-xs font-bold">
-                      Transmission
-                    </Label>
-                    <Select
-                      value={transmission}
-                      onValueChange={(value) => setValue("transmission", value)}
-                    >
-                      <SelectTrigger className="h-14 rounded-2xl">
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Automatic">Automatic</SelectItem>
-                        <SelectItem value="Manual">Manual</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {transmission === "Other" && (
-                      <Input
-                        {...register("transmissionOther")}
-                        className="h-14 rounded-2xl mt-2"
-                        placeholder="Enter transmission"
-                      />
-                    )}
-                  </div>
+                  {/* Save vehicle for future - green box on the right side */}
+                  {!useSavedVehicle && !selectedSavedVehicle && make && model && color && watch('licensePlate') && (
+                    <div className="p-3 rounded-xl bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800">
+                      <div className="text-xs font-bold text-lime-700 dark:text-lime-300 mb-2">
+                        Save vehicle for future use?
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const finalMake = make === "Other" ? watch('makeOther') : make;
+                          const finalModel = model === "Other" ? watch('modelOther') : model;
+                          const finalColor = color === "Other" ? watch('colorOther') : color;
+
+                          if (!finalMake || !finalModel || !finalColor || !watch('licensePlate')) {
+                            toast.error("Missing information", {
+                              description: "Please fill in all vehicle details.",
+                            });
+                            return;
+                          }
+
+                          saveVehicleMutation.mutate({
+                            make: finalMake,
+                            model: finalModel,
+                            color: finalColor,
+                            licensePlate: watch('licensePlate'),
+                            customer: { id: customer.profileId },
+                          });
+                        }}
+                        disabled={saveVehicleMutation.isPending}
+                        className="h-10"
+                      >
+                        {saveVehicleMutation.isPending ? "Saving..." : "Save Vehicle"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Other - optional additional info */}
+                <div className="space-y-2">
+                  <Label htmlFor="vehicleOther" className="text-xs font-bold">
+                    Other
+                  </Label>
+                  <Textarea
+                    id="vehicleOther"
+                    {...register("instructions")}
+                    className="min-h-[100px] rounded-2xl"
+                    placeholder="Any additional information (e.g. special instructions, damage notes, etc.)"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Optional - Any additional information (e.g. special instructions, damage notes, etc.)
+                  </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Step 4: Instructions */}
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader>
-                <div>
-                  <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                    Step 4
-                  </CardDescription>
-                  <CardTitle className="text-2xl font-black mt-2">
-                    Instructions
-                  </CardTitle>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Gate codes, key handoff notes, dealership contact at pickup,
-                    etc.
-                  </p>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="instructions"
-                    className="text-xs font-black uppercase tracking-widest"
-                  >
-                    Special instructions
-                  </Label>
-                  <Textarea
-                    id="instructions"
-                    {...register("instructions")}
-                    className="min-h-[130px] rounded-2xl"
-                    placeholder="Gate code, parking instructions, key location, point-of-contact notes..."
-                  />
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* RIGHT COLUMN - Contact, Recipient, Payment (unchanged) */}
