@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  Store,
   MapPin,
   MailCheck,
   Lock,
@@ -388,119 +387,21 @@ export function DealerSignIn({
       </header>
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-          {/* Left: Intro Section (unchanged) */}
-          <div className="lg:col-span-6 order-2 lg:order-1">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
-                {isAdmin ? (
-                  <Lock className="text-primary w-6 h-6 font-bold" />
-                ) : isDealer ? (
-                  <Store className="text-primary w-6 h-6 font-bold" />
-                ) : (
-                  <Car className="text-primary w-6 h-6 font-bold" />
-                )}
-              </div>
-              <div>
-                <h1 className="text-4xl font-black text-slate-900 dark:text-white">
-                  {isAdmin ? "Admin Sign In" : isDealer ? "Customer Sign In" : "Driver Sign In"}
-                </h1>
-                <p className="text-slate-600 dark:text-slate-400 mt-3 text-lg leading-relaxed max-w-xl">
-                  {isAdmin ? (
-                    "Manage platform users, monitor operations, and configure system settings."
-                  ) : isDealer ? (
-                    "Manage deliveries, track status, and review compliance proofs."
-                  ) : (
-                    "Accept delivery jobs, upload proofs, and track earnings."
-                  )}
-                </p>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/25 text-slate-800 dark:text-slate-200 text-xs font-extrabold">
-                    <MapPin className="text-primary w-4 h-4" />
-                    California-only operations
-                  </div>
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold">
-                    <MailCheck className="text-primary w-4 h-4" />
-                    Email-first notifications
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <CustomCard className="mt-10 bg-white/70 dark:bg-slate-900/40 border border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
-              <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                What you can do as {isAdmin ? "an Admin" : isDealer ? "a Customer" : "a Driver"}
-              </h2>
-              <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
-                {isAdmin ? (
-                  <>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Manage all user accounts (dealers, drivers) and their permissions
-                    </li>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Monitor platform-wide operations and delivery analytics
-                    </li>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Configure system settings, notification preferences, and compliance rules
-                    </li>
-                  </>
-                ) : isDealer ? (
-                  <>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Create delivery requests for customers or inventory moves
-                    </li>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Track status updates and receive email notifications (SMS optional if enabled)
-                    </li>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Review VIN last-4 verification, photos, odometer start/end, and trip report proofs
-                    </li>
-                  </>
-                ) : (
-                  <>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Accept delivery jobs based on availability and location
-                    </li>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Upload VIN verification, photos, and odometer readings
-                    </li>
-                    <li className="flex gap-3">
-                      <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                      Track earnings and delivery history with detailed trip reports
-                    </li>
-                  </>
-                )}
-              </ul>
-            </CustomCard>
-          </div>
-
-          {/* Right: Sign-in Form */}
-          <div className="lg:col-span-6 order-1 lg:order-2">
+        {isDealer ? (
+          /* ========== DEALER: Single-column layout ========== */
+          <div className="max-w-md mx-auto space-y-8">
+            {/* Sign-in Form Card */}
             <CustomCard className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-7 sm:p-10 hover-lift">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                    {isAdmin ? "ADMIN" : isDealer ? "CUST" : "DRV"}
+                    CUST
                   </p>
                   <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-                    {isAdmin ? "Welcome back, Admin" : isDealer ? "Welcome back" : "Welcome back, Driver"}
+                    Welcome back
                   </h2>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    {isAdmin ? (
-                      "Sign in to access the admin dashboard."
-                    ) : isDealer ? (
-                      "Sign in to access your dashboard."
-                    ) : (
-                      "Sign in to access your driver portal."
-                    )}
+                    Sign in to access your dashboard.
                   </p>
                 </div>
                 <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
@@ -511,54 +412,33 @@ export function DealerSignIn({
                 </div>
               </div>
 
-              {/* Error Display (unchanged) */}
               {loginError && (
                 <div className="mt-6 p-4 rounded-2xl bg-destructive/10 border border-destructive/20">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                    <p className="text-sm text-destructive font-medium ">
-                      {loginError}
-                    </p>
+                    <p className="text-sm text-destructive font-medium">{loginError}</p>
                   </div>
                 </div>
               )}
 
-              <form
-                onSubmit={handleSubmit(onSubmit)}
-                className="mt-8 space-y-5"
-              >
+              <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="username"
-                    className="text-xs font-black uppercase tracking-widest text-slate-500"
-                  >
-                    {/* {isAdmin ? "Email or Username" : isDealer ? "Business Name" : "Email or Username"} */}
-                    Email
-                  </Label>
+                  <Label htmlFor="username" className="text-xs font-black uppercase tracking-widest text-slate-500">Email</Label>
                   <Input
                     id="username"
                     type="text"
-                    placeholder={
-                      isAdmin ? "admin@101drivers.com" : isDealer ? "dealer@business.com" : "driver@email.com"
-                    }
+                    placeholder="dealer@business.com"
                     className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                     disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
                     {...register("username")}
                   />
                   {errors.username && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {errors.username.message}
-                    </p>
+                    <p className="text-sm text-red-500 mt-1">{errors.username.message}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label
-                    htmlFor="password"
-                    className="text-xs font-black uppercase tracking-widest text-slate-500"
-                  >
-                    Password
-                  </Label>
+                  <Label htmlFor="password" className="text-xs font-black uppercase tracking-widest text-slate-500">Password</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -574,17 +454,11 @@ export function DealerSignIn({
                       onClick={() => setShowPassword(!showPassword)}
                       disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
                     >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
                   </div>
                   {errors.password && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {errors.password.message}
-                    </p>
+                    <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>
                   )}
                 </div>
 
@@ -596,15 +470,10 @@ export function DealerSignIn({
                       disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
                       {...register("rememberMe" as any)}
                     />
-                    <Label
-                      htmlFor="rememberMe"
-                      className="text-sm font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"
-                    >
+                    <Label htmlFor="rememberMe" className="text-sm font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
                       Remember me
                     </Label>
                   </div>
-
-                  {/* Forgot password button - now sends request */}
                   <Button
                     variant="link"
                     className="text-sm font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
@@ -623,31 +492,15 @@ export function DealerSignIn({
                 >
                   {loginMutation.isPending ? (
                     <>
-                      <svg
-                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary-foreground"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                       Signing in...
                     </>
                   ) : (
                     <>
-                      Sign In {isAdmin ? "as Admin" : isDealer ? "" : "as Driver"}
+                      Sign In
                       <ArrowRight className="w-5 h-5 font-bold" />
                     </>
                   )}
@@ -655,32 +508,16 @@ export function DealerSignIn({
 
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {!isAdmin && "Don't have an account? "}
-                    {isAdmin ? (
-                      <span className="text-xs text-slate-500">Admin accounts are created by system administrators.</span>
-                    ) : isDealer ? (
-                      <Button
-                        variant="link"
-                        className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
-                        asChild
-                        type="button"
-                      >
-                        <Link to="/auth/dealer-signup">
-                          Create dealer account
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="link"
-                        className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
-                        asChild
-                        type="button"
-                      >
-                        <Link to="/driver-onboarding">Sign up</Link>
-                      </Button>
-                    )}
+                    Don't have an account?{" "}
+                    <Button
+                      variant="link"
+                      className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
+                      asChild
+                      type="button"
+                    >
+                      <Link to="/auth/dealer-signup">Sign up</Link>
+                    </Button>
                   </p>
-
                   <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                     Notifications are{" "}
                     <span className="font-bold">email-first</span>. SMS is
@@ -690,11 +527,282 @@ export function DealerSignIn({
               </form>
             </CustomCard>
 
+            {/* Sign Up Now Card */}
+            <CustomCard className="bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
+              <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                Sign Up Now!
+              </h2>
+              <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
+                <li className="flex gap-3">
+                  <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                  Create vehicle delivery requests or schedule inventory moves
+                </li>
+                <li className="flex gap-3">
+                  <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                  Track all status updates and receive real-time email notifications
+                </li>
+                <li className="flex gap-3">
+                  <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                  View before &amp; after photos, full delivery history, and payment reports on your admin dashboard
+                </li>
+              </ul>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/25 text-slate-800 dark:text-slate-200 text-xs font-extrabold">
+                  <MapPin className="text-primary w-4 h-4" />
+                  California-only operations
+                </div>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold">
+                  <MailCheck className="text-primary w-4 h-4" />
+                  Email alerts
+                </div>
+              </div>
+            </CustomCard>
 
+            {/* Bottom Sign Up Link */}
+            <div className="text-center pb-4">
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Don't have an account?{" "}
+                <Button
+                  variant="link"
+                  className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
+                  asChild
+                  type="button"
+                >
+                  <Link to="/auth/dealer-signup">Sign up</Link>
+                </Button>
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          /* ========== DRIVER / ADMIN: Two-column layout ========== */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            {/* Left: Intro Section */}
+            <div className="lg:col-span-6 order-2 lg:order-1">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
+                  {isAdmin ? (
+                    <Lock className="text-primary w-6 h-6 font-bold" />
+                  ) : (
+                    <Car className="text-primary w-6 h-6 font-bold" />
+                  )}
+                </div>
+                <div>
+                  <h1 className="text-4xl font-black text-slate-900 dark:text-white">
+                    {isAdmin ? "Admin Sign In" : "Driver Sign In"}
+                  </h1>
+                  <p className="text-slate-600 dark:text-slate-400 mt-3 text-lg leading-relaxed max-w-xl">
+                    {isAdmin ? (
+                      "Manage platform users, monitor operations, and configure system settings."
+                    ) : (
+                      "Accept delivery jobs, upload proofs, and track earnings."
+                    )}
+                  </p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/25 text-slate-800 dark:text-slate-200 text-xs font-extrabold">
+                      <MapPin className="text-primary w-4 h-4" />
+                      California-only operations
+                    </div>
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold">
+                      <MailCheck className="text-primary w-4 h-4" />
+                      Email-first notifications
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <CustomCard className="mt-10 bg-white/70 dark:bg-slate-900/40 border border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                  What you can do as {isAdmin ? "an Admin" : "a Driver"}
+                </h2>
+                <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
+                  {isAdmin ? (
+                    <>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Manage all user accounts (dealers, drivers) and their permissions
+                      </li>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Monitor platform-wide operations and delivery analytics
+                      </li>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Configure system settings, notification preferences, and compliance rules
+                      </li>
+                    </>
+                  ) : (
+                    <>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Accept delivery jobs based on availability and location
+                      </li>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Upload VIN verification, photos, and odometer readings
+                      </li>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Track earnings and delivery history with detailed trip reports
+                      </li>
+                    </>
+                  )}
+                </ul>
+              </CustomCard>
+            </div>
+
+            {/* Right: Sign-in Form */}
+            <div className="lg:col-span-6 order-1 lg:order-2">
+              <CustomCard className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-7 sm:p-10 hover-lift">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                      {isAdmin ? "ADMIN" : "DRV"}
+                    </p>
+                    <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-2">
+                      {isAdmin ? "Welcome back, Admin" : "Welcome back, Driver"}
+                    </h2>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      {isAdmin ? (
+                        "Sign in to access the admin dashboard."
+                      ) : (
+                        "Sign in to access your driver portal."
+                      )}
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                    <Lock className="text-primary w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
+                      Secure
+                    </span>
+                  </div>
+                </div>
+
+                {loginError && (
+                  <div className="mt-6 p-4 rounded-2xl bg-destructive/10 border border-destructive/20">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                      <p className="text-sm text-destructive font-medium">{loginError}</p>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="username" className="text-xs font-black uppercase tracking-widest text-slate-500">Email</Label>
+                    <Input
+                      id="username"
+                      type="text"
+                      placeholder={isAdmin ? "admin@101drivers.com" : "driver@email.com"}
+                      className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                      disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                      {...register("username")}
+                    />
+                    {errors.username && (
+                      <p className="text-sm text-red-500 mt-1">{errors.username.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-xs font-black uppercase tracking-widest text-slate-500">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm pr-12"
+                        disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                        {...register("password")}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="rememberMe"
+                        className="rounded border-slate-300 text-primary focus:ring-primary/20"
+                        disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                        {...register("rememberMe" as any)}
+                      />
+                      <Label htmlFor="rememberMe" className="text-sm font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
+                        Remember me
+                      </Label>
+                    </div>
+                    <Button
+                      variant="link"
+                      className="text-sm font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
+                      type="button"
+                      onClick={handleForgotPassword}
+                      disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                    >
+                      {forgotPasswordMutation.isPending ? "Sending..." : "Forgot password?"}
+                    </Button>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                    className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-14 text-base"
+                  >
+                    {loginMutation.isPending ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Signing in...
+                      </>
+                    ) : (
+                      <>
+                        Sign In {isAdmin ? "as Admin" : "as Driver"}
+                        <ArrowRight className="w-5 h-5 font-bold" />
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {isAdmin ? (
+                        <span className="text-xs text-slate-500">Admin accounts are created by system administrators.</span>
+                      ) : (
+                        <>
+                          Don't have an account?{" "}
+                          <Button
+                            variant="link"
+                            className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
+                            asChild
+                            type="button"
+                          >
+                            <Link to="/driver-onboarding">Sign up</Link>
+                          </Button>
+                        </>
+                      )}
+                    </p>
+                    <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Notifications are{" "}
+                      <span className="font-bold">email-first</span>. SMS is
+                      optional and depends on Admin policy.
+                    </p>
+                  </div>
+                </form>
+              </CustomCard>
+            </div>
+          </div>
+        )}
       </main>
 
+      {/* Footer */}
       <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">
         <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
