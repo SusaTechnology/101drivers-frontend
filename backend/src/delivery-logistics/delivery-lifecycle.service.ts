@@ -240,9 +240,15 @@ async startTrip(input: {
     );
 
     // Clear any stale tracking points from a previous attempt
-    await tx.trackingPoint.deleteMany({
-      where: { trackingSession: { deliveryId: input.deliveryId } },
+    const existingSession = await tx.trackingSession.findUnique({
+      where: { deliveryId: input.deliveryId },
+      select: { id: true },
     });
+    if (existingSession) {
+      await tx.trackingPoint.deleteMany({
+        where: { sessionId: existingSession.id },
+      });
+    }
 
     await tx.trackingSession.upsert({
       where: { deliveryId: input.deliveryId },
