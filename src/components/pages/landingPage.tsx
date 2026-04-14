@@ -817,9 +817,9 @@ export default function LandingPage() {
                     <Ruler className="h-5 w-5 text-slate-400" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">Estimated Price</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">Service Price</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Enter locations above for estimate
+                      Enter pickup and drop-off locations above for your price.
                     </p>
                   </div>
                 </div>
@@ -828,7 +828,7 @@ export default function LandingPage() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                        Estimated Price
+                        Service Price
                       </h3>
                       <Badge variant="secondary" className="mt-2 gap-1.5 px-3 py-1.5">
                         <Ruler className="h-3.5 w-3.5 text-lime-500" />
@@ -842,7 +842,7 @@ export default function LandingPage() {
                         ${quoteResult.estimatedPrice.toFixed(2)}
                       </p>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                        Total Estimate
+                        (incl. fees)
                       </p>
                     </div>
                   </div>
@@ -850,7 +850,7 @@ export default function LandingPage() {
                   {quoteResult?.feesBreakdown && (
                     <div className="flex justify-between items-center py-3 border-t border-slate-100 dark:border-slate-800">
                       <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                        Base Transportation
+                        Base Fee
                       </span>
                       <span className="font-black text-sm text-slate-900 dark:text-white">
                         ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
@@ -862,7 +862,7 @@ export default function LandingPage() {
                   <div className="flex gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-900/30">
                     <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-[10px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
-                      Estimate only. Final scheduling depends on driver availability and operational policy.
+                      Scheduling depends on driver availability and operational policy.
                     </p>
                   </div>
 
