@@ -340,6 +340,17 @@ export default function DriverDashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Driver identity pill */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                {user?.username || 'Driver'}
+              </span>
+            </div>
+
             <Button
               variant="outline"
               size="icon"
@@ -391,8 +402,19 @@ export default function DriverDashboardPage() {
                 </span>
               </div>
 
+              {/* Mobile identity indicator */}
+              <div className="sm:hidden inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40 w-fit">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                  Online as {user?.username || 'Driver'}
+                </span>
+              </div>
+
               <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-4 leading-tight">
-                Available jobs near you
+                Hey{user?.username ? `, ${user.username}` : ''} — available jobs
               </h1>
               <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm sm:text-base max-w-2xl leading-relaxed">
                 Browse jobs like an airport board. Book a job to claim it. Pickup and drop-off checklists are required before you can start or complete.
