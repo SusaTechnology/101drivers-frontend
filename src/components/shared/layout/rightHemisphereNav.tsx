@@ -21,7 +21,6 @@ export const RightHemisphereNav = () => {
       {/* Dealer Sign In - Primary */}
       <Link
         to="/auth/dealer-signin"
-        search={{ userType: "dealer" }}
         className="hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-lime-500 text-slate-950 font-bold text-sm hover:bg-lime-600 transition-colors"
       >
         <Building className="w-4 h-4" />
@@ -85,7 +84,6 @@ export const RightHemisphereNav = () => {
         <div className="absolute top-20 right-4 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-4 flex flex-col gap-2">
           <Link
             to="/auth/dealer-signin"
-            search={{ userType: "dealer" }}
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center gap-2 px-4 py-3 rounded-xl bg-lime-500 text-slate-950 font-bold text-sm"
           >

@@ -7,12 +7,9 @@ export const Route = createFileRoute('/auth/dealer-signin')({
 })
 
 function DealerSignInPage() {
-    const search = Route.useSearch() as { userType?: string }
-  const userType = search.userType === 'driver' ? 'driver' : 'dealer'
-
   return (
     <ThemeProvider attribute="class" defaultTheme="light">
-      <DealerSignIn userType={userType} />
+      <DealerSignIn userType="dealer" />
     </ThemeProvider>
   )
 }

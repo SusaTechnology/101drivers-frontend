@@ -118,7 +118,7 @@ export default function DealerSupportRequest() {
 
   const handleSignOut = () => {
     toast.success('Signed out successfully')
-    navigate({ to: '/auth/dealer-signin?userType=dealer' })
+    navigate({ to: '/auth/dealer-signin' })
   }
 
   const handleSubmit = () => {
