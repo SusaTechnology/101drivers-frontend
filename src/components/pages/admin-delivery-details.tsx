@@ -608,11 +608,21 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
                     <p className="text-[10px] text-slate-400 mb-1">Tracking Status</p>
-                    <p className="text-sm font-bold">{getTrackingStatusLabel(delivery.tracking?.status || 'NOT_STARTED')}</p>
+                    <p className="text-sm font-bold">
+                      {delivery.status === 'COMPLETED'
+                        ? 'Completed'
+                        : delivery.status === 'CANCELLED'
+                          ? 'Cancelled'
+                          : getTrackingStatusLabel(delivery.tracking?.status || 'NOT_STARTED')}
+                    </p>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
                     <p className="text-[10px] text-slate-400 mb-1">Driven Miles</p>
-                    <p className="text-sm font-bold">{formatMiles(delivery.tracking?.drivenMiles)}</p>
+                    <p className="text-sm font-bold">
+                      {(delivery.tracking?.drivenMiles == null || delivery.tracking?.drivenMiles <= 0)
+                        ? (delivery.quote?.distanceMiles ? `${delivery.quote.distanceMiles.toFixed(1)} mi` : '—')
+                        : formatMiles(delivery.tracking.drivenMiles)}
+                    </p>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
                     <p className="text-[10px] text-slate-400 mb-1">Odometer Start</p>

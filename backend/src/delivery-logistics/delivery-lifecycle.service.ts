@@ -239,6 +239,11 @@ async startTrip(input: {
       tx
     );
 
+    // Clear any stale tracking points from a previous attempt
+    await tx.trackingPoint.deleteMany({
+      where: { trackingSession: { deliveryId: input.deliveryId } },
+    });
+
     await tx.trackingSession.upsert({
       where: { deliveryId: input.deliveryId },
       create: {
@@ -252,6 +257,7 @@ async startTrip(input: {
         startedAt: new Date(),
         stoppedAt: null,
         status: EnumTrackingSessionStatus.STARTED,
+        drivenMiles: 0,
       },
     });
 
@@ -314,6 +320,7 @@ async completeTrip(input: {
         status: true,
         dropoffLat: true,
         dropoffLng: true,
+        quoteId: true,
       },
     });
 
@@ -358,8 +365,9 @@ async completeTrip(input: {
       );
     }
 
+    let drivenMiles = tracking?.drivenMiles ?? 0;
+
     // For trips with a meaningful distance (2+ miles driven), require at least 3 tracking points
-    const drivenMiles = tracking?.drivenMiles ?? 0;
     if (drivenMiles >= 2 && pointCount < 3) {
       throw new BadRequestException(
         `Cannot complete delivery: insufficient tracking data (${pointCount} points). At least 3 GPS points are required for trips over 2 miles. Please ensure location is on.`
@@ -385,13 +393,41 @@ async completeTrip(input: {
       }
     }
 
-    await tx.trackingSession.updateMany({
-      where: { deliveryId: input.deliveryId },
-      data: {
-        stoppedAt: new Date(),
-        status: EnumTrackingSessionStatus.STOPPED,
-      },
-    });
+    // If GPS-driven miles is 0 or too low, fall back to the quote map distance.
+    // This prevents completed deliveries from showing 0 miles when GPS signal was poor.
+    let finalDrivenMiles = drivenMiles;
+    if (finalDrivenMiles <= 0 && delivery.quoteId) {
+      const quote = await tx.quote.findUnique({
+        where: { id: delivery.quoteId },
+        select: { distanceMiles: true },
+      });
+      if (quote?.distanceMiles != null && quote.distanceMiles > 0) {
+        finalDrivenMiles = quote.distanceMiles;
+      }
+    }
+
+    // Ensure tracking session exists and is properly stopped.
+    // If session is missing (e.g. admin override path), create a STOPPED one.
+    if (tracking) {
+      await tx.trackingSession.updateMany({
+        where: { deliveryId: input.deliveryId },
+        data: {
+          stoppedAt: new Date(),
+          status: EnumTrackingSessionStatus.STOPPED,
+          drivenMiles: finalDrivenMiles,
+        },
+      });
+    } else {
+      await tx.trackingSession.create({
+        data: {
+          deliveryId: input.deliveryId,
+          status: EnumTrackingSessionStatus.STOPPED,
+          startedAt: new Date(),
+          stoppedAt: new Date(),
+          drivenMiles: finalDrivenMiles,
+        },
+      });
+    }
 
     await tx.deliveryRequest.update({
       where: { id: input.deliveryId },

@@ -324,7 +324,11 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     vin: deliveryData?.vinVerificationCode || '—',
     odometerStart: deliveryData?.compliance?.odometerStart || '—',
     odometerEnd: deliveryData?.compliance?.odometerEnd || '—',
-    trackingStatus: deliveryData?.trackingSession?.status || 'Not started',
+    trackingStatus: deliveryData?.status === 'COMPLETED'
+      ? 'Completed'
+      : deliveryData?.status === 'CANCELLED'
+        ? 'Cancelled'
+        : (deliveryData?.trackingSession?.status || 'Not started'),
     trackingStart: deliveryData?.trackingSession?.startedAt ? formatDateTime(deliveryData.trackingSession.startedAt) : '—',
     trackingEnd: deliveryData?.trackingSession?.stoppedAt ? formatDateTime(deliveryData.trackingSession.stoppedAt) : '—',
   }
