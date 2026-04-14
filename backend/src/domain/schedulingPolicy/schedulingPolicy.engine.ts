@@ -549,7 +549,9 @@ export class SchedulingPolicyEngine {
     }>
   ) {
     const day = this.toPolicyDayOfWeek(window.start);
-    const hours = operatingHours.filter((row) => row.dayOfWeek === day);
+    const hours = operatingHours.filter(
+      (row) => this.normalizeDbDayOfWeek(row.dayOfWeek) === day
+    );
 
     if (hours.length === 0) {
       return { withinHours: false };
@@ -697,11 +699,21 @@ export class SchedulingPolicyEngine {
 
   /**
    * Schema uses Int dayOfWeek on OperatingHour.
-   * This implementation assumes 1=Monday ... 7=Sunday.
-   * If your seed uses 0=Sunday ... 6=Saturday, adjust this one method only.
+   * Returns the Luxon ISO weekday: 1=Monday ... 7=Sunday.
+   *
+   * Legacy data may use JS convention (0=Sunday), so the engine
+   * checks for BOTH conventions when matching operating hours.
    */
   private toPolicyDayOfWeek(date: Date): number {
     return this.toBusinessDateTime(date).weekday;
+  }
+
+  /**
+   * Normalize a DB dayOfWeek value to ISO convention (1=Mon ... 7=Sun).
+   * Handles legacy data that stored Sunday as 0 (JS getDay convention).
+   */
+  private normalizeDbDayOfWeek(value: number): number {
+    return value === 0 ? 7 : value;
   }
 
   private async resolvePreviewCustomerType(input: {
