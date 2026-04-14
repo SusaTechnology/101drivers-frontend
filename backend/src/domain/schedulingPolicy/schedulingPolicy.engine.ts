@@ -217,6 +217,13 @@ export class SchedulingPolicyEngine {
       );
     }
 
+    if (slotTemplates.length === 0) {
+      throw new AppException(
+        "No active time slot templates configured",
+        ErrorCodes.BUSINESS_RULE_VIOLATION
+      );
+    }
+
     const reasons: string[] = [];
     const warnings: string[] = [];
 
@@ -257,9 +264,29 @@ export class SchedulingPolicyEngine {
       sameDayEligible
     );
 
+    // Try up to 7 days forward to find a day with operating hours + available slots
+    const suggestedPickupSlots = this.buildSuggestedSlotsMultiDay(
+      baseDate,
+      slotTemplates,
+      operatingHours,
+      7
+    );
+
+    const actualSlotDate = this.resolveSlotDate(
+      baseDate,
+      slotTemplates,
+      operatingHours,
+      7
+    );
+
     const sameDayStatus =
       policy.defaultMode === EnumSchedulingPolicyDefaultMode.SAME_DAY &&
-      sameDayEligible
+      sameDayEligible &&
+      actualSlotDate &&
+      this.toBusinessDateTime(actualSlotDate).hasSame(
+        this.toBusinessDateTime(requestCreatedAt.toJSDate()),
+        "day"
+      )
         ? "SAME_DAY"
         : "NEXT_DAY";
 
@@ -269,17 +296,7 @@ export class SchedulingPolicyEngine {
     const hasDropoffWindow =
       !!input.dropoffWindowStart && !!input.dropoffWindowEnd;
 
-    const suggestedPickupSlots = this.buildSuggestedSlots(
-      baseDate,
-      slotTemplates,
-      operatingHours
-    );
-
-    const suggestedDropoffSlots = this.buildSuggestedSlots(
-      baseDate,
-      slotTemplates,
-      operatingHours
-    ).map((slot) => ({
+    const suggestedDropoffSlots = suggestedPickupSlots.map((slot) => ({
       ...slot,
       start: this.addMinutes(slot.start, totalTravelMinutes),
       end: this.addMinutes(slot.end, totalTravelMinutes),
@@ -572,6 +589,66 @@ export class SchedulingPolicyEngine {
       startTime: slot.startTime,
       endTime: slot.endTime,
     };
+  }
+
+  /**
+   * Try building slots across multiple consecutive days (up to maxDays).
+   * Returns slots for the FIRST day that has at least one valid slot.
+   * This prevents "no slots" when the target day has no operating hours
+   * but other days in the week do.
+   */
+  private buildSuggestedSlotsMultiDay(
+    baseDate: Date,
+    slotTemplates: Array<{ label: string; startTime: string; endTime: string }>,
+    operatingHours: Array<{
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+    }>
+  >,
+    maxDays: number = 7
+  ): SlotCandidate[] {
+    for (let d = 0; d < maxDays; d++) {
+      const candidateDate = this.addMinutes(baseDate, d * 24 * 60);
+      const slots = this.buildSuggestedSlots(
+        candidateDate,
+        slotTemplates,
+        operatingHours
+      );
+      if (slots.length > 0) {
+        return slots;
+      }
+    }
+    return [];
+  }
+
+  /**
+   * Find the first date (within maxDays of baseDate) that yields
+   * at least one valid slot. Used to determine sameDay vs nextDay status.
+   */
+  private resolveSlotDate(
+    baseDate: Date,
+    slotTemplates: Array<{ label: string; startTime: string; endTime: string }>,
+    operatingHours: Array<{
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+    }>
+  >,
+    maxDays: number = 7
+  ): Date | null {
+    for (let d = 0; d < maxDays; d++) {
+      const candidateDate = this.addMinutes(baseDate, d * 24 * 60);
+      const slots = this.buildSuggestedSlots(
+        candidateDate,
+        slotTemplates,
+        operatingHours
+      );
+      if (slots.length > 0) {
+        return candidateDate;
+      }
+    }
+    return null;
   }
 
   private buildSuggestedSlots(
