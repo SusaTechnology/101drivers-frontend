@@ -336,7 +336,7 @@ function RouteComponent() {
                   DRV
                 </p>
                 <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-                  Welcome back
+                  Welcome back, Driver
                 </h2>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                   Sign in to access your driver portal.
@@ -521,15 +521,13 @@ function RouteComponent() {
                   Become a Driver
                 </h2>
                 <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm leading-relaxed">
-                  Log in to accept California delivery jobs and see your earnings. Flexible schedule, be your own boss.
+                  Accept delivery jobs, upload proofs, and track earnings.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="text-xs font-bold">
-                    California-only
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs font-bold">
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <MailCheck className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Email-first notifications
-                  </Badge>
+                  </span>
                 </div>
               </div>
             </div>
@@ -543,15 +541,15 @@ function RouteComponent() {
             <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
               <li className="flex gap-3">
                 <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                Be your own boss
+                Accept delivery jobs based on availability and location
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                Plan your routes &amp; schedule
+                Upload VIN verification, photos, and odometer readings
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                Pick jobs, build your income
+                Track earnings and delivery history with detailed trip reports
               </li>
             </ul>
           </CustomCard>
