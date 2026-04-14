@@ -690,29 +690,7 @@ export function DealerSignIn({
               </form>
             </CustomCard>
 
-            <div className="mt-3 flex flex-col sm:flex-row gap-3">
-              <Button
-                variant="outline"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-extrabold border-slate-200 dark:border-slate-800 h-12"
-                asChild
-                disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-              >
-                <Link to="/">
-                  <ArrowLeft className="w-5 h-5 text-primary" />
-                  Back to Index
-                </Link>
-              </Button>
-              <Button
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-extrabold bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition h-12"
-                asChild
-                disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-              >
-                <Link to="/landing">
-                  Go to Landing
-                  <ArrowRight className="w-5 h-5" />
-                </Link>
-              </Button>
-            </div>
+
           </div>
         </div>
       </main>
