@@ -147,6 +147,9 @@ export default function RouteMap({
       return;
     }
 
+    // Don't override if zones are fitting the bounds
+    if (fitZonesBounds && zones && zones.length > 0) return;
+
     if (pickup && dropoff) {
       const bounds = new google.maps.LatLngBounds();
       bounds.extend(pickup);
@@ -160,13 +163,13 @@ export default function RouteMap({
       map.setZoom(13);
     }
     // else: keep the initial center/zoom set in GoogleMap props
-  }, [map, directions, pickup, dropoff]);
+  }, [map, directions, pickup, dropoff, fitZonesBounds, zones]);
 
   // Auto-fit map to service district zones when they load
   useEffect(() => {
     if (!map || !fitZonesBounds || !zones || zones.length === 0) return;
-    // Don't override if directions are showing or user has pickup/dropoff
-    if (directions || pickup || dropoff) return;
+    // Only defer to directions — show zones alongside pickup/dropoff markers
+    if (directions) return;
 
     const bounds = new google.maps.LatLngBounds();
     let hasCoords = false;
@@ -197,7 +200,7 @@ export default function RouteMap({
       const padH = Math.round(w * 0.08); // 8% horizontal padding
       map.fitBounds(bounds, { top: padV, right: padH, bottom: padV, left: padH });
     }
-  }, [map, fitZonesBounds, zones, directions, pickup, dropoff]);
+  }, [map, fitZonesBounds, zones, directions]);
 
   // Draw historical points as a polyline with a distinct color
   useEffect(() => {

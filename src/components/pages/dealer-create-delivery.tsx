@@ -2150,7 +2150,7 @@ const handleQuotePreview = () => {
                       dropoff={dropoffCoords}
                       isLoaded={isLoaded}
                       zones={pickupZones}
-                      fitZonesBounds={!pickupCoords && !dropoffCoords}
+                      fitZonesBounds={true}
                     />
                     {/* Overlay badges */}
                     <div className="absolute bottom-5 left-5 flex flex-wrap gap-2 z-10">
