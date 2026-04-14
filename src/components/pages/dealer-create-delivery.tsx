@@ -2718,24 +2718,33 @@ const handleQuotePreview = () => {
                   )}
                 </div>
 
-                {/* Other - optional additional info */}
-                <div className="space-y-2">
-                  <Label htmlFor="vehicleOther" className="text-xs font-bold">
-                    Other
-                  </Label>
-                  <Textarea
-                    id="vehicleOther"
-                    {...register("instructions")}
-                    className="min-h-[100px] rounded-2xl"
-                    placeholder="Any additional information (e.g. special instructions, damage notes, etc.)"
-                  />
-                  <p className="text-[11px] text-slate-500">
-                    Optional - Any additional information (e.g. special instructions, damage notes, etc.)
-                  </p>
-                </div>
               </CardContent>
             </Card>
 
+            {/* Step 4: Special Instructions */}
+            <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader>
+                <div>
+                  <CardDescription className="text-[11px] font-black uppercase tracking-widest">
+                    Step 4
+                  </CardDescription>
+                  <CardTitle className="text-2xl font-black mt-2">
+                    Special Instructions
+                  </CardTitle>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                    Any additional notes or special requests (optional)
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  id="instructions"
+                  {...register("instructions")}
+                  className="min-h-[100px] rounded-2xl"
+                  placeholder="Add any notes or special requests..."
+                />
+              </CardContent>
+            </Card>
           </div>
 
           {/* RIGHT COLUMN - Contact, Recipient, Payment (unchanged) */}
