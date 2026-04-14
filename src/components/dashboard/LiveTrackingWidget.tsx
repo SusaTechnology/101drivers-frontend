@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useJsApiLoader } from '@react-google-maps/api'
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import {
   Navigation,
   MapPin,
@@ -209,9 +210,9 @@ export default function LiveTrackingWidget({
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry', 'places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
   // Fetch tracking link to get token

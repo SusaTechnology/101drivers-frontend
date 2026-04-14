@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { useJsApiLoader, DirectionsService, DirectionsRenderer } from '@react-google-maps/api'
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import RouteMap from '@/components/map/RouteMap' // adjust path as needed
 import {
   ArrowLeft as ArrowBack,
@@ -244,9 +245,9 @@ export default function DriverActiveDeliveryPage() {
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry', 'places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
   // Set coordinates directly from delivery data when available

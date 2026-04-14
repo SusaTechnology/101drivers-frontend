@@ -50,6 +50,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
 import { Map as MapComponent } from '@/components/map/GoogleMap'
 import { useJsApiLoader } from '@react-google-maps/api'
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import LocationAutocomplete from '@/components/map/LocationAutocomplete' // adjust path as needed
 
 // Form schema – includes all fields for the combined payload
@@ -129,9 +130,9 @@ export default function DriverPreferencesPage() {
 
   // Google Maps API loader
   const { isLoaded: googleMapsLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
-    libraries: ['geometry', 'places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
   // Fetch real districts

@@ -59,6 +59,7 @@ import { DealerSignupForm } from "../auth/DealerSignupForm";
 import RouteMap from '@/components/map/RouteMap';
 import LocationAutocomplete from "../map/LocationAutocomplete";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
 import { useCreate, useDataQuery } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 import { usePickupZones } from "@/hooks/usePickupZones";
@@ -170,9 +171,9 @@ export default function LandingPage() {
   }, [settings, settingsError, settingsErrorMsg]);
 
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry', 'places'], 
+    libraries: GOOGLE_MAPS_LIBRARIES, 
   });
 
   const getQuote = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/individual/quote-preview`, {

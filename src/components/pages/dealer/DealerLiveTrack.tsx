@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useJsApiLoader } from '@react-google-maps/api'
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import RouteMap from '@/components/map/RouteMap'
 import {
   ArrowLeft,
@@ -226,9 +227,9 @@ export default function DealerLiveTrack() {
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry', 'places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
   // 1. Fetch tracking link to get token

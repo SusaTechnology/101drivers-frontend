@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
 import LocationAutocomplete from "@/components/map/LocationAutocomplete"; // adjust path as needed
 import {
   Card,
@@ -162,9 +163,9 @@ export default function DriverOnboardingPage() {
 
   // Load Google Maps API for autocomplete
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry','places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   // Mutation for sending OTP (first step)

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useJsApiLoader } from '@react-google-maps/api'
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import { ArrowLeft, MapPin, Navigation, ArrowRight, Clock, DollarSign, Car } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -63,9 +64,9 @@ export default function DriverStartingLocationPage() {
 
   // ── Google Maps loader ───────────────────────────────────────────────
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script-starting-location',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry', 'places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
   // ── Fetch service district zones ─────────────────────────────────────

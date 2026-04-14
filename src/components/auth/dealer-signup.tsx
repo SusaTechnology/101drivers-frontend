@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useJsApiLoader } from "@react-google-maps/api";
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
 import {
   LogIn as LoginIcon,
   Menu,
@@ -15,9 +16,9 @@ export function DealerSignUp() {
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
+    id: GOOGLE_MAPS_SCRIPT_ID,
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: ['geometry','places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   return (
