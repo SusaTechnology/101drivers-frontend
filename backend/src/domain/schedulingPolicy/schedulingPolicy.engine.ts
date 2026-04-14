@@ -185,9 +185,6 @@ export class SchedulingPolicyEngine {
       dropoffWindowEnd: input.dropoffWindowEnd ?? null,
       afterHoursRequested: input.afterHoursRequested ?? false,
     });
-console.log("FINAL sameDayEligible:", preview.sameDayEligible);
-console.log("FINAL reasons:", preview.reasons);
-console.log("FINAL matchedSlots:", preview.matchedSlots);
     return this.mapPreviewToResponse(preview, routeMetrics.durationMinutes);
   }
 
@@ -396,61 +393,7 @@ console.log("FINAL matchedSlots:", preview.matchedSlots);
         requiresOpsConfirmation = true;
       }
     }
-console.log("TZ requestCreatedAt:", requestCreatedAt.toISO());
-console.log(
-  "TZ pickup start CA:",
-  resolvedPickup ? this.toBusinessDateTime(resolvedPickup.start).toFormat("yyyy-MM-dd HH:mm ZZZZ") : null
-);
-console.log(
-  "TZ pickup end CA:",
-  resolvedPickup ? this.toBusinessDateTime(resolvedPickup.end).toFormat("yyyy-MM-dd HH:mm ZZZZ") : null
-);
-console.log(
-  "TZ dropoff start CA:",
-  resolvedDropoff ? this.toBusinessDateTime(resolvedDropoff.start).toFormat("yyyy-MM-dd HH:mm ZZZZ") : null
-);
-console.log(
-  "TZ dropoff end CA:",
-  resolvedDropoff ? this.toBusinessDateTime(resolvedDropoff.end).toFormat("yyyy-MM-dd HH:mm ZZZZ") : null
-);
 
-console.log(
-  "TZ pickup HHmm:",
-  resolvedPickup
-    ? {
-        start: this.toHHmm(resolvedPickup.start),
-        end: this.toHHmm(resolvedPickup.end),
-      }
-    : null
-);
-
-console.log(
-  "TZ dropoff HHmm:",
-  resolvedDropoff
-    ? {
-        start: this.toHHmm(resolvedDropoff.start),
-        end: this.toHHmm(resolvedDropoff.end),
-      }
-    : null
-);
-
-console.log(
-  "TZ suggested pickup:",
-  suggestedPickupSlots.map((s) => ({
-    label: s.label,
-    start: this.toBusinessDateTime(s.start).toFormat("yyyy-MM-dd HH:mm ZZZZ"),
-    end: this.toBusinessDateTime(s.end).toFormat("yyyy-MM-dd HH:mm ZZZZ"),
-  }))
-);
-
-console.log(
-  "TZ suggested dropoff:",
-  suggestedDropoffSlots.map((s) => ({
-    label: s.label,
-    start: this.toBusinessDateTime(s.start).toFormat("yyyy-MM-dd HH:mm ZZZZ"),
-    end: this.toBusinessDateTime(s.end).toFormat("yyyy-MM-dd HH:mm ZZZZ"),
-  }))
-);
     const pickupSlotMatch = this.findMatchingSlot(resolvedPickup, slotTemplates);
     const dropoffSlotMatch = this.findMatchingSlot(
       resolvedDropoff,
@@ -617,15 +560,7 @@ console.log(
     
     const startHHmm = this.toHHmm(window.start);
     const endHHmm = this.toHHmm(window.end);
-console.log("MATCH window", {
-  startHHmm,
-  endHHmm,
-  templates: slotTemplates.map((row) => ({
-    label: row.label,
-    startTime: row.startTime,
-    endTime: row.endTime,
-  })),
-});
+
     const slot = slotTemplates.find(
       (row) => row.startTime === startHHmm && row.endTime === endHHmm
     );

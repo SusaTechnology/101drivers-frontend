@@ -152,16 +152,18 @@ export class OperatingHourPolicyService {
       );
     }
 
-    if (num >= 0 && num <= 6) {
+    // Normalize to ISO weekday: 1=Monday ... 7=Sunday
+    // Accept both 0-6 (JS style, 0=Sun) and 1-7 (ISO style)
+    if (num >= 1 && num <= 7) {
       return num;
     }
 
-    if (num >= 1 && num <= 7) {
-      return num === 7 ? 0 : num;
+    if (num === 0) {
+      return 7; // Sunday: 0 (JS) → 7 (ISO)
     }
 
     throw new AppException(
-      "dayOfWeek must be between 0 and 6, or between 1 and 7",
+      "dayOfWeek must be between 1 (Monday) and 7 (Sunday)",
       ErrorCodes.VALIDATION_ERROR
     );
   }

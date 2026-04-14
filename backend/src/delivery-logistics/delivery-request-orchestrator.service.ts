@@ -1649,7 +1649,6 @@ private async resolveIndividualCustomerForCreate(
         serviceType: true,
       },
     });
-    console.log("SCHEDULE PREVIEW RAW BODY:", input);
     if (!quote) {
       throw new NotFoundException("Quote not found");
     }

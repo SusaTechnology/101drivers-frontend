@@ -19,7 +19,7 @@ export class TimeSlotTemplatePolicyService {
     this.ensureEndAfterStart(row.startTime, row.endTime);
 
     await this.ensureUniqueLabel(client, row.label.trim());
-    await this.ensureUniqueTimeRange(client, row.startTime, row.endTime);
+    await this.ensureNoOverlappingTimeRange(client, row.startTime, row.endTime);
   }
 
   async beforeUpdate(
@@ -62,7 +62,7 @@ export class TimeSlotTemplatePolicyService {
       merged.startTime !== existing!.startTime ||
       merged.endTime !== existing!.endTime
     ) {
-      await this.ensureUniqueTimeRange(
+      await this.ensureNoOverlappingTimeRange(
         client,
         String(merged.startTime),
         String(merged.endTime),
@@ -107,27 +107,44 @@ export class TimeSlotTemplatePolicyService {
     }
   }
 
-  private async ensureUniqueTimeRange(
+  /**
+   * Ensure no overlapping time ranges exist among active slot templates.
+   * Uses interval overlap: [start1, end1) overlaps [start2, end2) iff start1 < end2 AND start2 < end1.
+   */
+  private async ensureNoOverlappingTimeRange(
     client: PrismaClient,
     startTime: string,
     endTime: string,
     excludeId?: string
   ): Promise<void> {
-    const existing = await client.timeSlotTemplate.findFirst({
+    const rows = await client.timeSlotTemplate.findMany({
       where: {
-        startTime,
-        endTime,
+        active: true,
         ...(excludeId ? { id: { not: excludeId } } : {}),
       },
-      select: { id: true },
+      select: {
+        id: true,
+        label: true,
+        startTime: true,
+        endTime: true,
+      },
     });
 
-    if (existing) {
-      throw new AppException(
-        "TimeSlotTemplate time range already exists",
-        ErrorCodes.DUPLICATE_ENTRY,
-        HttpStatus.CONFLICT
-      );
+    const nextStart = this.toMinutes(startTime);
+    const nextEnd = this.toMinutes(endTime);
+
+    for (const row of rows) {
+      const rowStart = this.toMinutes(row.startTime);
+      const rowEnd = this.toMinutes(row.endTime);
+
+      const overlaps = nextStart < rowEnd && rowStart < nextEnd;
+      if (overlaps) {
+        throw new AppException(
+          `Time slot "${row.label}" (${row.startTime}-${row.endTime}) overlaps with the new range (${startTime}-${endTime}). Overlapping time slots are not allowed.`,
+          ErrorCodes.CONFLICT,
+          HttpStatus.CONFLICT
+        );
+      }
     }
   }
 
