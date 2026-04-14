@@ -2950,15 +2950,12 @@ const handleQuotePreview = () => {
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div>
-                  <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                    Submit
-                  </CardDescription>
-                  <CardTitle className="text-2xl font-black mt-2">
+                  <CardTitle className="text-2xl font-black">
                     {draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED') 
                       ? 'Update Delivery' 
                       : draftId 
                         ? 'Review & Submit Draft' 
-                        : 'Review & Create'}
+                        : 'Review & Submit'}
                   </CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                     {draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED')
@@ -2983,7 +2980,7 @@ const handleQuotePreview = () => {
                     <>
                       {draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED') 
                         ? 'Update Delivery' 
-                        : 'Review & Continue'}
+                        : 'Continue'}
                       <ChevronRight className="ml-2 h-5 w-5" />
                     </>
                   )}
@@ -2991,7 +2988,7 @@ const handleQuotePreview = () => {
 
                 {!isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 text-center">
-                    Please complete all required fields: addresses, schedule window, vehicle details, and recipient info.
+                    Please complete all required fields: addresses, pickup or arrival time, vehicle details, and recipient information.
                   </p>
                 )}
 
@@ -3045,10 +3042,7 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                <p className="text-[11px] text-slate-500 mt-4 text-center">
-                  Compliance evidence (VIN verification, photos, odometer,
-                  Start/Stop tracking) is captured by driver during delivery.
-                </p>
+
               </CardContent>
             </Card>
 
@@ -3057,7 +3051,7 @@ const handleQuotePreview = () => {
               <CardHeader>
                 <CardTitle className="text-xl font-black">Need help?</CardTitle>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Having trouble creating a delivery? Our support team is here to help.
+                  Have questions? Our support team is here to help.
                 </p>
               </CardHeader>
               <CardContent>
