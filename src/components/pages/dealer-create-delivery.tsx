@@ -2165,24 +2165,11 @@ const handleQuotePreview = () => {
                     </div>
                   </div>
 
-                  {/* Quote Breakdown */}
+                  {/* Quote */}
                   <Card className="lg:col-span-5">
                     <CardHeader>
                       <div className="flex items-start justify-between">
-                        <div>
-                          <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                            Quote
-                          </CardDescription>
-                          <CardTitle className="text-2xl font-black mt-2">
-                            {formatCurrency(quoteData.total) || "$—"}
-                            <span className="text-sm font-bold text-slate-500 dark:text-slate-400 ml-2">
-                              (estimated)
-                            </span>
-                          </CardTitle>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                            Itemized breakdown updates if addresses change.
-                          </p>
-                        </div>
+                        <div />
                         <Button
                           type="button"
                           variant="outline"
@@ -2199,51 +2186,31 @@ const handleQuotePreview = () => {
                         </Button>
                       </div>
                     </CardHeader>
-                    <CardContent>
-                      {hasCalculated ? <div className="space-y-3 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400 font-semibold">
-                            Base fare
-                          </span>
-                          <span className="text-slate-900 dark:text-white font-black">
-                            {formatCurrency(quoteData.base)}
-                          </span>
+                    <CardContent className="flex flex-col items-center text-center pb-8">
+                      {hasCalculated ? (
+                        <>
+                          {/* Price bubble */}
+                          <div className="w-32 h-32 rounded-full bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center mb-3">
+                            <span className="text-3xl font-black text-slate-900 dark:text-white">
+                              {formatCurrency(quoteData.total) || "$—"}
+                            </span>
+                          </div>
+                          {/* Miles */}
+                          <div className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-4">
+                            {quoteData.miles || "—"} miles
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-32 h-32 rounded-full bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center mb-3">
+                          <span className="text-3xl font-black text-slate-900 dark:text-white">$—</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400 font-semibold">
-                            Distance charge
-                          </span>
-                          <span className="text-slate-900 dark:text-white font-black">
-                            {formatCurrency(quoteData.distance)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400 font-semibold">
-                            Insurance fee
-                          </span>
-                          <span className="text-slate-900 dark:text-white font-black">
-                            {formatCurrency(quoteData.insurance)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400 font-semibold">
-                            Transaction fee
-                          </span>
-                          <span className="text-slate-900 dark:text-white font-black">
-                            {formatCurrency(quoteData.transaction)}
-                          </span>
-                        </div>
-                      </div>: <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal">
-                            Click "Calculate" to get a real-time quote based on the addresses.
-                          </p>}
-
-
-                      <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 flex gap-3">
-                        <Info className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                        <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal">
-                          Real-time quote updates automatically when addresses change.
-                        </p>
-                      </div>
+                      )}
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        Moving your car from pickup to drop-off location
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-500 mt-1">
+                        Price updates live as you change the addresses.
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
