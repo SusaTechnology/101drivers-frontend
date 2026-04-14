@@ -105,6 +105,10 @@ export default function DriverPickupChecklistPage() {
   // Use deliveryId if present
   // const deliveryId = params.deliveryId || MOCK_DELIVERY.id
 
+  // Location permission state
+  const [locationStatus, setLocationStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown')
+  const [isCheckingLocation, setIsCheckingLocation] = useState(false)
+
   // Step states
   const [vinValue, setVinValue] = useState('')
   const [vinNote, setVinNote] = useState('')
@@ -375,10 +379,49 @@ export default function DriverPickupChecklistPage() {
     saveProgressMutation.mutate(payload)
   }
 
-  const handleStartTrip = () => {
+  // Check GPS location permission
+  const checkLocationPermission = async (): Promise<boolean> => {
+    setIsCheckingLocation(true)
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 30000,
+        })
+      })
+      if (position) {
+        setLocationStatus('granted')
+        setIsCheckingLocation(false)
+        return true
+      }
+    } catch (err: any) {
+      console.warn('Location check failed:', err)
+      const code = err?.code
+      if (code === err?.PERMISSION_DENIED || code === 1) {
+        setLocationStatus('denied')
+      } else {
+        setLocationStatus('denied')
+      }
+    }
+    setIsCheckingLocation(false)
+    return false
+  }
+
+  const handleStartTrip = async () => {
     if (!vinVerified || !photosSaved || !odometerSaved) {
       toast.error('Cannot start trip', {
         description: 'Please complete all required steps first.',
+      })
+      return
+    }
+
+    // Check GPS before allowing trip start
+    const hasLocation = await checkLocationPermission()
+    if (!hasLocation) {
+      toast.error('Location required', {
+        description: 'Please enable location services and allow GPS access, then try again.',
+        duration: 8000,
       })
       return
     }
@@ -399,8 +442,8 @@ export default function DriverPickupChecklistPage() {
     navigate({ to: '/driver-active' })
   }
 
-  // Check if all steps are complete
-  const allStepsComplete = vinVerified && photosSaved && odometerSaved
+  // Check if all steps are complete (including location)
+  const allStepsComplete = vinVerified && photosSaved && odometerSaved && locationStatus === 'granted'
 
   // Status badges
   const getStepStatus = (stepId: number) => {
@@ -508,14 +551,17 @@ export default function DriverPickupChecklistPage() {
                 {/* <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{deliveryId}</p> */}
                 {/* <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-400">{MOCK_DELIVERY.route}</p> */}
 
+                {/* Location status warning */}
+                {locationStatus === 'denied' && allStepsComplete && (
+                  <div className="mt-3 flex items-start gap-2 p-3 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
+                    <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-red-800 dark:text-red-200 font-semibold">
+                      Location must be on to start this trip. Please enable GPS and tap Start Trip again.
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-4 flex sm:justify-end gap-2">
-                  {/* <Link
-                    to={`/driver-job-details?jobId=${deliveryId}`}
-                    className="inline-flex w-fit whitespace-nowrap items-center gap-2 px-4 py-2 rounded-2xl font-extrabold bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-primary/5 transition"
-                  >
-                    Job details
-                    <ArrowForward className="w-4 h-4 text-primary" />
-                  </Link> */}
                   <Button
                     variant="link"
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl font-extrabold text-slate-700 dark:text-slate-200 hover:text-primary transition"

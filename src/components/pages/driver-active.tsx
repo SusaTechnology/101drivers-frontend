@@ -182,6 +182,11 @@ export default function DriverActiveDeliveryPage() {
   // 👇 NEW: ref to store latest position for interval
   const latestPositionRef = useRef<google.maps.LatLngLiteral | null>(null)
 
+  // Location health tracking
+  const [locationHealth, setLocationHealth] = useState<'healthy' | 'warning' | 'lost'>('healthy')
+  const [lastLocationTime, setLastLocationTime] = useState<Date>(new Date())
+  const consecutiveMissedRef = useRef(0)
+
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
   const user = getUser()
@@ -256,26 +261,46 @@ export default function DriverActiveDeliveryPage() {
     }
   }, [delivery])
 
-  // 👇 UPDATED: geolocation with toast errors
+  // 👇 UPDATED: geolocation with health tracking
   useEffect(() => {
     if (!pickupCoords || !dropoffCoords) return
     // Real-time geolocation tracking:
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => setDriverPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => {
+        setDriverPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLastLocationTime(new Date())
+        consecutiveMissedRef.current = 0
+        setLocationHealth('healthy')
+      },
       (err) => {
         console.error(err)
-        toast.error(`Location error: ${err.message}`)
+        consecutiveMissedRef.current += 1
+        if (err.code === 1) {
+          // PERMISSION_DENIED
+          setLocationHealth('lost')
+        } else if (consecutiveMissedRef.current >= 3) {
+          setLocationHealth('warning')
+        }
       },
       { enableHighAccuracy: true }
     );
     console.log("setDriverPosition",watchId, driverPosition)
     return () => navigator.geolocation.clearWatch(watchId);
-
-    // Simulated position: a point 30% along the route
-    // const lat = pickupCoords.lat + (dropoffCoords.lat - pickupCoords.lat) * 0.3
-    // const lng = pickupCoords.lng + (dropoffCoords.lng - pickupCoords.lng) * 0.3
-    // setDriverPosition({ lat, lng })
   }, [pickupCoords, dropoffCoords])
+
+  // Monitor location health: show warning if no update for 120s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - lastLocationTime.getTime()) / 1000
+      if (elapsed > 120 && locationHealth === 'healthy') {
+        setLocationHealth('warning')
+      }
+      if (elapsed > 180) {
+        setLocationHealth('lost')
+      }
+    }, 30000) // check every 30s
+    return () => clearInterval(interval)
+  }, [lastLocationTime, locationHealth])
 
   // 👇 NEW: update ref when driverPosition changes
   useEffect(() => {
@@ -497,6 +522,16 @@ export default function DriverActiveDeliveryPage() {
 
   const handleCompleteDelivery = () => {
     if (!driverId || !userId) return
+
+    // Block completion if location is lost
+    if (locationHealth === 'lost') {
+      toast.error('Location signal lost', {
+        description: 'Please enable location services and ensure GPS is working before completing the delivery.',
+        duration: 8000,
+      })
+      return
+    }
+
     const payload = {
       driverId,
       actorUserId: userId,
@@ -714,6 +749,26 @@ export default function DriverActiveDeliveryPage() {
       </header>
 
       <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-36">
+        {/* Location health warning banner */}
+        {locationHealth === 'warning' && (
+          <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+            <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">GPS signal weak</p>
+              <p className="text-[12px] text-amber-800/80 dark:text-amber-200/80 mt-1">Location updates are delayed. Please make sure GPS is enabled on your phone for accurate tracking.</p>
+            </div>
+          </div>
+        )}
+        {locationHealth === 'lost' && (
+          <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
+            <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-extrabold text-red-900 dark:text-red-200">Location signal lost</p>
+              <p className="text-[12px] text-red-800/80 dark:text-red-200/80 mt-1">GPS tracking is not working. Please enable location services to continue tracking and complete this delivery.</p>
+            </div>
+          </div>
+        )}
+
         {/* Status / route card */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
           <CardContent className="p-0">
@@ -1038,14 +1093,21 @@ export default function DriverActiveDeliveryPage() {
       {dropoffPhotosSaved && (
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 border-t border-slate-200 dark:border-slate-800 safe-bottom">
           <div className="max-w-[980px] mx-auto px-5 sm:px-6 py-4">
-            <Button
-              onClick={handleCompleteDelivery}
-              disabled={completeTripMutation.isPending}
-              className="w-full lime-btn rounded-2xl py-4 hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2"
-            >
-              {completeTripMutation.isPending ? 'Completing...' : 'Complete Delivery'}
-              <ArrowForward className="w-5 h-5" />
-            </Button>
+            {locationHealth === 'lost' ? (
+              <div className="w-full p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-center">
+                <p className="text-sm font-extrabold text-red-900 dark:text-red-200">Location required to complete</p>
+                <p className="text-[12px] text-red-800/70 dark:text-red-200/70 mt-1">Please enable GPS on your phone first.</p>
+              </div>
+            ) : (
+              <Button
+                onClick={handleCompleteDelivery}
+                disabled={completeTripMutation.isPending}
+                className="w-full lime-btn rounded-2xl py-4 hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2"
+              >
+                {completeTripMutation.isPending ? 'Completing...' : 'Complete Delivery'}
+                <ArrowForward className="w-5 h-5" />
+              </Button>
+            )}
           </div>
         </nav>
       )}

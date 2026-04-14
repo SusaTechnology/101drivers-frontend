@@ -312,6 +312,8 @@ async completeTrip(input: {
       select: {
         id: true,
         status: true,
+        dropoffLat: true,
+        dropoffLng: true,
       },
     });
 
@@ -335,6 +337,7 @@ async completeTrip(input: {
       where: { deliveryId: input.deliveryId },
       select: {
         id: true,
+        drivenMiles: true,
         points: {
           select: {
             lat: true,
@@ -343,6 +346,44 @@ async completeTrip(input: {
         },
       },
     });
+
+    const pointCount = tracking?.points?.length ?? 0;
+
+    // Require minimum tracking points to prevent completions without any GPS data.
+    // For very short trips (under 2 miles), allow as few as 1 point.
+    // For normal trips, require at least 3 points to confirm actual movement occurred.
+    if (pointCount < 1) {
+      throw new BadRequestException(
+        "Cannot complete delivery: no GPS tracking data recorded. Location must be on during the trip."
+      );
+    }
+
+    // For trips with a meaningful distance (2+ miles driven), require at least 3 tracking points
+    const drivenMiles = tracking?.drivenMiles ?? 0;
+    if (drivenMiles >= 2 && pointCount < 3) {
+      throw new BadRequestException(
+        `Cannot complete delivery: insufficient tracking data (${pointCount} points). At least 3 GPS points are required for trips over 2 miles. Please ensure location is on.`
+      );
+    }
+
+    // Geofence check: verify the driver's last known position is near the dropoff location.
+    // This prevents completing a delivery from a completely different location.
+    // Uses the last tracking point if available, and checks within a 500-meter (~0.31 mile) radius.
+    const lastPoint = tracking?.points?.[pointCount - 1];
+    if (lastPoint && delivery.dropoffLat != null && delivery.dropoffLng != null) {
+      const distanceFromDropoff = this.haversineMiles(
+        lastPoint.lat,
+        lastPoint.lng,
+        delivery.dropoffLat,
+        delivery.dropoffLng
+      );
+      const MAX_GEOFENCE_RADIUS_MILES = 0.5; // ~800 meters, generous for GPS accuracy
+      if (distanceFromDropoff > MAX_GEOFENCE_RADIUS_MILES) {
+        throw new BadRequestException(
+          `You appear to be ${distanceFromDropoff.toFixed(1)} miles away from the dropoff location. Please proceed to the dropoff address before completing the delivery.`
+        );
+      }
+    }
 
     await tx.trackingSession.updateMany({
       where: { deliveryId: input.deliveryId },

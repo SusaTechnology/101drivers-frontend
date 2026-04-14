@@ -62,7 +62,7 @@ export default function DriverProofCamPage() {
       navigate({ to: "/driver-dashboard" });
     } else {
       setPermissionError(
-        "We need this for jobs—retry?"
+        "Camera and location access are required for deliveries. Please tap Allow on both prompts to continue."
       );
     }
 
@@ -86,23 +86,28 @@ export default function DriverProofCamPage() {
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="max-w-md w-full text-center space-y-6">
           <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-snug">
-            Your Phone = Your Proof Cam
+            Proof Camera
           </h1>
 
           <div className="space-y-4 text-lg text-slate-600 dark:text-slate-300 leading-relaxed text-left">
             <p>
-              Quick snaps before &amp; after each job—like vehicle pics or
-              odometer reads—to keep things fair.
+              Your phone is your proof camera. That just means you use it to
+              take six pictures of the vehicle before and after each job. Those
+              photos get uploaded to the app so the customer has proof everything
+              was done right. You don&rsquo;t need to keep the pictures.
             </p>
             <p>
-              Location turns on auto when you're on a route and off after.
+              Location turns on only when you hit Start on a route, and it turns
+              off when you hit End.
             </p>
             <p>
-              Needs your smartphone's camera + GPS—any iPhone or Android works.
+              This app requires a smartphone with a camera and GPS — works on
+              any iPhone or Android.
             </p>
             <p>
-              Tap "Cool, let's go!" and we'll ask permissions only when needed.
-              Keeps your pay smooth.
+              When you tap the button below, we&rsquo;ll ask you to allow
+              camera and location. Just tap Allow — it&rsquo;s only used while
+              you&rsquo;re on an active route.
             </p>
           </div>
 
