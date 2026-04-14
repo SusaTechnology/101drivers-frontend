@@ -112,7 +112,7 @@ export const NavBar = () => {
                 Dealer Sign In
               </Link>
               <a
-                href="/auth/driver-signin"
+                href="/driver-signin"
                 className="text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >

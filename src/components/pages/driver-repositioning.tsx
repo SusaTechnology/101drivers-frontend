@@ -165,7 +165,7 @@ export default function DriverRepositioningPage() {
 
   const handleSignOut = () => {
     toast.success('Signed out successfully')
-    navigate({ to: '/auth/dealer-signin?userType=driver' })
+    navigate({ to: '/driver-signin' })
   }
 
   const handleZoneOptIn = (zoneName: string) => {

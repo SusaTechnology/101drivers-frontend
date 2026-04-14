@@ -413,7 +413,7 @@ export default function DriverPreferencesPage() {
 
   const handleSignOut = () => {
     toast.success('Signed out successfully')
-    navigate({ to: '/auth/dealer-signin?userType=driver' })
+    navigate({ to: '/driver-signin' })
   }
 
   // Submit handler – constructs the combined payload

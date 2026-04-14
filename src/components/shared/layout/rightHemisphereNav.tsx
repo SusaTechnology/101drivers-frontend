@@ -30,8 +30,7 @@ export const RightHemisphereNav = () => {
 
       {/* Driver Sign In - Secondary */}
       <Link
-        to="/auth/dealer-signin"
-        search={{ userType: "driver" }}
+        to="/driver-signin"
         className="hidden lg:inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
       >
         <Car className="w-4 h-4" />
@@ -94,8 +93,7 @@ export const RightHemisphereNav = () => {
             Dealer Sign In
           </Link>
           <Link
-            to="/auth/dealer-signin"
-            search={{ userType: "driver" }}
+            to="/driver-signin"
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-sm"
           >

@@ -144,7 +144,7 @@ export default function DriverJobDetailsPage() {
 
   const handleSignOut = () => {
     toast.success('Signed out successfully')
-    navigate({ to: '/auth/dealer-signin?userType=driver' })
+    navigate({ to: '/driver-signin' })
   }
 
   const handleBookJob = () => {

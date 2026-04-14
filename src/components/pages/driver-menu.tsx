@@ -191,7 +191,7 @@ export default function DriverMenuPage() {
 
   const handleSignOut = () => {
     toast.success('Signed out successfully')
-    navigate({ to: '/auth/dealer-signin?userType=driver' })
+    navigate({ to: '/driver-signin' })
   }
 
   return (

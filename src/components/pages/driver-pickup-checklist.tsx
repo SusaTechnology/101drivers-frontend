@@ -221,7 +221,7 @@ export default function DriverPickupChecklistPage() {
 
   const handleSignOut = () => {
     toast.success('Signed out successfully')
-    navigate({ to: '/auth/dealer-signin?userType=driver' })
+    navigate({ to: '/driver-signin' })
   }
 
   // Step handlers

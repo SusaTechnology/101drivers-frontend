@@ -351,7 +351,7 @@ function AboutPage() {
                 </li>
                 <li>
                   <a
-                    href="/auth/driver-signin"
+                    href="/driver-signin"
                     className="hover:text-primary transition-colors"
                   >
                     Driver Sign In

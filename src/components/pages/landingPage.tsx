@@ -481,8 +481,7 @@ export default function LandingPage() {
               </li>
               <li>
                 <Link
-                  to="/auth/dealer-signin"
-                  search={{ userType: 'driver' }}
+                  to="/driver-signin"
                   className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
                 >
                   Driver
@@ -1062,8 +1061,7 @@ export default function LandingPage() {
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
-                    to="/auth/dealer-signin"
-                    search={{ userType: 'driver' }}
+                    to="/driver-signin"
                     className="w-full py-3 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold transition flex items-center justify-center gap-2 text-sm"
                   >
                     Already In? Log In
