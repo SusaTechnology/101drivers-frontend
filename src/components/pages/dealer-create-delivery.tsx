@@ -2860,7 +2860,7 @@ const handleQuotePreview = () => {
               </CardContent>
             </Card> */}
 
-            {/* Recipient Tracking */}
+            {/* Recipient Information */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div>
@@ -2868,11 +2868,10 @@ const handleQuotePreview = () => {
                     Required
                   </CardDescription>
                   <CardTitle className="text-2xl font-black mt-2">
-                    Recipient tracking
+                    Recipient Information
                   </CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Recipient phone is essential for driver communication during delivery. 
-                    Email enables tracking notifications.
+                    The person receiving the vehicle. Phone is required for driver communication. Email is required to receive the tracking link.
                   </p>
                 </div>
               </CardHeader>
@@ -2884,13 +2883,13 @@ const handleQuotePreview = () => {
                         htmlFor="recipientName"
                         className="text-xs font-bold"
                       >
-                        Recipient name <span className="text-red-500">*</span>
+                        Name <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="recipientName"
                         {...register("recipientName")}
                         className="h-14 rounded-2xl"
-                        placeholder="Buyer / receiver"
+                        placeholder="Full name"
                       />
                       {errors.recipientName && (
                         <p className="text-xs text-red-500">{errors.recipientName.message}</p>
@@ -2902,7 +2901,7 @@ const handleQuotePreview = () => {
                         htmlFor="recipientEmail"
                         className="text-xs font-bold"
                       >
-                        Recipient email <span className="text-red-500">*</span>
+                        Email <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="recipientEmail"
@@ -2922,7 +2921,7 @@ const handleQuotePreview = () => {
                       htmlFor="recipientPhone"
                       className="text-xs font-bold"
                     >
-                      Recipient phone <span className="text-red-500">*</span>
+                      Phone <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="recipientPhone"
@@ -2938,14 +2937,10 @@ const handleQuotePreview = () => {
                     {errors.recipientPhone && (
                       <p className="text-xs text-red-500">{errors.recipientPhone.message}</p>
                     )}
-                    <p className="text-[11px] text-slate-500">
-                      Driver will communicate with recipient during delivery
-                    </p>
                   </div>
 
                   <p className="text-[11px] text-slate-500">
-                    Tracking links are access-controlled and should expire
-                    after completion.
+                    Tracking shows the driver's location only while the delivery is active. The link expires when the delivery is complete.
                   </p>
                 </div>
               </CardContent>
