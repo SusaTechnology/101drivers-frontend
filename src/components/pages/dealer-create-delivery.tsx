@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
+import { getAllMakes, getModelsForMake } from "@/data/vehicleDatabase";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { getUser, useCreate, useDataQuery, usePatch, authFetch } from "@/lib/tanstack/dataQuery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -2580,7 +2581,7 @@ const handleQuotePreview = () => {
                   </div>
                 </div>
 
-                {/* Make & Model */}
+                {/* Make & Model — Cascading from vehicle database */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="make" className="text-xs font-bold">
@@ -2588,22 +2589,22 @@ const handleQuotePreview = () => {
                     </Label>
                     <Select
                       value={make}
-                      onValueChange={(value) => setValue("make", value)}
+                      onValueChange={(value) => {
+                        setValue("make", value);
+                        // Reset model when make changes
+                        setValue("model", "");
+                      }}
                     >
                       <SelectTrigger className="h-14 rounded-2xl">
-                        <SelectValue placeholder="Select..." />
+                        <SelectValue placeholder="Select make..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Toyota">Toyota</SelectItem>
-                        <SelectItem value="Honda">Honda</SelectItem>
-                        <SelectItem value="Ford">Ford</SelectItem>
-                        <SelectItem value="Chevrolet">Chevrolet</SelectItem>
-                        <SelectItem value="Tesla">Tesla</SelectItem>
-                        <SelectItem value="BMW">BMW</SelectItem>
-                        <SelectItem value="Mercedes-Benz">
-                          Mercedes-Benz
-                        </SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
+                        {getAllMakes().map((makeName) => (
+                          <SelectItem key={makeName} value={makeName}>
+                            {makeName}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="Other">Other (not listed)</SelectItem>
                       </SelectContent>
                     </Select>
                     {make === "Other" && (
@@ -2619,25 +2620,38 @@ const handleQuotePreview = () => {
                     <Label htmlFor="model" className="text-xs font-bold">
                       Model <span className="text-red-500">*</span>
                     </Label>
-                    <Select
-                      value={model}
-                      onValueChange={(value) => setValue("model", value)}
-                    >
-                      <SelectTrigger className="h-14 rounded-2xl">
-                        <SelectValue placeholder="Select..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Camry">Camry</SelectItem>
-                        <SelectItem value="Corolla">Corolla</SelectItem>
-                        <SelectItem value="RAV4">RAV4</SelectItem>
-                        <SelectItem value="Civic">Civic</SelectItem>
-                        <SelectItem value="Accord">Accord</SelectItem>
-                        <SelectItem value="Model 3">Model 3</SelectItem>
-                        <SelectItem value="Model Y">Model Y</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {model === "Other" && (
+                    {make && make !== "Other" ? (
+                      <Select
+                        value={model}
+                        onValueChange={(value) => setValue("model", value)}
+                      >
+                        <SelectTrigger className="h-14 rounded-2xl">
+                          <SelectValue placeholder="Select model..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getModelsForMake(make).map((modelName) => (
+                            <SelectItem key={modelName} value={modelName}>
+                              {modelName}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="Other">Other (not listed)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : make === "Other" ? (
+                      <Input
+                        {...register("modelOther")}
+                        className="h-14 rounded-2xl"
+                        placeholder="Enter model"
+                      />
+                    ) : (
+                      <Select disabled>
+                        <SelectTrigger className="h-14 rounded-2xl">
+                          <SelectValue placeholder="Select a make first..." />
+                        </SelectTrigger>
+                        <SelectContent />
+                      </Select>
+                    )}
+                    {model === "Other" && make !== "Other" && (
                       <Input
                         {...register("modelOther")}
                         className="h-14 rounded-2xl mt-2"
