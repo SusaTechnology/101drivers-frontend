@@ -327,266 +327,248 @@ function RouteComponent() {
       </header>
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-          {/* Left: Intro Section */}
-          <div className="lg:col-span-6">
+        <div className="max-w-md mx-auto space-y-8">
+          {/* Sign-in Form Card */}
+          <CustomCard className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-7 sm:p-10 hover-lift">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                  DRV
+                </p>
+                <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-2">
+                  Welcome back
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                  Sign in to access your driver portal.
+                </p>
+              </div>
+              <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <Lock className="text-primary w-4 h-4" />
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
+                  Secure
+                </span>
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {loginError && (
+              <div className="mt-6 p-4 rounded-2xl bg-destructive/10 border border-destructive/20">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive font-medium">
+                    {loginError}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <form
+              onSubmit={handleSubmit(onSubmit)}
+              className="mt-8 space-y-5"
+            >
+              {/* Email Field */}
+              <div className="space-y-2">
+                <Label
+                  htmlFor="username"
+                  className="text-xs font-black uppercase tracking-widest text-slate-500"
+                >
+                  Email
+                </Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="driver@email.com"
+                  className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                  disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                  {...register("username")}
+                />
+                {errors.username && (
+                  <p className="text-sm text-red-500 mt-1">
+                    {errors.username.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Password Field */}
+              <div className="space-y-2">
+                <Label
+                  htmlFor="password"
+                  className="text-xs font-black uppercase tracking-widest text-slate-500"
+                >
+                  Password
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm pr-12"
+                    disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                    {...register("password")}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-red-500 mt-1">
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Remember Me & Forgot Password */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="rememberMe"
+                    defaultChecked
+                    className="rounded border-slate-300 text-primary focus:ring-primary/20"
+                    disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                    {...register("rememberMe" as any)}
+                  />
+                  <Label
+                    htmlFor="rememberMe"
+                    className="text-sm font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"
+                  >
+                    Remember me
+                  </Label>
+                </div>
+
+                <Button
+                  variant="link"
+                  className="text-sm font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                >
+                  {forgotPasswordMutation.isPending ? "Sending..." : "Forgot password?"}
+                </Button>
+              </div>
+
+              {/* Submit Button */}
+              <Button
+                type="submit"
+                disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-14 text-base"
+              >
+                {loginMutation.isPending ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary-foreground"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Log In
+                    <ArrowRight className="w-5 h-5 font-bold" />
+                  </>
+                )}
+              </Button>
+
+              {/* Don't have an account? Sign up link */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Don't have an account?{" "}
+                  <Button
+                    variant="link"
+                    className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
+                    asChild
+                    type="button"
+                  >
+                    <Link to="/driver-onboarding">Sign up</Link>
+                  </Button>
+                </p>
+              </div>
+            </form>
+          </CustomCard>
+
+          {/* Become a Driver Section */}
+          <CustomCard className="bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
                 <Car className="text-primary w-6 h-6 font-bold" />
               </div>
               <div>
-                <h1 className="text-4xl font-black text-slate-900 dark:text-white">
-                  Driver Login
-                </h1>
-                <p className="text-slate-600 dark:text-slate-400 mt-3 text-lg leading-relaxed max-w-xl">
-                  Log in to accept California delivery jobs and see your earnings.
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                  Become a Driver
+                </h2>
+                <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm leading-relaxed">
+                  Log in to accept California delivery jobs and see your earnings. Flexible schedule, be your own boss.
                 </p>
-                {/* Plain text quick notes (no pills/badges) */}
-                <div className="mt-6 space-y-1">
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="text-xs font-bold">
                     California-only
-                  </p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs font-bold">
                     Email-first notifications
-                  </p>
+                  </Badge>
                 </div>
               </div>
             </div>
+          </CustomCard>
 
-            <CustomCard className="mt-10 bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
-              <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                What you get:
-              </h2>
-              <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
-                <li className="flex gap-3">
-                  <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                  Be your own boss
-                </li>
-                <li className="flex gap-3">
-                  <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                  Plan your routes &amp; schedule
-                </li>
-                <li className="flex gap-3">
-                  <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                  Pick jobs, build your income
-                </li>
-              </ul>
-            </CustomCard>
-          </div>
+          {/* What you can do as a Driver */}
+          <CustomCard className="bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">
+              What you can do as a Driver
+            </h2>
+            <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
+              <li className="flex gap-3">
+                <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                Be your own boss
+              </li>
+              <li className="flex gap-3">
+                <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                Plan your routes &amp; schedule
+              </li>
+              <li className="flex gap-3">
+                <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                Pick jobs, build your income
+              </li>
+            </ul>
+          </CustomCard>
 
-          {/* Right: Login Form Card */}
-          <div className="lg:col-span-6">
-            <CustomCard className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-7 sm:p-10 hover-lift">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                    DRV
-                  </p>
-                  <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-2">
-                    Welcome back
-                  </h2>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Sign in to access your driver portal.
-                  </p>
-                </div>
-                <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                  <Lock className="text-primary w-4 h-4" />
-                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
-                    Secure
-                  </span>
-                </div>
-              </div>
-
-              {/* Error Display */}
-              {loginError && (
-                <div className="mt-6 p-4 rounded-2xl bg-destructive/10 border border-destructive/20">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                    <p className="text-sm text-destructive font-medium">
-                      {loginError}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <form
-                onSubmit={handleSubmit(onSubmit)}
-                className="mt-8 space-y-5"
-              >
-                {/* Email Field */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="username"
-                    className="text-xs font-black uppercase tracking-widest text-slate-500"
-                  >
-                    Email
-                  </Label>
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="driver@email.com"
-                    className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
-                    disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-                    {...register("username")}
-                  />
-                  {errors.username && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {errors.username.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Password Field */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="password"
-                    className="text-xs font-black uppercase tracking-widest text-slate-500"
-                  >
-                    Password
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm pr-12"
-                      disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-                      {...register("password")}
-                    />
-                    <button
-                      type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                      onClick={() => setShowPassword(!showPassword)}
-                      disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                  {errors.password && (
-                    <p className="text-sm text-red-500 mt-1">
-                      {errors.password.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Remember Me & Forgot Password */}
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="rememberMe"
-                      defaultChecked
-                      className="rounded border-slate-300 text-primary focus:ring-primary/20"
-                      disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-                      {...register("rememberMe" as any)}
-                    />
-                    <Label
-                      htmlFor="rememberMe"
-                      className="text-sm font-semibold text-slate-600 dark:text-slate-300 cursor-pointer"
-                    >
-                      Remember me
-                    </Label>
-                  </div>
-
-                  <Button
-                    variant="link"
-                    className="text-sm font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
-                    type="button"
-                    onClick={handleForgotPassword}
-                    disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-                  >
-                    {forgotPasswordMutation.isPending ? "Sending..." : "Forgot password?"}
-                  </Button>
-                </div>
-
-                {/* Submit Button */}
-                <Button
-                  type="submit"
-                  disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-                  className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-14 text-base"
-                >
-                  {loginMutation.isPending ? (
-                    <>
-                      <svg
-                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary-foreground"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Signing in...
-                    </>
-                  ) : (
-                    <>
-                      Log In
-                      <ArrowRight className="w-5 h-5 font-bold" />
-                    </>
-                  )}
-                </Button>
-
-                {/* Bottom Link */}
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Don't have an account?{" "}
-                    <Button
-                      variant="link"
-                      className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
-                      asChild
-                      type="button"
-                    >
-                      <Link to="/driver-onboarding">Become a driver</Link>
-                    </Button>
-                  </p>
-
-                  <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Notifications are{" "}
-                    <span className="font-bold">email-first</span>. SMS is
-                    optional and depends on Admin policy.
-                  </p>
-                </div>
-              </form>
-            </CustomCard>
-
-            {/* Bottom Navigation Buttons */}
-            <div className="mt-3 flex flex-col sm:flex-row gap-3">
+          {/* Bottom Sign Up Link */}
+          <div className="text-center pb-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Don't have an account?{" "}
               <Button
-                variant="outline"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-extrabold border-slate-200 dark:border-slate-800 h-12"
+                variant="link"
+                className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
                 asChild
-                disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                type="button"
               >
-                <Link to="/">
-                  <ArrowLeft className="w-5 h-5 text-primary" />
-                  Back to Index
-                </Link>
+                <Link to="/driver-onboarding">Sign up</Link>
               </Button>
-              <Button
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-extrabold bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition h-12"
-                asChild
-                disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
-              >
-                <Link to="/landing">
-                  Go to Landing
-                  <ArrowRight className="w-5 h-5" />
-                </Link>
-              </Button>
-            </div>
+            </p>
           </div>
         </div>
       </main>
