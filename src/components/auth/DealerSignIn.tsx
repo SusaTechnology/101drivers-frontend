@@ -390,7 +390,7 @@ export function DealerSignIn({
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           {/* Left: Intro Section (unchanged) */}
-          <div className="lg:col-span-6">
+          <div className="lg:col-span-6 order-2 lg:order-1">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
                 {isAdmin ? (
@@ -483,7 +483,7 @@ export function DealerSignIn({
           </div>
 
           {/* Right: Sign-in Form */}
-          <div className="lg:col-span-6">
+          <div className="lg:col-span-6 order-1 lg:order-2">
             <CustomCard className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-7 sm:p-10 hover-lift">
               <div className="flex items-start justify-between gap-4">
                 <div>
