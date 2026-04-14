@@ -676,7 +676,7 @@ export function DealerSignIn({
                         asChild
                         type="button"
                       >
-                        <Link to="/driver-onboarding">Become a driver</Link>
+                        <Link to="/driver-onboarding">Sign up</Link>
                       </Button>
                     )}
                   </p>
