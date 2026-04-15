@@ -505,14 +505,14 @@ export default function DriverPreferencesPage() {
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-white">Personal Information</h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                Update your contact details and profile photo.
+                Update your contact details.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-9 items-start">
               {/* Phone Field */}
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  Phone Number
+                  Cell Phone
                 </Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -532,10 +532,8 @@ export default function DriverPreferencesPage() {
                 </Label>
                 <div className="flex flex-col items-start gap-2">
                   <div
-                    onClick={handlePreviewClick}
                     className={cn(
-                      "relative w-24 h-24 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-pointer hover:opacity-90 transition",
-                      uploadPhoto.isPending && "opacity-50 cursor-wait"
+                      "relative w-24 h-24 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 opacity-50 cursor-not-allowed"
                     )}
                   >
                     {uploadPhoto.isPending ? (
@@ -564,8 +562,11 @@ export default function DriverPreferencesPage() {
                     onChange={handleFileChange}
                     className="hidden"
                   />
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Click the photo to upload a new image.
+                  <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                    Tap to take a new photo
+                  </p>
+                  <p className="text-xs text-slate-900 dark:text-white leading-relaxed">
+                    To update your photo, contact customer service.
                   </p>
                   {uploadPhoto.isPending && (
                     <p className="text-xs text-primary flex items-center gap-1">
