@@ -360,6 +360,9 @@ async rejectDriver(
         alerts: {
           select: {
             id: true,
+            enabled: true,
+            emailEnabled: true,
+            smsEnabled: true,
           },
         },
 
@@ -377,6 +380,10 @@ async rejectDriver(
         location: {
           select: {
             id: true,
+            homeBaseLat: true,
+            homeBaseLng: true,
+            homeBaseCity: true,
+            homeBaseState: true,
           },
         },
 
@@ -385,6 +392,8 @@ async rejectDriver(
         preferences: {
           select: {
             id: true,
+            city: true,
+            radiusMiles: true,
           },
         },
 
@@ -395,6 +404,20 @@ async rejectDriver(
         user: {
           select: {
             id: true,
+          },
+        },
+
+        districts: {
+          select: {
+            id: true,
+            districtId: true,
+            district: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
           },
         },
       },
