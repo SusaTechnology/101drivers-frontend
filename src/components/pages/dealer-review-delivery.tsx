@@ -522,21 +522,17 @@ export default function ReviewDeliveryPage() {
             </CardContent>
           </Card>
 
-          {/* Car Transfer */}
+          {/* Vehicle Transport */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-black">Car Transfer</CardTitle>
+                <CardTitle className="text-lg font-black">Vehicle Transport</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-3">
-                <Car className="h-5 w-5 text-lime-600" />
-                <span className="font-bold">Car Transfer</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">
-                  Book 101 Drivers to move your car in Southern California.
-                </span>
-              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                101 Drivers will transport your vehicle in Southern California.
+              </p>
             </CardContent>
           </Card>
 
@@ -582,7 +578,7 @@ export default function ReviewDeliveryPage() {
                   )}
                 </div>
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs font-bold text-slate-500">Delivery Time</p>
+                  <p className="text-xs font-bold text-slate-500">Arrival Time</p>
                   <p className="text-sm font-bold">{formatTimeRange(reviewData.dropoffWindowStart, reviewData.dropoffWindowEnd)}</p>
                   {reviewData.dropoffWindowStart && (
                     <p className="text-xs text-slate-500 mt-1">
