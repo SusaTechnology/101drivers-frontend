@@ -29,6 +29,7 @@ type AuthValidatedUser = {
   id: string;
   username: string;
   email?: string | null;
+  fullName?: string | null;
   roles: string[];
   isActive: boolean;
 };
@@ -82,6 +83,7 @@ export class AuthService {
         email: true,
         roles: true,
         isActive: true,
+        fullName: true,
         password: true,
         passwordHash: true,
       },
@@ -217,6 +219,7 @@ export class AuthService {
       profileId: authMeta.profileId,
       username: user.username,
       email: user.email ?? null,
+      fullName: user.fullName ?? null,
       roles: user.roles,
       customerApprovalStatus: authMeta.customerApprovalStatus,
       driverStatus: authMeta.driverStatus,
@@ -246,6 +249,7 @@ export class AuthService {
           email: true,
           roles: true,
           isActive: true,
+          fullName: true,
         },
       } as any);
 
@@ -287,6 +291,7 @@ export class AuthService {
         profileId: authMeta.profileId,
         username: user.username,
         email: (user as any).email ?? null,
+        fullName: (user as any).fullName ?? null,
         roles,
         customerApprovalStatus: authMeta.customerApprovalStatus,
         driverStatus: authMeta.driverStatus,
@@ -403,7 +408,8 @@ export class AuthService {
       (user as any).email ?? null,
       user.roles,
       request,
-      response
+      response,
+      dto.fullName
     );
   }
 
@@ -547,7 +553,8 @@ export class AuthService {
       (user as any).email ?? null,
       user.roles,
       request,
-      response
+      response,
+      dto.fullName
     );
   }
 
@@ -632,7 +639,8 @@ export class AuthService {
     email: string | null,
     roles: EnumUserRoles,
     request: Request,
-    response: Response
+    response: Response,
+    fullName?: string | null,
   ): Promise<UserInfo> {
     const roleList = [String(roles)];
     const authMeta = await this.resolveAuthMeta(userId, roleList);
@@ -668,6 +676,7 @@ export class AuthService {
       profileId: authMeta.profileId,
       username,
       email,
+      fullName: fullName ?? null,
       roles: roleList,
       customerApprovalStatus: authMeta.customerApprovalStatus,
       driverStatus: authMeta.driverStatus,

@@ -7,6 +7,7 @@ interface LoginResponse {
   refreshToken?: string;
   id: string;
   username: string;
+  fullName?: string | null;
   roles: string[];
 }
 
@@ -27,12 +28,14 @@ export function useLogin() {
       setUser({
         id: data.id,
         username: data.username,
+        fullName: data.fullName,
         roles: data.roles,
       });
 
       queryClient.setQueryData(["currentUser"], {
         id: data.id,
         username: data.username,
+        fullName: data.fullName,
         roles: data.roles,
       });
     },

@@ -190,6 +190,7 @@ export function DealerSignIn({
       setUser({
         id: data.id,
         username: data.username,
+        fullName: data.fullName,
         profileId: data.profileId,
         roles: data.roles,
         customerApprovalStatus: data.customerApprovalStatus,

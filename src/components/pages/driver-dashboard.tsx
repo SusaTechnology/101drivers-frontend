@@ -175,6 +175,8 @@ export default function DriverDashboardPage() {
   const { theme, setTheme } = useTheme()
   const user = getUser()
   const driverId = user?.profileId
+  // Prefer first name from fullName; fall back to username
+  const displayName = user?.fullName?.split(' ')[0] || user?.username || 'Driver'
   const navigate = useNavigate()
 
   // Filter state - maps directly to backend API params
@@ -347,7 +349,7 @@ export default function DriverDashboardPage() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
               <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                {user?.username || 'Driver'}
+                {displayName}
               </span>
             </div>
 
@@ -409,12 +411,12 @@ export default function DriverDashboardPage() {
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
                 <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
-                  Online as {user?.username || 'Driver'}
+                  Online as {displayName}
                 </span>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-4 leading-tight">
-                Hey{user?.username ? `, ${user.username}` : ''} — available jobs
+                Hey, {displayName} — available jobs
               </h1>
               <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm sm:text-base max-w-2xl leading-relaxed">
                 Browse jobs like an airport board. Book a job to claim it. Pickup and drop-off checklists are required before you can start or complete.

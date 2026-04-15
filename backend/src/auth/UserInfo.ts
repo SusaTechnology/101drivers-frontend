@@ -22,5 +22,8 @@ export class UserInfo {
 
   @Field(() => String, { nullable: true })
   refreshToken?: string;
+
+  @Field(() => String, { nullable: true })
+  fullName?: string | null;
   
 }

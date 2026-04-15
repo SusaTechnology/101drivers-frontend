@@ -20,6 +20,7 @@ const REFRESH_COOLDOWN_MS = 5000; // 5 seconds cooldown between refresh attempts
 let currentUser: {
   id: string;
   username: string;
+  fullName?: string | null;
   profileId: string | null;
   roles: string[];
   // Approval status for customers and drivers
@@ -310,10 +311,10 @@ async function refreshAccessToken(): Promise<string> {
 
     // If the refresh response includes user data (id, username, roles), update it
     if (data.id && data.username && data.roles && data.profileId) {
-      console.log("here fjjrfs", data.profileId)
       setUser({
         id: data.id,
         username: data.username,
+        fullName: data.fullName,
         profileId: data.profileId,
         roles: data.roles,
         customerApprovalStatus: data.customerApprovalStatus,
