@@ -574,12 +574,11 @@ export default function DriverPreferencesPage() {
                     onChange={handleFileChange}
                     className="hidden"
                   />
-                  <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
-                    Tap to take a new photo
-                  </p>
-                  <p className="text-xs text-slate-900 dark:text-white leading-relaxed">
-                    To update your photo, contact customer service.
-                  </p>
+                  {!form.watch('profilePhotoUrl') && !uploadPhoto.isPending && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                      Tap to take a new photo
+                    </p>
+                  )}
                   {uploadPhoto.isPending && (
                     <p className="text-xs text-primary flex items-center gap-1">
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -589,6 +588,13 @@ export default function DriverPreferencesPage() {
                   {form.watch('profilePhotoUrl') && !uploadPhoto.isPending && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400">Photo ready</p>
                   )}
+                  <p className="text-xs text-slate-900 dark:text-white leading-relaxed">
+                    To update your photo,{' '}
+                    <Link to="/help-driver" className="text-primary underline underline-offset-2 hover:text-primary/80 transition">
+                      contact customer service
+                    </Link>
+                    .
+                  </p>
                 </div>
               </div>
             </div>
