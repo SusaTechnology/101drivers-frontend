@@ -177,6 +177,29 @@ interface SchedulePreviewResponse {
   };
 }
 
+// Types for saved data
+interface SavedAddress {
+  id: string;
+  address: string;
+  city: string;
+  country: string;
+  label?: string;
+  lat: number;
+  lng: number;
+  placeId?: string;
+  postalCode?: string;
+  state?: string;
+  isDefault?: boolean;
+}
+
+interface SavedVehicle {
+  id: string;
+  color: string;
+  licensePlate: string;
+  make: string;
+  model: string;
+}
+
 // Customer data interface for fetching postpaid status
 interface CustomerData {
   id: string;
@@ -271,6 +294,19 @@ export default function EditDeliveryPage() {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
+  // Saved addresses state
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedSavedAddress, setSelectedSavedAddress] = useState<SavedAddress | null>(null);
+  const [pickupSaved, setPickupSaved] = useState(false);
+  const [pendingSavedAddressId, setPendingSavedAddressId] = useState<string | null>(null);
+
+  // Saved vehicles state
+  const [useSavedVehicle, setUseSavedVehicle] = useState(false);
+  const [savedVehicles, setSavedVehicles] = useState<SavedVehicle[]>([]);
+  const [selectedSavedVehicle, setSelectedSavedVehicle] = useState<SavedVehicle | null>(null);
+  const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
+  const [pendingSavedVehicleId, setPendingSavedVehicleId] = useState<string | null>(null);
+
   // Ref to prevent quote reset during data loading
   const isDataLoadingRef = useRef(false);
   // Ref to track previous coordinates for detecting actual changes
@@ -313,6 +349,61 @@ export default function EditDeliveryPage() {
   const isPrivateCustomer = customerDataQuery.data?.customerType === 'PRIVATE';
   const isBusinessCustomer = customerDataQuery.data?.customerType === 'BUSINESS';
   const postpaidEnabled = isBusinessCustomer && (customerDataQuery.data?.postpaidEnabled ?? false);
+
+  // Fetch saved addresses
+  const savedAddressesQuery = useQuery<SavedAddress[]>({
+    queryKey: ['savedAddresses', customer?.profileId],
+    queryFn: async () => {
+      return authFetch(
+        `${import.meta.env.VITE_API_URL}/api/savedAddresses?where[customer][id]=${customer?.profileId}`,
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    },
+    enabled: !!customer?.profileId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch saved vehicles
+  const savedVehiclesQuery = useQuery<SavedVehicle[]>({
+    queryKey: ['savedVehicles', customer?.profileId],
+    queryFn: async () => {
+      return authFetch(
+        `${import.meta.env.VITE_API_URL}/api/savedVehicles?where[customer][id]=${customer?.profileId}`,
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    },
+    enabled: !!customer?.profileId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Mutation for saving pickup address
+  const saveAddressMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/savedAddresses`, {
+    onSuccess: () => {
+      toast.success("Location saved");
+      savedAddressesQuery.refetch();
+      setPickupSaved(true);
+    },
+    onError: (error: any) => {
+      toast.error("Failed to save address", { description: error?.message });
+    },
+    successMessage: undefined,
+  });
+
+  // Mutation for saving vehicle
+  const saveVehicleMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/savedVehicles`, {
+    onSuccess: () => {
+      toast.success("Vehicle saved for future use");
+      savedVehiclesQuery.refetch();
+    },
+    onError: (error: any) => {
+      toast.error("Failed to save vehicle", { description: error?.message });
+    },
+    successMessage: undefined,
+  });
 
   // Determine if editing is allowed based on status
   const canEdit = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED';
@@ -544,6 +635,113 @@ export default function EditDeliveryPage() {
   }, [pickupCoords, dropoffCoords]);
 
   // Helper functions
+  // Saved addresses auto-select effect
+  useEffect(() => {
+    if (savedAddressesQuery.data) {
+      setSavedAddresses(savedAddressesQuery.data);
+
+      // Check if we have a pending saved address to restore
+      if (pendingSavedAddressId) {
+        const addr = savedAddressesQuery.data.find(a => a.id === pendingSavedAddressId);
+        if (addr) {
+          setSelectedSavedAddress(addr);
+          setValue('pickupAddress', addr.address);
+          setPickupCoords({ lat: addr.lat, lng: addr.lng });
+          if (addr.state) setPickupState(addr.state);
+          setPendingSavedAddressId(null);
+          return;
+        }
+      }
+
+      // Check if current pickup address matches a saved one
+      if (pickupAddress && !selectedSavedAddress) {
+        const matched = savedAddressesQuery.data.find(a => a.address === pickupAddress);
+        if (matched) {
+          setSelectedSavedAddress(matched);
+          setPickupSaved(true);
+        }
+      }
+    }
+  }, [savedAddressesQuery.data, pendingSavedAddressId]);
+
+  // Saved vehicles auto-select effect
+  useEffect(() => {
+    if (savedVehiclesQuery.data) {
+      setSavedVehicles(savedVehiclesQuery.data);
+
+      // Check if we have a pending saved vehicle to restore
+      if (pendingSavedVehicleId) {
+        const vehicle = savedVehiclesQuery.data.find(v => v.id === pendingSavedVehicleId);
+        if (vehicle) {
+          setSelectedSavedVehicle(vehicle);
+          setPendingSavedVehicleId(null);
+          return;
+        }
+      }
+
+      // Check if current vehicle matches a saved one
+      if (make && model && !selectedSavedVehicle) {
+        const matched = savedVehiclesQuery.data.find(
+          v => v.make === make && v.model === model && v.licensePlate === licensePlate
+        );
+        if (matched) {
+          setSelectedSavedVehicle(matched);
+          setUseSavedVehicle(true);
+        }
+      }
+    }
+  }, [savedVehiclesQuery.data, pendingSavedVehicleId]);
+
+  // Handle saved address selection
+  const handleSavedAddressSelect = async (addressId: string) => {
+    const address = savedAddresses.find(a => a.id === addressId);
+    if (address) {
+      setSelectedSavedAddress(address);
+      setValue("pickupAddress", address.address);
+      setPickupCoords({ lat: address.lat, lng: address.lng });
+
+      const isValidGooglePlaceId = address.placeId &&
+        (address.placeId.startsWith('ChIJ') ||
+         (address.placeId.length >= 20 && /^[A-Za-z0-9_-]+$/.test(address.placeId)));
+
+      if (isValidGooglePlaceId) {
+        setPickupPlaceId(address.placeId);
+      } else if (isLoaded && address.address) {
+        try {
+          const geocoder = new google.maps.Geocoder();
+          const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+            geocoder.geocode({ address: address.address }, (results, status) => {
+              if (status === "OK" && results) resolve(results);
+              else reject(new Error(`Geocoding failed: ${status}`));
+            });
+          });
+          if (results[0]?.place_id) {
+            setPickupPlaceId(results[0].place_id);
+          } else {
+            setPickupPlaceId(null);
+          }
+        } catch (error) {
+          setPickupPlaceId(null);
+        }
+      } else {
+        setPickupPlaceId(null);
+      }
+
+      if (address.state) setPickupState(address.state);
+      if (address.city) setPickupCity(address.city);
+    }
+  };
+
+  // Handle saved vehicle selection
+  const handleSavedVehicleSelect = (vehicle: SavedVehicle) => {
+    setSelectedSavedVehicle(vehicle);
+    setValue("make", vehicle.make);
+    setValue("model", vehicle.model);
+    setValue("color", vehicle.color);
+    setValue("licensePlate", vehicle.licensePlate);
+    setShowVehicleDropdown(false);
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -747,6 +945,8 @@ export default function EditDeliveryPage() {
       setPickupCoords({ lat, lng });
       setPickupPlaceId(place.place_id || null);
       setValue("pickupAddress", place.formatted_address || "");
+      setSelectedSavedAddress(null);
+      setPickupSaved(false);
 
       if (place.address_components) {
         const stateComp = place.address_components.find(comp =>
@@ -1151,9 +1351,19 @@ export default function EditDeliveryPage() {
                         <LocationAutocomplete
                           key="pickup"
                           value={pickupAddress || ""}
-                          onChange={(val) => setValue("pickupAddress", val)}
+                          onChange={(val) => {
+                            setValue("pickupAddress", val);
+                            if (!val) {
+                              setSelectedSavedAddress(null);
+                              setPickupSaved(false);
+                            }
+                          }}
                           onPlaceSelect={handlePickupSelect}
-                          onClear={handlePickupClear}
+                          onClear={() => {
+                            handlePickupClear();
+                            setSelectedSavedAddress(null);
+                            setPickupSaved(false);
+                          }}
                           isLoaded={isLoaded}
                           placeholder="Search starting location (California only)"
                           icon={<MapPin className="h-5 w-5 text-slate-400" />}
@@ -1161,6 +1371,68 @@ export default function EditDeliveryPage() {
                         {errors.pickupAddress && (
                           <p className="text-xs text-red-500">{errors.pickupAddress.message}</p>
                         )}
+                        {/* Save location checkbox */}
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="savePickupLocation"
+                            checked={pickupSaved}
+                            disabled={!pickupAddress || !pickupCoords}
+                            onCheckedChange={async (checked) => {
+                              if (!checked) {
+                                setPickupSaved(false);
+                                setSelectedSavedAddress(null);
+                                return;
+                              }
+                              const alreadySaved = savedAddresses.find(
+                                (a) => a.address === pickupAddress
+                              );
+                              if (alreadySaved) {
+                                setSelectedSavedAddress(alreadySaved);
+                                setPickupSaved(true);
+                                return;
+                              }
+                              let finalPlaceId = pickupPlaceId;
+                              const isValid = pickupPlaceId &&
+                                (pickupPlaceId.startsWith('ChIJ') || pickupPlaceId.startsWith('Eh'));
+                              if (!isValid && pickupCoords && isLoaded) {
+                                try {
+                                  const geocoder = new google.maps.Geocoder();
+                                  const results = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+                                    geocoder.geocode({ location: pickupCoords }, (results, status) => {
+                                      if (status === "OK" && results) resolve(results);
+                                      else reject(new Error(status));
+                                    });
+                                  });
+                                  if (results[0]?.place_id) {
+                                    finalPlaceId = results[0].place_id;
+                                    setPickupPlaceId(finalPlaceId);
+                                  }
+                                } catch (e) {
+                                  console.warn('Reverse geocoding failed:', e);
+                                }
+                              }
+                              saveAddressMutation.mutate({
+                                label: '',
+                                address: pickupAddress,
+                                lat: pickupCoords!.lat,
+                                lng: pickupCoords!.lng,
+                                placeId: finalPlaceId || undefined,
+                                city: pickupCity || '',
+                                state: pickupState || '',
+                                country: 'USA',
+                                postalCode: '',
+                                isDefault: savedAddresses.length === 0,
+                                customer: { id: customer.profileId },
+                              });
+                            }}
+                          />
+                          <Label
+                            htmlFor="savePickupLocation"
+                            className={`text-xs font-bold cursor-pointer ${!pickupAddress || !pickupCoords ? 'text-slate-400 cursor-not-allowed' : ''}`}
+                          >
+                            {pickupSaved ? 'Saved' : 'Save location'}
+                          </Label>
+                        </div>
                       </div>
 
                       {/* Drop-off Address */}
@@ -1549,6 +1821,53 @@ export default function EditDeliveryPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    {/* Checkbox for saved vehicles */}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="useSavedVehicle"
+                        checked={useSavedVehicle}
+                        onCheckedChange={(checked) => {
+                          setUseSavedVehicle(!!checked);
+                          if (!checked) {
+                            setSelectedSavedVehicle(null);
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor="useSavedVehicle"
+                        className="text-xs font-bold cursor-pointer"
+                      >
+                        Use saved vehicle
+                      </Label>
+                    </div>
+
+                    {/* Saved vehicle dropdown */}
+                    {useSavedVehicle && (
+                      <div className="relative mb-4">
+                        <Input
+                          placeholder="Select saved vehicle..."
+                          onFocus={() => setShowVehicleDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowVehicleDropdown(false), 200)}
+                          value={selectedSavedVehicle ? `${selectedSavedVehicle.make} ${selectedSavedVehicle.model} (${selectedSavedVehicle.licensePlate})` : ""}
+                          readOnly
+                          className="h-14 rounded-2xl"
+                        />
+                        {showVehicleDropdown && savedVehicles.length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-60 overflow-auto">
+                            {savedVehicles.map((vehicle) => (
+                              <div
+                                key={vehicle.id}
+                                className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                                onClick={() => handleSavedVehicleSelect(vehicle)}
+                              >
+                                {vehicle.make} {vehicle.model} - {vehicle.color} ({vehicle.licensePlate})
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Basic Vehicle Info */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       <div className="space-y-2">
@@ -1696,6 +2015,44 @@ export default function EditDeliveryPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Save vehicle for future */}
+                    {!useSavedVehicle && !selectedSavedVehicle && make && model && color && watch('licensePlate') && (
+                      <div className="p-3 rounded-xl bg-lime-50 dark:bg-lime-900/20 border border-lime-200 dark:border-lime-800">
+                        <div className="text-xs font-bold text-lime-700 dark:text-lime-300 mb-2">
+                          Save vehicle for future use?
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const finalMake = make === "Other" ? watch('makeOther') : make;
+                            const finalModel = model === "Other" ? watch('modelOther') : model;
+                            const finalColor = color === "Other" ? watch('colorOther') : color;
+
+                            if (!finalMake || !finalModel || !finalColor || !watch('licensePlate')) {
+                              toast.error("Missing information", {
+                                description: "Please fill in all vehicle details.",
+                              });
+                              return;
+                            }
+
+                            saveVehicleMutation.mutate({
+                              make: finalMake,
+                              model: finalModel,
+                              color: finalColor,
+                              licensePlate: watch('licensePlate'),
+                              customer: { id: customer.profileId },
+                            });
+                          }}
+                          disabled={saveVehicleMutation.isPending}
+                          className="h-10"
+                        >
+                          {saveVehicleMutation.isPending ? "Saving..." : "Save Vehicle"}
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
