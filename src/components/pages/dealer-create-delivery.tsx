@@ -1449,22 +1449,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           });
         }
 
-        if (!data.feasible) {
-          toast.error("Schedule not feasible", {
-            description: data.message || "The selected schedule windows may not work. Please adjust and try again.",
-          });
-        } else if (data.pickupWindowStart && data.dropoffWindowStart) {
-          // Validation mode success
-          toast.success("Schedule verified", {
-            description: `ETA: ${formatDuration(data.etaMinutes)}. ${data.sameDayEligible ? '✨ Same-day eligible!' : ''}`,
-          });
-        }
+        // No toasts during slot checking — the inline UI handles all feedback
       },
       onError: (error: any) => {
-        const errorMessage = error?.message || "Failed to check schedule feasibility";
-        toast.error("Schedule check failed", {
-          description: errorMessage,
-        });
         console.error('Schedule preview failed:', error);
         setSchedulePreviewData(null);
         setIsLoadingSlots(false);
@@ -2411,12 +2398,7 @@ const handleQuotePreview = () => {
                           ))}
                         </SelectContent>
                       </Select>
-                    ) : (
-                      <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
-                        <AlertCircle className="h-4 w-4 inline mr-2" />
-                        No available slots found. Please try a different option.
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
 
@@ -2486,18 +2468,7 @@ const handleQuotePreview = () => {
                           Same-day: {schedulePreviewData.sameDay.status}
                         </Badge>
                       )}
-                      {schedulePreviewData.sameDay?.warnings && schedulePreviewData.sameDay.warnings.length > 0 && (
-                        <Badge variant="outline" className="text-amber-600 border-amber-200 dark:text-amber-400 dark:border-amber-800 text-[10px]">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          {schedulePreviewData.sameDay.warnings[0]}
-                        </Badge>
-                      )}
-                      {(schedulePreviewData.requiresOpsConfirmation || schedulePreviewData.afterHours) && (
-                        <Badge variant="outline" className="text-amber-600 border-amber-200 dark:text-amber-400 dark:border-amber-800 text-[10px]">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Requires ops confirmation
-                        </Badge>
-                      )}
+
                     </div>
 
                     {/* ETA info */}
@@ -2510,13 +2481,7 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                {/* Error state */}
-                {schedulePreviewData && !schedulePreviewData.feasible && !isLoadingSlots && (
-                  <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
-                    <AlertCircle className="h-4 w-4 inline mr-2" />
-                    {schedulePreviewData.message || "This schedule is not feasible. Please try a different time."}
-                  </div>
-                )}
+
 
                 {/* Hint when no quote calculated */}
                 {!quoteId && (
