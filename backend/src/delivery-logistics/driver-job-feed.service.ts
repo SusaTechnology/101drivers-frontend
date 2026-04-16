@@ -535,8 +535,8 @@ async getDriverJobFeed(input: {
             compliance: {
               select: {
                 id: true,
-                pickupOdometerStart: true,
-                pickupOdometerEnd: true,
+                odometerStart: true,
+                odometerEnd: true,
                 pickupCompletedAt: true,
                 dropoffCompletedAt: true,
               },
