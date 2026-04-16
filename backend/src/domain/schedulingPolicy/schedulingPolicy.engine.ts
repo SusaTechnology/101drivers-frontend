@@ -266,7 +266,9 @@ export class SchedulingPolicyEngine {
     // today/tomorrow logic based on policy and same-day eligibility.
     let baseDate: Date;
     if (input.preferredDate) {
-      baseDate = this.toBusinessDateTime(new Date(input.preferredDate))
+      // Use fromISO directly to avoid UTC-midnight shift: new Date("2025-07-17")
+      // parses as UTC 00:00 which becomes 17:00 PDT the previous day.
+      baseDate = DateTime.fromISO(input.preferredDate, { zone: this.businessTimeZone })
         .startOf("day")
         .toJSDate();
     } else {
@@ -292,16 +294,17 @@ export class SchedulingPolicyEngine {
       7
     );
 
+    // Same UTC-shift bug avoidance: parse ISO date string in business timezone directly
+    const preferredDay = input.preferredDate
+      ? DateTime.fromISO(input.preferredDate, { zone: this.businessTimeZone })
+      : this.toBusinessDateTime(requestCreatedAt.toJSDate());
+
     const sameDayStatus =
       policy.defaultMode === EnumSchedulingPolicyDefaultMode.SAME_DAY &&
       sameDayEligible &&
       actualSlotDate &&
       this.toBusinessDateTime(actualSlotDate).hasSame(
-        this.toBusinessDateTime(
-          input.preferredDate
-            ? new Date(input.preferredDate)
-            : requestCreatedAt.toJSDate()
-        ),
+        preferredDay,
         "day"
       )
         ? "SAME_DAY"
