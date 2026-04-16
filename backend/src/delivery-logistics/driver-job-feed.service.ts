@@ -466,11 +466,8 @@ async getDriverJobFeed(input: {
     driverId: string;
     deliveryId: string;
   }): Promise<DriverFeedItem | null> {
-    await this.assertDriverCanBookDelivery(this.prisma, {
-      driverId: input.driverId,
-      deliveryId: input.deliveryId,
-    });
-
+    // Don't assert booking eligibility here — drivers should be able to
+    // browse gig details freely. The booking endpoint enforces restrictions.
     const feed = await this.getDriverJobFeed({
       driverId: input.driverId,
       limit: 50,
