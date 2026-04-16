@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { cn } from "@/lib/utils";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from "@/lib/google-maps-config";
 import {
@@ -33,6 +34,7 @@ import {
   Flag,
   Car,
   Clock,
+  CalendarIcon,
   Mail,
   Phone,
   User,
@@ -67,6 +69,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 
 // Form validation schema
 const deliverySchema = z.object({
@@ -305,7 +310,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [originalDeliveryStatus, setOriginalDeliveryStatus] = useState<string | null>(null);
   
   // Schedule section - new one-side-at-a-time flow
-  const [customerChose, setCustomerChose] = useState<"PICKUP_WINDOW" | "DROPOFF_WINDOW" | null>(null);
+  const [customerChose, setCustomerChose] = useState<"PICKUP_WINDOW" | "DROPOFF_WINDOW" | null>("PICKUP_WINDOW");
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedSlot, setSelectedSlot] = useState<SlotItem | null>(null);
   const [suggestedSlots, setSuggestedSlots] = useState<{ pickup: SlotItem[]; dropoff: SlotItem[] }>({ pickup: [], dropoff: [] });
   const [validatedWindows, setValidatedWindows] = useState<{
@@ -1401,6 +1407,33 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         // Store suggested slots for dropdown
         if (data.suggestedSlots) {
           setSuggestedSlots(data.suggestedSlots);
+
+          // Auto-select the first slot for the active side
+          const side = customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff";
+          const slots = data.suggestedSlots[side] || [];
+          if (slots.length > 0 && !selectedSlot) {
+            // Auto-select first slot (will trigger validation via handleSlotSelect)
+            const firstSlot = slots[0];
+            setSelectedSlot(firstSlot);
+            if (quoteId && customerChose) {
+              const validationRequest: SchedulePreviewRequest = {
+                quoteId,
+                serviceType,
+                customerType: customerDataQuery.data?.customerType || 'BUSINESS',
+                customerId: customer?.profileId,
+                customerChose,
+              };
+              if (customerChose === "PICKUP_WINDOW") {
+                validationRequest.pickupWindowStart = firstSlot.start;
+                validationRequest.pickupWindowEnd = firstSlot.end;
+              } else {
+                validationRequest.dropoffWindowStart = firstSlot.start;
+                validationRequest.dropoffWindowEnd = firstSlot.end;
+              }
+              setIsLoadingSlots(true);
+              getSchedulePreview.mutate(validationRequest);
+            }
+          }
         }
 
         // Only set validated windows if we actually have both window times from the API
@@ -1497,6 +1530,30 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     console.log('Validation Mode Request:', request);
     setIsLoadingSlots(true);
     getSchedulePreview.mutate(request);
+  };
+
+  // Called when user picks a date from the calendar
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    setSelectedDate(date);
+
+    // Reset slot state
+    setSelectedSlot(null);
+    setValidatedWindows(null);
+    setSuggestedSlots({ pickup: [], dropoff: [] });
+
+    // Auto-discover slots for the currently chosen side (default: pickup)
+    if (quoteId && customerChose) {
+      setIsLoadingSlots(true);
+      const request: SchedulePreviewRequest = {
+        quoteId,
+        serviceType,
+        customerType: customerDataQuery.data?.customerType || 'BUSINESS',
+        customerId: customer?.profileId,
+        customerChose,
+      };
+      getSchedulePreview.mutate(request);
+    }
   };
 
 const handleQuotePreview = () => {
@@ -2229,7 +2286,7 @@ const handleQuotePreview = () => {
                       Schedule window
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      Set Pickup or Arrival Time
+                      Pickup or arrival
                     </p>
                   </div>
                   <div className="hidden sm:flex flex-col gap-2">
@@ -2246,10 +2303,39 @@ const handleQuotePreview = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Step 1: Choose which side to set */}
+                {/* Date picker - Choose a date */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest">
+                    Choose a date
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full h-14 justify-start text-left font-medium rounded-2xl border-slate-200 dark:border-slate-700",
+                          !selectedDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
+                        {selectedDate ? format(selectedDate, "EEE MMM d, yyyy") : "Choose a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={handleDateSelect}
+                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Choose which side to set */}
                 <div className="space-y-3">
                   <Label className="text-xs font-black uppercase tracking-widest">
-                    Set Pickup or Arrival Time
+                    Pickup or arrival
                   </Label>
                   <RadioGroup
                     value={customerChose || ""}
@@ -2287,11 +2373,11 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                {/* Step 2: Select a time slot (only shown after user chooses side) */}
+                {/* Step 2: Select a time slot (only shown after date is chosen) */}
                 {customerChose && !isLoadingSlots && (
                   <div className="space-y-3">
                     <Label className="text-xs font-black uppercase tracking-widest">
-                      {customerChose === "PICKUP_WINDOW" ? "Select pickup window" : "Select arrival window"}
+                      {customerChose === "PICKUP_WINDOW" ? "Pickup time" : "Arrival time"}
                     </Label>
                     
                     {suggestedSlots[customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff"].length > 0 ? (
@@ -2425,7 +2511,7 @@ const handleQuotePreview = () => {
                 {!quoteId && (
                   <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
                     <Info className="h-3 w-3 inline mr-1" />
-                    Please select your Schedule Window.
+                    Please calculate a quote first to see available schedules.
                   </div>
                 )}
 
