@@ -444,7 +444,7 @@ export function QuoteDetails() {
       instructions: data.instructions || undefined,
       requiresOpsConfirmation: data.afterHours || false,
       sameDayEligible: false,
-      status: "QUOTED", // Initial status - customer must review and release to market
+      status: "LISTED", // Delivery is listed on marketplace immediately after creation
     };
 
     // Include OTP if verification is required and OTP is provided

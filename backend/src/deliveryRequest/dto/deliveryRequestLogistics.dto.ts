@@ -23,26 +23,6 @@ import {
 import { ApiProperty } from "@nestjs/swagger";
 
 
-export class ReleaseDeliveryToMarketplaceBody {
-  @ApiProperty({
-    required: false,
-    nullable: true,
-  })
-  actorUserId?: string | null;
-
-  @ApiProperty({
-    required: false,
-    nullable: true,
-    enum: EnumDeliveryStatusHistoryActorRole,
-  })
-  actorRole?: EnumDeliveryStatusHistoryActorRole | null;
-
-  @ApiProperty({
-    required: false,
-    nullable: true,
-  })
-  note?: string | null;
-}
 
 export class IndividualQuotePreviewBody {
   @ApiProperty()

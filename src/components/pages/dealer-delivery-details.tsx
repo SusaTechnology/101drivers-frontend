@@ -56,11 +56,10 @@ import {
   Award,
   ChevronRight,
   DollarSign,
-  Rocket,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, authFetch } from '@/lib/tanstack/dataQuery'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 // Helper to format date
@@ -193,32 +192,6 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     },
     onError: (error) => {
       toast.error('Failed to send tip', { description: error.message })
-    }
-  })
-
-  // Release to marketplace mutation
-  const queryClient = useQueryClient()
-  const releaseToMarketMutation = useMutation({
-    mutationFn: async () => {
-      return authFetch(
-        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${id}/release-to-marketplace`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-    },
-    onSuccess: () => {
-      toast.success('Released to market', { 
-        description: 'Your delivery is now visible to drivers. You will be notified when a driver books it.' 
-      })
-      queryClient.invalidateQueries({ queryKey: ['delivery', id] })
-      refetch() // Refresh delivery data
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to release to market', { description: error.message })
     }
   })
 
@@ -928,26 +901,6 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3">
-            {/* Release to Market button - shown for QUOTED status */}
-            {deliveryData.status === 'QUOTED' && (
-              <Button
-                onClick={() => releaseToMarketMutation.mutate({})}
-                disabled={releaseToMarketMutation.isPending}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-lime-500 text-slate-950 font-extrabold hover:bg-lime-600"
-              >
-                {releaseToMarketMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950"></div>
-                    Releasing...
-                  </>
-                ) : (
-                  <>
-                    <Rocket className="h-4 w-4" />
-                    Release to Market
-                  </>
-                )}
-              </Button>
-            )}
             <Button
               variant="outline"
               onClick={() => navigate({ to: '/dealer-edit-delivery', state: { id: deliveryData.id } })}

@@ -45,7 +45,6 @@ import {
   CreateDeliveryFromQuoteBody,
   CreateDeliveryDraftFromQuoteBody,
   QuotePreviewBody,
-  ReleaseDeliveryToMarketplaceBody,
   DriverLocationPingBody,
   CreateTrackingLinkBody,
   TrackingLinkResponseBody,
@@ -572,27 +571,6 @@ async getDriverJobDetail(
       actorUserId: body.actorUserId ?? null,
       actorRole: body.actorRole ?? null,
       actorType: body.actorType ?? EnumDeliveryStatusHistoryActorType.USER,
-      note: body.note ?? null,
-    });
-  }
-  @common.Post(":id/release-to-marketplace")
-  @swagger.ApiOkResponse({ type: DeliveryRequest })
-  @nestAccessControl.UseRoles({
-    resource: "DeliveryRequest",
-    action: "update",
-    possession: "any",
-  })
-  @swagger.ApiForbiddenResponse({
-    type: errors.ForbiddenException,
-  })
-  async releaseDeliveryToMarketplace(
-    @common.Param() params: DeliveryRequestWhereUniqueInput,
-    @common.Body() body: ReleaseDeliveryToMarketplaceBody
-  ): Promise<DeliveryRequest> {
-    return this.service.releaseDeliveryToMarketplace({
-      deliveryId: params.id,
-      actorUserId: body.actorUserId ?? null,
-      actorRole: body.actorRole ?? null,
       note: body.note ?? null,
     });
   }

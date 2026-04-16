@@ -636,22 +636,6 @@ async completeTrip(input: {
 
     target[field] = this.normalizeOptionalState(raw);
   }
-async releaseDeliveryToMarketplace(input: {
-  deliveryId: string;
-  actorUserId?: string | null;
-  actorRole?: EnumDeliveryStatusHistoryActorRole | null;
-  note?: string | null;
-}): Promise<any> {
-  await this.lifecycleService.releaseToMarketplace({
-    deliveryId: input.deliveryId,
-    actorUserId: input.actorUserId ?? null,
-    actorRole: input.actorRole ?? null,
-    note: this.trimOptionalString(input.note) ?? null,
-  });
-
-  return this.domain.findUnique({ id: input.deliveryId });
-}
-
 async submitPickupCompliance(input: {
   deliveryId: string;
   driverId: string;

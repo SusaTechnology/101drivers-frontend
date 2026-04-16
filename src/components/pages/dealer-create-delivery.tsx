@@ -51,7 +51,6 @@ import {
   CheckCircle,
   FileText,
   HelpCircle,
-  Rocket,
   RefreshCw,
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
@@ -61,14 +60,6 @@ import { usePickupZones } from "@/hooks/usePickupZones";
 import { getUser, useCreate, useDataQuery, usePatch, authFetch } from "@/lib/tanstack/dataQuery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
@@ -331,9 +322,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const prevPickupCoordsRef = useRef<google.maps.LatLngLiteral | null>(null);
   const prevDropoffCoordsRef = useRef<google.maps.LatLngLiteral | null>(null);
 
-  // Release dialog state
-  const [showReleaseDialog, setShowReleaseDialog] = useState(false);
-  const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
   const customer = getUser();
 
   // Fetch service area zones for map overlay (like landing page)
@@ -380,9 +368,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           console.error('Failed to delete draft after submission:', e);
         }
       }
-      // Show release dialog instead of navigating
-      setCreatedDeliveryId(data?.id || data?.deliveryRequest?.id || null);
-      setShowReleaseDialog(true);
+      toast.success("Delivery submitted!", {
+        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
+      });
+      navigate({ to: "/dealer-dashboard" });
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to create delivery request";
@@ -403,31 +392,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Query client for invalidating queries
   const queryClient = useQueryClient();
-
-  // Mutation for releasing to marketplace
-  const releaseToMarketMutation = useMutation({
-    mutationFn: async (deliveryId: string) => {
-      return authFetch(
-        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/release-to-marketplace`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-    },
-    onSuccess: () => {
-      toast.success("Released to market", {
-        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
-      });
-      setShowReleaseDialog(false);
-      navigate({ to: "/dealer-dashboard" });
-    },
-    onError: (error: Error) => {
-      toast.error("Failed to release to market", { description: error.message });
-    }
-  });
 
   // Mutation for saving as draft (new draft)
   const saveDraftMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-draft-from-quote`, {
@@ -1773,7 +1737,7 @@ const handleQuotePreview = () => {
         isUrgent: false,
   requiresOpsConfirmation: schedulePreviewData?.requiresOpsConfirmation || false,
   sameDayEligible: schedulePreviewData?.sameDayEligible || false,
-  status: "QUOTED", // Initial status - dealer must review and release to market
+  status: "LISTED", // Delivery is listed on marketplace immediately after creation
   customerId: customer.profileId
 
     };
@@ -1958,52 +1922,6 @@ const handleQuotePreview = () => {
           </div>
         </div>
       )}
-
-      {/* Release to Market Dialog */}
-      <Dialog open={showReleaseDialog} onOpenChange={setShowReleaseDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-lime-500" />
-              Delivery Created Successfully
-            </DialogTitle>
-            <DialogDescription>
-              Your delivery request has been created with status "Quoted". Would you like to release it to the marketplace now?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Releasing to the marketplace will make your delivery visible to available drivers. You'll be notified when a driver books it.
-            </p>
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              onClick={() => navigate({ to: "/dealer-dashboard" })}
-              className="w-full sm:w-auto"
-            >
-              View in Dashboard
-            </Button>
-            <Button
-              onClick={() => createdDeliveryId && releaseToMarketMutation.mutate(createdDeliveryId)}
-              disabled={releaseToMarketMutation.isPending}
-              className="w-full sm:w-auto bg-lime-500 text-slate-950 hover:bg-lime-600 font-extrabold"
-            >
-              {releaseToMarketMutation.isPending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950 mr-2"></div>
-                  Releasing...
-                </>
-              ) : (
-                <>
-                  <Rocket className="h-4 w-4 mr-2" />
-                  Release to Market
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
         {/* Title section */}
