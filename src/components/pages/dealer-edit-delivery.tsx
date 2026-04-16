@@ -325,6 +325,37 @@ export default function EditDeliveryPage() {
     },
   });
 
+  // Save as Draft mutation
+  const saveAsDraft = usePatch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}`, {
+    onSuccess: () => {
+      toast.success("Saved as draft", {
+        description: "Delivery moved to Drafts. You can continue editing or delete it from there.",
+      });
+      navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to save as draft";
+      toast.error("Failed to save as draft", {
+        description: errorMessage,
+      });
+      console.error("Save as draft failed:", error);
+    },
+  });
+
+  const handleSaveAsDraft = () => {
+    if (!pickupCoords || !dropoffCoords) {
+      toast.error("Missing addresses", {
+        description: "Please enter pickup and drop-off addresses before saving.",
+      });
+      return;
+    }
+    const payload = {
+      ...buildPayload(getValues()),
+      status: "DRAFT",
+    };
+    saveAsDraft.mutate(payload);
+  };
+
   const {
     register,
     handleSubmit,
@@ -1781,7 +1812,7 @@ export default function EditDeliveryPage() {
                       Submit
                     </CardDescription>
                     <CardTitle className="text-2xl font-black mt-2">
-                      Update Delivery
+                      Delivery Details
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                       Your changes will update the existing delivery while keeping its current status.
@@ -1789,26 +1820,47 @@ export default function EditDeliveryPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Button
-                    type="submit"
-                    className="w-full py-6 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={updateDelivery.isPending || !isFormValidForSubmission}
-                  >
-                    {updateDelivery.isPending ? (
-                      <>
-                        Updating...
-                        <RefreshCw className="ml-2 h-5 w-5 animate-spin" />
-                      </>
-                    ) : (
-                      <>
-                        Update Delivery
-                        <ChevronRight className="ml-2 h-5 w-5" />
-                      </>
-                    )}
-                  </Button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button
+                      type="submit"
+                      className="py-6 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={updateDelivery.isPending || !isFormValidForSubmission}
+                    >
+                      {updateDelivery.isPending ? (
+                        <>
+                          Updating...
+                          <RefreshCw className="ml-2 h-5 w-5 animate-spin" />
+                        </>
+                      ) : (
+                        <>
+                          Update Delivery
+                          <ChevronRight className="ml-2 h-5 w-5" />
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="py-6 rounded-2xl border-slate-200 dark:border-slate-700 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={saveAsDraft.isPending}
+                      onClick={handleSaveAsDraft}
+                    >
+                      {saveAsDraft.isPending ? (
+                        <>
+                          Saving...
+                          <RefreshCw className="ml-2 h-5 w-5 animate-spin" />
+                        </>
+                      ) : (
+                        "Save as Draft"
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center sm:text-right">
+                    Saves changes and moves this delivery to the Drafts tab (you can delete it from there later)
+                  </p>
 
                   {!isFormValidForSubmission && !updateDelivery.isPending && (
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 text-center">
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-3 text-center">
                       Please complete all required fields: addresses, schedule window, vehicle details, and recipient info.
                     </p>
                   )}
@@ -1833,9 +1885,6 @@ export default function EditDeliveryPage() {
                     </div>
                   )}
 
-                  <p className="text-[11px] text-slate-500 mt-4 text-center">
-                    Compliance evidence (VIN verification, photos, odometer, Start/Stop tracking) is captured by driver during delivery.
-                  </p>
                 </CardContent>
               </Card>
 
@@ -1844,7 +1893,7 @@ export default function EditDeliveryPage() {
                 <CardHeader>
                   <CardTitle className="text-xl font-black">Need help?</CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Having trouble editing a delivery? Our support team is here to help.
+                    Need help with anything? Our support team is here to help.
                   </p>
                 </CardHeader>
                 <CardContent>
