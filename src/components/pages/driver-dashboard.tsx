@@ -287,16 +287,16 @@ export default function DriverDashboardPage() {
   const handleRefresh = () => {
     refetch()
     toast.success('Refreshed', {
-      description: 'Job feed updated.',
+      description: 'Gig feed updated.',
     })
   }
 
-  const handleViewJob = (jobId: string) => {
-    navigate({ to: `/driver-job-details`, search: { jobId }}) // adjust route as needed
+  const handleViewGig = (gigId: string) => {
+    navigate({ to: `/driver-job-details`, search: { jobId: gigId }}) // adjust route as needed
   }
 
   // Transform API data to UI-friendly array
-  const jobs = deliveriesData?.items?.map((item: any) => ({
+  const gigs = deliveriesData?.items?.map((item: any) => ({
     id: item.deliveryId,
     urgent: item.isUrgent || false,
     type: serviceTypeLabels[item.serviceType] || item.serviceType,
@@ -336,7 +336,7 @@ export default function DriverDashboardPage() {
                 Driver
               </div>
               <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                Job Feed
+                Gig Feed
               </div>
             </div>
           </div>
@@ -416,10 +416,10 @@ export default function DriverDashboardPage() {
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-4 leading-tight">
-                Hey, {displayName} — available jobs
+                Hey, {displayName} — available gigs
               </h1>
               <p className="text-slate-600 dark:text-slate-400 mt-2 text-sm sm:text-base max-w-2xl leading-relaxed">
-                Browse jobs like an airport board. Book a job to claim it. Pickup and drop-off checklists are required before you can start or complete.
+                Browse gigs like an airport board. Book a gig to claim it. Pickup and drop-off checklists are required before you can start or complete.
               </p>
             </div>
 
@@ -568,13 +568,13 @@ export default function DriverDashboardPage() {
           </Card>
         </section>
 
-        {/* Job Board */}
+        {/* Gig Board */}
         <section className="mt-6">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white">Job board</h2>
+              <h2 className="text-lg font-black text-slate-900 dark:text-white">Gig board</h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                Tap a job to view details, requirements, and book it.
+                Tap a gig to view details, requirements, and book it.
               </p>
             </div>
 
@@ -605,7 +605,7 @@ export default function DriverDashboardPage() {
             <Card className="mt-4 border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden p-8 text-center">
               <div className="flex flex-col items-center gap-4">
                 <RefreshCw className="w-8 h-8 animate-spin text-primary" />
-                <p className="text-sm text-slate-600 dark:text-slate-400">Loading available jobs...</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Loading available gigs...</p>
               </div>
             </Card>
           )}
@@ -614,21 +614,21 @@ export default function DriverDashboardPage() {
             <Card className="mt-4 border-red-200 dark:border-red-900 shadow-lg overflow-hidden p-8">
               <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
                 <AlertCircle className="w-5 h-5" />
-                <p className="text-sm font-semibold">Failed to load jobs. Please try again.</p>
+                <p className="text-sm font-semibold">Failed to load gigs. Please try again.</p>
               </div>
             </Card>
           )}
 
-          {!isLoading && !isError && jobs.length === 0 && (
+          {!isLoading && !isError && gigs.length === 0 && (
             <Card className="mt-4 border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden p-8 text-center">
               <div className="flex flex-col items-center gap-2">
                 <Inbox className="w-8 h-8 text-slate-400" />
-                <p className="text-sm text-slate-600 dark:text-slate-400">No jobs available at the moment.</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">No gigs available at the moment.</p>
               </div>
             </Card>
           )}
 
-          {jobs.length > 0 && (
+          {gigs.length > 0 && (
             <Card className="mt-4 border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
               {/* Header row - desktop only */}
               <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
@@ -640,17 +640,17 @@ export default function DriverDashboardPage() {
               </div>
 
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {jobs.map((job) => (
+                {gigs.map((gig) => (
                   <button
-                    key={job.id}
-                    onClick={() => handleViewJob(job.id)}
+                    key={gig.id}
+                    onClick={() => handleViewGig(gig.id)}
                     className="w-full text-left hover:bg-slate-50 dark:hover:bg-slate-950/40 transition cursor-pointer"
                   >
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 px-5 sm:px-6 py-5">
                       {/* Time column */}
                       <div className="md:col-span-2">
                         <div className="flex items-center gap-2">
-                          {job.urgent ? (
+                          {gig.urgent ? (
                             <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 text-[11px] font-extrabold">
                               <BoltIcon className="w-3.5 h-3.5 text-amber-500" />
                               Urgent
@@ -658,25 +658,25 @@ export default function DriverDashboardPage() {
                           ) : (
                             <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
                               <Calendar className="w-3.5 h-3.5 text-primary" />
-                              {job.type}
+                              {gig.type}
                             </Badge>
                           )}
                         </div>
                         <div className="mt-2 text-sm font-black text-slate-900 dark:text-white">
-                          {job.date} • {job.timeWindow}
+                          {gig.date} • {gig.timeWindow}
                         </div>
                       </div>
 
                       {/* Route column */}
                       <div className="md:col-span-4">
                         <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                          {job.pickup} → {job.dropoff}
+                          {gig.pickup} → {gig.dropoff}
                         </div>
                         <div className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
-                          Service: {job.service}
+                          Service: {gig.service}
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {job.requirements.map((req, idx) => (
+                          {gig.requirements.map((req, idx) => (
                             <Badge key={idx} variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
                               <req.icon className="w-3.5 h-3.5 text-primary mr-1" />
                               {req.label}
@@ -691,10 +691,10 @@ export default function DriverDashboardPage() {
                           Miles
                         </div>
                         <div className="text-sm font-black text-slate-900 dark:text-white">
-                          {job.miles ? `${job.miles} mi` : '—'}
+                          {gig.miles ? `${gig.miles} mi` : '—'}
                         </div>
                         <div className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold">
-                          Est. {job.duration}
+                          Est. {gig.duration}
                         </div>
                       </div>
 
@@ -704,11 +704,11 @@ export default function DriverDashboardPage() {
                           Payout
                         </div>
                         <div className="text-lg font-black text-primary">
-                          {formatCurrency(job.payout)}
+                          {formatCurrency(gig.payout)}
                         </div>
-                        {job.bonus > 0 && (
+                        {gig.bonus > 0 && (
                           <div className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold">
-                            + {formatCurrency(job.bonus)} bonus
+                            + {formatCurrency(gig.bonus)} bonus
                           </div>
                         )}
                       </div>
@@ -731,7 +731,7 @@ export default function DriverDashboardPage() {
               <div className="p-5 sm:p-6 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {jobs.length} job{jobs.length !== 1 ? 's' : ''} available. Booking is first-come/first-served; if another driver books it first, you'll see "Already booked".
+                    {gigs.length} gig{gigs.length !== 1 ? 's' : ''} available. Booking is first-come/first-served; if another driver books it first, you'll see "Already booked".
                   </p>
                   <Link
                     to="/driver-preferences"

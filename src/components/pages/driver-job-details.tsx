@@ -92,7 +92,7 @@ const serviceTypeLabels: Record<string, string> = {
 // Bottom action buttons (unchanged)
 const bottomActions = [
   {
-    label: 'Book This Job',
+    label: 'Book This Gig',
     primary: true,
     action: 'book',
   },
@@ -110,23 +110,23 @@ export default function DriverJobDetailsPage() {
   const user = getUser()
   const { jobId } = useSearch({ strict: false }) as { jobId: string }
 
-  // Fetch real job details
+  // Fetch real gig details
   const { data, isLoading, isError, error } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${user?.profileId}/${jobId}`,
     noFilter: true,
     enabled: Boolean(jobId && user?.profileId)
   })
 
-  // Book job mutation
-  const bookJob = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
+  // Book gig mutation
+  const bookGig = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
     onSuccess: () => {
-      toast.success('Job booked successfully!', {
+      toast.success('Gig booked successfully!', {
         description: 'You have been assigned to this delivery.',
       })
       navigate({ to: `/driver-pickup-checklist`,search: { jobId }}) 
     },
     onError: (error) => {
-      toast.error('Failed to book job', {
+      toast.error('Failed to book gig', {
         description: error.message,
       })
     }
@@ -147,12 +147,12 @@ export default function DriverJobDetailsPage() {
     navigate({ to: '/driver-signin' })
   }
 
-  const handleBookJob = () => {
+  const handleBookGig = () => {
     if (!user?.profileId || !user?.id) {
       toast.error('User not authenticated')
       return
     }
-    bookJob.mutate({
+    bookGig.mutate({
       driverId: user.profileId,
       bookedByUserId: user.id,
       reason: '' // optional note, can be empty string
@@ -202,7 +202,7 @@ export default function DriverJobDetailsPage() {
         <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
             <CardContent className="p-8 text-center">
-              <p className="text-slate-600 dark:text-slate-400">Loading job details...</p>
+              <p className="text-slate-600 dark:text-slate-400">Loading gig details...</p>
             </CardContent>
           </Card>
         </main>
@@ -246,7 +246,7 @@ export default function DriverJobDetailsPage() {
         <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
           <Card className="border-red-200 dark:border-red-900 shadow-lg">
             <CardContent className="p-8 text-center">
-              <p className="text-red-600 dark:text-red-400">Failed to load job details. Please try again.</p>
+              <p className="text-red-600 dark:text-red-400">Failed to load gig details. Please try again.</p>
             </CardContent>
           </Card>
         </main>
@@ -255,21 +255,21 @@ export default function DriverJobDetailsPage() {
   }
 
   // Data is available – extract fields
-  const job = data
+  const gig = data
 
   // Compute display values
-  const route = `${getShortAddress(job.pickupAddress)} → ${getShortAddress(job.dropoffAddress)}`
-  const serviceLabel = serviceTypeLabels[job.serviceType] || job.serviceType
-  const typeLabel = job.originSource === 'homeBase' ? 'Near home base' : 'Matched job'
-  const urgent = job.isUrgent
-  const bonus = job.urgentBonusAmount
-  const payout = job.payoutPreviewAmount
+  const route = `${getShortAddress(gig.pickupAddress)} → ${getShortAddress(gig.dropoffAddress)}`
+  const serviceLabel = serviceTypeLabels[gig.serviceType] || gig.serviceType
+  const typeLabel = gig.originSource === 'homeBase' ? 'Near home base' : 'Matched gig'
+  const urgent = gig.isUrgent
+  const bonus = gig.urgentBonusAmount
+  const payout = gig.payoutPreviewAmount
   const basePay = payout && bonus ? payout - bonus : payout // estimate if needed, but we don't have basePay separate
-  const miles = job.pickupDistanceMiles // could also be trip distance, but pickupDistanceMiles is given
-  const windowDate = formatDate(job.pickupWindowStart)
-  const windowTime = formatTimeRange(job.pickupWindowStart, job.pickupWindowEnd)
+  const miles = gig.pickupDistanceMiles // could also be trip distance, but pickupDistanceMiles is given
+  const windowDate = formatDate(gig.pickupWindowStart)
+  const windowTime = formatTimeRange(gig.pickupWindowStart, gig.pickupWindowEnd)
   const window = `${windowDate} • ${windowTime}`
-  const driveTime = formatDuration(job.etaMinutes)
+  const driveTime = formatDuration(gig.etaMinutes)
 
   // Static requirements (could be dynamic later)
   const pickupRequirements = [
@@ -353,7 +353,7 @@ export default function DriverJobDetailsPage() {
                 <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                   Service: {serviceLabel} • {typeLabel}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">Status: {job.status}</p>
+                <p className="mt-1 text-xs text-slate-500">Status: {gig.status}</p>
               </div>
 
               <div className="text-left sm:text-right">
@@ -400,16 +400,16 @@ export default function DriverJobDetailsPage() {
             </div>
 
             {/* Additional fields: afterHours, matchScore */}
-            {(job.afterHours || job.matchScore != null) && (
+            {(gig.afterHours || gig.matchScore != null) && (
               <div className="mt-4 flex flex-wrap gap-2">
-                {job.afterHours && (
+                {gig.afterHours && (
                   <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 text-amber-700 dark:text-amber-300">
                     After Hours
                   </Badge>
                 )}
-                {job.matchScore != null && (
+                {gig.matchScore != null && (
                   <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-300">
-                    Match Score: {job.matchScore}
+                    Match Score: {gig.matchScore}
                   </Badge>
                 )}
               </div>
@@ -472,7 +472,7 @@ export default function DriverJobDetailsPage() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               {/* <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Delivery ID</p>
-                <p className="font-medium">{job.deliveryId}</p>
+                <p className="font-medium">{gig.deliveryId}</p>
               </div> */}
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Service Type</p>
@@ -480,16 +480,16 @@ export default function DriverJobDetailsPage() {
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
-                <p className="font-medium">{job.status}</p>
+                <p className="font-medium">{gig.status}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Match Score</p>
-                <p className="font-medium">{job.matchScore ?? '—'}</p>
+                <p className="font-medium">{gig.matchScore ?? '—'}</p>
               </div>
               <div className="col-span-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Match Reasons</p>
                 <div className="flex flex-wrap gap-1 mt-1">
-                  {job.matchReasons?.map((reason: string, i: number) => (
+                  {gig.matchReasons?.map((reason: string, i: number) => (
                     <Badge key={i} variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100">
                       {reason}
                     </Badge>
@@ -498,23 +498,23 @@ export default function DriverJobDetailsPage() {
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup Distance (mi)</p>
-                <p className="font-medium">{job.pickupDistanceMiles ?? '—'}</p>
+                <p className="font-medium">{gig.pickupDistanceMiles ?? '—'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup ETA (min)</p>
-                <p className="font-medium">{job.pickupEtaMinutes ?? '—'}</p>
+                <p className="font-medium">{gig.pickupEtaMinutes ?? '—'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Origin Source</p>
-                <p className="font-medium">{job.originSource}</p>
+                <p className="font-medium">{gig.originSource}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">After Hours</p>
-                <p className="font-medium">{job.afterHours ? 'Yes' : 'No'}</p>
+                <p className="font-medium">{gig.afterHours ? 'Yes' : 'No'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Created At</p>
-                <p className="font-medium">{new Date(job.createdAt).toLocaleString()}</p>
+                <p className="font-medium">{new Date(gig.createdAt).toLocaleString()}</p>
               </div>
             </div>
           </CardContent>

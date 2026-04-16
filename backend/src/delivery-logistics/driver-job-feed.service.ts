@@ -109,40 +109,27 @@ async getDriverJobFeed(input: {
     throw new NotFoundException("Driver not found");
   }
 
-  if (driver.status !== EnumDriverStatus.APPROVED) {
+  // Relaxed: allow PENDING drivers to browse gigs (they just can't book until approved)
+  if (driver.status === EnumDriverStatus.SUSPENDED) {
     return { items: [], nextCursor: null };
   }
 
-  if (driver.alerts?.enabled === false) {
-    return { items: [], nextCursor: null };
-  }
+  // Removed: alerts.enabled gate — was silently hiding all gigs for many drivers
 
-  const busyAssignment = await this.prisma.deliveryAssignment.findFirst({
-    where: {
-      driverId: input.driverId,
-      unassignedAt: null,
-      delivery: {
-        status: {
-          in: [
-            EnumDeliveryRequestStatus.BOOKED,
-            EnumDeliveryRequestStatus.ACTIVE,
-          ],
-        },
-      },
-    },
-    select: { id: true },
-  });
-
-  if (busyAssignment) {
-    return { items: [], nextCursor: null };
-  }
+  // Relaxed: allow drivers with an active assignment to still browse available gigs
+  // (the booking endpoint already handles preventing double-booking)
+  // const busyAssignment = ... — removed hard block
 
   const preferredCity = driver.preferences?.city?.trim().toLowerCase() ?? null;
   const preferredRadiusMiles = driver.preferences?.radiusMiles ?? null;
-  const effectiveRadiusMiles =
+  // When radiusMiles is null from the controller, it means "Any distance" was selected
+  // on the frontend — respect that and show all gigs. Only apply preference radius
+  // when a specific numeric radius was explicitly chosen.
+  const inputRadius =
     input.radiusMiles != null && Number.isFinite(Number(input.radiusMiles))
       ? Number(input.radiusMiles)
-      : preferredRadiusMiles;
+      : null;
+  const effectiveRadiusMiles = inputRadius ?? null; // "ANY" = no radius limit
 
   const normalizedSearch = input.search?.trim().toLowerCase() ?? null;
   const normalizedDatePreset = input.datePreset ?? "ALL";
