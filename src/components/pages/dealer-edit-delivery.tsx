@@ -1,4 +1,3 @@
-// @ts-nocheck
 // app/pages/dealer/edit-delivery.tsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate, useLocation, Link } from "@tanstack/react-router";
@@ -54,12 +53,19 @@ import {
   RefreshCw,
   X,
   Menu,
+  CalendarIcon,
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
+import { getAllMakes, getModelsForMake } from "@/data/vehicleDatabase";
+import { usePickupZones } from "@/hooks/usePickupZones";
 import { getUser, useDataQuery, usePatch, useCreate, authFetch } from "@/lib/tanstack/dataQuery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 // Form validation schema - same as create page
 const deliverySchema = z.object({
@@ -123,6 +129,7 @@ interface SchedulePreviewRequest {
   pickupWindowEnd?: string;
   dropoffWindowStart?: string;
   dropoffWindowEnd?: string;
+  preferredDate?: string;
 }
 
 interface SlotItem {
@@ -262,6 +269,7 @@ export default function EditDeliveryPage() {
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
   // Ref to prevent quote reset during data loading
   const isDataLoadingRef = useRef(false);
@@ -270,6 +278,8 @@ export default function EditDeliveryPage() {
   const prevDropoffCoordsRef = useRef<google.maps.LatLngLiteral | null>(null);
 
   const customer = getUser();
+
+  const { zones: pickupZones } = usePickupZones();
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
@@ -653,6 +663,7 @@ export default function EditDeliveryPage() {
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose: choice,
+      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
     };
 
     console.log('Discovery Mode Request:', request);
@@ -676,6 +687,7 @@ export default function EditDeliveryPage() {
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
+      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
     };
 
     if (customerChose === "PICKUP_WINDOW") {
@@ -689,6 +701,31 @@ export default function EditDeliveryPage() {
     console.log('Validation Mode Request:', request);
     setIsLoadingSlots(true);
     getSchedulePreview.mutate(request);
+  };
+
+  // Called when user picks a date from the calendar
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    setSelectedDate(date);
+
+    // Reset slot state
+    setSelectedSlot(null);
+    setValidatedWindows(null);
+    setSuggestedSlots({ pickup: [], dropoff: [] });
+
+    // Auto-discover slots for the currently chosen side
+    if (quoteId && customerChose) {
+      setIsLoadingSlots(true);
+      const request: SchedulePreviewRequest = {
+        quoteId,
+        serviceType,
+        customerType: customerDataQuery.data?.customerType || 'BUSINESS',
+        customerId: customer?.profileId,
+        customerChose,
+        preferredDate: format(date, "yyyy-MM-dd"),
+      };
+      getSchedulePreview.mutate(request);
+    }
   };
 
   const handleQuotePreview = () => {
@@ -1155,6 +1192,8 @@ export default function EditDeliveryPage() {
                           pickup={pickupCoords}
                           dropoff={dropoffCoords}
                           isLoaded={isLoaded}
+                          zones={pickupZones}
+                          fitZonesBounds={true}
                         />
                         <div className="absolute bottom-5 left-5 flex flex-wrap gap-2 z-10">
                           <Badge className="bg-white/95 dark:bg-slate-900/90 backdrop-blur shadow-lg">
@@ -1242,7 +1281,10 @@ export default function EditDeliveryPage() {
               )}
 
               {/* Step 3: Scheduling */}
-              <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
+              <Card className={cn(
+                "border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow",
+                !quoteId && "opacity-60 pointer-events-none"
+              )}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
@@ -1253,7 +1295,7 @@ export default function EditDeliveryPage() {
                         Schedule window
                       </CardTitle>
                       <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                        Choose which time you want to set. The other will be calculated automatically.
+                        Pickup or arrival
                       </p>
                     </div>
                     <div className="hidden sm:flex flex-col gap-2">
@@ -1263,17 +1305,70 @@ export default function EditDeliveryPage() {
                       </Badge>
                       {schedulePreviewData?.sameDayEligible && (
                         <Badge className="bg-lime-500 text-slate-900 animate-pulse">
-                          ✨ Same-day eligible!
+                          Same-day eligible!
                         </Badge>
                       )}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Step 1: Choose which side to set */}
+                  {/* Gate: show message when quote is not yet calculated */}
+                  {!quoteId && (
+                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-center py-8">
+                      <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                        <Clock className="w-5 h-5 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                        Calculate a quote first
+                      </p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+                        Enter pickup and destination addresses above and calculate a quote to unlock scheduling.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Date picker + controls only available after quote */}
+                  {quoteId && (<>
+
+                  {/* Date picker - Choose a date */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase tracking-widest">
+                      Choose a date
+                    </Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full h-14 justify-start text-left font-medium rounded-2xl border-slate-200 dark:border-slate-700",
+                            !selectedDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
+                          {selectedDate ? format(selectedDate, "EEE MMM d, yyyy") : "Choose a date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={handleDateSelect}
+                          disabled={(date) => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const maxDate = new Date(today);
+                            maxDate.setDate(maxDate.getDate() + 7);
+                            return date < today || date > maxDate;
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Choose which side to set */}
                   <div className="space-y-3">
                     <Label className="text-xs font-black uppercase tracking-widest">
-                      Which time do you want to set?
+                      Pickup or arrival
                     </Label>
                     <RadioGroup
                       value={customerChose || ""}
@@ -1287,7 +1382,7 @@ export default function EditDeliveryPage() {
                             <MapPin className="h-4 w-4 text-lime-500" />
                             I want to set pickup time
                           </span>
-                          <span className="text-xs text-slate-500 font-normal">Dropoff will be calculated</span>
+                          <span className="text-xs text-slate-500 font-normal">Arrival will be calculated</span>
                         </Label>
                       </div>
                       <div className="flex items-center space-x-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-lime-500 transition-colors cursor-pointer">
@@ -1295,13 +1390,14 @@ export default function EditDeliveryPage() {
                         <Label htmlFor="dropoff-choice" className="cursor-pointer font-medium">
                           <span className="flex items-center gap-2">
                             <Flag className="h-4 w-4 text-lime-500" />
-                            I want to set dropoff time
+                            I want to set arrival time
                           </span>
                           <span className="text-xs text-slate-500 font-normal">Pickup will be calculated</span>
                         </Label>
                       </div>
                     </RadioGroup>
                   </div>
+                  </>)}
 
                   {/* Loading state for discovery mode */}
                   {isLoadingSlots && !selectedSlot && (
@@ -1315,7 +1411,7 @@ export default function EditDeliveryPage() {
                   {customerChose && !isLoadingSlots && (
                     <div className="space-y-3">
                       <Label className="text-xs font-black uppercase tracking-widest">
-                        {customerChose === "PICKUP_WINDOW" ? "Select pickup window" : "Select dropoff window"}
+                        {customerChose === "PICKUP_WINDOW" ? "Pickup time" : "Arrival time"}
                       </Label>
                       
                       {suggestedSlots[customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff"].length > 0 ? (
@@ -1338,12 +1434,7 @@ export default function EditDeliveryPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                      ) : (
-                        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
-                          <AlertCircle className="h-4 w-4 inline mr-2" />
-                          No available slots found. Please try a different option.
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   )}
 
@@ -1380,7 +1471,7 @@ export default function EditDeliveryPage() {
                           )}
                         </div>
                         <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                          <div className="text-xs font-bold text-slate-500 uppercase mb-1">Dropoff Window</div>
+                          <div className="text-xs font-bold text-slate-500 uppercase mb-1">Arrival Window</div>
                           <div className="text-sm font-medium">
                             {customerChose === "DROPOFF_WINDOW" ? (
                               <span className="text-lime-600 dark:text-lime-400">🎯 {selectedSlot?.label}</span>
@@ -1432,27 +1523,6 @@ export default function EditDeliveryPage() {
                       {schedulePreviewData.message || "This schedule is not feasible. Please try a different time."}
                     </div>
                   )}
-
-                  {/* Hint when no quote calculated */}
-                  {!quoteId && (
-                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
-                      <Info className="h-3 w-3 inline mr-1" />
-                      Calculate a quote first to set the schedule.
-                    </div>
-                  )}
-
-                  {/* Info box explaining the flow */}
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-start gap-3">
-                      <Info className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                      <div>
-                        <div className="text-sm font-extrabold text-slate-700 dark:text-slate-300">How it works</div>
-                        <div className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
-                          Choose whether you want to set the pickup or dropoff time. Select an available slot, and we'll automatically calculate the other window based on transit time and verify feasibility.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
 
@@ -1517,19 +1587,23 @@ export default function EditDeliveryPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="make" className="text-xs font-bold">Make</Label>
-                        <Select value={make} onValueChange={(value) => setValue("make", value)}>
+                        <Select
+                          value={make}
+                          onValueChange={(value) => {
+                            setValue("make", value);
+                            if (value !== model) setValue("model", "");
+                          }}
+                        >
                           <SelectTrigger className="h-14 rounded-2xl">
-                            <SelectValue placeholder="Select..." />
+                            <SelectValue placeholder="Select make..." />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Toyota">Toyota</SelectItem>
-                            <SelectItem value="Honda">Honda</SelectItem>
-                            <SelectItem value="Ford">Ford</SelectItem>
-                            <SelectItem value="Chevrolet">Chevrolet</SelectItem>
-                            <SelectItem value="Tesla">Tesla</SelectItem>
-                            <SelectItem value="BMW">BMW</SelectItem>
-                            <SelectItem value="Mercedes-Benz">Mercedes-Benz</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
+                            {getAllMakes().map((makeName) => (
+                              <SelectItem key={makeName} value={makeName}>
+                                {makeName}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="Other">Other (not listed)</SelectItem>
                           </SelectContent>
                         </Select>
                         {make === "Other" && (
@@ -1539,23 +1613,43 @@ export default function EditDeliveryPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor="model" className="text-xs font-bold">Model</Label>
-                        <Select value={model} onValueChange={(value) => setValue("model", value)}>
-                          <SelectTrigger className="h-14 rounded-2xl">
-                            <SelectValue placeholder="Select..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Camry">Camry</SelectItem>
-                            <SelectItem value="Corolla">Corolla</SelectItem>
-                            <SelectItem value="RAV4">RAV4</SelectItem>
-                            <SelectItem value="Civic">Civic</SelectItem>
-                            <SelectItem value="Accord">Accord</SelectItem>
-                            <SelectItem value="Model 3">Model 3</SelectItem>
-                            <SelectItem value="Model Y">Model Y</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {model === "Other" && (
-                          <Input {...register("modelOther")} className="h-14 rounded-2xl mt-2" placeholder="Enter model" />
+                        {make && make !== "Other" ? (
+                          <Select
+                            value={model}
+                            onValueChange={(value) => setValue("model", value)}
+                          >
+                            <SelectTrigger className="h-14 rounded-2xl">
+                              <SelectValue placeholder="Select model..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getModelsForMake(make).map((modelName) => (
+                                <SelectItem key={modelName} value={modelName}>
+                                  {modelName}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="Other">Other (not listed)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : make === "Other" ? (
+                          <Input
+                            {...register("modelOther")}
+                            className="h-14 rounded-2xl"
+                            placeholder="Enter model"
+                          />
+                        ) : (
+                          <Select disabled>
+                            <SelectTrigger className="h-14 rounded-2xl">
+                              <SelectValue placeholder="Select a make first..." />
+                            </SelectTrigger>
+                            <SelectContent />
+                          </Select>
+                        )}
+                        {model === "Other" && make !== "Other" && (
+                          <Input
+                            {...register("modelOther")}
+                            className="h-14 rounded-2xl mt-2"
+                            placeholder="Enter model"
+                          />
                         )}
                       </div>
                     </div>
