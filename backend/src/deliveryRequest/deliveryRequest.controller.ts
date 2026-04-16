@@ -470,6 +470,22 @@ async createQuotePreview(
     });
   }
 
+@common.Get("driver/active-delivery/:driverId")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "DeliveryRequest",
+  action: "read",
+  possession: "any",
+})
+@swagger.ApiForbiddenResponse({
+  type: errors.ForbiddenException,
+})
+async getDriverActiveDelivery(
+  @common.Param("driverId") driverId: string
+): Promise<any> {
+  return this.service.getDriverActiveDelivery(driverId);
+}
+
 @common.Get("driver/feed/:driverId")
 @swagger.ApiOkResponse({ type: Object })
 @nestAccessControl.UseRoles({

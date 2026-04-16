@@ -195,9 +195,11 @@ export default function DriverActiveDeliveryPage() {
   const userId = user?.id
 
     // Main query: fetch active delivery for this driver
+  // Uses dedicated endpoint — returns { assignment + delivery } or null
   const activeDeliveryQuery = useDataQuery<any>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests?where[status]=ACTIVE&where[assignments][some][driverId]=${driverId}`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${driverId}`,
     noFilter: true,
+    refetchInterval: 10000, // refresh every 10s
     onSuccess: (data) => {
       // Optionally sync workflow status if needed, but we'll keep separate
       // setWorkflowStatus(data); // if you want to set something else
@@ -207,8 +209,8 @@ export default function DriverActiveDeliveryPage() {
     },
   })
 
-  // Extract the actual delivery object (first item in the array)
-  const delivery = activeDeliveryQuery.data?.[0]
+  // Extract delivery from the assignment wrapper
+  const delivery = activeDeliveryQuery.data?.delivery || null
   const deliveryLoading = activeDeliveryQuery.isLoading
   const deliveryError = activeDeliveryQuery.error
   const hasNoData = !deliveryLoading && !deliveryError && !delivery

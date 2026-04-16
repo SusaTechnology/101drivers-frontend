@@ -478,6 +478,79 @@ async getDriverJobFeed(input: {
     );
   }
 
+  async getActiveDeliveryForDriver(driverId: string) {
+    const assignment = await this.prisma.deliveryAssignment.findFirst({
+      where: {
+        driverId,
+        unassignedAt: null,
+        delivery: {
+          status: {
+            in: [
+              EnumDeliveryRequestStatus.BOOKED,
+              EnumDeliveryRequestStatus.ACTIVE,
+            ],
+          },
+        },
+      },
+      select: {
+        id: true,
+        deliveryId: true,
+        assignedByUserId: true,
+        createdAt: true,
+        delivery: {
+          select: {
+            id: true,
+            status: true,
+            serviceType: true,
+            pickupAddress: true,
+            dropoffAddress: true,
+            pickupLat: true,
+            pickupLng: true,
+            dropoffLat: true,
+            dropoffLng: true,
+            pickupWindowStart: true,
+            pickupWindowEnd: true,
+            dropoffWindowStart: true,
+            dropoffWindowEnd: true,
+            etaMinutes: true,
+            isUrgent: true,
+            afterHours: true,
+            urgentBonusAmount: true,
+            licensePlate: true,
+            vehicleColor: true,
+            vehicleMake: true,
+            vehicleModel: true,
+            vinVerificationCode: true,
+            customer: {
+              select: {
+                id: true,
+                contactName: true,
+                contactPhone: true,
+                contactEmail: true,
+              },
+            },
+            recipientName: true,
+            recipientPhone: true,
+            recipientEmail: true,
+            compliance: {
+              select: {
+                id: true,
+                pickupOdometerStart: true,
+                pickupOdometerEnd: true,
+                pickupCompletedAt: true,
+                dropoffCompletedAt: true,
+              },
+            },
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return assignment ?? null;
+  }
+
   async assertDriverCanBookDelivery(
   db: DbClient,
   input: {

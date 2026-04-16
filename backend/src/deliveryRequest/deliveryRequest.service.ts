@@ -255,6 +255,10 @@ async getDriverJobDetail(input: {
   });
 }
 
+async getDriverActiveDelivery(driverId: string): Promise<any> {
+  return this.driverJobFeedService.getActiveDeliveryForDriver(driverId);
+}
+
   async bookDelivery(input: {
     deliveryId: string;
     driverId: string;
