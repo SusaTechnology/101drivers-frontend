@@ -537,11 +537,11 @@ export default function DriverJobDetailsPage() {
         <div className="max-w-[980px] mx-auto px-5 sm:px-6 py-4">
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
-              onClick={handleBookJob}
+              onClick={handleBookGig}
               disabled={bookJob.isPending}
               className="flex-1 px-6 py-4 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {bookJob.isPending ? 'Booking...' : 'Book This Job'}
+              {bookJob.isPending ? 'Booking...' : 'Book This Gig'}
             </Button>
 
             <Button
