@@ -97,7 +97,7 @@ const bottomActions = [
     action: 'book',
   },
   {
-    label: 'Message Ops',
+    label: 'Report Issue',
     primary: false,
     action: 'message',
   },
@@ -160,10 +160,10 @@ export default function DriverJobDetailsPage() {
   }
 
   const handleMessageOps = () => {
-    toast.info('Opening message to Ops', {
-      description: 'You can now send a message to operations.',
+    navigate({
+      to: '/driver-issue-report',
+      state: { deliveryId: jobId },
     })
-    // Navigate to messaging or open modal
   }
 
   // Loading state
@@ -549,7 +549,7 @@ export default function DriverJobDetailsPage() {
               variant="outline"
               className="flex-1 px-6 py-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-extrabold hover:bg-primary/5 transition"
             >
-              Message Ops
+              Report Issue
             </Button>
           </div>
         </div>
