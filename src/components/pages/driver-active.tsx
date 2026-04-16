@@ -199,6 +199,7 @@ export default function DriverActiveDeliveryPage() {
   const activeDeliveryQuery = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${driverId}`,
     noFilter: true,
+    enabled: Boolean(driverId),
     refetchInterval: 10000, // refresh every 10s
     onSuccess: (data) => {
       // Optionally sync workflow status if needed, but we'll keep separate
@@ -809,7 +810,7 @@ export default function DriverActiveDeliveryPage() {
                       </Badge>
                       <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
                         <Bolt className="w-4 h-4 text-primary mr-1" />
-                        Bonus {deliveryData?.bonus || '$0'}
+                        Bonus ${deliveryData?.urgentBonusAmount ? `$${deliveryData.urgentBonusAmount}` : '$0'}
                       </Badge>
                     </div>
                   </div>

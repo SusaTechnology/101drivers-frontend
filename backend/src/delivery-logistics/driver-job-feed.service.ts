@@ -541,7 +541,35 @@ async getDriverJobFeed(input: {
                 dropoffCompletedAt: true,
               },
             },
+            quote: {
+              select: {
+                id: true,
+                distanceMiles: true,
+                estimatedPrice: true,
+                pricingMode: true,
+                mileageCategory: true,
+              },
+            },
+            trackingSession: {
+              select: {
+                id: true,
+                startedAt: true,
+                stoppedAt: true,
+                status: true,
+                drivenMiles: true,
+              },
+            },
+            evidence: {
+              select: {
+                id: true,
+                slotIndex: true,
+                imageUrl: true,
+                phase: true,
+                type: true,
+              },
+            },
             createdAt: true,
+            updatedAt: true,
           },
         },
       },
