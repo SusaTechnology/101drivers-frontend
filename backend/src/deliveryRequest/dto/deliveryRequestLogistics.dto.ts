@@ -13,6 +13,7 @@ import {
 import { Type } from "class-transformer";
 import {
   IsBoolean,
+  IsDateString,
   IsEmail,
   IsEnum,
   IsNotEmpty,
@@ -663,6 +664,18 @@ export class SchedulePreviewBody {
   @IsOptional()
   @IsBoolean()
   afterHoursRequested?: boolean;
+
+  @swagger.ApiProperty({
+    type: String,
+    format: "date",
+    required: false,
+    nullable: true,
+    description:
+      "User-selected date (YYYY-MM-DD). When provided, slots are generated for this date instead of today/tomorrow.",
+  })
+  @IsOptional()
+  @IsDateString()
+  preferredDate?: string | null;
 }
 
 

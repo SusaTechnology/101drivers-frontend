@@ -32,6 +32,7 @@ type SchedulePreviewInput = {
   dropoffWindowStart?: Date | null;
   dropoffWindowEnd?: Date | null;
   afterHoursRequested?: boolean;
+  preferredDate?: string | null;
 };
 
 type TimeRange = {
@@ -56,6 +57,7 @@ type DeliverySchedulePreviewInput = {
   dropoffWindowStart?: Date | null;
   dropoffWindowEnd?: Date | null;
   afterHoursRequested?: boolean;
+  preferredDate?: string | null;
 };
 
 type QuotePreviewRow = {
@@ -184,6 +186,7 @@ export class SchedulingPolicyEngine {
       dropoffWindowStart: input.dropoffWindowStart ?? null,
       dropoffWindowEnd: input.dropoffWindowEnd ?? null,
       afterHoursRequested: input.afterHoursRequested ?? false,
+      preferredDate: input.preferredDate ?? null,
     });
     return this.mapPreviewToResponse(preview, routeMetrics.durationMinutes);
   }
@@ -258,11 +261,21 @@ export class SchedulingPolicyEngine {
       reasons.push("AFTER_HOURS_REQUIRES_OPS_CONFIRMATION");
     }
 
-    const baseDate = this.getBaseScheduleDate(
-      requestCreatedAt.toJSDate(),
-      policy.defaultMode,
-      sameDayEligible
-    );
+    // When the user selects a specific date via the calendar, use that as the
+    // base date for slot generation.  Otherwise fall back to the default
+    // today/tomorrow logic based on policy and same-day eligibility.
+    let baseDate: Date;
+    if (input.preferredDate) {
+      baseDate = this.toBusinessDateTime(new Date(input.preferredDate))
+        .startOf("day")
+        .toJSDate();
+    } else {
+      baseDate = this.getBaseScheduleDate(
+        requestCreatedAt.toJSDate(),
+        policy.defaultMode,
+        sameDayEligible
+      );
+    }
 
     // Try up to 7 days forward to find a day with operating hours + available slots
     const suggestedPickupSlots = this.buildSuggestedSlotsMultiDay(
@@ -284,7 +297,11 @@ export class SchedulingPolicyEngine {
       sameDayEligible &&
       actualSlotDate &&
       this.toBusinessDateTime(actualSlotDate).hasSame(
-        this.toBusinessDateTime(requestCreatedAt.toJSDate()),
+        this.toBusinessDateTime(
+          input.preferredDate
+            ? new Date(input.preferredDate)
+            : requestCreatedAt.toJSDate()
+        ),
         "day"
       )
         ? "SAME_DAY"

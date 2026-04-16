@@ -734,6 +734,7 @@ async schedulePreview(
     dropoffWindowStart: input.dropoffWindowStart ?? null,
     dropoffWindowEnd: input.dropoffWindowEnd ?? null,
     afterHoursRequested: input.afterHoursRequested ?? false,
+    preferredDate: input.preferredDate ?? null,
   });
 
 }

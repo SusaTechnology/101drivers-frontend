@@ -134,6 +134,7 @@ interface SchedulePreviewRequest {
   pickupWindowEnd?: string;
   dropoffWindowStart?: string;
   dropoffWindowEnd?: string;
+  preferredDate?: string;
 }
 
 interface SlotItem {
@@ -1422,6 +1423,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
                 customerType: customerDataQuery.data?.customerType || 'BUSINESS',
                 customerId: customer?.profileId,
                 customerChose,
+                ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
               };
               if (customerChose === "PICKUP_WINDOW") {
                 validationRequest.pickupWindowStart = firstSlot.start;
@@ -1493,6 +1495,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose: choice,
+      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
     };
 
     console.log('Discovery Mode Request:', request);
@@ -1517,6 +1520,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
+      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
     };
 
     if (customerChose === "PICKUP_WINDOW") {
@@ -1551,6 +1555,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         customerType: customerDataQuery.data?.customerType || 'BUSINESS',
         customerId: customer?.profileId,
         customerChose,
+        preferredDate: format(date, "yyyy-MM-dd"),
       };
       getSchedulePreview.mutate(request);
     }
@@ -2326,7 +2331,13 @@ const handleQuotePreview = () => {
                         mode="single"
                         selected={selectedDate}
                         onSelect={handleDateSelect}
-                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                        disabled={(date) => {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const maxDate = new Date(today);
+                          maxDate.setDate(maxDate.getDate() + 7);
+                          return date < today || date > maxDate;
+                        }}
                       />
                     </PopoverContent>
                   </Popover>
