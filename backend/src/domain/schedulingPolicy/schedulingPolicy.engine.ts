@@ -623,8 +623,7 @@ export class SchedulingPolicyEngine {
       dayOfWeek: number;
       startTime: string;
       endTime: string;
-    }>
-  >,
+    }>,
     maxDays: number = 7
   ): SlotCandidate[] {
     for (let d = 0; d < maxDays; d++) {
@@ -652,8 +651,7 @@ export class SchedulingPolicyEngine {
       dayOfWeek: number;
       startTime: string;
       endTime: string;
-    }>
-  >,
+    }>,
     maxDays: number = 7
   ): Date | null {
     for (let d = 0; d < maxDays; d++) {
