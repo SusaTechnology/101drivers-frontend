@@ -302,7 +302,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [originalDeliveryStatus, setOriginalDeliveryStatus] = useState<string | null>(null);
   
   // Schedule section - new one-side-at-a-time flow
-  const [customerChose, setCustomerChose] = useState<"PICKUP_WINDOW" | "DROPOFF_WINDOW" | null>("PICKUP_WINDOW");
+  // Default to null — user must calculate a quote before choosing pickup/arrival
+  const [customerChose, setCustomerChose] = useState<"PICKUP_WINDOW" | "DROPOFF_WINDOW" | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedSlot, setSelectedSlot] = useState<SlotItem | null>(null);
   const [suggestedSlots, setSuggestedSlots] = useState<{ pickup: SlotItem[]; dropoff: SlotItem[] }>({ pickup: [], dropoff: [] });
@@ -1328,6 +1329,21 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       toast.success("Quote calculated", {
         description: `Estimated price: ${formatCurrency(data.estimatedPrice || 0)} for ${data.distanceMiles || 0} miles`,
       });
+
+      // Auto-trigger schedule discovery with default PICKUP_WINDOW
+      const chosenSide = customerChose || "PICKUP_WINDOW";
+      setCustomerChose(chosenSide);
+      setIsLoadingSlots(true);
+      const scheduleRequest: SchedulePreviewRequest = {
+        quoteId: data.id,
+        serviceType,
+        customerType: customerDataQuery.data?.customerType || 'BUSINESS',
+        customerId: customer?.profileId,
+        customerChose: chosenSide,
+        ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
+      };
+      console.log('Auto schedule preview after quote:', scheduleRequest);
+      getSchedulePreview.mutate(scheduleRequest);
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to calculate quote";
@@ -2185,7 +2201,10 @@ const handleQuotePreview = () => {
             </Card>
 
             {/* Step 2: Scheduling */}
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
+            <Card className={cn(
+              "border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow",
+              !quoteId && "opacity-60 pointer-events-none"
+            )}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
@@ -2206,13 +2225,30 @@ const handleQuotePreview = () => {
                     </Badge>
                     {schedulePreviewData?.sameDayEligible && (
                       <Badge className="bg-lime-500 text-slate-900 animate-pulse">
-                        ✨ Same-day eligible!
+                        Same-day eligible!
                       </Badge>
                     )}
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Gate: show message when quote is not yet calculated */}
+                {!quoteId && (
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-center py-8">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                      <Clock className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                      Calculate a quote first
+                    </p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+                      Enter pickup and destination addresses above and calculate a quote to unlock scheduling.
+                    </p>
+                  </div>
+                )}
+
+                {/* Date picker + controls only available after quote */}
+                {quoteId && (<>
                 {/* Date picker - Choose a date */}
                 <div className="space-y-2">
                   <Label className="text-xs font-black uppercase tracking-widest">
@@ -2280,6 +2316,7 @@ const handleQuotePreview = () => {
                     </div>
                   </RadioGroup>
                 </div>
+                </>)}
 
                 {/* Loading state for discovery mode */}
                 {isLoadingSlots && !selectedSlot && (
@@ -2399,15 +2436,6 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-
-
-                {/* Hint when no quote calculated */}
-                {!quoteId && (
-                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
-                    <Info className="h-3 w-3 inline mr-1" />
-                    Please calculate a quote first to see available schedules.
-                  </div>
-                )}
 
               </CardContent>
             </Card>
