@@ -106,6 +106,21 @@ export class NotificationEventEngine {
           throw new Error("toEmail is required for EMAIL notifications");
         }
 
+        if (!this.mailService.isConfigured) {
+          this.logger.warn(
+            `Email delivery skipped (SMTP not configured): event=${event.id}, to=${event.toEmail}`
+          );
+          await this.prisma.notificationEvent.update({
+            where: { id: event.id },
+            data: {
+              status: EnumNotificationEventStatus.FAILED,
+              failedAt: new Date(),
+              errorMessage: "SMTP not configured",
+            },
+          });
+          return;
+        }
+
         await this.mailService.sendMail({
           to: event.toEmail,
           subject: event.subject ?? "101 Drivers Notification",

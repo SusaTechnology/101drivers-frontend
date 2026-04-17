@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, Logger } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
 
@@ -11,9 +11,10 @@ export type VerificationAudience =
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private readonly transporter: nodemailer.Transporter;
+  private readonly transporter: nodemailer.Transporter | null;
   private readonly from: string;
   private readonly appDomain: string;
+  private readonly smtpConfigured: boolean;
 
   constructor(private readonly configService: ConfigService) {
     const host = this.configService.get<string>("SMTP_HOST");
@@ -34,9 +35,16 @@ export class MailService {
       );
 
     if (!host || !user || !pass) {
-      throw new InternalServerErrorException("SMTP configuration is incomplete");
+      this.smtpConfigured = false;
+      this.transporter = null;
+      this.logger.warn(
+        "SMTP configuration is incomplete (missing SMTP_HOST, SMTP_USER, or SMTP_PASS). " +
+        "Email sending will be disabled. Notifications will be logged but not delivered."
+      );
+      return;
     }
 
+    this.smtpConfigured = true;
     this.transporter = nodemailer.createTransport({
       host,
       port,
@@ -46,6 +54,12 @@ export class MailService {
         pass,
       },
     });
+
+    this.logger.log("SMTP transporter configured successfully");
+  }
+
+  get isConfigured(): boolean {
+    return this.smtpConfigured;
   }
 
   async sendMail(params: {
@@ -54,6 +68,13 @@ export class MailService {
     text?: string | null;
     html?: string | null;
   }): Promise<void> {
+    if (!this.smtpConfigured || !this.transporter) {
+      this.logger.warn(
+        `Email not sent (SMTP not configured). to=${params.to}, subject="${params.subject}"`
+      );
+      return;
+    }
+
     try {
       const info = await this.transporter.sendMail({
         from: this.from,
@@ -68,7 +89,7 @@ export class MailService {
       this.logger.error(
         `Failed to send email to ${params.to}: ${error?.message ?? error}`
       );
-      throw new InternalServerErrorException("Failed to send email");
+      throw new Error(`Failed to send email: ${error?.message ?? "unknown error"}`);
     }
   }
 

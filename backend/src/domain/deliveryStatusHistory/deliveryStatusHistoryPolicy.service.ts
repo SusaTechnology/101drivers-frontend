@@ -258,7 +258,7 @@ export class DeliveryStatusHistoryPolicyService {
       ACTIVE: ["COMPLETED", "CANCELLED", "DISPUTED", "ACTIVE"],
       COMPLETED: ["DISPUTED", "COMPLETED"],
       CANCELLED: ["CANCELLED"],
-      EXPIRED: ["EXPIRED"],
+      EXPIRED: ["QUOTED"],
       DISPUTED: ["ACTIVE", "COMPLETED", "CANCELLED", "DISPUTED"],
     };
 
