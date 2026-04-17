@@ -56,6 +56,7 @@ import {
   Award,
   ChevronRight,
   DollarSign,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, authFetch } from '@/lib/tanstack/dataQuery'
@@ -1541,15 +1542,25 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                     <p className="text-sm font-medium">
                       {deliveryData.status === 'LISTED' ? 'Waiting for driver to book' :
                        deliveryData.status === 'DRAFT' ? 'Draft - not yet submitted' :
-                       ['EXPIRED', 'CANCELLED'].includes(deliveryData.status) ? 'Delivery not active' :
+                       deliveryData.status === 'EXPIRED' ? 'Delivery expired' :
+                       deliveryData.status === 'CANCELLED' ? 'Delivery cancelled' :
                        'Driver not yet assigned'}
                     </p>
                     <p className="text-xs mt-1">
                       {deliveryData.status === 'LISTED' ? 'Driver details will appear once a driver accepts this delivery.' :
                        deliveryData.status === 'DRAFT' ? 'Submit this delivery to make it available for drivers.' :
-                       ['EXPIRED', 'CANCELLED'].includes(deliveryData.status) ? 'This delivery is no longer active.' :
+                       deliveryData.status === 'EXPIRED' ? 'This delivery expired but you can reactivate it by adjusting the schedule.' :
+                       deliveryData.status === 'CANCELLED' ? 'This delivery was cancelled.' :
                        'Driver details appear after the delivery is booked.'}
                     </p>
+                    {deliveryData.status === 'EXPIRED' && (
+                      <Button
+                        onClick={() => navigate({ to: '/dealer-edit-delivery', state: { id: deliveryData.id } })}
+                        className="mt-4 bg-amber-500 text-white hover:bg-amber-600 font-bold"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />Reactivate
+                      </Button>
+                    )}
                   </div>
                 )}
 

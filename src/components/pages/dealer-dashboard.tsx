@@ -252,15 +252,16 @@ export default function DealerDashboard() {
     active: deliveries.filter(d => d.status === 'ACTIVE').length,
     listed: deliveries.filter(d => ['LISTED', 'QUOTED'].includes(d.status)).length,
     booked: deliveries.filter(d => d.status === 'BOOKED').length,
+    expired: deliveries.filter(d => d.status === 'EXPIRED').length,
     todayRevenue: deliveries.filter(d => ['ACTIVE', 'COMPLETED'].includes(d.status)).reduce((sum, d) => sum + (d.price || 0), 0),
   }), [deliveries])
 
   const filteredDeliveries = useMemo(() => {
     let result = deliveries
     if (activeFilter === 'ACTIVE') result = result.filter(d => d.status === 'ACTIVE')
-    else if (activeFilter === 'LISTED') result = result.filter(d => d.status === 'LISTED' || d.status === 'QUOTED')
+    else if (activeFilter === 'LISTED') result = result.filter(d => d.status === 'LISTED' || d.status === 'QUOTED' || d.status === 'EXPIRED')
     else if (activeFilter === 'BOOKED') result = result.filter(d => d.status === 'BOOKED')
-    else if (activeFilter === 'HISTORY') result = result.filter(d => ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(d.status))
+    else if (activeFilter === 'HISTORY') result = result.filter(d => ['COMPLETED', 'CANCELLED'].includes(d.status))
     if (!showAll && dealerId) result = result.filter(d => d.createdById === dealerId)
     if (dateFrom) result = result.filter(d => new Date(d.pickupWindowStart || d.createdAt) >= dateFrom)
     if (dateTo) result = result.filter(d => new Date(d.pickupWindowStart || d.createdAt) <= dateTo)
@@ -484,7 +485,7 @@ export default function DealerDashboard() {
       <div className="px-4 py-3">
         <div className="max-w-[980px] mx-auto">
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {[{ id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: stats.active }, { id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: stats.listed }, { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: stats.booked }, { id: 'HISTORY', label: 'History', icon: <History className="h-4 w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CANCELLED', 'EXPIRED'].includes(d.status)).length }].map((tab) => (
+            {[{ id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: stats.active }, { id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: stats.listed + (stats.expired ?? 0) }, { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: stats.booked }, { id: 'HISTORY', label: 'History', icon: <History className="h-4 w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CANCELLED'].includes(d.status)).length }].map((tab) => (
               <Button key={tab.id} variant={activeFilter === tab.id ? "default" : "outline"} className={cn("flex items-center gap-2 px-4 py-2 rounded-full h-auto shrink-0", activeFilter === tab.id ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "bg-white dark:bg-slate-900")} onClick={() => setActiveFilter(tab.id)}>
                 {tab.icon}<span className="font-bold">{tab.label}</span>{tab.count > 0 && <Badge variant="secondary" className="ml-1 px-2 py-0.5 text-xs rounded-full">{tab.count}</Badge>}
               </Button>
@@ -552,8 +553,8 @@ export default function DealerDashboard() {
                         <Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"><Navigation className="h-5 w-5" />Track Live<ChevronRight className="h-5 w-5" /></Link>
                       ) : delivery.status === 'BOOKED' ? (
                         <><Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition"><Eye className="h-5 w-5" />View</Link>{delivery.driver && <a href={`tel:${delivery.driver.phone}`} className="w-12 h-12 rounded-2xl bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center text-lime-600 hover:bg-lime-200 transition"><Phone className="h-5 w-5" /></a>}</>
-                      ) : delivery.status === 'LISTED' || delivery.status === 'QUOTED' ? (
-                        <Link to="/dealer-edit-delivery" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition"><Edit3 className="h-5 w-5" />Edit</Link>
+                      ) : delivery.status === 'LISTED' || delivery.status === 'QUOTED' || delivery.status === 'EXPIRED' ? (
+                        <Link to="/dealer-edit-delivery" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition"><Edit3 className="h-5 w-5" />{delivery.status === 'EXPIRED' ? 'Reactivate' : 'Edit'}</Link>
                       ) : (
                         <Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition"><Eye className="h-5 w-5" />View Details</Link>
                       )}

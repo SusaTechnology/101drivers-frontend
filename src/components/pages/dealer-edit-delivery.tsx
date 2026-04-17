@@ -406,8 +406,9 @@ export default function EditDeliveryPage() {
   });
 
   // Determine if editing is allowed based on status
-  const canEdit = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED';
-  const canEditSchedule = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED' || deliveryData?.status === 'BOOKED';
+  const canEdit = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED' || deliveryData?.status === 'EXPIRED';
+  const canEditSchedule = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED' || deliveryData?.status === 'BOOKED' || deliveryData?.status === 'EXPIRED';
+  const isExpired = deliveryData?.status === 'EXPIRED';
 
   // Update mutation
   const updateDelivery = usePatch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}`, {
@@ -1095,7 +1096,36 @@ export default function EditDeliveryPage() {
     }
 
     const payload = buildPayload(data);
-    updateDelivery.mutate(payload);
+    updateDelivery.mutate(payload, {
+      onSuccess: async () => {
+        // If the delivery was expired, auto-revive it to QUOTED so the dealer can re-list
+        if (isExpired) {
+          try {
+            const apiUrl = import.meta.env.VITE_API_URL;
+            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+            const response = await fetch(`${apiUrl}/api/deliveryRequests/${deliveryId}/transition-status`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({
+                toStatus: 'QUOTED',
+                note: 'Delivery revived by dealer after adjusting schedule',
+              }),
+            });
+            if (!response.ok) {
+              console.error('Failed to revive expired delivery:', await response.text());
+              toast.error('Revive failed', {
+                description: 'Delivery updated but could not be reactivated. Please contact support.',
+              });
+            }
+          } catch (error) {
+            console.error('Failed to revive expired delivery:', error);
+          }
+        }
+      },
+    });
   };
 
   // Header component
@@ -1270,12 +1300,14 @@ export default function EditDeliveryPage() {
               </div>
               <div>
                 <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
-                  Edit Delivery #{deliveryId?.slice(-6).toUpperCase()}
+                  {isExpired ? 'Reactivate Delivery' : 'Edit Delivery'} #{deliveryId?.slice(-6).toUpperCase()}
                 </h1>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-2xl">
-                  {canEdit 
-                    ? "Update delivery details. Changes will be saved immediately."
-                    : "Update schedule for this delivery. Other fields are locked after booking."}
+                  {isExpired
+                    ? "This delivery expired. Adjust the date and schedule, then update to reactivate it."
+                    : canEdit 
+                      ? "Update delivery details. Changes will be saved immediately."
+                      : "Update schedule for this delivery. Other fields are locked after booking."}
                 </p>
               </div>
             </div>

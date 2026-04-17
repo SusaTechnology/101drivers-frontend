@@ -89,7 +89,9 @@ export class DeliveryLifecycleService {
       EnumDeliveryRequestStatus.DISPUTED,
     ],
     [EnumDeliveryRequestStatus.CANCELLED]: [],
-    [EnumDeliveryRequestStatus.EXPIRED]: [],
+    [EnumDeliveryRequestStatus.EXPIRED]: [
+      EnumDeliveryRequestStatus.QUOTED,
+    ],
     [EnumDeliveryRequestStatus.DISPUTED]: [],
   };
 

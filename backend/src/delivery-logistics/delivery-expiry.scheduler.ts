@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { Cron, CronExpression } from "@nestjs/schedule";
+import { Cron } from "@nestjs/schedule";
 import {
   EnumDeliveryRequestStatus,
   EnumDeliveryStatusHistoryActorType,
@@ -29,7 +29,7 @@ export class DeliveryExpiryScheduler {
    * Expire LISTED deliveries whose pickup window has fully passed.
    * Runs every 15 minutes.
    */
-  @Cron(CronExpression.EVERY_15_MINUTES)
+  @Cron("*/15 * * * *")
   async expireListedDeliveries() {
     const now = new Date();
 
