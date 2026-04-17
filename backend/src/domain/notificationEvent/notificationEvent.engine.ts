@@ -820,6 +820,103 @@ async notifyTripCompleted(input: {
     });
   }
 
+  async notifyDeliveryExpired(input: {
+    deliveryId: string;
+    reason: "pickup_window_passed" | "draft_stale_7_days" | "quoted_stale_48_hours";
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        pickupWindowStart: true,
+        pickupWindowEnd: true,
+        customer: {
+          select: {
+            id: true,
+            contactEmail: true,
+            contactName: true,
+            businessName: true,
+            user: {
+              select: {
+                email: true,
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyDeliveryExpired: delivery ${input.deliveryId} not found, skipping`
+      );
+      return null;
+    }
+
+    const toEmail =
+      delivery.customer?.user?.email ??
+      delivery.customer?.contactEmail ??
+      null;
+
+    if (!toEmail) {
+      return null;
+    }
+
+    const displayName =
+      delivery.customer?.user?.fullName ??
+      delivery.customer?.contactName ??
+      delivery.customer?.businessName ??
+      "Customer";
+
+    const reasonMessages: Record<string, string> = {
+      pickup_window_passed:
+        "The pickup window for your delivery has passed without a driver being assigned. Your delivery has been automatically expired. You can create a new delivery with an updated schedule at any time.",
+      draft_stale_7_days:
+        "Your delivery draft has been inactive for over 7 days and has been automatically expired. You can create a new delivery at any time.",
+      quoted_stale_48_hours:
+        "Your quoted delivery was not listed on the marketplace within 48 hours and has been automatically expired. You can create a new delivery to get a fresh quote.",
+    };
+
+    const reasonMessage = reasonMessages[input.reason] ?? "Your delivery has expired.";
+
+    return this.queueAndSend({
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DELIVERY_STATUS_CHANGED,
+      templateCode: "delivery-expired",
+      toEmail,
+      subject: "Your delivery has expired",
+      body: [
+        `Hi ${displayName},`,
+        "",
+        reasonMessage,
+        "",
+        delivery.pickupAddress ? `Pickup: ${delivery.pickupAddress}` : null,
+        delivery.dropoffAddress ? `Drop-off: ${delivery.dropoffAddress}` : null,
+        delivery.pickupWindowStart
+          ? `Pickup window: ${this.formatWindow(
+              delivery.pickupWindowStart,
+              delivery.pickupWindowEnd
+            )}`
+          : null,
+        "Status: EXPIRED",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        reason: input.reason,
+        status: "EXPIRED",
+      },
+    });
+  }
+
   private async notifyStatusChangeInternal(input: {
     deliveryId: string;
     actorUserId?: string | null;

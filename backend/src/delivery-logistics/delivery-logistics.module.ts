@@ -7,6 +7,7 @@ import { PricingEngineService } from "./pricing-engine.service";
 import { DriverJobFeedService } from "./driver-job-feed.service";
 import { DeliveryLifecycleService } from "./delivery-lifecycle.service";
 import { DeliveryRequestOrchestratorService } from "./delivery-request-orchestrator.service";
+import { DeliveryExpiryScheduler } from "./delivery-expiry.scheduler";
 
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 
@@ -25,6 +26,7 @@ import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.en
     DriverJobFeedService,
     DeliveryLifecycleService,
     DeliveryRequestOrchestratorService,
+    DeliveryExpiryScheduler,
     NotificationEventEngine,
     EmailVerificationService,
     MailService,

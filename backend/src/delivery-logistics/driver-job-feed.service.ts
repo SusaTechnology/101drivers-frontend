@@ -162,6 +162,7 @@ async getDriverJobFeed(input: {
   const deliveries = await this.prisma.deliveryRequest.findMany({
     where: {
       status: EnumDeliveryRequestStatus.LISTED,
+      pickupWindowEnd: { gte: now },
       ...(input.urgentOnly === true ? { isUrgent: true } : {}),
       ...(input.serviceType ? { serviceType: input.serviceType as any } : {}),
       ...(input.cursor ? { id: { lt: input.cursor } } : {}),
