@@ -70,6 +70,7 @@ import {
   List,
   Briefcase,
   Funnel,
+  LocateFixed,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -107,7 +108,7 @@ const FILTER_OPTIONS = {
   datePresetOptions: [
     { value: 'TODAY', label: 'Today' },
     { value: 'TOMORROW', label: 'Tomorrow' },
-    { value: 'ALL', label: 'Any' },
+    { value: 'ALL', label: 'Any Date' },
   ],
   serviceTypeOptions: [
     { value: 'ALL', label: 'All Transfers' },
@@ -133,29 +134,41 @@ const formatDate = (isoString?: string): string => {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+// Full weekday date format: "Monday, April 20"
+const formatFullWeekdayDate = (isoString?: string): string => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+// Time range: "8:00 AM – 11:00 AM"
 const formatTimeRange = (startIso?: string, endIso?: string): string => {
   if (!startIso || !endIso) return ''
   const start = new Date(startIso)
   const end = new Date(endIso)
   const startStr = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   const endStr = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  return `${startStr}–${endStr}`
+  return `${startStr} - ${endStr}`
 }
 
 const formatDuration = (minutes?: number): string => {
-  if (!minutes) return '—'
+  if (!minutes) return ''
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
   return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
 }
 
 const formatCurrency = (amount?: number | null): string => {
-  if (amount == null) return '—'
+  if (amount == null) return ''
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(amount)
 }
 
@@ -207,6 +220,85 @@ interface JobItem {
   // Coordinates for map
   lat: number
   lng: number
+}
+
+// ── Reusable Route Thumbnail SVG ────────────────────────────────
+function RouteThumbnail() {
+  return (
+    <svg width="80" height="80" viewBox="0 0 80 80" fill="none" className="shrink-0 rounded-2xl bg-slate-50 dark:bg-slate-800/60">
+      {/* Subtle grid lines */}
+      <line x1="12" y1="0" x2="12" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="28" y1="0" x2="28" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="44" y1="0" x2="44" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="60" y1="0" x2="60" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="12" x2="80" y2="12" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="28" x2="80" y2="28" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="44" x2="80" y2="44" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="60" x2="80" y2="60" stroke="#e2e8f0" strokeWidth="0.5" />
+      {/* Road path */}
+      <path d="M16 64 C16 64, 24 44, 38 34 C52 24, 62 16, 64 16" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" fill="none" />
+      {/* Pickup dot */}
+      <circle cx="16" cy="64" r="5" fill="#22c55e" />
+      <circle cx="16" cy="64" r="2.5" fill="white" />
+      {/* Dropoff dot */}
+      <circle cx="64" cy="16" r="5" fill="#22c55e" />
+      <circle cx="64" cy="16" r="2.5" fill="white" />
+    </svg>
+  )
+}
+
+// ── Reusable Gig Card Component ──────────────────────────────────
+function GigCard({ job, onClick }: { job: JobItem; onClick: () => void }) {
+  return (
+    <Card
+      className="border-slate-200 dark:border-slate-700/60 shadow-sm hover:shadow-md transition-all cursor-pointer bg-white dark:bg-slate-900/80 rounded-2xl overflow-hidden"
+      onClick={onClick}
+    >
+      {/* Top section: details + map thumbnail */}
+      <CardContent className="p-5 pb-3">
+        <div className="flex gap-4">
+          {/* Left: Gig details */}
+          <div className="flex-1 min-w-0">
+            {/* Full weekday date */}
+            <div className="text-[15px] font-bold text-slate-900 dark:text-white leading-tight">
+              {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
+            </div>
+
+            {/* Time range */}
+            <div className="text-[14px] font-medium text-slate-600 dark:text-slate-400 mt-0.5 leading-tight">
+              {job.timeWindow}
+            </div>
+
+            {/* Route: pickup → dropoff */}
+            <div className="text-[16px] font-bold text-slate-900 dark:text-white mt-2 leading-snug">
+              {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
+            </div>
+
+            {/* Distance + Est. time */}
+            <div className="text-[14px] text-slate-600 dark:text-slate-400 font-medium mt-2 leading-tight">
+              {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
+            </div>
+          </div>
+
+          {/* Right: Map thumbnail */}
+          <div className="shrink-0">
+            <RouteThumbnail />
+          </div>
+        </div>
+      </CardContent>
+
+      {/* Divider */}
+      <div className="h-px bg-slate-200/80 dark:bg-slate-700/60" />
+
+      {/* Bottom section: Price + Chevron */}
+      <div className="px-5 py-3 flex items-center justify-between">
+        <span className="text-[28px] font-black text-green-600 dark:text-green-400 leading-none">
+          {formatCurrency(job.payout)}
+        </span>
+        <ChevronRight className="w-6 h-6 text-green-500 dark:text-green-400" />
+      </div>
+    </Card>
+  )
 }
 
 export default function DriverDashboardPage() {
@@ -337,21 +429,15 @@ export default function DriverDashboardPage() {
     })
   }
 
+  // Navigate to full Gig Details page
   const handleViewJob = (jobId: string) => {
     navigate({ to: `/driver-job-details`, search: { jobId } })
   }
 
-  // Open bottom sheet for a specific job
+  // Open bottom sheet for a specific job (from map bubble tap)
   const handleSelectJob = useCallback((job: JobItem) => {
     setSelectedJob(job)
     setShowSheet(true)
-  }, [])
-
-  // View on Map from list view card
-  const handleViewOnMap = useCallback((job: JobItem) => {
-    setSelectedJob(job)
-    setShowSheet(true)
-    setActiveView('map')
   }, [])
 
   // Transform API data to UI-friendly array
@@ -432,34 +518,19 @@ export default function DriverDashboardPage() {
   const formatFullDate = (isoString?: string): string => {
     if (!isoString) return ''
     return new Date(isoString).toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
+      weekday: 'long',
+      month: 'long',
       day: 'numeric',
       year: 'numeric',
     })
-  }
-
-  // Format pickup time for list cards
-  const formatPickupTime = (isoString?: string): string => {
-    if (!isoString) return ''
-    const date = new Date(isoString)
-    const dateStr = date.toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
-    const timeStr = date.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-    return `${dateStr} - ${timeStr}`
   }
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col">
-      {/* Top App Bar */}
-      <header className="sticky top-0 z-40 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+      {/* ═══════════════════════════════════════ */}
+      {/* TOP APP BAR                           */}
+      {/* ═══════════════════════════════════════ */}
+      <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800">
         <div className="max-w-[480px] mx-auto px-4 h-14 flex items-center justify-between">
           {/* Left: Logo + Title */}
           <div className="flex items-center gap-2.5">
@@ -474,14 +545,14 @@ export default function DriverDashboardPage() {
             </Link>
             <div className="leading-tight">
               <div className="text-[13px] font-black text-slate-900 dark:text-white">
-                {activeView === 'map' ? 'Map View' : 'Gig Feed'}
+                {activeView === 'map' ? 'Map View' : 'Gig Board'}
               </div>
             </div>
           </div>
 
-          {/* Right: Actions */}
+          {/* Right: Action icons */}
           <div className="flex items-center gap-1.5">
-            {/* Driver identity pill */}
+            {/* Driver identity pill (desktop) */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -492,117 +563,81 @@ export default function DriverDashboardPage() {
               </span>
             </div>
 
-            {/* Filter button */}
+            {/* Filter / Funnel */}
             <Link
               to="/driver-preferences"
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Filter"
             >
-              <Funnel className="w-4.5 h-4.5" />
+              <Funnel className="w-4 h-4" />
             </Link>
 
-            {/* Preferences */}
+            {/* Gear / Preferences */}
             <Link
               to="/driver-preferences"
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Preferences"
             >
-              <Settings className="w-4.5 h-4.5" />
+              <Settings className="w-4 h-4" />
             </Link>
 
-            {/* Active Deliveries */}
+            {/* Briefcase / Active Deliveries */}
             <Link
               to="/driver-active"
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Active deliveries"
             >
-              <Briefcase className="w-4.5 h-4.5" />
+              <Briefcase className="w-4 h-4" />
             </Link>
 
-            {/* View toggle button: Map/List */}
+            {/* List button — switches to Gig Board */}
             <button
-              onClick={() => setActiveView(activeView === 'map' ? 'list' : 'map')}
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-              aria-label={activeView === 'map' ? 'Switch to list view' : 'Switch to map view'}
-            >
-              {activeView === 'map' ? (
-                <List className="w-4.5 h-4.5" />
-              ) : (
-                <Map className="w-4.5 h-4.5" />
+              onClick={() => setActiveView('list')}
+              className={cn(
+                "w-9 h-9 rounded-xl border transition flex items-center justify-center",
+                activeView === 'list'
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
               )}
+              aria-label="Switch to list view"
+            >
+              <List className="w-4 h-4" />
             </button>
 
             {/* Notifications */}
             <Link
               to="/driver-inbox"
-              className="relative w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              className="relative w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Inbox"
             >
-              <Inbox className="w-4.5 h-4.5" />
+              <Inbox className="w-4 h-4" />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-slate-950 text-[11px] font-black flex items-center justify-center border border-white dark:border-slate-900">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </Link>
-
-            {/* Theme toggle */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-            >
-              {mounted && theme === 'dark' ? (
-                <Sun className="w-4.5 h-4.5" />
-              ) : (
-                <Moon className="w-4.5 h-4.5" />
-              )}
-            </Button>
-
-            {/* Sign out */}
-            <Button
-              onClick={handleSignOut}
-              variant="outline"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-xs font-bold text-slate-700 dark:text-slate-200"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Mobile identity indicator */}
-        <div className="sm:hidden max-w-[480px] mx-auto px-4 pb-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
-              Online as {displayName}
-            </span>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* ═══════════════════════════════════════ */}
+      {/* MAIN CONTENT                          */}
+      {/* ═══════════════════════════════════════ */}
       {activeView === 'map' ? (
-        /* ============================== */
-        /* MAP VIEW                        */
-        /* ============================== */
+        /* ─── MAP VIEW ─── */
         <div className="flex-1">
           {isLoaded ? (
             <GoogleMap
               mapContainerClassName="w-full"
-              mapContainerStyle={{ width: '100%', height: 'calc(100vh - 120px)' }}
-              center={{ lat: 33.95, lng: -118.35 }}
+              mapContainerStyle={{ width: '100%', height: 'calc(100vh - 56px - 56px)' }}
+              center={{ lat: 33.94, lng: -118.40 }}
               zoom={11}
               options={mapOptions}
             >
-              {/* Driver location dot */}
+              {/* Driver location dot (blue with white ring) */}
               <Marker
-                position={{ lat: 33.95, lng: -118.35 }}
+                position={{ lat: 33.94, lng: -118.40 }}
                 icon={driverDotIcon}
               />
 
@@ -611,6 +646,9 @@ export default function DriverDashboardPage() {
                 <Marker
                   position={{ lat: 34.0, lng: -118.3 }}
                   icon={clusterIcon}
+                  onClick={() => {
+                    toast.info(`${jobs.length} gigs in this area`)
+                  }}
                 />
               )}
 
@@ -625,7 +663,7 @@ export default function DriverDashboardPage() {
               ))}
             </GoogleMap>
           ) : (
-            <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 120px)' }}>
+            <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 56px - 56px)' }}>
               <div className="flex flex-col items-center gap-4">
                 <RefreshCw className="w-8 h-8 animate-spin text-primary" />
                 <p className="text-sm text-slate-600 dark:text-slate-400">Loading map...</p>
@@ -634,12 +672,20 @@ export default function DriverDashboardPage() {
           )}
         </div>
       ) : (
-        /* ============================== */
-        /* GIG FEED / LIST VIEW            */
-        /* ============================== */
+        /* ─── GIG BOARD (LIST VIEW) ─── */
         <main className="flex-1 w-full max-w-[480px] mx-auto px-4 sm:px-6 py-4 pb-24">
+          {/* Page Header */}
+          <div className="mb-4">
+            <h1 className="text-xl font-black text-slate-900 dark:text-white">
+              Gig Board
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Tap any gig to see details and book it.
+            </p>
+          </div>
+
           {/* Search Bar */}
-          <div className="relative mb-4">
+          <div className="relative mb-3">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
               value={filters.search}
@@ -649,17 +695,17 @@ export default function DriverDashboardPage() {
             />
           </div>
 
-          {/* Filters Section */}
-          <Card className="border-slate-200 dark:border-slate-800 shadow-lg mb-4">
-            <CardContent className="p-4">
+          {/* Filters Row */}
+          <Card className="border-slate-200 dark:border-slate-700/60 shadow-sm mb-4">
+            <CardContent className="p-3">
               <div className="flex flex-wrap items-center gap-2">
                 {/* Pickup Distance dropdown */}
                 <Select
                   value={filters.radiusMiles}
                   onValueChange={(value) => updateFilter('radiusMiles', value)}
                 >
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm min-w-[130px]">
-                    <SelectValue placeholder="Any" />
+                  <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[120px]">
+                    <SelectValue placeholder="Pickup Distance" />
                   </SelectTrigger>
                   <SelectContent>
                     {FILTER_OPTIONS.radiusOptions.map((option) => (
@@ -675,8 +721,8 @@ export default function DriverDashboardPage() {
                   value={filters.datePreset}
                   onValueChange={(value) => updateFilter('datePreset', value)}
                 >
-                  <SelectTrigger className="h-10 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm min-w-[110px]">
-                    <SelectValue placeholder="Any" />
+                  <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[90px]">
+                    <SelectValue placeholder="Any Date" />
                   </SelectTrigger>
                   <SelectContent>
                     {FILTER_OPTIONS.datePresetOptions.map((option) => (
@@ -687,9 +733,9 @@ export default function DriverDashboardPage() {
                   </SelectContent>
                 </Select>
 
-                {/* All Transfers - disabled */}
+                {/* All Transfers - grayed out / disabled */}
                 <button
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-sm text-slate-400 pointer-events-none opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-400 pointer-events-none opacity-50"
                   disabled
                 >
                   <Car className="w-3.5 h-3.5" />
@@ -698,43 +744,30 @@ export default function DriverDashboardPage() {
 
                 <div className="flex-1" />
 
-                {/* Clear */}
+                {/* Clear filters */}
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   onClick={clearFilters}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-xs font-bold"
+                  className="inline-flex items-center justify-center px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                 >
                   Clear
-                </Button>
-
-                {/* Refresh */}
-                <Button
-                  type="button"
-                  onClick={handleRefresh}
-                  disabled={isFetching}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition text-xs font-bold"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Section Header */}
+          {/* Section header with count */}
           <div className="flex items-end justify-between gap-4 mb-3">
-            <h2 className="text-base font-black text-slate-900 dark:text-white">
-              GIGS NEARBY ({jobs.length})
+            <h2 className="text-sm font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Gigs Nearby ({jobs.length})
             </h2>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                Sort
-              </span>
               <Select
                 value={filters.sortBy}
                 onValueChange={(value) => updateFilter('sortBy', value)}
               >
-                <SelectTrigger className="h-8 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[110px]">
+                <SelectTrigger className="h-8 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[100px]">
                   <SelectValue placeholder="Soonest" />
                 </SelectTrigger>
                 <SelectContent>
@@ -748,9 +781,9 @@ export default function DriverDashboardPage() {
             </div>
           </div>
 
-          {/* Loading / Error / Empty states */}
+          {/* Loading state */}
           {isLoading && (
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden p-8 text-center">
+            <Card className="border-slate-200 dark:border-slate-700/60 shadow-sm p-8 text-center rounded-2xl">
               <div className="flex flex-col items-center gap-4">
                 <RefreshCw className="w-8 h-8 animate-spin text-primary" />
                 <p className="text-sm text-slate-600 dark:text-slate-400">Loading available gigs...</p>
@@ -758,8 +791,9 @@ export default function DriverDashboardPage() {
             </Card>
           )}
 
+          {/* Error state */}
           {isError && (
-            <Card className="border-red-200 dark:border-red-900 shadow-lg overflow-hidden p-8">
+            <Card className="border-red-200 dark:border-red-900 shadow-sm p-8 rounded-2xl">
               <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
                 <AlertCircle className="w-5 h-5" />
                 <p className="text-sm font-semibold">Failed to load gigs. Please try again.</p>
@@ -767,8 +801,9 @@ export default function DriverDashboardPage() {
             </Card>
           )}
 
+          {/* Empty state */}
           {!isLoading && !isError && jobs.length === 0 && (
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden p-8 text-center">
+            <Card className="border-slate-200 dark:border-slate-700/60 shadow-sm p-8 text-center rounded-2xl">
               <div className="flex flex-col items-center gap-2">
                 <Inbox className="w-8 h-8 text-slate-400" />
                 <p className="text-sm text-slate-600 dark:text-slate-400">No gigs available at the moment.</p>
@@ -776,113 +811,24 @@ export default function DriverDashboardPage() {
             </Card>
           )}
 
-          {/* Job Cards */}
+          {/* Gig Cards */}
           {jobs.length > 0 && (
             <div className="flex flex-col gap-3">
               {jobs.map((job) => (
-                <Card
+                <GigCard
                   key={job.id}
-                  className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
-                  onClick={() => handleSelectJob(job)}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex gap-3">
-                      {/* Map Thumb Placeholder */}
-                      <div className="w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                        <MapPin className="w-5 h-5 text-slate-400" />
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            {/* Date & Time */}
-                            <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 truncate">
-                              {formatPickupTime(job.pickupWindowStartFull || deliveriesData?.items?.find((i: any) => i.deliveryId === job.id)?.pickupWindowStart)}
-                            </div>
-                            {/* Pickup */}
-                            <div className="text-sm font-bold text-slate-900 dark:text-white truncate mt-0.5">
-                              {job.pickup}
-                            </div>
-                            {/* Dropoff */}
-                            <div className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                              → {job.dropoff}
-                            </div>
-                          </div>
-                          {/* Pay amount */}
-                          <div className="text-lg font-black text-green-600 dark:text-green-400 shrink-0">
-                            {formatCurrency(job.payout)}
-                          </div>
-                        </div>
-
-                        {/* Bottom: mileage + View on Map */}
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {job.miles ? `${job.miles} mi` : ''}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleViewOnMap(job)
-                            }}
-                            className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-                          >
-                            <Map className="w-3 h-3" />
-                            View on Map
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  job={job}
+                  onClick={() => handleViewJob(job.id)}
+                />
               ))}
             </div>
           )}
-
-          {/* Tips Section */}
-          <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover-lift">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                      Checklist required
-                    </h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                      Before you can start: VIN code + 6 pickup photos + starting odometer.
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
-                    <Verified className="w-4 h-4 text-primary font-bold" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover-lift">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-900 dark:text-white">
-                      No cancel in Driver UI
-                    </h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                      If an issue happens, report it and Ops will assist. All actions are logged.
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center shrink-0">
-                    <AlertCircle className="w-4 h-4 text-amber-500 font-bold" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </section>
         </main>
       )}
 
-      {/* ============================== */}
-      {/* DETAILS BOTTOM SHEET            */}
-      {/* ============================== */}
+      {/* ═══════════════════════════════════════ */}
+      {/* DETAILS BOTTOM SHEET                  */}
+      {/* ═══════════════════════════════════════ */}
       <Sheet
         open={showSheet}
         onOpenChange={(open) => {
@@ -974,7 +920,7 @@ export default function DriverDashboardPage() {
                       Mileage
                     </div>
                     <div className="text-sm font-bold text-slate-900 dark:text-white">
-                      {selectedJob.miles ? `${selectedJob.miles} mi` : '—'}
+                      {selectedJob.miles ? `${selectedJob.miles} mi` : '\u2014'}
                     </div>
                   </div>
                   <div className="flex-1">
@@ -1018,7 +964,7 @@ export default function DriverDashboardPage() {
                 </div>
               </div>
 
-              {/* Bottom Buttons */}
+              {/* Bottom Buttons: Decline + Accept */}
               <div className="flex gap-3 mt-6">
                 <Button
                   variant="outline"
@@ -1026,7 +972,7 @@ export default function DriverDashboardPage() {
                     setShowSheet(false)
                     setSelectedJob(null)
                   }}
-                  className="flex-1 h-12 rounded-2xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm font-bold text-slate-700 dark:text-slate-200"
+                  className="flex-1 h-12 rounded-2xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm font-bold text-slate-600 dark:text-slate-300"
                 >
                   Decline
                 </Button>
@@ -1045,31 +991,45 @@ export default function DriverDashboardPage() {
         </SheetContent>
       </Sheet>
 
-      {/* ============================== */}
-      {/* BOTTOM TAB BAR                  */}
-      {/* ============================== */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 safe-bottom">
+      {/* ═══════════════════════════════════════ */}
+      {/* BOTTOM TAB BAR                        */}
+      {/* ═══════════════════════════════════════ */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 safe-bottom">
         <div className="max-w-[480px] mx-auto">
           <div className="grid grid-cols-2 gap-0">
             <button
               onClick={() => setActiveView('map')}
               className={cn(
                 "flex flex-col items-center gap-1 py-3 transition",
-                activeView === 'map' ? 'text-primary' : 'text-slate-400'
+                activeView === 'map'
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-slate-400 dark:text-slate-500'
               )}
             >
               <Map className="w-5 h-5" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Map</span>
+              <span className={cn(
+                "text-[10px] font-black uppercase tracking-widest",
+                activeView === 'map' && 'text-green-600 dark:text-green-400'
+              )}>
+                Map
+              </span>
             </button>
             <button
               onClick={() => setActiveView('list')}
               className={cn(
                 "flex flex-col items-center gap-1 py-3 transition",
-                activeView === 'list' ? 'text-primary' : 'text-slate-400'
+                activeView === 'list'
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-slate-400 dark:text-slate-500'
               )}
             >
               <List className="w-5 h-5" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Gigs</span>
+              <span className={cn(
+                "text-[10px] font-black uppercase tracking-widest",
+                activeView === 'list' && 'text-green-600 dark:text-green-400'
+              )}>
+                Gigs
+              </span>
             </button>
           </div>
         </div>
