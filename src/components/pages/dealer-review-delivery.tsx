@@ -216,8 +216,8 @@ export default function ReviewDeliveryPage() {
     }
   }, [navigate]);
 
-  // Mutation for creating and releasing delivery
-  const createAndReleaseDelivery = useMutation({
+  // Mutation for submitting delivery
+  const submitDelivery = useMutation({
     mutationFn: async () => {
       if (!reviewData) throw new Error('No review data');
 
@@ -299,24 +299,13 @@ export default function ReviewDeliveryPage() {
         }
       }
 
-      // Step 3: Release to marketplace
-      if (deliveryId) {
-        await authFetch(
-          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/release-to-marketplace`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-      }
-
       return delivery;
     },
     onSuccess: () => {
       // Clear session storage
       sessionStorage.removeItem("reviewDeliveryData");
       
-      toast.success("Delivery submitted & released!", {
+      toast.success("Delivery submitted!", {
         description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
       });
       
@@ -354,7 +343,7 @@ export default function ReviewDeliveryPage() {
   };
 
   const handleSubmit = () => {
-    createAndReleaseDelivery.mutate();
+    submitDelivery.mutate();
   };
 
   const handleGoBack = () => {
@@ -950,16 +939,16 @@ export default function ReviewDeliveryPage() {
                   <Button
                     className="flex-1 py-4 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold text-lg"
                     onClick={handleSubmit}
-                    disabled={createAndReleaseDelivery.isPending}
+                    disabled={submitDelivery.isPending}
                   >
-                    {createAndReleaseDelivery.isPending ? (
+                    {submitDelivery.isPending ? (
                       <>
                         <span className="animate-spin mr-2">⏳</span>
                         Submitting...
                       </>
                     ) : (
                       <>
-                        Submit & Release to Market
+                        Submit Delivery
                         <ChevronRight className="ml-2 h-5 w-5" />
                       </>
                     )}

@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { cn } from "@/lib/utils";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from "@/lib/google-maps-config";
 import {
@@ -33,6 +34,7 @@ import {
   Flag,
   Car,
   Clock,
+  CalendarIcon,
   Mail,
   Phone,
   User,
@@ -49,7 +51,6 @@ import {
   CheckCircle,
   FileText,
   HelpCircle,
-  Rocket,
   RefreshCw,
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
@@ -59,14 +60,9 @@ import { usePickupZones } from "@/hooks/usePickupZones";
 import { getUser, useCreate, useDataQuery, usePatch, authFetch } from "@/lib/tanstack/dataQuery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 
 // Form validation schema
 const deliverySchema = z.object({
@@ -129,6 +125,7 @@ interface SchedulePreviewRequest {
   pickupWindowEnd?: string;
   dropoffWindowStart?: string;
   dropoffWindowEnd?: string;
+  preferredDate?: string;
 }
 
 interface SlotItem {
@@ -305,7 +302,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [originalDeliveryStatus, setOriginalDeliveryStatus] = useState<string | null>(null);
   
   // Schedule section - new one-side-at-a-time flow
+  // Default to null — user must calculate a quote before choosing pickup/arrival
   const [customerChose, setCustomerChose] = useState<"PICKUP_WINDOW" | "DROPOFF_WINDOW" | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedSlot, setSelectedSlot] = useState<SlotItem | null>(null);
   const [suggestedSlots, setSuggestedSlots] = useState<{ pickup: SlotItem[]; dropoff: SlotItem[] }>({ pickup: [], dropoff: [] });
   const [validatedWindows, setValidatedWindows] = useState<{
@@ -324,9 +323,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const prevPickupCoordsRef = useRef<google.maps.LatLngLiteral | null>(null);
   const prevDropoffCoordsRef = useRef<google.maps.LatLngLiteral | null>(null);
 
-  // Release dialog state
-  const [showReleaseDialog, setShowReleaseDialog] = useState(false);
-  const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
   const customer = getUser();
 
   // Fetch service area zones for map overlay (like landing page)
@@ -373,9 +369,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           console.error('Failed to delete draft after submission:', e);
         }
       }
-      // Show release dialog instead of navigating
-      setCreatedDeliveryId(data?.id || data?.deliveryRequest?.id || null);
-      setShowReleaseDialog(true);
+      toast.success("Delivery submitted!", {
+        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
+      });
+      navigate({ to: "/dealer-dashboard" });
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to create delivery request";
@@ -396,31 +393,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Query client for invalidating queries
   const queryClient = useQueryClient();
-
-  // Mutation for releasing to marketplace
-  const releaseToMarketMutation = useMutation({
-    mutationFn: async (deliveryId: string) => {
-      return authFetch(
-        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/release-to-marketplace`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-    },
-    onSuccess: () => {
-      toast.success("Released to market", {
-        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
-      });
-      setShowReleaseDialog(false);
-      navigate({ to: "/dealer-dashboard" });
-    },
-    onError: (error: Error) => {
-      toast.error("Failed to release to market", { description: error.message });
-    }
-  });
 
   // Mutation for saving as draft (new draft)
   const saveDraftMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-draft-from-quote`, {
@@ -1357,6 +1329,21 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       toast.success("Quote calculated", {
         description: `Estimated price: ${formatCurrency(data.estimatedPrice || 0)} for ${data.distanceMiles || 0} miles`,
       });
+
+      // Auto-trigger schedule discovery with default PICKUP_WINDOW
+      const chosenSide = customerChose || "PICKUP_WINDOW";
+      setCustomerChose(chosenSide);
+      setIsLoadingSlots(true);
+      const scheduleRequest: SchedulePreviewRequest = {
+        quoteId: data.id,
+        serviceType,
+        customerType: customerDataQuery.data?.customerType || 'BUSINESS',
+        customerId: customer?.profileId,
+        customerChose: chosenSide,
+        ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
+      };
+      console.log('Auto schedule preview after quote:', scheduleRequest);
+      getSchedulePreview.mutate(scheduleRequest);
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to calculate quote";
@@ -1401,6 +1388,34 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         // Store suggested slots for dropdown
         if (data.suggestedSlots) {
           setSuggestedSlots(data.suggestedSlots);
+
+          // Auto-select the first slot for the active side
+          const side = customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff";
+          const slots = data.suggestedSlots[side] || [];
+          if (slots.length > 0 && !selectedSlot) {
+            // Auto-select first slot (will trigger validation via handleSlotSelect)
+            const firstSlot = slots[0];
+            setSelectedSlot(firstSlot);
+            if (quoteId && customerChose) {
+              const validationRequest: SchedulePreviewRequest = {
+                quoteId,
+                serviceType,
+                customerType: customerDataQuery.data?.customerType || 'BUSINESS',
+                customerId: customer?.profileId,
+                customerChose,
+                ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
+              };
+              if (customerChose === "PICKUP_WINDOW") {
+                validationRequest.pickupWindowStart = firstSlot.start;
+                validationRequest.pickupWindowEnd = firstSlot.end;
+              } else {
+                validationRequest.dropoffWindowStart = firstSlot.start;
+                validationRequest.dropoffWindowEnd = firstSlot.end;
+              }
+              setIsLoadingSlots(true);
+              getSchedulePreview.mutate(validationRequest);
+            }
+          }
         }
 
         // Only set validated windows if we actually have both window times from the API
@@ -1414,22 +1429,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           });
         }
 
-        if (!data.feasible) {
-          toast.error("Schedule not feasible", {
-            description: data.message || "The selected schedule windows may not work. Please adjust and try again.",
-          });
-        } else if (data.pickupWindowStart && data.dropoffWindowStart) {
-          // Validation mode success
-          toast.success("Schedule verified", {
-            description: `ETA: ${formatDuration(data.etaMinutes)}. ${data.sameDayEligible ? '✨ Same-day eligible!' : ''}`,
-          });
-        }
+        // No toasts during slot checking — the inline UI handles all feedback
       },
       onError: (error: any) => {
-        const errorMessage = error?.message || "Failed to check schedule feasibility";
-        toast.error("Schedule check failed", {
-          description: errorMessage,
-        });
         console.error('Schedule preview failed:', error);
         setSchedulePreviewData(null);
         setIsLoadingSlots(false);
@@ -1460,6 +1462,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose: choice,
+      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
     };
 
     console.log('Discovery Mode Request:', request);
@@ -1484,6 +1487,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
+      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
     };
 
     if (customerChose === "PICKUP_WINDOW") {
@@ -1497,6 +1501,31 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     console.log('Validation Mode Request:', request);
     setIsLoadingSlots(true);
     getSchedulePreview.mutate(request);
+  };
+
+  // Called when user picks a date from the calendar
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    setSelectedDate(date);
+
+    // Reset slot state
+    setSelectedSlot(null);
+    setValidatedWindows(null);
+    setSuggestedSlots({ pickup: [], dropoff: [] });
+
+    // Auto-discover slots for the currently chosen side (default: pickup)
+    if (quoteId && customerChose) {
+      setIsLoadingSlots(true);
+      const request: SchedulePreviewRequest = {
+        quoteId,
+        serviceType,
+        customerType: customerDataQuery.data?.customerType || 'BUSINESS',
+        customerId: customer?.profileId,
+        customerChose,
+        preferredDate: format(date, "yyyy-MM-dd"),
+      };
+      getSchedulePreview.mutate(request);
+    }
   };
 
 const handleQuotePreview = () => {
@@ -1724,7 +1753,7 @@ const handleQuotePreview = () => {
         isUrgent: false,
   requiresOpsConfirmation: schedulePreviewData?.requiresOpsConfirmation || false,
   sameDayEligible: schedulePreviewData?.sameDayEligible || false,
-  status: "QUOTED", // Initial status - dealer must review and release to market
+  status: "LISTED", // Delivery is listed on marketplace immediately after creation
   customerId: customer.profileId
 
     };
@@ -1909,52 +1938,6 @@ const handleQuotePreview = () => {
           </div>
         </div>
       )}
-
-      {/* Release to Market Dialog */}
-      <Dialog open={showReleaseDialog} onOpenChange={setShowReleaseDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-lime-500" />
-              Delivery Created Successfully
-            </DialogTitle>
-            <DialogDescription>
-              Your delivery request has been created with status "Quoted". Would you like to release it to the marketplace now?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Releasing to the marketplace will make your delivery visible to available drivers. You'll be notified when a driver books it.
-            </p>
-          </div>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              onClick={() => navigate({ to: "/dealer-dashboard" })}
-              className="w-full sm:w-auto"
-            >
-              View in Dashboard
-            </Button>
-            <Button
-              onClick={() => createdDeliveryId && releaseToMarketMutation.mutate(createdDeliveryId)}
-              disabled={releaseToMarketMutation.isPending}
-              className="w-full sm:w-auto bg-lime-500 text-slate-950 hover:bg-lime-600 font-extrabold"
-            >
-              {releaseToMarketMutation.isPending ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950 mr-2"></div>
-                  Releasing...
-                </>
-              ) : (
-                <>
-                  <Rocket className="h-4 w-4 mr-2" />
-                  Release to Market
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
         {/* Title section */}
@@ -2218,7 +2201,10 @@ const handleQuotePreview = () => {
             </Card>
 
             {/* Step 2: Scheduling */}
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
+            <Card className={cn(
+              "border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow",
+              !quoteId && "opacity-60 pointer-events-none"
+            )}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
@@ -2229,7 +2215,7 @@ const handleQuotePreview = () => {
                       Schedule window
                     </CardTitle>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                      Set Pickup or Arrival Time
+                      Pickup or arrival
                     </p>
                   </div>
                   <div className="hidden sm:flex flex-col gap-2">
@@ -2239,17 +2225,69 @@ const handleQuotePreview = () => {
                     </Badge>
                     {schedulePreviewData?.sameDayEligible && (
                       <Badge className="bg-lime-500 text-slate-900 animate-pulse">
-                        ✨ Same-day eligible!
+                        Same-day eligible!
                       </Badge>
                     )}
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Step 1: Choose which side to set */}
+                {/* Gate: show message when quote is not yet calculated */}
+                {!quoteId && (
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-center py-8">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                      <Clock className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                      Calculate a quote first
+                    </p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+                      Enter pickup and destination addresses above and calculate a quote to unlock scheduling.
+                    </p>
+                  </div>
+                )}
+
+                {/* Date picker + controls only available after quote */}
+                {quoteId && (<>
+                {/* Date picker - Choose a date */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase tracking-widest">
+                    Choose a date
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full h-14 justify-start text-left font-medium rounded-2xl border-slate-200 dark:border-slate-700",
+                          !selectedDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
+                        {selectedDate ? format(selectedDate, "EEE MMM d, yyyy") : "Choose a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={handleDateSelect}
+                        disabled={(date) => {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const maxDate = new Date(today);
+                          maxDate.setDate(maxDate.getDate() + 7);
+                          return date < today || date > maxDate;
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Choose which side to set */}
                 <div className="space-y-3">
                   <Label className="text-xs font-black uppercase tracking-widest">
-                    Set Pickup or Arrival Time
+                    Pickup or arrival
                   </Label>
                   <RadioGroup
                     value={customerChose || ""}
@@ -2278,6 +2316,7 @@ const handleQuotePreview = () => {
                     </div>
                   </RadioGroup>
                 </div>
+                </>)}
 
                 {/* Loading state for discovery mode */}
                 {isLoadingSlots && !selectedSlot && (
@@ -2287,11 +2326,11 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                {/* Step 2: Select a time slot (only shown after user chooses side) */}
+                {/* Step 2: Select a time slot (only shown after date is chosen) */}
                 {customerChose && !isLoadingSlots && (
                   <div className="space-y-3">
                     <Label className="text-xs font-black uppercase tracking-widest">
-                      {customerChose === "PICKUP_WINDOW" ? "Select pickup window" : "Select arrival window"}
+                      {customerChose === "PICKUP_WINDOW" ? "Pickup time" : "Arrival time"}
                     </Label>
                     
                     {suggestedSlots[customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff"].length > 0 ? (
@@ -2314,12 +2353,7 @@ const handleQuotePreview = () => {
                           ))}
                         </SelectContent>
                       </Select>
-                    ) : (
-                      <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
-                        <AlertCircle className="h-4 w-4 inline mr-2" />
-                        No available slots found. Please try a different option.
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
 
@@ -2389,18 +2423,7 @@ const handleQuotePreview = () => {
                           Same-day: {schedulePreviewData.sameDay.status}
                         </Badge>
                       )}
-                      {schedulePreviewData.sameDay?.warnings && schedulePreviewData.sameDay.warnings.length > 0 && (
-                        <Badge variant="outline" className="text-amber-600 border-amber-200 dark:text-amber-400 dark:border-amber-800 text-[10px]">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          {schedulePreviewData.sameDay.warnings[0]}
-                        </Badge>
-                      )}
-                      {(schedulePreviewData.requiresOpsConfirmation || schedulePreviewData.afterHours) && (
-                        <Badge variant="outline" className="text-amber-600 border-amber-200 dark:text-amber-400 dark:border-amber-800 text-[10px]">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Requires ops confirmation
-                        </Badge>
-                      )}
+
                     </div>
 
                     {/* ETA info */}
@@ -2413,21 +2436,6 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                {/* Error state */}
-                {schedulePreviewData && !schedulePreviewData.feasible && !isLoadingSlots && (
-                  <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
-                    <AlertCircle className="h-4 w-4 inline mr-2" />
-                    {schedulePreviewData.message || "This schedule is not feasible. Please try a different time."}
-                  </div>
-                )}
-
-                {/* Hint when no quote calculated */}
-                {!quoteId && (
-                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
-                    <Info className="h-3 w-3 inline mr-1" />
-                    Please select your Schedule Window.
-                  </div>
-                )}
 
               </CardContent>
             </Card>

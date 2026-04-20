@@ -255,6 +255,10 @@ async getDriverJobDetail(input: {
   });
 }
 
+async getDriverActiveDelivery(driverId: string): Promise<any> {
+  return this.driverJobFeedService.getActiveDeliveryForDriver(driverId);
+}
+
   async bookDelivery(input: {
     deliveryId: string;
     driverId: string;
@@ -636,22 +640,6 @@ async completeTrip(input: {
 
     target[field] = this.normalizeOptionalState(raw);
   }
-async releaseDeliveryToMarketplace(input: {
-  deliveryId: string;
-  actorUserId?: string | null;
-  actorRole?: EnumDeliveryStatusHistoryActorRole | null;
-  note?: string | null;
-}): Promise<any> {
-  await this.lifecycleService.releaseToMarketplace({
-    deliveryId: input.deliveryId,
-    actorUserId: input.actorUserId ?? null,
-    actorRole: input.actorRole ?? null,
-    note: this.trimOptionalString(input.note) ?? null,
-  });
-
-  return this.domain.findUnique({ id: input.deliveryId });
-}
-
 async submitPickupCompliance(input: {
   deliveryId: string;
   driverId: string;
@@ -734,6 +722,7 @@ async schedulePreview(
     dropoffWindowStart: input.dropoffWindowStart ?? null,
     dropoffWindowEnd: input.dropoffWindowEnd ?? null,
     afterHoursRequested: input.afterHoursRequested ?? false,
+    preferredDate: input.preferredDate ?? null,
   });
 
 }

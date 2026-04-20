@@ -13,6 +13,7 @@ import {
 import { Type } from "class-transformer";
 import {
   IsBoolean,
+  IsDateString,
   IsEmail,
   IsEnum,
   IsNotEmpty,
@@ -22,26 +23,6 @@ import {
 import { ApiProperty } from "@nestjs/swagger";
 
 
-export class ReleaseDeliveryToMarketplaceBody {
-  @ApiProperty({
-    required: false,
-    nullable: true,
-  })
-  actorUserId?: string | null;
-
-  @ApiProperty({
-    required: false,
-    nullable: true,
-    enum: EnumDeliveryStatusHistoryActorRole,
-  })
-  actorRole?: EnumDeliveryStatusHistoryActorRole | null;
-
-  @ApiProperty({
-    required: false,
-    nullable: true,
-  })
-  note?: string | null;
-}
 
 export class IndividualQuotePreviewBody {
   @ApiProperty()
@@ -663,6 +644,18 @@ export class SchedulePreviewBody {
   @IsOptional()
   @IsBoolean()
   afterHoursRequested?: boolean;
+
+  @swagger.ApiProperty({
+    type: String,
+    format: "date",
+    required: false,
+    nullable: true,
+    description:
+      "User-selected date (YYYY-MM-DD). When provided, slots are generated for this date instead of today/tomorrow.",
+  })
+  @IsOptional()
+  @IsDateString()
+  preferredDate?: string | null;
 }
 
 

@@ -712,7 +712,7 @@ private async createIndividualDeliveryForResolvedCustomer(
       afterHours: input.afterHours === true,
 
       serviceType: input.serviceType,
-      status: EnumDeliveryRequestStatus.QUOTED,
+      status: EnumDeliveryRequestStatus.LISTED,
 
       licensePlate: resolvedVehicle.licensePlate,
       vehicleColor: resolvedVehicle.vehicleColor,
@@ -739,8 +739,8 @@ private async createIndividualDeliveryForResolvedCustomer(
       actorUserId: customer.userId,
       actorType: EnumDeliveryStatusHistoryActorType.USER,
       fromStatus: null,
-      toStatus: EnumDeliveryStatusHistoryToStatus.QUOTED,
-      note: "Individual delivery created from accepted quote",
+      toStatus: EnumDeliveryStatusHistoryToStatus.LISTED,
+      note: "Delivery created and listed on marketplace",
     },
   });
 
@@ -782,7 +782,7 @@ private async createIndividualDeliveryForResolvedCustomer(
     },
   });
 
-  await this.notificationEventEngine.notifyDeliveryCreated({
+  await this.notificationEventEngine.notifyDeliveryReleased({
     deliveryId: delivery.id,
     actorUserId: customer.userId ?? null,
   });
@@ -1368,7 +1368,7 @@ private async resolveIndividualCustomerForCreate(
         afterHours: input.afterHours === true,
 
         serviceType: input.serviceType,
-        status: EnumDeliveryRequestStatus.QUOTED,
+        status: EnumDeliveryRequestStatus.LISTED,
 
         licensePlate: input.licensePlate.trim(),
         vehicleColor: input.vehicleColor.trim(),
@@ -1401,8 +1401,8 @@ private async resolveIndividualCustomerForCreate(
         actorRole: input.createdByRole ?? null,
         actorType: EnumDeliveryStatusHistoryActorType.USER,
         fromStatus: null,
-        toStatus: EnumDeliveryStatusHistoryToStatus.QUOTED,
-        note: "Delivery created from accepted quote",
+        toStatus: EnumDeliveryStatusHistoryToStatus.LISTED,
+        note: "Delivery created and listed on marketplace",
       },
     });
 
@@ -1454,7 +1454,7 @@ private async resolveIndividualCustomerForCreate(
       });
     }
 
-    await this.notificationEventEngine.notifyDeliveryCreated({
+    await this.notificationEventEngine.notifyDeliveryReleased({
       deliveryId: delivery.id,
       actorUserId: input.createdByUserId ?? null,
     });

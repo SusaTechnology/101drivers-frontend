@@ -89,7 +89,9 @@ export class DeliveryLifecycleService {
       EnumDeliveryRequestStatus.DISPUTED,
     ],
     [EnumDeliveryRequestStatus.CANCELLED]: [],
-    [EnumDeliveryRequestStatus.EXPIRED]: [],
+    [EnumDeliveryRequestStatus.EXPIRED]: [
+      EnumDeliveryRequestStatus.QUOTED,
+    ],
     [EnumDeliveryRequestStatus.DISPUTED]: [],
   };
 
@@ -771,78 +773,6 @@ async getTrackingLink(input: {
           }
         : null,
     };
-  }
-
-  async releaseToMarketplace(input: {
-    deliveryId: string;
-    actorUserId?: string | null;
-    actorRole?: EnumDeliveryStatusHistoryActorRole | null;
-    note?: string | null;
-  }) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      const delivery = await tx.deliveryRequest.findUnique({
-        where: { id: input.deliveryId },
-        select: {
-          id: true,
-          status: true,
-          quoteId: true,
-          pickupWindowStart: true,
-          pickupWindowEnd: true,
-          dropoffWindowStart: true,
-          dropoffWindowEnd: true,
-        },
-      });
-
-      if (!delivery) {
-        throw new NotFoundException("Delivery request not found");
-      }
-
-      if (delivery.status !== EnumDeliveryRequestStatus.QUOTED) {
-        throw new ConflictException(
-          "Only QUOTED deliveries can be released to marketplace"
-        );
-      }
-
-      if (!delivery.quoteId) {
-        throw new BadRequestException("LISTED delivery must have an accepted quote");
-      }
-
-      if (!delivery.pickupWindowStart || !delivery.pickupWindowEnd) {
-        throw new BadRequestException("Pickup window is required before listing");
-      }
-
-      if (!delivery.dropoffWindowStart || !delivery.dropoffWindowEnd) {
-        throw new BadRequestException("Drop-off window is required before listing");
-      }
-
-      await tx.deliveryRequest.update({
-        where: { id: input.deliveryId },
-        data: {
-          status: EnumDeliveryRequestStatus.LISTED,
-        },
-      });
-
-      await tx.deliveryStatusHistory.create({
-        data: {
-          deliveryId: input.deliveryId,
-          actorUserId: input.actorUserId ?? null,
-          actorRole: input.actorRole ?? null,
-          actorType: EnumDeliveryStatusHistoryActorType.USER,
-          note: input.note ?? "Delivery released to marketplace",
-          fromStatus: EnumDeliveryStatusHistoryFromStatus.QUOTED,
-          toStatus: EnumDeliveryStatusHistoryToStatus.LISTED,
-        },
-      });
-
-      return { ok: true };
-    });
-
-    await this.notificationEventEngine.notifyDeliveryReleased({
-      deliveryId: input.deliveryId,
-      actorUserId: input.actorUserId ?? null,
-    });
-
-    return result;
   }
 
   private async assertDriverAssignedToDeliveryTx(

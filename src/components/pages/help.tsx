@@ -51,7 +51,7 @@ const customerFaqs = [
   },
   {
     question: 'What happens after I book a delivery?',
-    answer: 'Once booked, your delivery is released to our driver marketplace. An available driver will accept the job, and you\'ll receive a tracking link to monitor the delivery in real-time.',
+    answer: 'Once submitted, your delivery is immediately visible to our driver marketplace. An available driver will accept the gig, and you\'ll receive a tracking link to monitor the delivery in real-time.',
   },
   {
     question: 'How do I cancel a delivery?',

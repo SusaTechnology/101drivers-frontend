@@ -48,10 +48,12 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
-import { Map as MapComponent } from '@/components/map/GoogleMap'
+import { GoogleMap, Marker } from '@react-google-maps/api'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
-import LocationAutocomplete from '@/components/map/LocationAutocomplete' // adjust path as needed
+import LocationAutocomplete from '@/components/map/LocationAutocomplete'
+import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
+import { usePickupZones } from '@/hooks/usePickupZones'
 
 // Form schema – includes all fields for the combined payload
 const preferencesSchema = z.object({
@@ -145,6 +147,13 @@ export default function DriverPreferencesPage() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/serviceDistricts`,
     noFilter: true,
   })
+
+  // Fetch pickup zones for map overlay
+  const { zones: pickupZones } = usePickupZones()
+
+  // Locating state for button feedback
+  const [locating, setLocating] = useState(false)
+
   // Fetch driver profile to prefill form
   const {
     data: driverProfile,
@@ -311,6 +320,7 @@ export default function DriverPreferencesPage() {
       toast.error('Geolocation not supported')
       return
     }
+    setLocating(true)
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords
@@ -319,9 +329,11 @@ export default function DriverPreferencesPage() {
         setMapCenter({ lat: latitude, lng: longitude })
         reverseGeocode({ lat: latitude, lng: longitude })
         toast.success('Location updated')
+        setLocating(false)
       },
       () => {
         toast.error('Unable to get current location')
+        setLocating(false)
       }
     )
   }
@@ -505,14 +517,14 @@ export default function DriverPreferencesPage() {
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-white">Personal Information</h2>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                Update your contact details and profile photo.
+                Update your contact details.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-9 items-start">
               {/* Phone Field */}
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  Phone Number
+                  Cell Phone
                 </Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -532,10 +544,8 @@ export default function DriverPreferencesPage() {
                 </Label>
                 <div className="flex flex-col items-start gap-2">
                   <div
-                    onClick={handlePreviewClick}
                     className={cn(
-                      "relative w-24 h-24 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-pointer hover:opacity-90 transition",
-                      uploadPhoto.isPending && "opacity-50 cursor-wait"
+                      "relative w-24 h-24 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 opacity-50 cursor-not-allowed"
                     )}
                   >
                     {uploadPhoto.isPending ? (
@@ -564,9 +574,11 @@ export default function DriverPreferencesPage() {
                     onChange={handleFileChange}
                     className="hidden"
                   />
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Click the photo to upload a new image.
-                  </p>
+                  {!form.watch('profilePhotoUrl') && !uploadPhoto.isPending && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                      Tap to take a new photo
+                    </p>
+                  )}
                   {uploadPhoto.isPending && (
                     <p className="text-xs text-primary flex items-center gap-1">
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -576,6 +588,13 @@ export default function DriverPreferencesPage() {
                   {form.watch('profilePhotoUrl') && !uploadPhoto.isPending && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400">Photo ready</p>
                   )}
+                  <p className="text-xs text-slate-900 dark:text-white leading-relaxed">
+                    To update your photo,{' '}
+                    <Link to="/help-driver" className="text-primary underline underline-offset-2 hover:text-primary/80 transition">
+                      contact customer service
+                    </Link>
+                    .
+                  </p>
                 </div>
               </div>
             </div>
@@ -646,10 +665,10 @@ export default function DriverPreferencesPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  Home Base Location
+                  Pickup Zone & Home Base
                 </h2>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                  Set your default starting point by clicking on the map or using your current location.
+                  Set your default starting point by using your current location.
                 </p>
               </div>
 
@@ -657,10 +676,15 @@ export default function DriverPreferencesPage() {
                 type="button"
                 variant="outline"
                 onClick={handleUseCurrentLocation}
+                disabled={locating}
                 className="rounded-2xl w-full sm:w-auto"
               >
-                <MapPin className="w-4 h-4 mr-2" />
-                Use My Current Location
+                {locating ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <MapPin className="w-4 h-4 mr-2" />
+                )}
+                {locating ? 'Locating...' : 'Use Current Location'}
               </Button>
             </div>
 
@@ -670,13 +694,30 @@ export default function DriverPreferencesPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                  <MapComponent
-                    center={mapCenter}
-                    markers={[{ lat: form.watch('homeBaseLat') || mapCenter.lat, lng: form.watch('homeBaseLng') || mapCenter.lng }]}
-                    zoom={12}
-                    onClick={handleMapClick}
-                  />
+                <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                  <div className="w-full h-[400px]">
+                    <GoogleMap
+                      mapContainerStyle={{ width: '100%', height: '100%' }}
+                      center={mapCenter}
+                      zoom={12}
+                      onClick={handleMapClick}
+                    >
+                      <PickupZoneOverlay zones={pickupZones} />
+                      <Marker
+                        position={{
+                          lat: form.watch('homeBaseLat') || mapCenter.lat,
+                          lng: form.watch('homeBaseLng') || mapCenter.lng,
+                        }}
+                      />
+                    </GoogleMap>
+                  </div>
+                  {/* Legend */}
+                  <div className="absolute bottom-3 left-3 z-10">
+                    <Badge className="bg-white/95 dark:bg-slate-900/90 backdrop-blur shadow-lg text-[11px] font-bold">
+                      <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#39FF14] mr-1.5" />
+                      Green area = Pickup Zone
+                    </Badge>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

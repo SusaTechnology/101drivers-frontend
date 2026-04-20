@@ -62,6 +62,7 @@ export type RouteMetrics = {
   durationSeconds: number;
   durationMinutes: number;
   polyline?: string | null;
+  estimated?: boolean;
 };
 
 @Injectable()
@@ -434,10 +435,17 @@ export class GoogleMapsService {
     this.logger.debug(`Routes first route: ${JSON.stringify(route)}`);
 
     if (!route || typeof route.distanceMeters !== "number") {
-      this.logger.error(
-        `Route result incomplete. First route: ${JSON.stringify(route)}`
+      this.logger.warn(
+        `Route result incomplete from Google API. First route: ${JSON.stringify(
+          route
+        )}. Falling back to haversine estimate. origin=(${input.originLat}, ${input.originLng}), destination=(${input.destinationLat}, ${input.destinationLng})`
       );
-      throw new InternalServerErrorException("Route result is incomplete");
+      return this.haversineRouteFallback(
+        input.originLat,
+        input.originLng,
+        input.destinationLat,
+        input.destinationLng
+      );
     }
 
     const durationRaw =
@@ -448,10 +456,21 @@ export class GoogleMapsService {
           : null;
 
     if (!durationRaw) {
-      this.logger.error(
-        `Route duration missing. Route payload: ${JSON.stringify(route)}`
+      this.logger.warn(
+        `Route duration missing from Google API. Falling back to haversine estimate. Route payload: ${JSON.stringify(
+          route
+        )}`
       );
-      throw new InternalServerErrorException("Route duration is missing");
+      const distanceMeters = route.distanceMeters;
+      const estimatedDuration = Math.ceil((distanceMeters / 1000) / 45 * 3600); // ~45 km/h avg
+      return {
+        distanceMeters,
+        distanceMiles: this.metersToMiles(distanceMeters),
+        durationSeconds: estimatedDuration,
+        durationMinutes: Math.ceil(estimatedDuration / 60),
+        polyline: route.polyline?.encodedPolyline ?? null,
+        estimated: true,
+      };
     }
 
     const distanceMeters = route.distanceMeters;
@@ -472,6 +491,70 @@ export class GoogleMapsService {
       durationMinutes: Math.ceil(durationSeconds / 60),
       polyline: route.polyline?.encodedPolyline ?? null,
     };
+  }
+
+  /**
+   * Haversine straight-line distance fallback when Google Routes API returns
+   * no usable route. Uses a 1.35x road-distance multiplier and 45 km/h
+   * average speed to produce realistic estimates for California roads.
+   */
+  private haversineRouteFallback(
+    originLat: number,
+    originLng: number,
+    destinationLat: number,
+    destinationLng: number
+  ): RouteMetrics {
+    const straightMeters = this.haversineDistance(
+      originLat,
+      originLng,
+      destinationLat,
+      destinationLng
+    );
+
+    const ROAD_FACTOR = 1.35;
+    const AVG_SPEED_KMH = 45;
+    const distanceMeters = Math.round(straightMeters * ROAD_FACTOR);
+    const distanceKm = distanceMeters / 1000;
+    const durationSeconds = Math.round((distanceKm / AVG_SPEED_KMH) * 3600);
+
+    this.logger.debug(
+      `Haversine fallback: straightLine=${Math.round(
+        straightMeters
+      )}m, estimated=${distanceMeters}m, duration=${durationSeconds}s`
+    );
+
+    return {
+      distanceMeters,
+      distanceMiles: this.metersToMiles(distanceMeters),
+      durationSeconds,
+      durationMinutes: Math.max(1, Math.ceil(durationSeconds / 60)),
+      polyline: null,
+      estimated: true,
+    };
+  }
+
+  /**
+   * Haversine formula for great-circle distance between two coordinates.
+   */
+  private haversineDistance(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number
+  ): number {
+    const R = 6_371_000; // Earth radius in meters
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
   }
 
   private metersToMiles(value: number): number {

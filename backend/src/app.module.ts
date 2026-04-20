@@ -44,6 +44,7 @@ import { SecretsManagerModule } from "./providers/secrets/secretsManager.module"
 import { ServeStaticModule } from "@nestjs/serve-static";
 import { ServeStaticOptionsService } from "./serveStaticOptions.service";
 import { ConfigModule, ConfigService } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { GraphQLModule } from "@nestjs/graphql";
 import { ApolloDriver, ApolloDriverConfig } from "@nestjs/apollo";
 
@@ -108,6 +109,7 @@ import { SupportRequestNoteModule } from "./supportRequestNote/supportRequestNot
     EmailVerificationModule,
     SupportRequestModule,
     SupportRequestNoteModule,
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true }),
     ServeStaticModule.forRootAsync({
       useClass: ServeStaticOptionsService,

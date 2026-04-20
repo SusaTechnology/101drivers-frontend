@@ -153,7 +153,7 @@ const MOCK_DELIVERY = {
 // Navigation items for mobile menu (optional)
 const navItems = [
   { href: '/driver-dashboard', label: 'Dashboard' },
-  { href: '/driver-active-delivery', label: 'Active Delivery', active: true },
+  { href: '/driver-active', label: 'Active Delivery', active: true },
 ]
 
 export default function DriverActiveDeliveryPage() {
@@ -195,9 +195,12 @@ export default function DriverActiveDeliveryPage() {
   const userId = user?.id
 
     // Main query: fetch active delivery for this driver
+  // Uses dedicated endpoint — returns { assignment + delivery } or null
   const activeDeliveryQuery = useDataQuery<any>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests?where[status]=ACTIVE&where[assignments][some][driverId]=${driverId}`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${driverId}`,
     noFilter: true,
+    enabled: Boolean(driverId),
+    refetchInterval: 10000, // refresh every 10s
     onSuccess: (data) => {
       // Optionally sync workflow status if needed, but we'll keep separate
       // setWorkflowStatus(data); // if you want to set something else
@@ -207,8 +210,8 @@ export default function DriverActiveDeliveryPage() {
     },
   })
 
-  // Extract the actual delivery object (first item in the array)
-  const delivery = activeDeliveryQuery.data?.[0]
+  // Extract delivery from the assignment wrapper
+  const delivery = activeDeliveryQuery.data?.delivery || null
   const deliveryLoading = activeDeliveryQuery.isLoading
   const deliveryError = activeDeliveryQuery.error
   const hasNoData = !deliveryLoading && !deliveryError && !delivery
@@ -558,6 +561,7 @@ export default function DriverActiveDeliveryPage() {
   }
 
   // Build timeline dynamically from actual data
+  const hasTrackingSession = !!deliveryData?.trackingSession?.startedAt
   const timelineSteps = deliveryData ? [
     {
       id: 1,
@@ -565,15 +569,17 @@ export default function DriverActiveDeliveryPage() {
       description: 'VIN, photos, and odometer start captured.',
       time: formatTime(deliveryData.compliance?.pickupCompletedAt),
       icon: CheckCircle,
-      status: deliveryData.compliance?.pickupCompletedAt ? 'complete' : 'locked',
+      status: deliveryData.compliance?.pickupCompletedAt ? 'complete' : (hasTrackingSession ? 'locked' : 'locked'),
     },
     {
       id: 2,
       title: 'Delivery in progress',
-      description: 'Tracking enabled. Share updates via "Check-in".',
-      time: 'Now',
+      description: hasTrackingSession
+        ? 'Tracking enabled. Share updates via "Check-in".'
+        : 'Waiting for trip to start.',
+      time: hasTrackingSession ? formatTime(deliveryData.trackingSession.startedAt) : 'Pending',
       icon: LocalShipping,
-      status: 'active',
+      status: hasTrackingSession ? 'active' : 'locked',
     },
     {
       id: 3,
@@ -797,24 +803,30 @@ export default function DriverActiveDeliveryPage() {
                     </h1>
 
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <Badge variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
-                        <Distance className="w-4 h-4 text-primary mr-1" />
-                        {deliveryData?.quote?.distanceMiles ? `${deliveryData.quote.distanceMiles} mi` : '—'}
-                      </Badge>
-                      <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-                        <Schedule className="w-4 h-4 text-primary mr-1" />
-                        Started {formatTime(deliveryData?.trackingSession?.startedAt)}
-                      </Badge>
-                      <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-                        <Bolt className="w-4 h-4 text-primary mr-1" />
-                        Bonus {deliveryData?.bonus || '$0'}
-                      </Badge>
+                      {deliveryData?.quote?.distanceMiles && (
+                        <Badge variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
+                          <Distance className="w-4 h-4 text-primary mr-1" />
+                          {deliveryData.quote.distanceMiles} mi
+                        </Badge>
+                      )}
+                      {deliveryData?.trackingSession?.startedAt && (
+                        <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
+                          <Schedule className="w-4 h-4 text-primary mr-1" />
+                          Started {formatTime(deliveryData.trackingSession.startedAt)}
+                        </Badge>
+                      )}
+                      {deliveryData?.urgentBonusAmount > 0 && (
+                        <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
+                          <Bolt className="w-4 h-4 text-primary mr-1" />
+                          Bonus ${deliveryData.urgentBonusAmount}
+                        </Badge>
+                      )}
                     </div>
                   </div>
 
                   <div className="text-left sm:text-right">
                     <p className="text-3xl font-black text-primary">
-                      ${deliveryData?.quote?.estimatedPrice?.toFixed(2) || '0.00'}
+                      ${deliveryData?.quote?.estimatedPrice ? deliveryData.quote.estimatedPrice.toFixed(2) : '—'}
                     </p>
                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
                       Est. payout
@@ -862,10 +874,12 @@ export default function DriverActiveDeliveryPage() {
                       Live Route
                     </div>
 
-                    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 shadow-lg border border-slate-200 dark:border-slate-700 inline-flex items-center gap-2 w-fit">
-                      <Speed className="w-4 h-4 text-primary" />
-                      ETA: {deliveryData?.etaMinutes ? `${Math.round(deliveryData.etaMinutes)} min` : '—'}
-                    </div>
+                    {deliveryData?.etaMinutes && (
+                      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 shadow-lg border border-slate-200 dark:border-slate-700 inline-flex items-center gap-2 w-fit">
+                        <Speed className="w-4 h-4 text-primary" />
+                        ETA: {Math.round(deliveryData.etaMinutes)} min
+                      </div>
+                    )}
                   </div>
 
                   <div className="absolute bottom-4 left-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
@@ -920,7 +934,7 @@ export default function DriverActiveDeliveryPage() {
                 <div>
                   <CardTitle className="text-lg font-black">Pickup evidence</CardTitle>
                   <CardDescription className="text-sm mt-1">
-                    {deliveryLoading ? <Skeleton className="h-4 w-16" /> : (deliveryData?.compliance?.pickupCompletedAt ? 'Complete ✓' : 'Pending')}
+                    {deliveryLoading ? <Skeleton className="h-4 w-16" /> : (deliveryData?.compliance?.pickupCompletedAt ? 'Complete' : 'Pending')}
                   </CardDescription>
                 </div>
                 <div className="w-11 h-11 rounded-2xl bg-primary/15 flex items-center justify-center">
@@ -935,37 +949,37 @@ export default function DriverActiveDeliveryPage() {
                     <Skeleton key={i} className="h-16 rounded-2xl" />
                   ))}
                 </div>
-              ) : (
+              ) : pickupPhotos.length > 0 ? (
                 <>
                   <div className="grid grid-cols-3 gap-2">
-                    {Array(6).fill(null).map((_, index) => {
-                      const slotIndex = index + 1
-                      const photo = pickupPhotos.find(p => p.slotIndex === slotIndex)
-                      return (
-                        <div
-                          key={index}
-                          className="h-16 rounded-2xl bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 overflow-hidden"
-                        >
-                          {photo?.imageUrl ? (
-                            <img
-                              src={photo.imageUrl}
-                              alt={`Pickup ${slotIndex}`}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
-                              No photo
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                    {pickupPhotos.map((photo: any, index: number) => (
+                      <div
+                        key={index}
+                        className="h-16 rounded-2xl bg-slate-100 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 overflow-hidden"
+                      >
+                        {photo?.imageUrl ? (
+                          <img
+                            src={photo.imageUrl}
+                            alt={`Pickup ${photo.slotIndex}`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                            No photo
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
 
                   <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-                    Photos captured at pickup. Time‑stamped and linked to delivery.
+                    Photos captured at pickup. Time-stamped and linked to delivery.
                   </p>
                 </>
+              ) : (
+                <div className="flex items-center justify-center h-16 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-700">
+                  <p className="text-xs text-slate-400">No pickup photos yet</p>
+                </div>
               )}
             </CardContent>
           </Card>

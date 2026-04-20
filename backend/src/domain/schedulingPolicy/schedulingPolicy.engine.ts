@@ -32,6 +32,7 @@ type SchedulePreviewInput = {
   dropoffWindowStart?: Date | null;
   dropoffWindowEnd?: Date | null;
   afterHoursRequested?: boolean;
+  preferredDate?: string | null;
 };
 
 type TimeRange = {
@@ -56,6 +57,7 @@ type DeliverySchedulePreviewInput = {
   dropoffWindowStart?: Date | null;
   dropoffWindowEnd?: Date | null;
   afterHoursRequested?: boolean;
+  preferredDate?: string | null;
 };
 
 type QuotePreviewRow = {
@@ -184,6 +186,7 @@ export class SchedulingPolicyEngine {
       dropoffWindowStart: input.dropoffWindowStart ?? null,
       dropoffWindowEnd: input.dropoffWindowEnd ?? null,
       afterHoursRequested: input.afterHoursRequested ?? false,
+      preferredDate: input.preferredDate ?? null,
     });
     return this.mapPreviewToResponse(preview, routeMetrics.durationMinutes);
   }
@@ -258,11 +261,23 @@ export class SchedulingPolicyEngine {
       reasons.push("AFTER_HOURS_REQUIRES_OPS_CONFIRMATION");
     }
 
-    const baseDate = this.getBaseScheduleDate(
-      requestCreatedAt.toJSDate(),
-      policy.defaultMode,
-      sameDayEligible
-    );
+    // When the user selects a specific date via the calendar, use that as the
+    // base date for slot generation.  Otherwise fall back to the default
+    // today/tomorrow logic based on policy and same-day eligibility.
+    let baseDate: Date;
+    if (input.preferredDate) {
+      // Use fromISO directly to avoid UTC-midnight shift: new Date("2025-07-17")
+      // parses as UTC 00:00 which becomes 17:00 PDT the previous day.
+      baseDate = DateTime.fromISO(input.preferredDate, { zone: this.businessTimeZone })
+        .startOf("day")
+        .toJSDate();
+    } else {
+      baseDate = this.getBaseScheduleDate(
+        requestCreatedAt.toJSDate(),
+        policy.defaultMode,
+        sameDayEligible
+      );
+    }
 
     // Try up to 7 days forward to find a day with operating hours + available slots
     const suggestedPickupSlots = this.buildSuggestedSlotsMultiDay(
@@ -279,12 +294,17 @@ export class SchedulingPolicyEngine {
       7
     );
 
+    // Same UTC-shift bug avoidance: parse ISO date string in business timezone directly
+    const preferredDay = input.preferredDate
+      ? DateTime.fromISO(input.preferredDate, { zone: this.businessTimeZone })
+      : this.toBusinessDateTime(requestCreatedAt.toJSDate());
+
     const sameDayStatus =
       policy.defaultMode === EnumSchedulingPolicyDefaultMode.SAME_DAY &&
       sameDayEligible &&
       actualSlotDate &&
       this.toBusinessDateTime(actualSlotDate).hasSame(
-        this.toBusinessDateTime(requestCreatedAt.toJSDate()),
+        preferredDay,
         "day"
       )
         ? "SAME_DAY"
@@ -606,8 +626,7 @@ export class SchedulingPolicyEngine {
       dayOfWeek: number;
       startTime: string;
       endTime: string;
-    }>
-  >,
+    }>,
     maxDays: number = 7
   ): SlotCandidate[] {
     for (let d = 0; d < maxDays; d++) {
@@ -635,8 +654,7 @@ export class SchedulingPolicyEngine {
       dayOfWeek: number;
       startTime: string;
       endTime: string;
-    }>
-  >,
+    }>,
     maxDays: number = 7
   ): Date | null {
     for (let d = 0; d < maxDays; d++) {

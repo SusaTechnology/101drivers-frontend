@@ -56,11 +56,11 @@ import {
   Award,
   ChevronRight,
   DollarSign,
-  Rocket,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, authFetch } from '@/lib/tanstack/dataQuery'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 // Helper to format date
@@ -193,32 +193,6 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     },
     onError: (error) => {
       toast.error('Failed to send tip', { description: error.message })
-    }
-  })
-
-  // Release to marketplace mutation
-  const queryClient = useQueryClient()
-  const releaseToMarketMutation = useMutation({
-    mutationFn: async () => {
-      return authFetch(
-        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${id}/release-to-marketplace`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-    },
-    onSuccess: () => {
-      toast.success('Released to market', { 
-        description: 'Your delivery is now visible to drivers. You will be notified when a driver books it.' 
-      })
-      queryClient.invalidateQueries({ queryKey: ['delivery', id] })
-      refetch() // Refresh delivery data
-    },
-    onError: (error: Error) => {
-      toast.error('Failed to release to market', { description: error.message })
     }
   })
 
@@ -928,26 +902,6 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3">
-            {/* Release to Market button - shown for QUOTED status */}
-            {deliveryData.status === 'QUOTED' && (
-              <Button
-                onClick={() => releaseToMarketMutation.mutate({})}
-                disabled={releaseToMarketMutation.isPending}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-lime-500 text-slate-950 font-extrabold hover:bg-lime-600"
-              >
-                {releaseToMarketMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-950"></div>
-                    Releasing...
-                  </>
-                ) : (
-                  <>
-                    <Rocket className="h-4 w-4" />
-                    Release to Market
-                  </>
-                )}
-              </Button>
-            )}
             <Button
               variant="outline"
               onClick={() => navigate({ to: '/dealer-edit-delivery', state: { id: deliveryData.id } })}
@@ -1588,15 +1542,25 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                     <p className="text-sm font-medium">
                       {deliveryData.status === 'LISTED' ? 'Waiting for driver to book' :
                        deliveryData.status === 'DRAFT' ? 'Draft - not yet submitted' :
-                       ['EXPIRED', 'CANCELLED'].includes(deliveryData.status) ? 'Delivery not active' :
+                       deliveryData.status === 'EXPIRED' ? 'Delivery expired' :
+                       deliveryData.status === 'CANCELLED' ? 'Delivery cancelled' :
                        'Driver not yet assigned'}
                     </p>
                     <p className="text-xs mt-1">
                       {deliveryData.status === 'LISTED' ? 'Driver details will appear once a driver accepts this delivery.' :
                        deliveryData.status === 'DRAFT' ? 'Submit this delivery to make it available for drivers.' :
-                       ['EXPIRED', 'CANCELLED'].includes(deliveryData.status) ? 'This delivery is no longer active.' :
+                       deliveryData.status === 'EXPIRED' ? 'This delivery expired but you can reactivate it by adjusting the schedule.' :
+                       deliveryData.status === 'CANCELLED' ? 'This delivery was cancelled.' :
                        'Driver details appear after the delivery is booked.'}
                     </p>
+                    {deliveryData.status === 'EXPIRED' && (
+                      <Button
+                        onClick={() => navigate({ to: '/dealer-edit-delivery', state: { id: deliveryData.id } })}
+                        className="mt-4 bg-amber-500 text-white hover:bg-amber-600 font-bold"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />Reactivate
+                      </Button>
+                    )}
                   </div>
                 )}
 
