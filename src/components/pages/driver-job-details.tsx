@@ -1,107 +1,251 @@
 // app/pages/driver/job-details.tsx
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
-  LogOut,
-  Bolt,
-  QrCode,
-  Camera,
-  Gauge as Speed,
-  Route,
-  Info,
   Sun,
   Moon,
-  Menu,
-  X,
-  ChevronRight,
-  ChevronLeft,
-  ChevronDown,
-  ChevronUp,
-  MoreHorizontal,
-  MoreVertical,
+  MapPin,
+  Clock,
+  Route,
+  Navigation,
+  CalendarDays,
+  ExternalLink,
+  Car,
+  MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getUser, useCreate, useDataQuery } from '@/lib/tanstack/dataQuery'
+import {
+  useJsApiLoader,
+  GoogleMap,
+  Marker,
+  DirectionsRenderer,
+} from '@react-google-maps/api'
+import {
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_SCRIPT_ID,
+} from '@/lib/google-maps-config'
 
-// Helper functions (same as dashboard)
-const formatDate = (isoString?: string): string => {
+// ── Formatters ──────────────────────────────────────────────────────
+
+const formatFullWeekdayDate = (isoString?: string | null): string => {
   if (!isoString) return ''
   const date = new Date(isoString)
-  const today = new Date()
-  const tomorrow = new Date(today)
-  tomorrow.setDate(tomorrow.getDate() + 1)
-
-  if (date.toDateString() === today.toDateString()) return 'Today'
-  if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
 }
 
-const formatTimeRange = (startIso?: string, endIso?: string): string => {
+const formatTimeRange = (startIso?: string | null, endIso?: string | null): string => {
   if (!startIso || !endIso) return ''
   const start = new Date(startIso)
   const end = new Date(endIso)
   const startStr = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   const endStr = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  return `${startStr}–${endStr}`
+  return `${startStr} \u2013 ${endStr}`
 }
 
-const formatDuration = (minutes?: number): string => {
-  if (!minutes) return '—'
+const formatDuration = (minutes?: number | null): string => {
+  if (!minutes) return ''
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
   return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
 }
 
 const formatCurrency = (amount?: number | null): string => {
-  if (amount == null) return '—'
+  if (amount == null) return ''
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(amount)
 }
 
-const getShortAddress = (address?: string): string => {
-  if (!address) return ''
-  const parts = address.split(',')
-  return parts[0] // first part before comma
+// Extract short human-readable label from a full address.
+const extractRouteLabel = (fullAddress: string): string => {
+  if (!fullAddress) return ''
+  const trimmed = fullAddress.trim()
+
+  if (trimmed.includes(',')) {
+    const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean)
+
+    for (let i = 1; i < parts.length; i++) {
+      const seg = parts[i]
+      if (/^\d+$/.test(seg)) continue
+      if (/^[A-Z]{2}$/.test(seg)) continue
+      if (/^(USA|United States)$/i.test(seg)) continue
+      if (/^\d/.test(seg)) continue
+      const clean = seg.replace(/\s+\d{5}(-\d{4})?$/, '').trim()
+      if (clean.length >= 3) return clean
+    }
+
+    const street = parts[0].replace(/^\d+\s+/, '').replace(/\s+(Blvd|Ave|Avenue|Street|St|Drive|Dr|Road|Rd|Lane|Ln|Way|Ct|Court|Pl|Place|Pkwy|Parkway)$/i, '').trim()
+    if (street.length >= 3) return street
+  }
+
+  const match = trimmed.match(/^\d+\s+(.+)$/)
+  return match ? match[1].trim() : trimmed
 }
 
-// Service type mapping
-const serviceTypeLabels: Record<string, string> = {
-  HOME_DELIVERY: 'Car Transfer',
-  BETWEEN_LOCATIONS: 'Car Transfer',
-  SERVICE_PICKUP_RETURN: 'Car Transfer',
+// ── Hero Route Map ──────────────────────────────────────────────────
+
+function HeroRouteMap({
+  pickup,
+  dropoff,
+  isLoaded,
+}: {
+  pickup: { lat: number; lng: number }
+  dropoff: { lat: number; lng: number }
+  isLoaded: boolean
+}) {
+  const [map, setMap] = useState<google.maps.Map | null>(null)
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
+  const [directionsFailed, setDirectionsFailed] = useState(false)
+  const hasFetched = useRef(false)
+
+  // Fetch route
+  useEffect(() => {
+    if (!isLoaded || hasFetched.current) return
+    hasFetched.current = true
+
+    const svc = new google.maps.DirectionsService()
+    svc.route(
+      {
+        origin: pickup,
+        destination: dropoff,
+        travelMode: google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === google.maps.DirectionsStatus.OK) setDirections(result)
+        else setDirectionsFailed(true)
+      },
+    )
+  }, [isLoaded, pickup, dropoff])
+
+  // Fit bounds tightly
+  useEffect(() => {
+    if (!map) return
+    if (!directions && !directionsFailed) return
+
+    const bounds = new google.maps.LatLngBounds()
+
+    if (directions && directions.routes.length > 0) {
+      directions.routes[0].legs.forEach((leg) => {
+        leg.steps.forEach((step) => {
+          bounds.extend(step.start_location)
+          bounds.extend(step.end_location)
+        })
+      })
+    } else {
+      bounds.extend(pickup)
+      bounds.extend(dropoff)
+    }
+
+    map.fitBounds(bounds, 48)
+  }, [map, directions, directionsFailed, pickup, dropoff])
+
+  const handleMapLoad = useCallback((gMap: google.maps.Map) => setMap(gMap), [])
+
+  const initialCenter = {
+    lat: (pickup.lat + dropoff.lat) / 2,
+    lng: (pickup.lng + dropoff.lng) / 2,
+  }
+
+  // Clean map styles — focus on route
+  const cleanStyles: google.maps.MapTypeStyle[] = [
+    { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi.business', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi.park', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit.station', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative.locality', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative.neighborhood', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'landscape', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  ]
+
+  if (!isLoaded) {
+    return (
+      <div className="w-full h-[220px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+        <div className="w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full h-[220px] bg-slate-100 dark:bg-slate-800">
+      <GoogleMap
+        mapContainerStyle={{ width: '100%', height: '100%' }}
+        center={initialCenter}
+        zoom={12}
+        onLoad={handleMapLoad}
+        options={{
+          fullscreenControl: false,
+          streetViewControl: false,
+          mapTypeControl: false,
+          zoomControl: false,
+          gestureHandling: 'greedy',
+          disableDefaultUI: false,
+          zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_TOP },
+          styles: cleanStyles,
+        }}
+      >
+        {/* Pickup marker — green */}
+        <Marker
+          position={pickup}
+          icon={{
+            url:
+              'data:image/svg+xml;charset=UTF-8,' +
+              encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="40"><path d="M16 2C10.48 2 6 6.48 6 12c0 7.5 10 18 10 18s10-10.5 10-18C26 6.48 21.52 2 16 2z" fill="#16a34a"/><circle cx="16" cy="12" r="5" fill="white"/></svg>',
+              ),
+            scaledSize: new google.maps.Size(28, 40),
+            anchor: new google.maps.Point(14, 40),
+          }}
+        />
+
+        {/* Dropoff marker — red */}
+        <Marker
+          position={dropoff}
+          icon={{
+            url:
+              'data:image/svg+xml;charset=UTF-8,' +
+              encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="40"><path d="M16 2C10.48 2 6 6.48 6 12c0 7.5 10 18 10 18s10-10.5 10-18C26 6.48 21.52 2 16 2z" fill="#dc2626"/><circle cx="16" cy="12" r="5" fill="white"/></svg>',
+              ),
+            scaledSize: new google.maps.Size(28, 40),
+            anchor: new google.maps.Point(14, 40),
+          }}
+        />
+
+        {/* Route polyline */}
+        {directions && (
+          <DirectionsRenderer
+            directions={directions}
+            options={{
+              suppressMarkers: true,
+              preserveViewport: true,
+              polylineOptions: {
+                strokeColor: '#16a34a',
+                strokeWeight: 5,
+                strokeOpacity: 1,
+              },
+            }}
+          />
+        )}
+      </GoogleMap>
+    </div>
+  )
 }
 
-// Bottom action buttons (unchanged)
-const bottomActions = [
-  {
-    label: 'Book This Gig',
-    primary: true,
-    action: 'book',
-  },
-  {
-    label: 'Report Issue',
-    primary: false,
-    action: 'message',
-  },
-]
+// ── Main Page ───────────────────────────────────────────────────────
 
 export default function DriverJobDetailsPage() {
   const [mounted, setMounted] = useState(false)
@@ -111,41 +255,35 @@ export default function DriverJobDetailsPage() {
   const { jobId } = useSearch({ strict: false }) as { jobId: string }
 
   // Fetch real gig details
-  const { data, isLoading, isError, error } = useDataQuery({
+  const { data: gig, isLoading, isError } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${user?.profileId}/${jobId}`,
     noFilter: true,
-    enabled: Boolean(jobId && user?.profileId)
+    enabled: Boolean(jobId && user?.profileId),
+  })
+
+  // Load Google Maps API
+  const { isLoaded: isMapsLoaded } = useJsApiLoader({
+    id: GOOGLE_MAPS_SCRIPT_ID,
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
   // Book gig mutation
   const bookGig = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
     onSuccess: () => {
-      toast.success('Gig booked successfully!', {
+      toast.success('Gig booked!', {
         description: 'You have been assigned to this delivery.',
       })
-      navigate({ to: `/driver-pickup-checklist`,search: { jobId }}) 
+      navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
     },
     onError: (error) => {
-      toast.error('Failed to book gig', {
-        description: error.message,
-      })
-    }
+      toast.error('Failed to book gig', { description: (error as any)?.message || 'Unknown error' })
+    },
   })
 
-  // Theme handling
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark')
-    toast.success(`${theme === 'dark' ? 'Light' : 'Dark'} mode activated`)
-  }
-
-  const handleSignOut = () => {
-    toast.success('Signed out successfully')
-    navigate({ to: '/driver-signin' })
-  }
 
   const handleBookGig = () => {
     if (!user?.profileId || !user?.id) {
@@ -155,403 +293,287 @@ export default function DriverJobDetailsPage() {
     bookGig.mutate({
       driverId: user.profileId,
       bookedByUserId: user.id,
-      reason: '' // optional note, can be empty string
+      reason: '',
     })
   }
 
-  const handleMessageOps = () => {
-    navigate({
-      to: '/driver-issue-report',
-      state: { deliveryId: jobId },
-    })
+  const handleDecline = () => {
+    navigate({ to: '/driver-dashboard' })
   }
 
-  // Loading state
+  const handleReportIssue = () => {
+    navigate({ to: '/driver-issue-report', state: { deliveryId: jobId } as any })
+  }
+
+  // Derived display values
+  const pickupLabel = extractRouteLabel(gig?.pickupAddress || '')
+  const dropoffLabel = extractRouteLabel(gig?.dropoffAddress || '')
+  const hasCoords =
+    gig?.pickupLat != null &&
+    gig?.pickupLng != null &&
+    gig?.dropoffLat != null &&
+    gig?.dropoffLng != null
+
+  // ── Loading skeleton ─────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-        <header className="sticky top-0 z-40 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-          <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link
-                to="/driver-dashboard"
-                className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-                aria-label="Back"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                  Delivery
-                </div>
-                <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                  Loading...
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="w-10 h-10 rounded-2xl" onClick={toggleTheme}>
-                {mounted && theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </Button>
-              <Button onClick={handleSignOut} variant="link" className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition p-0 h-auto">
-                Sign Out
-              </Button>
-            </div>
+      <div className="min-h-screen bg-white dark:bg-slate-950 font-sans antialiased">
+        {/* Header skeleton */}
+        <div className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md">
+          <div className="h-14 flex items-center px-4">
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            <div className="ml-3 h-4 w-48 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
           </div>
-        </header>
-        <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
-          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-            <CardContent className="p-8 text-center">
-              <p className="text-slate-600 dark:text-slate-400">Loading gig details...</p>
-            </CardContent>
-          </Card>
-        </main>
+        </div>
+        {/* Map skeleton */}
+        <div className="w-full h-[220px] bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        {/* Content skeleton */}
+        <div className="px-5 py-6 space-y-5">
+          <div className="h-7 w-3/4 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          <div className="h-10 w-32 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          <div className="h-4 w-2/3 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        </div>
       </div>
     )
   }
 
-  // Error state
-  if (isError || !data) {
+  // ── Error state ──────────────────────────────────────────────────
+  if (isError || !gig) {
     return (
-      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-        <header className="sticky top-0 z-40 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-          <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link
-                to="/driver-dashboard"
-                className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-                aria-label="Back"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                  Delivery
-                </div>
-                <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                  Error
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="w-10 h-10 rounded-2xl" onClick={toggleTheme}>
-                {mounted && theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </Button>
-              <Button onClick={handleSignOut} variant="link" className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition p-0 h-auto">
-                Sign Out
-              </Button>
-            </div>
+      <div className="min-h-screen bg-white dark:bg-slate-950 font-sans antialiased">
+        <div className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md">
+          <div className="h-14 flex items-center px-4">
+            <Link
+              to="/driver-dashboard"
+              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
           </div>
-        </header>
-        <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
-          <Card className="border-red-200 dark:border-red-900 shadow-lg">
-            <CardContent className="p-8 text-center">
-              <p className="text-red-600 dark:text-red-400">Failed to load gig details. Please try again.</p>
-            </CardContent>
-          </Card>
-        </main>
+        </div>
+        <div className="px-5 py-16 text-center">
+          <p className="text-lg font-bold text-slate-900 dark:text-white">Gig not found</p>
+          <p className="mt-1 text-sm text-slate-500">This gig may no longer be available.</p>
+          <Link to="/driver-dashboard">
+            <Button className="mt-6 rounded-2xl px-6 font-bold">Back to Dashboard</Button>
+          </Link>
+        </div>
       </div>
     )
   }
 
-  // Data is available – extract fields
-  const gig = data
-
-  // Compute display values
-  const route = `${getShortAddress(gig.pickupAddress)} → ${getShortAddress(gig.dropoffAddress)}`
-  const serviceLabel = serviceTypeLabels[gig.serviceType] || gig.serviceType
-  const typeLabel = gig.originSource === 'homeBase' ? 'Near home base' : 'Matched gig'
-  const urgent = gig.isUrgent
-  const bonus = gig.urgentBonusAmount
-  const payout = gig.payoutPreviewAmount
-  const basePay = payout && bonus ? payout - bonus : payout // estimate if needed, but we don't have basePay separate
-  const miles = gig.pickupDistanceMiles // could also be trip distance, but pickupDistanceMiles is given
-  const windowDate = formatDate(gig.pickupWindowStart)
-  const windowTime = formatTimeRange(gig.pickupWindowStart, gig.pickupWindowEnd)
-  const window = `${windowDate} • ${windowTime}`
-  const driveTime = formatDuration(gig.etaMinutes)
-
-  // Static requirements (could be dynamic later)
-  const pickupRequirements = [
-    { icon: QrCode, label: 'VIN last-4' },
-    { icon: Camera, label: '6 Pickup Photos' },
-    { icon: Speed, label: 'Odometer Start' },
-  ]
-  const dropoffRequirements = [
-    { icon: Camera, label: '6 Drop-off Photos' },
-    { icon: Speed, label: 'Odometer End' },
-    { icon: Route, label: 'Tap Complete' },
-  ]
-
+  // ── Main content ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans antialiased pb-24">
+      {/* ── Sticky header ── */}
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md">
+        <div className="h-14 flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <Link
               to="/driver-dashboard"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-              aria-label="Back"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 text-slate-700 dark:text-slate-200" />
             </Link>
             <div>
               <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                Delivery
+                Gig Details
               </div>
-              <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                {route}
+              <div className="text-sm font-extrabold text-slate-900 dark:text-white truncate max-w-[200px] sm:max-w-none">
+                {pickupLabel} &rarr; {dropoffLabel}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Theme toggle */}
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
+              className="w-9 h-9 rounded-xl"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              {mounted && theme === 'dark' ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
-            </Button>
-
-            <Button
-              onClick={handleSignOut}
-              variant="link"
-              className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition p-0 h-auto"
-            >
-              Sign Out
+              {mounted && theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
-        {/* Summary Card */}
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-          <CardContent className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div>
-                {urgent && (
-                  <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 text-[11px] font-extrabold">
-                    <Bolt className="w-4 h-4 text-amber-500" />
-                    Urgent
-                  </Badge>
-                )}
+      {/* ── 1. HERO MAP ── */}
+      {hasCoords ? (
+        <HeroRouteMap
+          pickup={{ lat: gig.pickupLat!, lng: gig.pickupLng! }}
+          dropoff={{ lat: gig.dropoffLat!, lng: gig.dropoffLng! }}
+          isLoaded={isMapsLoaded}
+        />
+      ) : (
+        <div className="w-full h-[220px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+          <MapPin className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+        </div>
+      )}
 
-                <h1 className="mt-4 text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                  {route}
-                </h1>
-
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                  Service: {serviceLabel} • {typeLabel}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">Status: {gig.status}</p>
-              </div>
-
-              <div className="text-left sm:text-right">
-                <p className="text-3xl font-black text-primary">
-                  {formatCurrency(payout)}
-                </p>
-                {bonus ? (
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                    Includes {formatCurrency(bonus)} bonus
-                  </p>
-                ) : (
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                    No bonus
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Miles
-                </p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
-                  {miles ? `${miles} mi` : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Window
-                </p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
-                  {window}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Est. Drive Time
-                </p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
-                  {driveTime}
-                </p>
-              </div>
-            </div>
-
-            {/* Additional fields: afterHours, matchScore */}
-            {(gig.afterHours || gig.matchScore != null) && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {gig.afterHours && (
-                  <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 text-amber-700 dark:text-amber-300">
-                    After Hours
-                  </Badge>
-                )}
-                {gig.matchScore != null && (
-                  <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-300">
-                    Match Score: {gig.matchScore}
-                  </Badge>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Pickup Requirements */}
-        <Card className="mt-6 border-slate-200 dark:border-slate-800 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg font-black">Required at Pickup</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-3">
-              {pickupRequirements.map((req, index) => (
-                <Badge 
-                  key={index}
-                  variant="outline" 
-                  className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
-                >
-                  <req.icon className="w-4 h-4 text-primary mr-1" />
-                  {req.label}
-                </Badge>
-              ))}
-            </div>
-
-            <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-              You cannot tap "Start Delivery" until all checklist items are completed.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Drop-off Requirements */}
-        <Card className="mt-6 border-slate-200 dark:border-slate-800 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg font-black">Required at Drop-off</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-3">
-              {dropoffRequirements.map((req, index) => (
-                <Badge 
-                  key={index}
-                  variant="outline" 
-                  className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
-                >
-                  <req.icon className="w-4 h-4 text-primary mr-1" />
-                  {req.label}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Job Details Card – shows all remaining fields */}
-        <Card className="mt-6 border-slate-200 dark:border-slate-800 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg font-black">Additional Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              {/* <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Delivery ID</p>
-                <p className="font-medium">{gig.deliveryId}</p>
-              </div> */}
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Service Type</p>
-                <p className="font-medium">{serviceLabel}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
-                <p className="font-medium">{gig.status}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Match Score</p>
-                <p className="font-medium">{gig.matchScore ?? '—'}</p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Match Reasons</p>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {gig.matchReasons?.map((reason: string, i: number) => (
-                    <Badge key={i} variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100">
-                      {reason}
-                    </Badge>
-                  )) || '—'}
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup Distance (mi)</p>
-                <p className="font-medium">{gig.pickupDistanceMiles ?? '—'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup ETA (min)</p>
-                <p className="font-medium">{gig.pickupEtaMinutes ?? '—'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Origin Source</p>
-                <p className="font-medium">{gig.originSource}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">After Hours</p>
-                <p className="font-medium">{gig.afterHours ? 'Yes' : 'No'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Created At</p>
-                <p className="font-medium">{new Date(gig.createdAt).toLocaleString()}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Policy Notes */}
-        <Alert className="mt-6 bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
-          <Info className="h-4 w-4 text-amber-500" />
-          <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm font-extrabold">
-            Important Policy
-          </AlertTitle>
-          <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-sm mt-1">
-            No cancellation from Driver UI. If an issue occurs, report it through Support. All actions are logged for audit purposes.
-          </AlertDescription>
-        </Alert>
-      </main>
-
-      {/* Bottom Action Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 safe-bottom">
-        <div className="max-w-[980px] mx-auto px-5 sm:px-6 py-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button
-              onClick={handleBookGig}
-              disabled={bookGig.isPending}
-              className="flex-1 px-6 py-4 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {bookGig.isPending ? 'Booking...' : 'Book This Gig'}
-            </Button>
-
-            <Button
-              onClick={handleMessageOps}
-              variant="outline"
-              className="flex-1 px-6 py-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-extrabold hover:bg-primary/5 transition"
-            >
-              Report Issue
-            </Button>
+      {/* ── 2. PRIMARY INFO: Route + Payout ── */}
+      <div className="px-5 pt-5 pb-4">
+        {/* Urgent badge */}
+        {gig.isUrgent && (
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 mb-3">
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
+              Urgent
+            </span>
           </div>
+        )}
+
+        {/* Route — BIG, BOLD */}
+        <h1 className="text-[22px] sm:text-[26px] font-black text-slate-900 dark:text-white leading-tight tracking-tight">
+          {pickupLabel}{' '}
+          <span className="text-slate-300 dark:text-slate-600 mx-1">&rarr;</span>{' '}
+          {dropoffLabel}
+        </h1>
+
+        {/* Payout — VERY PROMINENT, GREEN */}
+        {gig.payoutPreviewAmount != null && (
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-[36px] sm:text-[42px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight">
+              {formatCurrency(gig.payoutPreviewAmount)}
+            </span>
+            {gig.urgentBonusAmount != null && gig.urgentBonusAmount > 0 && (
+              <span className="text-[12px] font-bold text-amber-600 dark:text-amber-400">
+                incl. {formatCurrency(gig.urgentBonusAmount)} bonus
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── 3. JOB SUMMARY BLOCK ── */}
+      <div className="mx-5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-4">
+        <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+          {/* Date */}
+          <div className="flex items-start gap-2.5">
+            <CalendarDays className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Date</p>
+              <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">
+                {formatFullWeekdayDate(gig.pickupWindowStart)}
+              </p>
+            </div>
+          </div>
+
+          {/* Time window */}
+          <div className="flex items-start gap-2.5">
+            <Clock className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Window</p>
+              <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">
+                {formatTimeRange(gig.pickupWindowStart, gig.pickupWindowEnd)}
+              </p>
+            </div>
+          </div>
+
+          {/* Distance */}
+          <div className="flex items-start gap-2.5">
+            <Navigation className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Distance</p>
+              <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">
+                {gig.pickupDistanceMiles != null ? `${gig.pickupDistanceMiles} mi` : '\u2014'}
+              </p>
+            </div>
+          </div>
+
+          {/* Estimated duration */}
+          <div className="flex items-start gap-2.5">
+            <Route className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Est. Drive</p>
+              <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">
+                {formatDuration(gig.etaMinutes) || '\u2014'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 4. LOCATION DETAILS ── */}
+      <div className="px-5 mt-5 space-y-4">
+        <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+          Locations
+        </h2>
+
+        {/* Pickup */}
+        <div className="flex gap-3">
+          <div className="flex flex-col items-center pt-1">
+            <div className="w-3 h-3 rounded-full bg-green-500 ring-2 ring-green-100 dark:ring-green-900/40" />
+            <div className="w-px flex-1 bg-slate-200 dark:bg-slate-700 mt-1" />
+          </div>
+          <div className="flex-1 pb-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400">
+              Pickup
+            </p>
+            <p className="text-[14px] font-semibold text-slate-900 dark:text-white mt-1 leading-snug">
+              {gig.pickupAddress || '\u2014'}
+            </p>
+            {gig.pickupLat && gig.pickupLng && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${gig.pickupLat},${gig.pickupLng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 mt-1.5 text-[12px] font-medium text-green-600 dark:text-green-400 hover:underline"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Open in Maps
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Dropoff */}
+        <div className="flex gap-3">
+          <div className="flex flex-col items-center pt-1">
+            <div className="w-3 h-3 rounded-full bg-red-500 ring-2 ring-red-100 dark:ring-red-900/40" />
+          </div>
+          <div className="flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-red-500 dark:text-red-400">
+              Dropoff
+            </p>
+            <p className="text-[14px] font-semibold text-slate-900 dark:text-white mt-1 leading-snug">
+              {gig.dropoffAddress || '\u2014'}
+            </p>
+            {gig.dropoffLat && gig.dropoffLng && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${gig.dropoffLat},${gig.dropoffLng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 mt-1.5 text-[12px] font-medium text-green-600 dark:text-green-400 hover:underline"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Open in Maps
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── 5. STICKY BOTTOM CTA ── */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800">
+        <div className="max-w-lg mx-auto px-5 py-3 flex items-center gap-3">
+          {/* Report issue (text only) */}
+          <button
+            onClick={handleReportIssue}
+            className="shrink-0 w-11 h-11 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+          >
+            <MessageSquare className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+          </button>
+
+          {/* Accept Gig — PRIMARY */}
+          <Button
+            onClick={handleBookGig}
+            disabled={bookGig.isPending}
+            className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[15px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-600/20"
+          >
+            {bookGig.isPending ? 'Booking\u2026' : 'Accept Gig'}
+          </Button>
         </div>
       </nav>
     </div>
