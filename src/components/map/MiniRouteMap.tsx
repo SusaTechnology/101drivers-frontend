@@ -7,17 +7,18 @@ interface MiniRouteMapProps {
   isLoaded: boolean
 }
 
-/** Compact live map for gig cards.
+/** Compact live route map for gig cards.
  *
- *  Behaviour:
- *  1. Lazy-mounts via IntersectionObserver (200 px margin).
- *  2. Fetches DirectionsService route between pickup → dropoff.
- *  3. Draws green polyline via DirectionsRenderer (preserveViewport = true,
- *     we control bounds ourselves).
- *  4. Fits LatLngBounds to route legs (or markers on fallback).
- *  5. For short routes (< ~2 mi) bumps zoom after fitBounds so the map
- *     doesn't look too zoomed-out.
- *  6. Zero UI controls — pure preview tile.
+ * Visual priorities:
+ *  1. Green route polyline — the star of the show
+ *  2. Pickup / dropoff markers — subtle, not dominant
+ *  3. Clean map surface — minimal labels, no clutter
+ *  4. Tight bounds — route fills the card edge-to-edge
+ *
+ * Performance:
+ *  - Lazy-mounts via IntersectionObserver (200 px margin)
+ *  - Directions fetched once per mount
+ *  - No gesture handling, no controls
  */
 export default function MiniRouteMap({ pickup, dropoff, isLoaded }: MiniRouteMapProps) {
   const [isVisible, setIsVisible] = useState(false)
@@ -27,7 +28,7 @@ export default function MiniRouteMap({ pickup, dropoff, isLoaded }: MiniRouteMap
   const containerRef = useRef<HTMLDivElement>(null)
   const hasFetched = useRef(false)
 
-  // ── 1. Lazy-mount: only render map when card scrolls into view ──
+  // ── 1. Lazy-mount ──
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -44,39 +45,29 @@ export default function MiniRouteMap({ pickup, dropoff, isLoaded }: MiniRouteMap
     return () => observer.disconnect()
   }, [])
 
-  // ── 2. Fetch route polyline ──
+  // ── 2. Fetch route ──
   useEffect(() => {
     if (!isVisible || !isLoaded || hasFetched.current) return
     hasFetched.current = true
 
     const svc = new google.maps.DirectionsService()
     svc.route(
-      {
-        origin: pickup,
-        destination: dropoff,
-        travelMode: google.maps.TravelMode.DRIVING,
-      },
+      { origin: pickup, destination: dropoff, travelMode: google.maps.TravelMode.DRIVING },
       (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK) {
-          setDirections(result)
-        } else {
-          setDirectionsFailed(true)
-        }
+        if (status === google.maps.DirectionsStatus.OK) setDirections(result)
+        else setDirectionsFailed(true)
       },
     )
   }, [isVisible, isLoaded, pickup, dropoff])
 
-  // ── 3. Fit bounds (always, both on route success and fallback) ──
+  // ── 3. Fit bounds tightly around the route ──
   useEffect(() => {
     if (!map) return
-
-    // Wait until we know whether directions succeeded or failed
     if (!directions && !directionsFailed) return
 
     const bounds = new google.maps.LatLngBounds()
 
     if (directions && directions.routes.length > 0) {
-      // Extend bounds along every step of the route for a tight fit
       directions.routes[0].legs.forEach((leg) => {
         leg.steps.forEach((step) => {
           bounds.extend(step.start_location)
@@ -84,17 +75,14 @@ export default function MiniRouteMap({ pickup, dropoff, isLoaded }: MiniRouteMap
         })
       })
     } else {
-      // Fallback: just the two markers
       bounds.extend(pickup)
       bounds.extend(dropoff)
     }
 
-    map.fitBounds(bounds, 32) // 32 px padding all around
+    // Tight padding — route should fill the card
+    map.fitBounds(bounds, 20)
 
-    // ── 4. Short-route zoom bump ──
-    // If pickup & dropoff are very close (< ~2 miles ≈ 0.03°), the auto
-    // zoom from fitBounds can look too zoomed-out in a tiny 80 px card.
-    // After fitBounds settles, nudge zoom to at least 14.
+    // Short-route zoom bump: keep it legible
     const latDiff = Math.abs(pickup.lat - dropoff.lat)
     const lngDiff = Math.abs(pickup.lng - dropoff.lng)
     const isShortRoute = latDiff < 0.03 && lngDiff < 0.03
@@ -109,18 +97,30 @@ export default function MiniRouteMap({ pickup, dropoff, isLoaded }: MiniRouteMap
 
   const handleMapLoad = useCallback((gMap: google.maps.Map) => setMap(gMap), [])
 
-  // ── Initial center = midpoint (before directions load) ──
   const initialCenter = {
     lat: (pickup.lat + dropoff.lat) / 2,
     lng: (pickup.lng + dropoff.lng) / 2,
   }
 
-  // ── Placeholder while not yet visible ──
+  // Map styles: strip everything except roads — route is the focus
+  const cleanStyles: google.maps.MapTypeStyle[] = [
+    { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi.business', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi.park', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit.station', elementType: 'all', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative.locality', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative.neighborhood', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'landscape', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  ]
+
+  // ── Placeholder ──
   if (!isVisible || !isLoaded) {
     return (
       <div
         ref={containerRef}
-        className="w-20 h-20 rounded-2xl bg-slate-100 dark:bg-slate-800/60 shrink-0 flex items-center justify-center"
+        className="w-[100px] h-[100px] rounded-2xl bg-slate-100 dark:bg-slate-800/60 shrink-0 flex items-center justify-center"
       >
         <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse" />
       </div>
@@ -131,7 +131,7 @@ export default function MiniRouteMap({ pickup, dropoff, isLoaded }: MiniRouteMap
   return (
     <div
       ref={containerRef}
-      className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-slate-200/70 dark:border-slate-700/50"
+      className="w-[100px] h-[100px] rounded-2xl overflow-hidden shrink-0 border border-slate-200/70 dark:border-slate-700/50"
     >
       <GoogleMap
         mapContainerStyle={{ width: '100%', height: '100%' }}
@@ -145,52 +145,49 @@ export default function MiniRouteMap({ pickup, dropoff, isLoaded }: MiniRouteMap
           zoomControl: false,
           gestureHandling: 'none',
           disableDefaultUI: true,
-          styles: [
-            { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-            { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-            { featureType: 'administrative', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-          ],
+          styles: cleanStyles,
         }}
       >
-        {/* Pickup marker — green */}
+        {/* Pickup — small green dot */}
         <Marker
           position={pickup}
           icon={{
             url:
               'data:image/svg+xml;charset=UTF-8,' +
               encodeURIComponent(
-                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="9" fill="#22c55e" stroke="white" stroke-width="2.5"/></svg>',
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12"><circle cx="12" cy="12" r="6" fill="#22c55e" stroke="white" stroke-width="2"/></svg>',
               ),
-            scaledSize: new google.maps.Size(16, 16),
-            anchor: new google.maps.Point(8, 8),
+            scaledSize: new google.maps.Size(12, 12),
+            anchor: new google.maps.Point(6, 6),
           }}
         />
 
-        {/* Dropoff marker — red */}
+        {/* Dropoff — small red dot */}
         <Marker
           position={dropoff}
           icon={{
             url:
               'data:image/svg+xml;charset=UTF-8,' +
               encodeURIComponent(
-                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="9" fill="#ef4444" stroke="white" stroke-width="2.5"/></svg>',
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12"><circle cx="12" cy="12" r="6" fill="#ef4444" stroke="white" stroke-width="2"/></svg>',
               ),
-            scaledSize: new google.maps.Size(16, 16),
-            anchor: new google.maps.Point(8, 8),
+            scaledSize: new google.maps.Size(12, 12),
+            anchor: new google.maps.Point(6, 6),
           }}
         />
 
-        {/* Route polyline via DirectionsRenderer */}
+        {/* Route polyline — the main visual */}
         {directions && (
           <DirectionsRenderer
             directions={directions}
             options={{
-              suppressMarkers: true, // we draw our own
-              preserveViewport: true, // we handle fitBounds ourselves
+              suppressMarkers: true,
+              preserveViewport: true,
               polylineOptions: {
-                strokeColor: '#22c55e',
-                strokeWeight: 3,
-                strokeOpacity: 0.9,
+                strokeColor: '#16a34a',     // strong green-600
+                strokeWeight: 5,             // thick — dominant over markers
+                strokeOpacity: 1,
+                icons: undefined,            // no dashed pattern
               },
             }}
           />
