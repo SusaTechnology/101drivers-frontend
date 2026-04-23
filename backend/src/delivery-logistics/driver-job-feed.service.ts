@@ -221,6 +221,7 @@ async getDriverJobFeed(input: {
       },
       quote: {
         select: {
+          estimatedPrice: true,
           pricingSnapshot: true,
           feesBreakdown: true,
         },
@@ -392,6 +393,7 @@ async getDriverJobFeed(input: {
       }
 
       const payoutPreviewAmount = this.extractPayoutPreviewAmount(
+        delivery.quote?.estimatedPrice,
         delivery.quote?.pricingSnapshot,
         delivery.quote?.feesBreakdown
       );
@@ -768,23 +770,27 @@ async getDriverJobFeed(input: {
   }
 
   private extractPayoutPreviewAmount(
+    quoteEstimatedPrice: number | null | undefined,
     pricingSnapshot: unknown,
     feesBreakdown: unknown
   ): number | null {
     const snapshot = (pricingSnapshot ?? {}) as Record<string, unknown>;
     const fees = (feesBreakdown ?? {}) as Record<string, unknown>;
 
+    // Total price: feesBreakdown.total (set by pricing engine) or quote.estimatedPrice
     const total =
+      this.toNumber(fees.total) ??
       this.toNumber(snapshot.totalAmount) ??
       this.toNumber(snapshot.finalAmount) ??
-      this.toNumber(snapshot.customerTotal);
+      (quoteEstimatedPrice != null ? quoteEstimatedPrice : null);
 
     if (total == null) return null;
 
-    const driverSharePct = this.toNumber(snapshot.driverSharePct) ?? 70;
-    const tip = this.toNumber(fees.tipAmount) ?? 0;
+    // Driver share percentage from pricing snapshot (frozen at quote time)
+    const driverSharePct = this.toNumber(snapshot.driverSharePct) ?? 60;
 
-    const payout = total * (driverSharePct / 100) + tip;
+    // Net payout = total × driverShare% (no tip at listing time — tips are post-completion)
+    const payout = total * (driverSharePct / 100);
     return Number(payout.toFixed(2));
   }
 
