@@ -265,24 +265,24 @@ interface JobItem {
 // ── Reusable Route Thumbnail SVG ────────────────────────────────
 function RouteThumbnail() {
   return (
-    <svg width="80" height="80" viewBox="0 0 80 80" fill="none" className="shrink-0 rounded-2xl bg-slate-50 dark:bg-slate-800/60">
+    <svg width="100" height="100" viewBox="0 0 100 100" fill="none" className="shrink-0 rounded-2xl bg-slate-50 dark:bg-slate-800/60">
       {/* Subtle grid lines */}
-      <line x1="12" y1="0" x2="12" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
-      <line x1="28" y1="0" x2="28" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
-      <line x1="44" y1="0" x2="44" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
-      <line x1="60" y1="0" x2="60" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
-      <line x1="0" y1="12" x2="80" y2="12" stroke="#e2e8f0" strokeWidth="0.5" />
-      <line x1="0" y1="28" x2="80" y2="28" stroke="#e2e8f0" strokeWidth="0.5" />
-      <line x1="0" y1="44" x2="80" y2="44" stroke="#e2e8f0" strokeWidth="0.5" />
-      <line x1="0" y1="60" x2="80" y2="60" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="20" y1="0" x2="20" y2="100" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="40" y1="0" x2="40" y2="100" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="60" y1="0" x2="60" y2="100" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="80" y1="0" x2="80" y2="100" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="20" x2="100" y2="20" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="40" x2="100" y2="40" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="60" x2="100" y2="60" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="80" x2="100" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
       {/* Road path */}
-      <path d="M16 64 C16 64, 24 44, 38 34 C52 24, 62 16, 64 16" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <path d="M20 80 C20 80, 30 55, 48 43 C65 30, 78 20, 80 20" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" fill="none" />
       {/* Pickup dot */}
-      <circle cx="16" cy="64" r="5" fill="#22c55e" />
-      <circle cx="16" cy="64" r="2.5" fill="white" />
+      <circle cx="20" cy="80" r="5" fill="#22c55e" />
+      <circle cx="20" cy="80" r="2.5" fill="white" />
       {/* Dropoff dot */}
-      <circle cx="64" cy="16" r="5" fill="#22c55e" />
-      <circle cx="64" cy="16" r="2.5" fill="white" />
+      <circle cx="80" cy="20" r="5" fill="#22c55e" />
+      <circle cx="80" cy="20" r="2.5" fill="white" />
     </svg>
   )
 }
@@ -297,56 +297,59 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
       onClick={onClick}
     >
       {/* ── Main content ── */}
-      <CardContent className="px-5 pt-5 pb-4">
-        <div className="flex gap-4">
-          {/* Left: text block */}
+      <CardContent className="px-4 py-3">
+        <div className="flex gap-3">
+          {/* Left: text block — route dominant, distance secondary */}
           <div className="flex-1 min-w-0 flex flex-col">
-            {/* Top: date + time (small, secondary) */}
-            <div className="text-[13px] font-medium text-slate-500 dark:text-slate-400 leading-tight">
+            {/* Date + time (small, secondary) */}
+            <div className="text-[12px] font-medium text-slate-400 dark:text-slate-500 leading-tight">
               {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
               {job.timeWindow && (
                 <>
-                  <span className="mx-1.5 text-slate-300 dark:text-slate-600">&middot;</span>
+                  <span className="mx-1 text-slate-300 dark:text-slate-600">&middot;</span>
                   <span>{job.timeWindow}</span>
                 </>
               )}
             </div>
 
-            {/* Middle: route — PRIMARY, most prominent */}
-            <div className="text-[18px] font-extrabold text-slate-900 dark:text-white mt-3 leading-snug tracking-tight">
+            {/* Route — PRIMARY, dominant text */}
+            <div className="text-[17px] font-extrabold text-slate-900 dark:text-white mt-1.5 leading-snug tracking-tight">
               {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
             </div>
 
-            {/* Bottom-left: distance + ETA */}
-            <div className="text-[14px] text-slate-500 dark:text-slate-400 font-medium mt-3 leading-tight">
+            {/* Distance + ETA — medium, supporting */}
+            <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
               {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
-            </div>
-
-            {/* Bottom-right: payout — large, green, dominant */}
-            <div className="self-end mt-1">
-              <span className="text-[26px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight">
-                {formatCurrency(job.payout)}
-              </span>
             </div>
           </div>
 
-          {/* Right: live mini map */}
-          {hasDropoffCoords ? (
-            <MiniRouteMap
-              pickup={{ lat: job.lat, lng: job.lng }}
-              dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
-              isLoaded={isMapsLoaded}
-            />
-          ) : (
-            <RouteThumbnail />
-          )}
+          {/* Right: vertical stack — map + payout */}
+          <div className="flex flex-col items-end justify-between shrink-0">
+            {/* Live mini map on top */}
+            {hasDropoffCoords ? (
+              <MiniRouteMap
+                pickup={{ lat: job.lat, lng: job.lng }}
+                dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
+                isLoaded={isMapsLoaded}
+              />
+            ) : (
+              <RouteThumbnail />
+            )}
+
+            {/* Payout — strong green accent, aligned with distance row */}
+            {job.payout != null && (
+              <span className="text-[22px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight mt-auto">
+                {formatCurrency(job.payout)}
+              </span>
+            )}
+          </div>
         </div>
       </CardContent>
 
-      {/* ── Bottom CTA strip ── */}
+      {/* ── Bottom CTA strip — thin tap affordance ── */}
       <div className="h-px bg-slate-200/80 dark:bg-slate-700/60" />
-      <div className="py-2.5 flex items-center justify-center">
-        <ChevronRight className="w-5 h-5 text-green-500 dark:text-green-400" />
+      <div className="py-1.5 flex items-center justify-center">
+        <ChevronRight className="w-4 h-4 text-green-500 dark:text-green-400" />
       </div>
     </Card>
   )
