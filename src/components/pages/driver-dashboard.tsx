@@ -251,52 +251,46 @@ function RouteThumbnail() {
 function GigCard({ job, onClick }: { job: JobItem; onClick: () => void }) {
   return (
     <Card
-      className="border-slate-200 dark:border-slate-700/60 shadow-sm hover:shadow-md transition-all cursor-pointer bg-white dark:bg-slate-900/80 rounded-2xl overflow-hidden"
+      className="border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/60 active:scale-[0.98] transition-all duration-150 cursor-pointer bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden"
       onClick={onClick}
     >
-      {/* Top section: details + map thumbnail */}
-      <CardContent className="p-5 pb-3">
+      <CardContent className="p-5">
         <div className="flex gap-4">
           {/* Left: Gig details */}
           <div className="flex-1 min-w-0">
-            {/* Full weekday date */}
-            <div className="text-[15px] font-bold text-slate-900 dark:text-white leading-tight">
+            {/* Date + Time on one line */}
+            <div className="text-[13px] font-medium text-slate-500 dark:text-slate-400 leading-tight">
               {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
+              {job.timeWindow && (
+                <>
+                  <span className="mx-1.5 text-slate-300 dark:text-slate-600">&middot;</span>
+                  <span>{job.timeWindow}</span>
+                </>
+              )}
             </div>
 
-            {/* Time range */}
-            <div className="text-[14px] font-medium text-slate-600 dark:text-slate-400 mt-0.5 leading-tight">
-              {job.timeWindow}
-            </div>
-
-            {/* Route: pickup → dropoff */}
-            <div className="text-[16px] font-bold text-slate-900 dark:text-white mt-2 leading-snug">
+            {/* Route — most prominent */}
+            <div className="text-[17px] font-extrabold text-slate-900 dark:text-white mt-3 leading-snug tracking-tight">
               {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
             </div>
 
             {/* Distance + Est. time */}
-            <div className="text-[14px] text-slate-600 dark:text-slate-400 font-medium mt-2 leading-tight">
+            <div className="text-[14px] text-slate-500 dark:text-slate-400 font-medium mt-2 leading-tight">
               {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
             </div>
           </div>
 
-          {/* Right: Map thumbnail */}
-          <div className="shrink-0">
+          {/* Right column: Price + Map thumbnail */}
+          <div className="flex flex-col items-end justify-between shrink-0 py-0.5">
+            {/* Price — large, green */}
+            <span className="text-[26px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight">
+              {formatCurrency(job.payout)}
+            </span>
+            {/* Map thumbnail */}
             <RouteThumbnail />
           </div>
         </div>
       </CardContent>
-
-      {/* Divider */}
-      <div className="h-px bg-slate-200/80 dark:bg-slate-700/60" />
-
-      {/* Bottom section: Price + Chevron */}
-      <div className="px-5 py-3 flex items-center justify-between">
-        <span className="text-[28px] font-black text-green-600 dark:text-green-400 leading-none">
-          {formatCurrency(job.payout)}
-        </span>
-        <ChevronRight className="w-6 h-6 text-green-500 dark:text-green-400" />
-      </div>
     </Card>
   )
 }
