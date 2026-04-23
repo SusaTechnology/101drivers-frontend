@@ -9,12 +9,7 @@ import {
   Sun,
   Moon,
   MapPin,
-  Clock,
-  Route,
-  Navigation,
-  CalendarDays,
   ExternalLink,
-  Car,
   MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,22 +27,33 @@ import {
 
 // ── Formatters ──────────────────────────────────────────────────────
 
-const formatFullWeekdayDate = (isoString?: string | null): string => {
+const formatShortDayMonth = (isoString?: string | null): string => {
   if (!isoString) return ''
   const date = new Date(isoString)
-  return date.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
     day: 'numeric',
   })
+}
+
+const formatDateTimeWindow = (startIso?: string | null, endIso?: string | null): string => {
+  if (!startIso || !endIso) return ''
+  const date = new Date(startIso)
+  const start = new Date(startIso)
+  const end = new Date(endIso)
+  const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return `${dayStr} \u2022 ${startStr} \u2013 ${endStr}`
 }
 
 const formatTimeRange = (startIso?: string | null, endIso?: string | null): string => {
   if (!startIso || !endIso) return ''
   const start = new Date(startIso)
   const end = new Date(endIso)
-  const startStr = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  const endStr = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   return `${startStr} \u2013 ${endStr}`
 }
 
@@ -276,8 +282,27 @@ export default function DriverJobDetailsPage() {
       })
       navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
     },
-    onError: (error) => {
-      toast.error('Failed to book gig', { description: (error as any)?.message || 'Unknown error' })
+    onError: (error: any) => {
+      const status = error?.status || error?.statusCode
+      const msg = error?.message || ''
+
+      if (status === 410 || msg?.includes('no longer available') || msg?.includes('already been booked')) {
+        toast.error('This gig is no longer available', {
+          description: 'Another driver may have already accepted it.',
+        })
+      } else if (status === 409 || msg?.includes('already have an active')) {
+        toast.error('Cannot book right now', {
+          description: 'You already have an active delivery. Complete it first.',
+        })
+      } else if (status === 403 || msg?.includes('not approved')) {
+        toast.error('Account not approved', {
+          description: 'Your driver account must be approved before booking gigs.',
+        })
+      } else {
+        toast.error('Failed to accept gig', {
+          description: msg || 'Something went wrong. Please try again.',
+        })
+      }
     },
   })
 
@@ -446,53 +471,22 @@ export default function DriverJobDetailsPage() {
         )}
       </div>
 
-      {/* ── 3. JOB SUMMARY BLOCK ── */}
-      <div className="mx-5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-4">
-        <div className="grid grid-cols-2 gap-y-3 gap-x-4">
-          {/* Date */}
-          <div className="flex items-start gap-2.5">
-            <CalendarDays className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Date</p>
-              <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">
-                {formatFullWeekdayDate(gig.pickupWindowStart)}
-              </p>
-            </div>
-          </div>
-
-          {/* Time window */}
-          <div className="flex items-start gap-2.5">
-            <Clock className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Window</p>
-              <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">
-                {formatTimeRange(gig.pickupWindowStart, gig.pickupWindowEnd)}
-              </p>
-            </div>
-          </div>
-
-          {/* Distance */}
-          <div className="flex items-start gap-2.5">
-            <Navigation className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Distance</p>
-              <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">
-                {gig.pickupDistanceMiles != null ? `${gig.pickupDistanceMiles} mi` : '\u2014'}
-              </p>
-            </div>
-          </div>
-
-          {/* Estimated duration */}
-          <div className="flex items-start gap-2.5">
-            <Route className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Est. Drive</p>
-              <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">
-                {formatDuration(gig.etaMinutes) || '\u2014'}
-              </p>
-            </div>
-          </div>
-        </div>
+      {/* ── 3. JOB SUMMARY — Stacked, not grid ── */}
+      <div className="mx-5 space-y-2">
+        {/* Pickup time window */}
+        <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">
+          Pickup: {formatDateTimeWindow(gig.pickupWindowStart, gig.pickupWindowEnd)}
+        </p>
+        {/* Dropoff time window */}
+        {gig.dropoffWindowStart && gig.dropoffWindowEnd && (
+          <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">
+            Drop-off: {formatDateTimeWindow(gig.dropoffWindowStart, gig.dropoffWindowEnd)}
+          </p>
+        )}
+        {/* Distance + ETA — single stacked line */}
+        <p className="text-[14px] font-medium text-slate-500 dark:text-slate-400">
+          {[gig.pickupDistanceMiles != null ? `${gig.pickupDistanceMiles} mi` : null, formatDuration(gig.etaMinutes) ? `Est. ${formatDuration(gig.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
+        </p>
       </div>
 
       {/* ── 4. LOCATION DETAILS ── */}

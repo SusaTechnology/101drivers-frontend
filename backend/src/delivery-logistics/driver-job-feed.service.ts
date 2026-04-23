@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, ForbiddenException, GoneException, ConflictException } from "@nestjs/common";
 import {
   EnumDeliveryRequestStatus,
   EnumDriverStatus,
@@ -631,12 +631,12 @@ async getDriverJobFeed(input: {
   }
 
   if (driver.status !== EnumDriverStatus.APPROVED) {
-    throw new NotFoundException("Driver is not eligible to book deliveries");
+    throw new ForbiddenException("Driver account is not approved — cannot book deliveries");
   }
 
-  if (driver.alerts?.enabled === false) {
-    throw new NotFoundException("Driver is not eligible to book deliveries");
-  }
+  // NOTE: alerts.enabled gate removed here to match feed behavior.
+  // Drivers with disabled push notifications can still browse and book.
+  // (Previously this silently blocked booking for many drivers.)
 
   const delivery = await db.deliveryRequest.findUnique({
     where: { id: input.deliveryId },
@@ -653,7 +653,7 @@ async getDriverJobFeed(input: {
   }
 
   if (delivery.status !== EnumDeliveryRequestStatus.LISTED) {
-    throw new NotFoundException("Delivery is not available for booking");
+    throw new GoneException("This gig is no longer available");
   }
 
   const existingBooking = await db.deliveryAssignment.findFirst({
@@ -665,7 +665,7 @@ async getDriverJobFeed(input: {
   });
 
   if (existingBooking) {
-    throw new NotFoundException("Delivery is not available for booking");
+    throw new GoneException("This gig has already been booked by another driver");
   }
 
   const busyAssignment = await db.deliveryAssignment.findFirst({
@@ -685,7 +685,7 @@ async getDriverJobFeed(input: {
   });
 
   if (busyAssignment) {
-    throw new NotFoundException("Driver already has an active delivery");
+    throw new ConflictException("You already have an active delivery — complete it before booking another");
   }
 
   const preferredRadiusMiles = driver.preferences?.radiusMiles ?? null;
