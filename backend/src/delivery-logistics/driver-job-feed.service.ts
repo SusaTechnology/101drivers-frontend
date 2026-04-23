@@ -34,6 +34,10 @@ export type DriverFeedItem = {
   matchReasons: string[];
   pickupDistanceMiles: number | null;
   pickupEtaMinutes: number | null;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
   originSource: "current" | "homeBase" | "none";
   createdAt: Date;
 };
@@ -197,6 +201,8 @@ async getDriverJobFeed(input: {
       dropoffAddress: true,
       pickupLat: true,
       pickupLng: true,
+      dropoffLat: true,
+      dropoffLng: true,
       pickupWindowStart: true,
       pickupWindowEnd: true,
       dropoffWindowStart: true,
@@ -412,6 +418,10 @@ async getDriverJobFeed(input: {
         matchReasons,
         pickupDistanceMiles,
         pickupEtaMinutes,
+        pickupLat: delivery.pickupLat,
+        pickupLng: delivery.pickupLng,
+        dropoffLat: delivery.dropoffLat,
+        dropoffLng: delivery.dropoffLng,
         originSource: origin.source,
         createdAt: delivery.createdAt,
       };
