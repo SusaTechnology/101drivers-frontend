@@ -174,8 +174,7 @@ const formatCurrency = (amount?: number | null): string => {
 }
 
 // Extract short human-readable label from a full address.
-// Strategy: try to pull the city (after last comma), otherwise the street name.
-// Examples:
+// Picks the first segment that looks like a city/neighborhood (not a state, ZIP, or street number).
 //   "1402 Santa Monica Blvd, Santa Monica, CA 90404" → "Santa Monica"
 //   "18700 Studebaker Rd, Cerritos, CA 90703"        → "Cerritos"
 //   "123 Main St"                                      → "Main St"
@@ -183,18 +182,30 @@ const extractRouteLabel = (fullAddress: string): string => {
   if (!fullAddress) return ''
   const trimmed = fullAddress.trim()
 
-  // If it has commas, grab the city part (second-to-last or last segment)
   if (trimmed.includes(',')) {
     const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean)
-    // parts like ["1402 Santa Monica Blvd", "Santa Monica", "CA 90404"]
-    if (parts.length >= 2) {
-      // Return the city (second part) — strip any 5-digit ZIP suffix
-      const city = parts[parts.length - 2] || parts[0]
-      return city.replace(/\s+\d{5}(-\d{4})?$/, '').trim()
+
+    // Walk segments starting from index 1 (skip the street address line).
+    // Pick the first one that looks like a city — not a state code, not a ZIP, not a country.
+    for (let i = 1; i < parts.length; i++) {
+      const seg = parts[i]
+      // Skip: purely digits (ZIP), 2-letter uppercase (state code), known countries
+      if (/^\d+$/.test(seg)) continue
+      if (/^[A-Z]{2}$/.test(seg)) continue
+      if (/^(USA|United States)$/i.test(seg)) continue
+      // Skip if it starts with a digit (still a street continuation)
+      if (/^\d/.test(seg)) continue
+      // Strip trailing ZIP like "CA 90404" → "CA" (but CA would be caught above)
+      const clean = seg.replace(/\s+\d{5}(-\d{4})?$/, '').trim()
+      if (clean.length >= 3) return clean
     }
+
+    // Fallback: extract street name from first segment
+    const street = parts[0].replace(/^\d+\s+/, '').replace(/\s+(Blvd|Ave|Avenue|Street|St|Drive|Dr|Road|Rd|Lane|Ln|Way|Ct|Court|Pl|Place|Pkwy|Parkway)$/i, '').trim()
+    if (street.length >= 3) return street
   }
 
-  // No commas: return just the street name (drop the building number)
+  // No commas: drop the building number, return street name
   const match = trimmed.match(/^\d+\s+(.+)$/)
   return match ? match[1].trim() : trimmed
 }
