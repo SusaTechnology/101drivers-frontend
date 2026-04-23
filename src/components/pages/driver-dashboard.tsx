@@ -336,9 +336,9 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
               <RouteThumbnail />
             )}
 
-            {/* Payout — strong green accent, aligned with distance row */}
+            {/* Payout — strong green accent, spaced below map */}
             {job.payout != null && (
-              <span className="text-[22px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight mt-auto">
+              <span className="text-[22px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight mt-2.5">
                 {formatCurrency(job.payout)}
               </span>
             )}
@@ -346,10 +346,10 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
         </div>
       </CardContent>
 
-      {/* ── Bottom CTA strip — thin tap affordance ── */}
+      {/* ── Bottom CTA strip — compact, bold tap affordance ── */}
       <div className="h-px bg-slate-200/80 dark:bg-slate-700/60" />
-      <div className="py-1.5 flex items-center justify-center">
-        <ChevronRight className="w-4 h-4 text-green-500 dark:text-green-400" />
+      <div className="py-1 flex items-center justify-center">
+        <ArrowRight className="w-5 h-5 text-green-600 dark:text-green-400" strokeWidth={2.5} />
       </div>
     </Card>
   )
