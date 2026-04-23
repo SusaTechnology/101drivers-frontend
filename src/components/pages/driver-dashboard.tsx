@@ -346,10 +346,9 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
         </div>
       </CardContent>
 
-      {/* ── Bottom CTA strip — tight action bar ── */}
-      <div className="border-t border-slate-200/80 dark:border-slate-700/60" />
-      <div className="h-7 flex items-center justify-center">
-        <ArrowRight className="w-6 h-6 text-green-600 dark:text-green-400" strokeWidth={3} />
+      {/* ── Bottom CTA bar — fixed height, attached action strip ── */}
+      <div className="h-11 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center bg-slate-50/60 dark:bg-slate-800/40">
+        <ArrowRight className="w-7 h-7 text-green-600 dark:text-green-400" strokeWidth={3} />
       </div>
     </Card>
   )
