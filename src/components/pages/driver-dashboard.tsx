@@ -346,10 +346,10 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
         </div>
       </CardContent>
 
-      {/* ── Bottom CTA strip — compact, bold tap affordance ── */}
-      <div className="h-px bg-slate-200/80 dark:bg-slate-700/60" />
-      <div className="py-1 flex items-center justify-center">
-        <ArrowRight className="w-5 h-5 text-green-600 dark:text-green-400" strokeWidth={2.5} />
+      {/* ── Bottom CTA strip — tight action bar ── */}
+      <div className="border-t border-slate-200/80 dark:border-slate-700/60" />
+      <div className="h-7 flex items-center justify-center">
+        <ArrowRight className="w-6 h-6 text-green-600 dark:text-green-400" strokeWidth={3} />
       </div>
     </Card>
   )
