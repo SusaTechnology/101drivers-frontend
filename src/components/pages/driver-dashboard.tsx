@@ -173,6 +173,32 @@ const formatCurrency = (amount?: number | null): string => {
   }).format(amount)
 }
 
+// Extract short human-readable label from a full address.
+// Strategy: try to pull the city (after last comma), otherwise the street name.
+// Examples:
+//   "1402 Santa Monica Blvd, Santa Monica, CA 90404" → "Santa Monica"
+//   "18700 Studebaker Rd, Cerritos, CA 90703"        → "Cerritos"
+//   "123 Main St"                                      → "Main St"
+const extractRouteLabel = (fullAddress: string): string => {
+  if (!fullAddress) return ''
+  const trimmed = fullAddress.trim()
+
+  // If it has commas, grab the city part (second-to-last or last segment)
+  if (trimmed.includes(',')) {
+    const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean)
+    // parts like ["1402 Santa Monica Blvd", "Santa Monica", "CA 90404"]
+    if (parts.length >= 2) {
+      // Return the city (second part) — strip any 5-digit ZIP suffix
+      const city = parts[parts.length - 2] || parts[0]
+      return city.replace(/\s+\d{5}(-\d{4})?$/.trim(), '').trim()
+    }
+  }
+
+  // No commas: return just the street name (drop the building number)
+  const match = trimmed.match(/^\d+\s+(.+)$/)
+  return match ? match[1].trim() : trimmed
+}
+
 // Service type to display name mapping
 const serviceTypeLabels: Record<string, string> = {
   HOME_DELIVERY: 'Car Transfer',
@@ -259,11 +285,12 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
       className="border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/60 active:scale-[0.98] transition-all duration-150 cursor-pointer bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden"
       onClick={onClick}
     >
-      <CardContent className="p-5">
+      {/* ── Main content ── */}
+      <CardContent className="px-5 pt-5 pb-4">
         <div className="flex gap-4">
-          {/* Left: Gig details */}
-          <div className="flex-1 min-w-0">
-            {/* Date + Time on one line */}
+          {/* Left: text block */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {/* Top: date + time (small, secondary) */}
             <div className="text-[13px] font-medium text-slate-500 dark:text-slate-400 leading-tight">
               {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
               {job.timeWindow && (
@@ -274,36 +301,42 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
               )}
             </div>
 
-            {/* Route — most prominent */}
-            <div className="text-[17px] font-extrabold text-slate-900 dark:text-white mt-3 leading-snug tracking-tight">
+            {/* Middle: route — PRIMARY, most prominent */}
+            <div className="text-[18px] font-extrabold text-slate-900 dark:text-white mt-3 leading-snug tracking-tight">
               {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
             </div>
 
-            {/* Distance + Est. time */}
-            <div className="text-[14px] text-slate-500 dark:text-slate-400 font-medium mt-2 leading-tight">
+            {/* Bottom-left: distance + ETA */}
+            <div className="text-[14px] text-slate-500 dark:text-slate-400 font-medium mt-3 leading-tight">
               {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
+            </div>
+
+            {/* Bottom-right: payout — large, green, dominant */}
+            <div className="self-end mt-1">
+              <span className="text-[26px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight">
+                {formatCurrency(job.payout)}
+              </span>
             </div>
           </div>
 
-          {/* Right column: Price + Live mini map */}
-          <div className="flex flex-col items-end justify-between shrink-0 py-0.5">
-            {/* Price — large, green */}
-            <span className="text-[26px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight">
-              {formatCurrency(job.payout)}
-            </span>
-            {/* Real live mini map */}
-            {hasDropoffCoords ? (
-              <MiniRouteMap
-                pickup={{ lat: job.lat, lng: job.lng }}
-                dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
-                isLoaded={isMapsLoaded}
-              />
-            ) : (
-              <RouteThumbnail />
-            )}
-          </div>
+          {/* Right: live mini map */}
+          {hasDropoffCoords ? (
+            <MiniRouteMap
+              pickup={{ lat: job.lat, lng: job.lng }}
+              dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
+              isLoaded={isMapsLoaded}
+            />
+          ) : (
+            <RouteThumbnail />
+          )}
         </div>
       </CardContent>
+
+      {/* ── Bottom CTA strip ── */}
+      <div className="h-px bg-slate-200/80 dark:bg-slate-700/60" />
+      <div className="py-2.5 flex items-center justify-center">
+        <ChevronRight className="w-5 h-5 text-green-500 dark:text-green-400" />
+      </div>
     </Card>
   )
 }
@@ -455,8 +488,8 @@ export default function DriverDashboardPage() {
       type: serviceTypeLabels[item.serviceType] || item.serviceType,
       date: formatDate(item.pickupWindowStart),
       timeWindow: formatTimeRange(item.pickupWindowStart, item.pickupWindowEnd),
-      pickup: item.pickupAddress?.split(',')[0] || item.pickupAddress,
-      dropoff: item.dropoffAddress?.split(',')[0] || item.dropoffAddress,
+      pickup: extractRouteLabel(item.pickupAddress || ''),
+      dropoff: extractRouteLabel(item.dropoffAddress || ''),
       service: serviceTypeLabels[item.serviceType] || item.serviceType,
       miles: item.pickupDistanceMiles || null,
       duration: formatDuration(item.etaMinutes),
