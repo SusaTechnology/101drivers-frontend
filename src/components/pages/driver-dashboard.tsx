@@ -190,7 +190,7 @@ const extractRouteLabel = (fullAddress: string): string => {
     if (parts.length >= 2) {
       // Return the city (second part) — strip any 5-digit ZIP suffix
       const city = parts[parts.length - 2] || parts[0]
-      return city.replace(/\s+\d{5}(-\d{4})?$/.trim(), '').trim()
+      return city.replace(/\s+\d{5}(-\d{4})?$/, '').trim()
     }
   }
 
