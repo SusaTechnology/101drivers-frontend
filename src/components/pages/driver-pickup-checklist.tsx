@@ -100,10 +100,23 @@ export default function DriverPickupChecklistPage() {
   const navigate = useNavigate()
   // Get deliveryId from route params (if available)
   const { jobId: deliveryId } = useSearch({ strict: false }) as { jobId: string }
-  // const { route } = useSearch({ strict: false }) as { route: string }
-  
-  // Use deliveryId if present
-  // const deliveryId = params.deliveryId || MOCK_DELIVERY.id
+
+  // Fetch delivery details for order info display
+  const { data: deliveryData } = useDataQuery({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${driverId}/${deliveryId}`,
+    noFilter: true,
+    enabled: Boolean(driverId && deliveryId),
+  })
+
+  // Also try active delivery endpoint for richer data (vehicle, contacts)
+  const { data: activeData } = useDataQuery({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${driverId}`,
+    noFilter: true,
+    enabled: Boolean(driverId),
+  })
+
+  // Merge: prefer active delivery data (has vehicle/contacts), fallback to feed data
+  const delivery = activeData?.delivery || deliveryData
 
   // Location permission state
   const [locationStatus, setLocationStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown')
@@ -511,23 +524,83 @@ export default function DriverPickupChecklistPage() {
       </header>
 
       <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-36">
-        {/* Top summary */}
+        {/* ── ORDER DETAILS CARD ── */}
+        {delivery && (
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg mb-5">
+            <CardContent className="p-5">
+              {/* Route */}
+              <h2 className="text-[18px] font-black text-slate-900 dark:text-white leading-tight">
+                {delivery.pickupAddress?.split(',')[1]?.trim() || 'Pickup'} &rarr; {delivery.dropoffAddress?.split(',')[1]?.trim() || 'Dropoff'}
+              </h2>
+
+              {/* Vehicle info */}
+              {(delivery.vehicleMake || delivery.vehicleModel || delivery.licensePlate) && (
+                <div className="mt-3 flex items-center gap-2">
+                  <Car className="w-4 h-4 text-slate-400" />
+                  <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
+                    {[delivery.vehicleColor, delivery.vehicleYear, delivery.vehicleMake, delivery.vehicleModel].filter(Boolean).join(' ')}
+                    {delivery.licensePlate ? ` • ${delivery.licensePlate}` : ''}
+                  </span>
+                </div>
+              )}
+
+              {/* Addresses */}
+              <div className="mt-4 space-y-2">
+                <div className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pickup</p>
+                    <p className="text-[13px] font-medium text-slate-900 dark:text-white">{delivery.pickupAddress || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Dropoff</p>
+                    <p className="text-[13px] font-medium text-slate-900 dark:text-white">{delivery.dropoffAddress || '—'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contacts */}
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {delivery.recipientName && (
+                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Recipient</p>
+                    <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">{delivery.recipientName}</p>
+                    {delivery.recipientPhone && (
+                      <a href={`tel:${delivery.recipientPhone}`} className="text-[12px] text-green-600 dark:text-green-400 font-medium hover:underline">
+                        {delivery.recipientPhone}
+                      </a>
+                    )}
+                  </div>
+                )}
+                {delivery.customer?.contactName && (
+                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sender</p>
+                    <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">{delivery.customer.contactName}</p>
+                    {delivery.customer.contactPhone && (
+                      <a href={`tel:${delivery.customer.contactPhone}`} className="text-[12px] text-green-600 dark:text-green-400 font-medium hover:underline">
+                        {delivery.customer.contactPhone}
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pickup checklist */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <CardContent className="p-6 sm:p-7">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
               <div>
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-slate-900 border border-primary/25 w-fit">
-                  <Verified className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-700 dark:text-slate-200">
-                    Proof required • CA MVP
-                  </span>
-                </div>
-
-                <h1 className="mt-4 text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                  Pickup evidence
+                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+                  Pickup Checklist
                 </h1>
                 <p className="mt-2 text-slate-600 dark:text-slate-400">
-                  Complete these steps before you can start the trip. Evidence is logged for Admin + stakeholders (email-first; SMS optional by policy).
+                  Complete these steps before you can start the trip.
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
