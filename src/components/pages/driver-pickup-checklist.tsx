@@ -133,6 +133,8 @@ export default function DriverPickupChecklistPage() {
   )
   const [photosSaved, setPhotosSaved] = useState(false)
   const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ slotIndex: number; imageUrl: string }>>([])
+  const [photoErrors, setPhotoErrors] = useState<Set<number>>(new Set())
+  const [photosUploading, setPhotosUploading] = useState(false)
 
   const [odometerValue, setOdometerValue] = useState('')
   const [odometerPhotoAdded, setOdometerPhotoAdded] = useState(false)
@@ -162,23 +164,34 @@ export default function DriverPickupChecklistPage() {
   const uploadPhotosMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
     `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
     {
+      onMutate: () => {
+        setPhotosUploading(true)
+        setPhotoErrors(new Set())
+      },
       onSuccess: (data) => {
-        // Transform the response to match our state format
+        setPhotosUploading(false)
         const photos = data.files.map(f => ({
           slotIndex: f.slotIndex,
           imageUrl: f.url,
         }))
         setUploadedPhotos(photos)
         setPhotosSaved(true)
+        setPhotoErrors(new Set())
         toast.success('Photos saved', {
           description: 'Pickup photos have been uploaded.',
         })
       },
       onError: (error) => {
-        toast.error('Failed to upload photos', {
-          description: error.message,
+        setPhotosUploading(false)
+        // Mark all non-empty slots as errored
+        const failedSlots = new Set<number>()
+        photoSlots.forEach((slot, i) => {
+          if (slot.file) failedSlots.add(i)
         })
-        console.error(error)
+        setPhotoErrors(failedSlots)
+        toast.error('Some photos failed to upload', {
+          description: 'Tap the failed photos to retry.',
+        })
       },
     }
   )
@@ -752,32 +765,68 @@ export default function DriverPickupChecklistPage() {
             {/* Step 2: Pickup photos */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
-              photosSaved && "border-primary/25 bg-primary/5"
+              photosSaved && !photoErrors.size && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
+              photoErrors.size > 0 && "border-red-200 dark:border-red-800/40",
+              photosUploading && "border-amber-200 dark:border-amber-800/40"
             )}>
               <CardContent className="p-6 sm:p-7">
+                {/* STATE 1: Uploading — red banner */}
+                {photosUploading && (
+                  <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <p className="text-[12px] font-bold text-red-700 dark:text-red-300">
+                      Still uploading photos. Please wait for all six to complete.
+                    </p>
+                  </div>
+                )}
+
+                {/* STATE 3: Error — red banner */}
+                {photoErrors.size > 0 && !photosUploading && (
+                  <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <p className="text-[12px] font-bold text-red-700 dark:text-red-300">
+                      Some photos failed to upload. Please tap the failed photos to retry.
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-4">
                   <div className={cn(
                     "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
-                    photosSaved 
-                      ? "bg-primary/10 border-primary/25 text-slate-900" 
-                      : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                    photosSaved && !photoErrors.size
+                      ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
+                      : photoErrors.size > 0
+                        ? "bg-red-100 dark:bg-red-900/20 border-red-200 dark:border-red-800/40 text-red-700"
+                        : photosUploading
+                          ? "bg-amber-100 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40 text-amber-700"
+                          : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
-                    {photosSaved ? <Check className="w-4 h-4 text-primary" /> : 2}
+                    {photosSaved && !photoErrors.size ? <Check className="w-4 h-4" /> :
+                     photoErrors.size > 0 ? <XCircle className="w-4 h-4" /> :
+                     photosUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 2}
                   </div>
 
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Capture pickup photos</h2>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-lg font-black text-slate-900 dark:text-white">Arrival Photos</h2>
+                          {/* Status badge */}
+                          {photosSaved && !photoErrors.size && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                              Completed
+                            </span>
+                          )}
+                          {(photoErrors.size > 0 || photosUploading) && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                              Pending
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                           Required set: front, rear, left, right, and any damage close-ups.
                         </p>
                       </div>
-
-                      <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
-                        <Camera className="w-3.5 h-3.5 text-primary mr-1" />
-                        Required
-                      </Badge>
                     </div>
 
                     {!photosSaved ? (
@@ -793,62 +842,96 @@ export default function DriverPickupChecklistPage() {
                         />
 
                         <div className="mt-5 grid grid-cols-3 gap-2">
-                          {photoSlots.map((slot, index) => (
-                            <Button
-                              key={index}
-                              variant="outline"
-                              onClick={() => handleAddPhoto(index)}
-                              className={cn(
-                                "h-16 rounded-2xl border-2 border-dashed flex items-center justify-center p-0 hover:bg-primary/5 transition overflow-hidden",
-                                slot.file
-                                  ? "border-primary bg-primary/10"
-                                  : "border-slate-200 dark:border-slate-700"
-                              )}
-                            >
-                              {slot.preview ? (
-                                <img
-                                  src={slot.preview}
-                                  alt={`Pickup ${index + 1}`}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : slot.file ? (
-                                <Check className="w-5 h-5 text-primary" />
-                              ) : (
-                                <Camera className="w-5 h-5 text-primary" />
-                              )}
-                            </Button>
-                          ))}
+                          {photoSlots.map((slot, index) => {
+                            const hasError = photoErrors.has(index)
+                            return (
+                              <Button
+                                key={index}
+                                variant="outline"
+                                onClick={() => !photosUploading && handleAddPhoto(index)}
+                                className={cn(
+                                  "h-20 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-0 hover:bg-primary/5 transition overflow-hidden relative",
+                                  slot.file && !hasError
+                                    ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
+                                    : hasError
+                                      ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/10 cursor-pointer"
+                                      : photosUploading
+                                        ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10"
+                                        : "border-slate-200 dark:border-slate-700"
+                                )}
+                              >
+                                {slot.preview ? (
+                                  <>
+                                    <img
+                                      src={slot.preview}
+                                      alt={`Photo ${index + 1}`}
+                                      className="h-full w-full object-cover"
+                                    />
+                                    {/* STATE 2: Success overlay */}
+                                    {photosUploading && (
+                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                      </div>
+                                    )}
+                                    {!photosUploading && !hasError && (
+                                      <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                                        <Check className="w-3 h-3 text-white" />
+                                      </div>
+                                    )}
+                                    {/* STATE 3: Error overlay */}
+                                    {hasError && (
+                                      <div className="absolute inset-0 bg-red-900/30 flex flex-col items-center justify-center gap-1">
+                                        <XCircle className="w-5 h-5 text-red-200" />
+                                        <span className="text-[9px] font-bold text-white">Failed — Tap to retry</span>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : slot.file ? (
+                                  <Check className="w-5 h-5 text-green-500" />
+                                ) : (
+                                  <Camera className={cn("w-5 h-5", photosUploading ? "text-amber-400" : "text-slate-400")} />
+                                )}
+                              </Button>
+                            )
+                          })}
                         </div>
 
                         <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                          <Button
-                            onClick={handleSavePhotos}
-                            disabled={uploadPhotosMutation.isPending}
-                            className="flex-1 bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition flex items-center justify-center gap-2"
-                          >
-                            {uploadPhotosMutation.isPending ? (
-                              <>Uploading...</>
-                            ) : (
-                              <>
-                                <CloudUpload className="w-4 h-4" />
-                                Save photos
-                              </>
-                            )}
-                          </Button>
-                          {/* <Button
-                            onClick={handleAddDamageNote}
-                            variant="outline"
-                            className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-extrabold rounded-2xl py-3 hover:bg-primary/5 transition flex items-center justify-center gap-2"
-                          >
-                            <NoteAdd className="w-4 h-4 text-primary" />
-                            Add damage note
-                          </Button> */}
+                          {photoErrors.size > 0 && !photosUploading ? (
+                            /* STATE 3: Retry button */
+                            <Button
+                              onClick={handleSavePhotos}
+                              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-2xl py-3 transition flex items-center justify-center gap-2"
+                            >
+                              <CloudUpload className="w-4 h-4" />
+                              Retry Failed Uploads
+                            </Button>
+                          ) : (
+                            /* STATE 1: Upload button (disabled while uploading) */
+                            <Button
+                              onClick={handleSavePhotos}
+                              disabled={uploadPhotosMutation.isPending || photosUploading}
+                              className="flex-1 bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                              {uploadPhotosMutation.isPending || photosUploading ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  Uploading photos…
+                                </>
+                              ) : (
+                                <>
+                                  <CloudUpload className="w-4 h-4" />
+                                  Save photos
+                                </>
+                              )}
+                            </Button>
+                          )}
                         </div>
                       </>
                     ) : (
-                      <div className="mt-4 p-4 rounded-2xl bg-primary/10 border border-primary/25">
-                        <p className="text-sm font-extrabold text-slate-900">Pickup photos saved ✓</p>
-                        <p className="text-[11px] text-slate-700 mt-1">Next: record odometer start.</p>
+                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
+                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Arrival photos uploaded ✓</p>
+                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: record odometer start.</p>
                       </div>
                     )}
                   </div>
