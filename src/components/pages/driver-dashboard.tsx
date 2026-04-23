@@ -96,6 +96,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
+import MiniRouteMap from '@/components/map/MiniRouteMap'
 import type { NotificationInboxResponse } from '@/types/notification'
 
 // Filter options matching backend API
@@ -220,6 +221,8 @@ interface JobItem {
   // Coordinates for map
   lat: number
   lng: number
+  dropoffLat: number | null
+  dropoffLng: number | null
 }
 
 // ── Reusable Route Thumbnail SVG ────────────────────────────────
@@ -248,7 +251,9 @@ function RouteThumbnail() {
 }
 
 // ── Reusable Gig Card Component ──────────────────────────────────
-function GigCard({ job, onClick }: { job: JobItem; onClick: () => void }) {
+function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => void; isMapsLoaded: boolean }) {
+  const hasDropoffCoords = job.dropoffLat != null && job.dropoffLng != null
+
   return (
     <Card
       className="border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/60 active:scale-[0.98] transition-all duration-150 cursor-pointer bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden"
@@ -280,14 +285,22 @@ function GigCard({ job, onClick }: { job: JobItem; onClick: () => void }) {
             </div>
           </div>
 
-          {/* Right column: Price + Map thumbnail */}
+          {/* Right column: Price + Live mini map */}
           <div className="flex flex-col items-end justify-between shrink-0 py-0.5">
             {/* Price — large, green */}
             <span className="text-[26px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight">
               {formatCurrency(job.payout)}
             </span>
-            {/* Map thumbnail */}
-            <RouteThumbnail />
+            {/* Real live mini map */}
+            {hasDropoffCoords ? (
+              <MiniRouteMap
+                pickup={{ lat: job.lat, lng: job.lng }}
+                dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
+                isLoaded={isMapsLoaded}
+              />
+            ) : (
+              <RouteThumbnail />
+            )}
           </div>
         </div>
       </CardContent>
@@ -462,6 +475,8 @@ export default function DriverDashboardPage() {
       isUrgent: item.isUrgent || false,
       lat: item.pickupLat && item.pickupLng ? item.pickupLat : mockPickupLocations[index % mockPickupLocations.length].lat,
       lng: item.pickupLat && item.pickupLng ? item.pickupLng : mockPickupLocations[index % mockPickupLocations.length].lng,
+      dropoffLat: item.dropoffLat || null,
+      dropoffLng: item.dropoffLng || null,
     })) || []
   }, [deliveriesData])
 
@@ -813,6 +828,7 @@ export default function DriverDashboardPage() {
                   key={job.id}
                   job={job}
                   onClick={() => handleViewJob(job.id)}
+                  isMapsLoaded={isLoaded}
                 />
               ))}
             </div>
