@@ -355,7 +355,7 @@ export default function DriverPickupChecklistPage() {
       if (slot.file) formData.append('files', slot.file)
     })
     formData.append('deliveryId', deliveryId)
-    formData.append('photoType', 'car-photos')
+    formData.append('phase', 'PICKUP')
     uploadCarPhotosMutation.mutate(formData)
   }
 
@@ -375,7 +375,7 @@ export default function DriverPickupChecklistPage() {
     const formData = new FormData()
     formData.append('files', odometerPhoto.file)
     formData.append('deliveryId', deliveryId)
-    formData.append('photoType', 'odometer')
+    formData.append('phase', 'PICKUP')
     uploadOdometerMutation.mutate(formData)
   }
 
@@ -395,7 +395,7 @@ export default function DriverPickupChecklistPage() {
     const formData = new FormData()
     formData.append('files', vinPhoto.file)
     formData.append('deliveryId', deliveryId)
-    formData.append('photoType', 'vin')
+    formData.append('phase', 'PICKUP')
     uploadVinPhotoMutation.mutate(formData)
   }
 
