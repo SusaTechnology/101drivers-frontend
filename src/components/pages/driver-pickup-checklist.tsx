@@ -184,18 +184,10 @@ export default function DriverPickupChecklistPage() {
     setMounted(true)
   }, [])
 
-  // Cleanup: clear persisted state and object URLs on unmount
-  useEffect(() => {
-    return () => {
-      photoSlots.forEach(slot => {
-        if (slot.preview) URL.revokeObjectURL(slot.preview)
-      })
-      if (odometerPhoto.preview) URL.revokeObjectURL(odometerPhoto.preview)
-      if (vinPhoto.preview) URL.revokeObjectURL(vinPhoto.preview)
-      // Clear persisted state if trip was not completed
-      if (deliveryId && !vinVerified) clearPersistedState(deliveryId)
-    }
-  }, [])
+  // Cleanup: only revoke object URLs on unmount.
+  // Do NOT clear persisted state here — a page refresh unmounts the component
+  // first, which would wipe localStorage before it can be restored.
+  // Persisted state is cleared explicitly in handleCancel and after successful submission.
   useEffect(() => {
     return () => {
       photoSlots.forEach(slot => {
@@ -283,6 +275,7 @@ export default function DriverPickupChecklistPage() {
     {
       onSuccess: () => {
         setVinVerified(true)
+        if (deliveryId) clearPersistedState(deliveryId)
         toast.success('Checklist complete!', {
           description: 'Tracking & location services are now active.',
         })
@@ -302,6 +295,7 @@ export default function DriverPickupChecklistPage() {
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/start-trip`,
     {
       onSuccess: () => {
+        if (deliveryId) clearPersistedState(deliveryId)
         toast.success('Trip started!', {
           description: 'You are now on route. Drive safe!',
         })
@@ -516,6 +510,7 @@ export default function DriverPickupChecklistPage() {
   }
 
   const handleCancel = () => {
+    if (deliveryId) clearPersistedState(deliveryId)
     toast.info('Checklist cancelled', {
       description: 'Returning to active delivery.',
     })
@@ -714,7 +709,7 @@ export default function DriverPickupChecklistPage() {
           {/* Left: checklist steps */}
           <div className="lg:col-span-7 space-y-6">
 
-            {/* ── Step 1: Greet the staff ── */}
+            {/* ── Step 1: Verify the vehicle ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               greeted && "border-primary/25 bg-primary/5"
@@ -733,38 +728,45 @@ export default function DriverPickupChecklistPage() {
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">I'm at the vehicle</h2>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Verify the vehicle</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Confirm you are at the pickup location with the correct vehicle.
+                          {greeted
+                            ? 'Vehicle verified. Proceed to the next step.'
+                            : 'Confirm you found the right vehicle before starting.'}
                         </p>
                       </div>
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
-                        <CarFront className="w-3.5 h-3.5 text-primary mr-1" />
-                        Required
+                        {greeted ? <Check className="w-3.5 h-3.5 text-green-500 mr-1" /> : <CarFront className="w-3.5 h-3.5 text-primary mr-1" />}
+                        {greeted ? 'Done' : 'Required'}
                       </Badge>
                     </div>
 
                     {!greeted ? (
                       <div className="mt-5">
-                        <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
-                          <p className="text-sm font-bold text-blue-800 dark:text-blue-200">
-                            Before starting, make sure you are at the right vehicle.
-                          </p>
-                          <p className="text-[12px] text-blue-600 dark:text-blue-400 mt-1">
-                            Verify the make, model, color, and license plate match the delivery details above.
-                          </p>
-                        </div>
+                        {/* Quick verification checklist */}
+                        <ul className="space-y-2">
+                          {[
+                            { label: 'Vehicle make & model matches', icon: Car },
+                            { label: 'Color and license plate match', icon: Shield },
+                            { label: 'You are at the correct pickup address', icon: MapPin },
+                          ].map((item, i) => (
+                            <li key={i} className="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300">
+                              <item.icon className="w-4 h-4 text-slate-400 shrink-0" />
+                              {item.label}
+                            </li>
+                          ))}
+                        </ul>
                         <Button
                           onClick={handleArrivedAtVehicle}
                           className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition flex items-center justify-center gap-2"
                         >
-                          <CarFront className="w-4 h-4" />
-                          I'm at the vehicle
+                          <Check className="w-4 h-4" />
+                          Confirm & continue
                         </Button>
                       </div>
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-primary/10 border border-primary/25">
-                        <p className="text-sm font-extrabold text-slate-900">Confirmed at vehicle</p>
+                        <p className="text-sm font-extrabold text-slate-900">Vehicle verified</p>
                         <p className="text-[11px] text-slate-700 mt-1">Next: walk around the car clockwise and take 6 photos.</p>
                       </div>
                     )}
