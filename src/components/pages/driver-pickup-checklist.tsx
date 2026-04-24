@@ -42,6 +42,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
+import { savePhoto, getPhotosForDelivery, clearDeliveryPhotos } from '@/lib/pickup-photo-store'
 
 // Photo slot labels — clockwise walk-around order
 const PHOTO_LABELS = [
@@ -91,6 +92,8 @@ function clearPersistedState(deliveryId: string) {
   } catch {
     // ignore
   }
+  // Also clear IndexedDB photo blobs
+  clearDeliveryPhotos(deliveryId).catch(() => { /* best effort */ })
 }
 
 export default function DriverPickupChecklistPage() {
@@ -151,6 +154,46 @@ export default function DriverPickupChecklistPage() {
   const [vinPhotoSaved, setVinPhotoSaved] = useState(saved?.vinPhotoSaved ?? false)
   const [vinPhotoUploading, setVinPhotoUploading] = useState(false)
   const [vinPhotoUploadError, setVinPhotoUploadError] = useState(false)
+
+  // ── Restore photo files from IndexedDB on mount (survives reload) ──
+  const [photosRestored, setPhotosRestored] = useState(false)
+  useEffect(() => {
+    if (!deliveryId || photosRestored) return
+    let cancelled = false
+
+    getPhotosForDelivery(deliveryId).then((photos) => {
+      if (cancelled) return
+
+      const newSlots = Array(6).fill(null).map(() => ({ file: null as File | null, preview: null as string | null }))
+      let restoredOdometer: File | null = null
+      let restoredVin: File | null = null
+
+      for (const p of photos) {
+        const preview = URL.createObjectURL(p.file)
+        if (p.type === 'car' && p.index >= 0 && p.index < 6) {
+          newSlots[p.index] = { file: p.file, preview }
+        } else if (p.type === 'odometer') {
+          restoredOdometer = p.file
+        } else if (p.type === 'vin') {
+          restoredVin = p.file
+        }
+      }
+
+      setPhotoSlots(newSlots)
+      if (restoredOdometer) {
+        setOdometerPhoto({ file: restoredOdometer, preview: URL.createObjectURL(restoredOdometer) })
+      }
+      if (restoredVin) {
+        setVinPhoto({ file: restoredVin, preview: URL.createObjectURL(restoredVin) })
+      }
+      setPhotosRestored(true)
+    }).catch(() => {
+      // IndexedDB unavailable — continue without restored photos
+      setPhotosRestored(true)
+    })
+
+    return () => { cancelled = true }
+  }, [deliveryId, photosRestored])
 
   // ── Step 5: Upload all + enter VIN last-4 digits ──
   const [vinValue, setVinValue] = useState(saved?.vinValue ?? '')
@@ -407,16 +450,22 @@ export default function DriverPickupChecklistPage() {
         newSlots[index] = { file, preview: previewUrl }
         return newSlots
       })
+      // Persist to IndexedDB so it survives reload
+      if (deliveryId) savePhoto(deliveryId, 'car', index, file).catch(() => {})
     } else if (currentInputTarget.current === 'odometer') {
       const previewUrl = URL.createObjectURL(file)
       if (odometerPhoto.preview) URL.revokeObjectURL(odometerPhoto.preview)
       setOdometerPhoto({ file, preview: previewUrl })
       setOdometerUploadError(false)
+      // Persist to IndexedDB
+      if (deliveryId) savePhoto(deliveryId, 'odometer', 0, file).catch(() => {})
     } else if (currentInputTarget.current === 'vin') {
       const previewUrl = URL.createObjectURL(file)
       if (vinPhoto.preview) URL.revokeObjectURL(vinPhoto.preview)
       setVinPhoto({ file, preview: previewUrl })
       setVinPhotoUploadError(false)
+      // Persist to IndexedDB
+      if (deliveryId) savePhoto(deliveryId, 'vin', 0, file).catch(() => {})
     }
 
     e.target.value = ''
