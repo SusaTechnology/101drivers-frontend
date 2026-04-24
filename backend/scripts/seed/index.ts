@@ -550,45 +550,6 @@ async function seedConfiguration(refs: DemoRefs) {
     }
   }
 
-  // ── Seed operating hours (Mon–Sun, 08:00–20:00) ──────────────────────────
-  for (let day = 1; day <= 7; day++) {
-    await prisma.operatingHour.upsert({
-      where: { id: `seed-oh-${day}` },
-      update: { active: true, startTime: "08:00", endTime: "20:00" },
-      create: {
-        id: `seed-oh-${day}`,
-        dayOfWeek: day,
-        startTime: "08:00",
-        endTime: "20:00",
-        active: true,
-      },
-    });
-  }
-
-  // ── Seed time-slot templates ──────────────────────────────────────────────
-  const defaultSlotTemplates = [
-    { label: "8:00 AM – 10:00 AM", startTime: "08:00", endTime: "10:00" },
-    { label: "10:00 AM – 12:00 PM", startTime: "10:00", endTime: "12:00" },
-    { label: "12:00 PM – 2:00 PM", startTime: "12:00", endTime: "14:00" },
-    { label: "2:00 PM – 4:00 PM", startTime: "14:00", endTime: "16:00" },
-    { label: "4:00 PM – 6:00 PM", startTime: "16:00", endTime: "18:00" },
-    { label: "6:00 PM – 8:00 PM", startTime: "18:00", endTime: "20:00" },
-  ];
-
-  for (const tpl of defaultSlotTemplates) {
-    await prisma.timeSlotTemplate.upsert({
-      where: { id: `seed-tst-${tpl.startTime}` },
-      update: { active: true, startTime: tpl.startTime, endTime: tpl.endTime, label: tpl.label },
-      create: {
-        id: `seed-tst-${tpl.startTime}`,
-        label: tpl.label,
-        startTime: tpl.startTime,
-        endTime: tpl.endTime,
-        active: true,
-      },
-    });
-  }
-
   await prisma.appSetting.upsert({
     where: { key: "platform.demoMode" },
     update: {

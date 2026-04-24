@@ -1,6 +1,6 @@
 import { DocumentBuilder, SwaggerCustomOptions } from "@nestjs/swagger";
 
-export const swaggerPath = "api-docs";
+export const swaggerPath = "api";
 
 export const swaggerDocumentOptions = new DocumentBuilder()
   .setTitle("101drivers")
