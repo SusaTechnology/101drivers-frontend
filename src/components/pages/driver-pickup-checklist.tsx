@@ -1,6 +1,6 @@
 // app/pages/driver/pickup-checklist.tsx
 import React, { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
@@ -9,8 +9,6 @@ import {
   LogOut,
   Sun,
   Moon,
-  Verified,
-  QrCode,
   Camera,
   Gauge as Speed,
   Info,
@@ -21,23 +19,21 @@ import {
   X,
   Save,
   CloudUpload,
-  FilePlus as NoteAdd,
-  EyeOff as VisibilityOff,
-  X as Close,
   Ruler as Distance,
-  MailCheck as MarkEmailRead,
   CheckCircle2 as TaskAlt,
   Headset as SupportAgent,
-  ArrowRight as ArrowForward,
   Lock,
-  FileText as Report,
   Circle as RadioButtonUnchecked,
-  CheckCircle as CheckCircleIcon,
   FileCheck as FactCheck,
   Home,
   Car,
   Inbox,
   Menu as MenuIcon,
+  Hand as HandIcon,
+  QrCode,
+  MapPin,
+  Shield,
+  MessageCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -46,41 +42,16 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
 
-// Delivery data (fallback)
-const MOCK_DELIVERY = {
-  id: 'DLV-20418',
-  route: 'San Jose → Los Angeles',
-  pickupLocation: 'San Jose',
-  dropoffLocation: 'Los Angeles',
-}
-
-// Steps data
-const STEPS = [
-  {
-    id: 1,
-    title: 'Verify VIN last-4',
-    description: 'Confirm the vehicle using the last 4 digits of the VIN (required by policy).',
-    icon: QrCode,
-    required: true,
-  },
-  {
-    id: 2,
-    title: 'Capture pickup photos',
-    description: 'Required set: front, rear, left, right, and any damage close-ups.',
-    icon: Camera,
-    required: true,
-  },
-  {
-    id: 3,
-    title: 'Record odometer start',
-    description: 'Enter starting miles and capture a clear odometer photo (required).',
-    icon: Speed,
-    required: true,
-  },
+// Photo slot labels — clockwise walk-around order
+const PHOTO_LABELS = [
+  'Front',
+  'Front-Right',
+  'Right Side',
+  'Rear',
+  'Rear-Left',
+  'Left Side',
 ]
 
 // Bottom navigation items
@@ -122,12 +93,10 @@ export default function DriverPickupChecklistPage() {
   const [locationStatus, setLocationStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown')
   const [isCheckingLocation, setIsCheckingLocation] = useState(false)
 
-  // Step states
-  const [vinValue, setVinValue] = useState('')
-  const [vinNote, setVinNote] = useState('')
-  const [vinVerified, setVinVerified] = useState(false)
+  // ── Step 1: Greet the staff ──
+  const [greeted, setGreeted] = useState(false)
 
-  // Photo upload state: array of 6 slots, each containing { file: File | null, preview: string | null }
+  // ── Step 2: 6 clockwise car photos ──
   const [photoSlots, setPhotoSlots] = useState<Array<{ file: File | null; preview: string | null }>>(
     Array(6).fill(null).map(() => ({ file: null, preview: null }))
   )
@@ -136,38 +105,51 @@ export default function DriverPickupChecklistPage() {
   const [photoErrors, setPhotoErrors] = useState<Set<number>>(new Set())
   const [photosUploading, setPhotosUploading] = useState(false)
 
-  const [odometerValue, setOdometerValue] = useState('')
-  const [odometerPhotoAdded, setOdometerPhotoAdded] = useState(false)
+  // ── Step 3: Odometer photo ──
+  const [odometerPhoto, setOdometerPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
   const [odometerSaved, setOdometerSaved] = useState(false)
+  const [odometerUploading, setOdometerUploading] = useState(false)
+  const [odometerUploadError, setOdometerUploadError] = useState(false)
 
-  // Refs for file input and currently selected slot index
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // ── Step 4: VIN last-4 photo ──
+  const [vinPhoto, setVinPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
+  const [vinPhotoSaved, setVinPhotoSaved] = useState(false)
+  const [vinPhotoUploading, setVinPhotoUploading] = useState(false)
+  const [vinPhotoUploadError, setVinPhotoUploadError] = useState(false)
+
+  // ── Step 5: Upload all + enter VIN last-4 digits ──
+  const [vinValue, setVinValue] = useState('')
+  const [vinVerified, setVinVerified] = useState(false)
+
+  // Refs for file inputs
+  const carPhotoInputRef = useRef<HTMLInputElement>(null)
+  const odometerInputRef = useRef<HTMLInputElement>(null)
+  const vinPhotoInputRef = useRef<HTMLInputElement>(null)
   const currentSlotIndex = useRef<number | null>(null)
+  const currentInputTarget = useRef<'car' | 'odometer' | 'vin'>('car')
 
   // Theme handling
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Cleanup object URLs when component unmounts or when photoSlots change
+  // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
       photoSlots.forEach(slot => {
-        if (slot.preview) {
-          URL.revokeObjectURL(slot.preview)
-        }
+        if (slot.preview) URL.revokeObjectURL(slot.preview)
       })
+      if (odometerPhoto.preview) URL.revokeObjectURL(odometerPhoto.preview)
+      if (vinPhoto.preview) URL.revokeObjectURL(vinPhoto.preview)
     }
-  }, [photoSlots])
+  }, [])
 
-  // Mutation for uploading all photos at once
-  const uploadPhotosMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
+  // ── Mutations ──
+
+  // Upload 6 car photos
+  const uploadCarPhotosMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
     `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
     {
-      onMutate: () => {
-        setPhotosUploading(true)
-        setPhotoErrors(new Set())
-      },
       onSuccess: (data) => {
         setPhotosUploading(false)
         const photos = data.files.map(f => ({
@@ -177,13 +159,12 @@ export default function DriverPickupChecklistPage() {
         setUploadedPhotos(photos)
         setPhotosSaved(true)
         setPhotoErrors(new Set())
-        toast.success('Photos saved', {
-          description: 'Pickup photos have been uploaded.',
+        toast.success('Car photos saved', {
+          description: '6 clockwise walk-around photos uploaded.',
         })
       },
-      onError: (error) => {
+      onError: () => {
         setPhotosUploading(false)
-        // Mark all non-empty slots as errored
         const failedSlots = new Set<number>()
         photoSlots.forEach((slot, i) => {
           if (slot.file) failedSlots.add(i)
@@ -196,53 +177,83 @@ export default function DriverPickupChecklistPage() {
     }
   )
 
-  // Mutation for saving the entire checklist (VIN, odometer, photo URLs)
+  // Upload odometer photo
+  const uploadOdometerMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
+    `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
+    {
+      onSuccess: (data) => {
+        setOdometerUploading(false)
+        setOdometerSaved(true)
+        toast.success('Odometer photo saved')
+      },
+      onError: () => {
+        setOdometerUploading(false)
+        setOdometerUploadError(true)
+        toast.error('Odometer photo failed to upload', {
+          description: 'Tap to retry.',
+        })
+      },
+    }
+  )
+
+  // Upload VIN photo
+  const uploadVinPhotoMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
+    `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
+    {
+      onSuccess: (data) => {
+        setVinPhotoUploading(false)
+        setVinPhotoSaved(true)
+        toast.success('VIN photo saved')
+      },
+      onError: () => {
+        setVinPhotoUploading(false)
+        setVinPhotoUploadError(true)
+        toast.error('VIN photo failed to upload', {
+          description: 'Tap to retry.',
+        })
+      },
+    }
+  )
+
+  // Save entire checklist (VIN digits, all photo URLs, odometer)
   const saveProgressMutation = useCreate<any, any>(
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/pickup-compliance`,
     {
       onSuccess: () => {
         setVinVerified(true)
-        setOdometerSaved(true)
-        toast.success('Progress saved', {
-          description: 'Checklist data saved. You can now start the trip.',
+        toast.success('Checklist complete!', {
+          description: 'Tracking & location services are now active.',
         })
+        // Auto-trigger location check after save
+        checkLocationPermission()
       },
-      onError: (error) => {
-        toast.error('Failed to save progress', {
-          description: error.message,
+      onError: (error: any) => {
+        toast.error('Failed to save checklist', {
+          description: error?.message || 'Unknown error',
         })
       },
     }
   )
 
-  // Mutation for starting the trip
+  // Start trip
   const startTripMutation = useCreate<any, any>(
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/start-trip`,
     {
       onSuccess: () => {
         toast.success('Trip started!', {
-          description: 'You are now on route. Safe travels!',
+          description: 'You are now on route. Drive safe!',
         })
-        navigate({ to: '/driver-active', search: {deliveryId} })
+        navigate({ to: '/driver-active', search: { jobId: deliveryId } as any })
       },
-      onError: (error) => {
+      onError: (error: any) => {
         toast.error('Failed to start trip', {
-          description: error.message,
+          description: error?.message || 'Unknown error',
         })
       },
     }
   )
 
-  // Unused single-file upload (kept to avoid breaking existing code)
-  const uploadPhoto = useFileUpload(`${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`, {
-    onSuccess: (data) => {
-      // This is intentionally left unused to preserve original behavior
-    },
-    onError: (error) => {
-      toast.error('Failed to upload photo')
-      console.error(error)
-    },
-  })
+  // ── Handlers ──
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -254,158 +265,145 @@ export default function DriverPickupChecklistPage() {
     navigate({ to: '/driver-signin' })
   }
 
-  // Step handlers
-  const handleVerifyVin = () => {
-    if (!vinValue || vinValue.length !== 4) {
-      toast.error('Invalid VIN', {
-        description: 'Please enter the last 4 digits of the VIN.',
-      })
-      return
-    }
-    setVinVerified(true)
-    toast.success('VIN verified', {
-      description: 'Vehicle identity confirmed.',
+  // Step 1: Greet
+  const handleGreet = () => {
+    setGreeted(true)
+    toast.success('Great! Now walk around the car clockwise.', {
+      description: 'Take 6 photos in order.',
     })
   }
 
-  const handleReportMismatch = () => {
-    toast.warning('VIN mismatch reported', {
-      description: 'Support has been notified.',
-    })
-  }
-
-  // Photo handlers
-  const handleAddPhoto = (index: number) => {
-    // Store which slot we're adding to
+  // Step 2: Car photos
+  const handleAddCarPhoto = (index: number) => {
     currentSlotIndex.current = index
-    // Trigger file input
-    fileInputRef.current?.click()
+    currentInputTarget.current = 'car'
+    carPhotoInputRef.current?.click()
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || currentSlotIndex.current === null) return
-
-    const index = currentSlotIndex.current
-    // Create preview URL
-    const previewUrl = URL.createObjectURL(file)
-
-    // Update the slot
-    setPhotoSlots(prev => {
-      const newSlots = [...prev]
-      // Revoke old preview if exists
-      if (newSlots[index].preview) {
-        URL.revokeObjectURL(newSlots[index].preview!)
-      }
-      newSlots[index] = { file, preview: previewUrl }
-      return newSlots
-    })
-
-    // Clear the input so the same file can be selected again if needed
-    e.target.value = ''
-  }
-
-  const handleSavePhotos = () => {
-    // Check if all 6 photos have been selected
+  const handleUploadCarPhotos = () => {
     const allPhotosAdded = photoSlots.every(slot => slot.file !== null)
     if (!allPhotosAdded) {
       toast.error('Missing photos', {
-        description: 'Please capture all required pickup photos.',
+        description: 'Please capture all 6 clockwise walk-around photos.',
       })
       return
     }
-
-    // Build FormData
     const formData = new FormData()
     photoSlots.forEach((slot) => {
-      if (slot.file) {
-        formData.append('files', slot.file)
-      }
+      if (slot.file) formData.append('files', slot.file)
     })
     formData.append('deliveryId', deliveryId)
-
-    // Upload
-    uploadPhotosMutation.mutate(formData)
+    formData.append('photoType', 'car-photos')
+    uploadCarPhotosMutation.mutate(formData)
   }
 
-  const handleAddDamageNote = () => {
-    toast.info('Damage note', {
-      description: 'Add damage description.',
-    })
-  }
-
+  // Step 3: Odometer photo
   const handleAddOdometerPhoto = () => {
-    setOdometerPhotoAdded(true)
-    toast.success('Odometer photo added')
+    currentInputTarget.current = 'odometer'
+    odometerInputRef.current?.click()
   }
 
-  const handleSaveOdometer = () => {
-    if (!odometerValue) {
-      toast.error('Odometer required', {
-        description: 'Please enter the starting odometer reading.',
+  const handleUploadOdometerPhoto = () => {
+    if (!odometerPhoto.file) {
+      toast.error('Photo required', {
+        description: 'Please take a clear odometer photo first.',
       })
       return
     }
-    // if (!odometerPhotoAdded) {
-    //   toast.error('Photo required', {
-    //     description: 'Please add an odometer photo.',
-    //   })
-    //   return
-    // }
-    setOdometerSaved(true)
-    toast.success('Odometer saved', {
-      description: 'Starting odometer recorded.',
-    })
+    const formData = new FormData()
+    formData.append('files', odometerPhoto.file)
+    formData.append('deliveryId', deliveryId)
+    formData.append('photoType', 'odometer')
+    uploadOdometerMutation.mutate(formData)
   }
 
-  const handleMarkUnreadable = () => {
-    toast.warning('Odometer marked unreadable', {
-      description: 'Support will be notified.',
-    })
+  // Step 4: VIN photo
+  const handleAddVinPhoto = () => {
+    currentInputTarget.current = 'vin'
+    vinPhotoInputRef.current?.click()
   }
 
-  const handleSaveProgress = () => {
-    // Validate inputs
+  const handleUploadVinPhoto = () => {
+    if (!vinPhoto.file) {
+      toast.error('Photo required', {
+        description: 'Please take a photo of the VIN last-4 digits.',
+      })
+      return
+    }
+    const formData = new FormData()
+    formData.append('files', vinPhoto.file)
+    formData.append('deliveryId', deliveryId)
+    formData.append('photoType', 'vin')
+    uploadVinPhotoMutation.mutate(formData)
+  }
+
+  // Unified file change handler
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (currentInputTarget.current === 'car' && currentSlotIndex.current !== null) {
+      const index = currentSlotIndex.current
+      const previewUrl = URL.createObjectURL(file)
+      setPhotoSlots(prev => {
+        const newSlots = [...prev]
+        if (newSlots[index].preview) URL.revokeObjectURL(newSlots[index].preview!)
+        newSlots[index] = { file, preview: previewUrl }
+        return newSlots
+      })
+    } else if (currentInputTarget.current === 'odometer') {
+      const previewUrl = URL.createObjectURL(file)
+      if (odometerPhoto.preview) URL.revokeObjectURL(odometerPhoto.preview)
+      setOdometerPhoto({ file, preview: previewUrl })
+      setOdometerUploadError(false)
+    } else if (currentInputTarget.current === 'vin') {
+      const previewUrl = URL.createObjectURL(file)
+      if (vinPhoto.preview) URL.revokeObjectURL(vinPhoto.preview)
+      setVinPhoto({ file, preview: previewUrl })
+      setVinPhotoUploadError(false)
+    }
+
+    e.target.value = ''
+  }
+
+  // Step 5: Submit all (upload remaining + enter VIN)
+  const handleSubmitAll = () => {
+    // Validate
+    if (!greeted) {
+      toast.error('Step 1 missing', { description: 'Please confirm you greeted the staff.' })
+      return
+    }
+    if (!photosSaved || uploadedPhotos.length !== 6) {
+      toast.error('Car photos not uploaded', { description: 'Please upload all 6 walk-around photos.' })
+      return
+    }
+    if (!odometerSaved) {
+      toast.error('Odometer photo not saved', { description: 'Please upload the odometer photo.' })
+      return
+    }
+    if (!vinPhotoSaved) {
+      toast.error('VIN photo not saved', { description: 'Please upload the VIN last-4 photo.' })
+      return
+    }
     if (!vinValue || vinValue.length !== 4) {
-      toast.error('Invalid VIN', {
-        description: 'Please enter the last 4 digits of the VIN.',
-      })
-      return
-    }
-    if (!odometerValue || isNaN(Number(odometerValue))) {
-      toast.error('Invalid odometer', {
-        description: 'Please enter a valid numeric odometer reading.',
-      })
-      return
-    }
-    // if (!odometerPhotoAdded) {
-    //   toast.error('Odometer photo missing', {
-    //     description: 'Please add an odometer photo.',
-    //   })
-    //   return
-    // }
-    if (uploadedPhotos.length !== 6) {
-      toast.error('Photos not uploaded', {
-        description: 'Please upload all 6 pickup photos first.',
-      })
+      toast.error('VIN digits required', { description: 'Please enter the last 4 digits of the VIN.' })
       return
     }
 
-    // Prepare payload
     const payload = {
       driverId,
       vinVerificationCode: vinValue,
-      odometerStart: Number(odometerValue),
-      photos: uploadedPhotos.map(p => ({
-        slotIndex: p.slotIndex,
-        imageUrl: p.imageUrl,
-      })),
+      photos: [
+        ...uploadedPhotos.map(p => ({ slotIndex: p.slotIndex, imageUrl: p.imageUrl, type: 'car' })),
+        { slotIndex: 6, imageUrl: 'odometer-uploaded', type: 'odometer' },
+        { slotIndex: 7, imageUrl: 'vin-uploaded', type: 'vin' },
+      ],
     }
 
     saveProgressMutation.mutate(payload)
   }
 
-  // Check GPS location permission
+  // GPS check
   const checkLocationPermission = async (): Promise<boolean> => {
     setIsCheckingLocation(true)
     try {
@@ -423,26 +421,20 @@ export default function DriverPickupChecklistPage() {
       }
     } catch (err: any) {
       console.warn('Location check failed:', err)
-      const code = err?.code
-      if (code === err?.PERMISSION_DENIED || code === 1) {
-        setLocationStatus('denied')
-      } else {
-        setLocationStatus('denied')
-      }
+      setLocationStatus('denied')
     }
     setIsCheckingLocation(false)
     return false
   }
 
   const handleStartTrip = async () => {
-    if (!vinVerified || !photosSaved || !odometerSaved) {
+    if (!vinVerified || !photosSaved || !odometerSaved || !vinPhotoSaved) {
       toast.error('Cannot start trip', {
         description: 'Please complete all required steps first.',
       })
       return
     }
 
-    // Check GPS before allowing trip start
     const hasLocation = await checkLocationPermission()
     if (!hasLocation) {
       toast.error('Location required', {
@@ -452,13 +444,11 @@ export default function DriverPickupChecklistPage() {
       return
     }
 
-    const payload = {
+    startTripMutation.mutate({
       driverId,
       actorUserId: userId,
       actorRole: 'DRIVER',
-    }
-
-    startTripMutation.mutate(payload)
+    })
   }
 
   const handleCancel = () => {
@@ -468,20 +458,18 @@ export default function DriverPickupChecklistPage() {
     navigate({ to: '/driver-active' })
   }
 
-  // Check if all steps are complete (including location)
-  const allStepsComplete = vinVerified && photosSaved && odometerSaved && locationStatus === 'granted'
+  // Check if all steps are complete
+  const allStepsComplete = greeted && photosSaved && odometerSaved && vinPhotoSaved && vinVerified
 
-  // Status badges
+  // Status helper
   const getStepStatus = (stepId: number) => {
     switch (stepId) {
-      case 1:
-        return vinVerified ? 'Done' : 'Pending'
-      case 2:
-        return photosSaved ? 'Done' : 'Pending'
-      case 3:
-        return odometerSaved ? 'Done' : 'Pending'
-      default:
-        return 'Pending'
+      case 1: return greeted ? 'Done' : 'Pending'
+      case 2: return photosSaved ? 'Done' : 'Pending'
+      case 3: return odometerSaved ? 'Done' : 'Pending'
+      case 4: return vinPhotoSaved ? 'Done' : 'Pending'
+      case 5: return vinVerified ? 'Done' : 'Pending'
+      default: return 'Pending'
     }
   }
 
@@ -504,7 +492,6 @@ export default function DriverPickupChecklistPage() {
                 Pickup Checklist
               </div>
               <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                {/* {deliveryId} • {MOCK_DELIVERY.pickupLocation} */}
               </div>
             </div>
           </div>
@@ -537,45 +524,41 @@ export default function DriverPickupChecklistPage() {
       </header>
 
       <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-36">
-        {/* ── ORDER DETAILS CARD ── */}
+        {/* Order Details Card */}
         {delivery && (
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg mb-5">
             <CardContent className="p-5">
-              {/* Route */}
               <h2 className="text-[18px] font-black text-slate-900 dark:text-white leading-tight">
                 {delivery.pickupAddress?.split(',')[1]?.trim() || 'Pickup'} &rarr; {delivery.dropoffAddress?.split(',')[1]?.trim() || 'Dropoff'}
               </h2>
 
-              {/* Vehicle info */}
               {(delivery.vehicleMake || delivery.vehicleModel || delivery.licensePlate) && (
                 <div className="mt-3 flex items-center gap-2">
                   <Car className="w-4 h-4 text-slate-400" />
                   <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
                     {[delivery.vehicleColor, delivery.vehicleYear, delivery.vehicleMake, delivery.vehicleModel].filter(Boolean).join(' ')}
-                    {delivery.licensePlate ? ` • ${delivery.licensePlate}` : ''}
+                    {delivery.licensePlate ? ` - ${delivery.licensePlate}` : ''}
                   </span>
                 </div>
               )}
 
-              {/* Addresses */}
               <div className="mt-4 space-y-2">
                 <div className="flex gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pickup</p>
-                    <p className="text-[13px] font-medium text-slate-900 dark:text-white">{delivery.pickupAddress || '—'}</p>
+                    <p className="text-[13px] font-medium text-slate-900 dark:text-white">{delivery.pickupAddress || '--'}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Dropoff</p>
-                    <p className="text-[13px] font-medium text-slate-900 dark:text-white">{delivery.dropoffAddress || '—'}</p>
+                    <p className="text-[13px] font-medium text-slate-900 dark:text-white">{delivery.dropoffAddress || '--'}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Contacts */}
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {delivery.recipientName && (
                   <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
@@ -604,7 +587,7 @@ export default function DriverPickupChecklistPage() {
           </Card>
         )}
 
-        {/* Pickup checklist */}
+        {/* Header Card */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <CardContent className="p-6 sm:p-7">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
@@ -613,30 +596,30 @@ export default function DriverPickupChecklistPage() {
                   Pickup Checklist
                 </h1>
                 <p className="mt-2 text-slate-600 dark:text-slate-400">
-                  Complete these steps before you can start the trip.
+                  Follow each step in order. Complete all steps to start the trip.
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Badge variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
-                    <QrCode className="w-3.5 h-3.5 text-primary mr-1" />
-                    VIN last-4
+                    <HandIcon className="w-3.5 h-3.5 text-primary mr-1" />
+                    Greet
                   </Badge>
                   <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
                     <Camera className="w-3.5 h-3.5 text-primary mr-1" />
-                    Pickup photos
+                    6 Photos
                   </Badge>
                   <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
                     <Speed className="w-3.5 h-3.5 text-primary mr-1" />
-                    Odometer start
+                    Odometer
+                  </Badge>
+                  <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
+                    <QrCode className="w-3.5 h-3.5 text-primary mr-1" />
+                    VIN
                   </Badge>
                 </div>
               </div>
 
               <div className="text-left sm:text-right">
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Delivery</p>
-                {/* <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{deliveryId}</p> */}
-                {/* <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-400">{MOCK_DELIVERY.route}</p> */}
-
                 {/* Location status warning */}
                 {locationStatus === 'denied' && allStepsComplete && (
                   <div className="mt-3 flex items-start gap-2 p-3 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
@@ -659,102 +642,66 @@ export default function DriverPickupChecklistPage() {
                 </div>
               </div>
             </div>
-{/* 
-            <div className="mt-6 flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/30">
-              <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
-                Prototype UI: uploads + validation are simulated. In production, every photo is time-stamped, geo-tagged (optional), and audited.
-              </p>
-            </div> */}
           </CardContent>
         </Card>
 
         {/* Steps */}
         <section className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: checklist */}
+          {/* Left: checklist steps */}
           <div className="lg:col-span-7 space-y-6">
-            {/* Step 1: VIN last-4 */}
+
+            {/* ── Step 1: Greet the staff ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
-              vinVerified && "border-primary/25 bg-primary/5"
+              greeted && "border-primary/25 bg-primary/5"
             )}>
               <CardContent className="p-6 sm:p-7">
                 <div className="flex items-start gap-4">
                   <div className={cn(
                     "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
-                    vinVerified 
-                      ? "bg-primary/10 border-primary/25 text-slate-900" 
+                    greeted
+                      ? "bg-primary/10 border-primary/25 text-slate-900"
                       : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
-                    {vinVerified ? <Check className="w-4 h-4 text-primary" /> : 1}
+                    {greeted ? <Check className="w-4 h-4 text-primary" /> : 1}
                   </div>
 
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Verify VIN last-4</h2>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Greet the staff</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Confirm the vehicle using the last 4 digits of the VIN (required by policy).
+                          Politely introduce yourself: &quot;Hi, I&apos;m here to pick up the car.&quot;
                         </p>
                       </div>
-
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
-                        <Lock className="w-3.5 h-3.5 text-primary mr-1" />
+                        <HandIcon className="w-3.5 h-3.5 text-primary mr-1" />
                         Required
                       </Badge>
                     </div>
 
-                    {!vinVerified ? (
-                      <>
-                        <div className="mt-5 grid grid-cols-1 sm:grid-cols-1 gap-3">
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">VIN last-4</label>
-                            <Input
-                              value={vinValue}
-                              onChange={(e) => setVinValue(e.target.value)}
-                              maxLength={4}
-                              className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
-                              placeholder="e.g., 7K21"
-                            />
-                          </div>
-{/* 
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Optional note</label>
-                            <Input
-                              value={vinNote}
-                              onChange={(e) => setVinNote(e.target.value)}
-                              className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
-                              placeholder="Any pickup notes…"
-                            />
-                          </div> */}
+                    {!greeted ? (
+                      <div className="mt-5">
+                        <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
+                          <p className="text-sm font-bold text-blue-800 dark:text-blue-200">
+                            &quot;Hi, I&apos;m here to pick up the car.&quot;
+                          </p>
+                          <p className="text-[12px] text-blue-600 dark:text-blue-400 mt-1">
+                            Say this to the dealer or lot staff, then tap the button below.
+                          </p>
                         </div>
-
-                        {/* Buttons commented out as requested */}
-                        {/*
-                        <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                          <Button
-                            onClick={handleVerifyVin}
-                            className="flex-1 bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition flex items-center justify-center gap-2"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                            Verify VIN
-                          </Button>
-
-                          <Button
-                            onClick={handleReportMismatch}
-                            variant="outline"
-                            className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-extrabold rounded-2xl py-3 hover:bg-primary/5 transition flex items-center justify-center gap-2"
-                          >
-                            <Report className="w-4 h-4 text-primary" />
-                            Report mismatch
-                          </Button>
-                        </div>
-                        */}
-                      </>
+                        <Button
+                          onClick={handleGreet}
+                          className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition flex items-center justify-center gap-2"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          I&apos;ve greeted the staff
+                        </Button>
+                      </div>
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-primary/10 border border-primary/25">
-                        <p className="text-sm font-extrabold text-slate-900">VIN verified ✓</p>
-                        <p className="text-[11px] text-slate-700 mt-1">You can proceed to photos and odometer.</p>
+                        <p className="text-sm font-extrabold text-slate-900">Staff greeted</p>
+                        <p className="text-[11px] text-slate-700 mt-1">Next: walk around the car clockwise and take 6 photos.</p>
                       </div>
                     )}
                   </div>
@@ -762,7 +709,7 @@ export default function DriverPickupChecklistPage() {
               </CardContent>
             </Card>
 
-            {/* Step 2: Pickup photos */}
+            {/* ── Step 2: 6 clockwise car photos ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               photosSaved && !photoErrors.size && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
@@ -770,7 +717,7 @@ export default function DriverPickupChecklistPage() {
               photosUploading && "border-amber-200 dark:border-amber-800/40"
             )}>
               <CardContent className="p-6 sm:p-7">
-                {/* STATE 1: Uploading — red banner */}
+                {/* Uploading banner */}
                 {photosUploading && (
                   <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -780,12 +727,12 @@ export default function DriverPickupChecklistPage() {
                   </div>
                 )}
 
-                {/* STATE 3: Error — red banner */}
+                {/* Error banner */}
                 {photoErrors.size > 0 && !photosUploading && (
                   <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
                     <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
                     <p className="text-[12px] font-bold text-red-700 dark:text-red-300">
-                      Some photos failed to upload. Please tap the failed photos to retry.
+                      Some photos failed to upload. Tap the failed photos to retry.
                     </p>
                   </div>
                 )}
@@ -810,30 +757,24 @@ export default function DriverPickupChecklistPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h2 className="text-lg font-black text-slate-900 dark:text-white">Arrival Photos</h2>
-                          {/* Status badge */}
+                          <h2 className="text-lg font-black text-slate-900 dark:text-white">Walk-around photos</h2>
                           {photosSaved && !photoErrors.size && (
                             <span className="text-[10px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
                               Completed
                             </span>
                           )}
-                          {(photoErrors.size > 0 || photosUploading) && (
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                              Pending
-                            </span>
-                          )}
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Required set: front, rear, left, right, and any damage close-ups.
+                          Walk clockwise around the car. Take 6 photos in order.
                         </p>
                       </div>
                     </div>
 
                     {!photosSaved ? (
                       <>
-                        {/* Hidden file input */}
+                        {/* Hidden file input for car photos */}
                         <input
-                          ref={fileInputRef}
+                          ref={carPhotoInputRef}
                           type="file"
                           accept="image/*"
                           capture="environment"
@@ -848,9 +789,9 @@ export default function DriverPickupChecklistPage() {
                               <Button
                                 key={index}
                                 variant="outline"
-                                onClick={() => !photosUploading && handleAddPhoto(index)}
+                                onClick={() => !photosUploading && handleAddCarPhoto(index)}
                                 className={cn(
-                                  "h-20 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-0 hover:bg-primary/5 transition overflow-hidden relative",
+                                  "h-24 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-0 hover:bg-primary/5 transition overflow-hidden relative",
                                   slot.file && !hasError
                                     ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
                                     : hasError
@@ -867,7 +808,6 @@ export default function DriverPickupChecklistPage() {
                                       alt={`Photo ${index + 1}`}
                                       className="h-full w-full object-cover"
                                     />
-                                    {/* STATE 2: Success overlay */}
                                     {photosUploading && (
                                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -878,18 +818,18 @@ export default function DriverPickupChecklistPage() {
                                         <Check className="w-3 h-3 text-white" />
                                       </div>
                                     )}
-                                    {/* STATE 3: Error overlay */}
                                     {hasError && (
                                       <div className="absolute inset-0 bg-red-900/30 flex flex-col items-center justify-center gap-1">
                                         <XCircle className="w-5 h-5 text-red-200" />
-                                        <span className="text-[9px] font-bold text-white">Failed — Tap to retry</span>
+                                        <span className="text-[9px] font-bold text-white">Retry</span>
                                       </div>
                                     )}
                                   </>
-                                ) : slot.file ? (
-                                  <Check className="w-5 h-5 text-green-500" />
                                 ) : (
-                                  <Camera className={cn("w-5 h-5", photosUploading ? "text-amber-400" : "text-slate-400")} />
+                                  <div className="flex flex-col items-center gap-1">
+                                    <Camera className={cn("w-5 h-5", photosUploading ? "text-amber-400" : "text-slate-400")} />
+                                    <span className="text-[9px] font-bold text-slate-400">{PHOTO_LABELS[index]}</span>
+                                  </div>
                                 )}
                               </Button>
                             )
@@ -898,30 +838,28 @@ export default function DriverPickupChecklistPage() {
 
                         <div className="mt-4 flex flex-col sm:flex-row gap-3">
                           {photoErrors.size > 0 && !photosUploading ? (
-                            /* STATE 3: Retry button */
                             <Button
-                              onClick={handleSavePhotos}
+                              onClick={handleUploadCarPhotos}
                               className="flex-1 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-2xl py-3 transition flex items-center justify-center gap-2"
                             >
                               <CloudUpload className="w-4 h-4" />
                               Retry Failed Uploads
                             </Button>
                           ) : (
-                            /* STATE 1: Upload button (disabled while uploading) */
                             <Button
-                              onClick={handleSavePhotos}
-                              disabled={uploadPhotosMutation.isPending || photosUploading}
+                              onClick={handleUploadCarPhotos}
+                              disabled={uploadCarPhotosMutation.isPending || photosUploading}
                               className="flex-1 bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
                             >
-                              {uploadPhotosMutation.isPending || photosUploading ? (
+                              {uploadCarPhotosMutation.isPending || photosUploading ? (
                                 <>
                                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                  Uploading photos…
+                                  Uploading photos...
                                 </>
                               ) : (
                                 <>
                                   <CloudUpload className="w-4 h-4" />
-                                  Save photos
+                                  Upload all 6 photos
                                 </>
                               )}
                             </Button>
@@ -930,8 +868,8 @@ export default function DriverPickupChecklistPage() {
                       </>
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
-                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Arrival photos uploaded ✓</p>
-                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: record odometer start.</p>
+                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Walk-around photos uploaded</p>
+                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: take a clear odometer photo.</p>
                       </div>
                     )}
                   </div>
@@ -939,31 +877,43 @@ export default function DriverPickupChecklistPage() {
               </CardContent>
             </Card>
 
-            {/* Step 3: Odometer start */}
+            {/* ── Step 3: Odometer photo ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
-              odometerSaved && "border-primary/25 bg-primary/5"
+              odometerSaved && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
+              odometerUploading && "border-amber-200 dark:border-amber-800/40"
             )}>
               <CardContent className="p-6 sm:p-7">
+                {odometerUploading && (
+                  <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <p className="text-[12px] font-bold text-amber-700 dark:text-amber-300">
+                      Uploading odometer photo...
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-4">
                   <div className={cn(
                     "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
-                    odometerSaved 
-                      ? "bg-primary/10 border-primary/25 text-slate-900" 
-                      : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                    odometerSaved
+                      ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
+                      : odometerUploading
+                        ? "bg-amber-100 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40 text-amber-700"
+                        : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
-                    {odometerSaved ? <Check className="w-4 h-4 text-primary" /> : 3}
+                    {odometerSaved ? <Check className="w-4 h-4" /> :
+                     odometerUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 3}
                   </div>
 
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Record odometer start</h2>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Odometer photo</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Enter starting miles and capture a clear odometer photo (required).
+                          Take a clear, readable photo of the odometer (required).
                         </p>
                       </div>
-
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
                         <Speed className="w-3.5 h-3.5 text-primary mr-1" />
                         Required
@@ -972,71 +922,323 @@ export default function DriverPickupChecklistPage() {
 
                     {!odometerSaved ? (
                       <>
-                        <div className="mt-5 grid grid-cols-1 sm:grid-cols-1 gap-3">
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Odometer start</label>
-                            <Input
-                              value={odometerValue}
-                              onChange={(e) => setOdometerValue(e.target.value)}
-                              className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
-                              placeholder="e.g., 54210"
-                              inputMode="numeric"
-                            />
-                          </div>
+                        <input
+                          ref={odometerInputRef}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
 
-                          {/* <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Odometer photo</label>
-                            <Button
-                              variant="outline"
-                              onClick={handleAddOdometerPhoto}
-                              className={cn(
-                                "h-12 w-full rounded-2xl border-2 border-dashed flex items-center justify-center gap-2 font-extrabold hover:bg-primary/5 transition",
-                                odometerPhotoAdded
-                                  ? "border-primary bg-primary/10"
+                        <div className="mt-5">
+                          <Button
+                            variant="outline"
+                            onClick={handleAddOdometerPhoto}
+                            disabled={odometerUploading}
+                            className={cn(
+                              "w-full h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
+                              odometerPhoto.preview
+                                ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
+                                : odometerUploadError
+                                  ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/10 cursor-pointer"
                                   : "border-slate-200 dark:border-slate-700"
-                              )}
-                            >
-                              {odometerPhotoAdded ? (
-                                <>
-                                  <Check className="w-4 h-4 text-primary" />
-                                  Added
-                                </>
-                              ) : (
-                                <>
-                                  <Camera className="w-4 h-4 text-primary" />
-                                  Add photo
-                                </>
-                              )}
-                            </Button>
-                          </div> */}
+                            )}
+                          >
+                            {odometerPhoto.preview ? (
+                              <div className="relative w-full h-full">
+                                <img
+                                  src={odometerPhoto.preview}
+                                  alt="Odometer"
+                                  className="h-full w-full object-cover"
+                                />
+                                {odometerUploading && (
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  </div>
+                                )}
+                                {!odometerUploading && !odometerUploadError && (
+                                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                                    <Check className="w-3 h-3 text-white" />
+                                  </div>
+                                )}
+                                {odometerUploadError && (
+                                  <div className="absolute inset-0 bg-red-900/30 flex flex-col items-center justify-center gap-1">
+                                    <XCircle className="w-5 h-5 text-red-200" />
+                                    <span className="text-[9px] font-bold text-white">Tap to retry</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                <Speed className="w-6 h-6 text-slate-400" />
+                                <span className="text-sm text-slate-500">Tap to take odometer photo</span>
+                              </>
+                            )}
+                          </Button>
                         </div>
 
-                        {/* Buttons commented out as requested */}
-                        
-                        {/* <div className="mt-4 flex flex-col sm:flex-row gap-3">
-                          <Button
-                            onClick={handleSaveOdometer}
-                            className="flex-1 lime-btn rounded-2xl py-3 hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2"
-                          >
-                            <Save className="w-4 h-4" />
-                            Save odometer
-                          </Button>
-
-                          <Button
-                            onClick={handleMarkUnreadable}
-                            variant="outline"
-                            className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-extrabold rounded-2xl py-3 hover:bg-primary/5 transition flex items-center justify-center gap-2"
-                          >
-                            <VisibilityOff className="w-4 h-4 text-primary" />
-                            Unreadable?
-                          </Button>
-                        </div> */}
-                       
+                        <Button
+                          onClick={handleUploadOdometerPhoto}
+                          disabled={!odometerPhoto.file || odometerUploading}
+                          className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {odometerUploading ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <CloudUpload className="w-4 h-4" />
+                              Upload odometer photo
+                            </>
+                          )}
+                        </Button>
                       </>
                     ) : (
-                      <div className="mt-4 p-4 rounded-2xl bg-primary/10 border border-primary/25">
-                        <p className="text-sm font-extrabold text-slate-900">Odometer saved ✓</p>
-                        <p className="text-[11px] text-slate-700 mt-1">You can now start tracking and begin the trip.</p>
+                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
+                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Odometer photo uploaded</p>
+                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: take a photo of the VIN last-4 digits.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Step 4: VIN last-4 photo ── */}
+            <Card className={cn(
+              "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
+              vinPhotoSaved && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
+              vinPhotoUploading && "border-amber-200 dark:border-amber-800/40"
+            )}>
+              <CardContent className="p-6 sm:p-7">
+                {vinPhotoUploading && (
+                  <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <p className="text-[12px] font-bold text-amber-700 dark:text-amber-300">
+                      Uploading VIN photo...
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
+                    vinPhotoSaved
+                      ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
+                      : vinPhotoUploading
+                        ? "bg-amber-100 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40 text-amber-700"
+                        : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                  )}>
+                    {vinPhotoSaved ? <Check className="w-4 h-4" /> :
+                     vinPhotoUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 4}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">VIN last-4 photo</h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                          Take a clear photo showing the last 4 digits of the VIN (required).
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
+                        <QrCode className="w-3.5 h-3.5 text-primary mr-1" />
+                        Required
+                      </Badge>
+                    </div>
+
+                    {!vinPhotoSaved ? (
+                      <>
+                        <input
+                          ref={vinPhotoInputRef}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+
+                        <div className="mt-5">
+                          <Button
+                            variant="outline"
+                            onClick={handleAddVinPhoto}
+                            disabled={vinPhotoUploading}
+                            className={cn(
+                              "w-full h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
+                              vinPhoto.preview
+                                ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
+                                : vinPhotoUploadError
+                                  ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/10 cursor-pointer"
+                                  : "border-slate-200 dark:border-slate-700"
+                            )}
+                          >
+                            {vinPhoto.preview ? (
+                              <div className="relative w-full h-full">
+                                <img
+                                  src={vinPhoto.preview}
+                                  alt="VIN last-4"
+                                  className="h-full w-full object-cover"
+                                />
+                                {vinPhotoUploading && (
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  </div>
+                                )}
+                                {!vinPhotoUploading && !vinPhotoUploadError && (
+                                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                                    <Check className="w-3 h-3 text-white" />
+                                  </div>
+                                )}
+                                {vinPhotoUploadError && (
+                                  <div className="absolute inset-0 bg-red-900/30 flex flex-col items-center justify-center gap-1">
+                                    <XCircle className="w-5 h-5 text-red-200" />
+                                    <span className="text-[9px] font-bold text-white">Tap to retry</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                <QrCode className="w-6 h-6 text-slate-400" />
+                                <span className="text-sm text-slate-500">Tap to take VIN last-4 photo</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+
+                        <Button
+                          onClick={handleUploadVinPhoto}
+                          disabled={!vinPhoto.file || vinPhotoUploading}
+                          className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {vinPhotoUploading ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <CloudUpload className="w-4 h-4" />
+                              Upload VIN photo
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    ) : (
+                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
+                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">VIN photo uploaded</p>
+                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: enter VIN digits and submit.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Step 5: Enter VIN digits + Submit ── */}
+            <Card className={cn(
+              "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
+              vinVerified && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10"
+            )}>
+              <CardContent className="p-6 sm:p-7">
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
+                    vinVerified
+                      ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
+                      : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                  )}>
+                    {vinVerified ? <Check className="w-4 h-4" /> : 5}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Confirm &amp; submit</h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                          Enter the last 4 digits of the VIN to finalize. Tracking will start automatically.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
+                        <Lock className="w-3.5 h-3.5 text-primary mr-1" />
+                        Required
+                      </Badge>
+                    </div>
+
+                    {!vinVerified ? (
+                      <>
+                        <div className="mt-5 grid grid-cols-1 sm:grid-cols-1 gap-3">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">VIN last-4 digits</label>
+                            <Input
+                              value={vinValue}
+                              onChange={(e) => setVinValue(e.target.value.toUpperCase())}
+                              maxLength={4}
+                              className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-lg font-black tracking-widest text-center"
+                              placeholder="e.g., 7K21"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Pre-submit checklist summary */}
+                        <div className="mt-5 space-y-2">
+                          {[
+                            { label: 'Greeted the staff', done: greeted },
+                            { label: '6 walk-around photos uploaded', done: photosSaved },
+                            { label: 'Odometer photo uploaded', done: odometerSaved },
+                            { label: 'VIN last-4 photo uploaded', done: vinPhotoSaved },
+                            { label: 'VIN digits entered', done: vinValue.length === 4 },
+                          ].map((item, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              {item.done ? (
+                                <Check className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <X className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+                              )}
+                              <span className={cn(
+                                "text-[13px] font-semibold",
+                                item.done ? "text-green-700 dark:text-green-300" : "text-slate-400"
+                              )}>
+                                {item.label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <Button
+                          onClick={handleSubmitAll}
+                          disabled={saveProgressMutation.isPending}
+                          className={cn(
+                            "mt-5 w-full rounded-2xl py-4 font-extrabold flex items-center justify-center gap-2 transition",
+                            allStepsComplete
+                              ? "lime-btn hover:shadow-xl hover:shadow-primary/20"
+                              : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                          )}
+                        >
+                          {saveProgressMutation.isPending ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Submitting checklist...
+                            </>
+                          ) : (
+                            <>
+                              <Shield className="w-4 h-4" />
+                              Submit checklist &amp; enable tracking
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    ) : (
+                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Pickup checklist complete!</p>
+                        </div>
+                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">
+                          Tracking and location services are now active. Drive slow and safe!
+                        </p>
                       </div>
                     )}
                   </div>
@@ -1045,14 +1247,14 @@ export default function DriverPickupChecklistPage() {
             </Card>
           </div>
 
-          {/* Right: policy / tips */}
+          {/* Right sidebar: status + tips */}
           <div className="lg:col-span-5 space-y-6">
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardContent className="p-6 sm:p-7">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white">Pickup checklist status</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">All required items must be complete to start.</p>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">Checklist status</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">All steps must be complete to start.</p>
                   </div>
                   <div className="w-11 h-11 rounded-2xl bg-primary/15 flex items-center justify-center">
                     <FactCheck className="w-5 h-5 text-primary" />
@@ -1060,24 +1262,28 @@ export default function DriverPickupChecklistPage() {
                 </div>
 
                 <div className="mt-5 space-y-3">
-                  {[1, 2, 3].map((step) => (
-                    <div key={step} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                  {[
+                    { id: 1, label: 'Greet the staff' },
+                    { id: 2, label: '6 walk-around photos' },
+                    { id: 3, label: 'Odometer photo' },
+                    { id: 4, label: 'VIN last-4 photo' },
+                    { id: 5, label: 'Confirm & submit' },
+                  ].map((step) => (
+                    <div key={step.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
                       <div className="flex items-center gap-3">
                         <RadioButtonUnchecked className={cn(
                           "w-5 h-5",
-                          getStepStatus(step) === 'Done' ? "text-primary" : "text-slate-400"
+                          getStepStatus(step.id) === 'Done' ? "text-primary" : "text-slate-400"
                         )} />
                         <p className="text-sm font-extrabold text-slate-900 dark:text-white">
-                          {step === 1 && 'VIN last-4'}
-                          {step === 2 && 'Pickup photos'}
-                          {step === 3 && 'Odometer start'}
+                          {step.label}
                         </p>
                       </div>
                       <span className={cn(
                         "text-[11px] font-black uppercase tracking-widest",
-                        getStepStatus(step) === 'Done' ? "text-primary" : "text-slate-400"
+                        getStepStatus(step.id) === 'Done' ? "text-primary" : "text-slate-400"
                       )}>
-                        {getStepStatus(step)}
+                        {getStepStatus(step.id)}
                       </span>
                     </div>
                   ))}
@@ -1089,9 +1295,10 @@ export default function DriverPickupChecklistPage() {
                     <div>
                       <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">Quality tips</p>
                       <ul className="mt-2 space-y-1 text-[11px] text-amber-900/80 dark:text-amber-200/80">
-                        <li>• Take photos in good light, avoid glare.</li>
-                        <li>• Include full vehicle angles + any damage close-ups.</li>
-                        {/* <li>• Odometer photo must be readable.</li> */}
+                        <li>- Walk clockwise: front, front-right, right, rear, rear-left, left.</li>
+                        <li>- Take photos in good light, avoid glare on the odometer.</li>
+                        <li>- VIN photo must clearly show the last 4 characters.</li>
+                        <li>- After submission, keep location services ON for tracking.</li>
                       </ul>
                     </div>
                   </div>
@@ -1101,41 +1308,54 @@ export default function DriverPickupChecklistPage() {
 
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardContent className="p-6 sm:p-7">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">Next steps</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">After pickup checklist is complete.</p>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">What happens next</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">After you submit the checklist.</p>
 
                 <div className="mt-5 space-y-3">
                   <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <Distance className="w-5 h-5 text-primary shrink-0" />
+                      <MapPin className="w-5 h-5 text-primary shrink-0" />
                       <div>
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Start trip tracking</p>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Tracking begins when you tap Start.</p>
+                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Tracking auto-starts</p>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Location services activate automatically on submission.</p>
                       </div>
                     </div>
-                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">Step 4</span>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <MarkEmailRead className="w-5 h-5 text-primary shrink-0" />
-                      <div>
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Send check-ins</p>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Ops & stakeholders get updates.</p>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">During</span>
+                    <span className="text-[11px] font-black uppercase tracking-widest text-primary">Auto</span>
                   </div>
 
                   <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
                       <TaskAlt className="w-5 h-5 text-primary shrink-0" />
                       <div>
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Complete drop-off checklist</p>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Drop-off photos + odometer end required.</p>
+                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Start the trip</p>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Tap Start Trip once you&apos;re ready to drive.</p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">Manual</span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <Distance className="w-5 h-5 text-primary shrink-0" />
+                      <div>
+                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Drop-off checklist</p>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Complete drop-off photos + odometer at destination.</p>
                       </div>
                     </div>
                     <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">Finish</span>
+                  </div>
+                </div>
+
+                {/* Safe driving reminder */}
+                <div className="mt-5 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
+                  <div className="flex items-start gap-3">
+                    <Shield className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-extrabold text-blue-900 dark:text-blue-200">Drive safe</p>
+                      <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-1">
+                        Keep driving slow and safe after pickup. Observe all traffic laws and speed limits.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -1153,17 +1373,17 @@ export default function DriverPickupChecklistPage() {
               variant="outline"
               className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl py-4 font-extrabold hover:bg-primary/5 transition flex items-center justify-center gap-2"
             >
-              <Close className="w-4 h-4 text-primary" />
+              <X className="w-4 h-4 text-primary" />
               Cancel
             </Button>
 
             <Button
-              onClick={handleSaveProgress}
-              disabled={saveProgressMutation.isPending || uploadPhotosMutation.isPending}
-              className="bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-2xl py-4 font-extrabold hover:opacity-90 transition flex items-center justify-center gap-2"
+              onClick={handleSubmitAll}
+              disabled={saveProgressMutation.isPending || uploadCarPhotosMutation.isPending || allStepsComplete}
+              className="bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-2xl py-4 font-extrabold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Save className="w-4 h-4" />
-              {saveProgressMutation.isPending ? 'Saving...' : 'Save'}
+              {saveProgressMutation.isPending ? 'Saving...' : vinVerified ? 'Saved' : 'Save'}
             </Button>
 
             <Button
