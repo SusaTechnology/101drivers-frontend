@@ -17,7 +17,6 @@ import {
   XCircle,
   Check,
   X,
-  Save,
   CloudUpload,
   Ruler as Distance,
   CheckCircle2 as TaskAlt,
@@ -1501,7 +1500,7 @@ export default function DriverPickupChecklistPage() {
       {/* Bottom Action Bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 safe-bottom">
         <div className="max-w-[980px] mx-auto px-5 sm:px-6 py-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Button
               onClick={handleCancel}
               variant="outline"
@@ -1509,15 +1508,6 @@ export default function DriverPickupChecklistPage() {
             >
               <X className="w-4 h-4 text-primary" />
               Cancel
-            </Button>
-
-            <Button
-              onClick={handleSubmitAll}
-              disabled={saveProgressMutation.isPending || uploadCarPhotosMutation.isPending || allStepsComplete}
-              className="bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-2xl py-4 font-extrabold hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              {saveProgressMutation.isPending ? 'Saving...' : vinVerified ? 'Saved' : 'Save'}
             </Button>
 
             <Button
