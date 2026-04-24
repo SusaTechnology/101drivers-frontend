@@ -29,11 +29,10 @@ import {
   Car,
   Inbox,
   Menu as MenuIcon,
-  Hand as HandIcon,
-  QrCode,
   MapPin,
+  CarFront,
+  QrCode,
   Shield,
-  MessageCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -54,13 +53,45 @@ const PHOTO_LABELS = [
   'Left Side',
 ]
 
-// Bottom navigation items
-const bottomNavItems = [
-  { href: '/driver-dashboard', label: 'Home', icon: Home },
-  { href: '/driver-active', label: 'Active', icon: Car },
-  { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
-  { href: '/driver-menu', label: 'Menu', icon: MenuIcon },
-]
+// localStorage persistence key scoped to delivery
+const STORAGE_KEY = (deliveryId: string) => `pickup-checklist-${deliveryId}`
+
+type PersistedState = {
+  greeted: boolean
+  photosSaved: boolean
+  uploadedPhotos: Array<{ slotIndex: number; imageUrl: string }>
+  odometerSaved: boolean
+  odometerValue: string
+  vinPhotoSaved: boolean
+  vinVerified: boolean
+  vinValue: string
+  step1Timestamp: string | null
+}
+
+function loadPersistedState(deliveryId: string): Partial<PersistedState> | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY(deliveryId))
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function persistState(deliveryId: string, state: Partial<PersistedState>) {
+  try {
+    localStorage.setItem(STORAGE_KEY(deliveryId), JSON.stringify(state))
+  } catch {
+    // localStorage might be full or unavailable
+  }
+}
+
+function clearPersistedState(deliveryId: string) {
+  try {
+    localStorage.removeItem(STORAGE_KEY(deliveryId))
+  } catch {
+    // ignore
+  }
+}
 
 export default function DriverPickupChecklistPage() {
   const [mounted, setMounted] = useState(false)
@@ -93,33 +124,37 @@ export default function DriverPickupChecklistPage() {
   const [locationStatus, setLocationStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown')
   const [isCheckingLocation, setIsCheckingLocation] = useState(false)
 
-  // ── Step 1: Greet the staff ──
-  const [greeted, setGreeted] = useState(false)
+  // ── Step 1: I'm at the vehicle ──
+  const saved = deliveryId ? loadPersistedState(deliveryId) : null
+  const [greeted, setGreeted] = useState(saved?.greeted ?? false)
 
   // ── Step 2: 6 clockwise car photos ──
   const [photoSlots, setPhotoSlots] = useState<Array<{ file: File | null; preview: string | null }>>(
     Array(6).fill(null).map(() => ({ file: null, preview: null }))
   )
-  const [photosSaved, setPhotosSaved] = useState(false)
-  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ slotIndex: number; imageUrl: string }>>([])
+  const [photosSaved, setPhotosSaved] = useState(saved?.photosSaved ?? false)
+  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ slotIndex: number; imageUrl: string }>>(
+    saved?.uploadedPhotos ?? []
+  )
   const [photoErrors, setPhotoErrors] = useState<Set<number>>(new Set())
   const [photosUploading, setPhotosUploading] = useState(false)
 
-  // ── Step 3: Odometer photo ──
+  // ── Step 3: Odometer photo + reading ──
   const [odometerPhoto, setOdometerPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
-  const [odometerSaved, setOdometerSaved] = useState(false)
+  const [odometerValue, setOdometerValue] = useState(saved?.odometerValue ?? '')
+  const [odometerSaved, setOdometerSaved] = useState(saved?.odometerSaved ?? false)
   const [odometerUploading, setOdometerUploading] = useState(false)
   const [odometerUploadError, setOdometerUploadError] = useState(false)
 
   // ── Step 4: VIN last-4 photo ──
   const [vinPhoto, setVinPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
-  const [vinPhotoSaved, setVinPhotoSaved] = useState(false)
+  const [vinPhotoSaved, setVinPhotoSaved] = useState(saved?.vinPhotoSaved ?? false)
   const [vinPhotoUploading, setVinPhotoUploading] = useState(false)
   const [vinPhotoUploadError, setVinPhotoUploadError] = useState(false)
 
   // ── Step 5: Upload all + enter VIN last-4 digits ──
-  const [vinValue, setVinValue] = useState('')
-  const [vinVerified, setVinVerified] = useState(false)
+  const [vinValue, setVinValue] = useState(saved?.vinValue ?? '')
+  const [vinVerified, setVinVerified] = useState(saved?.vinVerified ?? false)
 
   // Refs for file inputs
   const carPhotoInputRef = useRef<HTMLInputElement>(null)
@@ -128,12 +163,39 @@ export default function DriverPickupChecklistPage() {
   const currentSlotIndex = useRef<number | null>(null)
   const currentInputTarget = useRef<'car' | 'odometer' | 'vin'>('car')
 
+  // Persist progress to localStorage whenever key state changes
+  useEffect(() => {
+    if (!deliveryId || vinVerified) return // don't overwrite after final submission
+    persistState(deliveryId, {
+      greeted,
+      photosSaved,
+      uploadedPhotos,
+      odometerSaved,
+      odometerValue,
+      vinPhotoSaved,
+      vinVerified,
+      vinValue,
+      step1Timestamp: greeted ? saved?.step1Timestamp ?? new Date().toISOString() : null,
+    })
+  }, [greeted, photosSaved, uploadedPhotos, odometerSaved, odometerValue, vinPhotoSaved, vinVerified, vinValue, deliveryId])
+
   // Theme handling
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Cleanup object URLs on unmount
+  // Cleanup: clear persisted state and object URLs on unmount
+  useEffect(() => {
+    return () => {
+      photoSlots.forEach(slot => {
+        if (slot.preview) URL.revokeObjectURL(slot.preview)
+      })
+      if (odometerPhoto.preview) URL.revokeObjectURL(odometerPhoto.preview)
+      if (vinPhoto.preview) URL.revokeObjectURL(vinPhoto.preview)
+      // Clear persisted state if trip was not completed
+      if (deliveryId && !vinVerified) clearPersistedState(deliveryId)
+    }
+  }, [])
   useEffect(() => {
     return () => {
       photoSlots.forEach(slot => {
@@ -265,11 +327,11 @@ export default function DriverPickupChecklistPage() {
     navigate({ to: '/driver-signin' })
   }
 
-  // Step 1: Greet
-  const handleGreet = () => {
+  // Step 1: Confirm at vehicle
+  const handleArrivedAtVehicle = () => {
     setGreeted(true)
-    toast.success('Great! Now walk around the car clockwise.', {
-      description: 'Take 6 photos in order.',
+    toast.success('You are at the vehicle.', {
+      description: 'Now walk around the car clockwise and take 6 photos.',
     })
   }
 
@@ -370,7 +432,7 @@ export default function DriverPickupChecklistPage() {
   const handleSubmitAll = () => {
     // Validate
     if (!greeted) {
-      toast.error('Step 1 missing', { description: 'Please confirm you greeted the staff.' })
+      toast.error('Step 1 missing', { description: 'Please confirm you are at the vehicle.' })
       return
     }
     if (!photosSaved || uploadedPhotos.length !== 6) {
@@ -379,6 +441,10 @@ export default function DriverPickupChecklistPage() {
     }
     if (!odometerSaved) {
       toast.error('Odometer photo not saved', { description: 'Please upload the odometer photo.' })
+      return
+    }
+    if (!odometerValue || isNaN(Number(odometerValue)) || Number(odometerValue) < 0) {
+      toast.error('Odometer reading required', { description: 'Please enter the current odometer mileage.' })
       return
     }
     if (!vinPhotoSaved) {
@@ -390,14 +456,12 @@ export default function DriverPickupChecklistPage() {
       return
     }
 
+    // Backend expects exactly 6 photos (slots 1-6) + odometerStart as number + vinVerificationCode
     const payload = {
       driverId,
       vinVerificationCode: vinValue,
-      photos: [
-        ...uploadedPhotos.map(p => ({ slotIndex: p.slotIndex, imageUrl: p.imageUrl, type: 'car' })),
-        { slotIndex: 6, imageUrl: 'odometer-uploaded', type: 'odometer' },
-        { slotIndex: 7, imageUrl: 'vin-uploaded', type: 'vin' },
-      ],
+      odometerStart: Math.floor(Number(odometerValue)),
+      photos: uploadedPhotos.map(p => ({ slotIndex: p.slotIndex, imageUrl: p.imageUrl })),
     }
 
     saveProgressMutation.mutate(payload)
@@ -601,8 +665,8 @@ export default function DriverPickupChecklistPage() {
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Badge variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
-                    <HandIcon className="w-3.5 h-3.5 text-primary mr-1" />
-                    Greet
+                    <CarFront className="w-3.5 h-3.5 text-primary mr-1" />
+                    Arrive
                   </Badge>
                   <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
                     <Camera className="w-3.5 h-3.5 text-primary mr-1" />
@@ -669,13 +733,13 @@ export default function DriverPickupChecklistPage() {
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Greet the staff</h2>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">I'm at the vehicle</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Politely introduce yourself: &quot;Hi, I&apos;m here to pick up the car.&quot;
+                          Confirm you are at the pickup location with the correct vehicle.
                         </p>
                       </div>
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
-                        <HandIcon className="w-3.5 h-3.5 text-primary mr-1" />
+                        <CarFront className="w-3.5 h-3.5 text-primary mr-1" />
                         Required
                       </Badge>
                     </div>
@@ -684,23 +748,23 @@ export default function DriverPickupChecklistPage() {
                       <div className="mt-5">
                         <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
                           <p className="text-sm font-bold text-blue-800 dark:text-blue-200">
-                            &quot;Hi, I&apos;m here to pick up the car.&quot;
+                            Before starting, make sure you are at the right vehicle.
                           </p>
                           <p className="text-[12px] text-blue-600 dark:text-blue-400 mt-1">
-                            Say this to the dealer or lot staff, then tap the button below.
+                            Verify the make, model, color, and license plate match the delivery details above.
                           </p>
                         </div>
                         <Button
-                          onClick={handleGreet}
+                          onClick={handleArrivedAtVehicle}
                           className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition flex items-center justify-center gap-2"
                         >
-                          <MessageCircle className="w-4 h-4" />
-                          I&apos;ve greeted the staff
+                          <CarFront className="w-4 h-4" />
+                          I'm at the vehicle
                         </Button>
                       </div>
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-primary/10 border border-primary/25">
-                        <p className="text-sm font-extrabold text-slate-900">Staff greeted</p>
+                        <p className="text-sm font-extrabold text-slate-900">Confirmed at vehicle</p>
                         <p className="text-[11px] text-slate-700 mt-1">Next: walk around the car clockwise and take 6 photos.</p>
                       </div>
                     )}
@@ -909,9 +973,9 @@ export default function DriverPickupChecklistPage() {
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Odometer photo</h2>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Odometer photo & reading</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Take a clear, readable photo of the odometer (required).
+                          Take a clear photo and enter the current mileage (both required).
                         </p>
                       </div>
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
@@ -931,7 +995,26 @@ export default function DriverPickupChecklistPage() {
                           className="hidden"
                         />
 
-                        <div className="mt-5">
+                        <div className="mt-5 space-y-4">
+                          <div>
+                            <label className="block text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                              Odometer Reading
+                            </label>
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="e.g. 45230"
+                              value={odometerValue}
+                              onChange={(e) => setOdometerValue(e.target.value)}
+                              className="h-12 text-base font-bold rounded-xl border-slate-200 dark:border-slate-700"
+                            />
+                            <p className="mt-1.5 text-[11px] text-slate-400">
+                              Enter the current mileage shown on the odometer.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4">
                           <Button
                             variant="outline"
                             onClick={handleAddOdometerPhoto}
