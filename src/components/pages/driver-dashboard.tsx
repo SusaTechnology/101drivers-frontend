@@ -1,5 +1,5 @@
 // app/pages/driver/dashboard.tsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
@@ -97,6 +97,8 @@ import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/ta
 import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import MiniRouteMap from '@/components/map/MiniRouteMap'
+import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
+import { usePickupZones } from '@/hooks/usePickupZones'
 import type { NotificationInboxResponse } from '@/types/notification'
 
 // Filter options matching backend API
@@ -422,6 +424,24 @@ export default function DriverDashboardPage() {
   })
   const unreadCount = inboxData?.unreadCount || 0
 
+  // Fetch service district zones for map overlay
+  const { zones: pickupZones } = usePickupZones()
+  const mapRef = useRef<google.maps.Map | null>(null)
+
+  // Fit map to service district bounds once zones load
+  useEffect(() => {
+    if (!mapRef.current || pickupZones.length === 0) return
+    const bounds = new google.maps.LatLngBounds()
+    pickupZones.forEach((zone: any) => {
+      const ring = zone.geoJson?.geometry?.coordinates?.[0]
+      if (!ring) return
+      ring.forEach((coord: number[]) => bounds.extend({ lat: coord[1], lng: coord[0] }))
+    })
+    if (!bounds.isEmpty()) {
+      mapRef.current.fitBounds(bounds, { top: 60, right: 30, bottom: 60, left: 30 })
+    }
+  }, [pickupZones])
+
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
@@ -689,6 +709,7 @@ export default function DriverDashboardPage() {
               center={{ lat: 33.94, lng: -118.40 }}
               zoom={11}
               options={mapOptions}
+              onLoad={(map) => { mapRef.current = map }}
             >
               {/* Driver location dot (blue with white ring) */}
               <Marker
@@ -706,6 +727,9 @@ export default function DriverDashboardPage() {
                   }}
                 />
               )}
+
+              {/* Service district / pickup area polygons */}
+              {pickupZones.length > 0 && <PickupZoneOverlay zones={pickupZones} />}
 
               {/* Job pay bubble markers */}
               {jobs.map((job) => (
