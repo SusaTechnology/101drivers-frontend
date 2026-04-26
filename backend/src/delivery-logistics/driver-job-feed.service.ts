@@ -537,6 +537,8 @@ async getDriverJobFeed(input: {
             customer: {
               select: {
                 id: true,
+                customerType: true,
+                businessName: true,
                 contactName: true,
                 contactPhone: true,
                 contactEmail: true,

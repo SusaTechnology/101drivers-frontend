@@ -688,10 +688,18 @@ export default function DriverPickupChecklistPage() {
                     )}
                   </div>
                 )}
-                {delivery.customer?.contactName && (
+                {(delivery.customer?.businessName || delivery.customer?.contactName) && (
                   <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sender</p>
-                    <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">{delivery.customer.contactName}</p>
+                    {delivery.customer.businessName && delivery.customer.customerType === 'BUSINESS' && (
+                      <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">{delivery.customer.businessName}</p>
+                    )}
+                    {delivery.customer.contactName && (!delivery.customer.businessName || delivery.customer.customerType !== 'BUSINESS') && (
+                      <p className="text-[13px] font-semibold text-slate-900 dark:text-white mt-0.5">{delivery.customer.contactName}</p>
+                    )}
+                    {delivery.customer.businessName && delivery.customer.customerType === 'BUSINESS' && delivery.customer.contactName && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">via {delivery.customer.contactName}</p>
+                    )}
                     {delivery.customer.contactPhone && (
                       <a href={`tel:${delivery.customer.contactPhone}`} className="text-[12px] text-green-600 dark:text-green-400 font-medium hover:underline">
                         {delivery.customer.contactPhone}
