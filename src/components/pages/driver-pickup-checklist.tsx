@@ -206,6 +206,7 @@ export default function DriverPickupChecklistPage() {
 
   // ── Step 5: Upload all + enter VIN last-4 digits ──
   const [vinValue, setVinValue] = useState(saved?.vinValue ?? '')
+  const [vinError, setVinError] = useState<string | null>(null)
   const [vinVerified, setVinVerified] = useState(saved?.vinVerified ?? false)
 
   // Refs for file inputs
@@ -480,6 +481,19 @@ export default function DriverPickupChecklistPage() {
     e.target.value = ''
   }
 
+  // VIN input handler — numbers only, max 4 digits, strips spaces on paste
+  const handleVinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[\s\-]/g, '') // strip spaces and dashes
+    const digitsOnly = raw.replace(/\D/g, '').slice(0, 4) // keep only digits, max 4
+    setVinValue(digitsOnly)
+    setVinError(null)
+    if (raw.length > 0 && digitsOnly.length === 0) {
+      setVinError('Numbers only')
+    } else if (raw.replace(/\D/g, '').length > 0 && raw.replace(/\D/g, '').length < 4 && raw.length >= 4) {
+      // User typed 4+ chars but fewer than 4 were digits — only show if they stopped typing non-digits
+    }
+  }
+
   // Step 5: Submit all (upload remaining + enter VIN)
   const handleSubmitAll = () => {
     // Validate
@@ -503,8 +517,14 @@ export default function DriverPickupChecklistPage() {
       toast.error('VIN photo not saved', { description: 'Please upload the VIN last-4 photo.' })
       return
     }
-    if (!vinValue || vinValue.length !== 4) {
-      toast.error('VIN digits required', { description: 'Please enter the last 4 digits of the VIN.' })
+    if (!vinValue) {
+      setVinError('Enter last 4 digits')
+      toast.error('VIN digits required', { description: 'Enter last 4 digits' })
+      return
+    }
+    if (!/^\d{4}$/.test(vinValue)) {
+      setVinError(vinValue.length < 4 ? 'Enter last 4 digits' : 'Numbers only')
+      toast.error('VIN digits required', { description: 'Enter the last 4 digits (numbers only).' })
       return
     }
 
@@ -1353,13 +1373,26 @@ export default function DriverPickupChecklistPage() {
                         <div className="mt-5 grid grid-cols-1 sm:grid-cols-1 gap-3">
                           <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">VIN last-4 digits</label>
-                            <Input
-                              value={vinValue}
-                              onChange={(e) => setVinValue(e.target.value.toUpperCase())}
-                              maxLength={4}
-                              className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-lg font-black tracking-widest text-center"
-                              placeholder="e.g., 7K21"
-                            />
+                            <div className="relative">
+                              <Input
+                                value={vinValue}
+                                onChange={handleVinChange}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                maxLength={4}
+                                className={cn(
+                                  "h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-lg font-black tracking-[0.3em] text-center pr-12",
+                                  vinError && "border-red-400 dark:border-red-500"
+                                )}
+                                placeholder="e.g. 1234"
+                              />
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 tabular-nums">
+                                {vinValue.length}/4
+                              </span>
+                            </div>
+                            {vinError && (
+                              <p className="text-[11px] font-bold text-red-500 mt-1">{vinError}</p>
+                            )}
                           </div>
                         </div>
 
