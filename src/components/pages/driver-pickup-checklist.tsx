@@ -53,6 +53,16 @@ const PHOTO_LABELS = [
   "Driver's Side",
 ]
 
+// Reference images shown on each tile before the driver captures a photo
+const ANGLE_REF_IMAGES = [
+  '/assets/angle-1-left-front.png',
+  '/assets/angle-2-right-front.png',
+  '/assets/angle-3-passenger-side.png',
+  '/assets/angle-4-right-rear.png',
+  '/assets/angle-5-left-rear.png',
+  '/assets/angle-6-driver-side.png',
+]
+
 // localStorage persistence key scoped to delivery
 const STORAGE_KEY = (deliveryId: string) => `pickup-checklist-${deliveryId}`
 
@@ -886,21 +896,6 @@ export default function DriverPickupChecklistPage() {
 
                     {!photosSaved ? (
                       <>
-                        {/* Reference image guide — shows the 6 required angles */}
-                        <div className="mt-5 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                          <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
-                            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                              Photo angle guide — match each numbered position
-                            </p>
-                          </div>
-                          <img
-                            src="/assets/photo-angle-guide.png"
-                            alt="Reference guide showing 6 car photo angles: 1) Left Front Corner, 2) Right Front Corner, 3) Passenger Side Full, 4) Right Rear Corner, 5) Left Rear Corner, 6) Driver's Side Full"
-                            className="w-full h-auto"
-                            loading="lazy"
-                          />
-                        </div>
-
                         {/* Hidden file input for car photos */}
                         <input
                           ref={carPhotoInputRef}
@@ -914,53 +909,83 @@ export default function DriverPickupChecklistPage() {
                         <div className="mt-5 grid grid-cols-3 gap-2">
                           {photoSlots.map((slot, index) => {
                             const hasError = photoErrors.has(index)
+                            const isCaptured = !!slot.preview && !hasError
                             return (
-                              <Button
+                              <button
                                 key={index}
-                                variant="outline"
+                                type="button"
                                 onClick={() => !photosUploading && handleAddCarPhoto(index)}
                                 className={cn(
-                                  "h-24 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-0 hover:bg-primary/5 transition overflow-hidden relative",
-                                  slot.file && !hasError
-                                    ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
+                                  "aspect-[3/4] rounded-2xl border-2 overflow-hidden relative flex flex-col items-center justify-end transition",
+                                  isCaptured
+                                    ? "border-green-300 dark:border-green-700"
                                     : hasError
-                                      ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/10 cursor-pointer"
-                                      : photosUploading
-                                        ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10"
-                                        : "border-slate-200 dark:border-slate-700"
+                                      ? "border-red-400 dark:border-red-600"
+                                      : "border-slate-200 dark:border-slate-700 hover:border-primary/50 active:scale-[0.97]"
                                 )}
                               >
-                                {slot.preview ? (
-                                  <>
-                                    <img
-                                      src={slot.preview}
-                                      alt={`Photo ${index + 1}`}
-                                      className="h-full w-full object-cover"
-                                    />
-                                    {photosUploading && (
-                                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                      </div>
-                                    )}
-                                    {!photosUploading && !hasError && (
-                                      <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-                                        <Check className="w-3 h-3 text-white" />
-                                      </div>
-                                    )}
-                                    {hasError && (
-                                      <div className="absolute inset-0 bg-red-900/30 flex flex-col items-center justify-center gap-1">
-                                        <XCircle className="w-5 h-5 text-red-200" />
-                                        <span className="text-[9px] font-bold text-white">Retry</span>
-                                      </div>
-                                    )}
-                                  </>
-                                ) : (
-                                  <div className="flex flex-col items-center gap-1">
-                                    <Camera className={cn("w-5 h-5", photosUploading ? "text-amber-400" : "text-slate-400")} />
-                                    <span className="text-[9px] font-bold text-slate-400">{PHOTO_LABELS[index]}</span>
+                                {/* Reference image shown as background when no photo captured yet */}
+                                <img
+                                  src={ANGLE_REF_IMAGES[index]}
+                                  alt={PHOTO_LABELS[index]}
+                                  className={cn(
+                                    "absolute inset-0 w-full h-full object-cover transition-opacity",
+                                    isCaptured ? "opacity-0" : "opacity-60"
+                                  )}
+                                  loading="lazy"
+                                />
+
+                                {/* Uploaded photo overlay — replaces reference image */}
+                                {slot.preview && (
+                                  <img
+                                    src={slot.preview}
+                                    alt={`Photo ${index + 1}`}
+                                    className="absolute inset-0 w-full h-full object-cover"
+                                  />
+                                )}
+
+                                {/* Uploading spinner overlay */}
+                                {photosUploading && slot.file && (
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+                                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                   </div>
                                 )}
-                              </Button>
+
+                                {/* Checkmark badge when captured */}
+                                {isCaptured && !photosUploading && (
+                                  <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center z-10 shadow">
+                                    <Check className="w-3 h-3 text-white" />
+                                  </div>
+                                )}
+
+                                {/* Error overlay */}
+                                {hasError && (
+                                  <div className="absolute inset-0 bg-red-900/30 flex flex-col items-center justify-center gap-1 z-10">
+                                    <XCircle className="w-5 h-5 text-red-200" />
+                                    <span className="text-[9px] font-bold text-white">Retry</span>
+                                  </div>
+                                )}
+
+                                {/* Bottom label strip — always visible */}
+                                <div className={cn(
+                                  "relative z-10 w-full px-1.5 py-2 flex items-center justify-center gap-1.5",
+                                  isCaptured
+                                    ? "bg-gradient-to-t from-black/70 via-black/40 to-transparent"
+                                    : "bg-gradient-to-t from-black/60 via-black/30 to-transparent"
+                                )}>
+                                  <span className={cn(
+                                    "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0",
+                                    isCaptured
+                                      ? "bg-green-500 text-white"
+                                      : "bg-white/90 text-slate-900"
+                                  )}>
+                                    {index + 1}
+                                  </span>
+                                  <span className="text-[9px] font-bold text-white leading-tight text-center">
+                                    {PHOTO_LABELS[index]}
+                                  </span>
+                                </div>
+                              </button>
                             )
                           })}
                         </div>
