@@ -43,14 +43,14 @@ import { Badge } from '@/components/ui/badge'
 import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
 import { savePhoto, getPhotosForDelivery, clearDeliveryPhotos } from '@/lib/pickup-photo-store'
 
-// Photo slot labels — clockwise walk-around order
+// Photo slot labels — matching reference image guide order
 const PHOTO_LABELS = [
-  'Front',
-  'Front-Right',
-  'Right Side',
-  'Rear',
-  'Rear-Left',
-  'Left Side',
+  'Left Front Corner',
+  'Right Front Corner',
+  'Passenger Side',
+  'Right Rear Corner',
+  'Left Rear Corner',
+  "Driver's Side",
 ]
 
 // localStorage persistence key scoped to delivery
@@ -879,13 +879,28 @@ export default function DriverPickupChecklistPage() {
                           )}
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Walk clockwise around the car. Take 6 photos in order.
+                          Follow the reference guide below. Take each photo from the numbered angle.
                         </p>
                       </div>
                     </div>
 
                     {!photosSaved ? (
                       <>
+                        {/* Reference image guide — shows the 6 required angles */}
+                        <div className="mt-5 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                          <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+                            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                              Photo angle guide — match each numbered position
+                            </p>
+                          </div>
+                          <img
+                            src="/assets/photo-angle-guide.png"
+                            alt="Reference guide showing 6 car photo angles: 1) Left Front Corner, 2) Right Front Corner, 3) Passenger Side Full, 4) Right Rear Corner, 5) Left Rear Corner, 6) Driver's Side Full"
+                            className="w-full h-auto"
+                            loading="lazy"
+                          />
+                        </div>
+
                         {/* Hidden file input for car photos */}
                         <input
                           ref={carPhotoInputRef}
