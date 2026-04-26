@@ -880,6 +880,6 @@ async getTrackingLink(input: {
   }
 
 private buildPublicTrackingUrl(token: string): string {
-  return `${this.appDomain}/deliveryRequests/public/tracking/${token}`;
+  return `${this.appDomain}/track/${token}`;
 }
 }

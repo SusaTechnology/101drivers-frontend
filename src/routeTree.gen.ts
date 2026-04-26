@@ -83,6 +83,7 @@ import { Route as AuthAdminSigninRouteImport } from './routes/auth/admin-signin'
 import { Route as AdminUserDetailUserIdRouteImport } from './routes/admin-user-detail/$userId'
 import { Route as AdminPricingConfigCreateIndexRouteImport } from './routes/admin-pricing-config/create/index'
 import { Route as AdminPricingConfigEditConfigIdRouteImport } from './routes/admin-pricing-config/edit/$configId'
+import { Route as TrackTokenRouteImport } from './routes/track/$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -477,9 +478,15 @@ const AdminPricingConfigEditConfigIdRoute =
     path: '/admin-pricing-config/edit/$configId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const TrackTokenRoute = TrackTokenRouteImport.update({
+  id: '/track/$token',
+  path: '/track/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/track/$token': typeof TrackTokenRoute
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
@@ -556,6 +563,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/track/$token': typeof TrackTokenRoute
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
@@ -633,6 +641,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/track/$token': typeof TrackTokenRoute
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
@@ -711,6 +720,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/track/$token'
     | '/admin-user-detail/$userId'
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
@@ -1514,6 +1524,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAdminSigninRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/track/$token': {
+      id: '/track/$token'
+      path: '/track/$token'
+      fullPath: '/track/$token'
+      preLoaderRoute: typeof TrackTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-user-detail/$userId': {
       id: '/admin-user-detail/$userId'
       path: '/admin-user-detail/$userId'
@@ -1540,6 +1557,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  TrackTokenRoute: TrackTokenRoute,
   AdminUserDetailUserIdRoute: AdminUserDetailUserIdRoute,
   AuthAdminSigninRoute: AuthAdminSigninRoute,
   AuthDealerSigninRoute: AuthDealerSigninRoute,
@@ -1606,6 +1624,7 @@ const rootRouteChildren: RootRouteChildren = {
   HelpDriverIndexRoute: HelpDriverIndexRoute,
   LandingIndexRoute: LandingIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
+  TrackTokenRoute: TrackTokenRoute,
   MapTestIndexRoute: MapTestIndexRoute,
   PrivacyIndexRoute: PrivacyIndexRoute,
   QuoteConfirmationIndexRoute: QuoteConfirmationIndexRoute,
