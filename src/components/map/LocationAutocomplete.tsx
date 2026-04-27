@@ -158,7 +158,20 @@ export default function LocationAutocomplete({
         }
 
         const formattedAddress = place.formatted_address || prediction.description;
-        
+
+        // Hard-block: reject places outside bounds when strictBounds is enabled
+        if (strictBounds && bounds && place.geometry?.location) {
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+          if (lat < bounds.south || lat > bounds.north || lng < bounds.west || lng > bounds.east) {
+            console.log('Address rejected: outside allowed region', { lat, lng, bounds });
+            setInputValue('');
+            onChangeRef.current('');
+            onClear?.();
+            return;
+          }
+        }
+
         console.log('Selected address:', formattedAddress);
         
         setInputValue(formattedAddress);
@@ -166,7 +179,7 @@ export default function LocationAutocomplete({
         onPlaceSelectRef.current(place);
       }
     );
-  }, []);
+  }, [strictBounds, bounds, onClear]);
 
   // Handle focus
   const handleFocus = useCallback(() => {

@@ -1568,6 +1568,18 @@ const handleQuotePreview = () => {
     if (place.geometry?.location) {
       const lat = place.geometry.location.lat();
       const lng = place.geometry.location.lng();
+
+      // Hard-block: reject any address outside California
+      if (lat < CA_BOUNDS.south || lat > CA_BOUNDS.north || lng < CA_BOUNDS.west || lng > CA_BOUNDS.east) {
+        setValue("pickupAddress", "");
+        setPickupCoords(null);
+        setPickupPlaceId(null);
+        setPickupState(null);
+        setPickupCity(null);
+        toast.error('Out of service area', { description: 'Pickup must be in California.' });
+        return;
+      }
+
       setPickupCoords({ lat, lng });
       setPickupPlaceId(place.place_id || null);
       setValue("pickupAddress", place.formatted_address || "");
@@ -1613,6 +1625,19 @@ const handleQuotePreview = () => {
     if (place.geometry?.location) {
       const lat = place.geometry.location.lat();
       const lng = place.geometry.location.lng();
+
+      // Hard-block: reject any address outside California
+      if (lat < CA_BOUNDS.south || lat > CA_BOUNDS.north || lng < CA_BOUNDS.west || lng > CA_BOUNDS.east) {
+        setValue("dropoffAddress", "");
+        setDropoffCoords(null);
+        setDropoffPlaceId(null);
+        setDropoffState(null);
+        setHasCalculated(false);
+        setQuoteId(null);
+        toast.error('Out of service area', { description: 'Destination must be in California.' });
+        return;
+      }
+
       setDropoffCoords({ lat, lng });
       setDropoffPlaceId(place.place_id || null);
       setValue("dropoffAddress", place.formatted_address || "");
