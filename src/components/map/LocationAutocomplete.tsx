@@ -18,23 +18,58 @@ interface LocationAutocompleteProps {
   bounds?: google.maps.LatLngBoundsLiteral;
 }
 
-// All US state abbreviations except CA — used to filter non-CA predictions
-const NON_CA_STATES = new Set([
+// All US state abbreviations except CA
+const NON_CA_STATE_ABBR = new Set([
   'AL','AK','AZ','AR','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
   'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM',
   'NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA',
   'WA','WV','WI','WY','DC','AS','GU','MP','PR','VI',
 ]);
 
+// Full state names (except California) — Google sometimes uses these in terms
+const NON_CA_STATE_NAMES = [
+  'Alabama','Alaska','Arizona','Arkansas','Colorado','Connecticut','Delaware',
+  'Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas',
+  'Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan',
+  'Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada',
+  'New Hampshire','New Jersey','New Mexico','New York','North Carolina',
+  'North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island',
+  'South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont',
+  'Virginia','Washington','West Virginia','Wisconsin','Wyoming',
+  'District of Columbia','American Samoa','Guam','Northern Mariana Islands',
+  'Puerto Rico','Virgin Islands',
+];
+
+// Build a single regex that matches any non-CA state (abbr followed by comma/space/end, or full name)
+const NON_CA_STATE_PATTERN = new RegExp(
+  ',\\s*(' +
+  [...NON_CA_STATE_ABBR].join('|') +
+  ')(?:\\s*,|\\s*$)',
+  'i'
+);
+const NON_CA_FULL_NAME_PATTERN = new RegExp(
+  ',\\s*(' +
+  NON_CA_STATE_NAMES.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') +
+  ')(?:\\s*,|\\s*$)',
+  'i'
+);
+
+function isNonCAPrediction(p: google.maps.places.AutocompletePrediction): boolean {
+  // Check each term for state abbreviation (e.g. "NY", "DC")
+  for (const term of p.terms) {
+    if (NON_CA_STATE_ABBR.has(term.value.toUpperCase())) return true;
+  }
+  // Also check the full description text for full state names
+  // (e.g. "Washington, District of Columbia, USA" won't have "DC" in terms)
+  if (NON_CA_FULL_NAME_PATTERN.test(p.description)) return true;
+  if (NON_CA_STATE_PATTERN.test(p.description)) return true;
+  return false;
+}
+
 function filterToCA(
   predictions: google.maps.places.AutocompletePrediction[]
 ): google.maps.places.AutocompletePrediction[] {
-  return predictions.filter((p) => {
-    for (const term of p.terms) {
-      if (NON_CA_STATES.has(term.value.toUpperCase())) return false;
-    }
-    return true;
-  });
+  return predictions.filter((p) => !isNonCAPrediction(p));
 }
 
 export default function LocationAutocomplete({
