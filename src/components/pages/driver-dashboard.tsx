@@ -47,9 +47,6 @@ import {
   ShieldCheck,
   ShieldAlert,
   ShieldX,
-  QrCode,
-  Gauge as Speed,
-  Camera as PhotoCamera,
   Phone,
   Mail,
   MessageSquare,
@@ -249,7 +246,7 @@ interface JobItem {
   duration: string
   payout: number | null
   bonus: number | null
-  requirements: { icon: any; label: string }[]
+  requirements?: { icon: any; label: string }[]
   // Full data for bottom sheet
   pickupAddressFull?: string
   dropoffAddressFull?: string
@@ -528,11 +525,7 @@ export default function DriverDashboardPage() {
       duration: formatDuration(item.etaMinutes),
       payout: item.payoutPreviewAmount,
       bonus: item.urgentBonusAmount,
-      requirements: [
-        { icon: QrCode, label: 'VIN required' },
-        { icon: PhotoCamera, label: 'Photos (12)' },
-        { icon: Speed, label: 'Odometer' },
-      ],
+      requirements: [],
       pickupAddressFull: item.pickupAddress || '',
       dropoffAddressFull: item.dropoffAddress || '',
       pickupWindowStartFull: item.pickupWindowStart || '',
@@ -993,7 +986,7 @@ export default function DriverDashboardPage() {
 
                 <Separator className="bg-slate-100 dark:bg-slate-800" />
 
-                {/* Mileage & Est. Time */}
+                {/* Mileage */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-0.5">
@@ -1001,14 +994,6 @@ export default function DriverDashboardPage() {
                     </div>
                     <div className="text-sm font-bold text-slate-900 dark:text-white">
                       {selectedJob.miles ? `${selectedJob.miles} mi` : '\u2014'}
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-0.5">
-                      Est. Time
-                    </div>
-                    <div className="text-sm font-bold text-slate-900 dark:text-white">
-                      {selectedJob.duration}
                     </div>
                   </div>
                 </div>
@@ -1033,15 +1018,17 @@ export default function DriverDashboardPage() {
                   </div>
                 )}
 
-                {/* Requirements */}
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {selectedJob.requirements.map((req, idx) => (
-                    <Badge key={idx} variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
-                      <req.icon className="w-3 h-3 text-primary mr-1" />
-                      {req.label}
-                    </Badge>
-                  ))}
-                </div>
+                {/* Requirements badges removed — compliance steps happen after acceptance */}
+                {selectedJob.requirements && selectedJob.requirements.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedJob.requirements.map((req, idx) => (
+                      <Badge key={idx} variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
+                        <req.icon className="w-3 h-3 text-primary mr-1" />
+                        {req.label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Bottom Buttons: Decline + Accept */}
