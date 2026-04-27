@@ -18,6 +18,25 @@ interface LocationAutocompleteProps {
   bounds?: google.maps.LatLngBoundsLiteral;
 }
 
+// All US state abbreviations except CA — used to filter non-CA predictions
+const NON_CA_STATES = new Set([
+  'AL','AK','AZ','AR','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS',
+  'KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM',
+  'NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA',
+  'WA','WV','WI','WY','DC','AS','GU','MP','PR','VI',
+]);
+
+function filterToCA(
+  predictions: google.maps.places.AutocompletePrediction[]
+): google.maps.places.AutocompletePrediction[] {
+  return predictions.filter((p) => {
+    for (const term of p.terms) {
+      if (NON_CA_STATES.has(term.value.toUpperCase())) return false;
+    }
+    return true;
+  });
+}
+
 export default function LocationAutocomplete({
   value,
   onChange,
@@ -113,8 +132,12 @@ export default function LocationAutocomplete({
           return;
         }
 
-        setPredictions(results);
-        setShowDropdown(results.length > 0);
+        // Client-side filter: Google's API doesn't reliably enforce strictBounds
+        // on getPlacePredictions, so we double-check each prediction's state term.
+        const filtered = strictBounds ? filterToCA(results) : results;
+
+        setPredictions(filtered);
+        setShowDropdown(filtered.length > 0);
       }
     );
   }, [types, strictBounds, bounds]);
