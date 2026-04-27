@@ -72,6 +72,14 @@ const CA_BOUNDS: google.maps.LatLngBoundsLiteral = {
   west: -124.410,
 };
 
+// Normalize state value to 2-letter abbreviation (e.g. "California" -> "CA")
+function normalizeStateCode(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const upper = raw.trim().toUpperCase();
+  if (upper === 'CA' || upper === 'CALIFORNIA') return 'CA';
+  return raw;
+}
+
 // Form validation schema
 const deliverySchema = z.object({
   serviceType: z.enum([
@@ -554,9 +562,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
             setDropoffPlaceId(null);
           }
 
-          setPickupState(data.pickupState || null);
+          setPickupState(normalizeStateCode(data.pickupState));
           setPickupCity(data.pickupCity || null);
-          setDropoffState(data.dropoffState || null);
+          setDropoffState(normalizeStateCode(data.dropoffState));
           
           // Restore schedule windows
           if (data.pickupWindowStart && data.pickupWindowEnd) {
@@ -693,8 +701,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         }
         setPickupPlaceId(draft.pickupPlaceId || null);
         setDropoffPlaceId(draft.dropoffPlaceId || null);
-        setPickupState(draft.pickupState || null);
-        setDropoffState(draft.dropoffState || null);
+        setPickupState(normalizeStateCode(draft.pickupState));
+        setDropoffState(normalizeStateCode(draft.dropoffState));
 
         // Schedule - populate validatedWindows for new flow
         if (draft.pickupWindowStart && draft.pickupWindowEnd && draft.dropoffWindowStart && draft.dropoffWindowEnd) {
@@ -1109,7 +1117,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           setSelectedSavedAddress(addr);
           setValue('pickupAddress', addr.address);
           setPickupCoords({ lat: addr.lat, lng: addr.lng });
-          if (addr.state) setPickupState(addr.state);
+          if (addr.state) setPickupState(normalizeStateCode(addr.state));
           setPendingSavedAddressId(null);
           return;
         }
@@ -1121,7 +1129,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         setSelectedSavedAddress(defaultAddress);
         setValue('pickupAddress', defaultAddress.address);
         setPickupCoords({ lat: defaultAddress.lat, lng: defaultAddress.lng });
-        if (defaultAddress.state) setPickupState(defaultAddress.state);
+        if (defaultAddress.state) setPickupState(normalizeStateCode(defaultAddress.state));
         setPickupSaved(true);
       }
     }
@@ -1237,8 +1245,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     if (!pickupCoords || !dropoffCoords) return false;
 
     // Both addresses must be in California
-    if (pickupState && pickupState !== 'CA') return false;
-    if (dropoffState && dropoffState !== 'CA') return false;
+    const pState = normalizeStateCode(pickupState);
+    const dState = normalizeStateCode(dropoffState);
+    if (pState && pState !== 'CA') return false;
+    if (dState && dState !== 'CA') return false;
 
     // Must have validated schedule (new flow)
     if (!validatedWindows || !validatedWindows.pickupWindowStart || !validatedWindows.dropoffWindowStart) return false;
@@ -1716,7 +1726,7 @@ const handleQuotePreview = () => {
       }
 
       if (address.state) {
-        setPickupState(address.state);
+        setPickupState(normalizeStateCode(address.state));
       }
       if (address.city) {
         setPickupCity(address.city);
@@ -2066,7 +2076,7 @@ const handleQuotePreview = () => {
                         {errors.pickupAddress.message}
                       </p>
                     )}
-                    {pickupState && pickupState !== 'CA' && (
+                    {normalizeStateCode(pickupState) && normalizeStateCode(pickupState) !== 'CA' && (
                       <p className="text-[11px] font-bold text-red-500">
                         Out-of-state addresses are not supported. Please select a California address.
                       </p>
@@ -2163,7 +2173,7 @@ const handleQuotePreview = () => {
                         {errors.dropoffAddress.message}
                       </p>
                     )}
-                    {dropoffState && dropoffState !== 'CA' && (
+                    {normalizeStateCode(dropoffState) && normalizeStateCode(dropoffState) !== 'CA' && (
                       <p className="text-[11px] font-bold text-red-500">
                         Out-of-state addresses are not supported. Please select a California address.
                       </p>
