@@ -64,6 +64,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 
+// California bounds for address restriction
+const CA_BOUNDS: google.maps.LatLngBoundsLiteral = {
+  north: 42.009,
+  south: 32.534,
+  east: -114.131,
+  west: -124.410,
+};
+
 // Form validation schema
 const deliverySchema = z.object({
   serviceType: z.enum([
@@ -1228,6 +1236,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     // Must have coordinates
     if (!pickupCoords || !dropoffCoords) return false;
 
+    // Both addresses must be in California
+    if (pickupState && pickupState !== 'CA') return false;
+    if (dropoffState && dropoffState !== 'CA') return false;
+
     // Must have validated schedule (new flow)
     if (!validatedWindows || !validatedWindows.pickupWindowStart || !validatedWindows.dropoffWindowStart) return false;
 
@@ -1247,7 +1259,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     if (!recipientEmail || recipientEmail.trim().length < 1) return false;
 
     return true;
-  }, [quoteId, pickupCoords, dropoffCoords, validatedWindows, licensePlate, make, model, color, vinVerification, recipientName, recipientPhone, recipientEmail]);
+  }, [quoteId, pickupCoords, dropoffCoords, pickupState, dropoffState, validatedWindows, licensePlate, make, model, color, vinVerification, recipientName, recipientPhone, recipientEmail]);
   // Removed - recipient is always shown now
 
   // Update dealer authorized state
@@ -2021,10 +2033,17 @@ const handleQuotePreview = () => {
                       isLoaded={isLoaded}
                       placeholder="Search Pickup (California Only)"
                       icon={<MapPin className="h-5 w-5 text-slate-400" />}
+                      bounds={CA_BOUNDS}
+                      strictBounds={true}
                     />
                     {errors.pickupAddress && (
                       <p className="text-xs text-red-500">
                         {errors.pickupAddress.message}
+                      </p>
+                    )}
+                    {pickupState && pickupState !== 'CA' && (
+                      <p className="text-[11px] font-bold text-red-500">
+                        Out-of-state addresses are not supported. Please select a California address.
                       </p>
                     )}
                     {/* Save location checkbox */}
@@ -2111,16 +2130,19 @@ const handleQuotePreview = () => {
                       isLoaded={isLoaded}
                       placeholder="Search Destination (California Only)"
                       icon={<Flag className="h-5 w-5 text-slate-400" />}
+                      bounds={CA_BOUNDS}
+                      strictBounds={true}
                     />
                     {errors.dropoffAddress && (
                       <p className="text-xs text-red-500">
                         {errors.dropoffAddress.message}
                       </p>
                     )}
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Any out-of-CA address will be rejected in the real app
-                      (server validation).
-                    </p>
+                    {dropoffState && dropoffState !== 'CA' && (
+                      <p className="text-[11px] font-bold text-red-500">
+                        Out-of-state addresses are not supported. Please select a California address.
+                      </p>
+                    )}
                   </div>
                 </div>
 
