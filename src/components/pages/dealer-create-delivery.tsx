@@ -110,6 +110,7 @@ const deliverySchema = z.object({
   contactEmail: z.string().email("Valid email is required").optional(),
   contactPhone: z.string().min(1, "Phone is required").optional(),
   enableRecipient: z.boolean().optional(), // Kept for backward compatibility
+  recipientBusinessName: z.string().optional(),
   recipientName: z.string().min(1, "Recipient name is required").optional(),
   recipientEmail: z.string().email().optional().or(z.literal("")),
   recipientPhone: z.string().min(10, "Valid phone number is required").optional(),
@@ -210,6 +211,7 @@ interface SavedVehicle {
   licensePlate: string;
   make: string;
   model: string;
+  vinVerificationCode?: string;
 }
 
 // Customer data interface for fetching postpaid status
@@ -302,6 +304,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [pickupState, setPickupState] = useState<string | null>(null);
   const [pickupCity, setPickupCity] = useState<string | null>(null);
   const [dropoffState, setDropoffState] = useState<string | null>(null);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [schedulePreviewData, setSchedulePreviewData] = useState<SchedulePreviewResponse | null>(null);
   const [hasCalculated, setHasCalculated] = useState(false);
   const [quoteId, setQuoteId] = useState<string | null>(null);
@@ -490,6 +493,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           if (data.colorOther) setValue('colorOther', data.colorOther);
           
           // Restore recipient (always required)
+          if (data.recipientBusinessName) setValue('recipientBusinessName', data.recipientBusinessName);
           if (data.recipientName) setValue('recipientName', data.recipientName);
           if (data.recipientEmail) setValue('recipientEmail', data.recipientEmail);
           if (data.recipientPhone) setValue('recipientPhone', data.recipientPhone);
@@ -742,6 +746,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         if (draft.transmission) setValue('transmission', draft.transmission);
 
         // Recipient (always enabled)
+        if (draft.recipientBusinessName) setValue('recipientBusinessName', draft.recipientBusinessName);
         if (draft.recipientName) setValue('recipientName', draft.recipientName);
         if (draft.recipientEmail) setValue('recipientEmail', draft.recipientEmail);
         if (draft.recipientPhone) setValue('recipientPhone', draft.recipientPhone);
@@ -836,9 +841,17 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     console.log('=== handleGoToReview START ===');
 
     if (!isFormValidForSubmission) {
+      setShowValidationErrors(true);
       toast.error("Incomplete form", {
         description: "Please complete all required fields before reviewing.",
       });
+      // Scroll to the first error field
+      setTimeout(() => {
+        const firstError = document.querySelector('[data-validation-error]');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
       return;
     }
 
@@ -918,6 +931,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       transmission: data.transmission || "Automatic",
 
       // Recipient (always required)
+      recipientBusinessName: data.recipientBusinessName,
       recipientName: data.recipientName,
       recipientEmail: data.recipientEmail,
       recipientPhone: data.recipientPhone,
@@ -1005,6 +1019,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       vehicleModel: data.model === "Other" ? data.modelOther : data.model,
       vehicleColor: data.color === "Other" ? data.colorOther : data.color,
       transmission: data.transmission,
+      recipientBusinessName: data.recipientBusinessName,
       recipientName: data.recipientName,
       recipientEmail: data.recipientEmail,
       recipientPhone: data.recipientPhone,
@@ -1215,6 +1230,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         setValue('model', firstVehicle.model);
         setValue('color', firstVehicle.color);
         setValue('licensePlate', firstVehicle.licensePlate);
+        if (firstVehicle.vinVerificationCode) {
+          setValue('vinVerification', firstVehicle.vinVerificationCode);
+        }
         setUseSavedVehicle(true);
       }
     }
@@ -1270,6 +1288,14 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
     return true;
   }, [quoteId, pickupCoords, dropoffCoords, pickupState, dropoffState, validatedWindows, licensePlate, make, model, color, vinVerification, recipientName, recipientPhone, recipientEmail]);
+
+  // Clear validation error state once form becomes valid
+  useEffect(() => {
+    if (isFormValidForSubmission && showValidationErrors) {
+      setShowValidationErrors(false);
+    }
+  }, [isFormValidForSubmission, showValidationErrors]);
+
   // Removed - recipient is always shown now
 
   // Update dealer authorized state
@@ -1352,20 +1378,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         description: `Estimated price: ${formatCurrency(data.estimatedPrice || 0)} for ${data.distanceMiles || 0} miles`,
       });
 
-      // Auto-trigger schedule discovery with default PICKUP_WINDOW
-      const chosenSide = customerChose || "PICKUP_WINDOW";
-      setCustomerChose(chosenSide);
-      setIsLoadingSlots(true);
-      const scheduleRequest: SchedulePreviewRequest = {
-        quoteId: data.id,
-        serviceType,
-        customerType: customerDataQuery.data?.customerType || 'BUSINESS',
-        customerId: customer?.profileId,
-        customerChose: chosenSide,
-        ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
-      };
-      console.log('Auto schedule preview after quote:', scheduleRequest);
-      getSchedulePreview.mutate(scheduleRequest);
+      // Do NOT auto-trigger schedule discovery — let user explicitly choose
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to calculate quote";
@@ -1411,33 +1424,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         if (data.suggestedSlots) {
           setSuggestedSlots(data.suggestedSlots);
 
-          // Auto-select the first slot for the active side
-          const side = customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff";
-          const slots = data.suggestedSlots[side] || [];
-          if (slots.length > 0 && !selectedSlot) {
-            // Auto-select first slot (will trigger validation via handleSlotSelect)
-            const firstSlot = slots[0];
-            setSelectedSlot(firstSlot);
-            if (quoteId && customerChose) {
-              const validationRequest: SchedulePreviewRequest = {
-                quoteId,
-                serviceType,
-                customerType: customerDataQuery.data?.customerType || 'BUSINESS',
-                customerId: customer?.profileId,
-                customerChose,
-                ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
-              };
-              if (customerChose === "PICKUP_WINDOW") {
-                validationRequest.pickupWindowStart = firstSlot.start;
-                validationRequest.pickupWindowEnd = firstSlot.end;
-              } else {
-                validationRequest.dropoffWindowStart = firstSlot.start;
-                validationRequest.dropoffWindowEnd = firstSlot.end;
-              }
-              setIsLoadingSlots(true);
-              getSchedulePreview.mutate(validationRequest);
-            }
-          }
+          // Do NOT auto-select — let user pick a slot explicitly
         }
 
         // Only set validated windows if we actually have both window times from the API
@@ -1741,6 +1728,9 @@ const handleQuotePreview = () => {
     setValue("model", vehicle.model);
     setValue("color", vehicle.color);
     setValue("licensePlate", vehicle.licensePlate);
+    if (vehicle.vinVerificationCode) {
+      setValue("vinVerification", vehicle.vinVerificationCode);
+    }
     setShowVehicleDropdown(false);
   };
 
@@ -1788,6 +1778,7 @@ const handleQuotePreview = () => {
       vehicleModel: finalModel,
       vehicleColor: finalColor,
       // specialInstructions: data.instructions,
+      recipientBusinessName: data.recipientBusinessName,
       recipientName: data.recipientName,
       recipientEmail: data.recipientEmail,
       recipientPhone: data.recipientPhone,
@@ -2309,7 +2300,7 @@ const handleQuotePreview = () => {
                 {/* Date picker - Choose a date */}
                 <div className="space-y-2">
                   <Label className="text-xs font-black uppercase tracking-widest">
-                    Choose a date
+                    Date
                   </Label>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -2321,7 +2312,7 @@ const handleQuotePreview = () => {
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
-                        {selectedDate ? format(selectedDate, "EEE MMM d, yyyy") : "Choose a date"}
+                        {selectedDate ? format(selectedDate, "EEE MMM d, yyyy") : "Select a date"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -2351,7 +2342,13 @@ const handleQuotePreview = () => {
                     onValueChange={(value) => handleCustomerChoseChange(value as "PICKUP_WINDOW" | "DROPOFF_WINDOW")}
                     className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                   >
-                    <div className="flex items-center space-x-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-lime-500 transition-colors cursor-pointer">
+                    <div className={cn(
+                      "flex items-center space-x-3 p-4 rounded-xl border transition-colors",
+                      customerChose === "PICKUP_WINDOW"
+                        ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
+                        : "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer",
+                      !customerChose && "border-slate-200 dark:border-slate-700"
+                    )}>
                       <RadioGroupItem value="PICKUP_WINDOW" id="pickup-choice" />
                       <Label htmlFor="pickup-choice" className="cursor-pointer font-medium">
                         <span className="flex items-center gap-2">
@@ -2361,16 +2358,33 @@ const handleQuotePreview = () => {
                         <span className="text-xs text-slate-500 font-normal">Arrival will be calculated</span>
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-lime-500 transition-colors cursor-pointer">
-                      <RadioGroupItem value="DROPOFF_WINDOW" id="dropoff-choice" />
-                      <Label htmlFor="dropoff-choice" className="cursor-pointer font-medium">
-                        <span className="flex items-center gap-2">
-                          <Flag className="h-4 w-4 text-lime-500" />
-                          I want to set arrival time
-                        </span>
-                        <span className="text-xs text-slate-500 font-normal">Pickup will be calculated</span>
-                      </Label>
-                    </div>
+                    {(() => {
+                      const isLongRoute = (schedulePreviewData?.etaMinutes > 45) || (quoteData.miles > 7.5);
+                      return (
+                        <div className={cn(
+                          "flex items-center space-x-3 p-4 rounded-xl border transition-colors",
+                          isLongRoute
+                            ? "border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed"
+                            : customerChose === "DROPOFF_WINDOW"
+                              ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
+                              : "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer"
+                        )}>
+                          <RadioGroupItem value="DROPOFF_WINDOW" id="dropoff-choice" disabled={isLongRoute} />
+                          <Label htmlFor="dropoff-choice" className={cn("font-medium", isLongRoute && "cursor-not-allowed text-slate-400")}>
+                            <span className="flex items-center gap-2">
+                              <Flag className="h-4 w-4 text-lime-500" />
+                              I want to set arrival time
+                            </span>
+                            <span className="text-xs text-slate-500 font-normal">
+                              {isLongRoute
+                                ? `Not available — route is ${quoteData.miles > 7.5 ? 'too long' : 'too slow'} (${quoteData.miles} mi, ~${formatDuration(schedulePreviewData?.etaMinutes || 0)})`
+                                : "Pickup will be calculated"
+                              }
+                            </span>
+                          </Label>
+                        </div>
+                      );
+                    })()}
                   </RadioGroup>
                 </div>
                 </>)}
@@ -2399,8 +2413,8 @@ const handleQuotePreview = () => {
                           if (slot) handleSlotSelect(slot);
                         }}
                       >
-                        <SelectTrigger className="h-14 rounded-2xl">
-                          <SelectValue placeholder="Choose a time slot..." />
+                        <SelectTrigger className="h-14 rounded-2xl border-slate-200 dark:border-slate-700">
+                          <SelectValue placeholder="Early morning (8am-10am)" />
                         </SelectTrigger>
                         <SelectContent>
                           {suggestedSlots[customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff"].map((slot) => (
@@ -2577,9 +2591,13 @@ const handleQuotePreview = () => {
                     <Input
                       id="licensePlate"
                       {...register("licensePlate")}
-                      className="h-14 rounded-2xl"
+                      className={cn("h-14 rounded-2xl", showValidationErrors && !licensePlate && "border-red-500 ring-1 ring-red-500")}
                       placeholder="ABC101"
+                      data-validation-error={!licensePlate ? "true" : undefined}
                     />
+                    {showValidationErrors && !licensePlate && (
+                      <p className="text-xs text-red-500 font-bold">License plate is required</p>
+                    )}
                     {errors.licensePlate && (
                       <p className="text-xs text-red-500">
                         {errors.licensePlate.message}
@@ -2598,10 +2616,14 @@ const handleQuotePreview = () => {
                     <Input
                       id="vinVerification"
                       {...register("vinVerification")}
-                      className="h-14 rounded-2xl"
+                      className={cn("h-14 rounded-2xl", showValidationErrors && (!vinVerification || !/^\d{4}$/.test(vinVerification)) && "border-red-500 ring-1 ring-red-500")}
                       placeholder="4 digits"
                       maxLength={4}
+                      data-validation-error={(!vinVerification || !/^\d{4}$/.test(vinVerification)) ? "true" : undefined}
                     />
+                    {showValidationErrors && (!vinVerification || !/^\d{4}$/.test(vinVerification)) && (
+                      <p className="text-xs text-red-500 font-bold">Must be exactly 4 digits</p>
+                    )}
                     {errors.vinVerification && (
                       <p className="text-xs text-red-500">
                         {errors.vinVerification.message}
@@ -2767,35 +2789,130 @@ const handleQuotePreview = () => {
               </CardContent>
             </Card>
 
-            {/* Step 4: Special Instructions */}
+            {/* Step 4: Recipient Information */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
-                <div>
-                  <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                    Step 4
-                  </CardDescription>
-                  <CardTitle className="text-2xl font-black mt-2">
-                    Special Instructions
-                  </CardTitle>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Any additional notes or special requests (optional)
-                  </p>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardDescription className="text-[11px] font-black uppercase tracking-widest">
+                      Step 4
+                    </CardDescription>
+                    <CardTitle className="text-2xl font-black mt-2">
+                      Recipient Information
+                    </CardTitle>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      The person receiving the vehicle. Phone is required for driver communication. Email is required to receive the tracking link.
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="hidden sm:flex">
+                    <User className="h-3 w-3 mr-1" />
+                    Required
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <Textarea
-                  id="instructions"
-                  {...register("instructions")}
-                  className="min-h-[100px] rounded-2xl"
-                  placeholder="Add any notes or special requests..."
-                />
+                <div className="space-y-4">
+                  {/* Business Name (optional) */}
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="recipientBusinessName"
+                      className="text-xs font-bold"
+                    >
+                      Business Name
+                    </Label>
+                    <Input
+                      id="recipientBusinessName"
+                      {...register("recipientBusinessName")}
+                      className="h-14 rounded-2xl"
+                      placeholder="Business name (optional)"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="recipientName"
+                        className="text-xs font-bold"
+                      >
+                        Name <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="recipientName"
+                        {...register("recipientName")}
+                        className={cn("h-14 rounded-2xl", showValidationErrors && (!recipientName || recipientName.trim().length < 1) && "border-red-500 ring-1 ring-red-500")}
+                        placeholder="Full name"
+                        data-validation-error={(!recipientName || recipientName.trim().length < 1) ? "true" : undefined}
+                      />
+                      {showValidationErrors && (!recipientName || recipientName.trim().length < 1) && (
+                        <p className="text-xs text-red-500 font-bold">Recipient name is required</p>
+                      )}
+                      {errors.recipientName && (
+                        <p className="text-xs text-red-500">{errors.recipientName.message}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="recipientEmail"
+                        className="text-xs font-bold"
+                      >
+                        Email <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="recipientEmail"
+                        {...register("recipientEmail")}
+                        className={cn("h-14 rounded-2xl", showValidationErrors && (!recipientEmail || recipientEmail.trim().length < 1) && "border-red-500 ring-1 ring-red-500")}
+                        placeholder="recipient@example.com"
+                        type="email"
+                        data-validation-error={(!recipientEmail || recipientEmail.trim().length < 1) ? "true" : undefined}
+                      />
+                      {showValidationErrors && (!recipientEmail || recipientEmail.trim().length < 1) && (
+                        <p className="text-xs text-red-500 font-bold">Recipient email is required</p>
+                      )}
+                      {errors.recipientEmail && (
+                        <p className="text-xs text-red-500">{errors.recipientEmail.message}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="recipientPhone"
+                      className="text-xs font-bold"
+                    >
+                      Phone <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="recipientPhone"
+                      value={watch("recipientPhone") || ""}
+                      onChange={(e) => {
+                        const formatted = formatUSPhone(e.target.value);
+                        setValue("recipientPhone", formatted);
+                      }}
+                      className={cn("h-14 rounded-2xl", showValidationErrors && (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) && "border-red-500 ring-1 ring-red-500")}
+                      placeholder="(555) 123-4567"
+                      type="tel"
+                      data-validation-error={(!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) ? "true" : undefined}
+                    />
+                    {showValidationErrors && (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) && (
+                      <p className="text-xs text-red-500 font-bold">Valid phone number is required</p>
+                    )}
+                    {errors.recipientPhone && (
+                      <p className="text-xs text-red-500">{errors.recipientPhone.message}</p>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-500">
+                    Tracking shows the driver's location only while the delivery is active. The link expires when the delivery is complete.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* RIGHT COLUMN - Contact, Recipient, Payment (unchanged) */}
+          {/* RIGHT COLUMN - Recipient Summary, Special Instructions, Review & Submit */}
           <div className="xl:col-span-5 space-y-8">
-            {/* Contact */}
+            {/* Contact (commented out - not used in current flow) */}
             {/* <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -2892,89 +3009,28 @@ const handleQuotePreview = () => {
               </CardContent>
             </Card> */}
 
-            {/* Recipient Information */}
+            {/* Special Instructions — placed near bottom before Review & Submit */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div>
                   <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                    Required
+                    Optional
                   </CardDescription>
-                  <CardTitle className="text-2xl font-black mt-2">
-                    Recipient Information
+                  <CardTitle className="text-lg font-black mt-2">
+                    Special Instructions
                   </CardTitle>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    The person receiving the vehicle. Phone is required for driver communication. Email is required to receive the tracking link.
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    Any additional notes or special requests for the driver
                   </p>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="recipientName"
-                        className="text-xs font-bold"
-                      >
-                        Name <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="recipientName"
-                        {...register("recipientName")}
-                        className="h-14 rounded-2xl"
-                        placeholder="Full name"
-                      />
-                      {errors.recipientName && (
-                        <p className="text-xs text-red-500">{errors.recipientName.message}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="recipientEmail"
-                        className="text-xs font-bold"
-                      >
-                        Email <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="recipientEmail"
-                        {...register("recipientEmail")}
-                        className="h-14 rounded-2xl"
-                        placeholder="recipient@example.com"
-                        type="email"
-                      />
-                      {errors.recipientEmail && (
-                        <p className="text-xs text-red-500">{errors.recipientEmail.message}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="recipientPhone"
-                      className="text-xs font-bold"
-                    >
-                      Phone <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="recipientPhone"
-                      value={watch("recipientPhone") || ""}
-                      onChange={(e) => {
-                        const formatted = formatUSPhone(e.target.value);
-                        setValue("recipientPhone", formatted);
-                      }}
-                      className="h-14 rounded-2xl"
-                      placeholder="(555) 123-4567"
-                      type="tel"
-                    />
-                    {errors.recipientPhone && (
-                      <p className="text-xs text-red-500">{errors.recipientPhone.message}</p>
-                    )}
-                  </div>
-
-                  <p className="text-[11px] text-slate-500">
-                    Tracking shows the driver's location only while the delivery is active. The link expires when the delivery is complete.
-                  </p>
-                </div>
+                <Textarea
+                  id="instructions"
+                  {...register("instructions")}
+                  className="min-h-[100px] rounded-2xl"
+                  placeholder="Add any notes or special requests..."
+                />
               </CardContent>
             </Card>
 
@@ -3018,7 +3074,29 @@ const handleQuotePreview = () => {
                   )}
                 </Button>
 
-                {!isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && (
+                {showValidationErrors && !isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && (
+                  <div className="mt-4 p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border-2 border-red-300 dark:border-red-900/30">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                      <div>
+                        <div className="text-sm font-extrabold text-red-900 dark:text-red-200">
+                          Please complete all required fields
+                        </div>
+                        <ul className="mt-2 text-[11px] text-red-900 dark:text-red-200 list-disc pl-5 space-y-1">
+                          {!quoteId && <li>Enter pickup and dropoff addresses</li>}
+                          {quoteId && !validatedWindows && <li>Select a date and time slot for scheduling</li>}
+                          {!licensePlate && <li>Enter a license plate number</li>}
+                          {(!vinVerification || !/^\d{4}$/.test(vinVerification)) && <li>Enter the last 4 digits of the VIN</li>}
+                          {(!recipientName || recipientName.trim().length < 1) && <li>Enter the recipient's name</li>}
+                          {(!recipientEmail || recipientEmail.trim().length < 1) && <li>Enter the recipient's email</li>}
+                          {(!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) && <li>Enter the recipient's phone number</li>}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!showValidationErrors && !isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && (
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 text-center">
                     Please complete all required fields: addresses, pickup or arrival time, vehicle details, and recipient information.
                   </p>
