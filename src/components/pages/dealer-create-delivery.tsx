@@ -2307,8 +2307,10 @@ const handleQuotePreview = () => {
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-full h-14 justify-start text-left font-medium rounded-2xl border-slate-200 dark:border-slate-700",
-                          !selectedDate && "text-muted-foreground"
+                          "w-full h-14 justify-start text-left font-medium rounded-2xl transition-colors",
+                          !selectedDate
+                            ? "border-red-300 dark:border-red-800 text-muted-foreground"
+                            : "border-slate-200 dark:border-slate-700"
                         )}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
@@ -2346,8 +2348,7 @@ const handleQuotePreview = () => {
                       "flex items-center space-x-3 p-4 rounded-xl border transition-colors",
                       customerChose === "PICKUP_WINDOW"
                         ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
-                        : "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer",
-                      !customerChose && "border-slate-200 dark:border-slate-700"
+                        : "border-red-300 dark:border-red-800 hover:border-lime-500 cursor-pointer"
                     )}>
                       <RadioGroupItem value="PICKUP_WINDOW" id="pickup-choice" />
                       <Label htmlFor="pickup-choice" className="cursor-pointer font-medium">
@@ -2367,7 +2368,7 @@ const handleQuotePreview = () => {
                             ? "border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed"
                             : customerChose === "DROPOFF_WINDOW"
                               ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
-                              : "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer"
+                              : "border-red-300 dark:border-red-800 hover:border-lime-500 cursor-pointer"
                         )}>
                           <RadioGroupItem value="DROPOFF_WINDOW" id="dropoff-choice" disabled={isLongRoute} />
                           <Label htmlFor="dropoff-choice" className={cn("font-medium", isLongRoute && "cursor-not-allowed text-slate-400")}>
@@ -2413,8 +2414,13 @@ const handleQuotePreview = () => {
                           if (slot) handleSlotSelect(slot);
                         }}
                       >
-                        <SelectTrigger className="h-14 rounded-2xl border-slate-200 dark:border-slate-700">
-                          <SelectValue placeholder="Early morning (8am-10am)" />
+                        <SelectTrigger className={cn(
+                          "h-14 rounded-2xl transition-colors",
+                          !selectedSlot
+                            ? "border-red-300 dark:border-red-800"
+                            : "border-slate-200 dark:border-slate-700"
+                        )}>
+                          <SelectValue placeholder="Select time slot" />
                         </SelectTrigger>
                         <SelectContent>
                           {suggestedSlots[customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff"].map((slot) => (
