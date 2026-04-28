@@ -57,6 +57,7 @@ import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
 import { getAllMakes, getModelsForMake } from "@/data/vehicleDatabase";
 import { usePickupZones } from "@/hooks/usePickupZones";
+import { isInPickupZone } from "@/lib/geo-utils";
 import { getUser, useCreate, useDataQuery, usePatch, authFetch } from "@/lib/tanstack/dataQuery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -64,13 +65,38 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 
-// California bounds for address restriction
+// California bounds for address restriction (fallback when zones aren't loaded yet)
 const CA_BOUNDS: google.maps.LatLngBoundsLiteral = {
   north: 42.009,
   south: 32.534,
   east: -114.131,
   west: -124.410,
 };
+
+// Compute a bounding box that covers all service district zones
+function computeZonesBounds(zones: any[]): google.maps.LatLngBoundsLiteral | null {
+  if (!zones.length) return null;
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const zone of zones) {
+    if (!zone.geoJson?.geometry?.coordinates) continue;
+    const ring = zone.geoJson.geometry.coordinates[0]; // outer ring [lng, lat]
+    for (const [lng, lat] of ring) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+  }
+  if (minLat === Infinity) return null;
+  // Add a small padding (0.02 degrees ≈ 2km) so edge addresses are still suggested
+  const pad = 0.02;
+  return {
+    north: Math.min(maxLat + pad, CA_BOUNDS.north),
+    south: Math.max(minLat - pad, CA_BOUNDS.south),
+    east: Math.min(maxLng + pad, CA_BOUNDS.east),
+    west: Math.max(minLng - pad, CA_BOUNDS.west),
+  };
+}
 
 // Normalize state value to 2-letter abbreviation (e.g. "California" -> "CA")
 function normalizeStateCode(raw: string | null | undefined): string | null {
@@ -346,6 +372,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Fetch service area zones for map overlay (like landing page)
   const { zones: pickupZones } = usePickupZones();
+
+  // Compute autocomplete bounds from service district zones (tighter than CA_BOUNDS)
+  const pickupBounds = useMemo(() => computeZonesBounds(pickupZones) || CA_BOUNDS, [pickupZones]);
 
   // Fetch customer data to check postpaidEnabled status
   const customerDataQuery = useDataQuery<CustomerData>({
@@ -1141,6 +1170,11 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       // Auto-select default address if exists and no address selected
       const defaultAddress = savedAddressesQuery.data.find(addr => addr.isDefault);
       if (defaultAddress && !selectedSavedAddress && !pickupAddress) {
+        // Only auto-select if the default address is within a service district zone
+        if (pickupZones.length > 0) {
+          const { inZone } = isInPickupZone(defaultAddress.lat, defaultAddress.lng, pickupZones);
+          if (!inZone) return; // Skip auto-select for out-of-zone default address
+        }
         setSelectedSavedAddress(defaultAddress);
         setValue('pickupAddress', defaultAddress.address);
         setPickupCoords({ lat: defaultAddress.lat, lng: defaultAddress.lng });
@@ -1548,18 +1582,6 @@ const handleQuotePreview = () => {
   }
 };
 
-  // Geocoder helper for the "Same as business info" button
-  const geocodeAddress = (address: string, setter: (coords: google.maps.LatLngLiteral) => void) => {
-    if (!isLoaded) return;
-    const geocoder = new google.maps.Geocoder();
-    geocoder.geocode({ address }, (results, status) => {
-      if (status === "OK" && results && results[0].geometry.location) {
-        const location = results[0].geometry.location;
-        setter({ lat: location.lat(), lng: location.lng() });
-      }
-    });
-  };
-
   // Handle place selection from autocomplete
   const handlePickupSelect = useCallback((place: google.maps.places.PlaceResult) => {
     if (place.geometry?.location) {
@@ -1575,6 +1597,20 @@ const handleQuotePreview = () => {
         setPickupCity(null);
         toast.error('Out of service area', { description: 'Pickup must be in California.' });
         return;
+      }
+
+      // Hard-block: reject any address outside the service district zones
+      if (pickupZones.length > 0) {
+        const { inZone } = isInPickupZone(lat, lng, pickupZones);
+        if (!inZone) {
+          setValue("pickupAddress", "");
+          setPickupCoords(null);
+          setPickupPlaceId(null);
+          setPickupState(null);
+          setPickupCity(null);
+          toast.error('Outside service district', { description: 'Pickup must be within our service area. See the green zone on the map.' });
+          return;
+        }
       }
 
       setPickupCoords({ lat, lng });
@@ -1600,7 +1636,7 @@ const handleQuotePreview = () => {
       }
     }
   }
-  }, []);
+  }, [pickupZones]);
 
   // Handle clearing pickup address
   const handlePickupClear = useCallback(() => {
@@ -1670,6 +1706,15 @@ const handleQuotePreview = () => {
   const handleSavedAddressSelect = async (addressId: string) => {
     const address = savedAddresses.find(a => a.id === addressId);
     if (address) {
+      // Check if saved address is within service district zones
+      if (pickupZones.length > 0) {
+        const { inZone } = isInPickupZone(address.lat, address.lng, pickupZones);
+        if (!inZone) {
+          toast.error('Outside service district', { description: 'This saved address is outside our service area. Pickup must be within the green zone on the map.' });
+          return;
+        }
+      }
+
       setSelectedSavedAddress(address);
       setValue("pickupAddress", address.address);
       setPickupCoords({ lat: address.lat, lng: address.lng });
@@ -1738,7 +1783,25 @@ const handleQuotePreview = () => {
   const handleSameAsBusiness = () => {
     const address = "101 Drivers Dealer Lot, Los Angeles, CA";
     setValue("pickupAddress", address);
-    geocodeAddress(address, setPickupCoords);
+    if (!isLoaded) return;
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address }, (results, status) => {
+      if (status === "OK" && results && results[0].geometry.location) {
+        const lat = results[0].geometry.location.lat();
+        const lng = results[0].geometry.location.lng();
+        // Validate against service district zones
+        if (pickupZones.length > 0) {
+          const { inZone } = isInPickupZone(lat, lng, pickupZones);
+          if (!inZone) {
+            toast.error('Outside service district', { description: 'The business address is outside our service area.' });
+            setValue("pickupAddress", "");
+            setPickupCoords(null);
+            return;
+          }
+        }
+        setPickupCoords({ lat, lng });
+      }
+    });
   };
 
   // Transform form data to API payload
@@ -2057,9 +2120,9 @@ const handleQuotePreview = () => {
                         setPickupSaved(false);
                       }}
                       isLoaded={isLoaded}
-                      placeholder="Search Pickup (California Only)"
+                      placeholder="Search Pickup (Service Area Only)"
                       icon={<MapPin className="h-5 w-5 text-slate-400" />}
-                      bounds={CA_BOUNDS}
+                      bounds={pickupBounds}
                       strictBounds={true}
                     />
                     {errors.pickupAddress && (
@@ -2070,6 +2133,11 @@ const handleQuotePreview = () => {
                     {normalizeStateCode(pickupState) && normalizeStateCode(pickupState) !== 'CA' && (
                       <p className="text-[11px] font-bold text-red-500">
                         Out-of-state addresses are not supported. Please select a California address.
+                      </p>
+                    )}
+                    {!pickupAddress && (
+                      <p className="text-[11px] text-slate-400">
+                        Pickup must be within the service district (green zone on map).
                       </p>
                     )}
                     {/* Save location checkbox */}
