@@ -1,6 +1,6 @@
 // Edit Draft Delivery Page
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,9 +41,43 @@ import {
 } from "lucide-react";
 import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
+import { usePickupZones } from "@/hooks/usePickupZones";
+import { isInPickupZone } from "@/lib/geo-utils";
 import { getUser, getAccessToken } from "@/lib/tanstack/dataQuery";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+// California bounds for address restriction (fallback)
+const CA_BOUNDS: google.maps.LatLngBoundsLiteral = {
+  north: 42.009,
+  south: 32.534,
+  east: -114.131,
+  west: -124.410,
+};
+
+// Compute a bounding box that covers all service district zones
+function computeZonesBounds(zones: any[]): google.maps.LatLngBoundsLiteral | null {
+  if (!zones.length) return null;
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const zone of zones) {
+    if (!zone.geoJson?.geometry?.coordinates) continue;
+    const ring = zone.geoJson.geometry.coordinates[0];
+    for (const [lng, lat] of ring) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+  }
+  if (minLat === Infinity) return null;
+  const pad = 0.02;
+  return {
+    north: Math.min(maxLat + pad, CA_BOUNDS.north),
+    south: Math.max(minLat - pad, CA_BOUNDS.south),
+    east: Math.min(maxLng + pad, CA_BOUNDS.east),
+    west: Math.max(minLng - pad, CA_BOUNDS.west),
+  };
+}
 
 // Form validation schema (relaxed for drafts)
 const draftSchema = z.object({
@@ -305,10 +339,37 @@ export default function EditDraftPage() {
   });
 
   // Handlers
+  const { zones: pickupZones } = usePickupZones();
+  const pickupBounds = useMemo(() => computeZonesBounds(pickupZones) || CA_BOUNDS, [pickupZones]);
+
   const handlePickupSelect = useCallback((place: google.maps.places.PlaceResult) => {
     if (place.geometry?.location) {
       const lat = place.geometry.location.lat();
       const lng = place.geometry.location.lng();
+
+      // Hard-block: reject any address outside California
+      if (lat < CA_BOUNDS.south || lat > CA_BOUNDS.north || lng < CA_BOUNDS.west || lng > CA_BOUNDS.east) {
+        setValue("pickupAddress", "");
+        setPickupCoords(null);
+        setPickupPlaceId(null);
+        setPickupState(null);
+        toast.error('Out of service area', { description: 'Pickup must be in California.' });
+        return;
+      }
+
+      // Hard-block: reject any address outside the service district zones
+      if (pickupZones.length > 0) {
+        const { inZone } = isInPickupZone(lat, lng, pickupZones);
+        if (!inZone) {
+          setValue("pickupAddress", "");
+          setPickupCoords(null);
+          setPickupPlaceId(null);
+          setPickupState(null);
+          toast.error('Outside service district', { description: 'Pickup must be within our service area. See the green zone on the map.' });
+          return;
+        }
+      }
+
       setPickupCoords({ lat, lng });
       setPickupPlaceId(place.place_id || null);
       setValue("pickupAddress", place.formatted_address || "");
@@ -319,7 +380,7 @@ export default function EditDraftPage() {
         if (stateComp) setPickupState(stateComp.short_name);
       }
     }
-  }, [setValue]);
+  }, [setValue, pickupZones]);
 
   const handleDropoffSelect = useCallback((place: google.maps.places.PlaceResult) => {
     if (place.geometry?.location) {
@@ -474,14 +535,16 @@ export default function EditDraftPage() {
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold">Pickup Address</Label>
-                  <LocationAutocomplete
+                    <LocationAutocomplete
                     key="pickup"
                     value={pickupAddress || ""}
                     onChange={(val) => setValue("pickupAddress", val)}
                     onPlaceSelect={handlePickupSelect}
                     isLoaded={isLoaded}
-                    placeholder="Search pickup location"
+                    placeholder="Search Pickup (Service Area Only)"
                     icon={<MapPin className="h-5 w-5 text-slate-400" />}
+                    bounds={pickupBounds}
+                    strictBounds={true}
                   />
                 </div>
                 <div className="space-y-2">

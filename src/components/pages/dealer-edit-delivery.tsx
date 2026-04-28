@@ -59,6 +59,7 @@ import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
 import { getAllMakes, getModelsForMake } from "@/data/vehicleDatabase";
 import { usePickupZones } from "@/hooks/usePickupZones";
+import { isInPickupZone } from "@/lib/geo-utils";
 import { getUser, useDataQuery, usePatch, useCreate, authFetch } from "@/lib/tanstack/dataQuery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -66,6 +67,38 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+
+// California bounds for address restriction (fallback)
+const CA_BOUNDS: google.maps.LatLngBoundsLiteral = {
+  north: 42.009,
+  south: 32.534,
+  east: -114.131,
+  west: -124.410,
+};
+
+// Compute a bounding box that covers all service district zones
+function computeZonesBounds(zones: any[]): google.maps.LatLngBoundsLiteral | null {
+  if (!zones.length) return null;
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const zone of zones) {
+    if (!zone.geoJson?.geometry?.coordinates) continue;
+    const ring = zone.geoJson.geometry.coordinates[0];
+    for (const [lng, lat] of ring) {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+  }
+  if (minLat === Infinity) return null;
+  const pad = 0.02;
+  return {
+    north: Math.min(maxLat + pad, CA_BOUNDS.north),
+    south: Math.max(minLat - pad, CA_BOUNDS.south),
+    east: Math.min(maxLng + pad, CA_BOUNDS.east),
+    west: Math.max(minLng - pad, CA_BOUNDS.west),
+  };
+}
 
 // Form validation schema - same as create page
 const deliverySchema = z.object({
@@ -316,6 +349,9 @@ export default function EditDeliveryPage() {
   const customer = getUser();
 
   const { zones: pickupZones } = usePickupZones();
+
+  // Compute autocomplete bounds from service district zones
+  const pickupBounds = useMemo(() => computeZonesBounds(pickupZones) || CA_BOUNDS, [pickupZones]);
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
@@ -697,6 +733,15 @@ export default function EditDeliveryPage() {
   const handleSavedAddressSelect = async (addressId: string) => {
     const address = savedAddresses.find(a => a.id === addressId);
     if (address) {
+      // Check if saved address is within service district zones
+      if (pickupZones.length > 0) {
+        const { inZone } = isInPickupZone(address.lat, address.lng, pickupZones);
+        if (!inZone) {
+          toast.error('Outside service district', { description: 'This saved address is outside our service area. Pickup must be within the green zone on the map.' });
+          return;
+        }
+      }
+
       setSelectedSavedAddress(address);
       setValue("pickupAddress", address.address);
       setPickupCoords({ lat: address.lat, lng: address.lng });
@@ -943,6 +988,32 @@ export default function EditDeliveryPage() {
     if (place.geometry?.location) {
       const lat = place.geometry.location.lat();
       const lng = place.geometry.location.lng();
+
+      // Hard-block: reject any address outside California
+      if (lat < CA_BOUNDS.south || lat > CA_BOUNDS.north || lng < CA_BOUNDS.west || lng > CA_BOUNDS.east) {
+        setValue("pickupAddress", "");
+        setPickupCoords(null);
+        setPickupPlaceId(null);
+        setPickupState(null);
+        setPickupCity(null);
+        toast.error('Out of service area', { description: 'Pickup must be in California.' });
+        return;
+      }
+
+      // Hard-block: reject any address outside the service district zones
+      if (pickupZones.length > 0) {
+        const { inZone } = isInPickupZone(lat, lng, pickupZones);
+        if (!inZone) {
+          setValue("pickupAddress", "");
+          setPickupCoords(null);
+          setPickupPlaceId(null);
+          setPickupState(null);
+          setPickupCity(null);
+          toast.error('Outside service district', { description: 'Pickup must be within our service area. See the green zone on the map.' });
+          return;
+        }
+      }
+
       setPickupCoords({ lat, lng });
       setPickupPlaceId(place.place_id || null);
       setValue("pickupAddress", place.formatted_address || "");
@@ -964,7 +1035,7 @@ export default function EditDeliveryPage() {
         }
       }
     }
-  }, [setValue]);
+  }, [setValue, pickupZones]);
 
   const handleDropoffSelect = useCallback((place: google.maps.places.PlaceResult) => {
     if (place.geometry?.location) {
@@ -1397,8 +1468,10 @@ export default function EditDeliveryPage() {
                             setPickupSaved(false);
                           }}
                           isLoaded={isLoaded}
-                          placeholder="Search starting location (California only)"
+                          placeholder="Search Pickup (Service Area Only)"
                           icon={<MapPin className="h-5 w-5 text-slate-400" />}
+                          bounds={pickupBounds}
+                          strictBounds={true}
                         />
                         {errors.pickupAddress && (
                           <p className="text-xs text-red-500">{errors.pickupAddress.message}</p>
