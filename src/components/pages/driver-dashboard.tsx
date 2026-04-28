@@ -101,23 +101,21 @@ import type { NotificationInboxResponse } from '@/types/notification'
 // Filter options matching backend API
 const FILTER_OPTIONS = {
   radiusOptions: [
+    { value: 'ANY', label: 'Any' },
     { value: '10', label: 'Within 10 miles' },
     { value: '25', label: 'Within 25 miles' },
-    { value: 'ANY', label: 'Any' },
   ],
   datePresetOptions: [
+    { value: 'ALL', label: 'Any' },
     { value: 'TODAY', label: 'Today' },
     { value: 'TOMORROW', label: 'Tomorrow' },
-    { value: 'ALL', label: 'Any Date' },
-  ],
-  serviceTypeOptions: [
-    { value: 'ALL', label: 'All Transfers' },
+    { value: 'THIS_WEEK', label: 'This Week' },
   ],
   sortOptions: [
-    { value: 'SOONEST', label: 'Soonest' },
-    { value: 'BEST_MATCH', label: 'Best match' },
+    { value: 'ANY', label: 'Any' },
+    { value: 'SOONEST', label: 'Earliest' },
     { value: 'NEAREST', label: 'Nearest' },
-    { value: 'NEWEST', label: 'Newest' },
+    { value: 'HIGHEST_PAY', label: 'Highest Pay' },
   ],
 }
 
@@ -369,8 +367,7 @@ export default function DriverDashboardPage() {
     search: '',
     radiusMiles: 'ANY',
     datePreset: 'ALL',
-    serviceType: 'ALL',
-    sortBy: 'SOONEST',
+    sortBy: 'ANY',
   })
 
   // Build query params from filter state
@@ -387,10 +384,7 @@ export default function DriverDashboardPage() {
     if (filters.datePreset && filters.datePreset !== 'ALL') {
       params.append('datePreset', filters.datePreset)
     }
-    if (filters.serviceType && filters.serviceType !== 'ALL') {
-      params.append('serviceType', filters.serviceType)
-    }
-    if (filters.sortBy) {
+    if (filters.sortBy && filters.sortBy !== 'ANY') {
       params.append('sortBy', filters.sortBy)
     }
 
@@ -486,8 +480,7 @@ export default function DriverDashboardPage() {
       search: '',
       radiusMiles: 'ANY',
       datePreset: 'ALL',
-      serviceType: 'ALL',
-      sortBy: 'SOONEST',
+      sortBy: 'ANY',
     })
     toast.success('Filters reset to defaults')
   }
@@ -770,49 +763,66 @@ export default function DriverDashboardPage() {
           {/* Filters Row */}
           <Card className="border-slate-200 dark:border-slate-700/60 shadow-sm mb-4">
             <CardContent className="p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Pickup Distance dropdown */}
-                <Select
-                  value={filters.radiusMiles}
-                  onValueChange={(value) => updateFilter('radiusMiles', value)}
-                >
-                  <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[120px]">
-                    <SelectValue placeholder="Pickup Distance" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FILTER_OPTIONS.radiusOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex flex-wrap items-end gap-3">
+                {/* Distance */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Distance</span>
+                  <Select
+                    value={filters.radiusMiles}
+                    onValueChange={(value) => updateFilter('radiusMiles', value)}
+                  >
+                    <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[130px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FILTER_OPTIONS.radiusOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                {/* Date dropdown */}
-                <Select
-                  value={filters.datePreset}
-                  onValueChange={(value) => updateFilter('datePreset', value)}
-                >
-                  <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[90px]">
-                    <SelectValue placeholder="Any Date" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FILTER_OPTIONS.datePresetOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* Date */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Date</span>
+                  <Select
+                    value={filters.datePreset}
+                    onValueChange={(value) => updateFilter('datePreset', value)}
+                  >
+                    <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[110px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FILTER_OPTIONS.datePresetOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                {/* All Transfers - grayed out / disabled */}
-                <button
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-400 pointer-events-none opacity-50"
-                  disabled
-                >
-                  <Car className="w-3.5 h-3.5" />
-                  All Transfers
-                </button>
+                {/* Order */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Order</span>
+                  <Select
+                    value={filters.sortBy}
+                    onValueChange={(value) => updateFilter('sortBy', value)}
+                  >
+                    <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FILTER_OPTIONS.sortOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 <div className="flex-1" />
 
@@ -821,7 +831,7 @@ export default function DriverDashboardPage() {
                   type="button"
                   variant="ghost"
                   onClick={clearFilters}
-                  className="inline-flex items-center justify-center px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  className="inline-flex items-center justify-center px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-px"
                 >
                   Clear
                 </Button>
@@ -834,23 +844,6 @@ export default function DriverDashboardPage() {
             <h2 className="text-sm font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Gigs Nearby ({jobs.length})
             </h2>
-            <div className="flex items-center gap-2">
-              <Select
-                value={filters.sortBy}
-                onValueChange={(value) => updateFilter('sortBy', value)}
-              >
-                <SelectTrigger className="h-8 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[100px]">
-                  <SelectValue placeholder="Soonest" />
-                </SelectTrigger>
-                <SelectContent>
-                  {FILTER_OPTIONS.sortOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           {/* Loading state */}
