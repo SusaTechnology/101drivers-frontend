@@ -62,8 +62,8 @@ async getDriverJobFeed(input: {
   serviceType?: string | null;
   search?: string | null;
   radiusMiles?: number | null;
-  datePreset?: "ALL" | "TODAY" | "TOMORROW" | null;
-  sortBy?: "BEST_MATCH" | "SOONEST" | "NEAREST" | "NEWEST" | null;
+  datePreset?: "ALL" | "TODAY" | "TOMORROW" | "THIS_WEEK" | null;
+  sortBy?: "BEST_MATCH" | "SOONEST" | "NEAREST" | "NEWEST" | "HIGHEST_PAY" | null;
 }): Promise<DriverJobFeedResult> {
   const limit = Math.max(1, Math.min(input.limit ?? 20, 50));
 
@@ -163,6 +163,13 @@ async getDriverJobFeed(input: {
   const dayAfterTomorrowStart = new Date(todayStart);
   dayAfterTomorrowStart.setDate(todayStart.getDate() + 2);
 
+  // End of this week: Sunday 23:59:59.999
+  const endOfWeek = new Date(todayStart);
+  const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+  const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  endOfWeek.setDate(todayStart.getDate() + daysUntilSunday);
+  endOfWeek.setHours(23, 59, 59, 999);
+
   const deliveries = await this.prisma.deliveryRequest.findMany({
     where: {
       status: EnumDeliveryRequestStatus.LISTED,
@@ -183,6 +190,14 @@ async getDriverJobFeed(input: {
             pickupWindowStart: {
               gte: tomorrowStart,
               lt: dayAfterTomorrowStart,
+            },
+          }
+        : {}),
+      ...(normalizedDatePreset === "THIS_WEEK"
+        ? {
+            pickupWindowStart: {
+              gte: todayStart,
+              lte: endOfWeek,
             },
           }
         : {}),
@@ -452,6 +467,13 @@ async getDriverJobFeed(input: {
     }
 
     if (normalizedSortBy === "NEWEST") {
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    }
+
+    if (normalizedSortBy === "HIGHEST_PAY") {
+      const aPay = a.payoutPreviewAmount ?? 0;
+      const bPay = b.payoutPreviewAmount ?? 0;
+      if (bPay !== aPay) return bPay - aPay;
       return b.createdAt.getTime() - a.createdAt.getTime();
     }
 
