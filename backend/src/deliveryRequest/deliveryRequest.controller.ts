@@ -504,9 +504,9 @@ async getDriverJobFeed(
   @common.Query("serviceType") serviceType?: string,
   @common.Query("search") search?: string,
   @common.Query("radiusMiles") radiusMiles?: string,
-  @common.Query("datePreset") datePreset?: "ALL" | "TODAY" | "TOMORROW" | "THIS_WEEK",
+  @common.Query("datePreset") datePreset?: "ALL" | "TODAY" | "TOMORROW",
   @common.Query("sortBy")
-  sortBy?: "BEST_MATCH" | "SOONEST" | "NEAREST" | "NEWEST" | "HIGHEST_PAY"
+  sortBy?: "BEST_MATCH" | "SOONEST" | "NEAREST" | "NEWEST"
 ): Promise<any> {
   return this.service.getDriverJobFeed({
     driverId,
