@@ -228,8 +228,8 @@ async getDriverJobFeed(input: {
   serviceType?: string | null;
   search?: string | null;
   radiusMiles?: number | null;
-  datePreset?: "ALL" | "TODAY" | "TOMORROW" | null;
-  sortBy?: "BEST_MATCH" | "SOONEST" | "NEAREST" | "NEWEST" | null;
+  datePreset?: "ALL" | "TODAY" | "TOMORROW" | "THIS_WEEK" | null;
+  sortBy?: "BEST_MATCH" | "SOONEST" | "NEAREST" | "NEWEST" | "HIGHEST_PAY" | null;
 }): Promise<DriverJobFeedResult> {
   return this.driverJobFeedService.getDriverJobFeed({
     driverId: input.driverId,
