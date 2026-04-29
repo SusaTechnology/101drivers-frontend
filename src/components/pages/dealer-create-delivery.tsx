@@ -2130,7 +2130,7 @@ const handleQuotePreview = () => {
                       placeholder="Search Pickup (Service Area Only)"
                       icon={<MapPin className="h-5 w-5 text-slate-400" />}
                       bounds={pickupBounds}
-                      strictBounds={true}
+                      strictBounds={false}
                     />
                     <p className="text-[11px] text-slate-500 font-medium">
                       Pickup must be inside the green service areas. Drop-off anywhere in Southern California.
