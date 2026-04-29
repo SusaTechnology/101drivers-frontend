@@ -395,7 +395,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState<SavedAddress | null>(null);
   const [pickupSaved, setPickupSaved] = useState(false);
-  const [pickupInputBlurred, setPickupInputBlurred] = useState(false);
+  const [pickupError, setPickupError] = useState<string | null>(null);
   const [pendingSavedAddressId, setPendingSavedAddressId] = useState<string | null>(null);
 
   // Saved vehicles state
@@ -1596,6 +1596,7 @@ const handleQuotePreview = () => {
         setPickupPlaceId(null);
         setPickupState(null);
         setPickupCity(null);
+        setPickupError('Out of service area. Pickup must be in California.');
         toast.error('Out of service area', { description: 'Pickup must be in California.' });
         return;
       }
@@ -1609,12 +1610,14 @@ const handleQuotePreview = () => {
           setPickupPlaceId(null);
           setPickupState(null);
           setPickupCity(null);
-          toast.error('Outside service district', { description: 'Pickup must be within our service area. See the green zone on the map.' });
+          setPickupError("Sorry, we don't offer service at this location yet. Pickup must be inside the green service areas.");
+          toast.error('Outside service district', { description: 'Pickup must be within our service area.' });
           return;
         }
       }
 
       setPickupCoords({ lat, lng });
+      setPickupError(null);
       setPickupPlaceId(place.place_id || null);
       setValue("pickupAddress", place.formatted_address || "");
       setSelectedSavedAddress(null);
@@ -1711,7 +1714,8 @@ const handleQuotePreview = () => {
       if (pickupZones.length > 0) {
         const { inZone } = isInPickupZone(address.lat, address.lng, pickupZones);
         if (!inZone) {
-          toast.error('Outside service district', { description: 'This saved address is outside our service area. Pickup must be within the green zone on the map.' });
+          setPickupError("Sorry, we don't offer service at this location yet. Pickup must be inside the green service areas.");
+          toast.error('Outside service district', { description: 'This saved address is outside our service area.' });
           return;
         }
       }
@@ -1719,6 +1723,7 @@ const handleQuotePreview = () => {
       setSelectedSavedAddress(address);
       setValue("pickupAddress", address.address);
       setPickupCoords({ lat: address.lat, lng: address.lng });
+      setPickupError(null);
 
       // Check if placeId is a valid Google Place ID
       // Valid Google Place IDs typically start with "ChIJ" and are 20+ characters
@@ -1794,6 +1799,7 @@ const handleQuotePreview = () => {
         if (pickupZones.length > 0) {
           const { inZone } = isInPickupZone(lat, lng, pickupZones);
           if (!inZone) {
+            setPickupError("Sorry, we don't offer service at this location yet. Pickup must be inside the green service areas.");
             toast.error('Outside service district', { description: 'The business address is outside our service area.' });
             setValue("pickupAddress", "");
             setPickupCoords(null);
@@ -2103,33 +2109,29 @@ const handleQuotePreview = () => {
                     >
                       From Where
                     </Label>
-                    <div
-                      onFocus={() => setPickupInputBlurred(false)}
-                      onBlur={() => setPickupInputBlurred(true)}
-                    >
                       <LocationAutocomplete
-                        key="pickup"
-                        value={pickupAddress || ""}
-                        onChange={(val) => {
-                          setValue("pickupAddress", val);
-                          if (!val) {
-                            setSelectedSavedAddress(null);
-                            setPickupSaved(false);
-                          }
-                        }}
-                        onPlaceSelect={handlePickupSelect}
-                        onClear={() => {
-                          handlePickupClear();
+                      key="pickup"
+                      value={pickupAddress || ""}
+                      onChange={(val) => {
+                        setValue("pickupAddress", val);
+                        if (!val) {
                           setSelectedSavedAddress(null);
                           setPickupSaved(false);
-                        }}
-                        isLoaded={isLoaded}
-                        placeholder="Search Pickup (Service Area Only)"
-                        icon={<MapPin className="h-5 w-5 text-slate-400" />}
-                        bounds={pickupBounds}
-                        strictBounds={true}
-                      />
-                    </div>
+                        }
+                      }}
+                      onPlaceSelect={handlePickupSelect}
+                      onClear={() => {
+                        handlePickupClear();
+                        setSelectedSavedAddress(null);
+                        setPickupSaved(false);
+                        setPickupError(null);
+                      }}
+                      isLoaded={isLoaded}
+                      placeholder="Search Pickup (Service Area Only)"
+                      icon={<MapPin className="h-5 w-5 text-slate-400" />}
+                      bounds={pickupBounds}
+                      strictBounds={true}
+                    />
                     <p className="text-[11px] text-slate-500 font-medium">
                       Pickup must be inside the green service areas. Drop-off anywhere in Southern California.
                     </p>
@@ -2143,9 +2145,9 @@ const handleQuotePreview = () => {
                         Out-of-state addresses are not supported. Please select a California address.
                       </p>
                     )}
-                    {pickupInputBlurred && pickupAddress && !pickupCoords && (
+                    {pickupError && (
                       <p className="text-[11px] font-bold text-red-500">
-                        Sorry, we don't offer service at this location yet. Pickup must be inside the green service areas.
+                        {pickupError}
                       </p>
                     )}
                     {/* Save location checkbox */}
