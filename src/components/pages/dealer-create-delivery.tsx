@@ -2125,6 +2125,9 @@ const handleQuotePreview = () => {
                       bounds={pickupBounds}
                       strictBounds={true}
                     />
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Pickup must be inside the green service areas. Drop-off anywhere in Southern California.
+                    </p>
                     {errors.pickupAddress && (
                       <p className="text-xs text-red-500">
                         {errors.pickupAddress.message}
@@ -2135,9 +2138,9 @@ const handleQuotePreview = () => {
                         Out-of-state addresses are not supported. Please select a California address.
                       </p>
                     )}
-                    {!pickupAddress && (
-                      <p className="text-[11px] text-slate-400">
-                        Pickup must be within the service district (green zone on map).
+                    {pickupAddress && !pickupCoords && (
+                      <p className="text-[11px] font-bold text-red-500">
+                        Sorry, we don't offer service at this location yet. Pickup must be inside the green service areas.
                       </p>
                     )}
                     {/* Save location checkbox */}

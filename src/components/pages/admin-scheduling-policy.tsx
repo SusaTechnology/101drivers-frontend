@@ -480,7 +480,7 @@ export default function AdminSchedulingPolicyPage() {
     deactivateTsMutation.mutate(
       { pathParams: { id: tsId } },
       {
-        onSuccess: () => toast.success('Time slot deactivated successfully'),
+        onSuccess: () => toast.error('Time slot deactivated'),
         onError: () => toast.error('Failed to deactivate time slot'),
       }
     );
@@ -983,12 +983,12 @@ export default function AdminSchedulingPolicyPage() {
                           <TableCell className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-1">
                               {ts.active ? (
-                                <Button variant="ghost" size="sm" onClick={() => handleDeactivateTs(ts.id)} disabled={deactivateTsMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Deactivate">
-                                  <PowerOff className="w-4 h-4" />
+                                <Button variant="ghost" size="sm" onClick={() => handleDeactivateTs(ts.id)} disabled={deactivateTsMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Deactivate">
+                                  <Power className="w-4 h-4" />
                                 </Button>
                               ) : (
-                                <Button variant="ghost" size="sm" onClick={() => handleActivateTs(ts.id)} disabled={activateTsMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Activate">
-                                  <Power className="w-4 h-4" />
+                                <Button variant="ghost" size="sm" onClick={() => handleActivateTs(ts.id)} disabled={activateTsMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50" title="Activate">
+                                  <PowerOff className="w-4 h-4" />
                                 </Button>
                               )}
                               <Button variant="ghost" size="sm" onClick={() => handleOpenEditTs(ts)} className="h-8 w-8 p-0 rounded-lg" title="Edit">
