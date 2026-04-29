@@ -395,6 +395,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState<SavedAddress | null>(null);
   const [pickupSaved, setPickupSaved] = useState(false);
+  const [pickupInputBlurred, setPickupInputBlurred] = useState(false);
   const [pendingSavedAddressId, setPendingSavedAddressId] = useState<string | null>(null);
 
   // Saved vehicles state
@@ -2102,29 +2103,33 @@ const handleQuotePreview = () => {
                     >
                       From Where
                     </Label>
-                    <LocationAutocomplete
-                      key="pickup"
-                      value={pickupAddress || ""}
-                      onChange={(val) => {
-                        setValue("pickupAddress", val);
-                        // If user clears or types new text, reset saved state
-                        if (!val) {
+                    <div
+                      onFocus={() => setPickupInputBlurred(false)}
+                      onBlur={() => setPickupInputBlurred(true)}
+                    >
+                      <LocationAutocomplete
+                        key="pickup"
+                        value={pickupAddress || ""}
+                        onChange={(val) => {
+                          setValue("pickupAddress", val);
+                          if (!val) {
+                            setSelectedSavedAddress(null);
+                            setPickupSaved(false);
+                          }
+                        }}
+                        onPlaceSelect={handlePickupSelect}
+                        onClear={() => {
+                          handlePickupClear();
                           setSelectedSavedAddress(null);
                           setPickupSaved(false);
-                        }
-                      }}
-                      onPlaceSelect={handlePickupSelect}
-                      onClear={() => {
-                        handlePickupClear();
-                        setSelectedSavedAddress(null);
-                        setPickupSaved(false);
-                      }}
-                      isLoaded={isLoaded}
-                      placeholder="Search Pickup (Service Area Only)"
-                      icon={<MapPin className="h-5 w-5 text-slate-400" />}
-                      bounds={pickupBounds}
-                      strictBounds={true}
-                    />
+                        }}
+                        isLoaded={isLoaded}
+                        placeholder="Search Pickup (Service Area Only)"
+                        icon={<MapPin className="h-5 w-5 text-slate-400" />}
+                        bounds={pickupBounds}
+                        strictBounds={true}
+                      />
+                    </div>
                     <p className="text-[11px] text-slate-500 font-medium">
                       Pickup must be inside the green service areas. Drop-off anywhere in Southern California.
                     </p>
@@ -2138,7 +2143,7 @@ const handleQuotePreview = () => {
                         Out-of-state addresses are not supported. Please select a California address.
                       </p>
                     )}
-                    {pickupAddress && !pickupCoords && (
+                    {pickupInputBlurred && pickupAddress && !pickupCoords && (
                       <p className="text-[11px] font-bold text-red-500">
                         Sorry, we don't offer service at this location yet. Pickup must be inside the green service areas.
                       </p>
