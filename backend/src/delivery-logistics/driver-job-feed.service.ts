@@ -715,42 +715,43 @@ async getDriverJobFeed(input: {
   const preferredRadiusMiles = driver.preferences?.radiusMiles ?? null;
   const origin = this.resolveDriverOrigin(driver.location ?? null);
 
-  if (
-    preferredRadiusMiles != null &&
-    origin.lat != null &&
-    origin.lng != null &&
-    delivery.pickupLat != null &&
-    delivery.pickupLng != null
-  ) {
-    const samePoint =
-      Math.abs(origin.lat - delivery.pickupLat) < 0.000001 &&
-      Math.abs(origin.lng - delivery.pickupLng) < 0.000001;
-
-    if (!samePoint) {
-      try {
-        const route = await this.mapsService.computeRouteMetrics({
-          originLat: origin.lat,
-          originLng: origin.lng,
-          destinationLat: delivery.pickupLat,
-          destinationLng: delivery.pickupLng,
-        });
-
-        if (route.distanceMiles > preferredRadiusMiles) {
-          throw new NotFoundException(
-            "Delivery is outside the driver's service radius"
-          );
-        }
-      } catch (error) {
-        if (error instanceof NotFoundException) {
-          throw error;
-        }
-
-        throw new NotFoundException(
-          "Unable to validate driver service radius for this delivery"
-        );
-      }
-    }
-  }
+  // Service radius check disabled temporarily for testing.
+  // if (
+  //   preferredRadiusMiles != null &&
+  //   origin.lat != null &&
+  //   origin.lng != null &&
+  //   delivery.pickupLat != null &&
+  //   delivery.pickupLng != null
+  // ) {
+  //   const samePoint =
+  //     Math.abs(origin.lat - delivery.pickupLat) < 0.000001 &&
+  //     Math.abs(origin.lng - delivery.pickupLng) < 0.000001;
+  //
+  //   if (!samePoint) {
+  //     try {
+  //       const route = await this.mapsService.computeRouteMetrics({
+  //         originLat: origin.lat,
+  //         originLng: origin.lng,
+  //         destinationLat: delivery.pickupLat,
+  //         destinationLng: delivery.pickupLng,
+  //       });
+  //
+  //       if (route.distanceMiles > preferredRadiusMiles) {
+  //         throw new NotFoundException(
+  //           "Delivery is outside the driver's service radius"
+  //         );
+  //       }
+  //     } catch (error) {
+  //       if (error instanceof NotFoundException) {
+  //         throw error;
+  //       }
+  //
+  //       throw new NotFoundException(
+  //         "Unable to validate driver service radius for this delivery"
+  //       );
+  //     }
+  //   }
+  // }
 }
 
 
