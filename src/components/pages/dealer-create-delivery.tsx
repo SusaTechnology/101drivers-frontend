@@ -2378,7 +2378,7 @@ const handleQuotePreview = () => {
                 {/* Date picker - Choose a date */}
                 <div className="space-y-2">
                   <Label className="text-xs font-black uppercase tracking-widest">
-                    Date
+                    Date {!selectedDate && <span className="text-red-500"> *</span>}
                   </Label>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -2386,7 +2386,7 @@ const handleQuotePreview = () => {
                         variant="outline"
                         className={cn(
                           "w-full h-14 justify-start text-left font-medium rounded-2xl transition-colors",
-                          !selectedDate
+                          showValidationErrors && !selectedDate
                             ? "border-red-300 dark:border-red-800 text-muted-foreground"
                             : "border-slate-200 dark:border-slate-700"
                         )}
@@ -2413,9 +2413,9 @@ const handleQuotePreview = () => {
                 </div>
 
                 {/* Choose which side to set */}
-                <div className="space-y-3">
+                <div className={cn("space-y-3", !selectedDate && "opacity-40 pointer-events-none")}>
                   <Label className="text-xs font-black uppercase tracking-widest">
-                    Pickup or arrival
+                    Pickup or arrival {selectedDate && !customerChose && <span className="text-red-500"> *</span>}
                   </Label>
                   <RadioGroup
                     value={customerChose || ""}
@@ -2426,7 +2426,11 @@ const handleQuotePreview = () => {
                       "flex items-center space-x-3 p-4 rounded-xl border transition-colors",
                       customerChose === "PICKUP_WINDOW"
                         ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
-                        : "border-red-300 dark:border-red-800 hover:border-lime-500 cursor-pointer"
+                        : customerChose
+                          ? "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer"
+                          : showValidationErrors && selectedDate
+                            ? "border-red-300 dark:border-red-800 hover:border-lime-500 cursor-pointer"
+                            : "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer"
                     )}>
                       <RadioGroupItem value="PICKUP_WINDOW" id="pickup-choice" />
                       <Label htmlFor="pickup-choice" className="cursor-pointer font-medium">
@@ -2446,7 +2450,11 @@ const handleQuotePreview = () => {
                             ? "border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed"
                             : customerChose === "DROPOFF_WINDOW"
                               ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
-                              : "border-red-300 dark:border-red-800 hover:border-lime-500 cursor-pointer"
+                              : customerChose
+                                ? "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer"
+                                : showValidationErrors && selectedDate
+                                  ? "border-red-300 dark:border-red-800 hover:border-lime-500 cursor-pointer"
+                                  : "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer"
                         )}>
                           <RadioGroupItem value="DROPOFF_WINDOW" id="dropoff-choice" disabled={isLongRoute} />
                           <Label htmlFor="dropoff-choice" className={cn("font-medium", isLongRoute && "cursor-not-allowed text-slate-400")}>
@@ -2480,7 +2488,7 @@ const handleQuotePreview = () => {
                 {customerChose && !isLoadingSlots && (
                   <div className="space-y-3">
                     <Label className="text-xs font-black uppercase tracking-widest">
-                      {customerChose === "PICKUP_WINDOW" ? "Pickup time" : "Arrival time"}
+                      {customerChose === "PICKUP_WINDOW" ? "Pickup time" : "Arrival time"} {!selectedSlot && <span className="text-red-500"> *</span>}
                     </Label>
                     
                     {suggestedSlots[customerChose === "PICKUP_WINDOW" ? "pickup" : "dropoff"].length > 0 ? (
@@ -2494,7 +2502,7 @@ const handleQuotePreview = () => {
                       >
                         <SelectTrigger className={cn(
                           "h-14 rounded-2xl transition-colors",
-                          !selectedSlot
+                          showValidationErrors && !selectedSlot
                             ? "border-red-300 dark:border-red-800"
                             : "border-slate-200 dark:border-slate-700"
                         )}>
@@ -2699,13 +2707,20 @@ const handleQuotePreview = () => {
                     </Label>
                     <Input
                       id="vinVerification"
-                      {...register("vinVerification")}
+                      {...register("vinVerification", {
+                        onChange: (e) => {
+                          e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        }
+                      })}
                       className={cn("h-14 rounded-2xl", showValidationErrors && (!vinVerification || !/^\d{4}$/.test(vinVerification)) && "border-red-500 ring-1 ring-red-500")}
                       placeholder="4 digits"
                       maxLength={4}
-                      data-validation-error={(!vinVerification || !/^\d{4}$/.test(vinVerification)) ? "true" : undefined}
+                      inputMode="numeric"
                     />
-                    {showValidationErrors && (!vinVerification || !/^\d{4}$/.test(vinVerification)) && (
+                    {showValidationErrors && !vinVerification && (
+                      <p className="text-xs text-red-500 font-bold">Last 4 VIN digits are required</p>
+                    )}
+                    {showValidationErrors && vinVerification && !/^\d{4}$/.test(vinVerification) && (
                       <p className="text-xs text-red-500 font-bold">Must be exactly 4 digits</p>
                     )}
                     {errors.vinVerification && (
@@ -2713,9 +2728,6 @@ const handleQuotePreview = () => {
                         {errors.vinVerification.message}
                       </p>
                     )}
-                    <p className="text-[11px] text-slate-500">
-                      Must be exactly 4 numeric digits (no letters).
-                    </p>
                   </div>
                 </div>
 
