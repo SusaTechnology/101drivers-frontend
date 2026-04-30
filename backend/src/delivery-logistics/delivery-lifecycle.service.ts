@@ -195,15 +195,6 @@ async bookDelivery(input: {
       actorUserId: input.bookedByUserId ?? null,
     });
 
-    const tracking = await this.getTrackingLink({
-      deliveryId: input.deliveryId,
-    });
-
-    await this.notificationEventEngine.notifyTrackingAvailableAfterBooking({
-      deliveryId: input.deliveryId,
-      trackingUrl: tracking.trackingUrl,
-    });
-
     return booking;
   });
 }
@@ -683,14 +674,14 @@ async getTrackingLink(input: {
     return {
       token,
       expiresAt: expiresAt.toISOString(),
-      trackingUrl: `/deliveryRequests/public/tracking/${token}`,
+      trackingUrl: this.buildPublicTrackingUrl(token),
     };
   }
 
   return {
     token: delivery.trackingShareToken,
     expiresAt: delivery.trackingShareExpiresAt.toISOString(),
-    trackingUrl: `/deliveryRequests/public/tracking/${delivery.trackingShareToken}`,
+    trackingUrl: this.buildPublicTrackingUrl(delivery.trackingShareToken),
   };
 }
 
