@@ -815,11 +815,6 @@ export default function DriverPickupChecklistPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h2 className="text-lg font-black text-slate-900 dark:text-white">Verify the vehicle</h2>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          {greeted
-                            ? 'Vehicle verified. Proceed to the next step.'
-                            : 'Confirm you found the right vehicle before starting.'}
-                        </p>
                       </div>
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
                         {greeted ? <Check className="w-3.5 h-3.5 text-green-500 mr-1" /> : <CarFront className="w-3.5 h-3.5 text-primary mr-1" />}
@@ -829,30 +824,38 @@ export default function DriverPickupChecklistPage() {
 
                     {!greeted ? (
                       <div className="mt-5">
-                        {/* Quick verification checklist */}
-                        <ul className="space-y-2">
-                          {[
-                            { label: 'Vehicle make & model matches', icon: Car },
-                            { label: 'Color and license plate match', icon: Shield },
-                            { label: 'You are at the correct pickup address', icon: MapPin },
-                          ].map((item, i) => (
-                            <li key={i} className="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300">
-                              <item.icon className="w-4 h-4 text-slate-400 shrink-0" />
-                              {item.label}
-                            </li>
-                          ))}
-                        </ul>
+                        {/* Vehicle details */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                            <Car className="w-5 h-5 text-slate-400 shrink-0" />
+                            <div>
+                              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Make & Model</p>
+                              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                {[delivery.vehicleMake, delivery.vehicleModel].filter(Boolean).join(' ') || '—'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                            <Shield className="w-5 h-5 text-slate-400 shrink-0" />
+                            <div>
+                              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">License Plate</p>
+                              <p className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
+                                {delivery.licensePlate || '—'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
                         <Button
                           onClick={handleArrivedAtVehicle}
-                          className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition flex items-center justify-center gap-2"
+                          className="mt-5 w-full bg-green-600 text-white font-extrabold rounded-2xl py-3.5 hover:bg-green-700 transition flex items-center justify-center gap-2 text-base"
                         >
-                          <Check className="w-4 h-4" />
+                          <Check className="w-5 h-5" />
                           Confirm & continue
                         </Button>
                       </div>
                     ) : (
-                      <div className="mt-4 p-4 rounded-2xl bg-primary/10 border border-primary/25">
-                        <p className="text-sm font-extrabold text-slate-900">Vehicle verified</p>
+                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
+                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Vehicle verified</p>
                         <p className="text-[11px] text-slate-700 mt-1">Next: walk around the car clockwise and take 6 photos.</p>
                       </div>
                     )}
