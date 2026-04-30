@@ -410,6 +410,7 @@ export class NotificationEventEngine {
 
 async notifyTripStarted(input: {
   deliveryId: string;
+  driverId?: string;
   actorUserId?: string | null;
   trackingUrl: string;
   expiresAt?: Date | null;
@@ -440,6 +441,23 @@ async notifyTripStarted(input: {
           },
         },
       },
+      assignments: {
+        where: { unassignedAt: null },
+        take: 1,
+        select: {
+          driver: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  email: true,
+                  fullName: true,
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -458,6 +476,13 @@ async notifyTripStarted(input: {
     delivery.customer?.businessName ??
     "Customer";
 
+  const assignedDriver = delivery.assignments?.[0]?.driver;
+  const driverEmail = assignedDriver?.user?.email ?? null;
+  const driverName = assignedDriver?.user?.fullName ?? "Driver";
+
+  const linkButtonHtml = `<div style="margin: 20px 0;"><a href="${this.escapeHtml(input.trackingUrl)}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">Track Delivery</a></div>`;
+
+  // CUSTOMER EMAIL
   if (customerEmail) {
     await this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
@@ -491,6 +516,7 @@ async notifyTripStarted(input: {
     });
   }
 
+  // RECIPIENT EMAIL
   if (delivery.recipientEmail) {
     await this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
@@ -508,6 +534,39 @@ async notifyTripStarted(input: {
         `Pickup: ${delivery.pickupAddress}`,
         `Drop-off: ${delivery.dropoffAddress}`,
         `Status: ${delivery.status}`,
+        "",
+        `Tracking link: ${input.trackingUrl}`,
+        delivery.trackingShareExpiresAt
+          ? `Link expires at: ${delivery.trackingShareExpiresAt.toISOString()}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        status: delivery.status,
+        trackingUrl: input.trackingUrl,
+      },
+    });
+  }
+
+  // DRIVER EMAIL
+  if (driverEmail) {
+    await this.queueAndSend({
+      actorUserId: input.actorUserId ?? null,
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.TRACKING_STARTED,
+      templateCode: "trip-started-driver",
+      toEmail: driverEmail,
+      subject: "Trip started — tracking link for your delivery",
+      body: [
+        `Hi ${driverName},`,
+        "",
+        "You have started the trip. Share this tracking link with your customer.",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
         "",
         `Tracking link: ${input.trackingUrl}`,
         delivery.trackingShareExpiresAt
@@ -1021,10 +1080,17 @@ async notifyTripCompleted(input: {
     const escapedSubject = this.escapeHtml(subject);
     const escapedBody = this.escapeHtml(body).replace(/\n/g, "<br />");
 
+    // Convert URLs (especially tracking links) into clickable <a> tags
+    // so they work reliably on mobile email clients
+    const withLinks = escapedBody.replace(
+      /(https?:\/\/[^\s<]+)/g,
+      '<a href="$1" style="color: #2563eb; word-break: break-all;">$1</a>'
+    );
+
     return `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111; max-width: 600px; margin: 0 auto;">
         <h2>${escapedSubject}</h2>
-        <p>${escapedBody}</p>
+        <p>${withLinks}</p>
       </div>
     `;
   }

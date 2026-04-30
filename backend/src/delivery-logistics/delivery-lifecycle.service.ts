@@ -294,6 +294,7 @@ async startTrip(input: {
 }).then(async (result) => {
   await this.notificationEventEngine.notifyTripStarted({
     deliveryId: input.deliveryId,
+    driverId: input.driverId,
     actorUserId: input.actorUserId ?? null,
     trackingUrl: this.buildPublicTrackingUrl(result.trackingShareToken),
     expiresAt: result.trackingShareExpiresAt,
