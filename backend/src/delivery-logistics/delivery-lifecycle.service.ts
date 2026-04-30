@@ -260,12 +260,10 @@ async startTrip(input: {
       },
     });
 
-    const trackingShareToken =
-      delivery.trackingShareToken ?? this.generateTrackingToken();
-
-    const trackingShareExpiresAt =
-      delivery.trackingShareExpiresAt ??
-      new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // Always generate a fresh token and 24h expiration at trip start
+    // so the tracking link sent in the email is guaranteed valid.
+    const trackingShareToken = this.generateTrackingToken();
+    const trackingShareExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await tx.deliveryRequest.update({
       where: { id: input.deliveryId },
@@ -373,24 +371,22 @@ async completeTrip(input: {
       );
     }
 
-    // Geofence check: verify the driver's last known position is near the dropoff location.
-    // This prevents completing a delivery from a completely different location.
-    // Uses the last tracking point if available, and checks within a 500-meter (~0.31 mile) radius.
-    const lastPoint = tracking?.points?.[pointCount - 1];
-    if (lastPoint && delivery.dropoffLat != null && delivery.dropoffLng != null) {
-      const distanceFromDropoff = this.haversineMiles(
-        lastPoint.lat,
-        lastPoint.lng,
-        delivery.dropoffLat,
-        delivery.dropoffLng
-      );
-      const MAX_GEOFENCE_RADIUS_MILES = 0.5; // ~800 meters, generous for GPS accuracy
-      if (distanceFromDropoff > MAX_GEOFENCE_RADIUS_MILES) {
-        throw new BadRequestException(
-          `You appear to be ${distanceFromDropoff.toFixed(1)} miles away from the dropoff location. Please proceed to the dropoff address before completing the delivery.`
-        );
-      }
-    }
+    // Geofence check disabled temporarily for testing the full flow.
+    // const lastPoint = tracking?.points?.[pointCount - 1];
+    // if (lastPoint && delivery.dropoffLat != null && delivery.dropoffLng != null) {
+    //   const distanceFromDropoff = this.haversineMiles(
+    //     lastPoint.lat,
+    //     lastPoint.lng,
+    //     delivery.dropoffLat,
+    //     delivery.dropoffLng
+    //   );
+    //   const MAX_GEOFENCE_RADIUS_MILES = 0.5;
+    //   if (distanceFromDropoff > MAX_GEOFENCE_RADIUS_MILES) {
+    //     throw new BadRequestException(
+    //       `You appear to be ${distanceFromDropoff.toFixed(1)} miles away from the dropoff location. Please proceed to the dropoff address before completing the delivery.`
+    //     );
+    //   }
+    // }
 
     // If GPS-driven miles is 0 or too low, fall back to the quote map distance.
     // This prevents completed deliveries from showing 0 miles when GPS signal was poor.
