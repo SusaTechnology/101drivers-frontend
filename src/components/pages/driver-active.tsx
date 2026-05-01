@@ -1029,11 +1029,16 @@ export default function DriverActiveDeliveryPage() {
               <div className="mt-4 flex flex-col gap-3">
                 <Button
                   onClick={handleUploadDropoffPhotos}
-                  disabled={true}
-                  className="w-full bg-slate-300 text-slate-500 dark:bg-slate-700 dark:text-slate-400 font-extrabold rounded-2xl py-3 cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={dropoffPhotosSaved || uploadDropoffPhotosMutation.isPending}
+                  className={cn(
+                    "w-full font-extrabold rounded-2xl py-3 flex items-center justify-center gap-2 transition",
+                    dropoffPhotosSaved
+                      ? "bg-slate-300 text-slate-500 dark:bg-slate-700 dark:text-slate-400 cursor-not-allowed"
+                      : "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-300"
+                  )}
                 >
                   <CloudUpload className="w-4 h-4" />
-                  Upload photos
+                  {dropoffPhotosSaved ? 'Photos uploaded' : uploadDropoffPhotosMutation.isPending ? 'Uploading...' : 'Upload photos'}
                 </Button>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
