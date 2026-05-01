@@ -987,16 +987,11 @@ export default function DriverActiveDeliveryPage() {
           {/* Drop-off evidence - upload functionality */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover-lift">
             <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <CardTitle className="text-lg font-black">Drop-off evidence</CardTitle>
-                  <CardDescription className="text-sm mt-1">
-                    {dropoffPhotosSaved ? 'Uploaded' : 'Pending'}
-                  </CardDescription>
-                </div>
-                <div className="w-11 h-11 rounded-2xl bg-amber-500/15 flex items-center justify-center">
-                  <Upload className="w-5 h-5 text-amber-500" />
-                </div>
+              <div>
+                <CardTitle className="text-lg font-black">Drop-off evidence</CardTitle>
+                <CardDescription className="text-sm mt-1">
+                  {dropoffPhotosSaved ? 'Uploaded' : 'Pending'}
+                </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -1034,17 +1029,17 @@ export default function DriverActiveDeliveryPage() {
               <div className="mt-4 flex flex-col gap-3">
                 <Button
                   onClick={handleUploadDropoffPhotos}
-                  disabled={uploadDropoffPhotosMutation.isPending}
-                  className="w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition flex items-center justify-center gap-2"
+                  disabled={true}
+                  className="w-full bg-slate-300 text-slate-500 dark:bg-slate-700 dark:text-slate-400 font-extrabold rounded-2xl py-3 cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   <CloudUpload className="w-4 h-4" />
-                  {uploadDropoffPhotosMutation.isPending ? 'Uploading...' : 'Upload dropoff photos'}
+                  Upload photos
                 </Button>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                      Odometer End
+                      Odometer Reading <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       value={odometerEnd}
@@ -1068,18 +1063,17 @@ export default function DriverActiveDeliveryPage() {
                 </div>
 
                 <Button
-                  onClick={handleSubmitDropoffCompliance}
-                  disabled={submitComplianceMutation.isPending}
+                  onClick={handleCompleteDelivery}
+                  disabled={completeTripMutation.isPending}
                   className="w-full lime-btn rounded-2xl py-3 font-extrabold flex items-center justify-center gap-2"
                 >
-                  <Save className="w-4 h-4" />
-                  {submitComplianceMutation.isPending ? 'Submitting...' : 'Submit dropoff compliance'}
+                  {completeTripMutation.isPending ? 'Completing...' : 'Complete Delivery'}
+                  <ArrowForward className="w-5 h-5" />
                 </Button>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
+                  Requires all 6 photos + odometer reading
+                </p>
               </div>
-
-              <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-                Drop-off completion requires all 6 photos + odometer end. If issues occur, use Support.
-              </p>
             </CardContent>
           </Card>
         </section>
@@ -1103,29 +1097,6 @@ export default function DriverActiveDeliveryPage() {
           </Card>
         )}
       </main>
-
-      {/* Bottom Action Bar - Only show Complete button after compliance is done */}
-      {dropoffPhotosSaved && (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 border-t border-slate-200 dark:border-slate-800 safe-bottom">
-          <div className="max-w-[980px] mx-auto px-5 sm:px-6 py-4">
-            {locationHealth === 'lost' ? (
-              <div className="w-full p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-center">
-                <p className="text-sm font-extrabold text-red-900 dark:text-red-200">Location required to complete</p>
-                <p className="text-[12px] text-red-800/70 dark:text-red-200/70 mt-1">Please enable GPS on your phone first.</p>
-              </div>
-            ) : (
-              <Button
-                onClick={handleCompleteDelivery}
-                disabled={completeTripMutation.isPending}
-                className="w-full lime-btn rounded-2xl py-4 hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2"
-              >
-                {completeTripMutation.isPending ? 'Completing...' : 'Complete Delivery'}
-                <ArrowForward className="w-5 h-5" />
-              </Button>
-            )}
-          </div>
-        </nav>
-      )}
 
       <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10 mt-6">
         <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
