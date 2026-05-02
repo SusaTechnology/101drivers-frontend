@@ -176,6 +176,7 @@ export default function DriverActiveDeliveryPage() {
   )
   const [uploadedDropoffPhotos, setUploadedDropoffPhotos] = useState<Array<{ slotIndex: number; imageUrl: string }>>([])
   const [dropoffPhotosSaved, setDropoffPhotosSaved] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const currentSlotIndex = useRef<number | null>(null)
@@ -444,6 +445,7 @@ export default function DriverActiveDeliveryPage() {
     `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
     {
       onSuccess: (data) => {
+        setIsUploading(false)
         const photos = data.files.map(f => ({
           slotIndex: f.slotIndex,
           imageUrl: f.url,
@@ -453,20 +455,22 @@ export default function DriverActiveDeliveryPage() {
         toast.success('Dropoff photos uploaded')
       },
       onError: (error) => {
+        setIsUploading(false)
         toast.error('Upload failed', { description: error.message })
       },
     }
   )
 
   const handleUploadDropoffPhotos = () => {
-    const allAdded = dropoffPhotoSlots.every(slot => slot.file !== null)
-    if (!allAdded) {
-      toast.error('Missing photos', { description: 'Please add all 6 dropoff photos.' })
+    const selectedCount = dropoffPhotoSlots.filter(slot => slot.file !== null).length
+    if (selectedCount === 0) {
+      toast.error('No photos selected', { description: 'Please take at least one dropoff photo.' })
       return
     }
 
+    setIsUploading(true)
     const formData = new FormData()
-    dropoffPhotoSlots.forEach(slot => {
+    dropoffPhotoSlots.forEach((slot, i) => {
       if (slot.file) formData.append('files', slot.file)
     })
     formData.append('deliveryId', deliveryId)
@@ -475,42 +479,7 @@ export default function DriverActiveDeliveryPage() {
     uploadDropoffPhotosMutation.mutate(formData)
   }
 
-  // Submit dropoff compliance
-  const submitComplianceMutation = useCreate<any, any>(
-    `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/dropoff-compliance`,
-    {
-      onSuccess: () => {
-        toast.success('Dropoff compliance submitted')
-      },
-      onError: (error) => {
-        toast.error('Compliance submission failed', { description: error.message })
-      },
-    }
-  )
-
-  const handleSubmitDropoffCompliance = () => {
-    if (!odometerEnd || isNaN(Number(odometerEnd))) {
-      toast.error('Odometer end required', { description: 'Please enter a valid number.' })
-      return
-    }
-    if (uploadedDropoffPhotos.length !== 6) {
-      toast.error('Photos not uploaded', { description: 'Please upload all dropoff photos first.' })
-      return
-    }
-
-    const payload = {
-      driverId,
-      odometerEnd: Number(odometerEnd),
-      photos: uploadedDropoffPhotos.map(p => ({
-        slotIndex: p.slotIndex,
-        imageUrl: p.imageUrl,
-      })),
-    }
-
-    submitComplianceMutation.mutate(payload)
-  }
-
-  // Complete trip
+  // Complete trip mutation
   const completeTripMutation = useCreate<any, any>(
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/complete-trip`,
     {
@@ -524,7 +493,35 @@ export default function DriverActiveDeliveryPage() {
     }
   )
 
-  const handleCompleteDelivery = () => {
+  // Actual trip completion — only called after compliance succeeds
+  const handleCompleteTrip = () => {
+    if (!driverId || !userId) return
+
+    const payload = {
+      driverId,
+      actorUserId: userId,
+      actorRole: 'DRIVER',
+    }
+    completeTripMutation.mutate(payload)
+  }
+
+  // Submit dropoff compliance
+  const submitComplianceMutation = useCreate<any, any>(
+    `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/dropoff-compliance`,
+    {
+      onSuccess: () => {
+        toast.success('Dropoff compliance submitted')
+        // After compliance is saved, automatically complete the trip
+        handleCompleteTrip()
+      },
+      onError: (error) => {
+        toast.error('Compliance submission failed', { description: error.message })
+      },
+    }
+  )
+
+  // Complete delivery: validates inputs, submits compliance, then auto-completes trip
+  const handleCompleteDelivery = async () => {
     if (!driverId || !userId) return
 
     // Block completion if location is lost
@@ -536,12 +533,26 @@ export default function DriverActiveDeliveryPage() {
       return
     }
 
-    const payload = {
-      driverId,
-      actorUserId: userId,
-      actorRole: 'DRIVER',
+    if (!odometerEnd || isNaN(Number(odometerEnd))) {
+      toast.error('Odometer reading required', { description: 'Please enter the odometer reading before completing.' })
+      return
     }
-    completeTripMutation.mutate(payload)
+
+    if (uploadedDropoffPhotos.length === 0) {
+      toast.error('Photos required', { description: 'Please upload dropoff photos before completing.' })
+      return
+    }
+
+    // Step 1: Submit dropoff compliance (odometerEnd + photos) to DB
+    // On success, the onSuccess callback above auto-calls handleCompleteTrip()
+    submitComplianceMutation.mutate({
+      driverId,
+      odometerEnd: Number(odometerEnd),
+      photos: uploadedDropoffPhotos.map(p => ({
+        slotIndex: p.slotIndex,
+        imageUrl: p.imageUrl,
+      })),
+    })
   }
 
   // Cleanup object URLs
@@ -1029,16 +1040,18 @@ export default function DriverActiveDeliveryPage() {
               <div className="mt-4 flex flex-col gap-3">
                 <Button
                   onClick={handleUploadDropoffPhotos}
-                  disabled={dropoffPhotosSaved || uploadDropoffPhotosMutation.isPending}
+                  disabled={dropoffPhotosSaved || isUploading}
                   className={cn(
                     "w-full font-extrabold rounded-2xl py-3 flex items-center justify-center gap-2 transition",
                     dropoffPhotosSaved
                       ? "bg-slate-300 text-slate-500 dark:bg-slate-700 dark:text-slate-400 cursor-not-allowed"
-                      : "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-300"
+                      : isUploading
+                        ? "bg-amber-500 text-white cursor-wait"
+                        : "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-300"
                   )}
                 >
                   <CloudUpload className="w-4 h-4" />
-                  {dropoffPhotosSaved ? 'Photos uploaded' : uploadDropoffPhotosMutation.isPending ? 'Uploading...' : 'Upload photos'}
+                  {dropoffPhotosSaved ? 'Photos uploaded' : isUploading ? 'Uploading...' : 'Upload photos'}
                 </Button>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1069,14 +1082,14 @@ export default function DriverActiveDeliveryPage() {
 
                 <Button
                   onClick={handleCompleteDelivery}
-                  disabled={completeTripMutation.isPending}
+                  disabled={submitComplianceMutation.isPending || completeTripMutation.isPending}
                   className="w-full lime-btn rounded-2xl py-3 font-extrabold flex items-center justify-center gap-2"
                 >
-                  {completeTripMutation.isPending ? 'Completing...' : 'Complete Delivery'}
+                  {(submitComplianceMutation.isPending || completeTripMutation.isPending) ? 'Completing delivery...' : 'Complete Delivery'}
                   <ArrowForward className="w-5 h-5" />
                 </Button>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
-                  Requires all 6 photos + odometer reading
+                  Upload photos + enter odometer, then tap to finish
                 </p>
               </div>
             </CardContent>
