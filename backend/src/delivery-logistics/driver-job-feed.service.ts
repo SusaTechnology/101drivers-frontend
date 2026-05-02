@@ -407,6 +407,48 @@ async getDriverJobFeed(input: {
         matchReasons.push("geo-fallback");
       }
 
+      // ── Transit Buffer + Radius from last drop-off (feed filter) ──
+      // Filter out jobs that would fail booking validation to avoid showing
+      // unavailable gigs to the driver.
+      try {
+        const deliverySettings = await this.getDeliverySettings();
+        const lastCompleted = await this.getLastCompletedDropoff(input.driverId);
+
+        // Transit buffer check: pickup window must be after buffer
+        if (lastCompleted && delivery.pickupWindowStart) {
+          const nextAvailableAt = new Date(
+            lastCompleted.updatedAt.getTime() + deliverySettings.transitBufferMinutes * 60 * 1000
+          );
+          if (new Date(delivery.pickupWindowStart) < nextAvailableAt) {
+            matchReasons.push("transit-buffer-blocked");
+            return null;
+          }
+        }
+
+        // Radius from last drop-off check
+        if (
+          lastCompleted &&
+          lastCompleted.dropoffLat != null &&
+          lastCompleted.dropoffLng != null &&
+          delivery.pickupLat != null &&
+          delivery.pickupLng != null
+        ) {
+          const straightMiles = this.haversineFallback(
+            lastCompleted.dropoffLat,
+            lastCompleted.dropoffLng,
+            delivery.pickupLat,
+            delivery.pickupLng,
+          );
+          // Use 1.3x multiplier for haversine vs route distance approximation
+          if (straightMiles > deliverySettings.maximumRadiusMiles * 1.3) {
+            matchReasons.push("outside-max-radius");
+            return null;
+          }
+        }
+      } catch {
+        // If settings fetch fails, don't block the feed
+      }
+
       const payoutPreviewAmount = this.extractPayoutPreviewAmount(
         delivery.quote?.estimatedPrice,
         delivery.quote?.pricingSnapshot,
@@ -893,6 +935,60 @@ async getDriverJobFeed(input: {
         Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+
+  private async getDeliverySettings(): Promise<{
+    maximumRadiusMiles: number;
+    transitBufferMinutes: number;
+  }> {
+    const defaults = { maximumRadiusMiles: 20, transitBufferMinutes: 45 };
+    try {
+      const setting = await this.prisma.appSetting.findUnique({
+        where: { key: "DELIVERY_SETTINGS" },
+      });
+      if (setting?.value && typeof setting.value === "object") {
+        const v = setting.value as any;
+        return {
+          maximumRadiusMiles: typeof v.maximumRadiusMiles === "number" ? v.maximumRadiusMiles : defaults.maximumRadiusMiles,
+          transitBufferMinutes: typeof v.transitBufferMinutes === "number" ? v.transitBufferMinutes : defaults.transitBufferMinutes,
+        };
+      }
+    } catch {
+      // Use defaults
+    }
+    return defaults;
+  }
+
+  private async getLastCompletedDropoff(driverId: string): Promise<{
+    dropoffLat: number;
+    dropoffLng: number;
+    updatedAt: Date;
+  } | null> {
+    const lastCompleted = await this.prisma.deliveryRequest.findFirst({
+      where: {
+        assignments: {
+          some: {
+            driverId,
+            unassignedAt: null,
+          },
+        },
+        status: EnumDeliveryRequestStatus.COMPLETED,
+      },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        dropoffLat: true,
+        dropoffLng: true,
+        updatedAt: true,
+      },
+    });
+    if (lastCompleted && lastCompleted.dropoffLat != null && lastCompleted.dropoffLng != null) {
+      return {
+        dropoffLat: lastCompleted.dropoffLat,
+        dropoffLng: lastCompleted.dropoffLng,
+        updatedAt: lastCompleted.updatedAt,
+      };
+    }
+    return null;
   }
 
   private extractPayoutPreviewAmount(
