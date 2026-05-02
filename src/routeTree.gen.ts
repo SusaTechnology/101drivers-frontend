@@ -34,6 +34,7 @@ import { Route as DriverJobDetailsIndexRouteImport } from './routes/driver-job-d
 import { Route as DriverIssueReportIndexRouteImport } from './routes/driver-issue-report/index'
 import { Route as DriverInboxIndexRouteImport } from './routes/driver-inbox/index'
 import { Route as DriverDashboardIndexRouteImport } from './routes/driver-dashboard/index'
+import { Route as DriverBookedLaterIndexRouteImport } from './routes/driver-booked-later/index'
 import { Route as DriverActiveIndexRouteImport } from './routes/driver-active/index'
 import { Route as DealerSupportRequestIndexRouteImport } from './routes/dealer-support-request/index'
 import { Route as DealerSupportListIndexRouteImport } from './routes/dealer-support-list/index'
@@ -81,9 +82,9 @@ import { Route as AuthDealerSignupRouteImport } from './routes/auth/dealer-signu
 import { Route as AuthDealerSigninRouteImport } from './routes/auth/dealer-signin'
 import { Route as AuthAdminSigninRouteImport } from './routes/auth/admin-signin'
 import { Route as AdminUserDetailUserIdRouteImport } from './routes/admin-user-detail/$userId'
+import { Route as TrackTokenIndexRouteImport } from './routes/track/$token/index'
 import { Route as AdminPricingConfigCreateIndexRouteImport } from './routes/admin-pricing-config/create/index'
 import { Route as AdminPricingConfigEditConfigIdRouteImport } from './routes/admin-pricing-config/edit/$configId'
-import { Route as TrackTokenRouteImport } from './routes/track/$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -212,6 +213,11 @@ const DriverInboxIndexRoute = DriverInboxIndexRouteImport.update({
 const DriverDashboardIndexRoute = DriverDashboardIndexRouteImport.update({
   id: '/driver-dashboard/',
   path: '/driver-dashboard/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DriverBookedLaterIndexRoute = DriverBookedLaterIndexRouteImport.update({
+  id: '/driver-booked-later/',
+  path: '/driver-booked-later/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DriverActiveIndexRoute = DriverActiveIndexRouteImport.update({
@@ -466,6 +472,11 @@ const AdminUserDetailUserIdRoute = AdminUserDetailUserIdRouteImport.update({
   path: '/admin-user-detail/$userId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TrackTokenIndexRoute = TrackTokenIndexRouteImport.update({
+  id: '/track/$token/',
+  path: '/track/$token/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPricingConfigCreateIndexRoute =
   AdminPricingConfigCreateIndexRouteImport.update({
     id: '/admin-pricing-config/create/',
@@ -478,15 +489,9 @@ const AdminPricingConfigEditConfigIdRoute =
     path: '/admin-pricing-config/edit/$configId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const TrackTokenRoute = TrackTokenRouteImport.update({
-  id: '/track/$token',
-  path: '/track/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/track/$token': typeof TrackTokenRoute
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
@@ -534,6 +539,7 @@ export interface FileRoutesByFullPath {
   '/dealer-support-list/': typeof DealerSupportListIndexRoute
   '/dealer-support-request/': typeof DealerSupportRequestIndexRoute
   '/driver-active/': typeof DriverActiveIndexRoute
+  '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
   '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-inbox/': typeof DriverInboxIndexRoute
   '/driver-issue-report/': typeof DriverIssueReportIndexRoute
@@ -560,10 +566,10 @@ export interface FileRoutesByFullPath {
   '/terms/': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
+  '/track/$token/': typeof TrackTokenIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/track/$token': typeof TrackTokenRoute
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
@@ -611,6 +617,7 @@ export interface FileRoutesByTo {
   '/dealer-support-list': typeof DealerSupportListIndexRoute
   '/dealer-support-request': typeof DealerSupportRequestIndexRoute
   '/driver-active': typeof DriverActiveIndexRoute
+  '/driver-booked-later': typeof DriverBookedLaterIndexRoute
   '/driver-dashboard': typeof DriverDashboardIndexRoute
   '/driver-inbox': typeof DriverInboxIndexRoute
   '/driver-issue-report': typeof DriverIssueReportIndexRoute
@@ -637,11 +644,11 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create': typeof AdminPricingConfigCreateIndexRoute
+  '/track/$token': typeof TrackTokenIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/track/$token': typeof TrackTokenRoute
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
@@ -689,6 +696,7 @@ export interface FileRoutesById {
   '/dealer-support-list/': typeof DealerSupportListIndexRoute
   '/dealer-support-request/': typeof DealerSupportRequestIndexRoute
   '/driver-active/': typeof DriverActiveIndexRoute
+  '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
   '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-inbox/': typeof DriverInboxIndexRoute
   '/driver-issue-report/': typeof DriverIssueReportIndexRoute
@@ -715,12 +723,12 @@ export interface FileRoutesById {
   '/terms/': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
+  '/track/$token/': typeof TrackTokenIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/track/$token'
     | '/admin-user-detail/$userId'
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
@@ -768,6 +776,7 @@ export interface FileRouteTypes {
     | '/dealer-support-list/'
     | '/dealer-support-request/'
     | '/driver-active/'
+    | '/driver-booked-later/'
     | '/driver-dashboard/'
     | '/driver-inbox/'
     | '/driver-issue-report/'
@@ -794,6 +803,7 @@ export interface FileRouteTypes {
     | '/terms/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
+    | '/track/$token/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -844,6 +854,7 @@ export interface FileRouteTypes {
     | '/dealer-support-list'
     | '/dealer-support-request'
     | '/driver-active'
+    | '/driver-booked-later'
     | '/driver-dashboard'
     | '/driver-inbox'
     | '/driver-issue-report'
@@ -870,6 +881,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create'
+    | '/track/$token'
   id:
     | '__root__'
     | '/'
@@ -920,6 +932,7 @@ export interface FileRouteTypes {
     | '/dealer-support-list/'
     | '/dealer-support-request/'
     | '/driver-active/'
+    | '/driver-booked-later/'
     | '/driver-dashboard/'
     | '/driver-inbox/'
     | '/driver-issue-report/'
@@ -946,6 +959,7 @@ export interface FileRouteTypes {
     | '/terms/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
+    | '/track/$token/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -997,6 +1011,7 @@ export interface RootRouteChildren {
   DealerSupportListIndexRoute: typeof DealerSupportListIndexRoute
   DealerSupportRequestIndexRoute: typeof DealerSupportRequestIndexRoute
   DriverActiveIndexRoute: typeof DriverActiveIndexRoute
+  DriverBookedLaterIndexRoute: typeof DriverBookedLaterIndexRoute
   DriverDashboardIndexRoute: typeof DriverDashboardIndexRoute
   DriverInboxIndexRoute: typeof DriverInboxIndexRoute
   DriverIssueReportIndexRoute: typeof DriverIssueReportIndexRoute
@@ -1023,6 +1038,7 @@ export interface RootRouteChildren {
   TermsIndexRoute: typeof TermsIndexRoute
   AdminPricingConfigEditConfigIdRoute: typeof AdminPricingConfigEditConfigIdRoute
   AdminPricingConfigCreateIndexRoute: typeof AdminPricingConfigCreateIndexRoute
+  TrackTokenIndexRoute: typeof TrackTokenIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1200,6 +1216,13 @@ declare module '@tanstack/react-router' {
       path: '/driver-dashboard'
       fullPath: '/driver-dashboard/'
       preLoaderRoute: typeof DriverDashboardIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/driver-booked-later/': {
+      id: '/driver-booked-later/'
+      path: '/driver-booked-later'
+      fullPath: '/driver-booked-later/'
+      preLoaderRoute: typeof DriverBookedLaterIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/driver-active/': {
@@ -1524,18 +1547,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAdminSigninRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/track/$token': {
-      id: '/track/$token'
-      path: '/track/$token'
-      fullPath: '/track/$token'
-      preLoaderRoute: typeof TrackTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin-user-detail/$userId': {
       id: '/admin-user-detail/$userId'
       path: '/admin-user-detail/$userId'
       fullPath: '/admin-user-detail/$userId'
       preLoaderRoute: typeof AdminUserDetailUserIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/track/$token/': {
+      id: '/track/$token/'
+      path: '/track/$token'
+      fullPath: '/track/$token/'
+      preLoaderRoute: typeof TrackTokenIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-pricing-config/create/': {
@@ -1557,7 +1580,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  TrackTokenRoute: TrackTokenRoute,
   AdminUserDetailUserIdRoute: AdminUserDetailUserIdRoute,
   AuthAdminSigninRoute: AuthAdminSigninRoute,
   AuthDealerSigninRoute: AuthDealerSigninRoute,
@@ -1605,6 +1627,7 @@ const rootRouteChildren: RootRouteChildren = {
   DealerSupportListIndexRoute: DealerSupportListIndexRoute,
   DealerSupportRequestIndexRoute: DealerSupportRequestIndexRoute,
   DriverActiveIndexRoute: DriverActiveIndexRoute,
+  DriverBookedLaterIndexRoute: DriverBookedLaterIndexRoute,
   DriverDashboardIndexRoute: DriverDashboardIndexRoute,
   DriverInboxIndexRoute: DriverInboxIndexRoute,
   DriverIssueReportIndexRoute: DriverIssueReportIndexRoute,
@@ -1624,7 +1647,6 @@ const rootRouteChildren: RootRouteChildren = {
   HelpDriverIndexRoute: HelpDriverIndexRoute,
   LandingIndexRoute: LandingIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
-  TrackTokenRoute: TrackTokenRoute,
   MapTestIndexRoute: MapTestIndexRoute,
   PrivacyIndexRoute: PrivacyIndexRoute,
   QuoteConfirmationIndexRoute: QuoteConfirmationIndexRoute,
@@ -1632,6 +1654,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsIndexRoute: TermsIndexRoute,
   AdminPricingConfigEditConfigIdRoute: AdminPricingConfigEditConfigIdRoute,
   AdminPricingConfigCreateIndexRoute: AdminPricingConfigCreateIndexRoute,
+  TrackTokenIndexRoute: TrackTokenIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

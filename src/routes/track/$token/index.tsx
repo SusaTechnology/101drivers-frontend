@@ -1,7 +1,7 @@
 import PublicTrackPage from '@/components/pages/PublicTrackPage'
 import { createFileRoute } from '@tanstack/react-router'
 
-export const Route = createFileRoute('/track/$token')({
+export const Route = createFileRoute('/track/$token/')({
   component: RouteComponent,
 })
 

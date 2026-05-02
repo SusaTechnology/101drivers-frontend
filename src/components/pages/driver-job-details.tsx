@@ -288,58 +288,41 @@ export default function DriverJobDetailsPage() {
         description: 'Your driver account must be approved before booking gigs.',
       })
     } else {
-      toast.error('Failed to accept gig', {
+      toast.error('Failed to book gig', {
         description: msg || 'Something went wrong. Please try again.',
       })
     }
   }
 
-  // Book gig mutation — goes to active page (queue view)
-  const bookGig = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
+  // Book for Later mutation — books the gig and navigates to booked-for-later page
+  const bookForLaterMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
     onSuccess: () => {
-      toast.success('Gig booked!', {
-        description: 'You have been assigned to this delivery.',
+      toast.success('Booked for later!', {
+        description: 'You can find it in your Booked for Later queue.',
       })
-      navigate({ to: '/driver-active' })
+      navigate({ to: '/driver-booked-later' })
     },
     onError: handleBookingError,
   })
 
-  // Book & Start mutation — goes directly to pickup checklist
-  const bookAndStartGig = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
-    onSuccess: () => {
-      toast.success('Gig booked!', {
-        description: 'Complete the pickup checklist to start your trip.',
-      })
-      navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
-    },
-    onError: handleBookingError,
-  })
-
-  const isBooking = bookGig.isPending || bookAndStartGig.isPending
+  const isBooking = bookForLaterMutation.isPending
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const handleBookGig = () => {
-    if (!user?.profileId || !user?.id) {
-      toast.error('User not authenticated')
-      return
-    }
-    bookGig.mutate({
-      driverId: user.profileId,
-      bookedByUserId: user.id,
-      reason: '',
-    })
+  // Accept Gig — just navigate to pickup checklist (no booking)
+  const handleAcceptGig = () => {
+    navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
   }
 
-  const handleBookAndStart = () => {
+  // Book for Later — book the gig and navigate to booked-for-later page
+  const handleBookForLater = () => {
     if (!user?.profileId || !user?.id) {
       toast.error('User not authenticated')
       return
     }
-    bookAndStartGig.mutate({
+    bookForLaterMutation.mutate({
       driverId: user.profileId,
       bookedByUserId: user.id,
       reason: '',
@@ -584,22 +567,21 @@ export default function DriverJobDetailsPage() {
             <MessageSquare className="w-5 h-5 text-slate-500 dark:text-slate-400" />
           </button>
 
-          {/* Accept Gig — adds to queue */}
+          {/* Accept Gig — navigate to pickup checklist */}
           <Button
-            onClick={handleBookGig}
-            disabled={isBooking}
-            className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-600/20"
+            onClick={handleAcceptGig}
+            className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[14px] tracking-tight transition shadow-lg shadow-green-600/20"
           >
-            {isBooking ? 'Booking\u2026' : 'Accept Gig'}
+            Accept Gig
           </Button>
 
-          {/* Book & Start — books and goes to pickup checklist */}
+          {/* Book for Later — book and navigate to queue */}
           <Button
-            onClick={handleBookAndStart}
+            onClick={handleBookForLater}
             disabled={isBooking}
             className="flex-1 h-12 rounded-2xl bg-primary hover:bg-primary/90 text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
           >
-            {isBooking ? 'Booking\u2026' : 'Book & Start'}
+            {isBooking ? 'Booking\u2026' : 'Book for Later'}
           </Button>
         </div>
       </nav>
