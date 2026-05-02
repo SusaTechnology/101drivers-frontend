@@ -32,6 +32,7 @@ import {
   CarFront,
   QrCode,
   Shield,
+  Play,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -789,6 +790,26 @@ export default function DriverPickupChecklistPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Early Start Banner - show when before scheduled window */}
+        {delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && (
+          <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <Play className="w-4 h-4 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-green-900 dark:text-green-200">
+                  Start Pickup Now
+                </p>
+                <p className="text-[11px] text-green-700 dark:text-green-300 mt-0.5">
+                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
+                  Since you're already here, you can complete the checklist and start early.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Steps */}
         <section className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
