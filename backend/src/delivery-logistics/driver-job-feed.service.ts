@@ -776,10 +776,13 @@ async getDriverJobFeed(input: {
   // last completed drop-off location.
   const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
 
+  const DEFAULT_MAX_RADIUS_MILES = 20;
+  const DEFAULT_TRANSIT_BUFFER_MINUTES = 45;
+
   let deliverySettings: {
-    maximumRadiusMiles?: number;
-    transitBufferMinutes?: number;
-  } = { maximumRadiusMiles: 20, transitBufferMinutes: 45 };
+    maximumRadiusMiles: number;
+    transitBufferMinutes: number;
+  } = { maximumRadiusMiles: DEFAULT_MAX_RADIUS_MILES, transitBufferMinutes: DEFAULT_TRANSIT_BUFFER_MINUTES };
 
   try {
     const setting = await this.prisma.appSetting.findUnique({
