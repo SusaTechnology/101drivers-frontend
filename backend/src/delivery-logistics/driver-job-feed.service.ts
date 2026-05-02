@@ -669,6 +669,7 @@ async getDriverJobFeed(input: {
       status: true,
       pickupLat: true,
       pickupLng: true,
+      pickupWindowStart: true,
     },
   });
 
@@ -716,6 +717,7 @@ async getDriverJobFeed(input: {
   const origin = this.resolveDriverOrigin(driver.location ?? null);
 
   // Service radius check disabled temporarily for testing.
+  // The new radius check is below: Maximum Radius from previous drop-off.
   // if (
   //   preferredRadiusMiles != null &&
   //   origin.lat != null &&
@@ -723,35 +725,114 @@ async getDriverJobFeed(input: {
   //   delivery.pickupLat != null &&
   //   delivery.pickupLng != null
   // ) {
-  //   const samePoint =
-  //     Math.abs(origin.lat - delivery.pickupLat) < 0.000001 &&
-  //     Math.abs(origin.lng - delivery.pickupLng) < 0.000001;
-  //
-  //   if (!samePoint) {
-  //     try {
-  //       const route = await this.mapsService.computeRouteMetrics({
-  //         originLat: origin.lat,
-  //         originLng: origin.lng,
-  //         destinationLat: delivery.pickupLat,
-  //         destinationLng: delivery.pickupLng,
-  //       });
-  //
-  //       if (route.distanceMiles > preferredRadiusMiles) {
-  //         throw new NotFoundException(
-  //           "Delivery is outside the driver's service radius"
-  //         );
-  //       }
-  //     } catch (error) {
-  //       if (error instanceof NotFoundException) {
-  //         throw error;
-  //       }
-  //
-  //       throw new NotFoundException(
-  //         "Unable to validate driver service radius for this delivery"
-  //       );
-  //     }
-  //   }
+  //   ... (original code removed)
   // }
+
+  // ── Maximum Radius Check (from previous drop-off) ──
+  // Only applies to 2nd delivery onward. First pickup of the day is exempt.
+  // Checks that new pickup is within maximumRadius miles of the driver's
+  // last completed drop-off location.
+  const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
+
+  let deliverySettings: {
+    maximumRadiusMiles?: number;
+    transitBufferMinutes?: number;
+  } = { maximumRadiusMiles: 20, transitBufferMinutes: 45 };
+
+  try {
+    const setting = await this.prisma.appSetting.findUnique({
+      where: { key: DELIVERY_SETTINGS_KEY },
+    });
+    if (setting?.value && typeof setting.value === "object") {
+      const v = setting.value as any;
+      if (typeof v.maximumRadiusMiles === "number") deliverySettings.maximumRadiusMiles = v.maximumRadiusMiles;
+      if (typeof v.transitBufferMinutes === "number") deliverySettings.transitBufferMinutes = v.transitBufferMinutes;
+    }
+  } catch {
+    // Use defaults if settings not found
+  }
+
+  // Find driver's last completed delivery to determine drop-off location
+  const lastCompletedDelivery = await db.deliveryRequest.findFirst({
+    where: {
+      assignments: {
+        some: {
+          driverId: input.driverId,
+          unassignedAt: null,
+        },
+      },
+      status: EnumDeliveryRequestStatus.COMPLETED,
+    },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      dropoffLat: true,
+      dropoffLng: true,
+      updatedAt: true,
+    },
+  });
+
+  if (
+    lastCompletedDelivery &&
+    lastCompletedDelivery.dropoffLat != null &&
+    lastCompletedDelivery.dropoffLng != null &&
+    delivery.pickupLat != null &&
+    delivery.pickupLng != null
+  ) {
+    const samePoint =
+      Math.abs(lastCompletedDelivery.dropoffLat - delivery.pickupLat) < 0.000001 &&
+      Math.abs(lastCompletedDelivery.dropoffLng - delivery.pickupLng) < 0.000001;
+
+    if (!samePoint) {
+      try {
+        const route = await this.mapsService.computeRouteMetrics({
+          originLat: lastCompletedDelivery.dropoffLat,
+          originLng: lastCompletedDelivery.dropoffLng,
+          destinationLat: delivery.pickupLat,
+          destinationLng: delivery.pickupLng,
+        });
+
+        if (route.distanceMiles > deliverySettings.maximumRadiusMiles) {
+          throw new ConflictException(
+            `Pickup is ${route.distanceMiles.toFixed(1)} miles from your last drop-off. Maximum radius is ${deliverySettings.maximumRadiusMiles} miles.`
+          );
+        }
+      } catch (error) {
+        if (error instanceof ConflictException || error instanceof NotFoundException) {
+          throw error;
+        }
+        // If routing fails, use haversine fallback
+        const straightMiles = this.haversineFallback(
+          lastCompletedDelivery.dropoffLat,
+          lastCompletedDelivery.dropoffLng,
+          delivery.pickupLat,
+          delivery.pickupLng,
+        );
+        if (straightMiles > deliverySettings.maximumRadiusMiles * 1.3) {
+          throw new ConflictException(
+            `Pickup appears too far from your last drop-off (>${deliverySettings.maximumRadiusMiles} miles).`
+          );
+        }
+      }
+    }
+  }
+
+  // ── Transit Buffer Check ──
+  // After completing a delivery, driver must wait transitBufferMinutes
+  // before starting the next pickup window.
+  if (lastCompletedDelivery && delivery.pickupWindowStart) {
+    const nextAvailableAt = new Date(
+      lastCompletedDelivery.updatedAt.getTime() + deliverySettings.transitBufferMinutes * 60 * 1000
+    );
+    if (new Date(delivery.pickupWindowStart) < nextAvailableAt) {
+      const waitMinutes = Math.ceil(
+        (nextAvailableAt.getTime() - Date.now()) / 60000
+      );
+      throw new ConflictException(
+        `You need ${Math.max(0, waitMinutes)} more minutes before your next pickup. Transit buffer is ${deliverySettings.transitBufferMinutes} minutes.`
+      );
+    }
+  }
 }
 
 
@@ -792,6 +873,26 @@ async getDriverJobFeed(input: {
       lng: null,
       source: "none",
     };
+  }
+
+  private haversineFallback(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const toRad = (v: number) => (v * Math.PI) / 180;
+    const R = 3958.7613;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
 
   private extractPayoutPreviewAmount(
