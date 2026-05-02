@@ -226,6 +226,24 @@ async startTrip(input: {
 
     await this.assertDriverAssignedToDeliveryTx(tx, input.deliveryId, input.driverId);
 
+    // Guard: only one delivery can be ACTIVE at a time.
+    // If the driver already has an ACTIVE delivery, reject the start.
+    const existingActive = await tx.deliveryAssignment.findFirst({
+      where: {
+        driverId: input.driverId,
+        unassignedAt: null,
+        delivery: {
+          status: EnumDeliveryRequestStatus.ACTIVE,
+          id: { not: input.deliveryId },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (existingActive) {
+      throw new ConflictException("You already have a delivery in progress — complete it before starting another");
+    }
+
     await this.deliveryComplianceEngine.assertReadyForTripStart(
       input.deliveryId,
       input.driverId,

@@ -556,7 +556,7 @@ async getDriverJobFeed(input: {
   }
 
   async getActiveDeliveryForDriver(driverId: string) {
-    const assignment = await this.prisma.deliveryAssignment.findFirst({
+    const assignments = await this.prisma.deliveryAssignment.findMany({
       where: {
         driverId,
         unassignedAt: null,
@@ -652,10 +652,18 @@ async getDriverJobFeed(input: {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     });
 
-    return assignment ?? null;
+    // Sort so ACTIVE comes first, then BOOKED in chronological order
+    const sorted = assignments.sort((a, b) => {
+      const aActive = a.delivery.status === EnumDeliveryRequestStatus.ACTIVE ? 0 : 1;
+      const bActive = b.delivery.status === EnumDeliveryRequestStatus.ACTIVE ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return new Date(a.delivery.pickupWindowStart!).getTime() - new Date(b.delivery.pickupWindowStart!).getTime();
+    });
+
+    return sorted;
   }
 
   async assertDriverCanBookDelivery(
@@ -735,24 +743,22 @@ async getDriverJobFeed(input: {
     throw new GoneException("This gig has already been booked by another driver");
   }
 
-  const busyAssignment = await db.deliveryAssignment.findFirst({
+  // Only block if driver already has an ACTIVE delivery (in-progress trip).
+  // Multiple BOOKED deliveries are allowed — this is the booking queue.
+  // Only one delivery can be ACTIVE at a time (enforced at start-trip).
+  const activeAssignment = await db.deliveryAssignment.findFirst({
     where: {
       driverId: input.driverId,
       unassignedAt: null,
       delivery: {
-        status: {
-          in: [
-            EnumDeliveryRequestStatus.BOOKED,
-            EnumDeliveryRequestStatus.ACTIVE,
-          ],
-        },
+        status: EnumDeliveryRequestStatus.ACTIVE,
       },
     },
     select: { id: true },
   });
 
-  if (busyAssignment) {
-    throw new ConflictException("You already have an active delivery — complete it before booking another");
+  if (activeAssignment) {
+    throw new ConflictException("You already have a delivery in progress — complete it before booking another");
   }
 
   const preferredRadiusMiles = driver.preferences?.radiusMiles ?? null;
@@ -797,48 +803,110 @@ async getDriverJobFeed(input: {
     // Use defaults if settings not found
   }
 
-  // Find driver's last completed delivery TODAY to determine drop-off location.
-  // Only today's completions count — the first pickup each day is exempt from
-  // both the radius check and the transit buffer check (Jake Buffett spec).
+  // Find the driver's most recent delivery that determines where they will be.
+  // Priority: ACTIVE (in-progress) > BOOKED (next up) > COMPLETED today.
+  // Radius + buffer checks use this delivery's drop-off as the origin.
+  // First pickup of the day is exempt if no ACTIVE/BOOKED/COMPLETED exists.
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
-  const lastCompletedDelivery = await db.deliveryRequest.findFirst({
+  // Get all of driver's current assignments (ACTIVE + BOOKED) ordered by creation
+  const currentAssignments = await db.deliveryAssignment.findMany({
     where: {
-      assignments: {
-        some: {
-          driverId: input.driverId,
-          unassignedAt: null,
+      driverId: input.driverId,
+      unassignedAt: null,
+      delivery: {
+        status: {
+          in: [
+            EnumDeliveryRequestStatus.ACTIVE,
+            EnumDeliveryRequestStatus.BOOKED,
+          ],
         },
       },
-      status: EnumDeliveryRequestStatus.COMPLETED,
-      updatedAt: { gte: startOfToday },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: { createdAt: "asc" },
     select: {
-      id: true,
-      dropoffLat: true,
-      dropoffLng: true,
-      updatedAt: true,
+      deliveryId: true,
+      delivery: {
+        select: {
+          id: true,
+          status: true,
+          pickupWindowStart: true,
+          pickupWindowEnd: true,
+          dropoffWindowEnd: true,
+          dropoffLat: true,
+          dropoffLng: true,
+          updatedAt: true,
+        },
+      },
     },
   });
 
+  // The "anchor" delivery is the one the driver will finish just before
+  // the new booking's pickup. We need to find the last BOOKED/ACTIVE delivery
+  // whose dropoff window ends before (or overlaps with) the new delivery's pickup.
+  const sortedAssignments = currentAssignments.map(a => a.delivery).sort(
+    (a, b) => new Date(a.pickupWindowStart!).getTime() - new Date(b.pickupWindowStart!).getTime()
+  );
+
+  // The last delivery in the queue (chronologically) is the one whose
+  // drop-off location matters for radius/buffer checks on the new booking.
+  const anchorDelivery = sortedAssignments.length > 0
+    ? sortedAssignments[sortedAssignments.length - 1]
+    : null;
+
+  // Fall back to last completed delivery today if no active/booked exists
+  let lastCompletedDelivery: {
+    id: string;
+    dropoffLat: number | null;
+    dropoffLng: number | null;
+    updatedAt: Date;
+  } | null = null;
+
+  if (!anchorDelivery) {
+    lastCompletedDelivery = await db.deliveryRequest.findFirst({
+      where: {
+        assignments: {
+          some: {
+            driverId: input.driverId,
+            unassignedAt: null,
+          },
+        },
+        status: EnumDeliveryRequestStatus.COMPLETED,
+        updatedAt: { gte: startOfToday },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        dropoffLat: true,
+        dropoffLng: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  // Determine the reference point for radius/buffer checks.
+  // Use anchorDelivery (BOOKED/ACTIVE) if exists, otherwise lastCompletedDelivery.
+  const referenceDelivery = anchorDelivery
+    ? { dropoffLat: anchorDelivery.dropoffLat, dropoffLng: anchorDelivery.dropoffLng, updatedAt: anchorDelivery.updatedAt }
+    : lastCompletedDelivery;
+
   if (
-    lastCompletedDelivery &&
-    lastCompletedDelivery.dropoffLat != null &&
-    lastCompletedDelivery.dropoffLng != null &&
+    referenceDelivery &&
+    referenceDelivery.dropoffLat != null &&
+    referenceDelivery.dropoffLng != null &&
     delivery.pickupLat != null &&
     delivery.pickupLng != null
   ) {
     const samePoint =
-      Math.abs(lastCompletedDelivery.dropoffLat - delivery.pickupLat) < 0.000001 &&
-      Math.abs(lastCompletedDelivery.dropoffLng - delivery.pickupLng) < 0.000001;
+      Math.abs(referenceDelivery.dropoffLat - delivery.pickupLat) < 0.000001 &&
+      Math.abs(referenceDelivery.dropoffLng - delivery.pickupLng) < 0.000001;
 
     if (!samePoint) {
       try {
         const route = await this.mapsService.computeRouteMetrics({
-          originLat: lastCompletedDelivery.dropoffLat,
-          originLng: lastCompletedDelivery.dropoffLng,
+          originLat: referenceDelivery.dropoffLat,
+          originLng: referenceDelivery.dropoffLng,
           destinationLat: delivery.pickupLat,
           destinationLng: delivery.pickupLng,
         });
@@ -854,8 +922,8 @@ async getDriverJobFeed(input: {
         }
         // If routing fails, use haversine fallback
         const straightMiles = this.haversineFallback(
-          lastCompletedDelivery.dropoffLat,
-          lastCompletedDelivery.dropoffLng,
+          referenceDelivery.dropoffLat,
+          referenceDelivery.dropoffLng,
           delivery.pickupLat,
           delivery.pickupLng,
         );
@@ -869,12 +937,18 @@ async getDriverJobFeed(input: {
   }
 
   // ── Transit Buffer Check ──
-  // After completing a delivery, driver must wait transitBufferMinutes
+  // After completing (or finishing) a delivery, driver must wait transitBufferMinutes
   // before starting the next pickup window.
-  if (lastCompletedDelivery && delivery.pickupWindowStart) {
-    const nextAvailableAt = new Date(
-      lastCompletedDelivery.updatedAt.getTime() + deliverySettings.transitBufferMinutes * 60 * 1000
-    );
+  // For BOOKED deliveries, we use the dropoff window end as the reference time
+  // (since the delivery hasn't been completed yet, we can't use updatedAt).
+  if (referenceDelivery && delivery.pickupWindowStart) {
+    // For BOOKED/ACTIVE deliveries, use dropoffWindowEnd as estimated finish time.
+    // For COMPLETED deliveries, use updatedAt (actual completion time).
+    const referenceTime = anchorDelivery?.dropoffWindowEnd
+      ? new Date(anchorDelivery.dropoffWindowEnd).getTime()
+      : referenceDelivery!.updatedAt.getTime();
+
+    const nextAvailableAt = new Date(referenceTime + deliverySettings.transitBufferMinutes * 60 * 1000);
     if (new Date(delivery.pickupWindowStart) < nextAvailableAt) {
       const waitMinutes = Math.ceil(
         (nextAvailableAt.getTime() - Date.now()) / 60000

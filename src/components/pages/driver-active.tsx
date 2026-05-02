@@ -195,27 +195,30 @@ export default function DriverActiveDeliveryPage() {
   const driverId = user?.profileId
   const userId = user?.id
 
-    // Main query: fetch active delivery for this driver
-  // Uses dedicated endpoint — returns { assignment + delivery } or null
+    // Main query: fetch active + booked deliveries for this driver
+  // Returns an array sorted: ACTIVE first, then BOOKED by pickup time
   const activeDeliveryQuery = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${driverId}`,
     noFilter: true,
     enabled: Boolean(driverId),
     refetchInterval: 10000, // refresh every 10s
-    onSuccess: (data) => {
-      // Optionally sync workflow status if needed, but we'll keep separate
-      // setWorkflowStatus(data); // if you want to set something else
-    },
     onError: (error) => {
-      toast.error('Failed to fetch active delivery')
+      toast.error('Failed to fetch deliveries')
     },
   })
 
-  // Extract delivery from the assignment wrapper
-  const delivery = activeDeliveryQuery.data?.delivery || null
+  // Backend now returns an array: [{ delivery, ... }, ...]
+  const assignments = Array.isArray(activeDeliveryQuery.data) ? activeDeliveryQuery.data : []
+
+  // Split into active (currently in-progress) and queue (booked for later)
+  const activeAssignment = assignments.find((a: any) => a.delivery?.status === 'ACTIVE')
+  const queuedAssignments = assignments.filter((a: any) => a.delivery?.status === 'BOOKED')
+
+  // Extract the current active delivery (null if none)
+  const delivery = activeAssignment?.delivery || null
   const deliveryLoading = activeDeliveryQuery.isLoading
   const deliveryError = activeDeliveryQuery.error
-  const hasNoData = !deliveryLoading && !deliveryError && !delivery
+  const hasNoData = !deliveryLoading && !deliveryError && assignments.length === 0
 
   // Use real data when available, otherwise fallback to defaults (only during loading)
   const deliveryData = delivery || (deliveryLoading ? MOCK_DELIVERY : null)
@@ -669,9 +672,9 @@ export default function DriverActiveDeliveryPage() {
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex items-center justify-center">
         <Card className="w-full max-w-md border-slate-200 dark:border-slate-800 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-lg font-black">No Active Delivery</CardTitle>
+            <CardTitle className="text-lg font-black">No Active Deliveries</CardTitle>
             <CardDescription className="text-sm mt-1">
-              You don't have any active delivery at the moment.
+              You don't have any active or booked deliveries at the moment.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -679,7 +682,7 @@ export default function DriverActiveDeliveryPage() {
               onClick={() => navigate({ to: '/driver-dashboard' })}
               className="w-full lime-btn rounded-2xl py-3 font-extrabold"
             >
-              Go to Dashboard
+              Browse Gigs
             </Button>
           </CardContent>
         </Card>
@@ -777,6 +780,12 @@ export default function DriverActiveDeliveryPage() {
             </div>
           </div>
         )}
+
+        {/* ═══════════════════════════════════════ */}
+        {/* ACTIVE DELIVERY (in-progress trip)     */}
+        {/* ═══════════════════════════════════════ */}
+        {deliveryData && (
+        <React.Fragment>
         {locationHealth === 'lost' && (
           <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
             <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
@@ -1095,6 +1104,82 @@ export default function DriverActiveDeliveryPage() {
             </CardContent>
           </Card>
         </section>
+        </React.Fragment>
+        )}
+
+        {/* Between deliveries — no active trip right now */}
+        {!deliveryData && queuedAssignments.length > 0 && (
+          <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-emerald-50 dark:bg-emerald-900/10">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">All caught up!</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Your next delivery is listed below. Go to the pickup location and start when ready.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ═══════════════════════════════════════════ */}
+        {/* UPCOMING QUEUE (Booked but not yet started) */}
+        {/* ═══════════════════════════════════════════ */}
+        {queuedAssignments.length > 0 && (
+          <section className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Up Next — {queuedAssignments.length} Booked
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {queuedAssignments.map((qa: any, idx: number) => {
+                const d = qa.delivery
+                const pickupTime = d.pickupWindowStart
+                  ? new Date(d.pickupWindowStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : '—'
+                const dropoffTime = d.dropoffWindowEnd
+                  ? new Date(d.dropoffWindowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : '—'
+                return (
+                  <Card key={d.id} className="border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/80 hover:shadow-md transition">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                              #{idx + 1} in queue
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400">
+                              {d.serviceType?.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {d.pickupAddress}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                            → {d.dropoffAddress}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{pickupTime}</p>
+                          <p className="text-[10px] text-slate-400">pickup</p>
+                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1">{dropoffTime}</p>
+                          <p className="text-[10px] text-slate-400">dropoff</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Workflow Status Display */}
         {workflowStatus && (
