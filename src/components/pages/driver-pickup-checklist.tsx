@@ -137,6 +137,49 @@ export default function DriverPickupChecklistPage() {
   const [locationStatus, setLocationStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown')
   const [isCheckingLocation, setIsCheckingLocation] = useState(false)
 
+  // GPS proximity check for "Start Pickup Now" — verifies driver is at the lot
+  const [isDriverAtPickup, setIsDriverAtPickup] = useState<boolean | null>(null) // null = not yet checked
+  useEffect(() => {
+    if (!deliveryId || !delivery?.pickupWindowStart) return
+    // Only check proximity if the pickup window hasn't started yet (early start scenario)
+    const windowStart = new Date(delivery.pickupWindowStart as string)
+    const now = new Date()
+    if (windowStart > now) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const res = await fetch(
+              `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/check-pickup-proximity`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  driverLat: position.coords.latitude,
+                  driverLng: position.coords.longitude,
+                }),
+              }
+            )
+            if (res.ok) {
+              const data = await res.json()
+              setIsDriverAtPickup(data.withinRadius)
+            } else {
+              setIsDriverAtPickup(null) // check failed, don't block
+            }
+          } catch {
+            setIsDriverAtPickup(null)
+          }
+        },
+        () => {
+          setIsDriverAtPickup(null) // location denied, don't block
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+      )
+    } else {
+      // Window already started — no need for early start check
+      setIsDriverAtPickup(null)
+    }
+  }, [deliveryId, delivery?.pickupWindowStart])
+
   // ── Step 1: I'm at the vehicle ──
   const saved = deliveryId ? loadPersistedState(deliveryId) : null
   const [greeted, setGreeted] = useState(saved?.greeted ?? false)
@@ -581,6 +624,15 @@ export default function DriverPickupChecklistPage() {
       return
     }
 
+    // If before pickup window, verify driver is actually at the pickup location (GPS check)
+    if (delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === false) {
+      toast.error('Not at pickup location', {
+        description: 'GPS shows you are not at the pickup lot yet. Please go to the pickup location to start early.',
+        duration: 8000,
+      })
+      return
+    }
+
     startTripMutation.mutate({
       driverId,
       actorUserId: userId,
@@ -791,8 +843,8 @@ export default function DriverPickupChecklistPage() {
           </CardContent>
         </Card>
 
-        {/* Early Start Banner - show when before scheduled window */}
-        {delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && (
+        {/* Early Start Banner - show when before scheduled window AND driver is GPS-verified at pickup */}
+        {delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === true && (
           <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -804,7 +856,27 @@ export default function DriverPickupChecklistPage() {
                 </p>
                 <p className="text-[11px] text-green-700 dark:text-green-300 mt-0.5">
                   Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
-                  Since you're already here, you can complete the checklist and start early.
+                  GPS confirms you're at the pickup location — you can complete the checklist and start early.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* If before window but NOT at pickup, show a waiting notice */}
+        {delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === false && (
+          <div className="mt-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <MapPin className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                  Not at Pickup Location
+                </p>
+                <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                  Your window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
+                  GPS shows you're not at the pickup location yet. Head to the lot to unlock early pickup.
                 </p>
               </div>
             </div>

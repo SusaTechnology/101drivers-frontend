@@ -797,7 +797,12 @@ async getDriverJobFeed(input: {
     // Use defaults if settings not found
   }
 
-  // Find driver's last completed delivery to determine drop-off location
+  // Find driver's last completed delivery TODAY to determine drop-off location.
+  // Only today's completions count — the first pickup each day is exempt from
+  // both the radius check and the transit buffer check (Jake Buffett spec).
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
   const lastCompletedDelivery = await db.deliveryRequest.findFirst({
     where: {
       assignments: {
@@ -807,6 +812,7 @@ async getDriverJobFeed(input: {
         },
       },
       status: EnumDeliveryRequestStatus.COMPLETED,
+      updatedAt: { gte: startOfToday },
     },
     orderBy: { updatedAt: "desc" },
     select: {
@@ -967,6 +973,10 @@ async getDriverJobFeed(input: {
     dropoffLng: number;
     updatedAt: Date;
   } | null> {
+    // Only count today's completions — first pickup each day is exempt
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
     const lastCompleted = await this.prisma.deliveryRequest.findFirst({
       where: {
         assignments: {
@@ -976,6 +986,7 @@ async getDriverJobFeed(input: {
           },
         },
         status: EnumDeliveryRequestStatus.COMPLETED,
+        updatedAt: { gte: startOfToday },
       },
       orderBy: { updatedAt: "desc" },
       select: {

@@ -1574,3 +1574,25 @@ export class CreateIndividualDeliveryDraftFromQuoteBody {
   isUrgent?: boolean;
 }
 
+
+// ── GPS Proximity Check ──
+
+export class CheckPickupProximityBody {
+  @swagger.ApiProperty({ required: true })
+  @IsNotEmpty()
+  @IsNumber()
+  driverLat!: number;
+
+  @swagger.ApiProperty({ required: true })
+  @IsNotEmpty()
+  @IsNumber()
+  driverLng!: number;
+}
+
+export class CheckPickupProximityResponseBody {
+  @swagger.ApiProperty()
+  withinRadius!: boolean;
+
+  @swagger.ApiProperty()
+  distanceMeters!: number;
+}

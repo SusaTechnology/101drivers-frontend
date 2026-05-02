@@ -312,6 +312,18 @@ async startTrip(input: {
   return this.domain.findUnique({ id: input.deliveryId });
 }
 
+async checkPickupProximity(input: {
+  deliveryId: string;
+  driverLat: number;
+  driverLng: number;
+}): Promise<{ withinRadius: boolean; distanceMeters: number }> {
+  return this.lifecycleService.checkPickupProximity({
+    deliveryId: input.deliveryId,
+    driverLat: input.driverLat,
+    driverLng: input.driverLng,
+  });
+}
+
 async completeTrip(input: {
   deliveryId: string;
   driverId: string;

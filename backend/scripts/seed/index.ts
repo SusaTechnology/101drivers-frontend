@@ -582,6 +582,55 @@ async function seedConfiguration(refs: DemoRefs) {
       value: { minutes: 30 },
     },
   });
+
+  // ── Delivery scheduling settings (max radius + transit buffer) ──
+  await prisma.appSetting.upsert({
+    where: { key: "DELIVERY_SETTINGS" },
+    update: {
+      value: { maximumRadiusMiles: 20, transitBufferMinutes: 45 },
+    },
+    create: {
+      key: "DELIVERY_SETTINGS",
+      value: { maximumRadiusMiles: 20, transitBufferMinutes: 45 },
+    },
+  });
+
+  // ── 30-minute time slot templates ──
+  const thirtyMinSlots = [
+    { label: "7:00 – 7:30 AM",  startTime: "07:00", endTime: "07:30" },
+    { label: "7:30 – 8:00 AM",  startTime: "07:30", endTime: "08:00" },
+    { label: "8:00 – 8:30 AM",  startTime: "08:00", endTime: "08:30" },
+    { label: "8:30 – 9:00 AM",  startTime: "08:30", endTime: "09:00" },
+    { label: "9:00 – 9:30 AM",  startTime: "09:00", endTime: "09:30" },
+    { label: "9:30 – 10:00 AM", startTime: "09:30", endTime: "10:00" },
+    { label: "10:00 – 10:30 AM", startTime: "10:00", endTime: "10:30" },
+    { label: "10:30 – 11:00 AM", startTime: "10:30", endTime: "11:00" },
+    { label: "11:00 – 11:30 AM", startTime: "11:00", endTime: "11:30" },
+    { label: "11:30 – 12:00 PM", startTime: "11:30", endTime: "12:00" },
+    { label: "12:00 – 12:30 PM", startTime: "12:00", endTime: "12:30" },
+    { label: "12:30 – 1:00 PM",  startTime: "12:30", endTime: "13:00" },
+    { label: "1:00 – 1:30 PM",   startTime: "13:00", endTime: "13:30" },
+    { label: "1:30 – 2:00 PM",   startTime: "13:30", endTime: "14:00" },
+    { label: "2:00 – 2:30 PM",   startTime: "14:00", endTime: "14:30" },
+    { label: "2:30 – 3:00 PM",   startTime: "14:30", endTime: "15:00" },
+    { label: "3:00 – 3:30 PM",   startTime: "15:00", endTime: "15:30" },
+    { label: "3:30 – 4:00 PM",   startTime: "15:30", endTime: "16:00" },
+    { label: "4:00 – 4:30 PM",   startTime: "16:00", endTime: "16:30" },
+    { label: "4:30 – 5:00 PM",   startTime: "16:30", endTime: "17:00" },
+    { label: "5:00 – 5:30 PM",   startTime: "17:00", endTime: "17:30" },
+    { label: "5:30 – 6:00 PM",   startTime: "17:30", endTime: "18:00" },
+  ];
+
+  for (const slot of thirtyMinSlots) {
+    const existing = await prisma.timeSlotTemplate.findFirst({
+      where: { startTime: slot.startTime, endTime: slot.endTime },
+    });
+    if (!existing) {
+      await prisma.timeSlotTemplate.create({
+        data: { label: slot.label, startTime: slot.startTime, endTime: slot.endTime, active: true },
+      });
+    }
+  }
 }
 
 async function seedLeads() {

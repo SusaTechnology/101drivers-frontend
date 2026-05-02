@@ -70,6 +70,7 @@ import {
   OpenDisputeAdminBody,
   LegalHoldAdminBody,
   ApproveComplianceAdminBody,
+  CheckPickupProximityBody,
 } from "./dto/deliveryRequestLogistics.dto";
 import { SupportRequestWhereUniqueInput } from "src/supportRequest/base/SupportRequestWhereUniqueInput";
 import { SupportRequestFindManyArgs } from "src/supportRequest/base/SupportRequestFindManyArgs";
@@ -673,6 +674,27 @@ async getDriverJobDetail(
     driverId: body.driverId,
     actorUserId: body.actorUserId ?? null,
     actorRole: body.actorRole ?? null,
+  });
+}
+
+@common.Post(":id/check-pickup-proximity")
+@swagger.ApiOkResponse({ description: "GPS proximity check for Start Pickup Now" })
+@nestAccessControl.UseRoles({
+  resource: "DeliveryRequest",
+  action: "read",
+  possession: "any",
+})
+@swagger.ApiForbiddenResponse({
+  type: errors.ForbiddenException,
+})
+async checkPickupProximity(
+  @common.Param() params: DeliveryRequestWhereUniqueInput,
+  @common.Body() body: CheckPickupProximityBody
+): Promise<{ withinRadius: boolean; distanceMeters: number }> {
+  return this.service.checkPickupProximity({
+    deliveryId: params.id,
+    driverLat: body.driverLat,
+    driverLng: body.driverLng,
   });
 }
 

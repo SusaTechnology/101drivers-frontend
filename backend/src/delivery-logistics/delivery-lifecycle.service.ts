@@ -464,6 +464,62 @@ async completeTrip(input: {
   });
 }
 
+  // ── GPS Proximity Check for "Start Pickup Now" ──
+  // Verifies the driver is physically near the pickup location.
+  // Returns { withinRadius, distanceMeters } so the frontend can
+  // conditionally show the "Start Pickup Now" button.
+  async checkPickupProximity(input: {
+    deliveryId: string;
+    driverLat: number;
+    driverLng: number;
+  }): Promise<{ withinRadius: boolean; distanceMeters: number }> {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        pickupLat: true,
+        pickupLng: true,
+        status: true,
+      },
+    });
+
+    if (!delivery) {
+      throw new NotFoundException("Delivery not found");
+    }
+
+    if (delivery.pickupLat == null || delivery.pickupLng == null) {
+      throw new BadRequestException("Delivery has no pickup coordinates");
+    }
+
+    // 300 meters (~1000 ft) threshold — driver must be at or very near the lot
+    const PROXIMITY_RADIUS_METERS = 300;
+
+    const distanceMeters = this.haversineMeters(
+      input.driverLat,
+      input.driverLng,
+      delivery.pickupLat,
+      delivery.pickupLng,
+    );
+
+    return {
+      withinRadius: distanceMeters <= PROXIMITY_RADIUS_METERS,
+      distanceMeters: Math.round(distanceMeters),
+    };
+  }
+
+  /** Haversine distance in meters between two lat/lng points */
+  private haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371000; // Earth radius in meters
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
   async ingestDriverLocation(input: {
     userId: string;
     lat: number;
