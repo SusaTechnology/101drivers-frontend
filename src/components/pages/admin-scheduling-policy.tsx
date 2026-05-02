@@ -270,7 +270,7 @@ export default function AdminSchedulingPolicyPage() {
     defaultValues: {
       label: '',
       startTime: '09:00',
-      endTime: '11:00',
+      endTime: '09:30',
       active: true,
     },
   });
@@ -429,7 +429,7 @@ export default function AdminSchedulingPolicyPage() {
     tsForm.reset({
       label: '',
       startTime: '09:00',
-      endTime: '11:00',
+      endTime: '09:30',
       active: true,
     });
     setIsTsModalOpen(true);
