@@ -267,6 +267,17 @@ export default function DriverJobDetailsPage() {
     enabled: Boolean(jobId && user?.profileId),
   })
 
+  // Check if driver already has an ACTIVE delivery
+  const { data: activeDeliveries } = useDataQuery({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${user?.profileId}`,
+    noFilter: true,
+    enabled: Boolean(user?.profileId),
+  })
+
+  const hasActiveDelivery = Array.isArray(activeDeliveries) && activeDeliveries.some(
+    (d: any) => d.status === 'ACTIVE',
+  )
+
   // Load Google Maps API
   const { isLoaded: isMapsLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
@@ -294,54 +305,37 @@ export default function DriverJobDetailsPage() {
     }
   }
 
-  // Accept Gig mutation — books the gig then navigates to pickup checklist
-  const acceptGigMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
+  // Single booking mutation — button label & destination change based on context
+  const bookMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
     onSuccess: () => {
-      toast.success('Gig accepted!', {
-        description: 'Complete the pickup checklist to start your trip.',
-      })
-      navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
+      if (hasActiveDelivery) {
+        toast.success('Booked for later!', {
+          description: 'You can find it in your Booked for Later queue.',
+        })
+        navigate({ to: '/driver-booked-later' })
+      } else {
+        toast.success('Gig accepted!', {
+          description: 'Complete the pickup checklist to start your trip.',
+        })
+        navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
+      }
     },
     onError: handleBookingError,
   })
 
-  // Book for Later mutation — books the gig and navigates to booked-for-later page
-  const bookForLaterMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
-    onSuccess: () => {
-      toast.success('Booked for later!', {
-        description: 'You can find it in your Booked for Later queue.',
-      })
-      navigate({ to: '/driver-booked-later' })
-    },
-    onError: handleBookingError,
-  })
-
-  const isBooking = acceptGigMutation.isPending || bookForLaterMutation.isPending
+  const isBooking = bookMutation.isPending
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Accept Gig — book the gig then navigate to pickup checklist
-  const handleAcceptGig = () => {
+  // Single booking handler — context-aware
+  const handleBook = () => {
     if (!user?.profileId || !user?.id) {
       toast.error('User not authenticated')
       return
     }
-    acceptGigMutation.mutate({
-      driverId: user.profileId,
-      bookedByUserId: user.id,
-      reason: '',
-    })
-  }
-
-  // Book for Later — book the gig and navigate to booked-for-later page
-  const handleBookForLater = () => {
-    if (!user?.profileId || !user?.id) {
-      toast.error('User not authenticated')
-      return
-    }
-    bookForLaterMutation.mutate({
+    bookMutation.mutate({
       driverId: user.profileId,
       bookedByUserId: user.id,
       reason: '',
@@ -586,22 +580,18 @@ export default function DriverJobDetailsPage() {
             <MessageSquare className="w-5 h-5 text-slate-500 dark:text-slate-400" />
           </button>
 
-          {/* Accept Gig — book then navigate to pickup checklist */}
+          {/* Single context-aware booking button */}
           <Button
-            onClick={handleAcceptGig}
+            onClick={handleBook}
             disabled={isBooking}
-            className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-600/20"
+            className={cn(
+              'flex-1 h-12 rounded-2xl text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg',
+              hasActiveDelivery
+                ? 'bg-primary hover:bg-primary/90 shadow-primary/20'
+                : 'bg-green-600 hover:bg-green-700 shadow-green-600/20',
+            )}
           >
-            {isBooking ? 'Booking\u2026' : 'Accept Gig'}
-          </Button>
-
-          {/* Book for Later — book and navigate to queue */}
-          <Button
-            onClick={handleBookForLater}
-            disabled={isBooking}
-            className="flex-1 h-12 rounded-2xl bg-primary hover:bg-primary/90 text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
-          >
-            {isBooking ? 'Booking\u2026' : 'Book for Later'}
+            {isBooking ? 'Booking\u2026' : hasActiveDelivery ? 'Book for Later' : 'Accept Gig'}
           </Button>
         </div>
       </nav>
