@@ -280,7 +280,9 @@ export default function DriverJobDetailsPage() {
       toast.success('Gig booked!', {
         description: 'You have been assigned to this delivery.',
       })
-      navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
+      // If driver already has an active delivery, go to the active page (shows booked queue)
+      // Otherwise go straight to the pickup checklist for this delivery
+      navigate({ to: '/driver-active' })
     },
     onError: (error: any) => {
       const status = error?.status || error?.statusCode

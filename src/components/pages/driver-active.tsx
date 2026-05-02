@@ -218,13 +218,14 @@ export default function DriverActiveDeliveryPage() {
   const delivery = activeAssignment?.delivery || null
   const deliveryLoading = activeDeliveryQuery.isLoading
   const deliveryError = activeDeliveryQuery.error
-  const hasNoData = !deliveryLoading && !deliveryError && assignments.length === 0
+  // If there's no data (and not loading), but there are queued bookings, show queue only
+  const hasOnlyBooked = !deliveryLoading && !deliveryError && !delivery && queuedAssignments.length > 0
+
+  const hasNoData = !deliveryLoading && !deliveryError && assignments.length === 0 && !hasOnlyBooked
 
   // Use real data when available, otherwise fallback to defaults (only during loading)
   const deliveryData = delivery || (deliveryLoading ? MOCK_DELIVERY : null)
   const deliveryId = delivery?.id;
-  // Get deliveryId from search params (still used for mutations, but we'll also validate)
-  // const { jobId: deliveryId } = useSearch({ strict: false }) as { jobId: string }
 
   // ==================== MUTATIONS & QUERIES ====================
 
@@ -667,6 +668,7 @@ export default function DriverActiveDeliveryPage() {
   ) || []
 
   // If there's no data (and not loading), show a message
+  // hasOnlyBooked = driver has booked deliveries but no active one — show queue below
   if (hasNoData) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex items-center justify-center">
@@ -1148,7 +1150,7 @@ export default function DriverActiveDeliveryPage() {
                   ? new Date(d.dropoffWindowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                   : '—'
                 return (
-                  <Card key={d.id} className="border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/80 hover:shadow-md transition">
+                  <Card key={d.id} className="border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/80 hover:shadow-md transition cursor-pointer" onClick={() => navigate({ to: '/driver-pickup-checklist', search: { jobId: d.id } as any })}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -1172,6 +1174,9 @@ export default function DriverActiveDeliveryPage() {
                           <p className="text-[10px] text-slate-400">pickup</p>
                           <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1">{dropoffTime}</p>
                           <p className="text-[10px] text-slate-400">dropoff</p>
+                          {activeAssignment && (
+                            <p className="text-[9px] text-red-500 font-bold mt-1.5">Complete current first</p>
+                          )}
                         </div>
                       </div>
                     </CardContent>
