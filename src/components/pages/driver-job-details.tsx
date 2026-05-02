@@ -274,39 +274,49 @@ export default function DriverJobDetailsPage() {
     libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
-  // Book gig mutation
+  // Shared error handler for booking mutations
+  const handleBookingError = (error: any) => {
+    const status = error?.status || error?.statusCode
+    const msg = error?.message || ''
+
+    if (status === 410 || msg?.includes('no longer available') || msg?.includes('already been booked')) {
+      toast.error('This gig is no longer available', {
+        description: 'Another driver may have already accepted it.',
+      })
+    } else if (status === 403 || msg?.includes('not approved')) {
+      toast.error('Account not approved', {
+        description: 'Your driver account must be approved before booking gigs.',
+      })
+    } else {
+      toast.error('Failed to accept gig', {
+        description: msg || 'Something went wrong. Please try again.',
+      })
+    }
+  }
+
+  // Book gig mutation — goes to active page (queue view)
   const bookGig = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
     onSuccess: () => {
       toast.success('Gig booked!', {
         description: 'You have been assigned to this delivery.',
       })
-      // If driver already has an active delivery, go to the active page (shows booked queue)
-      // Otherwise go straight to the pickup checklist for this delivery
       navigate({ to: '/driver-active' })
     },
-    onError: (error: any) => {
-      const status = error?.status || error?.statusCode
-      const msg = error?.message || ''
-
-      if (status === 410 || msg?.includes('no longer available') || msg?.includes('already been booked')) {
-        toast.error('This gig is no longer available', {
-          description: 'Another driver may have already accepted it.',
-        })
-      } else if (status === 409 || msg?.includes('already have an active')) {
-        toast.error('Cannot book right now', {
-          description: 'You already have an active delivery. Complete it first.',
-        })
-      } else if (status === 403 || msg?.includes('not approved')) {
-        toast.error('Account not approved', {
-          description: 'Your driver account must be approved before booking gigs.',
-        })
-      } else {
-        toast.error('Failed to accept gig', {
-          description: msg || 'Something went wrong. Please try again.',
-        })
-      }
-    },
+    onError: handleBookingError,
   })
+
+  // Book & Start mutation — goes directly to pickup checklist
+  const bookAndStartGig = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
+    onSuccess: () => {
+      toast.success('Gig booked!', {
+        description: 'Complete the pickup checklist to start your trip.',
+      })
+      navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
+    },
+    onError: handleBookingError,
+  })
+
+  const isBooking = bookGig.isPending || bookAndStartGig.isPending
 
   useEffect(() => {
     setMounted(true)
@@ -318,6 +328,18 @@ export default function DriverJobDetailsPage() {
       return
     }
     bookGig.mutate({
+      driverId: user.profileId,
+      bookedByUserId: user.id,
+      reason: '',
+    })
+  }
+
+  const handleBookAndStart = () => {
+    if (!user?.profileId || !user?.id) {
+      toast.error('User not authenticated')
+      return
+    }
+    bookAndStartGig.mutate({
       driverId: user.profileId,
       bookedByUserId: user.id,
       reason: '',
@@ -562,13 +584,22 @@ export default function DriverJobDetailsPage() {
             <MessageSquare className="w-5 h-5 text-slate-500 dark:text-slate-400" />
           </button>
 
-          {/* Accept Gig — PRIMARY */}
+          {/* Accept Gig — adds to queue */}
           <Button
             onClick={handleBookGig}
-            disabled={bookGig.isPending}
-            className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[15px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-600/20"
+            disabled={isBooking}
+            className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-600/20"
           >
-            {bookGig.isPending ? 'Booking\u2026' : 'Accept Gig'}
+            {isBooking ? 'Booking\u2026' : 'Accept Gig'}
+          </Button>
+
+          {/* Book & Start — books and goes to pickup checklist */}
+          <Button
+            onClick={handleBookAndStart}
+            disabled={isBooking}
+            className="flex-1 h-12 rounded-2xl bg-primary hover:bg-primary/90 text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
+          >
+            {isBooking ? 'Booking\u2026' : 'Book & Start'}
           </Button>
         </div>
       </nav>
