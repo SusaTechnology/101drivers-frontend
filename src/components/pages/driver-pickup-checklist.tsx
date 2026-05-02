@@ -395,30 +395,6 @@ export default function DriverPickupChecklistPage() {
     }
   )
 
-  // Book delivery (used when Accept Gig navigates here without booking)
-  const bookDeliveryMutation = useCreate<any, any>(
-    `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/book`,
-    {
-      onSuccess: () => {
-        toast.success('Gig booked!', {
-          description: 'Starting trip now...',
-        })
-        // After successful booking, proceed to start trip
-        startTripMutation.mutate({
-          driverId,
-          actorUserId: userId,
-          actorRole: 'DRIVER',
-        })
-      },
-      onError: (error: any) => {
-        toast.error('Failed to book gig', {
-          description: error?.message || 'This gig may no longer be available.',
-          duration: 8000,
-        })
-      },
-    }
-  )
-
   // Start trip
   const startTripMutation = useCreate<any, any>(
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/start-trip`,
@@ -674,21 +650,11 @@ export default function DriverPickupChecklistPage() {
       return
     }
 
-    // If the delivery is not yet BOOKED (e.g. came via Accept Gig), book it first
-    if (delivery?.status !== 'BOOKED' && delivery?.status !== 'ACTIVE') {
-      bookDeliveryMutation.mutate({
-        driverId,
-        bookedByUserId: userId,
-        reason: '',
-      })
-    } else {
-      // Already BOOKED — proceed directly to start trip
-      startTripMutation.mutate({
-        driverId,
-        actorUserId: userId,
-        actorRole: 'DRIVER',
-      })
-    }
+    startTripMutation.mutate({
+      driverId,
+      actorUserId: userId,
+      actorRole: 'DRIVER',
+    })
   }
 
   const handleCancel = () => {
@@ -765,6 +731,17 @@ export default function DriverPickupChecklistPage() {
       </header>
 
       <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-36">
+        {/* Loading state while delivery data loads */}
+        {!delivery && (
+          <div className="space-y-6">
+            <div className="h-8 w-48 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            <div className="h-32 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            <div className="h-64 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            <div className="h-64 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            <div className="h-48 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          </div>
+        )}
+
         {/* Order Details Card */}
         {delivery && (
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg mb-5">
@@ -944,7 +921,8 @@ export default function DriverPickupChecklistPage() {
           </div>
         )}
 
-        {/* Steps */}
+        {/* Steps — only render when delivery data is available */}
+        {delivery && (
         <section className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left: checklist steps */}
           <div className="lg:col-span-7 space-y-6">
@@ -1733,6 +1711,7 @@ export default function DriverPickupChecklistPage() {
             </Card>
           </div>
         </section>
+        )}
       </main>
 
       {/* Bottom Action Bar */}
@@ -1750,7 +1729,7 @@ export default function DriverPickupChecklistPage() {
 
             <Button
               onClick={handleStartTrip}
-              disabled={!allStepsComplete || startTripMutation.isPending || bookDeliveryMutation.isPending || hasOtherActiveDelivery}
+              disabled={!allStepsComplete || startTripMutation.isPending || hasOtherActiveDelivery}
               className={cn(
                 "rounded-2xl py-4 font-extrabold flex items-center justify-center gap-2 transition",
                 allStepsComplete && !hasOtherActiveDelivery
@@ -1759,7 +1738,7 @@ export default function DriverPickupChecklistPage() {
               )}
             >
               <Distance className="w-4 h-4" />
-              {hasOtherActiveDelivery ? 'Complete Current First' : (startTripMutation.isPending || bookDeliveryMutation.isPending ? 'Starting...' : 'Start Trip')}
+              {hasOtherActiveDelivery ? 'Complete Current First' : (startTripMutation.isPending ? 'Starting...' : 'Start Trip')}
             </Button>
           </div>
         </div>

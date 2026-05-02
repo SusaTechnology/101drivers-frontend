@@ -294,6 +294,17 @@ export default function DriverJobDetailsPage() {
     }
   }
 
+  // Accept Gig mutation — books the gig then navigates to pickup checklist
+  const acceptGigMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
+    onSuccess: () => {
+      toast.success('Gig accepted!', {
+        description: 'Complete the pickup checklist to start your trip.',
+      })
+      navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
+    },
+    onError: handleBookingError,
+  })
+
   // Book for Later mutation — books the gig and navigates to booked-for-later page
   const bookForLaterMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
     onSuccess: () => {
@@ -305,15 +316,23 @@ export default function DriverJobDetailsPage() {
     onError: handleBookingError,
   })
 
-  const isBooking = bookForLaterMutation.isPending
+  const isBooking = acceptGigMutation.isPending || bookForLaterMutation.isPending
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Accept Gig — just navigate to pickup checklist (no booking)
+  // Accept Gig — book the gig then navigate to pickup checklist
   const handleAcceptGig = () => {
-    navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
+    if (!user?.profileId || !user?.id) {
+      toast.error('User not authenticated')
+      return
+    }
+    acceptGigMutation.mutate({
+      driverId: user.profileId,
+      bookedByUserId: user.id,
+      reason: '',
+    })
   }
 
   // Book for Later — book the gig and navigate to booked-for-later page
@@ -567,12 +586,13 @@ export default function DriverJobDetailsPage() {
             <MessageSquare className="w-5 h-5 text-slate-500 dark:text-slate-400" />
           </button>
 
-          {/* Accept Gig — navigate to pickup checklist */}
+          {/* Accept Gig — book then navigate to pickup checklist */}
           <Button
             onClick={handleAcceptGig}
-            className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[14px] tracking-tight transition shadow-lg shadow-green-600/20"
+            disabled={isBooking}
+            className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-green-600/20"
           >
-            Accept Gig
+            {isBooking ? 'Booking\u2026' : 'Accept Gig'}
           </Button>
 
           {/* Book for Later — book and navigate to queue */}
