@@ -642,6 +642,15 @@ export default function DriverDashboardPage() {
               <Settings className="w-4 h-4" />
             </Link>
 
+            {/* Inbox / Booked for Later */}
+            <Link
+              to="/driver-booked-later"
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              aria-label="Booked for later"
+            >
+              <Inbox className="w-4 h-4" />
+            </Link>
+
             {/* Briefcase / Active Deliveries */}
             <Link
               to="/driver-active"
@@ -1056,7 +1065,7 @@ export default function DriverDashboardPage() {
       {/* ═══════════════════════════════════════ */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 safe-bottom">
         <div className="max-w-[480px] mx-auto">
-          <div className="grid grid-cols-2 gap-0">
+          <div className="grid grid-cols-3 gap-0">
             <button
               onClick={() => setActiveView('map')}
               className={cn(
@@ -1091,6 +1100,18 @@ export default function DriverDashboardPage() {
                 Gigs
               </span>
             </button>
+            <Link
+              to="/driver-booked-later"
+              className={cn(
+                "flex flex-col items-center gap-1 py-3 transition",
+                'text-slate-400 dark:text-slate-500'
+              )}
+            >
+              <Inbox className="w-5 h-5" />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                Booked
+              </span>
+            </Link>
           </div>
         </div>
       </nav>
