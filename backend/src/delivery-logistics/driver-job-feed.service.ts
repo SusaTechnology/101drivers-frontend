@@ -743,23 +743,9 @@ async getDriverJobFeed(input: {
     throw new GoneException("This gig has already been booked by another driver");
   }
 
-  // Only block if driver already has an ACTIVE delivery (in-progress trip).
-  // Multiple BOOKED deliveries are allowed — this is the booking queue.
-  // Only one delivery can be ACTIVE at a time (enforced at start-trip).
-  const activeAssignment = await db.deliveryAssignment.findFirst({
-    where: {
-      driverId: input.driverId,
-      unassignedAt: null,
-      delivery: {
-        status: EnumDeliveryRequestStatus.ACTIVE,
-      },
-    },
-    select: { id: true },
-  });
-
-  if (activeAssignment) {
-    throw new ConflictException("You already have a delivery in progress — complete it before booking another");
-  }
+  // Multi-booking allowed: drivers can BOOK multiple deliveries while having one ACTIVE.
+  // The "one ACTIVE at a time" constraint is enforced at start-trip (delivery-lifecycle.service.ts).
+  // Time buffer and radius checks below still apply.
 
   const preferredRadiusMiles = driver.preferences?.radiusMiles ?? null;
   const origin = this.resolveDriverOrigin(driver.location ?? null);

@@ -124,14 +124,22 @@ export default function DriverPickupChecklistPage() {
   })
 
   // Also try active delivery endpoint for richer data (vehicle, contacts)
+  // Returns array: [{ delivery: {...} }, ...] — ACTIVE first, then BOOKED
   const { data: activeData } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${driverId}`,
     noFilter: true,
     enabled: Boolean(driverId),
   })
 
+  const assignments = Array.isArray(activeData) ? activeData : []
   // Merge: prefer active delivery data (has vehicle/contacts), fallback to feed data
-  const delivery = activeData?.delivery || deliveryData
+  const activeDeliveryData = assignments.find((a: any) => a.delivery?.id === deliveryId)
+  const delivery = activeDeliveryData?.delivery || deliveryData
+
+  // Guard: check if driver has ANOTHER delivery currently ACTIVE (not this one)
+  const hasOtherActiveDelivery = assignments.some(
+    (a: any) => a.delivery?.status === 'ACTIVE' && a.delivery?.id !== deliveryId
+  )
 
   // Location permission state
   const [locationStatus, setLocationStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown')
@@ -608,6 +616,15 @@ export default function DriverPickupChecklistPage() {
   }
 
   const handleStartTrip = async () => {
+    // Guard: cannot start a new trip while another delivery is ACTIVE
+    if (hasOtherActiveDelivery) {
+      toast.error('Cannot start trip', {
+        description: 'You already have a delivery in progress. Complete it first, then come back to start this one.',
+        duration: 8000,
+      })
+      return
+    }
+
     if (!vinVerified || !photosSaved || !odometerSaved || !vinPhotoSaved) {
       toast.error('Cannot start trip', {
         description: 'Please complete all required steps first.',
@@ -818,6 +835,16 @@ export default function DriverPickupChecklistPage() {
               </div>
 
               <div className="text-left sm:text-right">
+                {/* Active delivery guard warning */}
+                {hasOtherActiveDelivery && (
+                  <div className="mt-3 flex items-start gap-2 p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+                    <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-800 dark:text-amber-200 font-semibold">
+                      You have an active delivery in progress. Complete it first, then return here to start this trip.
+                    </p>
+                  </div>
+                )}
+
                 {/* Location status warning */}
                 {locationStatus === 'denied' && allStepsComplete && (
                   <div className="mt-3 flex items-start gap-2 p-3 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
@@ -1689,16 +1716,16 @@ export default function DriverPickupChecklistPage() {
 
             <Button
               onClick={handleStartTrip}
-              disabled={!allStepsComplete || startTripMutation.isPending}
+              disabled={!allStepsComplete || startTripMutation.isPending || hasOtherActiveDelivery}
               className={cn(
                 "rounded-2xl py-4 font-extrabold flex items-center justify-center gap-2 transition",
-                allStepsComplete
+                allStepsComplete && !hasOtherActiveDelivery
                   ? "lime-btn hover:shadow-xl hover:shadow-primary/20"
                   : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
               )}
             >
               <Distance className="w-4 h-4" />
-              {startTripMutation.isPending ? 'Starting...' : 'Start Trip'}
+              {hasOtherActiveDelivery ? 'Complete Current First' : (startTripMutation.isPending ? 'Starting...' : 'Start Trip')}
             </Button>
           </div>
         </div>
