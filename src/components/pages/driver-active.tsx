@@ -878,6 +878,7 @@ export default function DriverActiveDeliveryPage() {
                   directionsResult={routes[0]}
                   selectedRouteIndex={selectedRouteIndex}
                   isLoaded={isLoaded}
+                  focusOnDriver={true}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">

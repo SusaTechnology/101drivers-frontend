@@ -255,6 +255,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
                 driverPosition={driverPosition}
                 points={routePoints}
                 isLoaded={isLoaded}
+                focusOnDriver={true}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center min-h-[350px] sm:min-h-[450px]">

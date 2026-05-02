@@ -462,6 +462,7 @@ export default function DealerLiveTrack() {
                     driverPosition={driverPosition}
                     points={routePoints} // 👈 pass the historical route points
                     isLoaded={isLoaded}
+                    focusOnDriver={true}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">

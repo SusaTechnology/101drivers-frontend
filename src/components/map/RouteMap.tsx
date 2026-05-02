@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import PickupZoneOverlay from './PickupZoneOverlay';
 
@@ -64,6 +64,12 @@ interface RouteMapProps {
    * Takes priority over initialCenter/initialZoom once zones are loaded.
    */
   fitZonesBounds?: boolean;
+  /**
+   * When true, the map will center on the driver's current position when it
+   * first becomes available. The route and markers are still drawn, but the
+   * initial viewport focuses on the driver rather than the full route.
+   */
+  focusOnDriver?: boolean;
 }
 
 export default function RouteMap({
@@ -84,10 +90,12 @@ export default function RouteMap({
   showCaliforniaDefault = false,
   lockViewport = false,
   fitZonesBounds = false,
+  focusOnDriver = false,
 }: RouteMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [internalDirections, setInternalDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [trackPolyline, setTrackPolyline] = useState<google.maps.Polyline | null>(null);
+  const initialDriverFocusDone = useRef(false);
 
   // Use external directions if provided, otherwise use internal
   const directions = externalDirections ?? internalDirections;
@@ -138,9 +146,21 @@ export default function RouteMap({
     );
   }, [isLoaded, pickup, dropoff, showAlternatives, externalDirections]);
 
+  // Center on driver position once when it first becomes available
+  useEffect(() => {
+    if (!map || !focusOnDriver || !driverPosition || initialDriverFocusDone.current) return;
+
+    map.setCenter(driverPosition);
+    map.setZoom(14);
+    initialDriverFocusDone.current = true;
+  }, [map, focusOnDriver, driverPosition]);
+
   // Adjust map view when directions or coordinates change
   useEffect(() => {
     if (!map) return;
+
+    // Don't auto-zoom when focusing on driver — the driver-focus effect handles it
+    if (focusOnDriver) return;
 
     if (directions) {
       // DirectionsRenderer will handle viewport unless preserveViewport is true
@@ -163,7 +183,7 @@ export default function RouteMap({
       map.setZoom(13);
     }
     // else: keep the initial center/zoom set in GoogleMap props
-  }, [map, directions, pickup, dropoff, fitZonesBounds, zones]);
+  }, [map, directions, pickup, dropoff, fitZonesBounds, zones, focusOnDriver]);
 
   // Auto-fit map to service district zones when they load
   useEffect(() => {
@@ -320,7 +340,7 @@ export default function RouteMap({
           directions={directions}
           options={{
             suppressMarkers: true, // we already have our own markers
-            preserveViewport: false, // auto-zoom to fit route on submit
+            preserveViewport: focusOnDriver ? true : false, // don't auto-zoom when focusing on driver
             routeIndex: selectedRouteIndex,
           }}
         />
