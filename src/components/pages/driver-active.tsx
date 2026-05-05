@@ -321,6 +321,15 @@ export default function DriverActiveDeliveryPage() {
     latestPositionRef.current = driverPosition
   }, [driverPosition])
 
+  // Send an immediate ping the moment GPS position is first acquired
+  const hasPingedRef = useRef(false)
+  useEffect(() => {
+    if (driverPosition && !hasPingedRef.current && deliveryId) {
+      hasPingedRef.current = true
+      sendLocationPing(driverPosition)
+    }
+  }, [driverPosition, deliveryId])
+
   // Fetch multiple routes using Directions API
   useEffect(() => {
     if (!isLoaded || !pickupCoords || !dropoffCoords) return
@@ -361,7 +370,7 @@ export default function DriverActiveDeliveryPage() {
       if (latestPositionRef.current) {
         sendLocationPing(latestPositionRef.current)
       }
-    }, 60000) // every 60 seconds
+    }, 30000) // every 30 seconds
 
     return () => clearInterval(interval)
   }, []) // empty dependency array – runs once
@@ -505,6 +514,11 @@ export default function DriverActiveDeliveryPage() {
   // Actual trip completion — only called after compliance succeeds
   const handleCompleteTrip = () => {
     if (!driverId || !userId) return
+
+    // Send a final location ping right before completing to ensure tracking data exists
+    if (latestPositionRef.current) {
+      sendLocationPing(latestPositionRef.current)
+    }
 
     const payload = {
       driverId,
@@ -724,6 +738,24 @@ export default function DriverActiveDeliveryPage() {
                 Loading map...
               </div>
             )}
+          </div>
+
+          {/* GPS tracking status indicator */}
+          <div className="fixed bottom-28 right-4 z-10">
+            <div className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full backdrop-blur shadow-lg text-[10px] font-extrabold uppercase tracking-widest',
+              locationHealth === 'healthy'
+                ? 'bg-green-500/90 text-white'
+                : locationHealth === 'warning'
+                ? 'bg-amber-500/90 text-white'
+                : 'bg-red-500/90 text-white'
+            )}>
+              <span className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                locationHealth === 'healthy' ? 'bg-white animate-pulse' : 'bg-white/70'
+              )} />
+              {locationHealth === 'healthy' ? 'Tracking' : locationHealth === 'warning' ? 'Weak GPS' : 'No GPS'}
+            </div>
           </div>
 
           {/* Top overlay — address + ETA + payout */}
