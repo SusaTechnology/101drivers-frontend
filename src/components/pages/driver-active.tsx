@@ -91,6 +91,7 @@ import {
   useFileUpload,
   useCreate,
 } from '@/lib/tanstack/dataQuery'
+import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
 // Default delivery data (fallback while loading) – updated to match API shape
 const MOCK_DELIVERY = {
@@ -159,6 +160,7 @@ const navItems = [
 export default function DriverActiveDeliveryPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [showCompletion, setShowCompletion] = useState(false)
   const [odometerEnd, setOdometerEnd] = useState('')
   const [deliveryNotes, setDeliveryNotes] = useState('')
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null)
@@ -488,8 +490,8 @@ export default function DriverActiveDeliveryPage() {
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/complete-trip`,
     {
       onSuccess: () => {
-        toast.success('Trip completed', { description: 'Thank you! Redirecting to dashboard.' })
-        navigate({ to: '/driver-dashboard' })
+        toast.success('Trip completed')
+        setShowCompletion(true)
       },
       onError: (error) => {
         toast.error('Failed to complete trip', { description: error.message })
@@ -1228,6 +1230,18 @@ export default function DriverActiveDeliveryPage() {
           </div>
         </div>
       </footer>
+
+      {/* Post-Trip Completion Overlay */}
+      {showCompletion && (
+        <PostTripCompletion
+          payout={deliveryData?.quote?.estimatedPrice ?? 0}
+          tripStartTime={deliveryData?.trackingSession?.startedAt}
+          onDismiss={() => {
+            setShowCompletion(false)
+            navigate({ to: '/driver-dashboard' })
+          }}
+        />
+      )}
     </div>
   )
 }
