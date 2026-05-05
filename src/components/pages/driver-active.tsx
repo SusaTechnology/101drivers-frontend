@@ -69,6 +69,8 @@ import {
   AlertTriangle,
   CloudUpload,
   Save,
+  Maximize,
+  Minimize,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -91,7 +93,6 @@ import {
   useFileUpload,
   useCreate,
 } from '@/lib/tanstack/dataQuery'
-import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
 // Default delivery data (fallback while loading) – updated to match API shape
 const MOCK_DELIVERY = {
@@ -159,8 +160,8 @@ const navItems = [
 
 export default function DriverActiveDeliveryPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [drivingMode, setDrivingMode] = useState(true)
   const [mounted, setMounted] = useState(false)
-  const [showCompletion, setShowCompletion] = useState(false)
   const [odometerEnd, setOdometerEnd] = useState('')
   const [deliveryNotes, setDeliveryNotes] = useState('')
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null)
@@ -415,7 +416,7 @@ export default function DriverActiveDeliveryPage() {
 
   const handleSupport = () => {
     // Navigate to support request page with delivery context
-    navigate({ 
+    navigate({
       to: '/driver-issue-report',
       state: { deliveryId: deliveryId }
     })
@@ -490,8 +491,8 @@ export default function DriverActiveDeliveryPage() {
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/complete-trip`,
     {
       onSuccess: () => {
-        toast.success('Trip completed')
-        setShowCompletion(true)
+        toast.success('Trip completed', { description: 'Thank you! Redirecting to dashboard.' })
+        navigate({ to: '/driver-dashboard' })
       },
       onError: (error) => {
         toast.error('Failed to complete trip', { description: error.message })
@@ -696,84 +697,229 @@ export default function DriverActiveDeliveryPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-40 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/driver-dashboard"
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-              aria-label="Back to driver dashboard"
-            >
-              <ArrowBack className="w-5 h-5" />
-            </Link>
+      {drivingMode && deliveryData ? (
+        <>
+          {/* ═══════════════════════════════════════════════ */}
+          {/* DRIVING MODE — Full-screen navigation view       */}
+          {/* ═══════════════════════════════════════════════ */}
 
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                Active Delivery
+          {/* Full-screen map */}
+          <div className="fixed inset-0 z-0">
+            {isLoaded && pickupCoords && dropoffCoords ? (
+              <RouteMap
+                pickup={pickupCoords}
+                dropoff={dropoffCoords}
+                driverPosition={driverPosition}
+                directionsResult={routes[0]}
+                selectedRouteIndex={selectedRouteIndex}
+                isLoaded={isLoaded}
+                focusOnDriver={true}
+                showMarkerLabels={false}
+                lockViewport={false}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
+                Loading map...
+              </div>
+            )}
+          </div>
+
+          {/* Top overlay — address + ETA + payout */}
+          <div className="fixed top-0 left-0 right-0 z-10 pointer-events-none">
+            <div className="bg-gradient-to-b from-white/90 dark:from-slate-950/90 via-white/70 dark:via-slate-950/70 to-transparent pb-8">
+              <div className="max-w-[980px] mx-auto px-5 sm:px-6 pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <button
+                      onClick={() => navigate({ to: '/driver-dashboard' })}
+                      className="pointer-events-auto w-10 h-10 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-lg shrink-0"
+                    >
+                      <ArrowBack className="w-5 h-5" />
+                    </button>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">
+                        Active Delivery
+                      </p>
+                      <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white leading-tight truncate">
+                        {deliveryData?.dropoffAddress || '—'}
+                      </p>
+                      {deliveryData?.etaMinutes ? (
+                        <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mt-1">
+                          ETA: {Math.round(deliveryData.etaMinutes)} {deliveryData.etaMinutes === 1 ? 'minute' : 'minutes'}
+                        </p>
+                      ) : (
+                        <p className="text-sm font-bold text-slate-400 mt-1">
+                          Navigating...
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-2xl font-black text-primary">
+                      ${deliveryData?.quote?.estimatedPrice ? deliveryData.quote.estimatedPrice.toFixed(2) : '—'}
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                      Est. payout
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleSignOut}
-              variant="outline"
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm font-bold text-slate-700 dark:text-slate-200"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
+          {/* Location health warnings (overlay on map) */}
+          {locationHealth === 'lost' && (
+            <div className="fixed top-28 left-4 right-4 z-20">
+              <div className="flex items-start gap-3 p-3 rounded-2xl bg-red-50/95 dark:bg-red-900/90 backdrop-blur border border-red-200 dark:border-red-900/30 shadow-lg">
+                <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-extrabold text-red-900 dark:text-red-200">Location signal lost</p>
+                  <p className="text-[11px] text-red-800/80 dark:text-red-200/80">Enable location services to continue.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-            <Button
-              variant="outline"
-              size="icon"
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-            >
-              {mounted && theme === 'dark' ? (
-                <Sun className="w-5 h-5" />
-              ) : (
-                <Moon className="w-5 h-5" />
-              )}
-            </Button>
+          {locationHealth === 'warning' && (
+            <div className="fixed top-28 left-4 right-4 z-20">
+              <div className="flex items-start gap-3 p-3 rounded-2xl bg-amber-50/95 dark:bg-amber-900/90 backdrop-blur border border-amber-200 dark:border-amber-900/30 shadow-lg">
+                <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">GPS signal weak</p>
+                  <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80">Location updates delayed.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-            <Button
-              variant="outline"
-              size="icon"
-              className="md:hidden w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              <Menu className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <div className="max-w-[980px] mx-auto px-5 py-4 flex flex-col gap-2">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    "px-4 py-3 rounded-2xl text-sm font-semibold transition-colors",
-                    item.active
-                      ? "bg-primary/15 text-slate-900 dark:text-white"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  )}
-                  onClick={() => setMobileMenuOpen(false)}
+          {/* Bottom — toggle + contact buttons */}
+          <div className="fixed bottom-0 left-0 right-0 z-10">
+            <div className="bg-gradient-to-t from-white/95 dark:from-slate-950/95 via-white/85 dark:via-slate-950/85 to-transparent pt-8 pb-6 px-5 sm:px-6">
+              <div className="max-w-[980px] mx-auto">
+                <button
+                  onClick={() => setDrivingMode(false)}
+                  className="w-full mb-3 py-2.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-700 text-sm font-extrabold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 shadow-md hover:bg-white dark:hover:bg-slate-800 transition"
                 >
-                  {item.label}
-                </Link>
-              ))}
+                  <Info className="w-4 h-4 text-primary" />
+                  View Details
+                </button>
+
+                {deliveryData?.recipientPhone && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <a
+                      href={`tel:${deliveryData.recipientPhone}`}
+                      className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-sm shadow-lg transition active:scale-[0.98]"
+                    >
+                      <Phone className="w-5 h-5" />
+                      Call Recipient
+                    </a>
+                    <a
+                      href={`sms:${deliveryData.recipientPhone}`}
+                      className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg transition active:scale-[0.98]"
+                    >
+                      <MessageSquare className="w-5 h-5" />
+                      Text Recipient
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        )}
-      </header>
+        </>
+      ) : (
+        <>
+          {/* ═══════════════════════════════════════ */}
+          {/* DETAIL MODE — Full information view    */}
+          {/* ═══════════════════════════════════════ */}
 
-      <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-36">
+          {/* Header (keep existing exactly as-is) */}
+          <header className="sticky top-0 z-40 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+            <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/driver-dashboard"
+                  className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+                  aria-label="Back to driver dashboard"
+                >
+                  <ArrowBack className="w-5 h-5" />
+                </Link>
+
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                    Active Delivery
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleSignOut}
+                  variant="outline"
+                  className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm font-bold text-slate-700 dark:text-slate-200"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                  onClick={toggleTheme}
+                  aria-label="Toggle theme"
+                >
+                  {mounted && theme === 'dark' ? (
+                    <Sun className="w-5 h-5" />
+                  ) : (
+                    <Moon className="w-5 h-5" />
+                  )}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="md:hidden w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                >
+                  <Menu className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+
+            {mobileMenuOpen && (
+              <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div className="max-w-[980px] mx-auto px-5 py-4 flex flex-col gap-2">
+                  {navItems.map((item) => (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      className={cn(
+                        "px-4 py-3 rounded-2xl text-sm font-semibold transition-colors",
+                        item.active
+                          ? "bg-primary/15 text-slate-900 dark:text-white"
+                          : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      )}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </header>
+
+          <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-36">
+            {/* NEW: Back to Navigation button (only when there's an active delivery) */}
+            {deliveryData && (
+              <button
+                onClick={() => setDrivingMode(true)}
+                className="w-full mb-4 flex items-center gap-3 p-4 rounded-2xl bg-primary/10 border border-primary/25 text-slate-900 dark:text-white hover:bg-primary/15 transition shadow-sm"
+              >
+                <Navigation className="w-5 h-5 text-primary" />
+                <span className="text-sm font-extrabold">Back to Navigation</span>
+              </button>
+            )}
         {/* Location health warning banner */}
         {locationHealth === 'warning' && (
           <div className="mb-4 flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
@@ -865,6 +1011,14 @@ export default function DriverActiveDeliveryPage() {
                         Support
                       </Button>
                     </div>
+                    {deliveryData?.etaMinutes && (
+                      <div className="mt-3">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                          <Speed className="w-3.5 h-3.5 text-primary" />
+                          ETA: {Math.round(deliveryData.etaMinutes)} MIN
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -890,29 +1044,7 @@ export default function DriverActiveDeliveryPage() {
                 </div>
               )}
 
-              {/* Overlay badges */}
-              {!deliveryLoading && (
-                <>
-                  <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
-                    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700">
-                      <Map className="w-4 h-4 text-primary" />
-                      Live Route
-                    </div>
 
-                    {deliveryData?.etaMinutes && (
-                      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 shadow-lg border border-slate-200 dark:border-slate-700 inline-flex items-center gap-2 w-fit">
-                        <Speed className="w-4 h-4 text-primary" />
-                        ETA: {Math.round(deliveryData.etaMinutes)} min
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="absolute bottom-4 left-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur px-4 py-2 rounded-2xl text-xs font-extrabold text-slate-900 dark:text-white shadow-lg flex items-center gap-2 border border-slate-200 dark:border-slate-700 z-10">
-                    <Route className="w-4 h-4 text-primary" />
-                    Pickup → Drop-off
-                  </div>
-                </>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -1230,17 +1362,7 @@ export default function DriverActiveDeliveryPage() {
           </div>
         </div>
       </footer>
-
-      {/* Post-Trip Completion Overlay */}
-      {showCompletion && (
-        <PostTripCompletion
-          payout={deliveryData?.quote?.estimatedPrice ?? 0}
-          tripStartTime={deliveryData?.trackingSession?.startedAt}
-          onDismiss={() => {
-            setShowCompletion(false)
-            navigate({ to: '/driver-dashboard' })
-          }}
-        />
+        </>
       )}
     </div>
   )
