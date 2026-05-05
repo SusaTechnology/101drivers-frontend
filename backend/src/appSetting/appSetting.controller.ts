@@ -19,6 +19,8 @@ import { AppSettingUpdateInput } from "./base/AppSettingUpdateInput";
 import {
   LandingPageSettingsResponseDto,
   UpdateLandingPageSettingsBody,
+  DeliverySettingsResponseDto,
+  UpdateDeliverySettingsBody,
 } from "./dto/appSetting.dto";
 
 @swagger.ApiTags("appSettings")
@@ -55,6 +57,31 @@ export class AppSettingController extends AppSettingControllerBase {
   ): Promise<LandingPageSettingsResponseDto> {
     return this.service.updateLandingPageSettings(body);
   }
+
+  @common.Get("delivery")
+  @swagger.ApiOkResponse({ type: DeliverySettingsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getDeliverySettings(): Promise<DeliverySettingsResponseDto> {
+    return this.service.getDeliverySettings();
+  }
+
+  @common.Patch("delivery")
+  @swagger.ApiOkResponse({ type: DeliverySettingsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async updateDeliverySettings(
+    @common.Body() body: UpdateDeliverySettingsBody
+  ): Promise<DeliverySettingsResponseDto> {
+    return this.service.updateDeliverySettings(body);
+  }
+
  @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Post()
   @swagger.ApiCreatedResponse({ type: AppSetting })

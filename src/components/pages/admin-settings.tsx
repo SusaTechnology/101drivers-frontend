@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
+import { useDataQuery, useDataMutation } from "@/lib/tanstack/dataQuery";
 import {
   Menu,
   X,
@@ -55,6 +56,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -189,6 +192,50 @@ export default function AdminSettingsHubPage() {
   const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+
+  // Delivery settings state
+  const [maxRadius, setMaxRadius] = useState('');
+  const [transitBuffer, setTransitBuffer] = useState('');
+  const [deliverySettingsLoaded, setDeliverySettingsLoaded] = useState(false);
+
+  // Fetch delivery settings
+  const deliverySettingsQuery = useDataQuery<any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/delivery`,
+    noFilter: true,
+    onSuccess: (data) => {
+      if (data?.maximumRadiusMiles != null) {
+        setMaxRadius(String(data.maximumRadiusMiles));
+        setTransitBuffer(String(data.transitBufferMinutes));
+        setDeliverySettingsLoaded(true);
+      }
+    },
+  });
+
+  // Update delivery settings
+  const updateDeliverySettingsMutation = useDataMutation<any, any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/delivery`,
+    method: 'PATCH',
+    onSuccess: () => {
+      toast.success('Delivery settings updated');
+      deliverySettingsQuery.refetch();
+    },
+    onError: (error) => {
+      toast.error('Failed to update settings', { description: error.message });
+    },
+  });
+
+  const handleSaveDeliverySettings = () => {
+    const radius = Number(maxRadius);
+    const buffer = Number(transitBuffer);
+    if (isNaN(radius) || radius < 1 || isNaN(buffer) || buffer < 1) {
+      toast.error('Invalid values', { description: 'Radius and buffer must be positive numbers.' });
+      return;
+    }
+    updateDeliverySettingsMutation.mutate({
+      maximumRadiusMiles: radius,
+      transitBufferMinutes: buffer,
+    });
+  };
 
   // Theme handling
   useEffect(() => {
@@ -524,6 +571,74 @@ export default function AdminSettingsHubPage() {
                 </Link>
               ))}
             </section>
+
+            {/* Delivery Settings — live from API */}
+            <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">
+                      Delivery Settings
+                    </CardTitle>
+                    <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      Configurable rules for driver scheduling. Changes take effect immediately.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="chip-emerald">
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    Live
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Maximum Pickup Radius (miles)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={maxRadius}
+                      onChange={(e) => setMaxRadius(e.target.value)}
+                      placeholder="25"
+                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                    />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Next pickup must be within this distance from the driver's last drop-off location.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Transit Buffer (minutes)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={transitBuffer}
+                      onChange={(e) => setTransitBuffer(e.target.value)}
+                      placeholder="60"
+                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                    />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      After completing a delivery, the driver becomes available again after this buffer.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    onClick={handleSaveDeliverySettings}
+                    disabled={updateDeliverySettingsMutation.isPending}
+                    className="px-6 py-3 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center gap-2"
+                  >
+                    {updateDeliverySettingsMutation.isPending ? 'Saving...' : 'Save Changes'}
+                    <Check className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Guardrails */}
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">

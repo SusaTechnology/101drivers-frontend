@@ -15,6 +15,7 @@ import {
 } from "./dto/appSetting.dto";
 
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
+const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
 
 type LandingPageSettingsValue = {
   fundraisingEnabled: boolean;
@@ -218,6 +219,37 @@ export class AppSettingService extends AppSettingServiceBase {
       update: {
         value: next as any,
       },
+    });
+
+    return next;
+  }
+
+  // ============================================================
+  // DELIVERY SETTINGS (max radius + transit buffer)
+  // ============================================================
+
+  async getDeliverySettings(): Promise<{ maximumRadiusMiles: number; transitBufferMinutes: number }> {
+    const row = await this.prisma.appSetting.findUnique({
+      where: { key: DELIVERY_SETTINGS_KEY },
+      select: { value: true },
+    });
+
+    const defaults = { maximumRadiusMiles: 25, transitBufferMinutes: 60 };
+    const value = row?.value && typeof row.value === "object" ? row.value : {};
+    return { ...defaults, ...value };
+  }
+
+  async updateDeliverySettings(input: { maximumRadiusMiles?: number; transitBufferMinutes?: number }): Promise<{ maximumRadiusMiles: number; transitBufferMinutes: number }> {
+    const current = await this.getDeliverySettings();
+    const next = {
+      maximumRadiusMiles: input.maximumRadiusMiles ?? current.maximumRadiusMiles,
+      transitBufferMinutes: input.transitBufferMinutes ?? current.transitBufferMinutes,
+    };
+
+    await this.prisma.appSetting.upsert({
+      where: { key: DELIVERY_SETTINGS_KEY },
+      create: { key: DELIVERY_SETTINGS_KEY, value: next as any },
+      update: { value: next as any },
     });
 
     return next;

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsBoolean,
+  IsNumber,
   IsOptional,
   IsString,
   IsUrl,
@@ -98,4 +99,24 @@ export class UpdateLandingPageSettingsBody {
   @IsString()
   @MaxLength(1000)
   investorLeadCtaDescription?: string | null;
+}
+
+export class DeliverySettingsResponseDto {
+  @ApiProperty()
+  maximumRadiusMiles!: number;
+
+  @ApiProperty()
+  transitBufferMinutes!: number;
+}
+
+export class UpdateDeliverySettingsBody {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  maximumRadiusMiles?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  transitBufferMinutes?: number;
 }

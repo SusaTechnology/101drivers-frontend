@@ -226,6 +226,39 @@ async startTrip(input: {
 
     await this.assertDriverAssignedToDeliveryTx(tx, input.deliveryId, input.driverId);
 
+    // First-pickup-of-day lock: if driver hasn't completed any delivery today,
+    // they must wait until the scheduled pickup window start time.
+    const deliveryWithWindow = await tx.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: { pickupWindowStart: true },
+    });
+
+    if (deliveryWithWindow?.pickupWindowStart) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const completedToday = await tx.deliveryAssignment.findFirst({
+        where: {
+          driverId: input.driverId,
+          unassignedAt: null,
+          delivery: {
+            status: EnumDeliveryRequestStatus.COMPLETED,
+            updatedAt: { gte: todayStart },
+          },
+        },
+        select: { id: true },
+      });
+
+      const now = new Date();
+      const windowStart = new Date(deliveryWithWindow.pickupWindowStart);
+
+      if (!completedToday && now < windowStart) {
+        throw new ConflictException(
+          `First pickup of the day must wait until the scheduled time. You can start at ${windowStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}.`
+        );
+      }
+    }
+
     // Guard: only one delivery can be ACTIVE at a time.
     // If the driver already has an ACTIVE delivery, reject the start.
     const existingActive = await tx.deliveryAssignment.findFirst({

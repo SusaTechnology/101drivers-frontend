@@ -240,6 +240,16 @@ export default function AdminPayoutsReportPage() {
               <Download className="h-3.5 w-3.5 mr-1" />
               CSV
             </Button>
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => {
+              const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+              const statusParam = status && status !== 'all' ? `?status=${status}` : '';
+              const url = `${import.meta.env.VITE_API_URL}/api/driverPayouts/admin/export-wise-csv${statusParam}`;
+              window.open(url, '_blank');
+              toast.success('Wise BatchTransfer CSV downloading...');
+            }}>
+              <Wallet className="h-3.5 w-3.5 mr-1" />
+              Wise Batch CSV
+            </Button>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => handleExport('xlsx')}>
               <Download className="h-3.5 w-3.5 mr-1" />
               Excel

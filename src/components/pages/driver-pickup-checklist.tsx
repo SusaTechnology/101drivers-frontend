@@ -147,8 +147,23 @@ export default function DriverPickupChecklistPage() {
 
   // GPS proximity check for "Start Pickup Now" — verifies driver is at the lot
   const [isDriverAtPickup, setIsDriverAtPickup] = useState<boolean | null>(null) // null = not yet checked
+
+  // First-pickup-of-day check: if driver has other BOOKED/ACTIVE deliveries besides this one,
+  // they've already done or are doing a gig today. If this is their ONLY delivery and it's
+  // before the window start, it's the first pickup and early start is blocked.
+  const hasOtherAssignments = assignments.filter(
+    (a: any) => a.delivery?.id !== deliveryId
+  ).length > 0
+  const isBeforeWindow = delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date()
+  const isFirstPickupOfDay = !hasOtherAssignments && !!isBeforeWindow
+
   useEffect(() => {
     if (!deliveryId || !delivery?.pickupWindowStart) return
+    // Don't check proximity if it's the first pickup of the day (early start blocked)
+    if (isFirstPickupOfDay) {
+      setIsDriverAtPickup(null)
+      return
+    }
     // Only check proximity if the pickup window hasn't started yet (early start scenario)
     const windowStart = new Date(delivery.pickupWindowStart as string)
     const now = new Date()
@@ -881,8 +896,8 @@ export default function DriverPickupChecklistPage() {
           </CardContent>
         </Card>
 
-        {/* Early Start Banner - show when before scheduled window AND driver is GPS-verified at pickup */}
-        {delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === true && (
+        {/* Early Start Banner - show when before scheduled window AND driver is GPS-verified at pickup AND not first pickup of day */}
+        {delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === true && !isFirstPickupOfDay && (
           <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-xl bg-green-500/15 flex items-center justify-center shrink-0 mt-0.5">
@@ -895,6 +910,26 @@ export default function DriverPickupChecklistPage() {
                 <p className="text-[11px] text-green-700 dark:text-green-300 mt-0.5">
                   Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
                   GPS confirms you're at the pickup location — you can complete the checklist and start early.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* First pickup of the day - must wait for scheduled time */}
+        {isFirstPickupOfDay && (
+          <div className="mt-4 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-blue-900 dark:text-blue-200">
+                  First Pickup — Wait for Scheduled Time
+                </p>
+                <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-0.5">
+                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
+                  The first pickup of the day must start at the scheduled time. After your first delivery, you can start early on the next one.
                 </p>
               </div>
             </div>

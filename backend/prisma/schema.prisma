@@ -83,6 +83,7 @@ model Customer {
 
 model Driver {
   alerts           DriverAlertPreference?
+  bankAccount      DriverBankAccount?
   approvedAt       DateTime?
   approvedBy       User?                      @relation(name: "driversApproved", fields: [approvedByUserId], references: [id])
   approvedByUserId String?
@@ -559,6 +560,21 @@ model DriverPayout {
   updatedAt          DateTime               @updatedAt
 
   @@index([driverId, status, createdAt])
+}
+
+model DriverBankAccount {
+  id               String   @id @default(cuid())
+  driverId         String
+  driver           Driver   @relation(fields: [driverId], references: [id])
+  accountHolderName String
+  routingNumber    String
+  accountNumber    String
+  accountType      String   @default("checking")
+  bankName         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([driverId])
 }
 
 model DriverPreference {

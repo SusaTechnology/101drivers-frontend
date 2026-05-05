@@ -63,6 +63,10 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
+  useDataQuery,
+  useDataMutation,
+} from '@/lib/tanstack/dataQuery'
+import {
   Card,
   CardContent,
   CardDescription,
@@ -157,6 +161,34 @@ export default function DriverWalletPage() {
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
 
+  // Fetch saved bank account
+  const bankAccountQuery = useDataQuery<any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-bank-account`,
+    noFilter: true,
+    onSuccess: (data) => {
+      if (data) {
+        setAccountHolder(data.accountHolderName || '')
+        setRoutingNumber(data.routingNumber || '')
+        setAccountNumber(data.accountNumber || '')
+        if (data.accountType) setPayoutType(data.accountType === 'debit' ? 'debit' : data.accountType === 'check' ? 'check' : 'ach')
+      }
+    },
+  })
+
+  // Save bank account
+  const saveBankAccountMutation = useDataMutation<any, any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-bank-account`,
+    method: 'POST',
+    onSuccess: () => {
+      toast.success('Payout method saved', {
+        description: 'Your bank account information has been updated securely.',
+      })
+    },
+    onError: (error) => {
+      toast.error('Failed to save', { description: error.message })
+    },
+  })
+
   // Theme handling
   useEffect(() => {
     setMounted(true)
@@ -181,12 +213,15 @@ export default function DriverWalletPage() {
   const handleSavePayoutMethod = () => {
     if (!accountHolder || !routingNumber || !accountNumber) {
       toast.error('Please fill in all fields', {
-        description: 'All payout method fields are required.',
+        description: 'Account holder name, routing number, and account number are required.',
       })
       return
     }
-    toast.success('Payout method saved', {
-      description: 'Your payout information has been updated.',
+    saveBankAccountMutation.mutate({
+      accountHolderName: accountHolder,
+      routingNumber,
+      accountNumber,
+      accountType: payoutType,
     })
   }
 
@@ -377,9 +412,14 @@ export default function DriverWalletPage() {
                   Add your preferred payout destination. This is verified and stored securely.
                 </CardDescription>
               </div>
-              <Badge variant="outline" className="chip bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200">
-                <Info className="w-3.5 h-3.5 text-amber-500 mr-1" />
-                Placeholder
+              <Badge variant="outline" className={cn(
+                "chip",
+                bankAccountQuery.data
+                  ? "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200"
+                  : "bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200"
+              )}>
+                <Info className="w-3.5 h-3.5 mr-1" />
+                {bankAccountQuery.data ? 'Connected' : 'Not connected'}
               </Badge>
             </div>
           </CardHeader>
