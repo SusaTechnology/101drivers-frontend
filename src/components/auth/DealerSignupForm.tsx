@@ -538,6 +538,9 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   const acceptTerms = watch("acceptTerms");
   const watchPassword = watch("password");
   const watchConfirmPassword = watch("confirmPassword");
+  const watchContactName = watch("contactName");
+  const watchContactEmail = watch("contactEmail");
+  const watchContactPhone = watch("contactPhone");
 
   // Password validation checks
   const passwordChecks = {
@@ -931,7 +934,12 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     <input type="hidden" {...registerSignup("placeId")} />
 
                     {/* Your Contact Details */}
-                    <div className="space-y-4">
+                    <div className={cn(
+                      "space-y-4 p-4 rounded-2xl border transition-all duration-300",
+                      signupErrors.contactName || signupErrors.contactEmail || signupErrors.contactPhone
+                        ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                        : "border-transparent"
+                    )}>
                       <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                         <UserCircle className="w-4 h-4" />
                         Your Contact Details
@@ -942,20 +950,32 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                           htmlFor="contactName"
                           className="text-xs font-bold text-slate-700 dark:text-slate-300"
                         >
-                          Name <span className="text-red-500">*</span>
+                          Name{!watchContactName?.trim() && <span className="text-red-500">*</span>}
                         </Label>
                         <div className="relative">
                           <Person className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                           <Input
                             id="contactName"
                             {...registerSignup("contactName")}
-                            className="w-full h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                            className={cn(
+                              "w-full h-14 pl-12 pr-4 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm transition-colors",
+                              signupErrors.contactName
+                                ? "border-red-400 dark:border-red-500"
+                                : watchContactName?.trim()
+                                  ? "border-green-300 dark:border-green-700"
+                                  : "border-slate-200 dark:border-slate-700"
+                            )}
                             placeholder="John Doe"
                             disabled={isPending}
                           />
+                          {watchContactName?.trim() && !signupErrors.contactName && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <CheckCircle className="w-5 h-5 text-green-500" />
+                            </div>
+                          )}
                         </div>
                         {signupErrors.contactName && (
-                          <p className="text-sm text-red-500">
+                          <p className="text-sm text-red-500 font-medium">
                             {signupErrors.contactName.message}
                           </p>
                         )}
@@ -966,7 +986,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                           htmlFor="contactEmail"
                           className="text-xs font-bold text-slate-700 dark:text-slate-300"
                         >
-                          Email <span className="text-red-500">*</span>
+                          Email{!watchContactEmail?.trim() && <span className="text-red-500">*</span>}
                         </Label>
                         <div className="relative">
                           <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -975,13 +995,25 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             {...registerSignup("contactEmail")}
                             type="email"
                             autoComplete="off"
-                            className="w-full h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                            className={cn(
+                              "w-full h-14 pl-12 pr-4 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm transition-colors",
+                              signupErrors.contactEmail
+                                ? "border-red-400 dark:border-red-500"
+                                : watchContactEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchContactEmail)
+                                  ? "border-green-300 dark:border-green-700"
+                                  : "border-slate-200 dark:border-slate-700"
+                            )}
                             placeholder="your@email.com"
                             disabled={isPending}
                           />
+                          {watchContactEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchContactEmail) && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <CheckCircle className="w-5 h-5 text-green-500" />
+                            </div>
+                          )}
                         </div>
                         {signupErrors.contactEmail && (
-                          <p className="text-sm text-red-500">
+                          <p className="text-sm text-red-500 font-medium">
                             {signupErrors.contactEmail.message}
                           </p>
                         )}
@@ -992,7 +1024,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                           htmlFor="contactPhone"
                           className="text-xs font-bold text-slate-700 dark:text-slate-300"
                         >
-                          Mobile <span className="text-red-500">*</span>
+                          Mobile{!watchContactPhone?.trim() && <span className="text-red-500">*</span>}
                         </Label>
                         <div className="relative">
                           <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1005,13 +1037,25 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             autoComplete="off"
                             inputMode="tel"
                             maxLength={14}
-                            className="w-full h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                            className={cn(
+                              "w-full h-14 pl-12 pr-4 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm transition-colors",
+                              signupErrors.contactPhone
+                                ? "border-red-400 dark:border-red-500"
+                                : (watchContactPhone?.replace(/\D/g, '').length || 0) >= 10
+                                  ? "border-green-300 dark:border-green-700"
+                                  : "border-slate-200 dark:border-slate-700"
+                            )}
                             placeholder="(555) 123-4567"
                             disabled={isPending}
                           />
+                          {(watchContactPhone?.replace(/\D/g, '').length || 0) >= 10 && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <CheckCircle className="w-5 h-5 text-green-500" />
+                            </div>
+                          )}
                         </div>
                         {signupErrors.contactPhone && (
-                          <p className="text-sm text-red-500">
+                          <p className="text-sm text-red-500 font-medium">
                             {signupErrors.contactPhone.message}
                           </p>
                         )}
@@ -1019,7 +1063,12 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     </div>
 
                     {/* Password */}
-                    <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className={cn(
+                      "space-y-4 p-4 rounded-2xl border transition-all duration-300",
+                      signupErrors.password || signupErrors.confirmPassword
+                        ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                        : "border-transparent"
+                    )}>
                       <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                         <Lock className="w-4 h-4" />
                         Account Password
@@ -1031,7 +1080,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             htmlFor="password"
                             className="text-xs font-bold text-slate-700 dark:text-slate-300"
                           >
-                            Password <span className="text-red-500">*</span>
+                            Password{!passwordChecks.allValid && <span className="text-red-500">*</span>}
                           </Label>
                           <div className="relative">
                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1067,7 +1116,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             htmlFor="confirmPassword"
                             className="text-xs font-bold text-slate-700 dark:text-slate-300"
                           >
-                            Confirm Password <span className="text-red-500">*</span>
+                            Confirm Password{!passwordChecks.hasMatch && <span className="text-red-500">*</span>}
                           </Label>
                           <div className="relative">
                             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1215,8 +1264,17 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     )}
 
                     {/* Terms and Conditions */}
-                    <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex items-start space-x-2">
+                    <div
+                      className={cn(
+                        "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                        signupErrors.acceptTerms
+                          ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                          : acceptTerms
+                          ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
+                          : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
+                      )}
+                    >
+                      <div className="flex items-start space-x-3">
                         <input
                           type="checkbox"
                           id="acceptTerms"
@@ -1227,11 +1285,15 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         <Label
                           htmlFor="acceptTerms"
                           className={cn(
-                            "text-xs text-slate-600 dark:text-slate-400 cursor-pointer",
-                            !acceptTerms && "text-amber-600 dark:text-amber-400",
+                            "text-xs cursor-pointer leading-relaxed",
+                            signupErrors.acceptTerms
+                              ? "text-red-700 dark:text-red-300 font-bold"
+                              : acceptTerms
+                              ? "text-green-700 dark:text-green-300 font-medium"
+                              : "text-slate-600 dark:text-slate-400"
                           )}
                         >
-                          I agree to the{" "}
+                          I agree to receive email notifications and accept the{" "}
                           <Link
                             to="/terms"
                             className="font-extrabold hover:text-primary underline"
@@ -1247,10 +1309,11 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                           >
                             Privacy Policy
                           </Link>
+                          .
                         </Label>
                       </div>
                       {signupErrors.acceptTerms && (
-                        <p className="text-sm text-red-500">
+                        <p className="text-sm text-red-500 font-medium">
                           {signupErrors.acceptTerms.message}
                         </p>
                       )}
@@ -1260,7 +1323,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                       <Info className="w-5 h-5 text-amber-500 shrink-0" />
                       <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
                         Accounts require Admin approval before accessing
-                        dashboard features. You'll receive updates by{" "}
+                        account features. You'll receive updates by{" "}
                         <span className="font-black">email-first</span> (SMS
                         optional if enabled by Admin policy).
                       </p>
@@ -1307,6 +1370,10 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                       {otpSent
                         ? "After verification, your application will be submitted for admin approval."
                         : "After submission, you'll receive a verification code via email."}
+                    </p>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                      Service is available in California only.
                     </p>
                   </form>
                 </CardContent>

@@ -687,41 +687,79 @@ export default function DriverOnboardingPage() {
                     </div> */}
 
                     {/* Full Name */}
-                    <div className="space-y-2">
+                    <div className={cn(
+                      "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                      errors.fullName
+                        ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                        : "border-transparent"
+                    )}>
                       <Label htmlFor="fullName" className="text-xs font-bold">
-                        Name
+                        Name{!watchFullName?.trim() && <span className="text-red-500">*</span>}
                       </Label>
-                      <Input
-                        id="fullName"
-                        {...register("fullName")}
-                        className="h-14 rounded-2xl"
-                        placeholder="Jane Driver"
-                        autoComplete="name"
-                        disabled={isPending}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="fullName"
+                          {...register("fullName")}
+                          className={cn(
+                            "h-14 rounded-2xl pr-10 transition-colors",
+                            errors.fullName
+                              ? "border-red-400 dark:border-red-500"
+                              : watchFullName?.trim()
+                                ? "border-green-300 dark:border-green-700"
+                                : ""
+                          )}
+                          placeholder="Jane Driver"
+                          autoComplete="name"
+                          disabled={isPending}
+                        />
+                        {watchFullName?.trim() && !errors.fullName && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          </div>
+                        )}
+                      </div>
                       {errors.fullName && (
-                        <p className="text-xs text-red-500">
+                        <p className="text-xs text-red-500 font-medium">
                           {errors.fullName.message}
                         </p>
                       )}
                     </div>
 
                     {/* Email */}
-                    <div className="space-y-2">
+                    <div className={cn(
+                      "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                      errors.email
+                        ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                        : "border-transparent"
+                    )}>
                       <Label htmlFor="email" className="text-xs font-bold">
-                        Email
+                        Email{!watchEmail?.trim() && <span className="text-red-500">*</span>}
                       </Label>
-                      <Input
-                        id="email"
-                        {...register("email")}
-                        className="h-14 rounded-2xl"
-                        placeholder="jane@example.com"
-                        type="email"
-                        autoComplete="email"
-                        disabled={isPending}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="email"
+                          {...register("email")}
+                          className={cn(
+                            "h-14 rounded-2xl pr-10 transition-colors",
+                            errors.email
+                              ? "border-red-400 dark:border-red-500"
+                              : watchEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchEmail)
+                                ? "border-green-300 dark:border-green-700"
+                                : ""
+                          )}
+                          placeholder="jane@example.com"
+                          type="email"
+                          autoComplete="email"
+                          disabled={isPending}
+                        />
+                        {watchEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchEmail) && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          </div>
+                        )}
+                      </div>
                       {errors.email && (
-                        <p className="text-xs text-red-500">
+                        <p className="text-xs text-red-500 font-medium">
                           {errors.email.message}
                         </p>
                       )}
@@ -730,7 +768,7 @@ export default function DriverOnboardingPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="password" className="text-xs font-bold">
-                          Password <span className="text-red-500">*</span>
+                          Password{!passwordChecks.allValid && <span className="text-red-500">*</span>}
                         </Label>
                         <div className="relative">
                           <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -767,7 +805,7 @@ export default function DriverOnboardingPage() {
                           htmlFor="confirmPassword"
                           className="text-xs font-bold"
                         >
-                          Confirm Password <span className="text-red-500">*</span>
+                          Confirm Password{!passwordChecks.hasMatch && <span className="text-red-500">*</span>}
                         </Label>
                         <div className="relative">
                           <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -870,9 +908,14 @@ export default function DriverOnboardingPage() {
                     </div>
 
                     {/* Phone */}
-                    <div className="space-y-2">
+                    <div className={cn(
+                      "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                      errors.phone
+                        ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                        : "border-transparent"
+                    )}>
                       <Label htmlFor="phone" className="text-xs font-bold">
-                        Phone <span className="text-red-500">*</span>
+                        Phone{(watchPhone?.replace(/\D/g, '').length || 0) < 10 && <span className="text-red-500">*</span>}
                       </Label>
                       <div className="relative">
                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -881,7 +924,14 @@ export default function DriverOnboardingPage() {
                           name="phone"
                           value={phoneDisplay}
                           onChange={handlePhoneChange}
-                          className="h-14 pl-12 rounded-2xl"
+                          className={cn(
+                            "h-14 pl-12 rounded-2xl transition-colors",
+                            errors.phone
+                              ? "border-red-400 dark:border-red-500"
+                              : (watchPhone?.replace(/\D/g, '').length || 0) >= 10
+                                ? "border-green-300 dark:border-green-700"
+                                : ""
+                          )}
                           placeholder="(555) 123-4567"
                           type="tel"
                           autoComplete="tel-national"
@@ -889,9 +939,14 @@ export default function DriverOnboardingPage() {
                           maxLength={14}
                           disabled={isPending}
                         />
+                        {(watchPhone?.replace(/\D/g, '').length || 0) >= 10 && !errors.phone && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          </div>
+                        )}
                       </div>
                       {errors.phone && (
-                        <p className="text-xs text-red-500">
+                        <p className="text-xs text-red-500 font-medium">
                           {errors.phone.message}
                         </p>
                       )}

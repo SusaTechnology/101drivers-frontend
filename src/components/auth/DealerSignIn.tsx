@@ -402,7 +402,7 @@ export function DealerSignIn({
                     Welcome back
                   </h2>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Sign in to access your dashboard.
+                    Log in to your account.
                   </p>
                 </div>
                 <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
@@ -501,7 +501,7 @@ export function DealerSignIn({
                     </>
                   ) : (
                     <>
-                      Sign In
+                      Log In
                       <ArrowRight className="w-5 h-5 font-bold" />
                     </>
                   )}
@@ -518,11 +518,6 @@ export function DealerSignIn({
                     >
                       <Link to="/auth/dealer-signup">Sign up</Link>
                     </Button>
-                  </p>
-                  <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Notifications are{" "}
-                    <span className="font-bold">email-first</span>. SMS is
-                    optional and depends on Admin policy.
                   </p>
                 </div>
               </form>
@@ -544,19 +539,9 @@ export function DealerSignIn({
                 </li>
                 <li className="flex gap-3">
                   <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                  View before &amp; after photos, full delivery history, and payment reports on your admin dashboard
+                  View before &amp; after photos, full delivery history, and payment reports on your account
                 </li>
               </ul>
-              <div className="mt-6 flex flex-wrap gap-2">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/25 text-slate-800 dark:text-slate-200 text-xs font-extrabold">
-                  <MapPin className="text-primary w-4 h-4" />
-                  California-only operations
-                </div>
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold">
-                  <MailCheck className="text-primary w-4 h-4" />
-                  Email alerts
-                </div>
-              </div>
             </CustomCard>
 
             {/* Bottom Sign Up Link */}
@@ -571,6 +556,9 @@ export function DealerSignIn({
                 >
                   <Link to="/auth/dealer-signup">Sign up</Link>
                 </Button>
+              </p>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                Service is available in California only.
               </p>
             </div>
           </div>
@@ -589,35 +577,32 @@ export function DealerSignIn({
                 </div>
                 <div>
                   <h1 className="text-4xl font-black text-slate-900 dark:text-white">
-                    {isAdmin ? "Admin Sign In" : "Driver Sign In"}
+                    {isAdmin ? "Admin Sign In" : "Welcome back, Driver"}
                   </h1>
                   <p className="text-slate-600 dark:text-slate-400 mt-3 text-lg leading-relaxed max-w-xl">
                     {isAdmin ? (
                       "Manage platform users, monitor operations, and configure system settings."
                     ) : (
-                      "Accept delivery jobs, upload proofs, and track earnings."
+                      "Log in to your account."
                     )}
                   </p>
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/25 text-slate-800 dark:text-slate-200 text-xs font-extrabold">
-                      <MapPin className="text-primary w-4 h-4" />
-                      California-only operations
+                  {!isAdmin && (
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/25 text-slate-800 dark:text-slate-200 text-xs font-extrabold">
+                        <MapPin className="text-primary w-4 h-4" />
+                        California-only operations
+                      </div>
                     </div>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold">
-                      <MailCheck className="text-primary w-4 h-4" />
-                      Email-first notifications
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
+              {isAdmin ? (
               <CustomCard className="mt-10 bg-white/70 dark:bg-slate-900/40 border border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
                 <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                  What you can do as {isAdmin ? "an Admin" : "a Driver"}
+                  What you can do as an Admin
                 </h2>
                 <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
-                  {isAdmin ? (
-                    <>
                       <li className="flex gap-3">
                         <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
                         Manage all user accounts (dealers, drivers) and their permissions
@@ -630,25 +615,43 @@ export function DealerSignIn({
                         <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
                         Configure system settings, notification preferences, and compliance rules
                       </li>
-                    </>
-                  ) : (
-                    <>
-                      <li className="flex gap-3">
-                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                        Accept delivery jobs based on availability and location
-                      </li>
-                      <li className="flex gap-3">
-                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                        Upload VIN verification, photos, and odometer readings
-                      </li>
-                      <li className="flex gap-3">
-                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
-                        Track earnings and delivery history with detailed trip reports
-                      </li>
-                    </>
-                  )}
                 </ul>
               </CustomCard>
+              ) : (
+              <CustomCard className="mt-10 bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                  Become a Driver
+                </h2>
+                <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Be your own boss — pick up jobs that fit your schedule
+                      </li>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        See your route, pickup details, and earnings before you accept
+                      </li>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Drive different cars every day across the LA area
+                      </li>
+                </ul>
+                <div className="mt-6">
+                  <Button
+                    className="w-full py-3.5 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-12 text-base font-black"
+                    asChild
+                  >
+                    <Link to="/driver-onboarding">
+                      Apply to Drive
+                      <ArrowRight className="w-5 h-5" />
+                    </Link>
+                  </Button>
+                  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 text-center leading-relaxed">
+                    All applicants must be 25 or older and pass a background check and DMV review.
+                  </p>
+                </div>
+              </CustomCard>
+              )}
             </div>
 
             {/* Right: Sign-in Form */}
@@ -664,9 +667,9 @@ export function DealerSignIn({
                     </h2>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                       {isAdmin ? (
-                        "Sign in to access the admin dashboard."
+                        "Log in to access your account."
                       ) : (
-                        "Sign in to access your driver portal."
+                        "Log in to your account."
                       )}
                     </p>
                   </div>
@@ -766,7 +769,7 @@ export function DealerSignIn({
                       </>
                     ) : (
                       <>
-                        Sign In {isAdmin ? "as Admin" : "as Driver"}
+                        Log In
                         <ArrowRight className="w-5 h-5 font-bold" />
                       </>
                     )}
@@ -789,11 +792,6 @@ export function DealerSignIn({
                           </Button>
                         </>
                       )}
-                    </p>
-                    <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Notifications are{" "}
-                      <span className="font-bold">email-first</span>. SMS is
-                      optional and depends on Admin policy.
                     </p>
                   </div>
                 </form>
