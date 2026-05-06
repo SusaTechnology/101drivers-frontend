@@ -20,7 +20,6 @@ import { EmailVerificationService } from "./email-verification/email-verificatio
 import { MailModule } from "src/common/mail/mail.module";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
 import { PrismaService } from "../prisma/prisma.service";
-import { MailService } from "src/common/mail/mail.service";
 @Module({
   imports: [
     forwardRef(() => UserModule),
@@ -66,7 +65,6 @@ import { MailService } from "src/common/mail/mail.service";
     EmailVerificationService,
     NotificationEventEngine,
     PrismaService,
-    MailService,
   ],
   controllers: [AuthController],
   exports: [AuthService, PasswordService],

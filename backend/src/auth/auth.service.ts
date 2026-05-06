@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { Credentials } from "./Credentials";
@@ -45,6 +46,8 @@ type VerificationRequiredResult = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordService: PasswordService,
@@ -429,7 +432,12 @@ export class AuthService {
       });
     } catch (notificationError) {
       // Log but don't block signup if notification fails
-      console.error("Failed to send driver signup confirmation email:", notificationError);
+      this.logger.error(
+        `Failed to send driver signup confirmation email: ${
+          notificationError instanceof Error ? notificationError.message : String(notificationError)
+        }`,
+        notificationError instanceof Error ? notificationError.stack : undefined,
+      );
     }
 
     return this.issueToken(
