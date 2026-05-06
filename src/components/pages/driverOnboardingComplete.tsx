@@ -886,7 +886,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   className="h-14 rounded-2xl"
                   placeholder="Apt 4B"
                   autoComplete="address-line2"
-                  disabled={submitMutation.isPending}
+                  disabled={false}
                 />
               </div>
 
@@ -1043,10 +1043,9 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
             <div className="border-t border-slate-100 dark:border-slate-800 px-6 py-6">
               <Button
                 type="submit"
-                disabled={submitMutation.isPending}
                 className="w-full h-14 rounded-2xl font-black text-base bg-lime-500 hover:bg-lime-600 text-black shadow-lg shadow-lime-500/20 disabled:opacity-60"
               >
-                {submitMutation.isPending ? (
+                {false ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                     Submitting...
