@@ -342,7 +342,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   // State change handler
   const handleStateChange = useCallback(
     (value: string) => {
-      setValue("state", value, { shouldValidate: true });
+      setValue("residentialState", value, { shouldValidate: true });
     },
     [setValue]
   );
