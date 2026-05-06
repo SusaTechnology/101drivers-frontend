@@ -526,7 +526,7 @@ async completeOnboarding(
  */
 
 async findDriverByOnboardingToken(token: string): Promise<any | null> {
-  return this.prisma.driver.findUnique({
+  return this.prisma.driver.findFirst({
     where: { onboardingToken: token },
     select: {
       id: true,
@@ -547,7 +547,7 @@ async completeOnboardingByToken(
   token: string,
   dto: CompleteDriverOnboardingDto
 ): Promise<any> {
-  const driver = await this.prisma.driver.findUnique({
+  const driver = await this.prisma.driver.findFirst({
     where: { onboardingToken: token },
     select: {
       id: true,
@@ -558,17 +558,17 @@ async completeOnboardingByToken(
   });
 
   if (!driver) {
-    throw new common.NotFoundException("Invalid or expired token");
+    throw new NotFoundException("Invalid or expired token");
   }
 
   if (driver.status !== EnumDriverStatus.APPROVED) {
-    throw new common.BadRequestException(
+    throw new BadRequestException(
       "Onboarding can only be completed for approved drivers"
     );
   }
 
   if (driver.onboardingCompletedAt) {
-    throw new common.BadRequestException("Onboarding has already been completed");
+    throw new BadRequestException("Onboarding has already been completed");
   }
 
   // Parse date of birth from MM/DD/YYYY to Date
