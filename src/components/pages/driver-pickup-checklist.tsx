@@ -230,7 +230,7 @@ export default function DriverPickupChecklistPage() {
   const [vinPhotoSaved, setVinPhotoSaved] = useState(saved?.vinPhotoSaved ?? false)
   const [vinPhotoUploading, setVinPhotoUploading] = useState(false)
   const [vinPhotoUploadError, setVinPhotoUploadError] = useState(false)
-
+  const [odometerError, setOdometerError] = useState<string | null>(null)
   // ── Restore photo files from IndexedDB on mount (survives reload) ──
   const [photosRestored, setPhotosRestored] = useState(false)
   useEffect(() => {
@@ -475,23 +475,28 @@ export default function DriverPickupChecklistPage() {
 
   // Step 3: Odometer photo
   const handleAddOdometerPhoto = () => {
-    currentInputTarget.current = 'odometer'
-    odometerInputRef.current?.click()
+  setOdometerError(null)
+  currentInputTarget.current = 'odometer'
+  odometerInputRef.current?.click()
+}
+
+const handleUploadOdometerPhoto = () => {
+  if (!odometerPhoto.file) {
+    setOdometerError('Take a photo of the odometer')
+    return
+  }
+  if (!odometerValue) {
+    setOdometerError('Enter the mileage reading')
+    return
   }
 
-  const handleUploadOdometerPhoto = () => {
-    if (!odometerPhoto.file) {
-      toast.error('Photo required', {
-        description: 'Please take a clear odometer photo first.',
-      })
-      return
-    }
-    const formData = new FormData()
-    formData.append('files', odometerPhoto.file)
-    formData.append('deliveryId', deliveryId)
-    formData.append('phase', 'PICKUP')
-    uploadOdometerMutation.mutate(formData)
-  }
+  setOdometerError(null) // clear any error
+  const formData = new FormData()
+  formData.append('files', odometerPhoto.file)
+  formData.append('deliveryId', deliveryId)
+  formData.append('phase', 'PICKUP')
+  uploadOdometerMutation.mutate(formData)
+}
 
   // Step 4: VIN photo
   const handleAddVinPhoto = () => {
@@ -958,7 +963,7 @@ export default function DriverPickupChecklistPage() {
 
         {/* Steps — only render when delivery data is available */}
         {delivery && (
-        <section className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <section className="mt-6 grid gap-6">
           {/* Left: checklist steps */}
           <div className="lg:col-span-7 space-y-6">
 
@@ -1287,13 +1292,17 @@ export default function DriverPickupChecklistPage() {
                           <div>
                             <label className="block text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                               Odometer Reading
+                              {!odometerValue && <span className="text-red-500 ml-0.5">*</span>}
                             </label>
                             <Input
                               type="number"
                               inputMode="numeric"
                               placeholder="e.g. 45230"
                               value={odometerValue}
-                              onChange={(e) => setOdometerValue(e.target.value)}
+                              onChange={(e) => {
+                                setOdometerValue(e.target.value)
+                                setOdometerError(null) // clear error when typing
+                              }}
                               className="h-12 text-base font-bold rounded-xl border-slate-200 dark:border-slate-700"
                             />
                             <p className="mt-1.5 text-[11px] text-slate-400">
@@ -1366,6 +1375,11 @@ export default function DriverPickupChecklistPage() {
                             </>
                           )}
                         </Button>
+                        {odometerError && (
+                        <p className="mt-2 text-[12px] font-bold text-red-500">
+                          {odometerError}
+                        </p>
+                      )}
                       </>
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
@@ -1631,8 +1645,7 @@ export default function DriverPickupChecklistPage() {
             </Card>
           </div>
 
-          {/* Right sidebar: status + tips */}
-          <div className="lg:col-span-5 space-y-6">
+           {/* <div className="lg:col-span-5 space-y-6">
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardContent className="p-6 sm:p-7">
                 <div className="flex items-start justify-between gap-4">
@@ -1730,7 +1743,6 @@ export default function DriverPickupChecklistPage() {
                   </div>
                 </div>
 
-                {/* Safe driving reminder */}
                 <div className="mt-5 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
                   <div className="flex items-start gap-3">
                     <Shield className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
@@ -1744,7 +1756,7 @@ export default function DriverPickupChecklistPage() {
                 </div>
               </CardContent>
             </Card>
-          </div>
+          </div> */} 
         </section>
         )}
       </main>
