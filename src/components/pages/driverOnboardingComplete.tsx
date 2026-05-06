@@ -112,7 +112,7 @@ const US_STATES = [
 // ==================== VALIDATION SCHEMA ====================
 
 const onboardingCompleteSchema = z.object({
-  fullName: z
+  legalFullName: z
     .string()
     .min(2, "Full legal name is required (at least 2 characters)"),
   dateOfBirth: z
@@ -126,14 +126,14 @@ const onboardingCompleteSchema = z.object({
     .string()
     .min(1, "Social Security Number is required")
     .regex(/^\d{9}$/, "SSN must be exactly 9 digits"),
-  addressLine1: z.string().min(1, "Street address is required"),
-  addressLine2: z.string().optional(),
-  city: z.string().min(1, "City is required"),
-  state: z
+  residentialAddressLine1: z.string().min(1, "Street address is required"),
+  residentialAddressLine2: z.string().optional(),
+  residentialCity: z.string().min(1, "City is required"),
+  residentialState: z
     .string()
     .min(1, "State is required")
     .regex(/^[A-Z]{2}$/, "State must be a valid 2-letter code"),
-  zipCode: z
+  residentialZip: z
     .string()
     .min(1, "ZIP code is required")
     .regex(/^\d{5}$/, "ZIP code must be exactly 5 digits"),
@@ -167,14 +167,14 @@ interface OnboardingStatusResponse {
 }
 
 interface OnboardingCompletePayload {
-  fullName: string;
+  legalFullName: string;
   dateOfBirth: string;
   ssn: string;
-  addressLine1: string;
-  addressLine2?: string;
-  city: string;
-  state: string;
-  zipCode: string;
+  residentialAddressLine1: string;
+  residentialAddressLine2?: string;
+  residentialCity: string;
+  residentialState: string;
+  residentialZip: string;
 }
 
 // ==================== COMPONENT ====================
@@ -236,25 +236,25 @@ export function DriverOnboardingComplete() {
   } = useForm<OnboardingCompleteFormData>({
     resolver: zodResolver(onboardingCompleteSchema),
     defaultValues: {
-      fullName: "",
+      legalFullName: "",
       dateOfBirth: "",
       ssn: "",
-      addressLine1: "",
-      addressLine2: "",
-      city: "",
-      state: "",
-      zipCode: "",
+      residentialAddressLine1: "",
+      residentialAddressLine2: "",
+      residentialCity: "",
+      residentialState: "",
+      residentialZip: "",
     },
   });
 
   // Watch fields for validation feedback
-  const watchFullName = watch("fullName");
+  const watchFullName = watch("legalFullName");
   const watchDob = watch("dateOfBirth");
   const watchSsn = watch("ssn");
-  const watchAddressLine1 = watch("addressLine1");
-  const watchCity = watch("city");
-  const watchState = watch("state");
-  const watchZipCode = watch("zipCode");
+  const watchAddressLine1 = watch("residentialAddressLine1");
+  const watchCity = watch("residentialCity");
+  const watchState = watch("residentialState");
+  const watchZipCode = watch("residentialZip");
 
   const dobIsValid =
     watchDob?.trim() && /^\d{2}\/\d{2}\/\d{4}$/.test(watchDob);
@@ -601,7 +601,7 @@ export function DriverOnboardingComplete() {
               <div
                 className={cn(
                   "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.fullName
+                  errors.legalFullName
                     ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                     : "border-transparent"
                 )}
@@ -619,10 +619,10 @@ export function DriverOnboardingComplete() {
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input
                     id="fullName"
-                    {...register("fullName")}
+                    {...register("legalFullName")}
                     className={cn(
                       "h-14 pl-12 pr-10 rounded-2xl transition-colors",
-                      errors.fullName
+                      errors.legalFullName
                         ? "border-red-400 dark:border-red-500"
                         : watchFullName?.trim() && watchFullName.trim().length >= 2
                           ? "border-green-300 dark:border-green-700"
@@ -634,15 +634,15 @@ export function DriverOnboardingComplete() {
                   />
                   {watchFullName?.trim() &&
                     watchFullName.trim().length >= 2 &&
-                    !errors.fullName && (
+                    !errors.legalFullName && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       </div>
                     )}
                 </div>
-                {errors.fullName && (
+                {errors.legalFullName && (
                   <p className="text-xs text-red-500 font-medium">
-                    {errors.fullName.message}
+                    {errors.legalFullName.message}
                   </p>
                 )}
               </div>
@@ -769,7 +769,7 @@ export function DriverOnboardingComplete() {
               <div
                 className={cn(
                   "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.addressLine1
+                  errors.residentialAddressLine1
                     ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                     : "border-transparent"
                 )}
@@ -787,10 +787,10 @@ export function DriverOnboardingComplete() {
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input
                     id="addressLine1"
-                    {...register("addressLine1")}
+                    {...register("residentialAddressLine1")}
                     className={cn(
                       "h-14 pl-12 pr-10 rounded-2xl transition-colors",
-                      errors.addressLine1
+                      errors.residentialAddressLine1
                         ? "border-red-400 dark:border-red-500"
                         : watchAddressLine1?.trim()
                           ? "border-green-300 dark:border-green-700"
@@ -800,15 +800,15 @@ export function DriverOnboardingComplete() {
                     autoComplete="address-line1"
                     disabled={submitMutation.isPending}
                   />
-                  {watchAddressLine1?.trim() && !errors.addressLine1 && (
+                  {watchAddressLine1?.trim() && !errors.residentialAddressLine1 && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     </div>
                   )}
                 </div>
-                {errors.addressLine1 && (
+                {errors.residentialAddressLine1 && (
                   <p className="text-xs text-red-500 font-medium">
-                    {errors.addressLine1.message}
+                    {errors.residentialAddressLine1.message}
                   </p>
                 )}
               </div>
@@ -826,7 +826,7 @@ export function DriverOnboardingComplete() {
                 </Label>
                 <Input
                   id="addressLine2"
-                  {...register("addressLine2")}
+                  {...register("residentialAddressLine2")}
                   className="h-14 rounded-2xl"
                   placeholder="Apt 4B"
                   autoComplete="address-line2"
@@ -838,7 +838,7 @@ export function DriverOnboardingComplete() {
               <div
                 className={cn(
                   "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.city
+                  errors.residentialCity
                     ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                     : "border-transparent"
                 )}
@@ -852,10 +852,10 @@ export function DriverOnboardingComplete() {
                 <div className="relative">
                   <Input
                     id="city"
-                    {...register("city")}
+                    {...register("residentialCity")}
                     className={cn(
                       "h-14 rounded-2xl pr-10 transition-colors",
-                      errors.city
+                      errors.residentialCity
                         ? "border-red-400 dark:border-red-500"
                         : watchCity?.trim()
                           ? "border-green-300 dark:border-green-700"
@@ -865,15 +865,15 @@ export function DriverOnboardingComplete() {
                     autoComplete="address-level2"
                     disabled={submitMutation.isPending}
                   />
-                  {watchCity?.trim() && !errors.city && (
+                  {watchCity?.trim() && !errors.residentialCity && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     </div>
                   )}
                 </div>
-                {errors.city && (
+                {errors.residentialCity && (
                   <p className="text-xs text-red-500 font-medium">
-                    {errors.city.message}
+                    {errors.residentialCity.message}
                   </p>
                 )}
               </div>
@@ -884,7 +884,7 @@ export function DriverOnboardingComplete() {
                 <div
                   className={cn(
                     "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                    errors.state
+                    errors.residentialState
                       ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                       : "border-transparent"
                   )}
@@ -903,7 +903,7 @@ export function DriverOnboardingComplete() {
                     <SelectTrigger
                       className={cn(
                         "h-14 rounded-2xl transition-colors",
-                        errors.state
+                        errors.residentialState
                           ? "border-red-400 dark:border-red-500"
                           : watchState
                             ? "border-green-300 dark:border-green-700"
@@ -920,7 +920,7 @@ export function DriverOnboardingComplete() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {watchState && !errors.state && (
+                  {watchState && !errors.residentialState && (
                     <div className="flex items-center gap-1.5">
                       <CheckCircle className="w-4 h-4 text-green-500" />
                       <span className="text-[10px] text-green-600 dark:text-green-400 font-medium">
@@ -928,9 +928,9 @@ export function DriverOnboardingComplete() {
                       </span>
                     </div>
                   )}
-                  {errors.state && (
+                  {errors.residentialState && (
                     <p className="text-xs text-red-500 font-medium">
-                      {errors.state.message}
+                      {errors.residentialState.message}
                     </p>
                   )}
                 </div>
@@ -939,7 +939,7 @@ export function DriverOnboardingComplete() {
                 <div
                   className={cn(
                     "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                    errors.zipCode
+                    errors.residentialZip
                       ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                       : "border-transparent"
                   )}
@@ -953,10 +953,10 @@ export function DriverOnboardingComplete() {
                   <div className="relative">
                     <Input
                       id="zipCode"
-                      {...register("zipCode")}
+                      {...register("residentialZip")}
                       className={cn(
                         "h-14 rounded-2xl pr-10 transition-colors",
-                        errors.zipCode
+                        errors.residentialZip
                           ? "border-red-400 dark:border-red-500"
                           : zipIsValid
                             ? "border-green-300 dark:border-green-700"
@@ -968,15 +968,15 @@ export function DriverOnboardingComplete() {
                       maxLength={5}
                       disabled={submitMutation.isPending}
                     />
-                    {zipIsValid && !errors.zipCode && (
+                    {zipIsValid && !errors.residentialZip && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       </div>
                     )}
                   </div>
-                  {errors.zipCode && (
+                  {errors.residentialZip && (
                     <p className="text-xs text-red-500 font-medium">
-                      {errors.zipCode.message}
+                      {errors.residentialZip.message}
                     </p>
                   )}
                 </div>

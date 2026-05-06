@@ -13,6 +13,7 @@ export function configureCors(app: INestApplication) {
 
       const ok =
         origin === "https://101drivers.techbee.et" ||
+        /^https:\/\/37\.60\.253\.124(:\d+)?$/i.test(origin) ||
         /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 
       if (ok) return cb(null, true);

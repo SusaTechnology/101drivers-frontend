@@ -267,7 +267,7 @@ export class DriverApprovalEngine {
 
     await this.prisma.adminAuditLog.create({
       data: {
-        action: EnumAdminAuditLogAction.DRIVER_APPROVE,
+        action: EnumAdminAuditLogAction.OTHER,
         actorUserId: input.actorUserId ?? null,
         actorType: EnumAdminAuditLogActorType.USER,
         driverId: input.driverId,

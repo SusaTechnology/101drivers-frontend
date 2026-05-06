@@ -167,15 +167,10 @@ export function DealerSignIn({
       }
 
       // Check 4: Approval status for drivers
+      // NOTE: PENDING drivers are allowed to log in — they will see the
+      // "Application Submitted" screen on /driver-onboarding-complete.
       if (isDriver && data.driverStatus) {
         const status = data.driverStatus;
-        if (status === 'PENDING') {
-          setLoginError(
-            "Your driver account is pending approval. We'll notify you by email once an administrator approves your application."
-          );
-          toast.error("Account pending approval.");
-          return;
-        }
         if (status === 'SUSPENDED') {
           setLoginError(
             "Your driver account has been suspended. Please contact support for assistance."
