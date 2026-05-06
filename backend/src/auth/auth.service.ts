@@ -20,6 +20,7 @@ import { EmailVerificationService } from "./email-verification/email-verificatio
 import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { MailService } from "src/common/mail/mail.service";
 import {
   EnumCustomerCustomerType,
   EnumDriverStatus,
@@ -57,6 +58,7 @@ export class AuthService {
     private readonly driverService: DriverService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly notificationEventEngine: NotificationEventEngine,
+    private readonly mailService: MailService,
   ) {}
 
   private normalizeIdentifier(identifier: string): string {
@@ -411,27 +413,26 @@ export class AuthService {
 
     // Send confirmation email to driver after successful sign-up
     try {
-      await this.notificationEventEngine.queueAndSend({
-        channel: EnumNotificationEventChannel.EMAIL,
-        type: EnumNotificationEventType.DRIVER_SIGNUP,
-        templateCode: "driver-signup-confirmation",
-        toEmail: normalizedEmail,
+      await this.mailService.sendMail({
+        to: normalizedEmail,
         subject: "Your application to join 101 Drivers has been received",
-        body: [
+        text: [
           `Hi ${dto.fullName},`,
           "",
           "Thank you!",
           "Your application to join 101 Drivers has been received.",
           "Your account is pending approval. We'll review your information and contact you when we're ready to bring on new drivers.",
         ].join("\n"),
-        payload: {
-          driverEmail: normalizedEmail,
-          driverName: dto.fullName,
-          signupAt: new Date().toISOString(),
-        },
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111; max-width: 600px; margin: 0 auto;">
+            <h2>Your application to join 101 Drivers has been received</h2>
+            <p>Hi ${dto.fullName},</p>
+            <p>Thank you! Your application to join 101 Drivers has been received.</p>
+            <p>Your account is pending approval. We'll review your information and contact you when we're ready to bring on new drivers.</p>
+          </div>
+        `,
       });
     } catch (notificationError) {
-      // Log but don't block signup if notification fails
       this.logger.error(
         `Failed to send driver signup confirmation email: ${
           notificationError instanceof Error ? notificationError.message : String(notificationError)

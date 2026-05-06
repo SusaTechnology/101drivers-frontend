@@ -29,6 +29,7 @@ import {
   User,
   Shield,
   LogIn,
+  Home,
   Info,
   Menu,
   X,
@@ -369,38 +370,87 @@ export function DriverOnboardingComplete() {
   // Driver account pending
   if (driverStatus === "PENDING") {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-        <Header
-          mobileMenuOpen={mobileMenuOpen}
-          setMobileMenuOpen={setMobileMenuOpen}
-        />
-        <main className="flex-1 flex items-center justify-center px-6">
-          <Card className="max-w-md w-full border-slate-200 dark:border-slate-800 shadow-lg">
-            <CardContent className="p-8 text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center">
-                <Clock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
+        <div className="max-w-2xl mx-auto pt-10">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-lg">
+            {/* Success Header */}
+            <div className="relative bg-gradient-to-br from-lime-500/20 via-lime-500/10 to-transparent py-12 px-6 sm:px-10">
+              <div className="relative flex flex-col items-center text-center">
+                <div className="relative mb-6">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-lime-400 to-lime-500 flex items-center justify-center shadow-lg shadow-lime-500/30">
+                    <CheckCircle className="w-12 h-12 text-white" />
+                  </div>
+                  <div className="absolute -inset-2 rounded-full border-2 border-lime-400/30 animate-pulse" />
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
+                  Application Submitted!
+                </h2>
+                <p className="text-lg text-slate-600 dark:text-slate-400 mt-3 max-w-md">
+                  Your driver account application has been received and is pending admin approval.
+                </p>
+                <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
+                  <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                    Pending Approval
+                  </span>
+                </div>
               </div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                Account Pending Approval
-              </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Your driver account is currently pending admin approval. You can
-                complete onboarding once your account has been approved.
+            </div>
+            <div className="p-6 sm:p-10">
+              <div className="mb-8">
+                <h3 className="text-lg font-black text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                  <ArrowRight className="w-5 h-5 text-lime-500" />
+                  What Happens Next?
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-3">
+                      <span className="text-lg font-black text-blue-600 dark:text-blue-400">1</span>
+                    </div>
+                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">Admin Review</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Our team will verify your information within 1-2 business days.</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-3">
+                      <span className="text-lg font-black text-purple-600 dark:text-purple-400">2</span>
+                    </div>
+                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">Email Confirmation</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">You'll receive an email once your account is approved.</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                    <div className="w-10 h-10 rounded-xl bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center mb-3">
+                      <span className="text-lg font-black text-lime-600 dark:text-lime-400">3</span>
+                    </div>
+                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">Complete Onboarding</h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Once approved, you'll provide additional details to get started.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  to="/driver-signin"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-bold hover:opacity-90 transition shadow-lg"
+                >
+                  <LogIn className="w-5 h-5" />
+                  Go to Sign In
+                </Link>
+                <Link
+                  to="/"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                >
+                  <Home className="w-5 h-5" />
+                  Back to Home
+                </Link>
+              </div>
+              <p className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                Questions? Contact support at{" "}
+                <a href="mailto:support@101drivers.com" className="font-bold text-lime-500 hover:underline">
+                  support@101drivers.com
+                </a>
               </p>
-              <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
-                <Clock className="h-4 w-4 text-amber-500" />
-                <AlertTitle className="text-amber-900 dark:text-amber-200">
-                  Please wait
-                </AlertTitle>
-                <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
-                  You&apos;ll receive a notification once your account is
-                  approved.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        </main>
-        <Footer />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

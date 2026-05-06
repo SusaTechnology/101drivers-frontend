@@ -79,8 +79,12 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
       });
 
       if (!res.ok) {
-        // If the API fails (e.g., 401), redirect to sign-in
-        setGuardState("needs_signin");
+        if (res.status === 401) {
+          setGuardState("needs_signin");
+        } else {
+          // On other errors (404, 500, etc.), allow through — don't block on transient failures
+          setGuardState("authenticated");
+        }
         return;
       }
 

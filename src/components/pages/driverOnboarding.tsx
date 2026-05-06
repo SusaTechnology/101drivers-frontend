@@ -145,9 +145,13 @@ export default function DriverOnboardingPage() {
   
   const navigate = useNavigate();
 
-  // After registration completes, the driver stays on this page and sees
-  // the "Application Submitted / Pending Approval" success screen below.
-  // No redirect — the backend sends a confirmation email automatically.
+  // Redirect to the onboarding-complete page after registration.
+  // That page checks driver status and shows "Application Submitted" for PENDING.
+  useEffect(() => {
+    if (registrationComplete) {
+      navigate({ to: '/driver-onboarding-complete' })
+    }
+  }, [registrationComplete, navigate])
 
   // Handle phone input with formatting
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
