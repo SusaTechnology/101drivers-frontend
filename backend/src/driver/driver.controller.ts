@@ -41,6 +41,7 @@ import {
   UnsuspendDriverBody,
   RejectDriverBody
 } from "./dto/driverApproval.dto";
+import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
 
 @swagger.ApiTags("drivers")
 @common.Controller("drivers")
@@ -188,7 +189,77 @@ async rejectDriver(
       }
       throw error;
     }
-  }  
+  }
+
+  @common.Post("/onboarding-complete")
+  @swagger.ApiOkResponse({ type: Driver })
+  @swagger.ApiBadRequestResponse({ description: "Invalid input or driver not eligible" })
+  @swagger.ApiForbiddenResponse({ type: errors.ForbiddenException })
+  @nestAccessControl.UseRoles({
+    resource: "Driver",
+    action: "update",
+    possession: "own",
+  })
+  async completeOnboarding(
+    @common.Req() request: Request,
+    @common.Body() body: CompleteDriverOnboardingDto
+  ): Promise<Driver | null> {
+    const profileId = (request as any).user?.profileId;
+    if (!profileId) {
+      throw new common.ForbiddenException("Driver profile not found");
+    }
+
+    try {
+      return await this.service.completeOnboarding(profileId, body);
+    } catch (error) {
+      if (error instanceof common.BadRequestException) {
+        throw error;
+      }
+      throw new errors.NotFoundException(
+        `Failed to complete onboarding: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+  }
+
+  @common.Get("/onboarding-status")
+  @swagger.ApiOkResponse({
+    schema: {
+      type: "object",
+      properties: {
+        onboardingCompleted: { type: "boolean" },
+        onboardingCompletedAt: { type: "string", nullable: true },
+        driverStatus: { type: "string" },
+      },
+    },
+  })
+  @nestAccessControl.UseRoles({
+    resource: "Driver",
+    action: "read",
+    possession: "own",
+  })
+  async getOnboardingStatus(
+    @common.Req() request: Request
+  ): Promise<{ onboardingCompleted: boolean; onboardingCompletedAt: string | null; driverStatus: string }> {
+    const profileId = (request as any).user?.profileId;
+    if (!profileId) {
+      return { onboardingCompleted: false, onboardingCompletedAt: null, driverStatus: "UNKNOWN" };
+    }
+
+    const driver = await this.service.driver({
+      where: { id: profileId },
+      select: {
+        status: true,
+        onboardingCompletedAt: true,
+      },
+    });
+
+    return {
+      onboardingCompleted: !!driver?.onboardingCompletedAt,
+      onboardingCompletedAt: driver?.onboardingCompletedAt?.toISOString() ?? null,
+      driverStatus: driver?.status ?? "UNKNOWN",
+    };
+  }
+
 @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Post()
   @swagger.ApiCreatedResponse({ type: Driver })

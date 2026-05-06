@@ -87,14 +87,23 @@ model Driver {
   location         DriverLocation?
   audits           AdminAuditLog[]
   createdAt        DateTime                   @default(now())
+  dateOfBirth      DateTime?
   districts        DriverDistrictPreference[]
   id               String                     @id @default(cuid())
+  legalFullName    String?
   notifications    NotificationEvent[]
+  onboardingCompletedAt  DateTime?
   payouts          DriverPayout[]
   phone            String?
   preferences      DriverPreference?
   profilePhotoUrl  String?
   ratingsReceived  DeliveryRating[]
+  residentialAddressLine1  String?
+  residentialAddressLine2  String?
+  residentialCity  String?
+  residentialState String?
+  residentialZip   String?
+  ssnLastFour      String?
   status           EnumDriverStatus           @default(PENDING)
   updatedAt        DateTime                   @updatedAt
   user             User                       @relation(name: "DriverOnUser", fields: [userId], references: [id])

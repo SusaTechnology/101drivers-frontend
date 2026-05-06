@@ -22,6 +22,7 @@ import { DriverPolicyService } from "../domain/driver/driverPolicy.service";
 import { UpdateDriverProfileBody } from "./dto/driverProfile.dto";
 import { EnumDriverStatus } from "@prisma/client";
 import { DriverApprovalEngine } from "../domain/driver/driverApproval.engine";
+import { CompleteDriverOnboardingDto } from "./dto/driverOnboardingComplete.dto";
 
 @Injectable()
 export class DriverService extends DriverServiceBase {
@@ -455,6 +456,59 @@ async driverLookupList(): Promise<
     status: row.status,
   }));
 }
-  
+
+async completeOnboarding(
+  driverId: string,
+  dto: CompleteDriverOnboardingDto
+): Promise<any> {
+  const driver = await this.prisma.driver.findUnique({
+    where: { id: driverId },
+    select: {
+      id: true,
+      status: true,
+      onboardingCompletedAt: true,
+    },
+  });
+
+  if (!driver) {
+    throw new BadRequestException("Driver not found");
+  }
+
+  if (driver.status !== EnumDriverStatus.APPROVED) {
+    throw new BadRequestException(
+      "Onboarding can only be completed for approved drivers"
+    );
+  }
+
+  if (driver.onboardingCompletedAt) {
+    throw new BadRequestException("Onboarding has already been completed");
+  }
+
+  // Parse date of birth from MM/DD/YYYY to Date
+  const [month, day, year] = dto.dateOfBirth.split("/");
+  const dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
+  // Store only the last 4 digits of SSN
+  const ssnLastFour = dto.ssn.slice(-4);
+
+  await this.prisma.driver.update({
+    where: { id: driverId },
+    data: {
+      legalFullName: dto.legalFullName.trim(),
+      dateOfBirth: dob,
+      ssnLastFour,
+      residentialAddressLine1: dto.residentialAddressLine1.trim(),
+      residentialAddressLine2: dto.residentialAddressLine2
+        ? dto.residentialAddressLine2.trim()
+        : null,
+      residentialCity: dto.residentialCity.trim(),
+      residentialState: dto.residentialState.trim(),
+      residentialZip: dto.residentialZip.trim(),
+      onboardingCompletedAt: new Date(),
+    },
+  });
+
+  return this.domain.findUnique({ id: driverId });
+}
 
 }

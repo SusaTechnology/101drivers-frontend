@@ -18,11 +18,14 @@ import { getCookieOptionsFromRequest } from "../common/cors-cookie.util";
 import { EmailVerificationService } from "./email-verification/email-verification.service";
 import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import {
   EnumCustomerCustomerType,
   EnumDriverStatus,
   EnumUserRoles,
   EnumEmailVerificationPurpose,
+  EnumNotificationEventChannel,
+  EnumNotificationEventType,
 } from "@prisma/client";
 
 type AuthValidatedUser = {
@@ -49,7 +52,8 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly customerService: CustomerService,
     private readonly driverService: DriverService,
-    private readonly emailVerificationService: EmailVerificationService
+    private readonly emailVerificationService: EmailVerificationService,
+    private readonly notificationEventEngine: NotificationEventEngine,
   ) {}
 
   private normalizeIdentifier(identifier: string): string {
@@ -401,6 +405,32 @@ export class AuthService {
       },
       select: { id: true },
     } as any);
+
+    // Send confirmation email to driver after successful sign-up
+    try {
+      await this.notificationEventEngine.queueAndSend({
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.DRIVER_SIGNUP,
+        templateCode: "driver-signup-confirmation",
+        toEmail: normalizedEmail,
+        subject: "Your application to join 101 Drivers has been received",
+        body: [
+          `Hi ${dto.fullName},`,
+          "",
+          "Thank you!",
+          "Your application to join 101 Drivers has been received.",
+          "Your account is pending approval. We'll review your information and contact you when we're ready to bring on new drivers.",
+        ].join("\n"),
+        payload: {
+          driverEmail: normalizedEmail,
+          driverName: dto.fullName,
+          signupAt: new Date().toISOString(),
+        },
+      });
+    } catch (notificationError) {
+      // Log but don't block signup if notification fails
+      console.error("Failed to send driver signup confirmation email:", notificationError);
+    }
 
     return this.issueToken(
       user.id,

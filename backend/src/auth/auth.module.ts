@@ -18,6 +18,9 @@ import { CustomerModule } from "../customer/customer.module";
 import { DriverModule } from "../driver/driver.module";
 import { EmailVerificationService } from "./email-verification/email-verification.service";
 import { MailModule } from "src/common/mail/mail.module";
+import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
+import { PrismaService } from "../prisma/prisma.service";
+import { MailService } from "src/common/mail/mail.service";
 @Module({
   imports: [
     forwardRef(() => UserModule),
@@ -60,7 +63,10 @@ import { MailModule } from "src/common/mail/mail.module";
     JwtStrategy,
     jwtSecretFactory,
     TokenService,
-    EmailVerificationService
+    EmailVerificationService,
+    NotificationEventEngine,
+    PrismaService,
+    MailService,
   ],
   controllers: [AuthController],
   exports: [AuthService, PasswordService],

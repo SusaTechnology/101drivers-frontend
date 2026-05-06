@@ -1,0 +1,10 @@
+-- AlterTable: Add driver onboarding completion fields
+ALTER TABLE "Driver" ADD COLUMN "dateOfBirth" TIMESTAMP(3);
+ALTER TABLE "Driver" ADD COLUMN "legalFullName" TEXT;
+ALTER TABLE "Driver" ADD COLUMN "onboardingCompletedAt" TIMESTAMP(3);
+ALTER TABLE "Driver" ADD COLUMN "residentialAddressLine1" TEXT;
+ALTER TABLE "Driver" ADD COLUMN "residentialAddressLine2" TEXT;
+ALTER TABLE "Driver" ADD COLUMN "residentialCity" TEXT;
+ALTER TABLE "Driver" ADD COLUMN "residentialState" TEXT;
+ALTER TABLE "Driver" ADD COLUMN "residentialZip" TEXT;
+ALTER TABLE "Driver" ADD COLUMN "ssnLastFour" TEXT;

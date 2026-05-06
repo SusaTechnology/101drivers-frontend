@@ -694,8 +694,11 @@ export default function DriverOnboardingPage() {
                         : "border-transparent"
                     )}>
                       <Label htmlFor="fullName" className="text-xs font-bold">
-                        Name{!watchFullName?.trim() && <span className="text-red-500">*</span>}
+                        Full legal name (exactly as it appears on your driver's license){!watchFullName?.trim() && <span className="text-red-500">*</span>}
                       </Label>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                        This must match your driver's license exactly.
+                      </p>
                       <div className="relative">
                         <Input
                           id="fullName"
@@ -708,7 +711,7 @@ export default function DriverOnboardingPage() {
                                 ? "border-green-300 dark:border-green-700"
                                 : ""
                           )}
-                          placeholder="Jane Driver"
+                          placeholder="Full legal name as on driver's license"
                           autoComplete="name"
                           disabled={isPending}
                         />
