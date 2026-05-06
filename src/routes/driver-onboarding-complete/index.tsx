@@ -4,12 +4,18 @@ import { DriverOnboardingComplete } from '@/components/pages/driverOnboardingCom
 
 export const Route = createFileRoute("/driver-onboarding-complete/")({
   component: DriverOnboardingCompletePage,
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      token: typeof search.token === "string" ? search.token : undefined,
+    }
+  },
 })
 
 function DriverOnboardingCompletePage() {
+  const { token } = Route.useSearch()
   return (
     <ThemeProvider attribute="class" defaultTheme="light">
-      <DriverOnboardingComplete />
+      <DriverOnboardingComplete token={token} />
     </ThemeProvider>
   )
 }

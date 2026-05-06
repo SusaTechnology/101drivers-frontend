@@ -179,52 +179,109 @@ interface OnboardingCompletePayload {
 
 // ==================== COMPONENT ====================
 
-export function DriverOnboardingComplete() {
+interface DriverOnboardingCompleteProps {
+  token?: string;
+}
+
+export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [ssnDisplay, setSsnDisplay] = useState("");
   const [dobDisplay, setDobDisplay] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+  const [alreadyCompleted, setAlreadyCompleted] = useState(false);
+  const [driverName, setDriverName] = useState<string | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
-  // Auth & user checks
-  const authenticated = isAuthenticated();
-  const user = getUser();
-  const isDriver = user?.roles?.includes("DRIVER");
-  const driverStatus = user?.driverStatus;
+  // Determine if we're using token-based (from email) or auth-based (from login) flow
+  const usingToken = !!token;
 
   // Fetch onboarding status on mount
-  const {
-    data: onboardingStatus,
-    isLoading: statusLoading,
-  } = useDataQuery<OnboardingStatusResponse>({
-    apiEndPoint: `${API_URL}/api/drivers/onboarding-status`,
-    noFilter: true,
-    fetchWithoutRefresh: true,
-    enabled: authenticated && isDriver && driverStatus === "APPROVED",
-  });
+  useEffect(() => {
+    if (usingToken) {
+      // Token-based: call public endpoint (no auth needed)
+      fetch(`${API_URL}/api/public/drivers/onboarding-status?token=${encodeURIComponent(token)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Invalid or expired link");
+          return res.json();
+        })
+        .then((data) => {
+          setTokenValid(true);
+          setAlreadyCompleted(data.onboardingCompleted === true);
+          setDriverName(data.driverName || null);
+        })
+        .catch((err) => {
+          setTokenValid(false);
+          setStatusError(err.message || "Invalid or expired link");
+        })
+        .finally(() => setLoadingStatus(false));
+    } else {
+      // Auth-based: check if user is authenticated driver
+      const authed = isAuthenticated();
+      const user = getUser();
+      const isDriver = user?.roles?.includes("DRIVER");
+      const driverStatus = user?.driverStatus;
 
-  const alreadyCompleted = onboardingStatus?.onboardingCompleted === true;
+      if (authed && isDriver && driverStatus === "APPROVED") {
+        fetch(`${API_URL}/api/drivers/onboarding-status`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+            "Content-Type": "application/json",
+          },
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            setAlreadyCompleted(data.onboardingCompleted === true);
+          })
+          .catch(() => {})
+          .finally(() => setLoadingStatus(false));
+      } else {
+        setLoadingStatus(false);
+      }
+    }
+  }, [token, usingToken]);
 
   // Submit mutation
-  const submitMutation = useDataMutation<
-    { message: string },
-    OnboardingCompletePayload
-  >({
-    apiEndPoint: `${API_URL}/api/drivers/onboarding-complete`,
-    onSuccess: () => {
+  const submitOnboarding = async (data: OnboardingCompleteFormData) => {
+    try {
+      let res: Response;
+      if (usingToken) {
+        // Token-based: call public endpoint (no auth needed)
+        res = await fetch(`${API_URL}/api/public/drivers/onboarding-complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, token }),
+        });
+      } else {
+        // Auth-based: use useDataMutation style
+        res = await fetch(`${API_URL}/api/drivers/onboarding-complete`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+          body: JSON.stringify(data),
+        });
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Request failed (${res.status})`);
+      }
+
       toast.success("Onboarding information submitted successfully!", {
         description: "We'll review your information shortly.",
       });
       setSubmitted(true);
-    },
-    onError: (error: unknown) => {
+    } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "Something went wrong";
       toast.error("Failed to submit onboarding information", {
         description: message,
       });
-    },
-    fetchWithoutRefresh: true,
-  });
+    }
+  };
 
   // Form setup
   const {
@@ -291,13 +348,49 @@ export function DriverOnboardingComplete() {
   );
 
   const onSubmit = (data: OnboardingCompleteFormData) => {
-    submitMutation.mutate(data);
+    submitOnboarding(data);
   };
 
-  // ==================== AUTH GUARD RENDERING ====================
+  // ==================== AUTH / TOKEN GUARD RENDERING ====================
 
-  // Not authenticated
-  if (!authenticated) {
+  // Token-based flow: invalid token
+  if (usingToken && !loadingStatus && tokenValid === false) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+        <Header
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+        />
+        <main className="flex-1 flex items-center justify-center px-6">
+          <Card className="max-w-md w-full border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                Invalid or Expired Link
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {statusError || "This onboarding link is no longer valid. Please contact support if you need a new link."}
+              </p>
+              <Link to="/">
+                <Button
+                  variant="outline"
+                  className="w-full h-12 rounded-2xl font-bold"
+                >
+                  Go to Home
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Auth-based flow: not authenticated
+  if (!usingToken && !isAuthenticated()) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
         <Header
@@ -330,133 +423,96 @@ export function DriverOnboardingComplete() {
     );
   }
 
-  // Not a driver
-  if (!isDriver) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-        <Header
-          mobileMenuOpen={mobileMenuOpen}
-          setMobileMenuOpen={setMobileMenuOpen}
-        />
-        <main className="flex-1 flex items-center justify-center px-6">
-          <Card className="max-w-md w-full border-slate-200 dark:border-slate-800 shadow-lg">
-            <CardContent className="p-8 text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
-                <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                Access Denied
-              </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                This page is only available for drivers. Your current account
-                does not have the driver role.
-              </p>
-              <Link to="/">
-                <Button
-                  variant="outline"
-                  className="w-full h-12 rounded-2xl font-bold"
-                >
-                  Go to Home
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
-  // Driver account pending
-  if (driverStatus === "PENDING") {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
-        <div className="max-w-2xl mx-auto pt-10">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-lg">
-            {/* Success Header */}
-            <div className="relative bg-gradient-to-br from-lime-500/20 via-lime-500/10 to-transparent py-12 px-6 sm:px-10">
-              <div className="relative flex flex-col items-center text-center">
-                <div className="relative mb-6">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-lime-400 to-lime-500 flex items-center justify-center shadow-lg shadow-lime-500/30">
-                    <CheckCircle className="w-12 h-12 text-white" />
-                  </div>
-                  <div className="absolute -inset-2 rounded-full border-2 border-lime-400/30 animate-pulse" />
+  // Auth-based flow: not a driver
+  if (!usingToken) {
+    const user = getUser();
+    if (!user?.roles?.includes("DRIVER")) {
+      return (
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+          <Header
+            mobileMenuOpen={mobileMenuOpen}
+            setMobileMenuOpen={setMobileMenuOpen}
+          />
+          <main className="flex-1 flex items-center justify-center px-6">
+            <Card className="max-w-md w-full border-slate-200 dark:border-slate-800 shadow-lg">
+              <CardContent className="p-8 text-center space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+                  <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
                 </div>
-                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
-                  Application Submitted!
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                  Access Denied
                 </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400 mt-3 max-w-md">
-                  Your driver account application has been received and is pending admin approval.
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  This page is only available for drivers.
                 </p>
-                <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
-                  <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                    Pending Approval
-                  </span>
+                <Link to="/">
+                  <Button
+                    variant="outline"
+                    className="w-full h-12 rounded-2xl font-bold"
+                  >
+                    Go to Home
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </main>
+          <Footer />
+        </div>
+      );
+    }
+
+    // Auth-based: pending driver
+    if (user?.driverStatus === "PENDING") {
+      return (
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
+          <div className="max-w-2xl mx-auto pt-10">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-lg">
+              <div className="relative bg-gradient-to-br from-lime-500/20 via-lime-500/10 to-transparent py-12 px-6 sm:px-10">
+                <div className="relative flex flex-col items-center text-center">
+                  <div className="relative mb-6">
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-lime-400 to-lime-500 flex items-center justify-center shadow-lg shadow-lime-500/30">
+                      <CheckCircle className="w-12 h-12 text-white" />
+                    </div>
+                  </div>
+                  <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
+                    Application Submitted!
+                  </h2>
+                  <p className="text-lg text-slate-600 dark:text-slate-400 mt-3 max-w-md">
+                    Your driver account application has been received and is pending admin approval.
+                  </p>
+                  <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
+                    <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                      Pending Approval
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="p-6 sm:p-10">
-              <div className="mb-8">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                  <ArrowRight className="w-5 h-5 text-lime-500" />
-                  What Happens Next?
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-3">
-                      <span className="text-lg font-black text-blue-600 dark:text-blue-400">1</span>
-                    </div>
-                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">Admin Review</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Our team will verify your information within 1-2 business days.</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-3">
-                      <span className="text-lg font-black text-purple-600 dark:text-purple-400">2</span>
-                    </div>
-                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">Email Confirmation</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">You'll receive an email once your account is approved.</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
-                    <div className="w-10 h-10 rounded-xl bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center mb-3">
-                      <span className="text-lg font-black text-lime-600 dark:text-lime-400">3</span>
-                    </div>
-                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">Complete Onboarding</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Once approved, you'll provide additional details to get started.</p>
-                  </div>
+              <div className="p-6 sm:p-10">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link to="/driver-signin" className="flex-1">
+                    <Button className="w-full h-12 rounded-2xl font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-950">
+                      <LogIn className="w-5 h-5 mr-2" />
+                      Go to Sign In
+                    </Button>
+                  </Link>
+                  <Link to="/" className="flex-1">
+                    <Button variant="outline" className="w-full h-12 rounded-2xl font-bold">
+                      <Home className="w-5 h-5 mr-2" />
+                      Back to Home
+                    </Button>
+                  </Link>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Link
-                  to="/driver-signin"
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-bold hover:opacity-90 transition shadow-lg"
-                >
-                  <LogIn className="w-5 h-5" />
-                  Go to Sign In
-                </Link>
-                <Link
-                  to="/"
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-                >
-                  <Home className="w-5 h-5" />
-                  Back to Home
-                </Link>
-              </div>
-              <p className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
-                Questions? Contact support at{" "}
-                <a href="mailto:support@101drivers.com" className="font-bold text-lime-500 hover:underline">
-                  support@101drivers.com
-                </a>
-              </p>
             </div>
           </div>
         </div>
-      </div>
-    );
+      );
+    }
   }
 
   // Loading onboarding status
-  if (statusLoading) {
+  if (loadingStatus) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
         <Header
@@ -630,7 +686,7 @@ export function DriverOnboardingComplete() {
                     )}
                     placeholder="John A. Smith"
                     autoComplete="name"
-                    disabled={submitMutation.isPending}
+                    disabled={false}
                   />
                   {watchFullName?.trim() &&
                     watchFullName.trim().length >= 2 &&
@@ -680,7 +736,7 @@ export function DriverOnboardingComplete() {
                     autoComplete="bday"
                     inputMode="numeric"
                     maxLength={10}
-                    disabled={submitMutation.isPending}
+                    disabled={false}
                   />
                   {dobIsValid && !errors.dateOfBirth && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -734,7 +790,7 @@ export function DriverOnboardingComplete() {
                     autoComplete="off"
                     inputMode="numeric"
                     maxLength={11}
-                    disabled={submitMutation.isPending}
+                    disabled={false}
                   />
                   {ssnIsValid && !errors.ssn && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -798,7 +854,7 @@ export function DriverOnboardingComplete() {
                     )}
                     placeholder="123 Main Street"
                     autoComplete="address-line1"
-                    disabled={submitMutation.isPending}
+                    disabled={false}
                   />
                   {watchAddressLine1?.trim() && !errors.residentialAddressLine1 && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -863,7 +919,7 @@ export function DriverOnboardingComplete() {
                     )}
                     placeholder="Los Angeles"
                     autoComplete="address-level2"
-                    disabled={submitMutation.isPending}
+                    disabled={false}
                   />
                   {watchCity?.trim() && !errors.residentialCity && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -898,7 +954,7 @@ export function DriverOnboardingComplete() {
                   <Select
                     value={watchState}
                     onValueChange={handleStateChange}
-                    disabled={submitMutation.isPending}
+                    disabled={false}
                   >
                     <SelectTrigger
                       className={cn(
@@ -966,7 +1022,7 @@ export function DriverOnboardingComplete() {
                       autoComplete="postal-code"
                       inputMode="numeric"
                       maxLength={5}
-                      disabled={submitMutation.isPending}
+                      disabled={false}
                     />
                     {zipIsValid && !errors.residentialZip && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">

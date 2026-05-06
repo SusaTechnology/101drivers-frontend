@@ -1,6 +1,6 @@
 // src/driver/driver.service.ts
 
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import {
   AdminAuditLog as PrismaAdminAuditLog,
   DeliveryAssignment as PrismaDeliveryAssignment,
@@ -519,6 +519,92 @@ async completeOnboarding(
   ]);
 
   return this.domain.findUnique({ id: driverId });
+}
+
+/**
+ * Public (no-auth) onboarding methods using onboarding token from email link.
+ */
+
+async findDriverByOnboardingToken(token: string): Promise<any | null> {
+  return this.prisma.driver.findUnique({
+    where: { onboardingToken: token },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      onboardingCompletedAt: true,
+      user: {
+        select: {
+          fullName: true,
+          email: true,
+        },
+      },
+    },
+  });
+}
+
+async completeOnboardingByToken(
+  token: string,
+  dto: CompleteDriverOnboardingDto
+): Promise<any> {
+  const driver = await this.prisma.driver.findUnique({
+    where: { onboardingToken: token },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      onboardingCompletedAt: true,
+    },
+  });
+
+  if (!driver) {
+    throw new common.NotFoundException("Invalid or expired token");
+  }
+
+  if (driver.status !== EnumDriverStatus.APPROVED) {
+    throw new common.BadRequestException(
+      "Onboarding can only be completed for approved drivers"
+    );
+  }
+
+  if (driver.onboardingCompletedAt) {
+    throw new common.BadRequestException("Onboarding has already been completed");
+  }
+
+  // Parse date of birth from MM/DD/YYYY to Date
+  const [month, day, year] = dto.dateOfBirth.split("/");
+  const dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
+  // Store only the last 4 digits of SSN
+  const ssnLastFour = dto.ssn.slice(-4);
+
+  // Update driver record with onboarding data
+  // fullName is stored on the related User model, not on Driver
+  await this.prisma.$transaction([
+    this.prisma.user.update({
+      where: { id: driver.userId },
+      data: {
+        fullName: dto.legalFullName.trim(),
+      },
+    }),
+    this.prisma.driver.update({
+      where: { id: driver.id },
+      data: {
+        dateOfBirth: dob,
+        ssnLastFour,
+        residentialAddressLine1: dto.residentialAddressLine1.trim(),
+        residentialAddressLine2: dto.residentialAddressLine2
+          ? dto.residentialAddressLine2.trim()
+          : null,
+        residentialCity: dto.residentialCity.trim(),
+        residentialState: dto.residentialState.trim(),
+        residentialZip: dto.residentialZip.trim(),
+        onboardingCompletedAt: new Date(),
+      },
+    }),
+  ]);
+
+  return this.domain.findUnique({ id: driver.id });
 }
 
 }

@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
+import { randomBytes } from "crypto";
 
 @Injectable()
 export class DriverApprovalEngine {
@@ -49,6 +50,9 @@ export class DriverApprovalEngine {
 
     const beforeJson = driver;
 
+    // Generate a unique onboarding token for the driver
+    const onboardingToken = randomBytes(32).toString("hex");
+
     await this.prisma.driver.update({
       where: { id: input.driverId },
       data: {
@@ -57,6 +61,7 @@ export class DriverApprovalEngine {
         approvedBy: input.actorUserId
           ? { connect: { id: input.actorUserId } }
           : undefined,
+        onboardingToken,
       },
     });
 
@@ -99,7 +104,7 @@ export class DriverApprovalEngine {
           "Good news \u2014 we\u2019re now activating new drivers.",
           "To continue, please complete your onboarding by visiting the link below:",
           "",
-          `https://${process.env.APP_DOMAIN || 'app.101drivers.com'}/driver-onboarding-complete`,
+          `https://${process.env.APP_DOMAIN || '101drivers.techbee.et'}/driver-onboarding-complete?token=${onboardingToken}`,
           "",
           "You will need to provide the following:",
           "",

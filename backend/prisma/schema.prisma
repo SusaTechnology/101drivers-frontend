@@ -96,6 +96,7 @@ model Driver {
   id               String                     @id @default(cuid())
   notifications    NotificationEvent[]
   onboardingCompletedAt  DateTime?
+  onboardingToken  String?
   payouts          DriverPayout[]
   phone            String?
   preferences      DriverPreference?

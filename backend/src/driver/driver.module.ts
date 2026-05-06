@@ -4,6 +4,7 @@ import { DriverModuleBase } from "./base/driver.module.base";
 import { DriverService } from "./driver.service";
 import { DriverController } from "./driver.controller";
 import { DriverOnboardingController } from "./driverOnboarding.controller";
+import { DriverOnboardingPublicController } from "./driverOnboardingPublic.controller";
 import { DriverResolver } from "./driver.resolver";
 import { DriverPolicyService } from "src/domain/driver/driverPolicy.service";
 import { DriverDomain } from "src/domain/driver/driver.domain";
@@ -13,7 +14,7 @@ import { MailService } from "src/common/mail/mail.service";
 
 @Module({
   imports: [DriverModuleBase, forwardRef(() => AuthModule)],
-  controllers: [DriverController, DriverOnboardingController],
+  controllers: [DriverController, DriverOnboardingController, DriverOnboardingPublicController],
   providers: [DriverService, DriverResolver, DriverDomain, DriverPolicyService, DriverApprovalEngine, NotificationEventEngine, MailService],
   exports: [DriverService],
 })

@@ -29,6 +29,7 @@ import { Route as DriverProofCamIndexRouteImport } from './routes/driver-proof-c
 import { Route as DriverPreferencesIndexRouteImport } from './routes/driver-preferences/index'
 import { Route as DriverPickupChecklistIndexRouteImport } from './routes/driver-pickup-checklist/index'
 import { Route as DriverOnboardingIndexRouteImport } from './routes/driver-onboarding/index'
+import { Route as DriverOnboardingCompleteIndexRouteImport } from './routes/driver-onboarding-complete/index'
 import { Route as DriverMenuIndexRouteImport } from './routes/driver-menu/index'
 import { Route as DriverJobDetailsIndexRouteImport } from './routes/driver-job-details/index'
 import { Route as DriverIssueReportIndexRouteImport } from './routes/driver-issue-report/index'
@@ -188,6 +189,11 @@ const DriverPickupChecklistIndexRoute =
 const DriverOnboardingIndexRoute = DriverOnboardingIndexRouteImport.update({
   id: '/driver-onboarding/',
   path: '/driver-onboarding/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DriverOnboardingCompleteIndexRoute = DriverOnboardingCompleteIndexRouteImport.update({
+  id: '/driver-onboarding-complete/',
+  path: '/driver-onboarding-complete/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DriverMenuIndexRoute = DriverMenuIndexRouteImport.update({
@@ -546,6 +552,7 @@ export interface FileRoutesByFullPath {
   '/driver-job-details/': typeof DriverJobDetailsIndexRoute
   '/driver-menu/': typeof DriverMenuIndexRoute
   '/driver-onboarding/': typeof DriverOnboardingIndexRoute
+  '/driver-onboarding-complete/': typeof DriverOnboardingCompleteIndexRoute
   '/driver-pickup-checklist/': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences/': typeof DriverPreferencesIndexRoute
   '/driver-proof-cam/': typeof DriverProofCamIndexRoute
@@ -624,6 +631,7 @@ export interface FileRoutesByTo {
   '/driver-job-details': typeof DriverJobDetailsIndexRoute
   '/driver-menu': typeof DriverMenuIndexRoute
   '/driver-onboarding': typeof DriverOnboardingIndexRoute
+  '/driver-onboarding-complete': typeof DriverOnboardingCompleteIndexRoute
   '/driver-pickup-checklist': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences': typeof DriverPreferencesIndexRoute
   '/driver-proof-cam': typeof DriverProofCamIndexRoute
@@ -703,6 +711,7 @@ export interface FileRoutesById {
   '/driver-job-details/': typeof DriverJobDetailsIndexRoute
   '/driver-menu/': typeof DriverMenuIndexRoute
   '/driver-onboarding/': typeof DriverOnboardingIndexRoute
+  '/driver-onboarding-complete/': typeof DriverOnboardingCompleteIndexRoute
   '/driver-pickup-checklist/': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences/': typeof DriverPreferencesIndexRoute
   '/driver-proof-cam/': typeof DriverProofCamIndexRoute
@@ -783,6 +792,7 @@ export interface FileRouteTypes {
     | '/driver-job-details/'
     | '/driver-menu/'
     | '/driver-onboarding/'
+    | '/driver-onboarding-complete/'
     | '/driver-pickup-checklist/'
     | '/driver-preferences/'
     | '/driver-proof-cam/'
@@ -861,6 +871,7 @@ export interface FileRouteTypes {
     | '/driver-job-details'
     | '/driver-menu'
     | '/driver-onboarding'
+    | '/driver-onboarding-complete'
     | '/driver-pickup-checklist'
     | '/driver-preferences'
     | '/driver-proof-cam'
@@ -939,6 +950,7 @@ export interface FileRouteTypes {
     | '/driver-job-details/'
     | '/driver-menu/'
     | '/driver-onboarding/'
+    | '/driver-onboarding-complete/'
     | '/driver-pickup-checklist/'
     | '/driver-preferences/'
     | '/driver-proof-cam/'
@@ -1634,6 +1646,7 @@ const rootRouteChildren: RootRouteChildren = {
   DriverJobDetailsIndexRoute: DriverJobDetailsIndexRoute,
   DriverMenuIndexRoute: DriverMenuIndexRoute,
   DriverOnboardingIndexRoute: DriverOnboardingIndexRoute,
+  DriverOnboardingCompleteIndexRoute: DriverOnboardingCompleteIndexRoute,
   DriverPickupChecklistIndexRoute: DriverPickupChecklistIndexRoute,
   DriverPreferencesIndexRoute: DriverPreferencesIndexRoute,
   DriverProofCamIndexRoute: DriverProofCamIndexRoute,
