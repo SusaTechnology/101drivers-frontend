@@ -104,7 +104,7 @@ export class DriverApprovalEngine {
           "Good news \u2014 we\u2019re now activating new drivers.",
           "To continue, please complete your onboarding by visiting the link below:",
           "",
-          `https://${process.env.APP_DOMAIN || '101drivers.techbee.et'}/driver-onboarding-complete?token=${onboardingToken}`,
+          `https://${(process.env.APP_DOMAIN || '101drivers.techbee.et').replace(/^https?:\/\//, '')}/driver-onboarding-complete?token=${onboardingToken}`,
           "",
           "You will need to provide the following:",
           "",

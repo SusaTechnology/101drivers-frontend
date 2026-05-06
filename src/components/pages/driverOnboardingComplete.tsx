@@ -389,80 +389,13 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     );
   }
 
-  // Auth-based flow: not authenticated
-  if (!usingToken && !isAuthenticated()) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-        <Header
-          mobileMenuOpen={mobileMenuOpen}
-          setMobileMenuOpen={setMobileMenuOpen}
-        />
-        <main className="flex-1 flex items-center justify-center px-6">
-          <Card className="max-w-md w-full border-slate-200 dark:border-slate-800 shadow-lg">
-            <CardContent className="p-8 text-center space-y-4">
-              <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center">
-                <LogIn className="w-8 h-8 text-amber-600 dark:text-amber-400" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                Please Sign In
-              </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                You need to be signed in to complete your driver onboarding.
-              </p>
-              <Link to="/driver-signin">
-                <Button className="w-full h-12 rounded-2xl font-bold bg-lime-500 hover:bg-lime-600 text-black">
-                  <LogIn className="w-4 h-4 mr-2" />
-                  Driver Sign In
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
-  // Auth-based flow: not a driver
+  // No-token flow: not authenticated OR not a driver → show Application Submitted (never Access Denied)
   if (!usingToken) {
-    const user = getUser();
-    if (!user?.roles?.includes("DRIVER")) {
-      return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-          <Header
-            mobileMenuOpen={mobileMenuOpen}
-            setMobileMenuOpen={setMobileMenuOpen}
-          />
-          <main className="flex-1 flex items-center justify-center px-6">
-            <Card className="max-w-md w-full border-slate-200 dark:border-slate-800 shadow-lg">
-              <CardContent className="p-8 text-center space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
-                  <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
-                </div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                  Access Denied
-                </h2>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  This page is only available for drivers.
-                </p>
-                <Link to="/">
-                  <Button
-                    variant="outline"
-                    className="w-full h-12 rounded-2xl font-bold"
-                  >
-                    Go to Home
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </main>
-          <Footer />
-        </div>
-      );
-    }
+    const user = isAuthenticated() ? getUser() : null;
 
-    // Auth-based: pending driver
-    if (user?.driverStatus === "PENDING") {
+    // If authenticated as an APPROVED driver, continue to the form/status check below.
+    // For everyone else (not authenticated, not a driver, PENDING driver), show Application Submitted.
+    if (!user?.roles?.includes("DRIVER") || user?.driverStatus === "PENDING") {
       return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
           <div className="max-w-2xl mx-auto pt-10">
