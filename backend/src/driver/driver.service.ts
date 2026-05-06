@@ -465,6 +465,7 @@ async completeOnboarding(
     where: { id: driverId },
     select: {
       id: true,
+      userId: true,
       status: true,
       onboardingCompletedAt: true,
     },
@@ -491,22 +492,31 @@ async completeOnboarding(
   // Store only the last 4 digits of SSN
   const ssnLastFour = dto.ssn.slice(-4);
 
-  await this.prisma.driver.update({
-    where: { id: driverId },
-    data: {
-      legalFullName: dto.legalFullName.trim(),
-      dateOfBirth: dob,
-      ssnLastFour,
-      residentialAddressLine1: dto.residentialAddressLine1.trim(),
-      residentialAddressLine2: dto.residentialAddressLine2
-        ? dto.residentialAddressLine2.trim()
-        : null,
-      residentialCity: dto.residentialCity.trim(),
-      residentialState: dto.residentialState.trim(),
-      residentialZip: dto.residentialZip.trim(),
-      onboardingCompletedAt: new Date(),
-    },
-  });
+  // Update driver record with onboarding data
+  // fullName is stored on the related User model, not on Driver
+  await this.prisma.$transaction([
+    this.prisma.user.update({
+      where: { id: driver.userId },
+      data: {
+        fullName: dto.legalFullName.trim(),
+      },
+    }),
+    this.prisma.driver.update({
+      where: { id: driverId },
+      data: {
+        dateOfBirth: dob,
+        ssnLastFour,
+        residentialAddressLine1: dto.residentialAddressLine1.trim(),
+        residentialAddressLine2: dto.residentialAddressLine2
+          ? dto.residentialAddressLine2.trim()
+          : null,
+        residentialCity: dto.residentialCity.trim(),
+        residentialState: dto.residentialState.trim(),
+        residentialZip: dto.residentialZip.trim(),
+        onboardingCompletedAt: new Date(),
+      },
+    }),
+  ]);
 
   return this.domain.findUnique({ id: driverId });
 }

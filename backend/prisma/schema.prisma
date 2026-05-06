@@ -94,7 +94,6 @@ model Driver {
   dateOfBirth      DateTime?
   districts        DriverDistrictPreference[]
   id               String                     @id @default(cuid())
-  legalFullName    String?
   notifications    NotificationEvent[]
   onboardingCompletedAt  DateTime?
   payouts          DriverPayout[]
