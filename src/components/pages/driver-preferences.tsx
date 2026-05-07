@@ -554,9 +554,9 @@ export default function DriverPreferencesPage() {
                       </div>
                     ) : previewUrl ? (
                       <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                    ) : form.watch('profilePhotoUrl') ? (
+                    ) : form.watch('profilePhotoUrl') || driverProfile?.selfiePhotoUrl ? (
                       <img
-                        src={form.watch('profilePhotoUrl')}
+                        src={form.watch('profilePhotoUrl') || driverProfile?.selfiePhotoUrl || ''}
                         alt="Current"
                         className="w-full h-full object-cover"
                       />
@@ -574,7 +574,7 @@ export default function DriverPreferencesPage() {
                     onChange={handleFileChange}
                     className="hidden"
                   />
-                  {!form.watch('profilePhotoUrl') && !uploadPhoto.isPending && (
+                  {!form.watch('profilePhotoUrl') && !driverProfile?.selfiePhotoUrl && !uploadPhoto.isPending && (
                     <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
                       Tap to take a new photo
                     </p>
@@ -585,7 +585,7 @@ export default function DriverPreferencesPage() {
                       Uploading...
                     </p>
                   )}
-                  {form.watch('profilePhotoUrl') && !uploadPhoto.isPending && (
+                  {(form.watch('profilePhotoUrl') || driverProfile?.selfiePhotoUrl) && !uploadPhoto.isPending && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400">Photo ready</p>
                   )}
                   <p className="text-xs text-slate-900 dark:text-white leading-relaxed">
