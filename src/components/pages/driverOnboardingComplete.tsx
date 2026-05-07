@@ -463,19 +463,12 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <Link to="/driver-dashboard" className="flex-1">
-                  <Button className="w-full h-12 rounded-2xl font-bold bg-lime-500 hover:bg-lime-600 text-black">
-                    <ArrowRight className="w-4 h-4 mr-2" />
-                    Go to Driver Dashboard
-                  </Button>
-                </Link>
-                <Link to="/" className="flex-1">
-                  <Button
-                    variant="outline"
-                    className="w-full h-12 rounded-2xl font-bold"
-                  >
-                    Back to Home
-                  </Button>
+                <Link
+                  to="/driver-signin"
+                  className="flex-1 inline-flex items-center justify-center h-12 rounded-2xl font-bold bg-lime-500 hover:bg-lime-600 text-black transition-colors no-underline"
+                >
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  Go to Sign In
                 </Link>
               </div>
             </CardContent>
