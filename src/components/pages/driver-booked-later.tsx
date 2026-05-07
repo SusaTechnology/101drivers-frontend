@@ -380,16 +380,8 @@ export default function DriverBookedLaterPage() {
 
       {/* ── Floating action button: browse gigs ── */}
       {bookedDeliveries.length >= 0 && (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800">
-          <div className="max-w-lg mx-auto px-5 py-3">
-            <Link to="/driver-dashboard">
-              <Button className="w-full h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-[14px] tracking-tight transition shadow-lg shadow-green-600/20 flex items-center justify-center gap-2">
-                <RouteIcon className="w-4 h-4" />
-                Browse More Gigs
-              </Button>
-            </Link>
-          </div>
-        </nav>
+      <DriverBottomNav activeTab="my-bookings" />
+
       )}
     </div>
   )

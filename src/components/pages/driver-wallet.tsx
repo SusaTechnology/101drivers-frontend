@@ -678,26 +678,8 @@ export default function DriverWalletPage() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 safe-bottom">
-        <div className="max-w-[900px] mx-auto px-5 sm:px-6 py-3">
-          <div className="grid grid-cols-4 gap-2 text-center">
-            {bottomNavItems.map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                className="py-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-900 transition"
-              >
-                <div className="w-10 h-10 mx-auto rounded-2xl flex items-center justify-center">
-                  <item.icon className="w-5 h-5 text-primary" />
-                </div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                  {item.label}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </nav>
+      <DriverBottomNav />
+
     </div>
   )
 }

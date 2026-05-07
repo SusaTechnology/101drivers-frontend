@@ -943,7 +943,7 @@ export default function DriverActiveDeliveryPage() {
             )}
           </header>
 
-          <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-36">
+          <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-28">
             {/* NEW: Back to Navigation button (only when there's an active delivery) */}
             {deliveryData && (
               <button
@@ -1410,6 +1410,5 @@ export default function DriverActiveDeliveryPage() {
           }}
         />
       )}
+      <DriverBottomNav activeTab="in-progress" />
     </div>
-  )
-}
