@@ -238,28 +238,12 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
         })
         .finally(() => setLoadingStatus(false));
     } else {
-      // Auth-based: check if user is authenticated driver
-      const authed = isAuthenticated();
+      // Auth-based: use stored login data (no API call needed)
       const user = getUser();
-      const isDriver = user?.roles?.includes("DRIVER");
-      const driverStatus = user?.driverStatus;
-
-      if (authed && isDriver && driverStatus === "APPROVED") {
-        fetch(`${API_URL}/api/drivers/onboarding-status`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-            "Content-Type": "application/json",
-          },
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            setAlreadyCompleted(data.onboardingCompleted === true);
-          })
-          .catch(() => {})
-          .finally(() => setLoadingStatus(false));
-      } else {
-        setLoadingStatus(false);
+      if (user?.onboardingCompleted) {
+        setAlreadyCompleted(true);
       }
+      setLoadingStatus(false);
     }
   }, [token, usingToken]);
 

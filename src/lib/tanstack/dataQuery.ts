@@ -26,6 +26,9 @@ let currentUser: {
   // Approval status for customers and drivers
   customerApprovalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
   driverStatus?: 'PENDING' | 'APPROVED' | 'SUSPENDED';
+  // Onboarding status for drivers
+  onboardingCompleted?: boolean;
+  onboardingToken?: string | null;
   // User active status
   isActive?: boolean;
 } | null = null;
@@ -319,6 +322,8 @@ async function refreshAccessToken(): Promise<string> {
         roles: data.roles,
         customerApprovalStatus: data.customerApprovalStatus,
         driverStatus: data.driverStatus,
+        onboardingCompleted: data.onboardingCompleted,
+        onboardingToken: data.onboardingToken,
         isActive: data.isActive,
       });
     }

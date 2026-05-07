@@ -106,6 +106,8 @@ export class AuthService {
     profileId: string | null;
     customerApprovalStatus: string | null;
     driverStatus: string | null;
+    onboardingCompleted: boolean;
+    onboardingToken: string | null;
   }> {
     if (
       roles.includes(String(EnumUserRoles.PRIVATE_CUSTOMER)) ||
@@ -123,6 +125,8 @@ export class AuthService {
         profileId: customer?.id ?? null,
         customerApprovalStatus: customer?.approvalStatus ?? null,
         driverStatus: null,
+        onboardingCompleted: false,
+        onboardingToken: null,
       };
     }
 
@@ -132,6 +136,8 @@ export class AuthService {
         select: {
           id: true,
           status: true,
+          onboardingCompletedAt: true,
+          onboardingToken: true,
         },
       } as any);
 
@@ -139,6 +145,8 @@ export class AuthService {
         profileId: driver?.id ?? null,
         customerApprovalStatus: null,
         driverStatus: driver?.status ?? null,
+        onboardingCompleted: !!driver?.onboardingCompletedAt,
+        onboardingToken: driver?.onboardingToken ?? null,
       };
     }
 
@@ -146,6 +154,8 @@ export class AuthService {
       profileId: null,
       customerApprovalStatus: null,
       driverStatus: null,
+      onboardingCompleted: false,
+      onboardingToken: null,
     };
   }
 
@@ -232,6 +242,8 @@ export class AuthService {
       roles: user.roles,
       customerApprovalStatus: authMeta.customerApprovalStatus,
       driverStatus: authMeta.driverStatus,
+      onboardingCompleted: authMeta.onboardingCompleted,
+      onboardingToken: authMeta.onboardingToken,
       isActive: user.isActive,
     } as UserInfo;
   }
@@ -304,6 +316,8 @@ export class AuthService {
         roles,
         customerApprovalStatus: authMeta.customerApprovalStatus,
         driverStatus: authMeta.driverStatus,
+        onboardingCompleted: authMeta.onboardingCompleted,
+        onboardingToken: authMeta.onboardingToken,
         isActive: user.isActive,
       } as UserInfo;
     } catch {
@@ -719,6 +733,8 @@ export class AuthService {
       roles: roleList,
       customerApprovalStatus: authMeta.customerApprovalStatus,
       driverStatus: authMeta.driverStatus,
+      onboardingCompleted: authMeta.onboardingCompleted,
+      onboardingToken: authMeta.onboardingToken,
       isActive: true,
     } as UserInfo;
   }

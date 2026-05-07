@@ -5,15 +5,7 @@ import {
   isAuthenticated,
   getUser,
 } from "@/lib/tanstack/dataQuery";
-import { Loader2, ShieldCheck, Clock, AlertTriangle } from "lucide-react";
-
-const API_URL = import.meta.env.VITE_API_URL;
-
-interface OnboardingStatus {
-  onboardingCompleted: boolean;
-  onboardingCompletedAt: string | null;
-  driverStatus: string;
-}
+import { Loader2, Clock, AlertTriangle } from "lucide-react";
 
 type GuardState =
   | "loading"
@@ -28,7 +20,9 @@ type GuardState =
  *   1. Authenticated → otherwise redirect to /driver-signin
  *   2. Driver role → otherwise redirect to /
  *   3. APPROVED status → otherwise show "pending" screen
- *   4. Onboarding completed → otherwise redirect to /driver-onboarding-complete
+ *   4. Onboarding completed → otherwise redirect to /driver-onboarding-complete?token=...
+ *
+ * Uses login response data (stored in localStorage) — no extra API calls.
  */
 export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -40,7 +34,7 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function checkAccess() {
+  function checkAccess() {
     // Step 1: Check authentication
     if (!isAuthenticated()) {
       setGuardState("needs_signin");
@@ -68,37 +62,14 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Step 4: For APPROVED drivers, check onboarding status
-    try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${API_URL}/api/drivers/onboarding-status`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          setGuardState("needs_signin");
-        } else {
-          // On other errors (404, 500, etc.), allow through — don't block on transient failures
-          setGuardState("authenticated");
-        }
-        return;
-      }
-
-      const status: OnboardingStatus = await res.json();
-
-      if (status.onboardingCompleted) {
-        setGuardState("authenticated");
-      } else {
-        setGuardState("needs_onboarding");
-      }
-    } catch {
-      // On network error, allow through — don't block on transient failures
-      setGuardState("authenticated");
+    // Step 4: Check onboarding using stored login data (no API call)
+    if (!user.onboardingCompleted) {
+      setGuardState("needs_onboarding");
+      return;
     }
+
+    // All checks passed
+    setGuardState("authenticated");
   }
 
   // Redirect states
@@ -106,7 +77,15 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
     if (guardState === "needs_signin") {
       navigate({ to: "/driver-signin" });
     } else if (guardState === "needs_onboarding") {
-      navigate({ to: "/driver-onboarding-complete" });
+      const user = getUser();
+      if (user?.onboardingToken) {
+        navigate({
+          to: "/driver-onboarding-complete",
+          search: { token: user.onboardingToken },
+        });
+      } else {
+        navigate({ to: "/driver-onboarding-complete" });
+      }
     }
   }, [guardState, navigate]);
 

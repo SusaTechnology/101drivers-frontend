@@ -190,6 +190,8 @@ export function DealerSignIn({
         roles: data.roles,
         customerApprovalStatus: data.customerApprovalStatus,
         driverStatus: data.driverStatus,
+        onboardingCompleted: data.onboardingCompleted,
+        onboardingToken: data.onboardingToken,
         isActive: data.isActive,
       });
       // Start session keep-alive for persistent login
@@ -202,8 +204,17 @@ export function DealerSignIn({
         if (userType === "dealer") {
           navigate({ to: "/dealer-dashboard" });
         } else if (userType === "driver") {
-          // Check onboarding status before deciding where to send the driver
-          checkDriverOnboardingAndRedirect();
+          // Use login data to decide where to redirect — no extra API call needed
+          if (data.onboardingCompleted) {
+            navigate({ to: "/driver-dashboard" });
+          } else if (data.onboardingToken) {
+            navigate({
+              to: "/driver-onboarding-complete",
+              search: { token: data.onboardingToken },
+            });
+          } else {
+            navigate({ to: "/driver-onboarding-complete" });
+          }
         } else {
           navigate({ to: "/admin-dashboard" });
         }
@@ -242,40 +253,6 @@ export function DealerSignIn({
     setLoginError(null);
     loginMutation.mutate(data);
   };
-
-  /**
-   * After a driver logs in successfully, check whether they've completed
-   * the post-approval onboarding (DOB, SSN, address). If not, redirect
-   * to /driver-onboarding-complete instead of /driver-dashboard.
-   */
-  async function checkDriverOnboardingAndRedirect() {
-    try {
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/drivers/onboarding-status`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (res.ok) {
-        const status = await res.json();
-        if (status.onboardingCompleted) {
-          navigate({ to: "/driver-dashboard" });
-        } else {
-          navigate({ to: "/driver-onboarding-complete" });
-        }
-        return;
-      }
-    } catch {
-      // On failure, fall through to dashboard
-    }
-    // Fallback: go to dashboard if API call fails
-    navigate({ to: "/driver-dashboard" });
-  }
 
   const handleForgotPassword = () => {
     if (!usernameValue) {

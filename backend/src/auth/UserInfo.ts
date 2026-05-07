@@ -25,5 +25,10 @@ export class UserInfo {
 
   @Field(() => String, { nullable: true })
   fullName?: string | null;
-  
+
+  @Field(() => Boolean, { nullable: true })
+  onboardingCompleted?: boolean;
+
+  @Field(() => String, { nullable: true })
+  onboardingToken?: string | null;
 }
