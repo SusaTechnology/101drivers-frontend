@@ -152,11 +152,10 @@ export default function DriverOnboardingPage() {
   
   const navigate = useNavigate();
 
-  // Redirect to the onboarding-complete page after registration.
-  // That page checks driver status and shows "Application Submitted" for PENDING.
+  // Redirect to the application submitted page after registration.
   useEffect(() => {
     if (registrationComplete) {
-      navigate({ to: '/driver-onboarding-complete' })
+      navigate({ to: '/driver-application-submitted' })
     }
   }, [registrationComplete, navigate])
 

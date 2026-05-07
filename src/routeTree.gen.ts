@@ -30,6 +30,7 @@ import { Route as DriverPreferencesIndexRouteImport } from './routes/driver-pref
 import { Route as DriverPickupChecklistIndexRouteImport } from './routes/driver-pickup-checklist/index'
 import { Route as DriverOnboardingIndexRouteImport } from './routes/driver-onboarding/index'
 import { Route as DriverOnboardingCompleteIndexRouteImport } from './routes/driver-onboarding-complete/index'
+import { Route as DriverApplicationSubmittedIndexRouteImport } from './routes/driver-application-submitted/index'
 import { Route as DriverMenuIndexRouteImport } from './routes/driver-menu/index'
 import { Route as DriverJobDetailsIndexRouteImport } from './routes/driver-job-details/index'
 import { Route as DriverIssueReportIndexRouteImport } from './routes/driver-issue-report/index'
@@ -194,6 +195,11 @@ const DriverOnboardingIndexRoute = DriverOnboardingIndexRouteImport.update({
 const DriverOnboardingCompleteIndexRoute = DriverOnboardingCompleteIndexRouteImport.update({
   id: '/driver-onboarding-complete/',
   path: '/driver-onboarding-complete/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DriverApplicationSubmittedIndexRoute = DriverApplicationSubmittedIndexRouteImport.update({
+  id: '/driver-application-submitted/',
+  path: '/driver-application-submitted/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DriverMenuIndexRoute = DriverMenuIndexRouteImport.update({
@@ -545,6 +551,7 @@ export interface FileRoutesByFullPath {
   '/dealer-support-list/': typeof DealerSupportListIndexRoute
   '/dealer-support-request/': typeof DealerSupportRequestIndexRoute
   '/driver-active/': typeof DriverActiveIndexRoute
+  '/driver-application-submitted/': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
   '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-inbox/': typeof DriverInboxIndexRoute
@@ -624,6 +631,7 @@ export interface FileRoutesByTo {
   '/dealer-support-list': typeof DealerSupportListIndexRoute
   '/dealer-support-request': typeof DealerSupportRequestIndexRoute
   '/driver-active': typeof DriverActiveIndexRoute
+  '/driver-application-submitted': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later': typeof DriverBookedLaterIndexRoute
   '/driver-dashboard': typeof DriverDashboardIndexRoute
   '/driver-inbox': typeof DriverInboxIndexRoute
@@ -704,6 +712,7 @@ export interface FileRoutesById {
   '/dealer-support-list/': typeof DealerSupportListIndexRoute
   '/dealer-support-request/': typeof DealerSupportRequestIndexRoute
   '/driver-active/': typeof DriverActiveIndexRoute
+  '/driver-application-submitted/': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
   '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-inbox/': typeof DriverInboxIndexRoute
@@ -793,6 +802,7 @@ export interface FileRouteTypes {
     | '/driver-menu/'
     | '/driver-onboarding/'
     | '/driver-onboarding-complete/'
+    | '/driver-application-submitted/'
     | '/driver-pickup-checklist/'
     | '/driver-preferences/'
     | '/driver-proof-cam/'
@@ -872,6 +882,7 @@ export interface FileRouteTypes {
     | '/driver-menu'
     | '/driver-onboarding'
     | '/driver-onboarding-complete'
+    | '/driver-application-submitted'
     | '/driver-pickup-checklist'
     | '/driver-preferences'
     | '/driver-proof-cam'
@@ -951,6 +962,7 @@ export interface FileRouteTypes {
     | '/driver-menu/'
     | '/driver-onboarding/'
     | '/driver-onboarding-complete/'
+    | '/driver-application-submitted/'
     | '/driver-pickup-checklist/'
     | '/driver-preferences/'
     | '/driver-proof-cam/'
@@ -1023,6 +1035,7 @@ export interface RootRouteChildren {
   DealerSupportListIndexRoute: typeof DealerSupportListIndexRoute
   DealerSupportRequestIndexRoute: typeof DealerSupportRequestIndexRoute
   DriverActiveIndexRoute: typeof DriverActiveIndexRoute
+  DriverApplicationSubmittedIndexRoute: typeof DriverApplicationSubmittedIndexRoute
   DriverBookedLaterIndexRoute: typeof DriverBookedLaterIndexRoute
   DriverDashboardIndexRoute: typeof DriverDashboardIndexRoute
   DriverInboxIndexRoute: typeof DriverInboxIndexRoute
@@ -1647,6 +1660,7 @@ const rootRouteChildren: RootRouteChildren = {
   DriverMenuIndexRoute: DriverMenuIndexRoute,
   DriverOnboardingIndexRoute: DriverOnboardingIndexRoute,
   DriverOnboardingCompleteIndexRoute: DriverOnboardingCompleteIndexRoute,
+  DriverApplicationSubmittedIndexRoute: DriverApplicationSubmittedIndexRoute,
   DriverPickupChecklistIndexRoute: DriverPickupChecklistIndexRoute,
   DriverPreferencesIndexRoute: DriverPreferencesIndexRoute,
   DriverProofCamIndexRoute: DriverProofCamIndexRoute,

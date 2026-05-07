@@ -168,7 +168,7 @@ export function DealerSignIn({
 
       // Check 4: Approval status for drivers
       // NOTE: PENDING drivers are allowed to log in — they will see the
-      // "Application Submitted" screen on /driver-onboarding-complete.
+      // "Application Submitted" screen on /driver-application-submitted.
       if (isDriver && data.driverStatus) {
         const status = data.driverStatus;
         if (status === 'SUSPENDED') {
@@ -213,7 +213,7 @@ export function DealerSignIn({
               search: { token: data.onboardingToken },
             });
           } else {
-            navigate({ to: "/driver-onboarding-complete" });
+            navigate({ to: "/driver-application-submitted" });
           }
         } else {
           navigate({ to: "/admin-dashboard" });
