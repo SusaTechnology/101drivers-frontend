@@ -66,6 +66,11 @@ export class UserAdminUpdateDriverDto {
   @IsOptional()
   @IsString()
   profilePhotoUrl?: string | null;
+
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  selfiePhotoUrl?: string | null;
 }
 
 export class UserAdminUpdateBodyDto {
