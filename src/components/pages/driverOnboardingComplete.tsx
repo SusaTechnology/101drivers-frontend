@@ -27,7 +27,7 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
@@ -43,7 +43,9 @@ import {
   Check,
   Loader2,
   MapPin,
-  Calendar,
+  Calendar as CalendarIcon,
+  Eye,
+  EyeOff,
   Lock,
   AlertCircle,
   FileCheck,
@@ -149,12 +151,6 @@ type OnboardingCompleteFormData = z.infer<typeof onboardingCompleteSchema>;
 
 // ==================== HELPER FUNCTIONS ====================
 
-/** Show last 4 digits of SSN for verification */
-const maskSSN = (digits: string): string => {
-  if (digits.length === 0) return "";
-  return `***-**-${digits.slice(-4).padStart(4, "_")}`;
-};
-
 /** Format DOB input as user types (auto-add slashes) */
 const formatDOB = (value: string): string => {
   const digits = value.replace(/\D/g, "");
@@ -210,6 +206,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [ssnDisplay, setSsnDisplay] = useState("");
   const [dobDisplay, setDobDisplay] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [ssnVisible, setSsnVisible] = useState(false);
   const ssnInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
@@ -689,7 +686,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                             : ""
                       )}
                     >
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none ml-4" style={{ position: "relative", top: "auto", transform: "none" }} />
+                      <CalendarIcon className="w-4 h-4 text-slate-400 mr-2" />
                       <span className={cn("flex-1 text-base", !dobDisplay && "text-slate-400")}>
                         {dobDisplay || "Select your date of birth"}
                       </span>
@@ -699,7 +696,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
+                    <CalendarPicker
                       mode="single"
                       selected={parseDOBtoDate(dobDisplay)}
                       onSelect={(date: Date | undefined) => {
@@ -746,14 +743,14 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   )}
                 </Label>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                  Used for background check purposes only. Your digits are masked for security.
+                  Used for background check purposes only.
                 </p>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input
                     ref={ssnInputRef}
                     id="ssn"
-                    type="password"
+                    type={ssnVisible ? "text" : "password"}
                     value={ssnDisplay}
                     onChange={handleSSNChange}
                     className={cn(
@@ -768,20 +765,20 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     autoComplete="off"
                     inputMode="numeric"
                     maxLength={9}
-                    disabled={false}
                   />
-                  {ssnIsValid && !errors.ssn && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSsnVisible(!ssnVisible)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {ssnVisible ? (
+                      <EyeOff className="w-5 h-5 text-slate-400" />
+                    ) : (
+                      <Eye className="w-5 h-5 text-slate-400" />
+                    )}
+                  </button>
                 </div>
-                {ssnDisplay.length > 0 && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                    Last 4 digits: <span className="font-bold text-slate-700 dark:text-slate-300">{maskSSN(ssnDisplay)}</span>
-                    <span className="ml-2 text-slate-400">({ssnDisplay.length}/9 entered)</span>
-                  </p>
-                )}
                 {errors.ssn && (
                   <p className="text-xs text-red-500 font-medium">
                     {errors.ssn.message}
