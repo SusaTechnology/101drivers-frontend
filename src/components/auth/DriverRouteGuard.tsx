@@ -84,7 +84,7 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
           search: { token: user.onboardingToken },
         });
       } else {
-        navigate({ to: "/driver-application-submitted" });
+        navigate({ to: "/driver-signin" });
       }
     }
   }, [guardState, navigate]);
