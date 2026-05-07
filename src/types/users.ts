@@ -57,6 +57,7 @@ export interface AdminDriverEmbed {
   status: DriverStatus;
   phone: string | null;
   profilePhotoUrl: string | null;
+  selfiePhotoUrl: string | null;
   approvedAt: string | null;
   approvedByUserId: string | null;
   createdAt: string;
@@ -219,6 +220,7 @@ export interface AdminUserDriverDetail {
   approvedByUserId: string | null;
   phone: string | null;
   profilePhotoUrl: string | null;
+  selfiePhotoUrl: string | null;
   status: DriverStatus;
   userId: string;
   createdAt: string;
@@ -368,6 +370,7 @@ export interface AdminUpdateUserRequest {
   driver?: {
     phone?: string;
     profilePhotoUrl?: string;
+    selfiePhotoUrl?: string;
   };
 }
 

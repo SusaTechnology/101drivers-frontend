@@ -834,6 +834,7 @@ async adminUpdateUser(input: {
   driver?: {
     phone?: string | null;
     profilePhotoUrl?: string | null;
+    selfiePhotoUrl?: string | null;
   };
 }): Promise<any> {
   const existing = await this.prisma.user.findUniqueOrThrow({
@@ -937,6 +938,11 @@ async adminUpdateUser(input: {
       if (input.driver.profilePhotoUrl !== undefined) {
         driverData.profilePhotoUrl = this.trimOptionalString(
           input.driver.profilePhotoUrl
+        );
+      }
+      if (input.driver.selfiePhotoUrl !== undefined) {
+        driverData.selfiePhotoUrl = this.trimOptionalString(
+          input.driver.selfiePhotoUrl
         );
       }
 

@@ -50,12 +50,13 @@ COPY --from=base /app/prisma ./prisma
 COPY --from=base /app/scripts ./scripts
 COPY --from=base /app/src ./src
 COPY --from=base /app/tsconfig* ./
+COPY --from=base /app/entrypoint.sh ./entrypoint.sh
 
 # change ownership of the workspace directory
 RUN chown -R ${uid}:${gid} /app/
 
-# get rid of the development dependencies
-RUN npm install --production
+# get rid of the development dependencies but keep prisma CLI for db push
+RUN npm install --production && npm install prisma@^5.4.2 --no-save
 
 # set user to the created non-privileged user
 USER ${user}
@@ -64,5 +65,5 @@ USER ${user}
 ENV PORT=3000
 EXPOSE ${PORT}
 
-# start the server using the previously build application
-CMD [ "node", "./dist/main.js" ]
+# start the server using the entrypoint (syncs DB schema first)
+CMD [ "sh", "./entrypoint.sh" ]
