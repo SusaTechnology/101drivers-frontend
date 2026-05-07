@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,6 +22,12 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
@@ -143,11 +149,10 @@ type OnboardingCompleteFormData = z.infer<typeof onboardingCompleteSchema>;
 
 // ==================== HELPER FUNCTIONS ====================
 
-/** Format raw SSN digits into ***-**-XXXX masked display */
+/** Show last 4 digits of SSN for verification */
 const maskSSN = (digits: string): string => {
-  if (digits.length <= 4) return digits;
-  if (digits.length <= 6) return `***-**-${digits.slice(4)}`;
-  return `***-**-${digits.slice(5)}`;
+  if (digits.length === 0) return "";
+  return `***-**-${digits.slice(-4).padStart(4, "_")}`;
 };
 
 /** Format DOB input as user types (auto-add slashes) */
@@ -157,6 +162,23 @@ const formatDOB = (value: string): string => {
   if (digits.length <= 2) return digits;
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+};
+
+/** Parse MM/DD/YYYY string to a Date object (for calendar) */
+const parseDOBtoDate = (dobStr: string): Date | undefined => {
+  if (!dobStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dobStr)) return undefined;
+  const [m, d, y] = dobStr.split("/").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return undefined;
+  return date;
+};
+
+/** Format Date object to MM/DD/YYYY */
+const formatDateToStr = (date: Date): string => {
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const y = date.getFullYear();
+  return `${m}/${d}/${y}`;
 };
 
 // ==================== TYPES ====================
@@ -187,6 +209,8 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [ssnDisplay, setSsnDisplay] = useState("");
   const [dobDisplay, setDobDisplay] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const ssnInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
@@ -645,40 +669,59 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     : "border-transparent"
                 )}
               >
-                <Label htmlFor="dateOfBirth" className="text-xs font-bold">
+                <Label className="text-xs font-bold">
                   Date of birth
                   {!watchDob?.trim() && (
                     <span className="text-red-500 ml-1">*</span>
                   )}
                 </Label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="dateOfBirth"
-                    value={dobDisplay}
-                    onChange={handleDOBChange}
-                    className={cn(
-                      "h-14 pl-12 pr-10 rounded-2xl transition-colors",
-                      errors.dateOfBirth
-                        ? "border-red-400 dark:border-red-500"
-                        : dobIsValid
-                          ? "border-green-300 dark:border-green-700"
-                          : ""
-                    )}
-                    placeholder="MM/DD/YYYY"
-                    autoComplete="bday"
-                    inputMode="numeric"
-                    maxLength={10}
-                    disabled={false}
-                  />
-                  {dobIsValid && !errors.dateOfBirth && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    </div>
-                  )}
-                </div>
+                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        "h-14 w-full pl-12 pr-10 rounded-2xl border border-input bg-background text-left text-sm transition-colors flex items-center",
+                        "hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500",
+                        errors.dateOfBirth
+                          ? "border-red-400 dark:border-red-500"
+                          : dobIsValid
+                            ? "border-green-300 dark:border-green-700"
+                            : ""
+                      )}
+                    >
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none ml-4" style={{ position: "relative", top: "auto", transform: "none" }} />
+                      <span className={cn("flex-1 text-base", !dobDisplay && "text-slate-400")}>
+                        {dobDisplay || "Select your date of birth"}
+                      </span>
+                      {dobIsValid && !errors.dateOfBirth && (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={parseDOBtoDate(dobDisplay)}
+                      onSelect={(date: Date | undefined) => {
+                        if (date) {
+                          const formatted = formatDateToStr(date);
+                          setDobDisplay(formatted);
+                          setValue("dateOfBirth", formatted, { shouldValidate: true });
+                          setCalendarOpen(false);
+                        }
+                      }}
+                      disabled={(date: Date) =>
+                        date > new Date() || date < new Date("1900-01-01")
+                      }
+                      defaultMonth={parseDOBtoDate(dobDisplay) || undefined}
+                      captionLayout="dropdown"
+                      fromYear={1920}
+                      toYear={new Date().getFullYear()}
+                    />
+                  </PopoverContent>
+                </Popover>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Format: MM/DD/YYYY
+                  Click to pick your date of birth from the calendar
                 </p>
                 {errors.dateOfBirth && (
                   <p className="text-xs text-red-500 font-medium">
@@ -703,13 +746,15 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   )}
                 </Label>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                  Used for background check purposes only. Displayed as masked.
+                  Used for background check purposes only. Your digits are masked for security.
                 </p>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input
+                    ref={ssnInputRef}
                     id="ssn"
-                    value={ssnDisplay.length > 0 ? maskSSN(ssnDisplay) : ""}
+                    type="password"
+                    value={ssnDisplay}
                     onChange={handleSSNChange}
                     className={cn(
                       "h-14 pl-12 pr-10 rounded-2xl tracking-widest font-mono transition-colors",
@@ -719,10 +764,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                           ? "border-green-300 dark:border-green-700"
                           : ""
                     )}
-                    placeholder="***-**-XXXX"
+                    placeholder="Enter 9 digits"
                     autoComplete="off"
                     inputMode="numeric"
-                    maxLength={11}
+                    maxLength={9}
                     disabled={false}
                   />
                   {ssnIsValid && !errors.ssn && (
@@ -731,6 +776,12 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     </div>
                   )}
                 </div>
+                {ssnDisplay.length > 0 && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                    Last 4 digits: <span className="font-bold text-slate-700 dark:text-slate-300">{maskSSN(ssnDisplay)}</span>
+                    <span className="ml-2 text-slate-400">({ssnDisplay.length}/9 entered)</span>
+                  </p>
+                )}
                 {errors.ssn && (
                   <p className="text-xs text-red-500 font-medium">
                     {errors.ssn.message}
