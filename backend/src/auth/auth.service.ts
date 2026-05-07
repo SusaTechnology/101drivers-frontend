@@ -416,6 +416,7 @@ export class AuthService {
         status: EnumDriverStatus.PENDING,
         phone: dto.phone ?? null,
         profilePhotoUrl: dto.profilePhotoUrl ?? null,
+        selfiePhotoUrl: dto.selfiePhotoUrl ?? null,
         user: { connect: { id: user.id } },
 
         ...(this.buildDriverPreferenceCreate(dto)),

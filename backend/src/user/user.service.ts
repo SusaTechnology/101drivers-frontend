@@ -660,6 +660,7 @@ async getAdminUserDetail(id: string): Promise<any> {
           approvedByUserId: true,
           phone: true,
           profilePhotoUrl: true,
+          selfiePhotoUrl: true,
           status: true,
           userId: true,
           createdAt: true,

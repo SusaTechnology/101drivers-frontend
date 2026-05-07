@@ -209,6 +209,33 @@ buildAppSettingPublicUrl(input: {
     ).replace(/\/+$/, "");
 
   return `${base}/app-settings/${input.scope}/${input.filename}`;
-}
+  }
+
+  // ==================== DRIVER SELFIE (PUBLIC) ====================
+
+  getDriverSelfieDiskRoot(): string {
+    const root =
+      this.configService.get<string>("DRIVERS_MEDIA_ROOT") ??
+      "/srv/cdn/101-drivers";
+    return path.join(root, "driver-selfie");
+  }
+
+  buildDriverSelfieFilename(originalName: string): string {
+    const ext = path.extname(originalName || "").toLowerCase() || ".jpg";
+    const safeExt = [".jpg", ".jpeg", ".png", ".webp"].includes(ext)
+      ? ext
+      : ".jpg";
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    return `selfie-${unique}${safeExt}`;
+  }
+
+  buildDriverSelfiePublicUrl(filename: string): string {
+    const base =
+      (
+        this.configService.get<string>("DRIVERS_MEDIA_BASE_URL") ??
+        "https://cdn.techbee.et/101-drivers"
+      ).replace(/\/+$/, "");
+    return `${base}/driver-selfie/${filename}`;
+  }
 
 }

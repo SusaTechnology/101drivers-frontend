@@ -107,6 +107,7 @@ model Driver {
   residentialCity  String?
   residentialState String?
   residentialZip   String?
+  selfiePhotoUrl   String?
   ssnLastFour      String?
   status           EnumDriverStatus           @default(PENDING)
   updatedAt        DateTime                   @updatedAt

@@ -39,6 +39,11 @@ export class SignupDriverDto {
   @IsString()
   profilePhotoUrl?: string;
 
+  @ApiProperty({ required: false, example: "https://cdn.example.com/selfie.jpg" })
+  @IsOptional()
+  @IsString()
+  selfiePhotoUrl?: string;
+
   @ApiProperty({
     required: false,
     nullable: true,

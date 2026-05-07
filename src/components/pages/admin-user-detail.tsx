@@ -44,6 +44,7 @@ import {
   Save,
   XIcon,
   Send,
+  Camera,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -1515,6 +1516,24 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               </div>
                             </div>
                           )}
+                          {/* Driver Selfie Photo */}
+                          <div>
+                            <Label className="text-xs font-bold text-slate-500">Selfie Photo</Label>
+                            <div className="mt-2">
+                              {user.driver.selfiePhotoUrl ? (
+                                <img
+                                  src={user.driver.selfiePhotoUrl}
+                                  alt="Driver selfie"
+                                  className="w-32 h-32 object-cover rounded-2xl border border-slate-200 dark:border-slate-700"
+                                />
+                              ) : (
+                                <div className="w-32 h-32 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-slate-400">
+                                  <Camera className="w-6 h-6 mb-1" />
+                                  <span className="text-[10px]">No selfie</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                           {user.driver.approvedAt && (
                             <div>
                               <Label className="text-xs font-bold text-slate-500">Approved</Label>
