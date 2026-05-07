@@ -400,6 +400,7 @@ async rejectDriver(
         },
 
         profilePhotoUrl: true,
+        selfiePhotoUrl: true,
         status: true,
         updatedAt: true,
 
