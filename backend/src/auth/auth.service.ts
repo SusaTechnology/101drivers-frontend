@@ -189,6 +189,7 @@ export class AuthService {
       id: user.id,
       username: user.username,
       email: user.email ?? null,
+      fullName: (user as any).fullName ?? null,
       roles: [String(user.roles)],
       isActive: user.isActive,
     };
