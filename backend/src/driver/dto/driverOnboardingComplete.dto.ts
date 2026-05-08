@@ -86,4 +86,12 @@ export class CompleteDriverOnboardingDto {
     message: "ZIP code must be 5 digits (optionally with 4-digit extension)",
   })
   residentialZip!: string;
+
+  @ApiProperty({
+    description: "Selfie photo URL for identity verification",
+    example: "https://example.com/uploads/selfie-abc123.jpg",
+  })
+  @IsNotEmpty({ message: "Selfie photo is required" })
+  @IsString()
+  selfiePhotoUrl!: string;
 }

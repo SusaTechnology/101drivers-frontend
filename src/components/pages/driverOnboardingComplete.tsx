@@ -50,6 +50,7 @@ import {
   AlertCircle,
   FileCheck,
   Clock,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -145,6 +146,7 @@ const onboardingCompleteSchema = z.object({
     .string()
     .min(1, "ZIP code is required")
     .regex(/^\d{5}$/, "ZIP code must be exactly 5 digits"),
+  selfiePhotoUrl: z.string().min(1, "Selfie photo is required"),
 });
 
 type OnboardingCompleteFormData = z.infer<typeof onboardingCompleteSchema>;
@@ -193,6 +195,7 @@ interface OnboardingCompletePayload {
   residentialCity: string;
   residentialState: string;
   residentialZip: string;
+  selfiePhotoUrl: string;
 }
 
 // ==================== COMPONENT ====================
@@ -214,7 +217,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [driverName, setDriverName] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
-
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+  const [selfieUploading, setSelfieUploading] = useState(false);
+  const selfieInputRef = useRef<HTMLInputElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   // Determine if we're using token-based (from email) or auth-based (from login) flow
   const usingToken = !!token;
 
@@ -247,9 +253,50 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     }
   }, [token, usingToken]);
 
+  // Selfie photo upload handler
+  const handleSelfieChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Invalid file type", { description: "Only JPEG, PNG, and WebP images are allowed." });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File too large", { description: "Please select an image under 5MB." });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => setSelfiePreview(reader.result as string);
+    reader.readAsDataURL(file);
+
+    setSelfieUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_URL}/api/public/uploads/driver-selfie`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      if (data.ok && data.url) {
+        setValue("selfiePhotoUrl", data.url, { shouldValidate: true });
+        toast.success("Selfie uploaded!");
+      } else {
+        throw new Error("Upload failed");
+      }
+    } catch {
+      toast.error("Upload failed", { description: "Could not upload selfie. Please try again." });
+      setSelfiePreview(null);
+      setValue("selfiePhotoUrl", "");
+    } finally {
+      setSelfieUploading(false);
+    }
+  }, [setValue]);
+
   // Submit mutation
   const submitOnboarding = async (data: OnboardingCompleteFormData) => {
     try {
+      setIsSubmitting(true);
       let res: Response;
       if (usingToken) {
         // Token-based: call public endpoint (no auth needed)
@@ -285,6 +332,8 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       toast.error("Failed to submit onboarding information", {
         description: message,
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -306,6 +355,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       residentialCity: "",
       residentialState: "",
       residentialZip: "",
+      selfiePhotoUrl: "",
     },
   });
 
@@ -959,13 +1009,102 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
               </div>
             </CardContent>
 
+            {/* ---- Selfie Photo ---- */}
+            <CardHeader className="border-b border-t border-slate-100 dark:border-slate-800">
+              <CardDescription className="text-[11px] font-black uppercase tracking-widest">
+                Section 3
+              </CardDescription>
+              <CardTitle className="text-xl font-black mt-1 flex items-center gap-2">
+                <Camera className="w-5 h-5 text-lime-500" />
+                Verification Photo
+              </CardTitle>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Take a clear selfie so we can verify your identity.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5 pt-6 pb-6">
+              <div
+                className={cn(
+                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                  errors.selfiePhotoUrl
+                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                    : selfiePreview
+                      ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
+                      : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
+                )}
+              >
+                <Label className="text-xs font-bold">
+                  Selfie Photo
+                  <span className="text-red-500 ml-1">*</span>
+                </Label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Take a clear selfie so the admin can verify your identity before approval.
+                </p>
+                <div className="flex items-center gap-4">
+                  <input
+                    ref={selfieInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    capture="user"
+                    onChange={handleSelfieChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => selfieInputRef.current?.click()}
+                    disabled={isSubmitting || selfieUploading}
+                    className={cn(
+                      "w-20 h-20 rounded-2xl border-2 border-dashed flex items-center justify-center transition-all",
+                      "hover:border-lime-500 hover:bg-lime-50 dark:hover:bg-lime-900/10",
+                      errors.selfiePhotoUrl
+                        ? "border-red-400 text-red-400"
+                        : selfiePreview
+                          ? "border-green-400 text-green-500"
+                          : "border-slate-300 dark:border-slate-600 text-slate-400"
+                    )}
+                  >
+                    {selfieUploading ? (
+                      <div className="animate-spin w-6 h-6 border-2 border-current border-t-transparent rounded-full" />
+                    ) : selfiePreview ? (
+                      <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover rounded-2xl" />
+                    ) : (
+                      <Camera className="w-8 h-8" />
+                    )}
+                  </button>
+                  <div className="flex-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => selfieInputRef.current?.click()}
+                      disabled={isSubmitting || selfieUploading}
+                      className="w-full h-10 rounded-xl"
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      {selfieUploading ? "Uploading..." : selfiePreview ? "Change Photo" : "Take / Upload Selfie"}
+                    </Button>
+                    {selfiePreview && (
+                      <p className="text-[10px] text-green-600 dark:text-green-400 mt-1 font-medium">
+                        Photo uploaded successfully
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {errors.selfiePhotoUrl && (
+                  <p className="text-xs text-red-500 font-medium">
+                    {errors.selfiePhotoUrl.message}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+
             {/* ---- Submit ---- */}
             <div className="border-t border-slate-100 dark:border-slate-800 px-6 py-6">
               <Button
                 type="submit"
+                disabled={isSubmitting}
                 className="w-full h-14 rounded-2xl font-black text-base bg-lime-500 hover:bg-lime-600 text-black shadow-lg shadow-lime-500/20 disabled:opacity-60"
               >
-                {false ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                     Submitting...

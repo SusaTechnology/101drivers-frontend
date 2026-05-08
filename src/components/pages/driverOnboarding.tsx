@@ -84,7 +84,6 @@ const onboardingSchema = z
     radius: z.string().optional(),
     districts: z.array(z.string()).optional(),
     alerts: z.boolean().optional(),
-    selfiePhotoUrl: z.string().min(1, "Selfie photo is required"),
     acceptTerms: z.boolean().refine((val) => val === true, {
       message: "You must accept the terms and privacy policy",
     }),
@@ -105,7 +104,6 @@ interface DriverSignupPayload {
   password: string;
   fullName: string;
   phone: string;
-  selfiePhotoUrl: string;
   homeArea?: string;
   preferredRadius?: string;
   districts?: string[];
@@ -145,10 +143,6 @@ export default function DriverOnboardingPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Selfie photo state
-  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
-  const [selfieUploading, setSelfieUploading] = useState(false);
-  const selfieInputRef = React.useRef<HTMLInputElement>(null);
   
   const navigate = useNavigate();
 
@@ -166,53 +160,6 @@ export default function DriverOnboardingPage() {
     // Store only digits for form submission
     const digits = formatted.replace(/\D/g, '');
     setValue("phone", digits);
-  };
-
-  // Handle selfie photo upload
-  const handleSelfieChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      toast.error("Invalid file type", { description: "Only JPEG, PNG, and WebP images are allowed." });
-      return;
-    }
-    // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File too large", { description: "Please select an image under 5MB." });
-      return;
-    }
-
-    // Show local preview immediately
-    const reader = new FileReader();
-    reader.onload = () => setSelfiePreview(reader.result as string);
-    reader.readAsDataURL(file);
-
-    // Upload to server
-    setSelfieUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/public/uploads/driver-selfie`,
-        { method: "POST", body: formData }
-      );
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      if (data.ok && data.url) {
-        setValue("selfiePhotoUrl", data.url, { shouldValidate: true });
-        toast.success("Selfie uploaded!");
-      } else {
-        throw new Error("Upload failed");
-      }
-    } catch {
-      toast.error("Upload failed", { description: "Could not upload selfie. Please try again." });
-      setSelfiePreview(null);
-      setValue("selfiePhotoUrl", "");
-    } finally {
-      setSelfieUploading(false);
-    }
   };
 
   // Load Google Maps API for autocomplete
@@ -432,8 +379,7 @@ export default function DriverOnboardingPage() {
       password: data.password,
       fullName: data.fullName,
       phone: data.phone,
-      selfiePhotoUrl: data.selfiePhotoUrl,
-      homeArea: data.homeArea,
+      homeArea: data.homeArea:
       preferredRadius: data.radius,
       districts: data.districts,
       emailAlerts: data.alerts,
@@ -1011,80 +957,6 @@ export default function DriverOnboardingPage() {
                       <p className="text-[11px] text-slate-500 dark:text-slate-400">
                         US phone number format. Used for operational contact.
                       </p>
-                    </div>
-
-                    {/* Selfie Photo */}
-                    <div
-                      className={cn(
-                        "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                        errors.selfiePhotoUrl
-                          ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                          : selfiePreview
-                            ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
-                            : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
-                      )}
-                    >
-                      <Label className="text-xs font-bold">
-                        Selfie Photo
-                        <span className="text-red-500 ml-1">*</span>
-                      </Label>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Take a clear selfie so the admin can verify your identity before approval.
-                      </p>
-                      <div className="flex items-center gap-4">
-                        <input
-                          ref={selfieInputRef}
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          capture="user"
-                          onChange={handleSelfieChange}
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => selfieInputRef.current?.click()}
-                          disabled={isPending || selfieUploading}
-                          className={cn(
-                            "w-20 h-20 rounded-2xl border-2 border-dashed flex items-center justify-center transition-all",
-                            "hover:border-lime-500 hover:bg-lime-50 dark:hover:bg-lime-900/10",
-                            errors.selfiePhotoUrl
-                              ? "border-red-400 text-red-400"
-                              : selfiePreview
-                                ? "border-green-400 text-green-500"
-                                : "border-slate-300 dark:border-slate-600 text-slate-400"
-                          )}
-                        >
-                          {selfieUploading ? (
-                            <div className="animate-spin w-6 h-6 border-2 border-current border-t-transparent rounded-full" />
-                          ) : selfiePreview ? (
-                            <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover rounded-2xl" />
-                          ) : (
-                            <Camera className="w-8 h-8" />
-                          )}
-                        </button>
-                        <div className="flex-1">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => selfieInputRef.current?.click()}
-                            disabled={isPending || selfieUploading}
-                            className="w-full h-10 rounded-xl"
-                          >
-                            <Camera className="w-4 h-4 mr-2" />
-                            {selfieUploading ? "Uploading..." : selfiePreview ? "Change Photo" : "Take / Upload Selfie"}
-                          </Button>
-                          {selfiePreview && (
-                            <p className="text-[10px] text-green-600 dark:text-green-400 mt-1 font-medium">
-                              Photo uploaded successfully
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      {errors.selfiePhotoUrl && (
-                        <p className="text-xs text-red-500 font-medium">
-                          {errors.selfiePhotoUrl.message}
-                        </p>
-                      )}
                     </div>
 
                     {/* Terms and Conditions */}
