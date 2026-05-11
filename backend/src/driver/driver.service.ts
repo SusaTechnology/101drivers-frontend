@@ -609,4 +609,85 @@ async completeOnboardingByToken(
   return this.domain.findUnique({ id: driver.id });
 }
 
+async getDriverDeliveriesByStatus(input: {
+  driverId: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ deliveries: any[]; total: number }> {
+  const driverId = input.driverId;
+  const status = input.status?.toUpperCase();
+  const page = input.page ?? 1;
+  const pageSize = input.pageSize ?? 20;
+  const skip = (page - 1) * pageSize;
+
+  // Validate status if provided
+  const validStatuses = [
+    "DRAFT", "QUOTED", "LISTED", "BOOKED", "ACTIVE",
+    "COMPLETED", "CANCELLED", "EXPIRED", "DISPUTED",
+  ];
+
+  if (status && !validStatuses.includes(status)) {
+    throw new BadRequestException(
+      `Invalid status. Must be one of: ${validStatuses.join(", ")}`
+    );
+  }
+
+  const where: Prisma.DeliveryAssignmentWhereInput = {
+    driverId,
+    unassignedAt: null,
+    delivery: {
+      ...(status ? { status: status as any } : {}),
+    },
+  };
+
+  const [assignments, total] = await this.prisma.$transaction([
+    this.prisma.deliveryAssignment.findMany({
+      where,
+      select: {
+        assignedAt: true,
+        delivery: {
+          select: {
+            id: true,
+            status: true,
+            serviceType: true,
+            pickupAddress: true,
+            pickupState: true,
+            pickupLat: true,
+            pickupLng: true,
+            dropoffAddress: true,
+            dropoffState: true,
+            dropoffLat: true,
+            dropoffLng: true,
+            pickupWindowStart: true,
+            pickupWindowEnd: true,
+            dropoffWindowStart: true,
+            dropoffWindowEnd: true,
+            isUrgent: true,
+            afterHours: true,
+            createdAt: true,
+            updatedAt: true,
+            vehicleMake: true,
+            vehicleModel: true,
+            vehicleColor: true,
+            licensePlate: true,
+          },
+        },
+      },
+      orderBy: { assignedAt: "desc" },
+      skip,
+      take: pageSize,
+    }),
+    this.prisma.deliveryAssignment.count({ where }),
+  ]);
+
+  return {
+    deliveries: assignments.map((a) => ({
+      ...a.delivery,
+      assignedAt: a.assignedAt,
+    })),
+    total,
+  };
+}
+
 }

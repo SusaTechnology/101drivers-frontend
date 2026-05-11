@@ -967,6 +967,49 @@ async rejectDriver(
     });
   }
 
+@common.UseInterceptors(AclFilterResponseInterceptor)
+  @common.Get("/:id/deliveries")
+  @swagger.ApiOkResponse({
+    schema: {
+      type: "object",
+      properties: {
+        deliveries: { type: "array", items: { type: "object" } },
+        total: { type: "number" },
+      },
+    },
+  })
+  @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "Driver",
+    action: "read",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
+  async getDriverDeliveries(
+    @common.Param() params: DriverWhereUniqueInput,
+    @common.Query("status") status?: string,
+    @common.Query("page") page?: string,
+    @common.Query("pageSize") pageSize?: string,
+  ): Promise<{ deliveries: any[]; total: number }> {
+    try {
+      return await this.service.getDriverDeliveriesByStatus({
+        driverId: params.id,
+        status: status ?? undefined,
+        page: page ? Number(page) : undefined,
+        pageSize: pageSize ? Number(pageSize) : undefined,
+      });
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        throw new errors.NotFoundException(
+          `No resource was found for ${JSON.stringify(params)}`
+        );
+      }
+      throw error;
+    }
+  }
+
   @common.UseInterceptors(AclFilterResponseInterceptor)
   @common.Get("/:id/notifications")
   @ApiNestedQuery(NotificationEventFindManyArgs)
