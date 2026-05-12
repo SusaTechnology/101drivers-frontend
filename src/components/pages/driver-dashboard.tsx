@@ -588,7 +588,10 @@ export default function DriverDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col">
+    <div className={cn(
+      "bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col",
+      activeView === 'map' ? "h-screen overflow-hidden" : "min-h-screen"
+    )}>
       {/* ═══════════════════════════════════════ */}
       {/* TOP APP BAR                           */}
       {/* ═══════════════════════════════════════ */}
@@ -697,11 +700,10 @@ export default function DriverDashboardPage() {
       {/* ═══════════════════════════════════════ */}
       {activeView === 'map' ? (
         /* ─── MAP VIEW ─── */
-        <div className="flex-1">
+        <div className="flex-1 min-h-0 relative">
           {isLoaded ? (
             <GoogleMap
-              mapContainerClassName="w-full"
-              mapContainerStyle={{ width: '100%', height: 'calc(100vh - 56px - 56px - 68px)' }}
+              mapContainerStyle={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
               center={{ lat: 33.94, lng: -118.40 }}
               zoom={11}
               options={mapOptions}
@@ -738,7 +740,7 @@ export default function DriverDashboardPage() {
               ))}
             </GoogleMap>
           ) : (
-            <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 56px - 56px - 68px)' }}>
+            <div className="absolute inset-0 flex items-center justify-center">
               <div className="flex flex-col items-center gap-4">
                 <RefreshCw className="w-8 h-8 animate-spin text-primary" />
                 <p className="text-sm text-slate-600 dark:text-slate-400">Loading map...</p>
