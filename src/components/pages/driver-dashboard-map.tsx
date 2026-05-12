@@ -392,6 +392,16 @@ export default function DriverMapPage() {
     ],
   }), [])
 
+  // Reposition zoom controls after map loads (can't use google in useMemo — not loaded yet)
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map
+    map.setOptions({
+      zoomControlOptions: {
+        position: google.maps.ControlPosition.RIGHT_BOTTOM,
+      },
+    })
+  }, [])
+
   const formatFullDate = (isoString?: string): string => {
     if (!isoString) return ''
     return new Date(isoString).toLocaleDateString(undefined, {
@@ -476,7 +486,7 @@ export default function DriverMapPage() {
             center={{ lat: 33.94, lng: -118.40 }}
             zoom={11}
             options={mapOptions}
-            onLoad={(map) => { mapRef.current = map }}
+            onLoad={handleMapLoad}
           >
             {/* Driver location */}
             <Marker
