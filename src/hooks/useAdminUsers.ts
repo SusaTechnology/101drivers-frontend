@@ -266,7 +266,7 @@ export function useCreateAdminUser() {
  */
 export function useInviteDriver() {
   return useDataMutation<AdminUserDetail, InviteDriverRequest>({
-    apiEndPoint: `${API_BASE_URL}/api/drivers/:id/invite`,
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/invite-driver`,
     method: 'POST',
     invalidateQueryKey: [['admin-users'], ['admin-users-summary'], ['admin-user-detail']],
   });

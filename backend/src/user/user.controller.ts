@@ -275,7 +275,26 @@ async unsuspendDriverFromUser(
     actorUserId: body.actorUserId ?? null,
     note: body.note ?? null,
   });
-} 
+}
+
+@common.Post(":id/invite-driver")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "update",
+  possession: "any",
+})
+async inviteDriverFromUser(
+  @common.Param("id") id: string,
+  @common.Body() body: UserAdminApprovalActionDto
+): Promise<any> {
+  return this.service.inviteDriverFromUser({
+    userId: id,
+    actorUserId: body.actorUserId ?? null,
+    note: body.note ?? null,
+  });
+}
+
 @common.Get("admin")
 @swagger.ApiOkResponse({ type: Object })
 @nestAccessControl.UseRoles({
