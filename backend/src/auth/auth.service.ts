@@ -374,6 +374,9 @@ export class AuthService {
   ): Promise<UserInfo | VerificationRequiredResult> {
     const normalizedEmail = dto.email.trim().toLowerCase();
 
+    // Validate driver age (must be 25+) before anything else
+    this.validateDriverAge(dto.dateOfBirth);
+
     await this.ensureEmailDoesNotExist(normalizedEmail);
 
     if (!dto.verificationToken) {
@@ -412,12 +415,17 @@ export class AuthService {
       select: { id: true, username: true, email: true, roles: true },
     } as any);
 
+    // Parse date of birth from MM/DD/YYYY
+    const [dobMonth, dobDay, dobYear] = dto.dateOfBirth.split("/");
+    const parsedDob = new Date(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay));
+
     await this.driverService.createDriver({
       data: {
-        status: EnumDriverStatus.PENDING,
+        status: EnumDriverStatus.WAITLISTED,
         phone: dto.phone ?? null,
         profilePhotoUrl: dto.profilePhotoUrl ?? null,
         selfiePhotoUrl: dto.selfiePhotoUrl ?? null,
+        dateOfBirth: parsedDob,
         user: { connect: { id: user.id } },
 
         ...(this.buildDriverPreferenceCreate(dto)),
@@ -437,14 +445,14 @@ export class AuthService {
           "",
           "Thank you!",
           "Your application to join 101 Drivers has been received.",
-          "Your account is pending approval. We'll review your information and contact you when we're ready to bring on new drivers.",
+          "Your account has been added to the waitlist. We'll review your information and contact you when we're ready to bring on new drivers.",
         ].join("\n"),
         html: `
           <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111; max-width: 600px; margin: 0 auto;">
             <h2>Your application to join 101 Drivers has been received</h2>
             <p>Hi ${dto.fullName},</p>
             <p>Thank you! Your application to join 101 Drivers has been received.</p>
-            <p>Your account is pending approval. We'll review your information and contact you when we're ready to bring on new drivers.</p>
+            <p>Your account has been added to the waitlist. We'll review your information and contact you when we're ready to bring on new drivers.</p>
           </div>
         `,
       });
@@ -739,6 +747,20 @@ export class AuthService {
       onboardingToken: authMeta.onboardingToken,
       isActive: true,
     } as UserInfo;
+  }
+
+  private validateDriverAge(dateOfBirth: string): void {
+    const [month, day, year] = dateOfBirth.split("/");
+    const dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    if (age < 25) {
+      throw new BadRequestException("Driver must be at least 25 years old");
+    }
   }
 
   private generateUsernameFromEmail(email: string): string {

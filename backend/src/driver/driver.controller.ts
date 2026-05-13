@@ -78,15 +78,44 @@ async driverLookupMinimal(): Promise<
 > {
   return this.service.driverLookupList();
 }  
- @common.Get("/admin/pending-approval")
+ @common.Get("/admin/waitlisted")
 @swagger.ApiOkResponse({ type: [Driver] })
 @nestAccessControl.UseRoles({
   resource: "Driver",
   action: "read",
   possession: "any",
 })
-async pendingDrivers(): Promise<Driver[]> {
-  return this.service.getPendingDrivers();
+async waitlistedDrivers(): Promise<Driver[]> {
+  return this.service.getWaitlistedDrivers();
+}
+
+@common.Get("/admin/pending-approval")
+@swagger.ApiOkResponse({ type: [Driver] })
+@nestAccessControl.UseRoles({
+  resource: "Driver",
+  action: "read",
+  possession: "any",
+})
+async pendingApprovalDrivers(): Promise<Driver[]> {
+  return this.service.getPendingApprovalDrivers();
+}
+
+@common.Post("/:id/invite")
+@swagger.ApiOkResponse({ type: Driver })
+@nestAccessControl.UseRoles({
+  resource: "Driver",
+  action: "update",
+  possession: "any",
+})
+async inviteDriver(
+  @common.Param("id") id: string,
+  @common.Body() body: ApproveDriverBody
+): Promise<Driver | null> {
+  return this.service.inviteDriver({
+    driverId: id,
+    actorUserId: body.actorUserId ?? null,
+    note: body.note ?? null,
+  });
 }
 
 @common.Post("/:id/approve")

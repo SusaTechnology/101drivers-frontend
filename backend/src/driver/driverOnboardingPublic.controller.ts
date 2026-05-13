@@ -30,6 +30,7 @@ export class DriverOnboardingPublicController {
     onboardingCompleted: boolean;
     driverStatus: string;
     driverName: string | null;
+    dateOfBirth: string | null;
   }> {
     if (!token) {
       throw new common.NotFoundException("Token is required");
@@ -46,6 +47,7 @@ export class DriverOnboardingPublicController {
       onboardingCompleted: !!driver.onboardingCompletedAt,
       driverStatus: driver.status,
       driverName: driver.user?.fullName ?? null,
+      dateOfBirth: driver.dateOfBirth?.toISOString() ?? null,
     };
   }
 

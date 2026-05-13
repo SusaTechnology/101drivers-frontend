@@ -181,11 +181,15 @@ export class DriverPolicyService {
   }
 
   private ensureDriverStatus(value: unknown): void {
-    if (
-      value !== EnumDriverStatus.PENDING &&
-      value !== EnumDriverStatus.APPROVED &&
-      value !== EnumDriverStatus.SUSPENDED
-    ) {
+    const validStatuses = [
+      EnumDriverStatus.WAITLISTED,
+      EnumDriverStatus.INVITED,
+      EnumDriverStatus.PENDING_APPROVAL,
+      EnumDriverStatus.APPROVED,
+      EnumDriverStatus.SUSPENDED,
+      EnumDriverStatus.REJECTED,
+    ];
+    if (!validStatuses.includes(value as EnumDriverStatus)) {
       throw new AppException(
         "status is invalid",
         ErrorCodes.VALIDATION_ERROR

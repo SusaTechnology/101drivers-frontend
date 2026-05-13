@@ -12,9 +12,12 @@ https://docs.amplication.com/how-to/custom-code
 import { registerEnumType } from "@nestjs/graphql";
 
 export enum EnumDriverStatus {
-  Pending = "PENDING",
+  Waitlisted = "WAITLISTED",
+  Invited = "INVITED",
+  PendingApproval = "PENDING_APPROVAL",
   Approved = "APPROVED",
   Suspended = "SUSPENDED",
+  Rejected = "REJECTED",
 }
 
 registerEnumType(EnumDriverStatus, {

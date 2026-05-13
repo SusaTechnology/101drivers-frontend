@@ -4,30 +4,44 @@ import {
   IsOptional,
   IsString,
   Matches,
-  IsDateString,
   MaxLength,
 } from "class-validator";
 
 export class CompleteDriverOnboardingDto {
   @ApiProperty({
-    description:
-      "Full legal name exactly as it appears on the driver's license",
-    example: "John Michael Smith",
+    description: "Driver's license number",
+    example: "D123456789",
   })
-  @IsNotEmpty({ message: "Full legal name is required" })
+  @IsNotEmpty({ message: "License number is required" })
   @IsString()
-  @MaxLength(200)
-  legalFullName!: string;
+  @MaxLength(50)
+  licenseNumber!: string;
 
   @ApiProperty({
-    description: "Date of birth in MM/DD/YYYY format",
-    example: "01/15/1990",
+    description: "State that issued the license (2-letter code)",
+    example: "CA",
   })
-  @IsNotEmpty({ message: "Date of birth is required" })
-  @Matches(/^\d{2}\/\d{2}\/\d{4}$/, {
-    message: "Date of birth must be in MM/DD/YYYY format",
+  @IsNotEmpty({ message: "License state is required" })
+  @Matches(/^[A-Z]{2}$/, {
+    message: "License state must be a valid 2-letter code",
   })
-  dateOfBirth!: string;
+  licenseState!: string;
+
+  @ApiProperty({
+    description: "Front of driver's license photo URL",
+    example: "https://example.com/uploads/license-front-abc123.jpg",
+  })
+  @IsNotEmpty({ message: "License front photo is required" })
+  @IsString()
+  licenseFrontUrl!: string;
+
+  @ApiProperty({
+    description: "Back of driver's license photo URL",
+    example: "https://example.com/uploads/license-back-abc123.jpg",
+  })
+  @IsNotEmpty({ message: "License back photo is required" })
+  @IsString()
+  licenseBackUrl!: string;
 
   @ApiProperty({
     description: "Social Security Number (9 digits, stored securely)",

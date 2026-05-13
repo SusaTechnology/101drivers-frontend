@@ -31,4 +31,10 @@ export class UserInfo {
 
   @Field(() => String, { nullable: true })
   onboardingToken?: string | null;
+
+  @Field(() => String, { nullable: true })
+  customerApprovalStatus?: string | null;
+
+  @Field(() => String, { nullable: true })
+  driverStatus?: string | null;
 }

@@ -367,13 +367,40 @@ if (body.alerts) {
 
     return this.domain.findUnique({ id: driverId });
   } 
- async getPendingDrivers(): Promise<any[]> {
+ async getWaitlistedDrivers(): Promise<any[]> {
   return this.domain.findMany({
     where: {
-      status: EnumDriverStatus.PENDING,
+      status: EnumDriverStatus.WAITLISTED,
     },
     orderBy: { createdAt: "desc" },
   });
+}
+
+async getPendingApprovalDrivers(): Promise<any[]> {
+  return this.domain.findMany({
+    where: {
+      status: EnumDriverStatus.PENDING_APPROVAL,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+async getPendingDrivers(): Promise<any[]> {
+  return this.getWaitlistedDrivers();
+}
+
+async inviteDriver(input: {
+  driverId: string;
+  actorUserId?: string | null;
+  note?: string | null;
+}): Promise<any> {
+  await this.driverApprovalEngine.inviteDriver({
+    driverId: input.driverId,
+    actorUserId: input.actorUserId ?? null,
+    note: input.note ?? null,
+  });
+
+  return this.domain.findUnique({ id: input.driverId });
 }
 
 async approveDriver(input: {
@@ -475,9 +502,9 @@ async completeOnboarding(
     throw new BadRequestException("Driver not found");
   }
 
-  if (driver.status !== EnumDriverStatus.APPROVED) {
+  if (driver.status !== EnumDriverStatus.INVITED) {
     throw new BadRequestException(
-      "Onboarding can only be completed for approved drivers"
+      "Onboarding can only be completed for invited drivers"
     );
   }
 
@@ -485,26 +512,17 @@ async completeOnboarding(
     throw new BadRequestException("Onboarding has already been completed");
   }
 
-  // Parse date of birth from MM/DD/YYYY to Date
-  const [month, day, year] = dto.dateOfBirth.split("/");
-  const dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-
-  // Store only the last 4 digits of SSN
   const ssnLastFour = dto.ssn;
 
   // Update driver record with onboarding data
-  // fullName is stored on the related User model, not on Driver
   await this.prisma.$transaction([
-    this.prisma.user.update({
-      where: { id: driver.userId },
-      data: {
-        fullName: dto.legalFullName.trim(),
-      },
-    }),
     this.prisma.driver.update({
       where: { id: driverId },
       data: {
-        dateOfBirth: dob,
+        licenseNumber: dto.licenseNumber.trim(),
+        licenseState: dto.licenseState.trim(),
+        licenseFrontUrl: dto.licenseFrontUrl.trim(),
+        licenseBackUrl: dto.licenseBackUrl.trim(),
         ssnLastFour,
         residentialAddressLine1: dto.residentialAddressLine1.trim(),
         residentialAddressLine2: dto.residentialAddressLine2
@@ -514,6 +532,7 @@ async completeOnboarding(
         residentialState: dto.residentialState.trim(),
         residentialZip: dto.residentialZip.trim(),
         selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
+        status: EnumDriverStatus.PENDING_APPROVAL,
         onboardingCompletedAt: new Date(),
       },
     }),
@@ -534,6 +553,7 @@ async findDriverByOnboardingToken(token: string): Promise<any | null> {
       userId: true,
       status: true,
       onboardingCompletedAt: true,
+      dateOfBirth: true,
       user: {
         select: {
           fullName: true,
@@ -562,9 +582,9 @@ async completeOnboardingByToken(
     throw new NotFoundException("Invalid or expired token");
   }
 
-  if (driver.status !== EnumDriverStatus.APPROVED) {
+  if (driver.status !== EnumDriverStatus.INVITED) {
     throw new BadRequestException(
-      "Onboarding can only be completed for approved drivers"
+      "Onboarding can only be completed for invited drivers"
     );
   }
 
@@ -572,26 +592,17 @@ async completeOnboardingByToken(
     throw new BadRequestException("Onboarding has already been completed");
   }
 
-  // Parse date of birth from MM/DD/YYYY to Date
-  const [month, day, year] = dto.dateOfBirth.split("/");
-  const dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-
-  // Store only the last 4 digits of SSN
   const ssnLastFour = dto.ssn;
 
   // Update driver record with onboarding data
-  // fullName is stored on the related User model, not on Driver
   await this.prisma.$transaction([
-    this.prisma.user.update({
-      where: { id: driver.userId },
-      data: {
-        fullName: dto.legalFullName.trim(),
-      },
-    }),
     this.prisma.driver.update({
       where: { id: driver.id },
       data: {
-        dateOfBirth: dob,
+        licenseNumber: dto.licenseNumber.trim(),
+        licenseState: dto.licenseState.trim(),
+        licenseFrontUrl: dto.licenseFrontUrl.trim(),
+        licenseBackUrl: dto.licenseBackUrl.trim(),
         ssnLastFour,
         residentialAddressLine1: dto.residentialAddressLine1.trim(),
         residentialAddressLine2: dto.residentialAddressLine2
@@ -601,6 +612,7 @@ async completeOnboardingByToken(
         residentialState: dto.residentialState.trim(),
         residentialZip: dto.residentialZip.trim(),
         selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
+        status: EnumDriverStatus.PENDING_APPROVAL,
         onboardingCompletedAt: new Date(),
       },
     }),

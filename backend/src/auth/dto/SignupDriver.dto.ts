@@ -5,8 +5,10 @@ import {
   IsBoolean,
   IsEmail,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Min,
   MinLength,
 } from "class-validator";
@@ -28,6 +30,16 @@ export class SignupDriverDto {
   @ApiProperty({ example: "Chris Driver" })
   @IsString()
   fullName!: string;
+
+  @ApiProperty({
+    description: "Date of birth in MM/DD/YYYY format. Driver must be 25 or older.",
+    example: "01/15/1990",
+  })
+  @IsNotEmpty({ message: "Date of birth is required" })
+  @Matches(/^\d{2}\/\d{2}\/\d{4}$/, {
+    message: "Date of birth must be in MM/DD/YYYY format",
+  })
+  dateOfBirth!: string;
 
   @ApiProperty({ example: "+1 408 555 0144", required: false })
   @IsOptional()

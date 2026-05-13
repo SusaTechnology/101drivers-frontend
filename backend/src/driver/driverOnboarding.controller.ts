@@ -63,10 +63,15 @@ export class DriverOnboardingController {
   })
   async getOnboardingStatus(
     @common.Req() request: Request
-  ): Promise<{ onboardingCompleted: boolean; onboardingCompletedAt: string | null; driverStatus: string }> {
+  ): Promise<{
+    onboardingCompleted: boolean;
+    onboardingCompletedAt: string | null;
+    driverStatus: string;
+    dateOfBirth: string | null;
+  }> {
     const profileId = (request as any).user?.profileId;
     if (!profileId) {
-      return { onboardingCompleted: false, onboardingCompletedAt: null, driverStatus: "UNKNOWN" };
+      return { onboardingCompleted: false, onboardingCompletedAt: null, driverStatus: "UNKNOWN", dateOfBirth: null };
     }
 
     const driver = await this.service.driver({
@@ -74,6 +79,7 @@ export class DriverOnboardingController {
       select: {
         status: true,
         onboardingCompletedAt: true,
+        dateOfBirth: true,
       },
     });
 
@@ -81,6 +87,7 @@ export class DriverOnboardingController {
       onboardingCompleted: !!driver?.onboardingCompletedAt,
       onboardingCompletedAt: driver?.onboardingCompletedAt?.toISOString() ?? null,
       driverStatus: driver?.status ?? "UNKNOWN",
+      dateOfBirth: driver?.dateOfBirth?.toISOString() ?? null,
     };
   }
 }
