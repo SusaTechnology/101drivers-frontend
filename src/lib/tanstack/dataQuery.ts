@@ -25,7 +25,7 @@ let currentUser: {
   roles: string[];
   // Approval status for customers and drivers
   customerApprovalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
-  driverStatus?: 'PENDING' | 'APPROVED' | 'SUSPENDED';
+  driverStatus?: 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
   // Onboarding status for drivers
   onboardingCompleted?: boolean;
   onboardingToken?: string | null;

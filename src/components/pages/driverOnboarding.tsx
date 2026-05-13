@@ -14,6 +14,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,6 +57,7 @@ import {
   EyeOff,
   Check,
   CheckCircle,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDataMutation, useDataQuery } from "@/lib/tanstack/dataQuery";
@@ -58,15 +65,14 @@ import { useDataMutation, useDataQuery } from "@/lib/tanstack/dataQuery";
 // Form validation schema (unchanged)
 const onboardingSchema = z
   .object({
-    // username: z
-    //   .string()
-    //   .min(3, "Username must be at least 3 characters")
-    //   .max(20, "Username must be less than 20 characters")
-    //   .regex(
-    //     /^[a-zA-Z0-9_]+$/,
-    //     "Username can only contain letters, numbers, and underscores",
-    //   ),
     fullName: z.string().min(2, "Full name is required"),
+    dateOfBirth: z
+      .string()
+      .min(1, "Date of birth is required")
+      .regex(
+        /^\d{2}\/\d{2}\/\d{4}$/,
+        "Date must be in MM/DD/YYYY format"
+      ),
     email: z.string().email("Valid email is required"),
     phone: z.string().min(10, "Phone number is required"),
     password: z
@@ -91,6 +97,21 @@ const onboardingSchema = z
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
     path: ["confirmPassword"],
+  })
+  .refine((data) => {
+    // Validate age >= 25
+    const dobStr = data.dateOfBirth;
+    if (!dobStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dobStr)) return false;
+    const [m, d, y] = dobStr.split('/').map(Number);
+    const dob = new Date(y, m - 1, d);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const mDiff = today.getMonth() - dob.getMonth();
+    if (mDiff < 0 || (mDiff === 0 && today.getDate() < dob.getDate())) age--;
+    return age >= 25;
+  }, {
+    message: "You must be at least 25 years old to apply",
+    path: ["dateOfBirth"],
   });
 
 type OnboardingFormData = z.infer<typeof onboardingSchema>;
@@ -99,10 +120,10 @@ type OnboardingFormData = z.infer<typeof onboardingSchema>;
 const DRIVER_SIGNUP_DRAFT_KEY = "driverSignupDraft";
 
 interface DriverSignupPayload {
-  // username: string;
   email: string;
   password: string;
   fullName: string;
+  dateOfBirth: string;
   phone: string;
   homeArea?: string;
   preferredRadius?: string;
@@ -129,6 +150,32 @@ const formatPhoneNumber = (value: string): string => {
   return `(${truncated.slice(0, 3)}) ${truncated.slice(3, 6)}-${truncated.slice(6)}`;
 };
 
+/** Format DOB input as user types (auto-add slashes) */
+const formatDOB = (value: string): string => {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+};
+
+/** Parse MM/DD/YYYY string to a Date object (for calendar) */
+const parseDOBtoDate = (dobStr: string): Date | undefined => {
+  if (!dobStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dobStr)) return undefined;
+  const [m, d, y] = dobStr.split("/").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return undefined;
+  return date;
+};
+
+/** Format Date object to MM/DD/YYYY */
+const formatDateToStr = (date: Date): string => {
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const y = date.getFullYear();
+  return `${m}/${d}/${y}`;
+};
+
 export default function DriverOnboardingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
@@ -138,6 +185,8 @@ export default function DriverOnboardingPage() {
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [phoneDisplay, setPhoneDisplay] = useState("");
+  const [dobDisplay, setDobDisplay] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
   
   // Password visibility states
   const [showPassword, setShowPassword] = useState(false);
@@ -239,8 +288,8 @@ export default function DriverOnboardingPage() {
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/driver`, // Adjust endpoint as needed
     onSuccess: (data, variables) => {
-      toast.success("Application submitted successfully!", {
-        description: "Your driver account is pending admin approval.",
+      toast.success("Registration successful!", {
+        description: "You've been added to the waitlist. We'll notify you when you're invited to complete your application.",
       });
       // Clear draft from localStorage
       localStorage.removeItem(DRIVER_SIGNUP_DRAFT_KEY);
@@ -374,16 +423,15 @@ export default function DriverOnboardingPage() {
 
     // Prepare base payload
     const basePayload: DriverSignupPayload = {
-      // username: data.username,
       email: data.email,
       password: data.password,
       fullName: data.fullName,
+      dateOfBirth: data.dateOfBirth,
       phone: data.phone,
-      homeArea: data.homeArea:
+      homeArea: data.homeArea,
       preferredRadius: data.radius,
       districts: data.districts,
       emailAlerts: data.alerts,
-      status: "PENDING"
     };
 
     if (!otpSent) {
@@ -415,6 +463,7 @@ export default function DriverOnboardingPage() {
   const watchConfirmPassword = watch("confirmPassword");
   const watchRadius = watch("radius");
   const watchFullName = watch("fullName");
+  const watchDateOfBirth = watch("dateOfBirth");
   const watchEmail = watch("email");
   const watchPhone = watch("phone");
 
@@ -555,7 +604,7 @@ export default function DriverOnboardingPage() {
               />
             </div>
             <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-              Driver onboarding • Pending approval • Email-first
+              Driver onboarding • Waitlist after signup • Email-first
             </p>
           </div>
           <p className="text-xs text-slate-500 font-medium">
@@ -584,7 +633,7 @@ export default function DriverOnboardingPage() {
                 className="bg-slate-100 dark:bg-slate-800/50"
               >
                 <Shield className="h-3 w-3 mr-1" />
-                Pending approval after signup
+                Waitlist after signup
               </Badge>
               <Badge
                 variant="outline"
@@ -600,17 +649,17 @@ export default function DriverOnboardingPage() {
                 Become a certified 101 Driver
               </h1>
               <p className="text-slate-600 dark:text-slate-400 text-lg max-w-2xl mt-4">
-                Drivers can complete signup, but your account remains
+                Drivers can complete signup and join the
                 <span className="font-extrabold text-lime-600 dark:text-lime-400">
                   {" "}
-                  Pending Approval{" "}
+                  Waitlist{" "}
                 </span>
-                until Admin approves it. Only
+                . Once an admin invites you, you'll complete your full application. Only
                 <span className="font-extrabold text-lime-600 dark:text-lime-400">
                   {" "}
                   approved drivers{" "}
                 </span>
-                can book jobs.
+                can book jobs. You must be at least 25 years old.
               </p>
             </div>
 
@@ -725,6 +774,72 @@ export default function DriverOnboardingPage() {
                       {errors.fullName && (
                         <p className="text-xs text-red-500 font-medium">
                           {errors.fullName.message}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Date of Birth */}
+                    <div className={cn(
+                      "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                      errors.dateOfBirth
+                        ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                        : "border-transparent"
+                    )}>
+                      <Label className="text-xs font-bold">
+                        Date of birth{!watchDateOfBirth?.trim() && <span className="text-red-500">*</span>}
+                      </Label>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                        You must be at least 25 years old to apply as a driver.
+                      </p>
+                      <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className={cn(
+                              "h-14 w-full pl-12 pr-10 rounded-2xl border border-input bg-background text-left text-sm transition-colors flex items-center",
+                              "hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500",
+                              errors.dateOfBirth
+                                ? "border-red-400 dark:border-red-500"
+                                : watchDateOfBirth?.trim() && /^\d{2}\/\d{2}\/\d{4}$/.test(watchDateOfBirth)
+                                  ? "border-green-300 dark:border-green-700"
+                                  : ""
+                            )}
+                            disabled={isPending}
+                          >
+                            <CalendarIcon className="w-4 h-4 text-slate-400 mr-2 ml-8" />
+                            <span className={cn("flex-1 text-base", !dobDisplay && "text-slate-400")}>
+                              {dobDisplay || "Select your date of birth"}
+                            </span>
+                            {watchDateOfBirth?.trim() && /^\d{2}\/\d{2}\/\d{4}$/.test(watchDateOfBirth) && !errors.dateOfBirth && (
+                              <CheckCircle className="w-5 h-5 text-green-500" />
+                            )}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <CalendarPicker
+                            mode="single"
+                            selected={parseDOBtoDate(dobDisplay)}
+                            onSelect={(date: Date | undefined) => {
+                              if (date) {
+                                const formatted = formatDateToStr(date);
+                                setDobDisplay(formatted);
+                                setValue("dateOfBirth", formatted, { shouldValidate: true });
+                                setCalendarOpen(false);
+                              }
+                            }}
+                            disabled={(date: Date) =>
+                              date > new Date() || date < new Date("1900-01-01")
+                            }
+                            defaultMonth={parseDOBtoDate(dobDisplay) || undefined}
+                            captionLayout="dropdown"
+                            fromYear={1920}
+                            toYear={new Date().getFullYear()}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {errors.dateOfBirth && (
+                        <p className="text-xs text-red-500 font-medium">
+                          {errors.dateOfBirth.message}
                         </p>
                       )}
                     </div>

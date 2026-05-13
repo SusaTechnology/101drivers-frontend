@@ -1,6 +1,6 @@
 // components/pages/admin-user-detail.tsx
 // Admin User Detail Page - Real API Integration
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -91,6 +91,7 @@ import {
   useRejectDriver,
   useSuspendDriver,
   useUnsuspendDriver,
+  useInviteDriver,
   useAdminUpdateUser,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
@@ -301,7 +302,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver'>('approve-customer');
+  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver'>('approve-customer');
 
   // Edit mode state
   const [editMode, setEditMode] = useState<'none' | 'user' | 'customer' | 'driver'>('none');
@@ -323,6 +324,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const suspendCustomerMutation = useSuspendCustomer();
   const unsuspendCustomerMutation = useUnsuspendCustomer();
   const approveDriverMutation = useApproveDriver();
+  const inviteDriverMutation = useInviteDriver();
   const rejectDriverMutation = useRejectDriver();
   const suspendDriverMutation = useSuspendDriver();
   const unsuspendDriverMutation = useUnsuspendDriver();
@@ -493,6 +495,21 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
       }
     );
   };
+
+  const handleInviteDriver = useCallback(() => {
+    if (!user) return;
+    inviteDriverMutation.mutate(
+      { pathParams: { id: user.id }, actorUserId: getActorUserId() },
+      {
+        onSuccess: () => {
+          toast.success('Driver invited successfully');
+          closeDialog();
+          refetch();
+        },
+        onError: () => toast.error('Failed to invite driver'),
+      }
+    );
+  }, [user, inviteDriverMutation, closeDialog, refetch]);
 
   const handleApproveDriver = () => {
     if (!user || !actorUserId) return;
@@ -912,8 +929,15 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   </Button>
                 )}
                 
+                {/* Driver waitlisted - show Invite Driver */}
+                {!user.disabledAt && user.driver?.status === 'WAITLISTED' && (
+                  <Button onClick={() => openDialog('invite-driver')} className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-sky-600 text-white hover:opacity-90 transition">
+                    <Send className="w-4 h-4" />
+                    Invite Driver
+                  </Button>
+                )}
                 {/* Driver pending approval - show Approve/Reject */}
-                {!user.disabledAt && user.driver?.status === 'PENDING' && (
+                {!user.disabledAt && user.driver?.status === 'PENDING_APPROVAL' && (
                   <>
                     <Button
                       onClick={() => openDialog('approve-driver')}
@@ -931,6 +955,14 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                       Reject Driver
                     </Button>
                   </>
+                )}
+                {/* Driver rejected */}
+                {!user.disabledAt && user.driver?.status === 'REJECTED' && (
+                  <Badge variant="outline" className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border-rose-200 text-rose-600 text-sm">Rejected</Badge>
+                )}
+                {/* Driver legacy pending */}
+                {!user.disabledAt && user.driver?.status === 'PENDING' && (
+                  <Badge variant="outline" className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border-amber-200 text-amber-600 text-sm">Legacy Pending</Badge>
                 )}
                 
                 {/* Customer pending approval - show Approve/Reject */}
@@ -1637,6 +1669,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
               {dialogAction === 'reject-customer' && 'Reject Customer'}
               {dialogAction === 'suspend-customer' && 'Suspend Customer'}
               {dialogAction === 'unsuspend-customer' && 'Unsuspend Customer'}
+              {dialogAction === 'invite-driver' && 'Invite Driver'}
               {dialogAction === 'approve-driver' && 'Approve Driver'}
               {dialogAction === 'reject-driver' && 'Reject Driver'}
               {dialogAction === 'suspend-driver' && 'Suspend Driver'}
@@ -1647,6 +1680,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
               {dialogAction === 'reject-customer' && `Reject ${user?.fullName}'s customer application?`}
               {dialogAction === 'suspend-customer' && `Suspend ${user?.fullName}'s customer account? They will not be able to create deliveries.`}
               {dialogAction === 'unsuspend-customer' && `Restore ${user?.fullName}'s customer account? They will be able to create deliveries again.`}
+              {dialogAction === 'invite-driver' && `Invite ${user?.fullName} to complete their driver application? They will receive an email with instructions.`}
               {dialogAction === 'approve-driver' && `Approve ${user?.fullName} as a driver? They will be able to accept delivery assignments.`}
               {dialogAction === 'reject-driver' && `Reject ${user?.fullName}'s driver application?`}
               {dialogAction === 'suspend-driver' && `Suspend ${user?.fullName}'s driver account? They will not be able to accept deliveries.`}
@@ -1725,6 +1759,24 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   {approveDriverMutation.isPending ? 'Approving...' : 'Approve Driver'}
                 </Button>
               </DialogFooter>
+            </div>
+          )}
+
+          {/* Invite Driver Confirmation */}
+          {dialogAction === 'invite-driver' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-sky-50 dark:bg-sky-900/20 rounded-xl">
+                <div className="text-sm text-sky-700 dark:text-sky-300">
+                  This will send an email to {user?.email} with instructions to complete their driver application.
+                  They will be moved from <b>Waitlisted</b> to <b>Invited</b> status.
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={closeDialog} className="rounded-2xl">Cancel</Button>
+                <Button onClick={handleInviteDriver} disabled={inviteDriverMutation.isPending} className="rounded-2xl bg-sky-600 hover:bg-sky-700 text-white">
+                  {inviteDriverMutation.isPending ? 'Inviting...' : 'Send Invite'}
+                </Button>
+              </div>
             </div>
           )}
 

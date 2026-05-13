@@ -12,6 +12,7 @@ import type {
   RejectCustomerRequest,
   ApproveDriverRequest,
   RejectDriverRequest,
+  InviteDriverRequest,
   SuspendCustomerRequest,
   UnsuspendCustomerRequest,
   SuspendDriverRequest,
@@ -254,5 +255,19 @@ export function useCreateAdminUser() {
     apiEndPoint: `${API_BASE_URL}/api/users/admin-create`,
     method: 'POST',
     invalidateQueryKey: [['admin-users'], ['admin-users-summary']],
+  });
+}
+
+// ==================== INVITE DRIVER ====================
+
+/**
+ * Hook for inviting a waitlisted driver
+ * POST /api/drivers/:id/invite
+ */
+export function useInviteDriver() {
+  return useDataMutation<AdminUserDetail, InviteDriverRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/drivers/:id/invite`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-summary'], ['admin-user-detail']],
   });
 }

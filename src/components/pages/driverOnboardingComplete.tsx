@@ -121,20 +121,17 @@ const US_STATES = [
 // ==================== VALIDATION SCHEMA ====================
 
 const onboardingCompleteSchema = z.object({
-  legalFullName: z
-    .string()
-    .min(2, "Full legal name is required (at least 2 characters)"),
-  dateOfBirth: z
-    .string()
-    .min(1, "Date of birth is required")
-    .regex(
-      /^\d{2}\/\d{2}\/\d{4}$/,
-      "Date must be in MM/DD/YYYY format"
-    ),
   ssn: z
     .string()
     .min(1, "Social Security Number is required")
     .regex(/^\d{9}$/, "SSN must be exactly 9 digits"),
+  licenseNumber: z.string().min(1, "License number is required"),
+  licenseState: z
+    .string()
+    .min(1, "License state is required")
+    .regex(/^[A-Z]{2}$/, "State must be a valid 2-letter code"),
+  licenseFrontUrl: z.string().min(1, "License front photo is required"),
+  licenseBackUrl: z.string().min(1, "License back photo is required"),
   residentialAddressLine1: z.string().min(1, "Street address is required"),
   residentialAddressLine2: z.string().optional(),
   residentialCity: z.string().min(1, "City is required"),
@@ -187,9 +184,11 @@ interface OnboardingStatusResponse {
 }
 
 interface OnboardingCompletePayload {
-  legalFullName: string;
-  dateOfBirth: string;
   ssn: string;
+  licenseNumber: string;
+  licenseState: string;
+  licenseFrontUrl: string;
+  licenseBackUrl: string;
   residentialAddressLine1: string;
   residentialAddressLine2?: string;
   residentialCity: string;
@@ -207,8 +206,6 @@ interface DriverOnboardingCompleteProps {
 export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [ssnDisplay, setSsnDisplay] = useState("");
-  const [dobDisplay, setDobDisplay] = useState("");
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const [ssnVisible, setSsnVisible] = useState(false);
   const ssnInputRef = useRef<HTMLInputElement>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -221,6 +218,12 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [selfieUploading, setSelfieUploading] = useState(false);
   const selfieInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [licenseFrontPreview, setLicenseFrontPreview] = useState<string | null>(null);
+  const [licenseBackPreview, setLicenseBackPreview] = useState<string | null>(null);
+  const [licenseFrontUploading, setLicenseFrontUploading] = useState(false);
+  const [licenseBackUploading, setLicenseBackUploading] = useState(false);
+  const licenseFrontInputRef = useRef<HTMLInputElement>(null);
+  const licenseBackInputRef = useRef<HTMLInputElement>(null);
   // Determine if we're using token-based (from email) or auth-based (from login) flow
   const usingToken = !!token;
 
@@ -347,9 +350,11 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   } = useForm<OnboardingCompleteFormData>({
     resolver: zodResolver(onboardingCompleteSchema),
     defaultValues: {
-      legalFullName: "",
-      dateOfBirth: "",
       ssn: "",
+      licenseNumber: "",
+      licenseState: "",
+      licenseFrontUrl: "",
+      licenseBackUrl: "",
       residentialAddressLine1: "",
       residentialAddressLine2: "",
       residentialCity: "",
@@ -360,16 +365,14 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   });
 
   // Watch fields for validation feedback
-  const watchFullName = watch("legalFullName");
-  const watchDob = watch("dateOfBirth");
   const watchSsn = watch("ssn");
+  const watchLicenseNumber = watch("licenseNumber");
+  const watchLicenseState = watch("licenseState");
   const watchAddressLine1 = watch("residentialAddressLine1");
   const watchCity = watch("residentialCity");
   const watchState = watch("residentialState");
   const watchZipCode = watch("residentialZip");
 
-  const dobIsValid =
-    watchDob?.trim() && /^\d{2}\/\d{2}\/\d{4}$/.test(watchDob);
   const ssnIsValid = watchSsn?.trim() && /^\d{9}$/.test(watchSsn);
   const zipIsValid =
     watchZipCode?.trim() && /^\d{5}$/.test(watchZipCode);
@@ -384,16 +387,6 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     [setValue]
   );
 
-  // DOB change handler
-  const handleDOBChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const formatted = formatDOB(e.target.value);
-      setDobDisplay(formatted);
-      setValue("dateOfBirth", formatted, { shouldValidate: true });
-    },
-    [setValue]
-  );
-
   // State change handler
   const handleStateChange = useCallback(
     (value: string) => {
@@ -401,6 +394,94 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     },
     [setValue]
   );
+
+  // License state change handler
+  const handleLicenseStateChange = useCallback(
+    (value: string) => {
+      setValue("licenseState", value, { shouldValidate: true });
+    },
+    [setValue]
+  );
+
+  // License front photo upload handler
+  const handleLicenseFrontChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Invalid file type", { description: "Only JPEG, PNG, and WebP images are allowed." });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File too large", { description: "Please select an image under 5MB." });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => setLicenseFrontPreview(reader.result as string);
+    reader.readAsDataURL(file);
+
+    setLicenseFrontUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_URL}/api/public/uploads/driver-selfie`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      if (data.ok && data.url) {
+        setValue("licenseFrontUrl", data.url, { shouldValidate: true });
+        toast.success("License front uploaded!");
+      } else {
+        throw new Error("Upload failed");
+      }
+    } catch {
+      toast.error("Upload failed", { description: "Could not upload license front. Please try again." });
+      setLicenseFrontPreview(null);
+      setValue("licenseFrontUrl", "");
+    } finally {
+      setLicenseFrontUploading(false);
+    }
+  }, [setValue]);
+
+  // License back photo upload handler
+  const handleLicenseBackChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Invalid file type", { description: "Only JPEG, PNG, and WebP images are allowed." });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File too large", { description: "Please select an image under 5MB." });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => setLicenseBackPreview(reader.result as string);
+    reader.readAsDataURL(file);
+
+    setLicenseBackUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_URL}/api/public/uploads/driver-selfie`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      if (data.ok && data.url) {
+        setValue("licenseBackUrl", data.url, { shouldValidate: true });
+        toast.success("License back uploaded!");
+      } else {
+        throw new Error("Upload failed");
+      }
+    } catch {
+      toast.error("Upload failed", { description: "Could not upload license back. Please try again." });
+      setLicenseBackPreview(null);
+      setValue("licenseBackUrl", "");
+    } finally {
+      setLicenseBackUploading(false);
+    }
+  }, [setValue]);
 
   const onSubmit = (data: OnboardingCompleteFormData) => {
     submitOnboarding(data);
@@ -449,7 +530,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     const user = isAuthenticated() ? getUser() : null;
 
     // Authenticated APPROVED driver with no onboarding token — redirect to dashboard
-    if (user?.roles?.includes("DRIVER") && user?.driverStatus !== "PENDING") {
+    if (user?.roles?.includes("DRIVER") && user?.driverStatus === 'APPROVED') {
       if (user?.onboardingCompleted) {
         window.location.href = "/driver-dashboard";
         return null;
@@ -592,130 +673,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                 Personal Information
               </CardTitle>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Information must match your government-issued ID exactly.
+                SSN is used for background check purposes only. License info must match your actual license.
               </p>
             </CardHeader>
             <CardContent className="space-y-5 pt-6 pb-6">
-              {/* Full Legal Name */}
-              <div
-                className={cn(
-                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.legalFullName
-                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                    : "border-transparent"
-                )}
-              >
-                <Label htmlFor="fullName" className="text-xs font-bold">
-                  Full legal name (as on driver&apos;s license)
-                  {!watchFullName?.trim() && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
-                </Label>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                  This must match your driver&apos;s license exactly.
-                </p>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="fullName"
-                    {...register("legalFullName")}
-                    className={cn(
-                      "h-14 pl-12 pr-10 rounded-2xl transition-colors",
-                      errors.legalFullName
-                        ? "border-red-400 dark:border-red-500"
-                        : watchFullName?.trim() && watchFullName.trim().length >= 2
-                          ? "border-green-300 dark:border-green-700"
-                          : ""
-                    )}
-                    placeholder="John A. Smith"
-                    autoComplete="name"
-                    disabled={false}
-                  />
-                  {watchFullName?.trim() &&
-                    watchFullName.trim().length >= 2 &&
-                    !errors.legalFullName && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                      </div>
-                    )}
-                </div>
-                {errors.legalFullName && (
-                  <p className="text-xs text-red-500 font-medium">
-                    {errors.legalFullName.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Date of Birth */}
-              <div
-                className={cn(
-                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                  errors.dateOfBirth
-                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                    : "border-transparent"
-                )}
-              >
-                <Label className="text-xs font-bold">
-                  Date of birth
-                  {!watchDob?.trim() && (
-                    <span className="text-red-500 ml-1">*</span>
-                  )}
-                </Label>
-                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        "h-14 w-full pl-12 pr-10 rounded-2xl border border-input bg-background text-left text-sm transition-colors flex items-center",
-                        "hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500",
-                        errors.dateOfBirth
-                          ? "border-red-400 dark:border-red-500"
-                          : dobIsValid
-                            ? "border-green-300 dark:border-green-700"
-                            : ""
-                      )}
-                    >
-                      <CalendarIcon className="w-4 h-4 text-slate-400 mr-2" />
-                      <span className={cn("flex-1 text-base", !dobDisplay && "text-slate-400")}>
-                        {dobDisplay || "Select your date of birth"}
-                      </span>
-                      {dobIsValid && !errors.dateOfBirth && (
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                      )}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarPicker
-                      mode="single"
-                      selected={parseDOBtoDate(dobDisplay)}
-                      onSelect={(date: Date | undefined) => {
-                        if (date) {
-                          const formatted = formatDateToStr(date);
-                          setDobDisplay(formatted);
-                          setValue("dateOfBirth", formatted, { shouldValidate: true });
-                          setCalendarOpen(false);
-                        }
-                      }}
-                      disabled={(date: Date) =>
-                        date > new Date() || date < new Date("1900-01-01")
-                      }
-                      defaultMonth={parseDOBtoDate(dobDisplay) || undefined}
-                      captionLayout="dropdown"
-                      fromYear={1920}
-                      toYear={new Date().getFullYear()}
-                    />
-                  </PopoverContent>
-                </Popover>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Click to pick your date of birth from the calendar
-                </p>
-                {errors.dateOfBirth && (
-                  <p className="text-xs text-red-500 font-medium">
-                    {errors.dateOfBirth.message}
-                  </p>
-                )}
-              </div>
-
               {/* SSN */}
               <div
                 className={cn(
@@ -776,10 +737,199 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
               </div>
             </CardContent>
 
-            {/* ---- Residential Address ---- */}
+            {/* ---- Driver's License Information ---- */}
             <CardHeader className="border-b border-t border-slate-100 dark:border-slate-800">
               <CardDescription className="text-[11px] font-black uppercase tracking-widest">
                 Section 2
+              </CardDescription>
+              <CardTitle className="text-xl font-black mt-1 flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-lime-500" />
+                Driver&apos;s License Information
+              </CardTitle>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Provide your valid driver&apos;s license details and upload photos of both sides.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5 pt-6 pb-6">
+              {/* License Number */}
+              <div
+                className={cn(
+                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                  errors.licenseNumber
+                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                    : watchLicenseNumber?.trim() ? "border-green-300 dark:border-green-700" : "border-transparent"
+                )}
+              >
+                <Label htmlFor="licenseNumber" className="text-xs font-bold">
+                  License Number{!watchLicenseNumber?.trim() && <span className="text-red-500">*</span>}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="licenseNumber"
+                    {...register("licenseNumber")}
+                    className={cn(
+                      "h-14 rounded-2xl pr-10 transition-colors",
+                      errors.licenseNumber
+                        ? "border-red-400 dark:border-red-500"
+                        : watchLicenseNumber?.trim()
+                          ? "border-green-300 dark:border-green-700"
+                          : ""
+                    )}
+                    placeholder="e.g. D1234567"
+                    autoComplete="off"
+                  />
+                  {watchLicenseNumber?.trim() && !errors.licenseNumber && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    </div>
+                  )}
+                </div>
+                {errors.licenseNumber && (
+                  <p className="text-xs text-red-500 font-medium">{errors.licenseNumber.message}</p>
+                )}
+              </div>
+
+              {/* License State */}
+              <div
+                className={cn(
+                  "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                  errors.licenseState
+                    ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                    : watchLicenseState ? "border-green-300 dark:border-green-700" : "border-transparent"
+                )}
+              >
+                <Label className="text-xs font-bold">
+                  Issuing State{!watchLicenseState && <span className="text-red-500">*</span>}
+                </Label>
+                <Select
+                  value={watchLicenseState}
+                  onValueChange={handleLicenseStateChange}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      "h-14 rounded-2xl transition-colors",
+                      errors.licenseState
+                        ? "border-red-400 dark:border-red-500"
+                        : watchLicenseState
+                          ? "border-green-300 dark:border-green-700"
+                          : ""
+                    )}
+                  >
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-64 overflow-y-auto">
+                    {US_STATES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.value} — {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.licenseState && (
+                  <p className="text-xs text-red-500 font-medium">{errors.licenseState.message}</p>
+                )}
+              </div>
+
+              {/* License Photos - Front and Back */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* License Front */}
+                <div
+                  className={cn(
+                    "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                    errors.licenseFrontUrl
+                      ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                      : "border-transparent"
+                  )}
+                >
+                  <Label className="text-xs font-bold">
+                    License Front Photo {!errors.licenseFrontUrl && <span className="text-red-500">*</span>}
+                  </Label>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Upload a clear photo of the front of your license
+                  </p>
+                  <input
+                    ref={licenseFrontInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleLicenseFrontChange}
+                    className="hidden"
+                  />
+                  {licenseFrontPreview ? (
+                    <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                      <img src={licenseFrontPreview} alt="License front" className="w-full h-32 object-cover" />
+                      {licenseFrontUploading && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <Loader2 className="w-6 h-6 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => licenseFrontInputRef.current?.click()}
+                      className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-2 hover:border-lime-500 dark:hover:border-lime-500 transition-colors"
+                    >
+                      <Camera className="w-6 h-6 text-slate-400" />
+                      <span className="text-xs text-slate-500">{licenseFrontUploading ? "Uploading..." : "Click to upload"}</span>
+                    </button>
+                  )}
+                  {errors.licenseFrontUrl && (
+                    <p className="text-xs text-red-500 font-medium">{errors.licenseFrontUrl.message}</p>
+                  )}
+                </div>
+
+                {/* License Back */}
+                <div
+                  className={cn(
+                    "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                    errors.licenseBackUrl
+                      ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                      : "border-transparent"
+                  )}
+                >
+                  <Label className="text-xs font-bold">
+                    License Back Photo {!errors.licenseBackUrl && <span className="text-red-500">*</span>}
+                  </Label>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Upload a clear photo of the back of your license
+                  </p>
+                  <input
+                    ref={licenseBackInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleLicenseBackChange}
+                    className="hidden"
+                  />
+                  {licenseBackPreview ? (
+                    <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                      <img src={licenseBackPreview} alt="License back" className="w-full h-32 object-cover" />
+                      {licenseBackUploading && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <Loader2 className="w-6 h-6 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => licenseBackInputRef.current?.click()}
+                      className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-2 hover:border-lime-500 dark:hover:border-lime-500 transition-colors"
+                    >
+                      <Camera className="w-6 h-6 text-slate-400" />
+                      <span className="text-xs text-slate-500">{licenseBackUploading ? "Uploading..." : "Click to upload"}</span>
+                    </button>
+                  )}
+                  {errors.licenseBackUrl && (
+                    <p className="text-xs text-red-500 font-medium">{errors.licenseBackUrl.message}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+
+            {/* ---- Residential Address ---- */}
+            <CardHeader className="border-b border-t border-slate-100 dark:border-slate-800">
+              <CardDescription className="text-[11px] font-black uppercase tracking-widest">
+                Section 3
               </CardDescription>
               <CardTitle className="text-xl font-black mt-1 flex items-center gap-2">
                 <MapPin className="w-5 h-5 text-lime-500" />
@@ -1012,7 +1162,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
             {/* ---- Selfie Photo ---- */}
             <CardHeader className="border-b border-t border-slate-100 dark:border-slate-800">
               <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                Section 3
+                Section 4
               </CardDescription>
               <CardTitle className="text-xl font-black mt-1 flex items-center gap-2">
                 <Camera className="w-5 h-5 text-lime-500" />
@@ -1111,7 +1261,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   </>
                 ) : (
                   <>
-                    Submit Onboarding Information
+                    Submit Application
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </>
                 )}

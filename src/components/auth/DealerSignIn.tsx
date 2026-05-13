@@ -59,7 +59,7 @@ interface LoginResponse {
   name?: string;
   // Approval status for customers and drivers
   customerApprovalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
-  driverStatus?: 'PENDING' | 'APPROVED' | 'SUSPENDED';
+  driverStatus?: 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
   // User active status
   isActive?: boolean;
 }
@@ -167,8 +167,8 @@ export function DealerSignIn({
       }
 
       // Check 4: Approval status for drivers
-      // NOTE: PENDING drivers are allowed to log in — they will see the
-      // "Application Submitted" screen on /driver-application-submitted.
+      // WAITLISTED and INVITED drivers are allowed to log in — they see a waiting screen
+      // REJECTED drivers are blocked
       if (isDriver && data.driverStatus) {
         const status = data.driverStatus;
         if (status === 'SUSPENDED') {
@@ -176,6 +176,13 @@ export function DealerSignIn({
             "Your driver account has been suspended. Please contact support for assistance."
           );
           toast.error("Account suspended.");
+          return;
+        }
+        if (status === 'REJECTED') {
+          setLoginError(
+            "Your driver application was not approved. Please contact support for more information."
+          );
+          toast.error("Application not approved.");
           return;
         }
       }
@@ -212,6 +219,10 @@ export function DealerSignIn({
               to: "/driver-onboarding-complete",
               search: { token: data.onboardingToken },
             });
+          } else if (data.driverStatus === 'WAITLISTED' || data.driverStatus === 'INVITED') {
+            navigate({ to: "/driver-application-submitted" });
+          } else if (data.driverStatus === 'PENDING_APPROVAL') {
+            navigate({ to: "/driver-application-submitted" });
           } else {
             navigate({ to: "/driver-application-submitted" });
           }

@@ -9,7 +9,7 @@ export type CustomerType = 'BUSINESS' | 'PRIVATE';
 
 export type CustomerApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 
-export type DriverStatus = 'PENDING' | 'APPROVED' | 'SUSPENDED';
+export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
 
 // ==================== ADMIN USERS TABLE TYPES ====================
 
@@ -60,6 +60,10 @@ export interface AdminDriverEmbed {
   selfiePhotoUrl: string | null;
   approvedAt: string | null;
   approvedByUserId: string | null;
+  licenseNumber: string | null;
+  licenseState: string | null;
+  licenseFrontUrl: string | null;
+  licenseBackUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -329,6 +333,11 @@ export interface RejectDriverRequest {
   actorUserId?: string;
 }
 
+export interface InviteDriverRequest {
+  note?: string;
+  actorUserId?: string;
+}
+
 export interface SuspendCustomerRequest {
   reason: string;
   actorUserId?: string;
@@ -422,9 +431,13 @@ export const CUSTOMER_APPROVAL_STATUS_LABELS: Record<CustomerApprovalStatus, str
 };
 
 export const DRIVER_STATUS_LABELS: Record<DriverStatus, string> = {
-  PENDING: 'Pending Approval',
+  WAITLISTED: 'Waitlisted',
+  INVITED: 'Invited',
+  PENDING: 'Pending',
+  PENDING_APPROVAL: 'Pending Approval',
   APPROVED: 'Approved',
   SUSPENDED: 'Suspended',
+  REJECTED: 'Rejected',
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -463,9 +476,17 @@ export function getDriverStatusColor(status: DriverStatus): string {
   switch (status) {
     case 'APPROVED':
       return 'emerald';
+    case 'WAITLISTED':
+      return 'slate';
+    case 'INVITED':
+      return 'sky';
     case 'PENDING':
       return 'amber';
+    case 'PENDING_APPROVAL':
+      return 'amber';
     case 'SUSPENDED':
+      return 'rose';
+    case 'REJECTED':
       return 'rose';
     default:
       return 'slate';

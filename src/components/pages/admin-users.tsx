@@ -54,6 +54,7 @@ import {
   useRejectDriver,
   useSuspendDriver,
   useUnsuspendDriver,
+  useInviteDriver,
   useCreateAdminUser,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
@@ -104,6 +105,7 @@ import {
   Phone,
   Lock,
   UserPlus,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -167,9 +169,12 @@ const CUSTOMER_STATUS_OPTIONS: { value: string; label: string }[] = [
 
 const DRIVER_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'All Status' },
-  { value: 'PENDING', label: 'Pending' },
+  { value: 'WAITLISTED', label: 'Waitlisted' },
+  { value: 'INVITED', label: 'Invited' },
+  { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
   { value: 'APPROVED', label: 'Approved' },
   { value: 'SUSPENDED', label: 'Suspended' },
+  { value: 'REJECTED', label: 'Rejected' },
 ];
 
 const SORT_BY_OPTIONS: { value: string; label: string }[] = [
@@ -314,7 +319,7 @@ export default function AdminUsersPage() {
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver'>('approve-customer');
+  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver'>('approve-customer');
   const [selectedUser, setSelectedUser] = useState<AdminUserRow | null>(null);
 
   // Create Admin Dialog State
@@ -365,6 +370,7 @@ export default function AdminUsersPage() {
   const rejectDriverMutation = useRejectDriver();
   const suspendDriverMutation = useSuspendDriver();
   const unsuspendDriverMutation = useUnsuspendDriver();
+  const inviteDriverMutation = useInviteDriver();
   const createAdminMutation = useCreateAdminUser();
 
   // ==================== FORMS ====================
@@ -482,6 +488,20 @@ export default function AdminUsersPage() {
       onError: () => toast.error('Failed to approve driver'),
     });
   }, [selectedUser, actorUserId, approveDriverMutation, closeDialog]);
+
+  const handleInviteDriver = useCallback(() => {
+    if (!selectedUser || !actorUserId) return;
+    inviteDriverMutation.mutate(
+      { pathParams: { id: selectedUser.id }, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Driver invited successfully');
+          closeDialog();
+        },
+        onError: () => toast.error('Failed to invite driver'),
+      }
+    );
+  }, [selectedUser, actorUserId, inviteDriverMutation, closeDialog]);
 
   const handleRejectDriver = useCallback((data: RejectFormData) => {
     if (!selectedUser || !actorUserId) return;
@@ -1038,25 +1058,30 @@ export default function AdminUsersPage() {
                                 <CheckCircle className="w-3.5 h-3.5 mr-1" /> Unsuspend Driver
                               </Button>
                             )}
+                            {/* Driver waitlisted - show Invite */}
+                            {!user.disabledAt && user.driver?.status === 'WAITLISTED' && (
+                              <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('invite-driver', user)}>
+                                <Send className="w-3.5 h-3.5 mr-1" /> Invite
+                              </Button>
+                            )}
                             {/* Driver pending approval - show Approve/Reject */}
-                            {!user.disabledAt && user.driver?.status === 'PENDING' && (
+                            {!user.disabledAt && user.driver?.status === 'PENDING_APPROVAL' && (
                               <>
-                                <Button
-                                  size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
-                                  onClick={() => openDialog('approve-driver', user)}
-                                >
+                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" onClick={() => openDialog('approve-driver', user)}>
                                   <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  className="rounded-lg"
-                                  onClick={() => openDialog('reject-driver', user)}
-                                >
+                                <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => openDialog('reject-driver', user)}>
                                   <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                                 </Button>
                               </>
+                            )}
+                            {/* Driver rejected - show badge */}
+                            {!user.disabledAt && user.driver?.status === 'REJECTED' && (
+                              <Badge variant="outline" className="rounded-lg border-rose-200 text-rose-600 text-xs">Rejected</Badge>
+                            )}
+                            {/* Driver legacy pending - show badge */}
+                            {!user.disabledAt && user.driver?.status === 'PENDING' && (
+                              <Badge variant="outline" className="rounded-lg border-amber-200 text-amber-600 text-xs">Legacy Pending</Badge>
                             )}
                             {/* Customer pending approval - show Approve/Reject */}
                             {!user.disabledAt && user.customer?.approvalStatus === 'PENDING' && (
@@ -1156,6 +1181,7 @@ export default function AdminUsersPage() {
               {dialogAction === 'reject-customer' && 'Reject Customer'}
               {dialogAction === 'suspend-customer' && 'Suspend Customer'}
               {dialogAction === 'unsuspend-customer' && 'Unsuspend Customer'}
+              {dialogAction === 'invite-driver' && 'Invite Driver'}
               {dialogAction === 'approve-driver' && 'Approve Driver'}
               {dialogAction === 'reject-driver' && 'Reject Driver'}
               {dialogAction === 'suspend-driver' && 'Suspend Driver'}
@@ -1166,6 +1192,7 @@ export default function AdminUsersPage() {
               {dialogAction === 'reject-customer' && `Reject ${selectedUser?.fullName}'s customer application?`}
               {dialogAction === 'suspend-customer' && `Suspend ${selectedUser?.fullName}'s customer account? They will not be able to create deliveries.`}
               {dialogAction === 'unsuspend-customer' && `Restore ${selectedUser?.fullName}'s customer account? They will be able to create deliveries again.`}
+              {dialogAction === 'invite-driver' && `Invite ${selectedUser?.fullName} to complete their driver application? They will receive an email with instructions.`}
               {dialogAction === 'approve-driver' && `Approve ${selectedUser?.fullName} as a driver? They will be able to accept delivery assignments.`}
               {dialogAction === 'reject-driver' && `Reject ${selectedUser?.fullName}'s driver application?`}
               {dialogAction === 'suspend-driver' && `Suspend ${selectedUser?.fullName}'s driver account? They will not be able to accept deliveries.`}
@@ -1244,6 +1271,30 @@ export default function AdminUsersPage() {
                   {approveDriverMutation.isPending ? 'Approving...' : 'Approve Driver'}
                 </Button>
               </DialogFooter>
+            </div>
+          )}
+
+          {/* Invite Driver Confirmation */}
+          {dialogAction === 'invite-driver' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-sky-50 dark:bg-sky-900/20 rounded-xl">
+                <div className="text-sm text-sky-700 dark:text-sky-300">
+                  This will send an email to {selectedUser?.email} with instructions to complete their driver application.
+                  They will be moved from <b>Waitlisted</b> to <b>Invited</b> status.
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={closeDialog} className="rounded-2xl">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleInviteDriver}
+                  disabled={inviteDriverMutation.isPending}
+                  className="rounded-2xl bg-sky-600 hover:bg-sky-700 text-white"
+                >
+                  {inviteDriverMutation.isPending ? 'Inviting...' : 'Send Invite'}
+                </Button>
+              </div>
             </div>
           )}
 

@@ -16,16 +16,17 @@ export function DriverApplicationSubmitted() {
                 </div>
               </div>
               <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
-                Application Submitted!
+                Registration Complete!
               </h2>
               <p className="text-lg text-slate-600 dark:text-slate-400 mt-3 max-w-md">
-                Your driver account application has been received and is pending
-                admin approval.
+                Your account has been created and added to the waitlist. An
+                administrator will review your information and invite you to
+                complete your application.
               </p>
-              <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
-                <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                  Pending Approval
+              <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <Clock className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Waitlisted
                 </span>
               </div>
             </div>

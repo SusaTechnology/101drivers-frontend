@@ -5,14 +5,17 @@ import {
   isAuthenticated,
   getUser,
 } from "@/lib/tanstack/dataQuery";
-import { Loader2, Clock, AlertTriangle } from "lucide-react";
+import { Loader2, Clock, AlertTriangle, CheckCircle } from "lucide-react";
 
 type GuardState =
   | "loading"
   | "authenticated"
   | "needs_signin"
   | "needs_onboarding"
-  | "pending_approval";
+  | "pending_approval"
+  | "waitlisted"
+  | "invited"
+  | "rejected";
 
 /**
  * DriverRouteGuard wraps protected driver pages.
@@ -52,13 +55,25 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
 
     // Step 3: Check driver status
     const driverStatus = user.driverStatus;
-    if (driverStatus === "PENDING") {
+    if (driverStatus === 'WAITLISTED') {
+      setGuardState("waitlisted");
+      return;
+    }
+    if (driverStatus === 'INVITED') {
+      setGuardState("invited");
+      return;
+    }
+    if (driverStatus === 'PENDING_APPROVAL' || driverStatus === 'PENDING') {
       setGuardState("pending_approval");
       return;
     }
-    if (driverStatus === "SUSPENDED") {
+    if (driverStatus === 'SUSPENDED') {
       setStatusMessage("Your driver account has been suspended. Please contact support for assistance.");
       setGuardState("needs_signin");
+      return;
+    }
+    if (driverStatus === 'REJECTED') {
+      setGuardState("rejected");
       return;
     }
 
@@ -113,7 +128,7 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
             Application Pending Approval
           </h2>
           <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-            Your driver account is still under review. We'll notify you by email
+            Your application is under review. We'll notify you by email
             once an administrator approves your application.
           </p>
           <button
@@ -121,6 +136,85 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
             className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
             Back to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Waitlisted screen
+  if (guardState === "waitlisted") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark p-6">
+        <div className="max-w-md w-full text-center">
+          <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mx-auto mb-6">
+            <Clock className="w-8 h-8 text-slate-500 dark:text-slate-400" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-3">
+            You're on the Waitlist
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+            Your account has been created and is on the waitlist. An administrator
+            will review your profile and invite you to complete your application
+            when a spot opens up.
+          </p>
+          <button
+            onClick={() => navigate({ to: "/driver-signin" })}
+            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            Back to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Invited screen
+  if (guardState === "invited") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark p-6">
+        <div className="max-w-md w-full text-center">
+          <div className="w-16 h-16 rounded-full bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-8 h-8 text-sky-600 dark:text-sky-400" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-3">
+            You've Been Invited!
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+            Congratulations! An administrator has invited you to complete your
+            driver application. Please sign in to continue.
+          </p>
+          <button
+            onClick={() => navigate({ to: "/driver-signin" })}
+            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold bg-sky-500 hover:bg-sky-600 text-white transition"
+          >
+            Sign In to Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Rejected screen
+  if (guardState === "rejected") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark p-6">
+        <div className="max-w-md w-full text-center">
+          <div className="w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-8 h-8 text-rose-600 dark:text-rose-400" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-3">
+            Application Not Approved
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+            Your driver application was not approved. Please contact support for
+            more information.
+          </p>
+          <button
+            onClick={() => navigate({ to: "/" })}
+            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            Go Home
           </button>
         </div>
       </div>
