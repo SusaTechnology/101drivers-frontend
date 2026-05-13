@@ -195,7 +195,7 @@ class DriverCreateInput {
   })
   @IsEnum(EnumDriverStatus)
   @Field(() => EnumDriverStatus)
-  status!: "PENDING" | "APPROVED" | "SUSPENDED";
+  status!: "WAITLISTED" | "INVITED" | "PENDING_APPROVAL" | "APPROVED" | "SUSPENDED" | "REJECTED";
 
   @ApiProperty({
     required: true,

@@ -168,11 +168,11 @@ export class DriverDistrictPreferencePolicyService {
 
   private validateDriverAllowed(status: EnumDriverStatus): void {
     if (
-      status !== EnumDriverStatus.PENDING &&
-      status !== EnumDriverStatus.APPROVED
+      status === EnumDriverStatus.SUSPENDED ||
+      status === EnumDriverStatus.REJECTED
     ) {
       throw new AppException(
-        "DriverDistrictPreference is not allowed for a suspended driver",
+        "DriverDistrictPreference is not allowed for a suspended or rejected driver",
         ErrorCodes.BUSINESS_RULE_VIOLATION
       );
     }

@@ -549,7 +549,15 @@ async getAdminUsersSummary(): Promise<any> {
       where: { approvalStatus: EnumCustomerApprovalStatus.PENDING },
     }),
     this.prisma.driver.count({
-      where: { status: EnumDriverStatus.PENDING },
+      where: {
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
+      },
     }),
   ]);
 

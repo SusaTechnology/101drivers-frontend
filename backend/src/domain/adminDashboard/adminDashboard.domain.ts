@@ -108,7 +108,15 @@ export class AdminDashboardDomain {
     });
 
     const pendingDrivers = await this.prisma.driver.findMany({
-      where: { status: EnumDriverStatus.PENDING },
+      where: {
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 5,
       select: {
@@ -129,7 +137,15 @@ export class AdminDashboardDomain {
     });
 
     const pendingDriverCount = await this.prisma.driver.count({
-      where: { status: EnumDriverStatus.PENDING },
+      where: {
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
+      },
     });
 
     const openDisputes = await this.prisma.disputeCase.findMany({
@@ -246,7 +262,13 @@ export class AdminDashboardDomain {
           label: "Review approvals",
           target: "drivers",
           filters: {
-            status: EnumDriverStatus.PENDING,
+            status: {
+              in: [
+                EnumDriverStatus.WAITLISTED,
+                EnumDriverStatus.INVITED,
+                EnumDriverStatus.PENDING_APPROVAL,
+              ],
+            },
           },
         },
       },
@@ -489,7 +511,13 @@ export class AdminDashboardDomain {
 
     const driverApprovalItems = await this.prisma.driver.findMany({
       where: {
-        status: EnumDriverStatus.PENDING,
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
       },
       orderBy: { createdAt: "desc" },
       take: 5,
@@ -512,7 +540,13 @@ export class AdminDashboardDomain {
 
     const driverApprovalCount = await this.prisma.driver.count({
       where: {
-        status: EnumDriverStatus.PENDING,
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
       },
     });
 
@@ -800,7 +834,13 @@ export class AdminDashboardDomain {
           label: "Open",
           target: "drivers",
           filters: {
-            status: EnumDriverStatus.PENDING,
+            status: {
+              in: [
+                EnumDriverStatus.WAITLISTED,
+                EnumDriverStatus.INVITED,
+                EnumDriverStatus.PENDING_APPROVAL,
+              ],
+            },
           },
         },
       },
@@ -1246,7 +1286,15 @@ export class AdminDashboardDomain {
     });
 
     const driverPending = await this.prisma.driver.count({
-      where: { status: EnumDriverStatus.PENDING },
+      where: {
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
+      },
     });
 
     const driverApproved = await this.prisma.driver.count({
@@ -1297,7 +1345,15 @@ export class AdminDashboardDomain {
     });
 
     const recentPendingDrivers = await this.prisma.driver.findMany({
-      where: { status: EnumDriverStatus.PENDING },
+      where: {
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 5,
       select: {
@@ -1497,7 +1553,13 @@ export class AdminDashboardDomain {
 
     const pendingDriverApprovals = await this.prisma.driver.count({
       where: {
-        status: EnumDriverStatus.PENDING,
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
       },
     });
 
@@ -2025,7 +2087,13 @@ export class AdminDashboardDomain {
         label: "Review driver approvals",
         target: "drivers",
         filters: {
-          status: EnumDriverStatus.PENDING,
+          status: {
+            in: [
+              EnumDriverStatus.WAITLISTED,
+              EnumDriverStatus.INVITED,
+              EnumDriverStatus.PENDING_APPROVAL,
+            ],
+          },
         },
       },
       {
@@ -2118,7 +2186,13 @@ export class AdminDashboardDomain {
 
     const pendingDrivers = await this.prisma.driver.findMany({
       where: {
-        status: EnumDriverStatus.PENDING,
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
       },
       orderBy: { createdAt: "desc" },
       take: 5,

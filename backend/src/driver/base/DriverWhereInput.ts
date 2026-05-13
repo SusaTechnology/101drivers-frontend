@@ -215,7 +215,7 @@ class DriverWhereInput {
   @Field(() => EnumDriverStatus, {
     nullable: true,
   })
-  status?: "PENDING" | "APPROVED" | "SUSPENDED";
+  status?: "WAITLISTED" | "INVITED" | "PENDING_APPROVAL" | "APPROVED" | "SUSPENDED" | "REJECTED";
 
   @ApiProperty({
     required: false,
