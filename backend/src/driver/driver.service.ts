@@ -490,7 +490,7 @@ async completeOnboarding(
   const dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
 
   // Store only the last 4 digits of SSN
-  const ssnLastFour = dto.ssn.slice(-4);
+  const ssnLastFour = dto.ssn;
 
   // Update driver record with onboarding data
   // fullName is stored on the related User model, not on Driver
@@ -577,7 +577,7 @@ async completeOnboardingByToken(
   const dob = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
 
   // Store only the last 4 digits of SSN
-  const ssnLastFour = dto.ssn.slice(-4);
+  const ssnLastFour = dto.ssn;
 
   // Update driver record with onboarding data
   // fullName is stored on the related User model, not on Driver
