@@ -256,6 +256,30 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     }
   }, [token, usingToken]);
 
+  // Form setup (must be before handlers that use setValue/watch)
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<OnboardingCompleteFormData>({
+    resolver: zodResolver(onboardingCompleteSchema),
+    defaultValues: {
+      ssn: "",
+      licenseNumber: "",
+      licenseState: "",
+      licenseFrontUrl: "",
+      licenseBackUrl: "",
+      residentialAddressLine1: "",
+      residentialAddressLine2: "",
+      residentialCity: "",
+      residentialState: "",
+      residentialZip: "",
+      selfiePhotoUrl: "",
+    },
+  });
+
   // Selfie photo upload handler
   const handleSelfieChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -339,30 +363,6 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       setIsSubmitting(false);
     }
   };
-
-  // Form setup
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<OnboardingCompleteFormData>({
-    resolver: zodResolver(onboardingCompleteSchema),
-    defaultValues: {
-      ssn: "",
-      licenseNumber: "",
-      licenseState: "",
-      licenseFrontUrl: "",
-      licenseBackUrl: "",
-      residentialAddressLine1: "",
-      residentialAddressLine2: "",
-      residentialCity: "",
-      residentialState: "",
-      residentialZip: "",
-      selfiePhotoUrl: "",
-    },
-  });
 
   // Watch fields for validation feedback
   const watchSsn = watch("ssn");
