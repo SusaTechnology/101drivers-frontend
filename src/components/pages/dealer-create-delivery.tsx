@@ -2678,7 +2678,7 @@ const handleQuotePreview = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="licensePlate" className="text-xs font-bold">
-                      License Plate <span className="text-red-500">*</span>
+                      License Plate {!licensePlate && <span className="text-red-500"> *</span>}
                     </Label>
                     <Input
                       id="licensePlate"
@@ -2703,7 +2703,7 @@ const handleQuotePreview = () => {
                       className="text-xs font-bold"
                     >
                       Last 4 numbers of VIN{" "}
-                      <span className="text-red-500">*</span>
+                      {!vinVerification && <span className="text-red-500"> *</span>}
                     </Label>
                     <Input
                       id="vinVerification"
@@ -2735,7 +2735,7 @@ const handleQuotePreview = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="make" className="text-xs font-bold">
-                      Make <span className="text-red-500">*</span>
+                      Make {!make && <span className="text-red-500"> *</span>}
                     </Label>
                     <Select
                       value={make}
@@ -2768,7 +2768,7 @@ const handleQuotePreview = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="model" className="text-xs font-bold">
-                      Model <span className="text-red-500">*</span>
+                      Model {!model && <span className="text-red-500"> *</span>}
                     </Label>
                     {make && make !== "Other" ? (
                       <Select
@@ -2815,7 +2815,7 @@ const handleQuotePreview = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="color" className="text-xs font-bold">
-                      Color <span className="text-red-500">*</span>
+                      Color {!color && <span className="text-red-500"> *</span>}
                     </Label>
                     <Select
                       value={color}
@@ -2930,7 +2930,7 @@ const handleQuotePreview = () => {
                         htmlFor="recipientName"
                         className="text-xs font-bold"
                       >
-                        Name <span className="text-red-500">*</span>
+                        Name {(!recipientName || recipientName.trim().length === 0) && <span className="text-red-500"> *</span>}
                       </Label>
                       <Input
                         id="recipientName"
@@ -2952,7 +2952,7 @@ const handleQuotePreview = () => {
                         htmlFor="recipientEmail"
                         className="text-xs font-bold"
                       >
-                        Email <span className="text-red-500">*</span>
+                        Email {(!recipientEmail || recipientEmail.trim().length === 0) && <span className="text-red-500"> *</span>}
                       </Label>
                       <Input
                         id="recipientEmail"
@@ -2976,7 +2976,7 @@ const handleQuotePreview = () => {
                       htmlFor="recipientPhone"
                       className="text-xs font-bold"
                     >
-                      Phone <span className="text-red-500">*</span>
+                      Phone {(!recipientPhone || recipientPhone.replace(/\D/g, '').length === 0) && <span className="text-red-500"> *</span>}
                     </Label>
                     <Input
                       id="recipientPhone"
