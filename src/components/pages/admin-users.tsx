@@ -55,6 +55,7 @@ import {
   useSuspendDriver,
   useUnsuspendDriver,
   useInviteDriver,
+  useResendInviteDriver,
   useCreateAdminUser,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
@@ -319,7 +320,7 @@ export default function AdminUsersPage() {
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver'>('approve-customer');
+  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver'>('approve-customer');
   const [selectedUser, setSelectedUser] = useState<AdminUserRow | null>(null);
 
   // Create Admin Dialog State
@@ -371,6 +372,7 @@ export default function AdminUsersPage() {
   const suspendDriverMutation = useSuspendDriver();
   const unsuspendDriverMutation = useUnsuspendDriver();
   const inviteDriverMutation = useInviteDriver();
+  const resendInviteDriverMutation = useResendInviteDriver();
   const createAdminMutation = useCreateAdminUser();
 
   // ==================== FORMS ====================
@@ -502,6 +504,20 @@ export default function AdminUsersPage() {
       }
     );
   }, [selectedUser, actorUserId, inviteDriverMutation, closeDialog]);
+
+  const handleResendInviteDriver = useCallback(() => {
+    if (!selectedUser || !actorUserId) return;
+    resendInviteDriverMutation.mutate(
+      { pathParams: { id: selectedUser.id }, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Invite resent successfully');
+          closeDialog();
+        },
+        onError: () => toast.error('Failed to resend invite'),
+      }
+    );
+  }, [selectedUser, actorUserId, resendInviteDriverMutation, closeDialog]);
 
   const handleRejectDriver = useCallback((data: RejectFormData) => {
     if (!selectedUser || !actorUserId) return;
@@ -1058,6 +1074,12 @@ export default function AdminUsersPage() {
                                 <CheckCircle className="w-3.5 h-3.5 mr-1" /> Unsuspend Driver
                               </Button>
                             )}
+                            {/* Driver invited - show Resend Invite */}
+                            {!user.disabledAt && user.driver?.status === 'INVITED' && (
+                              <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('resend-invite-driver', user)}>
+                                <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
+                              </Button>
+                            )}
                             {/* Driver waitlisted - show Invite */}
                             {!user.disabledAt && user.driver?.status === 'WAITLISTED' && (
                               <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('invite-driver', user)}>
@@ -1075,9 +1097,11 @@ export default function AdminUsersPage() {
                                 </Button>
                               </>
                             )}
-                            {/* Driver rejected - show badge */}
+                            {/* Driver rejected - show Approve button */}
                             {!user.disabledAt && user.driver?.status === 'REJECTED' && (
-                              <Badge variant="outline" className="rounded-lg border-rose-200 text-rose-600 text-xs">Rejected</Badge>
+                              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" onClick={() => openDialog('approve-driver', user)}>
+                                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
+                              </Button>
                             )}
                             {/* Driver legacy pending - show badge */}
                             {!user.disabledAt && user.driver?.status === 'PENDING' && (
@@ -1182,6 +1206,7 @@ export default function AdminUsersPage() {
               {dialogAction === 'suspend-customer' && 'Suspend Customer'}
               {dialogAction === 'unsuspend-customer' && 'Unsuspend Customer'}
               {dialogAction === 'invite-driver' && 'Invite Driver'}
+              {dialogAction === 'resend-invite-driver' && 'Resend Invite'}
               {dialogAction === 'approve-driver' && 'Approve Driver'}
               {dialogAction === 'reject-driver' && 'Reject Driver'}
               {dialogAction === 'suspend-driver' && 'Suspend Driver'}
@@ -1193,6 +1218,7 @@ export default function AdminUsersPage() {
               {dialogAction === 'suspend-customer' && `Suspend ${selectedUser?.fullName}'s customer account? They will not be able to create deliveries.`}
               {dialogAction === 'unsuspend-customer' && `Restore ${selectedUser?.fullName}'s customer account? They will be able to create deliveries again.`}
               {dialogAction === 'invite-driver' && `Invite ${selectedUser?.fullName} to complete their driver application? They will receive an email with instructions.`}
+              {dialogAction === 'resend-invite-driver' && `Resend the invitation email to ${selectedUser?.email}? A new onboarding link will be generated.`}
               {dialogAction === 'approve-driver' && `Approve ${selectedUser?.fullName} as a driver? They will be able to accept delivery assignments.`}
               {dialogAction === 'reject-driver' && `Reject ${selectedUser?.fullName}'s driver application?`}
               {dialogAction === 'suspend-driver' && `Suspend ${selectedUser?.fullName}'s driver account? They will not be able to accept deliveries.`}
@@ -1293,6 +1319,30 @@ export default function AdminUsersPage() {
                   className="rounded-2xl bg-sky-600 hover:bg-sky-700 text-white"
                 >
                   {inviteDriverMutation.isPending ? 'Inviting...' : 'Send Invite'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Resend Invite Driver Confirmation */}
+          {dialogAction === 'resend-invite-driver' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-sky-50 dark:bg-sky-900/20 rounded-xl">
+                <div className="text-sm text-sky-700 dark:text-sky-300">
+                  A new onboarding link will be generated and sent to {selectedUser?.email}.
+                  The previous link will no longer work.
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={closeDialog} className="rounded-2xl">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleResendInviteDriver}
+                  disabled={resendInviteDriverMutation.isPending}
+                  className="rounded-2xl bg-sky-600 hover:bg-sky-700 text-white"
+                >
+                  {resendInviteDriverMutation.isPending ? 'Sending...' : 'Resend Invite'}
                 </Button>
               </div>
             </div>

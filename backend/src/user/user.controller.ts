@@ -295,6 +295,24 @@ async inviteDriverFromUser(
   });
 }
 
+@common.Post(":id/resend-invite-driver")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "update",
+  possession: "any",
+})
+async resendInviteDriverFromUser(
+  @common.Param("id") id: string,
+  @common.Body() body: UserAdminApprovalActionDto
+): Promise<any> {
+  return this.service.resendInviteDriverFromUser({
+    userId: id,
+    actorUserId: body.actorUserId ?? null,
+    note: body.note ?? null,
+  });
+}
+
 @common.Get("admin")
 @swagger.ApiOkResponse({ type: Object })
 @nestAccessControl.UseRoles({

@@ -271,3 +271,17 @@ export function useInviteDriver() {
     invalidateQueryKey: [['admin-users'], ['admin-users-summary'], ['admin-user-detail']],
   });
 }
+
+// ==================== RESEND INVITE DRIVER ====================
+
+/**
+ * Hook for resending invitation to an already-invited driver
+ * POST /api/users/:id/resend-invite-driver
+ */
+export function useResendInviteDriver() {
+  return useDataMutation<AdminUserDetail, InviteDriverRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/resend-invite-driver`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}

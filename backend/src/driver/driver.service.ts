@@ -403,6 +403,20 @@ async inviteDriver(input: {
   return this.domain.findUnique({ id: input.driverId });
 }
 
+async resendInviteDriver(input: {
+  driverId: string;
+  actorUserId?: string | null;
+  note?: string | null;
+}): Promise<any> {
+  await this.driverApprovalEngine.resendInviteDriver({
+    driverId: input.driverId,
+    actorUserId: input.actorUserId ?? null,
+    note: input.note ?? null,
+  });
+
+  return this.domain.findUnique({ id: input.driverId });
+}
+
 async approveDriver(input: {
   driverId: string;
   actorUserId?: string | null;

@@ -1177,6 +1177,22 @@ async inviteDriverFromUser(input: {
   return this.getAdminUserDetail(input.userId);
 }
 
+async resendInviteDriverFromUser(input: {
+  userId: string;
+  actorUserId?: string | null;
+  note?: string | null;
+}) {
+  const driver = await this.getUserDriverOrThrow(input.userId);
+
+  await this.driverService.resendInviteDriver({
+    driverId: driver.id,
+    actorUserId: input.actorUserId ?? null,
+    note: input.note ?? null,
+  });
+
+  return this.getAdminUserDetail(input.userId);
+}
+
 private async getUserCustomerOrThrow(userId: string) {
   const user = await this.prisma.user.findUniqueOrThrow({
     where: { id: userId },

@@ -159,8 +159,11 @@ export class DriverApprovalEngine {
       throw new BadRequestException("Driver is already approved");
     }
 
-    if (driver.status !== EnumDriverStatus.PENDING_APPROVAL) {
-      throw new BadRequestException("Only drivers with pending approval can be approved");
+    if (
+      driver.status !== EnumDriverStatus.PENDING_APPROVAL &&
+      driver.status !== EnumDriverStatus.REJECTED
+    ) {
+      throw new BadRequestException("Only drivers with pending approval or rejected can be approved");
     }
 
     const beforeJson = driver;
@@ -439,6 +442,111 @@ export class DriverApprovalEngine {
           driverId: input.driverId,
           reason: input.reason ?? null,
           rejected: true,
+        },
+      });
+    }
+  }
+
+  /**
+   * RESEND INVITE: Admin resends invitation to an already-invited driver.
+   * INVITED → INVITED (regenerates onboarding token, resends email)
+   */
+  async resendInviteDriver(input: {
+    driverId: string;
+    actorUserId?: string | null;
+    note?: string | null;
+  }): Promise<void> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        user: {
+          select: {
+            email: true,
+            fullName: true,
+          },
+        },
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException("Driver not found");
+    }
+
+    if (driver.status !== EnumDriverStatus.INVITED) {
+      throw new BadRequestException("Only invited drivers can have their invite resent");
+    }
+
+    const beforeJson = driver;
+
+    // Generate a new onboarding token
+    const onboardingToken = randomBytes(32).toString("hex");
+
+    await this.prisma.driver.update({
+      where: { id: input.driverId },
+      data: {
+        onboardingToken,
+      },
+    });
+
+    const afterDriver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    await this.prisma.adminAuditLog.create({
+      data: {
+        action: EnumAdminAuditLogAction.OTHER,
+        actorUserId: input.actorUserId ?? null,
+        actorType: EnumAdminAuditLogActorType.USER,
+        driverId: input.driverId,
+        reason: input.note ?? null,
+        beforeJson: beforeJson ?? Prisma.JsonNull,
+        afterJson: afterDriver ?? Prisma.JsonNull,
+      },
+    });
+
+    const toEmail = driver.user?.email?.trim().toLowerCase() || null;
+    const displayName = driver.user?.fullName || "Driver";
+
+    if (toEmail) {
+      await this.notificationEventEngine.queueAndSend({
+        actorUserId: input.actorUserId ?? null,
+        driverId: input.driverId,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.DRIVER_APPROVED,
+        templateCode: "driver-invited",
+        subject: "Reminder: Complete your driver application \u2014 101 Drivers",
+        body: [
+          `Hi ${displayName},`,
+          "",
+          "This is a reminder to complete your driver application with 101 Drivers.",
+          "Please visit the link below to finish your onboarding:",
+          "",
+          `https://${(process.env.APP_DOMAIN || "101drivers.techbee.et").replace(/^https?:\/\//, "")}/driver-onboarding-complete?token=${onboardingToken}`,
+          "",
+          "You will need to provide the following:",
+          "",
+          "\u2022  Driver\u2019s license (front and back photos)",
+          "\u2022  Social Security Number",
+          "\u2022  Current residential address",
+          "\u2022  Selfie photo for identity verification",
+          "",
+          "Once we receive your complete application, we\u2019ll review it and get back to you.",
+          input.note ? `\nNote from our team: ${input.note}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        toEmail,
+        payload: {
+          driverId: input.driverId,
+          invitedAt: afterDriver ? new Date().toISOString() : null,
+          note: input.note ?? null,
         },
       });
     }
