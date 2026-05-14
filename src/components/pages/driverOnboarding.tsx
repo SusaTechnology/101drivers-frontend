@@ -1225,8 +1225,11 @@ export default function DriverOnboardingPage() {
                         <SelectValue placeholder="Select radius" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="5">5 miles</SelectItem>
-                        <SelectItem value="10">10 miles</SelectItem>
+                        <SelectItem value="25">25 miles</SelectItem>
+                        <SelectItem value="50">50 miles</SelectItem>
+                        <SelectItem value="75">75 miles</SelectItem>
+                        <SelectItem value="100">100 miles</SelectItem>
+
                       </SelectContent>
                     </Select>
                     {errors.radius && (
