@@ -582,7 +582,7 @@ export function DealerSignIn({
           /* ========== DRIVER / ADMIN: Two-column layout ========== */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             {/* Left: Intro Section */}
-            <div className="lg:col-span-6 order-2 lg:order-1">
+            <div className="lg:col-span-6 order-1 lg:order-1">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
                   {isAdmin ? (
@@ -638,7 +638,7 @@ export function DealerSignIn({
                 <h2 className="text-xl font-black text-slate-900 dark:text-white">
                   Become a Driver
                 </h2>
-                <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
+               <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
                       <li className="flex gap-3">
                         <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
                         Be your own boss — pick up jobs that fit your schedule
@@ -650,6 +650,14 @@ export function DealerSignIn({
                       <li className="flex gap-3">
                         <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
                         Drive different cars every day across the LA area
+                      </li>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Must be 25 years or older
+                      </li>
+                      <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Must pass a background check and DMV review
                       </li>
                 </ul>
                 <div className="mt-6">
