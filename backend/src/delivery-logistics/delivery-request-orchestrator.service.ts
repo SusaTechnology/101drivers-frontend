@@ -667,6 +667,20 @@ private async createIndividualDeliveryForResolvedCustomer(
     routeMetrics?.distanceMiles ?? null
   );
 
+  // Hard-block same-day delivery creation after cutoff
+  const isSameDay = this.isSameCalendarDay(
+    schedule.pickupWindowStart,
+    schedule.dropoffWindowEnd
+  );
+  if (isSameDay) {
+    const cutoffResult = this.enforceSameDayCutoff(policy);
+    if (cutoffResult === 'blocked') {
+      throw new BadRequestException(
+        'Cutoff time has passed. No more same-day deliveries can be created today. Please choose a next-day delivery window.'
+      );
+    }
+  }
+
   const requiresOpsConfirmation =
     policy?.requiresOpsConfirmation === true ||
     (input.afterHours === true && policy?.afterHoursEnabled !== true) ||
@@ -1327,6 +1341,23 @@ private async resolveIndividualCustomerForCreate(
       routeMetrics?.distanceMiles ?? null
     );
 
+    // Hard-block same-day delivery creation after cutoff
+    const isSameDay = this.isSameCalendarDay(
+      input.pickupWindowStart,
+      input.dropoffWindowEnd
+    );
+    if (isSameDay) {
+      const cutoffResult = this.enforceSameDayCutoff(policy);
+      if (cutoffResult === 'blocked') {
+        return {
+          delivery: null,
+          message:
+            'Cutoff time has passed. No more same-day deliveries can be created today. Please choose a next-day delivery window.',
+          requiresOpsConfirmation: false,
+        } as any;
+      }
+    }
+
     const requiresOpsConfirmation =
       policy?.requiresOpsConfirmation === true ||
       (input.afterHours === true && policy?.afterHoursEnabled !== true) ||
@@ -1499,6 +1530,34 @@ private async resolveIndividualCustomerForCreate(
     );
 
     return availableMinutes >= etaMinutes + bufferMinutes;
+  }
+
+  /**
+   * Check if the current time has passed the same-day cutoff.
+   * Returns 'blocked' if cutoff has passed and ops confirmation is NOT required.
+   * Returns 'allowed' if within cutoff or ops confirmation will handle it.
+   */
+  private enforceSameDayCutoff(
+    policy: any
+  ): 'blocked' | 'allowed' {
+    const cutoffTime: string | null = policy?.sameDayCutoffTime;
+    if (!cutoffTime) return 'allowed';
+
+    const hhmm = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(cutoffTime);
+    if (!hhmm) return 'allowed';
+
+    const now = new Date();
+    const cutoff = new Date();
+    cutoff.setHours(parseInt(hhmm[1], 10), parseInt(hhmm[2], 10), 0, 0);
+
+    if (now > cutoff) {
+      if (policy?.requiresOpsConfirmation === true) {
+        return 'allowed'; // ops confirmation will flag it
+      }
+      return 'blocked';
+    }
+
+    return 'allowed';
   }
 
   private isSameCalendarDay(a: Date, b: Date): boolean {
