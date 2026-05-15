@@ -264,16 +264,6 @@ export default function AdminSchedulingPolicyPage() {
     },
   });
 
-  // Earliest same-day cutoff from all active SAME_DAY policies (for warning)
-  const earliestCutoff = useMemo(() => {
-    const cutoffs = policies
-      .filter(p => p.active && p.defaultMode === 'SAME_DAY' && p.sameDayCutoffTime)
-      .map(p => p.sameDayCutoffTime!);
-    if (cutoffs.length === 0) return null;
-    // Return the earliest cutoff time
-    return cutoffs.sort()[0];
-  }, [policies]);
-
   // ==================== TIME SLOT FORM ====================
   const tsForm = useForm<TimeSlotFormData>({
     resolver: zodResolver(timeSlotFormSchema),
@@ -710,12 +700,13 @@ export default function AdminSchedulingPolicyPage() {
                           <TableCell className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-1">
                               {policy.active ? (
-                                <Button variant="ghost" size="sm" onClick={() => handleDeactivatePolicy(policy.id)} disabled={deactivatePolicyMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Deactivate">
-                                  <PowerOff className="w-4 h-4" />
+                                
+                                  <Button variant="ghost" size="sm" onClick={() => handleDeactivatePolicy(policy.id)} disabled={deactivatePolicyMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Deactivate" >
+                                  <Power className="w-4 h-4" />
                                 </Button>
                               ) : (
-                                <Button variant="ghost" size="sm" onClick={() => handleActivatePolicy(policy.id)} disabled={activatePolicyMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Activate">
-                                  <Power className="w-4 h-4" />
+                                <Button variant="ghost" size="sm" onClick={() => handleActivatePolicy(policy.id)} disabled={activatePolicyMutation.isPending}  className="h-8 w-8 p-0 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Activate">
+                                  <PowerOff className="w-4 h-4" />
                                 </Button>
                               )}
                               <Button variant="ghost" size="sm" onClick={() => handleOpenEditPolicy(policy)} className="h-8 w-8 p-0 rounded-lg" title="Edit">
@@ -812,12 +803,13 @@ export default function AdminSchedulingPolicyPage() {
                               </Badge>
                               <div className="flex gap-1">
                                 {item.active ? (
-                                  <Button variant="ghost" size="sm" onClick={() => handleDeactivateOh(item.id)} className="h-5 w-5 p-0 text-amber-500">
-                                    <PowerOff className="w-3 h-3" />
+                                  
+                                  <Button variant="ghost" size="sm" onClick={() => handleDeactivateOh(item.id)}  className="h-5 w-5 p-0 text-emerald-500">
+                                    <Power className="w-3 h-3" />
                                   </Button>
                                 ) : (
-                                  <Button variant="ghost" size="sm" onClick={() => handleActivateOh(item.id)} className="h-5 w-5 p-0 text-emerald-500">
-                                    <Power className="w-3 h-3" />
+                                  <Button variant="ghost" size="sm" onClick={() => handleActivateOh(item.id)} className="h-5 w-5 p-0 text-amber-500">
+                                    <PowerOff className="w-3 h-3" />
                                   </Button>
                                 )}
                                 <Button variant="ghost" size="sm" onClick={() => handleOpenEditOh(item)} className="h-5 w-5 p-0">
@@ -879,12 +871,13 @@ export default function AdminSchedulingPolicyPage() {
                             <TableCell className="px-4 py-3 text-right">
                               <div className="flex justify-end gap-1">
                                 {oh.active ? (
-                                  <Button variant="ghost" size="sm" onClick={() => handleDeactivateOh(oh.id)} disabled={deactivateOhMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Deactivate">
-                                    <PowerOff className="w-4 h-4" />
+                                 
+                                   <Button variant="ghost" size="sm" onClick={() => handleDeactivateOh(oh.id)} disabled={deactivateOhMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Deactivate" >
+                                    <Power className="w-4 h-4" />
                                   </Button>
                                 ) : (
-                                  <Button variant="ghost" size="sm" onClick={() => handleActivateOh(oh.id)} disabled={activateOhMutation.isPending} className="h-8 w-8 p-0 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Activate">
-                                    <Power className="w-4 h-4" />
+                                   <Button variant="ghost" size="sm" onClick={() => handleActivateOh(oh.id)} disabled={activateOhMutation.isPending}  className="h-8 w-8 p-0 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Activate">
+                                    <PowerOff className="w-4 h-4" />
                                   </Button>
                                 )}
                                 <Button variant="ghost" size="sm" onClick={() => handleOpenEditOh(oh)} className="h-8 w-8 p-0 rounded-lg" title="Edit">
@@ -1168,19 +1161,6 @@ export default function AdminSchedulingPolicyPage() {
                 <Input type="time" {...tsForm.register('endTime')} className="mt-1.5 rounded-xl h-10" />
               </div>
             </div>
-            {earliestCutoff && tsForm.watch('startTime') >= earliestCutoff && (
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
-                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-bold text-amber-800 dark:text-amber-200">
-                    Slot starts after the daily cutoff time
-                  </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                    The cutoff is set to {formatTime(earliestCutoff)}. This slot ({formatTime(tsForm.watch('startTime'))}) starts at or after the cutoff and will not be available to customers for same-day deliveries.
-                  </p>
-                </div>
-              </div>
-            )}
             <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
               <div>
                 <div className="font-bold text-sm">Active</div>
