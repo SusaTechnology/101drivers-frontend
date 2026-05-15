@@ -214,6 +214,10 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     // Store only digits for form submission
     const digits = formatted.replace(/\D/g, '');
     setSignupValue("contactPhone", digits);
+    // Clear error once user has entered 10 digits
+    if (digits.length >= 10) {
+      clearSignupErrors("contactPhone");
+    }
   };
 
   // Mutation for sending OTP (first step)
@@ -322,6 +326,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     setValue: setSignupValue,
     watch,
     trigger,
+    clearErrors: clearSignupErrors,
   } = useForm<DealerSignupFormData>({
     resolver: zodResolver(dealerSignupSchema),
     mode: "onBlur",
@@ -1035,6 +1040,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             name="contactPhone"
                             value={contactPhoneDisplay}
                             onChange={handleContactPhoneChange}
+                            onBlur={() => trigger("contactPhone")}
                             type="tel"
                             autoComplete="off"
                             inputMode="tel"
