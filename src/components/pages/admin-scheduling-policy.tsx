@@ -626,7 +626,7 @@ export default function AdminSchedulingPolicyPage() {
                   <Plus className="h-3.5 w-3.5 mr-1" />
                   New Policy
                 </Button>
-                <Button onClick={() => refetchPolicies()} disabled={policiesFetching} variant="outline" size="sm" className="rounded-xl">
+                <Button onClick={() => refetchPolicies({ cancelRefetch: true })} disabled={policiesFetching} variant="outline" size="sm" className="rounded-xl">
                   <RefreshCw className={cn("h-3.5 w-3.5", policiesFetching && "animate-spin")} />
                 </Button>
               </div>
@@ -644,7 +644,7 @@ export default function AdminSchedulingPolicyPage() {
                     <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-3" />
                     <p className="text-rose-700 dark:text-rose-300 font-bold">Failed to load policies</p>
                     <p className="text-sm text-slate-500 mt-1">{policiesErrorMsg?.message || 'Unknown error'}</p>
-                    <Button onClick={() => refetchPolicies()} variant="outline" className="mt-4 rounded-xl">Try Again</Button>
+                    <Button onClick={() => refetchPolicies({ cancelRefetch: true })} variant="outline" className="mt-4 rounded-xl">Try Again</Button>
                   </div>
                 ) : policies.length === 0 ? (
                   <div className="p-8 text-center">
@@ -782,7 +782,7 @@ export default function AdminSchedulingPolicyPage() {
                   <Plus className="h-3.5 w-3.5 mr-1" />
                   Add Hours
                 </Button>
-                <Button onClick={() => { refetchOh(); refetchWeekly(); }} disabled={ohFetching || weeklyLoading} variant="outline" size="sm" className="rounded-xl">
+                <Button onClick={() => { refetchOh({ cancelRefetch: true }); refetchWeekly({ cancelRefetch: true }); }} disabled={ohFetching || weeklyLoading} variant="outline" size="sm" className="rounded-xl">
                   <RefreshCw className={cn("h-3.5 w-3.5", (ohFetching || weeklyLoading) && "animate-spin")} />
                 </Button>
               </div>
@@ -844,7 +844,7 @@ export default function AdminSchedulingPolicyPage() {
                     <div className="p-8 text-center">
                       <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-3" />
                       <p className="text-rose-700 dark:text-rose-300 font-bold">Failed to load operating hours</p>
-                      <Button onClick={() => refetchOh()} variant="outline" className="mt-4 rounded-xl">Try Again</Button>
+                      <Button onClick={() => refetchOh({ cancelRefetch: true })} variant="outline" className="mt-4 rounded-xl">Try Again</Button>
                     </div>
                   ) : operatingHours.length === 0 ? (
                     <div className="p-8 text-center">
@@ -942,7 +942,7 @@ export default function AdminSchedulingPolicyPage() {
                   <Plus className="h-3.5 w-3.5 mr-1" />
                   New Slot
                 </Button>
-                <Button onClick={() => refetchTs()} disabled={tsFetching} variant="outline" size="sm" className="rounded-xl">
+                <Button onClick={() => refetchTs({ cancelRefetch: true })} disabled={tsFetching} variant="outline" size="sm" className="rounded-xl">
                   <RefreshCw className={cn("h-3.5 w-3.5", tsFetching && "animate-spin")} />
                 </Button>
               </div>
@@ -959,7 +959,7 @@ export default function AdminSchedulingPolicyPage() {
                   <div className="p-8 text-center">
                     <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-3" />
                     <p className="text-rose-700 dark:text-rose-300 font-bold">Failed to load time slots</p>
-                    <Button onClick={() => refetchTs()} variant="outline" className="mt-4 rounded-xl">Try Again</Button>
+                    <Button onClick={() => refetchTs({ cancelRefetch: true })} variant="outline" className="mt-4 rounded-xl">Try Again</Button>
                   </div>
                 ) : timeSlots.length === 0 ? (
                   <div className="p-8 text-center">
@@ -1069,7 +1069,16 @@ export default function AdminSchedulingPolicyPage() {
               <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-200 dark:border-blue-800">
                 <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cutoff Time</Label>
-                  <Input type="time" {...policyForm.register('sameDayCutoffTime')} className="mt-1.5 rounded-xl h-10" />
+                  <Input
+                    type="time"
+                    {...policyForm.register('sameDayCutoffTime', {
+                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                        policyForm.setValue('sameDayCutoffTime', e.target.value, { shouldValidate: true });
+                        e.target.blur();
+                      },
+                    })}
+                    className="mt-1.5 rounded-xl h-10"
+                  />
                 </div>
                 <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Miles</Label>
@@ -1124,11 +1133,29 @@ export default function AdminSchedulingPolicyPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Start Time *</Label>
-                <Input type="time" {...ohForm.register('startTime')} className="mt-1.5 rounded-xl h-10" />
+                <Input
+                    type="time"
+                    {...ohForm.register('startTime', {
+                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                        ohForm.setValue('startTime', e.target.value, { shouldValidate: true });
+                        e.target.blur();
+                      },
+                    })}
+                    className="mt-1.5 rounded-xl h-10"
+                  />
               </div>
               <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">End Time *</Label>
-                <Input type="time" {...ohForm.register('endTime')} className="mt-1.5 rounded-xl h-10" />
+                <Input
+                    type="time"
+                    {...ohForm.register('endTime', {
+                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                        ohForm.setValue('endTime', e.target.value, { shouldValidate: true });
+                        e.target.blur();
+                      },
+                    })}
+                    className="mt-1.5 rounded-xl h-10"
+                  />
               </div>
             </div>
             <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -1163,11 +1190,29 @@ export default function AdminSchedulingPolicyPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Start Time *</Label>
-                <Input type="time" {...tsForm.register('startTime')} className="mt-1.5 rounded-xl h-10" />
+                <Input
+                    type="time"
+                    {...tsForm.register('startTime', {
+                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                        tsForm.setValue('startTime', e.target.value, { shouldValidate: true });
+                        e.target.blur();
+                      },
+                    })}
+                    className="mt-1.5 rounded-xl h-10"
+                  />
               </div>
               <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">End Time *</Label>
-                <Input type="time" {...tsForm.register('endTime')} className="mt-1.5 rounded-xl h-10" />
+                <Input
+                    type="time"
+                    {...tsForm.register('endTime', {
+                      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                        tsForm.setValue('endTime', e.target.value, { shouldValidate: true });
+                        e.target.blur();
+                      },
+                    })}
+                    className="mt-1.5 rounded-xl h-10"
+                  />
               </div>
             </div>
             {earliestCutoff && tsForm.watch('startTime') >= earliestCutoff && (
