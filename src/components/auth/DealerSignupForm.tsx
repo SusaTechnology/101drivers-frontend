@@ -70,8 +70,8 @@ const dealerSignupSchema = z
     
     // Contact fields - Contact Person is now the primary account holder
     contactName: z.string().min(1, "Contact name is required"),
-    contactEmail: z.string().email("Valid email is required"),
-    contactPhone: z.string().min(1, "Mobile number is required"),
+    contactEmail: z.string().min(1, "Email is required").email("Please enter a valid email address"),
+    contactPhone: z.string().min(1, "Mobile number is required").regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
     
     // Account fields
     password: z
@@ -89,7 +89,7 @@ const dealerSignupSchema = z
     // Business primary contact info (fullName, phone) - businessEmail is optional
     fullName: z.string().min(1, "Business contact full name is required"),
     businessEmail: z.string().email("Valid business email").optional().or(z.literal("")), // Optional - only if found from directory
-    businessPhone: z.string().min(1, "Business phone is required"),
+    businessPhone: z.string().min(1, "Business phone is required").regex(/^\d{10}$/, "Business phone must be exactly 10 digits"),
     
     // Terms
     acceptTerms: z.boolean().refine((val) => val === true, {
@@ -324,6 +324,8 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     trigger,
   } = useForm<DealerSignupFormData>({
     resolver: zodResolver(dealerSignupSchema),
+    mode: "onBlur",
+    reValidateMode: "onChange",
     defaultValues: {
       placeId: "",
       contactName: "",
