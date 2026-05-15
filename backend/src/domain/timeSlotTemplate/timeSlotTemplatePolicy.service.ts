@@ -20,6 +20,7 @@ export class TimeSlotTemplatePolicyService {
 
     await this.ensureUniqueLabel(client, row.label.trim());
     await this.ensureNoOverlappingTimeRange(client, row.startTime, row.endTime);
+    await this.warnIfAfterCutoff(client, row.startTime);
   }
 
   async beforeUpdate(
@@ -69,6 +70,8 @@ export class TimeSlotTemplatePolicyService {
         id!
       );
     }
+
+    await this.warnIfAfterCutoff(client, String(merged.startTime));
   }
 
   async beforeDelete(
@@ -195,6 +198,49 @@ export class TimeSlotTemplatePolicyService {
   private toMinutes(value: string): number {
     const [hh, mm] = value.split(":").map(Number);
     return hh * 60 + mm;
+  }
+
+  /**
+   * If any active SAME_DAY policy has a cutoff time, warn when a slot
+   * starts at or after that cutoff — it won't be available for same-day.
+   */
+  private async warnIfAfterCutoff(
+    client: PrismaClient,
+    startTime: string
+  ): Promise<void> {
+    const activePolicies = await client.schedulingPolicy.findMany({
+      where: {
+        active: true,
+        defaultMode: "SAME_DAY",
+        sameDayCutoffTime: { not: null },
+      },
+      select: { sameDayCutoffTime: true },
+    });
+
+    if (activePolicies.length === 0) return;
+
+    const slotMinutes = this.toMinutes(startTime);
+
+    for (const policy of activePolicies) {
+      const cutoffMinutes = this.toMinutes(policy.sameDayCutoffTime!);
+      if (slotMinutes >= cutoffMinutes) {
+        const cutoff12 = this.to12Hour(policy.sameDayCutoffTime!);
+        const slot12 = this.to12Hour(startTime);
+        throw new AppException(
+          `This slot (${slot12}) starts at or after the daily cutoff time (${cutoff12}). ` +
+            `It will not be available to customers for same-day deliveries. ` +
+            `Please adjust the cutoff time in the Scheduling Policy first, or choose an earlier slot.`,
+          ErrorCodes.VALIDATION_ERROR
+        );
+      }
+    }
+  }
+
+  private to12Hour(hhmm: string): string {
+    const [hh, mm] = hhmm.split(":").map(Number);
+    const period = hh >= 12 ? "PM" : "AM";
+    const h12 = hh % 12 || 12;
+    return `${h12}:${String(mm).padStart(2, "0")} ${period}`;
   }
 
   private resolveUpdatedValue(nextValue: any, currentValue: any): any {
