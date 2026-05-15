@@ -331,8 +331,8 @@ export default function AdminSchedulingPolicyPage() {
         handleClosePolicyModal();
         refetchPolicies();
       },
-      onError: () => {
-        toast.error('Failed to save policy');
+      onError: (error) => {
+        toast.error(error.message || 'Failed!');
       },
     });
   }, [editingPolicy, upsertPolicyMutation, handleClosePolicyModal, refetchPolicies]);
@@ -342,7 +342,7 @@ export default function AdminSchedulingPolicyPage() {
       { pathParams: { id: policyId } },
       {
         onSuccess: () => toast.success('Policy activated successfully'),
-        onError: () => toast.error('Failed to activate policy'),
+        onError: (error) => toast.error(error.message ||'Failed to activate policy'),
       }
     );
   }, [activatePolicyMutation]);
@@ -352,7 +352,7 @@ export default function AdminSchedulingPolicyPage() {
       { pathParams: { id: policyId } },
       {
         onSuccess: () => toast.success('Policy deactivated successfully'),
-        onError: () => toast.error('Failed to deactivate policy'),
+        onError: (error) => toast.error(error.message || 'Failed to deactivate policy'),
       }
     );
   }, [deactivatePolicyMutation]);
@@ -401,8 +401,8 @@ export default function AdminSchedulingPolicyPage() {
         refetchOh();
         refetchWeekly();
       },
-      onError: () => {
-        toast.error('Failed to save operating hours');
+      onError: (error) => {
+        toast.error(error.message || 'Failed to save operating hours');
       },
     });
   }, [editingOh, upsertOhMutation, handleCloseOhModal, refetchOh, refetchWeekly]);
@@ -412,7 +412,7 @@ export default function AdminSchedulingPolicyPage() {
       { pathParams: { id: ohId } },
       {
         onSuccess: () => toast.success('Operating hours activated successfully'),
-        onError: () => toast.error('Failed to activate operating hours'),
+        onError: (error) => toast.error(error.message || 'Failed to activate operating hours'),
       }
     );
   }, [activateOhMutation]);
@@ -422,7 +422,7 @@ export default function AdminSchedulingPolicyPage() {
       { pathParams: { id: ohId } },
       {
         onSuccess: () => toast.success('Operating hours deactivated successfully'),
-        onError: () => toast.error('Failed to deactivate operating hours'),
+        onError: (error) => toast.error(error.message || 'Failed to deactivate operating hours'),
       }
     );
   }, [deactivateOhMutation]);
@@ -469,8 +469,8 @@ export default function AdminSchedulingPolicyPage() {
         handleCloseTsModal();
         refetchTs();
       },
-      onError: () => {
-        toast.error('Failed to save time slot');
+      onError: (error) => {
+        toast.error(error.message || 'Failed to save time slot');
       },
     });
   }, [editingTs, upsertTsMutation, handleCloseTsModal, refetchTs]);
@@ -480,7 +480,7 @@ export default function AdminSchedulingPolicyPage() {
       { pathParams: { id: tsId } },
       {
         onSuccess: () => toast.success('Time slot activated successfully'),
-        onError: () => toast.error('Failed to activate time slot'),
+        onError: (error) => toast.error(error.message || 'Failed to activate time slot'),
       }
     );
   }, [activateTsMutation]);
@@ -490,7 +490,7 @@ export default function AdminSchedulingPolicyPage() {
       { pathParams: { id: tsId } },
       {
         onSuccess: () => toast.error('Time slot deactivated'),
-        onError: () => toast.error('Failed to deactivate time slot'),
+        onError: (error) => toast.error(error.message || 'Failed to deactivate time slot'),
       }
     );
   }, [deactivateTsMutation]);
