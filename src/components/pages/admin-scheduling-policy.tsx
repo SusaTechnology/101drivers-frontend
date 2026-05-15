@@ -264,6 +264,15 @@ export default function AdminSchedulingPolicyPage() {
     },
   });
 
+  // Earliest same-day cutoff from all active SAME_DAY policies (for warning)
+  const earliestCutoff = useMemo(() => {
+    const cutoffs = policies
+      .filter(p => p.active && p.defaultMode === 'SAME_DAY' && p.sameDayCutoffTime)
+      .map(p => p.sameDayCutoffTime!);
+    if (cutoffs.length === 0) return null;
+    return cutoffs.sort()[0];
+  }, [policies]);
+
   // ==================== TIME SLOT FORM ====================
   const tsForm = useForm<TimeSlotFormData>({
     resolver: zodResolver(timeSlotFormSchema),
@@ -1161,6 +1170,19 @@ export default function AdminSchedulingPolicyPage() {
                 <Input type="time" {...tsForm.register('endTime')} className="mt-1.5 rounded-xl h-10" />
               </div>
             </div>
+            {earliestCutoff && tsForm.watch('startTime') >= earliestCutoff && (
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-amber-800 dark:text-amber-200">
+                    Slot starts after the daily cutoff time
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                    The cutoff is set to {formatTime(earliestCutoff)}. This slot ({formatTime(tsForm.watch('startTime'))}) starts at or after the cutoff and will not be available to customers for same-day deliveries.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800">
               <div>
                 <div className="font-bold text-sm">Active</div>
