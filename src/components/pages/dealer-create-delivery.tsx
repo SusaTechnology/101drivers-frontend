@@ -138,8 +138,8 @@ const deliverySchema = z.object({
   enableRecipient: z.boolean().optional(), // Kept for backward compatibility
   recipientBusinessName: z.string().optional(),
   recipientName: z.string().min(1, "Recipient name is required").optional(),
-  recipientEmail: z.string().email().optional().or(z.literal("")),
-  recipientPhone: z.string().min(10, "Valid phone number is required").optional(),
+  recipientEmail: z.string().min(1, "Email is required").email("Please enter a valid email"),
+  recipientPhone: z.string().regex(/^\(\d{3}\) \d{3}-\d{4}$/, "Valid 10‑digit phone number is required").optional(),
   paymentType: z.enum(["PREPAID", "POSTPAID"]).optional(),
   dealerAuthorized: z.boolean().optional(),
   status: z.enum( ["DRAFT", "QUOTED", "LISTED", "BOOKED", "ACTIVE", "COMPLETED", "CANCELLED", "EXPIRED"]),
@@ -334,6 +334,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const [schedulePreviewData, setSchedulePreviewData] = useState<SchedulePreviewResponse | null>(null);
   const [hasCalculated, setHasCalculated] = useState(false);
   const [quoteId, setQuoteId] = useState<string | null>(null);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [quoteData, setQuoteData] = useState({
     miles: 0,
     total: 0,
@@ -1113,6 +1114,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     handleSubmit,
     watch,
     setValue,
+    trigger,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm<DeliveryFormData>({
     resolver: zodResolver(deliverySchema),
@@ -1548,29 +1552,30 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   };
 
   // Called when user picks a date from the calendar
-  const handleDateSelect = (date: Date | undefined) => {
-    if (!date) return;
-    setSelectedDate(date);
+const handleDateSelect = (date: Date | undefined) => {
+  if (!date) return;
+  setSelectedDate(date);
+  setIsCalendarOpen(false); // close the popover immediately
 
-    // Reset slot state
-    setSelectedSlot(null);
-    setValidatedWindows(null);
-    setSuggestedSlots({ pickup: [], dropoff: [] });
+  // reset slot state
+  setSelectedSlot(null);
+  setValidatedWindows(null);
+  setSuggestedSlots({ pickup: [], dropoff: [] });
 
-    // Auto-discover slots for the currently chosen side (default: pickup)
-    if (quoteId && customerChose) {
-      setIsLoadingSlots(true);
-      const request: SchedulePreviewRequest = {
-        quoteId,
-        serviceType,
-        customerType: customerDataQuery.data?.customerType || 'BUSINESS',
-        customerId: customer?.profileId,
-        customerChose,
-        preferredDate: format(date, "yyyy-MM-dd"),
-      };
-      getSchedulePreview.mutate(request);
-    }
-  };
+  // auto-discover slots for the currently chosen side (default: pickup)
+  if (quoteId && customerChose) {
+    setIsLoadingSlots(true);
+    const request: SchedulePreviewRequest = {
+      quoteId,
+      serviceType,
+      customerType: customerDataQuery.data?.customerType || 'BUSINESS',
+      customerId: customer?.profileId,
+      customerChose,
+      preferredDate: format(date, "yyyy-MM-dd"),
+    };
+    getSchedulePreview.mutate(request);
+  }
+};
 
 const handleQuotePreview = () => {
   if (pickupAddress && dropoffAddress && serviceType) {
@@ -2380,36 +2385,36 @@ const handleQuotePreview = () => {
                   <Label className="text-xs font-black uppercase tracking-widest">
                     Date {!selectedDate && <span className="text-red-500"> *</span>}
                   </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full h-14 justify-start text-left font-medium rounded-2xl transition-colors",
-                          showValidationErrors && !selectedDate
-                            ? "border-red-300 dark:border-red-800 text-muted-foreground"
-                            : "border-slate-200 dark:border-slate-700"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
-                        {selectedDate ? format(selectedDate, "EEE MMM d, yyyy") : "Select a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={handleDateSelect}
-                        disabled={(date) => {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          const maxDate = new Date(today);
-                          maxDate.setDate(maxDate.getDate() + 7);
-                          return date < today || date > maxDate;
-                        }}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full h-14 justify-start text-left font-medium rounded-2xl transition-colors",
+                        showValidationErrors && !selectedDate
+                          ? "border-red-300 dark:border-red-800 text-muted-foreground"
+                          : "border-slate-200 dark:border-slate-700"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
+                      {selectedDate ? format(selectedDate, "EEE MMM d, yyyy") : "Select a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={handleDateSelect}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const maxDate = new Date(today);
+                        maxDate.setDate(maxDate.getDate() + 7);
+                        return date < today || date > maxDate;
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
                 </div>
 
                 {/* Choose which side to set */}
@@ -2473,6 +2478,11 @@ const handleQuotePreview = () => {
                       );
                     })()}
                   </RadioGroup>
+                  {selectedDate && !customerChose && (
+                  <p className="text-xs text-red-500 dark:text-slate-400 italic mt-1">
+                    Select either pickup or arrival time
+                  </p>
+                )}
                 </div>
                 </>)}
 
@@ -2537,38 +2547,54 @@ const handleQuotePreview = () => {
                     </div>
                     
                     {/* Validated windows display */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">Pickup Window</div>
-                        <div className="text-sm font-medium">
-                          {customerChose === "PICKUP_WINDOW" ? (
-                            <span className="text-lime-600 dark:text-lime-400">🎯 {selectedSlot?.label}</span>
-                          ) : (
-                            <span className="text-blue-600 dark:text-blue-400">✨ {formatTimeRange(validatedWindows.pickupWindowStart, validatedWindows.pickupWindowEnd)}</span>
-                          )}
-                        </div>
-                        {validatedWindows.pickupWindowStart && (
-                          <div className="text-xs text-slate-500 mt-1">
-                            {new Date(validatedWindows.pickupWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </div>
+                   {/* Validated windows display */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Pickup Window */}
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Car className="h-4 w-4 text-green-500" />
+                        <div className="text-xs font-bold text-slate-500 uppercase">Pickup Window</div>
+                      </div>
+                      <div className="text-sm font-medium">
+                        {customerChose === "PICKUP_WINDOW" ? (
+                          <span className="text-green-600 dark:text-green-400">🎯 {selectedSlot?.label}</span>
+                        ) : (
+                          <span className="text-blue-600 dark:text-blue-400">✨ {formatTimeRange(validatedWindows.pickupWindowStart, validatedWindows.pickupWindowEnd)}</span>
                         )}
                       </div>
-                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">Arrival Window</div>
-                        <div className="text-sm font-medium">
-                          {customerChose === "DROPOFF_WINDOW" ? (
-                            <span className="text-lime-600 dark:text-lime-400">🎯 {selectedSlot?.label}</span>
-                          ) : (
-                            <span className="text-blue-600 dark:text-blue-400">✨ {formatTimeRange(validatedWindows.dropoffWindowStart, validatedWindows.dropoffWindowEnd)}</span>
-                          )}
+                      {validatedWindows.pickupWindowStart && (
+                        <div className="text-xs text-slate-500 mt-1">
+                          {new Date(validatedWindows.pickupWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                         </div>
-                        {validatedWindows.dropoffWindowStart && (
-                          <div className="text-xs text-slate-500 mt-1">
-                            {new Date(validatedWindows.dropoffWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </div>
-                        )}
+                      )}
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        🚙 Driver picks up vehicle
                       </div>
                     </div>
+
+                    {/* Arrival Window */}
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Car className="h-4 w-4 text-blue-500" />
+                        <div className="text-xs font-bold text-slate-500 uppercase">Arrival Window</div>
+                      </div>
+                      <div className="text-sm font-medium">
+                        {customerChose === "DROPOFF_WINDOW" ? (
+                          <span className="text-green-600 dark:text-green-400">🎯 {selectedSlot?.label}</span>
+                        ) : (
+                          <span className="text-blue-600 dark:text-blue-400">✨ {formatTimeRange(validatedWindows.dropoffWindowStart, validatedWindows.dropoffWindowEnd)}</span>
+                        )}
+                      </div>
+                      {validatedWindows.dropoffWindowStart && (
+                        <div className="text-xs text-slate-500 mt-1">
+                          {new Date(validatedWindows.dropoffWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </div>
+                      )}
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        🚙 Vehicle arrives at destination
+                      </div>
+                    </div>
+                  </div>
 
                     {/* Status badges */}
                     <div className="flex flex-wrap gap-2">
@@ -2709,9 +2735,14 @@ const handleQuotePreview = () => {
                       id="vinVerification"
                       {...register("vinVerification", {
                         onChange: (e) => {
-                          e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                          const raw = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          setValue("vinVerification", raw, { shouldValidate: false });
+                          if (raw.length === 4) {
+                            clearErrors("vinVerification");
+                          }
                         }
                       })}
+                      onBlur={() => trigger("vinVerification")}
                       className={cn("h-14 rounded-2xl", showValidationErrors && (!vinVerification || !/^\d{4}$/.test(vinVerification)) && "border-red-500 ring-1 ring-red-500")}
                       placeholder="4 digits"
                       maxLength={4}
@@ -2957,6 +2988,15 @@ const handleQuotePreview = () => {
                       <Input
                         id="recipientEmail"
                         {...register("recipientEmail")}
+                          onChange={(e) => {
+                          register("recipientEmail").onChange(e);
+                          // trigger("recipientEmail"); 
+                          if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value)) {
+                            clearErrors("recipientEmail")
+                          }
+                        }}
+
+                        onBlur={() => trigger("recipientEmail")}
                         className={cn("h-14 rounded-2xl", showValidationErrors && (!recipientEmail || recipientEmail.trim().length < 1) && "border-red-500 ring-1 ring-red-500")}
                         placeholder="recipient@example.com"
                         type="email"
@@ -2983,13 +3023,20 @@ const handleQuotePreview = () => {
                       value={watch("recipientPhone") || ""}
                       onChange={(e) => {
                         const formatted = formatUSPhone(e.target.value);
-                        setValue("recipientPhone", formatted);
+                        setValue("recipientPhone", formatted, { shouldValidate: false });
+
+                        const digits = formatted.replace(/\D/g, '');
+                        if (formatted.replace(/\D/g, '').length === 10) {
+                            clearErrors("recipientPhone");
+                          }
                       }}
+                      onBlur={() => trigger("recipientPhone")}
                       className={cn("h-14 rounded-2xl", showValidationErrors && (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) && "border-red-500 ring-1 ring-red-500")}
                       placeholder="(555) 123-4567"
                       type="tel"
                       data-validation-error={(!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) ? "true" : undefined}
                     />
+                    <input type="hidden" {...register("recipientPhone")} />
                     {showValidationErrors && (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) && (
                       <p className="text-xs text-red-500 font-bold">Valid phone number is required</p>
                     )}
