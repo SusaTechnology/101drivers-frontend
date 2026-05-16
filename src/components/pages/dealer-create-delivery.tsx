@@ -351,6 +351,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   // Default to null — user must calculate a quote before choosing pickup/arrival
   const [customerChose, setCustomerChose] = useState<"PICKUP_WINDOW" | "DROPOFF_WINDOW" | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const selectedDateRef = useRef<Date | undefined>(undefined);
+  // Keep ref in sync so mutation callbacks always read latest value
+  useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
   const [selectedSlot, setSelectedSlot] = useState<SlotItem | null>(null);
   const [suggestedSlots, setSuggestedSlots] = useState<{ pickup: SlotItem[]; dropoff: SlotItem[] }>({ pickup: [], dropoff: [] });
   const [validatedWindows, setValidatedWindows] = useState<{
@@ -1463,7 +1466,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         if (data.suggestedSlots) {
           // Filter out slots whose end time has already passed for today
           const now = new Date();
-          const isToday = selectedDate && selectedDate.toDateString() === now.toDateString();
+          const currentDate = selectedDateRef.current;
+          const isToday = currentDate && currentDate.toDateString() === now.toDateString();
           const filterPastSlots = (slots: { start: string; end: string; label: string }[]) => {
             if (!isToday) return slots;
             return slots.filter(slot => new Date(slot.end) > now);
@@ -1472,6 +1476,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
             pickup: filterPastSlots(data.suggestedSlots.pickup || []),
             dropoff: filterPastSlots(data.suggestedSlots.dropoff || []),
           });
+
+          console.log('[SlotFilter] now:', now.toISOString(), 'selectedDate:', currentDate?.toDateString(), 'isToday:', isToday,
+            'pickup before:', data.suggestedSlots.pickup?.length, 'pickup after:', filterPastSlots(data.suggestedSlots.pickup || []).length);
 
           // Do NOT auto-select — let user pick a slot explicitly
         }
