@@ -475,6 +475,37 @@ async getDriverJobFeed(input: {
           }
         }
 
+        // Overlap check: new delivery must not overlap any existing BOOKED/ACTIVE gig
+        if (newPickupMs && delivery.pickupWindowEnd) {
+          const newDropoffEndMs = new Date(delivery.pickupWindowEnd).getTime();
+          for (const a of sorted) {
+            if (!a.pickupWindowStart || !a.dropoffWindowEnd) continue;
+            const exPickupMs = new Date(a.pickupWindowStart).getTime();
+            const exDropoffMs = new Date(a.dropoffWindowEnd).getTime();
+            if (newPickupMs < exDropoffMs && newDropoffEndMs > exPickupMs) {
+              matchReasons.push("schedule-overlap");
+              return null;
+            }
+          }
+        }
+
+        // Forward buffer check: new delivery must leave enough gap before the next gig
+        if (newPickupMs && delivery.pickupWindowEnd) {
+          const newDropoffEndMs = new Date(delivery.pickupWindowEnd).getTime();
+          const requiredGapMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+          for (const a of sorted) {
+            if (!a.pickupWindowStart) continue;
+            const exPickupMs = new Date(a.pickupWindowStart).getTime();
+            if (exPickupMs > newDropoffEndMs) {
+              if (exPickupMs < newDropoffEndMs + requiredGapMs) {
+                matchReasons.push("forward-transit-buffer-blocked");
+                return null;
+              }
+              break; // Only check the immediately next delivery
+            }
+          }
+        }
+
         // Radius from last drop-off check
         if (
           referenceForFilter &&
@@ -992,7 +1023,55 @@ async getDriverJobFeed(input: {
     }
   }
 
-  // ── Transit Buffer Check ──
+  // ── Overlap Check ──
+  // The new delivery's time window must not overlap with any existing BOOKED/ACTIVE delivery.
+  if (newPickupStart && delivery.pickupWindowEnd) {
+    const newDropoffEnd = new Date(delivery.pickupWindowEnd).getTime();
+
+    for (const existing of sortedAssignments) {
+      if (!existing.pickupWindowStart || !existing.dropoffWindowEnd) continue;
+      const exPickupStart = new Date(existing.pickupWindowStart).getTime();
+      const exDropoffEnd = new Date(existing.dropoffWindowEnd).getTime();
+
+      // Windows overlap if: new starts before existing ends AND new ends after existing starts
+      if (newPickupStart < exDropoffEnd && newDropoffEnd > exPickupStart) {
+        const existingLabel = `${new Date(existing.pickupWindowStart).toLocaleString()} – ${new Date(existing.dropoffWindowEnd).toLocaleString()}`;
+        throw new ConflictException(
+          `This delivery overlaps with your existing booking (${existingLabel}). ` +
+          `You cannot book two deliveries at the same time.`
+        );
+      }
+    }
+  }
+
+  // ── Forward Buffer Check ──
+  // The new delivery must leave enough transit buffer before the NEXT booked delivery.
+  // Find the first existing delivery whose pickup starts after the new delivery ends.
+  if (newPickupStart && delivery.pickupWindowEnd) {
+    const newDropoffEnd = new Date(delivery.pickupWindowEnd).getTime();
+
+    for (const existing of sortedAssignments) {
+      if (!existing.pickupWindowStart) continue;
+      const exPickupStart = new Date(existing.pickupWindowStart).getTime();
+
+      if (exPickupStart > newDropoffEnd) {
+        // This is the next delivery after the new one — check forward buffer
+        const requiredGapMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+        if (exPickupStart < newDropoffEnd + requiredGapMs) {
+          const availableMinutes = Math.ceil((exPickupStart - newDropoffEnd) / 60000);
+          const existingLabel = new Date(existing.pickupWindowStart).toLocaleString();
+          throw new ConflictException(
+            `Not enough transit time before your next delivery starting at ${existingLabel}. ` +
+            `You need at least ${deliverySettings.transitBufferMinutes} minutes between deliveries, ` +
+            `but only ${Math.max(0, availableMinutes)} minutes are available.`
+          );
+        }
+        break; // Only need to check the immediately next delivery
+      }
+    }
+  }
+
+  // ── Transit Buffer Check (Backward) ──
   // After completing (or finishing) a delivery, driver must wait transitBufferMinutes
   // before starting the next pickup window.
   // For BOOKED deliveries, we use the dropoff window end as the reference time
