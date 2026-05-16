@@ -477,19 +477,22 @@ export default function DriverOnboardingPage() {
   const watchEmail = watch("email");
   const watchPhone = watch("phone");
 
-  // Age gate: verify driver is 25+ before allowing form access
-  const isAgeVerified = useMemo(() => {
+  // Age gate: compute actual age from DOB
+  const computedAge = useMemo(() => {
     const dobStr = watchDateOfBirth;
-    if (!dobStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dobStr)) return false;
+    if (!dobStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dobStr)) return null;
     const [m, d, y] = dobStr.split('/').map(Number);
     const dob = new Date(y, m - 1, d);
-    if (dob.getFullYear() !== y || dob.getMonth() !== m - 1 || dob.getDate() !== d) return false;
+    if (dob.getFullYear() !== y || dob.getMonth() !== m - 1 || dob.getDate() !== d) return null;
     const today = new Date();
     let age = today.getFullYear() - dob.getFullYear();
     const mDiff = today.getMonth() - dob.getMonth();
     if (mDiff < 0 || (mDiff === 0 && today.getDate() < dob.getDate())) age--;
-    return age >= 25;
+    return age;
   }, [watchDateOfBirth]);
+
+  const isAgeVerified = computedAge !== null && computedAge >= 25;
+  const isUnder25 = computedAge !== null && computedAge < 25;
 
   // Password validation checks
   const passwordChecks = {
@@ -764,7 +767,7 @@ export default function DriverOnboardingPage() {
                     {/* Date of Birth */}
                     <div className={cn(
                       "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                      errors.dateOfBirth
+                      isUnder25 || errors.dateOfBirth
                         ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                         : "border-transparent"
                     )}>
@@ -781,11 +784,13 @@ export default function DriverOnboardingPage() {
                             className={cn(
                               "h-14 w-full pl-12 pr-10 rounded-2xl border border-input bg-background text-left text-sm transition-colors flex items-center",
                               "hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:ring-2 focus:ring-lime-500/50 focus:border-lime-500",
-                              errors.dateOfBirth
+                              isUnder25
                                 ? "border-red-400 dark:border-red-500"
-                                : watchDateOfBirth?.trim() && /^\d{2}\/\d{2}\/\d{4}$/.test(watchDateOfBirth)
-                                  ? "border-green-300 dark:border-green-700"
-                                  : ""
+                                : errors.dateOfBirth
+                                  ? "border-red-400 dark:border-red-500"
+                                  : watchDateOfBirth?.trim() && /^\d{2}\/\d{2}\/\d{4}$/.test(watchDateOfBirth)
+                                    ? "border-green-300 dark:border-green-700"
+                                    : ""
                             )}
                             disabled={isPending}
                           >
@@ -793,7 +798,7 @@ export default function DriverOnboardingPage() {
                             <span className={cn("flex-1 text-base", !dobDisplay && "text-slate-400")}>
                               {dobDisplay || "Select your date of birth"}
                             </span>
-                            {watchDateOfBirth?.trim() && /^\d{2}\/\d{2}\/\d{4}$/.test(watchDateOfBirth) && !errors.dateOfBirth && (
+                            {watchDateOfBirth?.trim() && /^\d{2}\/\d{2}\/\d{4}$/.test(watchDateOfBirth) && !errors.dateOfBirth && !isUnder25 && (
                               <CheckCircle className="w-5 h-5 text-green-500" />
                             )}
                           </button>
@@ -820,15 +825,36 @@ export default function DriverOnboardingPage() {
                           />
                         </PopoverContent>
                       </Popover>
-                      {errors.dateOfBirth && (
+                      {isUnder25 ? (
+                        <div className="flex items-start gap-2 mt-1">
+                          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                          <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+                            You are <span className="font-black">{computedAge} years old</span>. You must be at least <span className="font-black">25 years old</span> to apply as a 101 Driver. Please enter a correct date of birth.
+                          </p>
+                        </div>
+                      ) : errors.dateOfBirth ? (
                         <p className="text-xs text-red-500 font-medium">
                           {errors.dateOfBirth.message}
                         </p>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* Age Gate Banner */}
-                    {!isAgeVerified ? (
+                    {isUnder25 ? (
+                      <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 space-y-2">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-red-900 dark:text-red-200">
+                              Sorry, you do not meet the age requirement
+                            </p>
+                            <p className="text-xs text-red-800/80 dark:text-red-300/80 mt-1">
+                              You are {computedAge} years old. You must be at least 25 years old to apply as a 101 Driver. If you entered the wrong date, please correct it above.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : !isAgeVerified ? (
                       <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 space-y-2">
                         <div className="flex items-start gap-3">
                           <Shield className="h-5 w-5 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
