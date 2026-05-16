@@ -1461,7 +1461,17 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
         // Store suggested slots for dropdown
         if (data.suggestedSlots) {
-          setSuggestedSlots(data.suggestedSlots);
+          // Filter out slots whose end time has already passed for today
+          const now = new Date();
+          const isToday = selectedDate && selectedDate.toDateString() === now.toDateString();
+          const filterPastSlots = (slots: { start: string; end: string; label: string }[]) => {
+            if (!isToday) return slots;
+            return slots.filter(slot => new Date(slot.end) > now);
+          };
+          setSuggestedSlots({
+            pickup: filterPastSlots(data.suggestedSlots.pickup || []),
+            dropoff: filterPastSlots(data.suggestedSlots.dropoff || []),
+          });
 
           // Do NOT auto-select — let user pick a slot explicitly
         }
