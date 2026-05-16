@@ -421,6 +421,7 @@ async getDriverJobFeed(input: {
           : null;
 
         let precedingDropoff: { time: Date; dropoffLat: number | null; dropoffLng: number | null } | null = null;
+        let sorted: { pickupWindowStart: Date | string | null; dropoffWindowEnd: Date | string | null; dropoffLat: number | null; dropoffLng: number | null }[] = [];
 
         if (newPickupMs) {
           const assignments = await this.prisma.deliveryAssignment.findMany({
@@ -444,7 +445,7 @@ async getDriverJobFeed(input: {
             },
           });
 
-          const sorted = assignments.map(a => a.delivery).sort(
+          sorted = assignments.map(a => a.delivery).sort(
             (a, b) => new Date(a.pickupWindowStart!).getTime() - new Date(b.pickupWindowStart!).getTime()
           );
 
@@ -801,6 +802,7 @@ async getDriverJobFeed(input: {
       pickupLat: true,
       pickupLng: true,
       pickupWindowStart: true,
+      pickupWindowEnd: true,
     },
   });
 
