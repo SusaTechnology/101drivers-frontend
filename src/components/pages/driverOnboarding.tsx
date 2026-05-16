@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useCallback, useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -396,6 +396,10 @@ export default function DriverOnboardingPage() {
             if (draft.formData.districts) {
               setSelectedDistricts(draft.formData.districts);
             }
+            // Restore DOB display
+            if (draft.formData.dateOfBirth) {
+              setDobDisplay(draft.formData.dateOfBirth);
+            }
             // Set OTP and show verification step
             setOtpValue(urlOtp);
             setOtpSent(true);
@@ -472,6 +476,20 @@ export default function DriverOnboardingPage() {
   const watchDateOfBirth = watch("dateOfBirth");
   const watchEmail = watch("email");
   const watchPhone = watch("phone");
+
+  // Age gate: verify driver is 25+ before allowing form access
+  const isAgeVerified = useMemo(() => {
+    const dobStr = watchDateOfBirth;
+    if (!dobStr || !/^\d{2}\/\d{2}\/\d{4}$/.test(dobStr)) return false;
+    const [m, d, y] = dobStr.split('/').map(Number);
+    const dob = new Date(y, m - 1, d);
+    if (dob.getFullYear() !== y || dob.getMonth() !== m - 1 || dob.getDate() !== d) return false;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const mDiff = today.getMonth() - dob.getMonth();
+    if (mDiff < 0 || (mDiff === 0 && today.getDate() < dob.getDate())) age--;
+    return age >= 25;
+  }, [watchDateOfBirth]);
 
   // Password validation checks
   const passwordChecks = {
@@ -743,48 +761,6 @@ export default function DriverOnboardingPage() {
                       </p>
                     </div> */}
 
-                    {/* Full Name */}
-                    <div className={cn(
-                      "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                      errors.fullName
-                        ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                        : "border-transparent"
-                    )}>
-                      <Label htmlFor="fullName" className="text-xs font-bold">
-                        Full legal name (exactly as it appears on your driver's license){!watchFullName?.trim() && <span className="text-red-500">*</span>}
-                      </Label>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                        This must match your driver's license exactly.
-                      </p>
-                      <div className="relative">
-                        <Input
-                          id="fullName"
-                          {...register("fullName")}
-                          className={cn(
-                            "h-14 rounded-2xl pr-10 transition-colors",
-                            errors.fullName
-                              ? "border-red-400 dark:border-red-500"
-                              : watchFullName?.trim()
-                                ? "border-green-300 dark:border-green-700"
-                                : ""
-                          )}
-                          placeholder="Full legal name as on driver's license"
-                          autoComplete="name"
-                          disabled={isPending}
-                        />
-                        {watchFullName?.trim() && !errors.fullName && (
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                          </div>
-                        )}
-                      </div>
-                      {errors.fullName && (
-                        <p className="text-xs text-red-500 font-medium">
-                          {errors.fullName.message}
-                        </p>
-                      )}
-                    </div>
-
                     {/* Date of Birth */}
                     <div className={cn(
                       "space-y-2 p-4 rounded-2xl border transition-all duration-300",
@@ -851,6 +827,74 @@ export default function DriverOnboardingPage() {
                       )}
                     </div>
 
+                    {/* Age Gate Banner */}
+                    {!isAgeVerified ? (
+                      <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 space-y-2">
+                        <div className="flex items-start gap-3">
+                          <Shield className="h-5 w-5 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-bold text-blue-900 dark:text-blue-200">
+                              Age Requirement — 25 or Older
+                            </p>
+                            <p className="text-xs text-blue-800/80 dark:text-blue-300/80 mt-1">
+                              You must be at least 25 years old to apply as a 101 Driver. Enter your date of birth above to unlock the rest of the application form.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                          <p className="text-xs font-bold text-green-800 dark:text-green-200">
+                            Age verified! You may continue with your application.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Full Name */}
+                    <div className={cn(
+                      "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                      errors.fullName
+                        ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                        : "border-transparent"
+                    )}>
+                      <Label htmlFor="fullName" className="text-xs font-bold">
+                        Full legal name (exactly as it appears on your driver's license){!watchFullName?.trim() && <span className="text-red-500">*</span>}
+                      </Label>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                        This must match your driver's license exactly.
+                      </p>
+                      <div className="relative">
+                        <Input
+                          id="fullName"
+                          {...register("fullName")}
+                          className={cn(
+                            "h-14 rounded-2xl pr-10 transition-colors",
+                            errors.fullName
+                              ? "border-red-400 dark:border-red-500"
+                              : watchFullName?.trim()
+                                ? "border-green-300 dark:border-green-700"
+                                : ""
+                          )}
+                          placeholder="Full legal name as on driver's license"
+                          autoComplete="name"
+                          disabled={isPending || !isAgeVerified}
+                        />
+                        {watchFullName?.trim() && !errors.fullName && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          </div>
+                        )}
+                      </div>
+                      {errors.fullName && (
+                        <p className="text-xs text-red-500 font-medium">
+                          {errors.fullName.message}
+                        </p>
+                      )}
+                    </div>
+
                     {/* Email */}
                     <div className={cn(
                       "space-y-2 p-4 rounded-2xl border transition-all duration-300",
@@ -876,7 +920,7 @@ export default function DriverOnboardingPage() {
                           placeholder="jane@example.com"
                           type="email"
                           autoComplete="email"
-                          disabled={isPending}
+                          disabled={isPending || !isAgeVerified}
                         />
                         {watchEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchEmail) && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -905,7 +949,7 @@ export default function DriverOnboardingPage() {
                             placeholder="Create password"
                             type={showPassword ? "text" : "password"}
                             autoComplete="off"
-                            disabled={isPending}
+                            disabled={isPending || !isAgeVerified}
                           />
                           <button
                             type="button"
@@ -942,7 +986,7 @@ export default function DriverOnboardingPage() {
                             placeholder="Repeat password"
                             type={showConfirmPassword ? "text" : "password"}
                             autoComplete="off"
-                            disabled={isPending}
+                            disabled={isPending || !isAgeVerified}
                           />
                           <button
                             type="button"
@@ -1050,7 +1094,7 @@ export default function DriverOnboardingPage() {
                           name="phone"
                           value={phoneDisplay}
                           onChange={handlePhoneChange}
-                          onBlur={() => trigger("phone")} 
+                          onBlur={() => trigger("phone")}
                           className={cn(
                             "h-14 pl-12 rounded-2xl transition-colors",
                             errors.phone
@@ -1064,7 +1108,7 @@ export default function DriverOnboardingPage() {
                           autoComplete="tel-national"
                           inputMode="tel"
                           maxLength={14}
-                          disabled={isPending}
+                          disabled={isPending || !isAgeVerified}
                         />
                         <input type="hidden" {...register("phone")} />
                         {(watchPhone?.replace(/\D/g, '').length || 0) >= 10 && !errors.phone && (
@@ -1099,7 +1143,7 @@ export default function DriverOnboardingPage() {
                           id="acceptTerms"
                           checked={acceptTerms}
                           onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
-                          disabled={isPending}
+                          disabled={isPending || !isAgeVerified}
                           className={cn(
                             allRequiredFieldsFilled && !acceptTerms && "data-[state=unchecked]:border-red-500 data-[state=unchecked]:bg-red-100"
                           )}
@@ -1173,7 +1217,7 @@ export default function DriverOnboardingPage() {
             </div>
 
             {/* Right: Service Area Preferences */}
-            <div className="lg:col-span-5">
+            <div className={cn("lg:col-span-5 transition-opacity duration-300", !isAgeVerified && "opacity-40 pointer-events-none")}>
               <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between">
@@ -1228,7 +1272,7 @@ export default function DriverOnboardingPage() {
                       key={`radius-${draftLoaded}`}
                       value={watchRadius || ""}
                       onValueChange={(value) => setValue("radius", value)}
-                      disabled={isPending}
+                      disabled={isPending || !isAgeVerified}
                     >
                       <SelectTrigger className="h-14 rounded-2xl">
                         <SelectValue placeholder="Select radius" />
@@ -1258,7 +1302,7 @@ export default function DriverOnboardingPage() {
                           id="alerts"
                           checked={watch("alerts")}
                           onCheckedChange={(checked) => setValue("alerts", checked as boolean)}
-                          disabled={isPending}
+                          disabled={isPending || !isAgeVerified}
                         />
                         <div>
                           <Label
@@ -1312,7 +1356,7 @@ export default function DriverOnboardingPage() {
                         className="h-14 rounded-2xl text-center text-lg tracking-widest font-mono"
                         placeholder="123456"
                         maxLength={6}
-                        disabled={isPending}
+                        disabled={isPending || !isAgeVerified}
                       />
                       <p className="text-[11px] text-slate-500">
                         Enter the 6-digit code sent to your email.
@@ -1335,10 +1379,10 @@ export default function DriverOnboardingPage() {
                   <Button
                     type="submit"
                     onClick={handleSubmit(onSubmit)}
-                    disabled={isPending || !isFormReady || (otpSent && !otpValue.trim())}
+                    disabled={isPending || !isAgeVerified || !isFormReady || (otpSent && !otpValue.trim())}
                     className={cn(
                       "w-full py-6 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
-                      !isFormReady
+                      (!isAgeVerified || !isFormReady)
                         ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                         : "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20",
                     )}
@@ -1348,6 +1392,8 @@ export default function DriverOnboardingPage() {
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></div>
                         {sendOtpMutation.isPending || resendCodeMutation.isPending ? "Sending Code..." : "Verifying..."}
                       </>
+                    ) : !isAgeVerified ? (
+                      "Enter Your Date of Birth First"
                     ) : !allRequiredFieldsFilled ? (
                       "Complete All Required Fields"
                     ) : !acceptTerms ? (
