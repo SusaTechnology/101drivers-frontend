@@ -74,7 +74,7 @@ const onboardingSchema = z
         "Date must be in MM/DD/YYYY format"
       ),
     email: z.string().email("Valid email is required"),
-    phone: z.string().min(10, "Phone number is required"),
+    phone: z.string().min(10, "Phone number is required and it must be 10 digits"),
     password: z
       .string()
       .min(8, "Password must be at least 8 characters")
@@ -86,7 +86,7 @@ const onboardingSchema = z
         "Password must contain at least one special character",
       ),
     confirmPassword: z.string().min(1, "Please confirm your password"),
-    homeArea: z.string().optional(),
+    homeArea: z.string().min(1, "Home city or ZIP is required"),
     radius: z.string().optional(),
     districts: z.array(z.string()).optional(),
     alerts: z.boolean().optional(),
@@ -209,6 +209,10 @@ export default function DriverOnboardingPage() {
     // Store only digits for form submission
     const digits = formatted.replace(/\D/g, '');
     setValue("phone", digits);
+
+    if (digits.length === 10) {
+    clearErrors("phone");
+  }
   };
 
   // Load Google Maps API for autocomplete
@@ -313,6 +317,8 @@ export default function DriverOnboardingPage() {
     handleSubmit,
     setValue,
     watch,
+    trigger,
+    clearErrors,
     formState: { errors },
     reset,
   } = useForm<OnboardingFormData>({
@@ -484,7 +490,8 @@ export default function DriverOnboardingPage() {
     (watchFullName?.trim().length || 0) >= 2 &&
     watchEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchEmail) &&
     passwordChecks.allValid &&
-    (watchPhone?.replace(/\D/g, '').length || 0) >= 10
+    (watchPhone?.replace(/\D/g, '').length || 0) >= 10 &&
+    (homeAreaValue?.trim().length || 0) >= 1  
   );
 
   // Form is ready to submit only when all fields are filled AND terms accepted
@@ -1043,6 +1050,7 @@ export default function DriverOnboardingPage() {
                           name="phone"
                           value={phoneDisplay}
                           onChange={handlePhoneChange}
+                          onBlur={() => trigger("phone")} 
                           className={cn(
                             "h-14 pl-12 rounded-2xl transition-colors",
                             errors.phone
@@ -1058,6 +1066,7 @@ export default function DriverOnboardingPage() {
                           maxLength={14}
                           disabled={isPending}
                         />
+                        <input type="hidden" {...register("phone")} />
                         {(watchPhone?.replace(/\D/g, '').length || 0) >= 10 && !errors.phone && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
                             <CheckCircle className="w-5 h-5 text-green-500" />
@@ -1098,7 +1107,7 @@ export default function DriverOnboardingPage() {
                         <Label
                           htmlFor="acceptTerms"
                           className={cn(
-                            "text-sm cursor-pointer leading-relaxed",
+                            "text-sm cursor-pointer leading-relaxed whitespace-nowrap flex items-center flex-wrap",
                             allRequiredFieldsFilled && !acceptTerms
                               ? "text-red-700 dark:text-red-300 font-bold"
                               : acceptTerms
@@ -1190,7 +1199,7 @@ export default function DriverOnboardingPage() {
                   {/* Home Area with Google Places Autocomplete (unchanged) */}
                   <div className="space-y-2">
                     <Label htmlFor="homeArea" className="text-xs font-bold">
-                      Home city or ZIP code <span className="text-slate-400 font-normal">(optional)</span>
+                      Home city or ZIP code {!homeAreaValue?.trim() && <span className="text-red-500"> *</span>}
                     </Label>
                     <LocationAutocomplete
                       value={homeAreaValue || ""}
@@ -1201,7 +1210,7 @@ export default function DriverOnboardingPage() {
                       icon={<MapPin className="h-4 w-4 text-slate-400" />}
                       types={['geocode']} // Allow cities, ZIP codes, and addresses
                     />
-                    {errors?.homeArea && (
+                    {errors.homeArea && (
                       <p className="text-xs text-red-500">
                         {errors.homeArea.message}
                       </p>
@@ -1225,7 +1234,7 @@ export default function DriverOnboardingPage() {
                         <SelectValue placeholder="Select radius" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="25">25 miles</SelectItem>
+                         <SelectItem value="25">25 miles</SelectItem>
                         <SelectItem value="50">50 miles</SelectItem>
                         <SelectItem value="75">75 miles</SelectItem>
                         <SelectItem value="100">100 miles</SelectItem>
