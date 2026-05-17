@@ -1349,12 +1349,9 @@ private async resolveIndividualCustomerForCreate(
     if (isSameDay) {
       const cutoffResult = this.enforceSameDayCutoff(policy);
       if (cutoffResult === 'blocked') {
-        return {
-          delivery: null,
-          message:
-            'Cutoff time has passed. No more same-day deliveries can be created today. Please choose a next-day delivery window.',
-          requiresOpsConfirmation: false,
-        } as any;
+        throw new BadRequestException(
+          'Cutoff time has passed. No more same-day deliveries can be created today. Please choose a next-day delivery window.',
+        );
       }
     }
 
