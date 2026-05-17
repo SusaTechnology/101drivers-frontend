@@ -90,7 +90,7 @@ export default function DriverCompletedPage() {
 
   const completedDeliveries = Array.isArray(assignmentsData)
     ? assignmentsData
-    : (assignmentsData?.items || [])
+    : (assignmentsData?.deliveries || [])
 
   useEffect(() => {
     setMounted(true)
@@ -217,7 +217,7 @@ export default function DriverCompletedPage() {
         ) : (
           <div className="space-y-3">
             {completedDeliveries.map((item: any) => {
-              const delivery = item.delivery || {}
+              const delivery = item
               return (
                 <Link
                   key={item.id}
@@ -238,9 +238,9 @@ export default function DriverCompletedPage() {
                           </Badge>
                         )}
                       </div>
-                      {item.completedAt && (
+                      {item.updatedAt && (
                         <span className="text-xs text-slate-400 dark:text-slate-500">
-                          {formatDate(item.completedAt)}
+                          {formatDate(item.updatedAt)}
                         </span>
                       )}
                     </div>
@@ -277,7 +277,9 @@ export default function DriverCompletedPage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <Package className="w-3.5 h-3.5" />
-                          {delivery.vehicleType || '--'}
+                          {delivery.vehicleMake && delivery.vehicleModel
+                            ? `${delivery.vehicleMake} ${delivery.vehicleModel}`
+                            : delivery.vehicleMake || delivery.vehicleModel || '--'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
