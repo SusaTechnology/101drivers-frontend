@@ -221,7 +221,7 @@ export default function DriverCompletedPage() {
               return (
                 <Link
                   key={item.id}
-                  to="/driver-job-details"
+                  to="/driver/completed-details"
                   search={{ jobId: delivery.id }}
                   className="block"
                 >
