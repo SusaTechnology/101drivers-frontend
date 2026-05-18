@@ -550,7 +550,7 @@ async notifyTripStarted(input: {
     });
   }
 
-  // DRIVER EMAIL
+  // DRIVER EMAIL — no tracking link, just a trip-started confirmation
   if (driverEmail) {
     await this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
@@ -560,25 +560,17 @@ async notifyTripStarted(input: {
       type: EnumNotificationEventType.TRACKING_STARTED,
       templateCode: "trip-started-driver",
       toEmail: driverEmail,
-      subject: "Trip started — tracking link for your delivery",
+      subject: "Trip started",
       body: [
         `Hi ${driverName},`,
         "",
-        "You have started the trip. Share this tracking link with your customer.",
+        "You have started your delivery. Safe travels!",
         `Pickup: ${delivery.pickupAddress}`,
         `Drop-off: ${delivery.dropoffAddress}`,
-        "",
-        `Tracking link: ${input.trackingUrl}`,
-        delivery.trackingShareExpiresAt
-          ? `Link expires at: ${delivery.trackingShareExpiresAt.toISOString()}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      ].join("\n"),
       payload: {
         deliveryId: delivery.id,
         status: delivery.status,
-        trackingUrl: input.trackingUrl,
       },
     });
   }
