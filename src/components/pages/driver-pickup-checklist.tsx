@@ -1205,6 +1205,7 @@ const handleUploadOdometerPhoto = () => {
                               Retry Failed Uploads
                             </Button>
                           ) : (
+                            <>
                             <Button
                               onClick={handleUploadCarPhotos}
                               disabled={uploadCarPhotosMutation.isPending || photosUploading}
@@ -1223,6 +1224,7 @@ const handleUploadOdometerPhoto = () => {
                               )}
                             </Button>
                             <p className="mt-2 text-[11px] text-slate-400 text-center">After you take all 6 photos, click the upload button.</p>
+                            </>
                           )}
                         </div>
                       </>
