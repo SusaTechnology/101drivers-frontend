@@ -31,7 +31,7 @@ import { PricingEngineService } from "./pricing-engine.service";
 import { EmailVerificationService } from "../auth/email-verification/email-verification.service";
 import { PasswordService } from "../auth/password.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
-import { businessIsPastCutoff, businessIsSameDay, businessHourOf } from "./business-time";
+import { businessIsPastCutoff, businessIsSameDay, businessHourOf, businessNow } from "./business-time";
 
 export type CreateDeliveryDraftFromQuoteInput = {
   customerId: string;
@@ -779,7 +779,7 @@ private async createIndividualDeliveryForResolvedCustomer(
       paymentType: EnumPaymentPaymentType.PREPAID,
       provider: EnumPaymentProvider.MANUAL,
       status: EnumPaymentStatus.AUTHORIZED,
-      authorizedAt: new Date(),
+      authorizedAt: businessNow().toJSDate(),
     },
   });
 
@@ -902,7 +902,7 @@ private async resolveIndividualCustomerForCreate(
         where: { id: customer.id },
         data: {
           approvalStatus: EnumCustomerApprovalStatus.APPROVED,
-          approvedAt: customer.approvedAt ?? new Date(),
+          approvedAt: customer.approvedAt ?? businessNow().toJSDate(),
           approvedByUserId: null,
         },
       });
@@ -997,7 +997,7 @@ private async resolveIndividualCustomerForCreate(
     const verifiedUser = await this.prisma.user.update({
       where: { id: existingUser.id },
       data: {
-        emailVerifiedAt: new Date(),
+        emailVerifiedAt: businessNow().toJSDate(),
         password: hashedPassword,
         fullName: customerName ?? existingUser.fullName ?? undefined,
         phone: customerPhone ?? existingUser.phone ?? undefined,
@@ -1042,7 +1042,7 @@ private async resolveIndividualCustomerForCreate(
           where: { id: existingCustomer.id },
           data: {
             approvalStatus: EnumCustomerApprovalStatus.APPROVED,
-            approvedAt: existingCustomer.approvedAt ?? new Date(),
+            approvedAt: existingCustomer.approvedAt ?? businessNow().toJSDate(),
             approvedByUserId: null,
           },
         });
@@ -1081,7 +1081,7 @@ private async resolveIndividualCustomerForCreate(
         userId: verifiedUser.id,
         customerType: EnumCustomerCustomerType.PRIVATE,
         approvalStatus: EnumCustomerApprovalStatus.APPROVED,
-        approvedAt: new Date(),
+        approvedAt: businessNow().toJSDate(),
         approvedByUserId: null,
         contactName: customerName ?? verifiedUser.fullName ?? "",
         contactEmail: customerEmail,
@@ -1155,7 +1155,7 @@ private async resolveIndividualCustomerForCreate(
       fullName: customerName,
       phone: customerPhone ?? null,
       isActive: true,
-      emailVerifiedAt: new Date(),
+      emailVerifiedAt: businessNow().toJSDate(),
     },
     select: {
       id: true,
@@ -1171,7 +1171,7 @@ private async resolveIndividualCustomerForCreate(
       userId: user.id,
       customerType: EnumCustomerCustomerType.PRIVATE,
       approvalStatus: EnumCustomerApprovalStatus.APPROVED,
-      approvedAt: new Date(),
+      approvedAt: businessNow().toJSDate(),
       approvedByUserId: null,
       contactName: customerName,
       contactEmail: customerEmail,
@@ -1461,7 +1461,7 @@ private async resolveIndividualCustomerForCreate(
         paymentType,
         provider: EnumPaymentProvider.MANUAL,
         status: EnumPaymentStatus.AUTHORIZED,
-        authorizedAt: new Date(),
+        authorizedAt: businessNow().toJSDate(),
       },
     });
 
@@ -1893,7 +1893,7 @@ private async resolveIndividualCustomerForCreate(
     );
 
     if (sameDayRequested) {
-      if (this.isSameCalendarDay(new Date(), schedule.pickupWindowStart)) {
+      if (this.isSameCalendarDay(businessNow().toJSDate(), schedule.pickupWindowStart)) {
         const hhmm = `${String(dealerSameDayCutoffHour).padStart(2, '0')}:00`;
         if (businessIsPastCutoff(hhmm)) {
           if (policy?.requiresOpsConfirmation === true) {

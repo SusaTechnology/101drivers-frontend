@@ -7,6 +7,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { DeliveryLifecycleService } from "./delivery-lifecycle.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { businessNow } from "./business-time";
 
 /**
  * Scheduled tasks that automatically expire stale deliveries.
@@ -31,7 +32,7 @@ export class DeliveryExpiryScheduler {
    */
   @Cron("*/15 * * * *")
   async expireListedDeliveries() {
-    const now = new Date();
+    const now = businessNow().toJSDate();
 
     const staleListed = await this.prisma.deliveryRequest.findMany({
       where: {
@@ -91,8 +92,7 @@ export class DeliveryExpiryScheduler {
    */
   @Cron("10 * * * *")
   async expireStaleDrafts() {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 7);
+    const cutoff = businessNow().minus({ days: 7 }).toJSDate();
 
     const staleDrafts = await this.prisma.deliveryRequest.findMany({
       where: {
@@ -153,8 +153,7 @@ export class DeliveryExpiryScheduler {
    */
   @Cron("25 * * * *")
   async expireStaleQuoted() {
-    const cutoff = new Date();
-    cutoff.setHours(cutoff.getHours() - 48);
+    const cutoff = businessNow().minus({ hours: 48 }).toJSDate();
 
     const staleQuoted = await this.prisma.deliveryRequest.findMany({
       where: {

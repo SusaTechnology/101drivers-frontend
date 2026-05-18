@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { businessStartOfDay } from "./business-time";
+import { businessStartOfDay, businessNow } from "./business-time";
 import {
   EnumDeliveryRequestStatus,
   EnumDeliveryStatusHistoryActorRole,
@@ -249,7 +249,7 @@ async startTrip(input: {
         select: { id: true },
       });
 
-      const now = new Date();
+      const now = businessNow().toJSDate();
       const windowStart = new Date(deliveryWithWindow.pickupWindowStart);
 
       if (!completedToday && now < windowStart) {
@@ -298,13 +298,13 @@ async startTrip(input: {
       where: { deliveryId: input.deliveryId },
       create: {
         deliveryId: input.deliveryId,
-        startedAt: new Date(),
+        startedAt: businessNow().toJSDate(),
         stoppedAt: null,
         status: EnumTrackingSessionStatus.STARTED,
         drivenMiles: 0,
       },
       update: {
-        startedAt: new Date(),
+        startedAt: businessNow().toJSDate(),
         stoppedAt: null,
         status: EnumTrackingSessionStatus.STARTED,
         drivenMiles: 0,
@@ -459,7 +459,7 @@ async completeTrip(input: {
       await tx.trackingSession.updateMany({
         where: { deliveryId: input.deliveryId },
         data: {
-          stoppedAt: new Date(),
+          stoppedAt: businessNow().toJSDate(),
           status: EnumTrackingSessionStatus.STOPPED,
           drivenMiles: finalDrivenMiles,
         },
@@ -469,8 +469,8 @@ async completeTrip(input: {
         data: {
           deliveryId: input.deliveryId,
           status: EnumTrackingSessionStatus.STOPPED,
-          startedAt: new Date(),
-          stoppedAt: new Date(),
+          startedAt: businessNow().toJSDate(),
+          stoppedAt: businessNow().toJSDate(),
           drivenMiles: finalDrivenMiles,
         },
       });
@@ -480,7 +480,7 @@ async completeTrip(input: {
       where: { id: input.deliveryId },
       data: {
         status: EnumDeliveryRequestStatus.COMPLETED,
-        trackingShareExpiresAt: new Date(),
+        trackingShareExpiresAt: businessNow().toJSDate(),
       },
     });
 
@@ -579,7 +579,7 @@ async completeTrip(input: {
   }) {
     this.assertValidCoordinates(input.lat, input.lng);
 
-    const recordedAt = input.recordedAt ?? new Date();
+    const recordedAt = input.recordedAt ?? businessNow().toJSDate();
 
     return this.prisma.$transaction(async (tx) => {
       const driver = await tx.driver.findUnique({

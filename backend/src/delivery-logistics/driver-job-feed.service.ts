@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, GoneException, ConflictException } from "@nestjs/common";
-import { businessStartOfDay, businessStartOfTomorrow, businessStartOfDayAfterTomorrow, businessEndOfWeek } from "./business-time";
+import { businessStartOfDay, businessStartOfTomorrow, businessStartOfDayAfterTomorrow, businessEndOfWeek, businessNow } from "./business-time";
 import {
   EnumDeliveryRequestStatus,
   EnumDriverStatus,
@@ -154,7 +154,7 @@ async getDriverJobFeed(input: {
 
   const origin = this.resolveDriverOrigin(driver.location ?? null);
 
-  const now = new Date();
+  const now = businessNow().toJSDate();
   const todayStart = businessStartOfDay();
 
   const tomorrowStart = businessStartOfTomorrow();
