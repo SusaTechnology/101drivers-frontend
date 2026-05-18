@@ -1,4 +1,4 @@
-import { DateTime } from "luxon";
+import { DateTime, Duration } from "luxon";
 
 /**
  * Business timezone for 101Drivers operations.
@@ -33,6 +33,13 @@ export function businessStartOfDay(): Date {
 }
 
 /**
+ * End of today (23:59:59.999) in business timezone, as a JS Date.
+ */
+export function businessEndOfDay(): Date {
+  return businessNow().endOf("day").toJSDate();
+}
+
+/**
  * Start of tomorrow in business timezone, as a JS Date.
  */
 export function businessStartOfTomorrow(): Date {
@@ -47,6 +54,13 @@ export function businessStartOfDayAfterTomorrow(): Date {
 }
 
 /**
+ * Start of this month (1st midnight) in business timezone, as a JS Date.
+ */
+export function businessStartOfMonth(): Date {
+  return businessNow().startOf("month").toJSDate();
+}
+
+/**
  * End of this week (Sunday 23:59:59.999) in business timezone, as a JS Date.
  */
 export function businessEndOfWeek(): Date {
@@ -54,6 +68,13 @@ export function businessEndOfWeek(): Date {
   const weekday = now.weekday; // 1=Monday ... 7=Sunday
   const daysUntilSunday = weekday === 7 ? 0 : 7 - weekday;
   return now.plus({ days: daysUntilSunday }).endOf("day").toJSDate();
+}
+
+/**
+ * Subtract a duration from the current business time, return as JS Date.
+ */
+export function businessMinus(duration: Duration | { days?: number; hours?: number; minutes?: number }): Date {
+  return businessNow().minus(duration).toJSDate();
 }
 
 /**

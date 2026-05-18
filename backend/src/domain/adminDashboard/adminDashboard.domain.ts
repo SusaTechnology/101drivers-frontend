@@ -14,6 +14,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { businessStartOfDay, businessEndOfDay, businessStartOfMonth, businessMinus } from "../../delivery-logistics/business-time";
 import {
   AdminDashboardOverviewQuery,
   EnumAdminDashboardActionType,
@@ -387,7 +388,7 @@ export class AdminDashboardDomain {
       },
     });
 
-    const staleBefore = new Date(Date.now() - 15 * 60 * 1000);
+    const staleBefore = businessMinus({ minutes: 15 });
 
     const items = activeDeliveries.map((delivery) => {
       const latestPoint = delivery.trackingSession?.points?.[0] ?? null;
@@ -1770,8 +1771,8 @@ export class AdminDashboardDomain {
   private async getOperations(
     deliveryWhere: Prisma.DeliveryRequestWhereInput
   ) {
-    const quotedStaleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const bookedStaleBefore = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const quotedStaleBefore = businessMinus({ hours: 24 });
+    const bookedStaleBefore = businessMinus({ hours: 12 });
 
     const listedWithoutAssignment = await this.prisma.deliveryRequest.count({
       where: {
@@ -2011,10 +2012,8 @@ export class AdminDashboardDomain {
     deliveryWhere: Prisma.DeliveryRequestWhereInput,
     range: DateRange
   ) {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    const todayStart = businessStartOfDay();
+    const todayEnd = businessEndOfDay();
 
     const deliveriesToday = await this.prisma.deliveryRequest.count({
       where: {
@@ -2456,35 +2455,20 @@ export class AdminDashboardDomain {
       };
     }
 
-    const now = new Date();
-    const from = new Date(now);
-    const to = new Date(now);
-
     if (preset === EnumAdminDashboardDatePreset.TODAY) {
-      from.setHours(0, 0, 0, 0);
-      to.setHours(23, 59, 59, 999);
-      return { from, to };
+      return { from: businessStartOfDay(), to: businessEndOfDay() };
     }
 
     if (preset === EnumAdminDashboardDatePreset.LAST_7_DAYS) {
-      from.setDate(now.getDate() - 6);
-      from.setHours(0, 0, 0, 0);
-      to.setHours(23, 59, 59, 999);
-      return { from, to };
+      const from = businessMinus({ days: 6 });
+      return { from, to: businessEndOfDay() };
     }
 
     if (preset === EnumAdminDashboardDatePreset.THIS_MONTH) {
-      from.setDate(1);
-      from.setHours(0, 0, 0, 0);
-      to.setHours(23, 59, 59, 999);
-      return { from, to };
+      return { from: businessStartOfMonth(), to: businessEndOfDay() };
     }
 
-    from.setDate(now.getDate() - 29);
-    from.setHours(0, 0, 0, 0);
-    to.setHours(23, 59, 59, 999);
-
-    return { from, to };
+    return { from: businessMinus({ days: 29 }), to: businessEndOfDay() };
   }
 
   private async countStaleTrackingDeliveries(
@@ -2510,7 +2494,7 @@ export class AdminDashboardDomain {
       },
     });
 
-    const staleBefore = new Date(Date.now() - 15 * 60 * 1000);
+    const staleBefore = businessMinus({ minutes: 15 });
 
     return activeDeliveries.filter((delivery) => {
       const latest = delivery.trackingSession?.points?.[0]?.recordedAt ?? null;
