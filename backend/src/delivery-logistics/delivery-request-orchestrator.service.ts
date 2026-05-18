@@ -31,6 +31,7 @@ import { PricingEngineService } from "./pricing-engine.service";
 import { EmailVerificationService } from "../auth/email-verification/email-verification.service";
 import { PasswordService } from "../auth/password.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { businessIsPastCutoff, businessIsSameDay, businessHourOf } from "./business-time";
 
 export type CreateDeliveryDraftFromQuoteInput = {
   customerId: string;
@@ -1543,11 +1544,7 @@ private async resolveIndividualCustomerForCreate(
     const hhmm = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(cutoffTime);
     if (!hhmm) return 'allowed';
 
-    const now = new Date();
-    const cutoff = new Date();
-    cutoff.setHours(parseInt(hhmm[1], 10), parseInt(hhmm[2], 10), 0, 0);
-
-    if (now > cutoff) {
+    if (businessIsPastCutoff(cutoffTime)) {
       if (policy?.requiresOpsConfirmation === true) {
         return 'allowed'; // ops confirmation will flag it
       }
@@ -1558,11 +1555,7 @@ private async resolveIndividualCustomerForCreate(
   }
 
   private isSameCalendarDay(a: Date, b: Date): boolean {
-    return (
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate()
-    );
+    return businessIsSameDay(a, b);
   }
 
   private mapDeliveryServiceTypeToQuoteServiceType(
@@ -1900,12 +1893,9 @@ private async resolveIndividualCustomerForCreate(
     );
 
     if (sameDayRequested) {
-      const now = new Date();
-      if (this.isSameCalendarDay(now, schedule.pickupWindowStart)) {
-        const cutoff = new Date(schedule.pickupWindowStart);
-        cutoff.setHours(dealerSameDayCutoffHour, 0, 0, 0);
-
-        if (now > cutoff) {
+      if (this.isSameCalendarDay(new Date(), schedule.pickupWindowStart)) {
+        const hhmm = `${String(dealerSameDayCutoffHour).padStart(2, '0')}:00`;
+        if (businessIsPastCutoff(hhmm)) {
           if (policy?.requiresOpsConfirmation === true) {
             requiresOpsConfirmation = true;
             message =
@@ -2124,7 +2114,7 @@ private async resolveIndividualCustomerForCreate(
   }
 
   private hourOf(value: Date): number {
-    return new Date(value).getHours();
+    return businessHourOf(value);
   }
 
   private resolveNumericPolicyValue(

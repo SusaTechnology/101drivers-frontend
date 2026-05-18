@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, GoneException, ConflictException } from "@nestjs/common";
+import { businessStartOfDay, businessStartOfTomorrow, businessStartOfDayAfterTomorrow, businessEndOfWeek } from "./business-time";
 import {
   EnumDeliveryRequestStatus,
   EnumDriverStatus,
@@ -154,21 +155,14 @@ async getDriverJobFeed(input: {
   const origin = this.resolveDriverOrigin(driver.location ?? null);
 
   const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStart = businessStartOfDay();
 
-  const tomorrowStart = new Date(todayStart);
-  tomorrowStart.setDate(todayStart.getDate() + 1);
+  const tomorrowStart = businessStartOfTomorrow();
 
-  const dayAfterTomorrowStart = new Date(todayStart);
-  dayAfterTomorrowStart.setDate(todayStart.getDate() + 2);
+  const dayAfterTomorrowStart = businessStartOfDayAfterTomorrow();
 
   // End of this week: Sunday 23:59:59.999
-  const endOfWeek = new Date(todayStart);
-  const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
-  const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-  endOfWeek.setDate(todayStart.getDate() + daysUntilSunday);
-  endOfWeek.setHours(23, 59, 59, 999);
+  const endOfWeek = businessEndOfWeek();
 
   const deliveries = await this.prisma.deliveryRequest.findMany({
     where: {
@@ -876,8 +870,7 @@ async getDriverJobFeed(input: {
   // Priority: ACTIVE (in-progress) > BOOKED (next up) > COMPLETED today.
   // Radius + buffer checks use this delivery's drop-off as the origin.
   // First pickup of the day is exempt if no ACTIVE/BOOKED/COMPLETED exists.
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  const startOfToday = businessStartOfDay();
 
   // Get all of driver's current assignments (ACTIVE + BOOKED) ordered by creation
   const currentAssignments = await db.deliveryAssignment.findMany({
@@ -1190,8 +1183,7 @@ async getDriverJobFeed(input: {
     updatedAt: Date;
   } | null> {
     // Only count today's completions — first pickup each day is exempt
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    const startOfToday = businessStartOfDay();
 
     const lastCompleted = await this.prisma.deliveryRequest.findFirst({
       where: {

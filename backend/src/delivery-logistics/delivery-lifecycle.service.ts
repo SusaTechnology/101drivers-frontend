@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { businessStartOfDay } from "./business-time";
 import {
   EnumDeliveryRequestStatus,
   EnumDeliveryStatusHistoryActorRole,
@@ -234,8 +235,7 @@ async startTrip(input: {
     });
 
     if (deliveryWithWindow?.pickupWindowStart) {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
+      const todayStart = businessStartOfDay();
 
       const completedToday = await tx.deliveryAssignment.findFirst({
         where: {
