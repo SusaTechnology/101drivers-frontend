@@ -629,6 +629,8 @@ export class SchedulingPolicyEngine {
     }>,
     maxDays: number = 7
   ): SlotCandidate[] {
+    const now = this.businessNow().toJSDate();
+
     for (let d = 0; d < maxDays; d++) {
       const candidateDate = this.addMinutes(baseDate, d * 24 * 60);
       const slots = this.buildSuggestedSlots(
@@ -636,8 +638,12 @@ export class SchedulingPolicyEngine {
         slotTemplates,
         operatingHours
       );
-      if (slots.length > 0) {
-        return slots;
+      // Remove slots that have already ended (only matters for today)
+      const available = d === 0
+        ? slots.filter(s => s.end > now)
+        : slots;
+      if (available.length > 0) {
+        return available;
       }
     }
     return [];

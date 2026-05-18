@@ -1462,31 +1462,12 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         setSchedulePreviewData(data);
         setIsLoadingSlots(false);
 
-        // Store suggested slots for dropdown
+        // Store suggested slots for dropdown — backend already filters out past slots
         if (data.suggestedSlots) {
-          // Filter out slots whose end time has already passed — use America/Los_Angeles
-          // so the filter matches business time regardless of the user's browser timezone
-          const BUSINESS_TZ = 'America/Los_Angeles';
-          const nowInLA = new Date(
-            new Date().toLocaleString('en-US', { timeZone: BUSINESS_TZ }),
-          );
-          const currentDate = selectedDateRef.current;
-          const isToday = currentDate && currentDate.toDateString() === nowInLA.toDateString();
-          const filterPastSlots = (slots: { start: string; end: string; label: string }[]) => {
-            if (!isToday) return slots;
-            // Both values are UTC timestamps under the hood — comparison is correct
-            return slots.filter(slot => new Date(slot.end) > new Date());
-          };
           setSuggestedSlots({
-            pickup: filterPastSlots(data.suggestedSlots.pickup || []),
-            dropoff: filterPastSlots(data.suggestedSlots.dropoff || []),
+            pickup: data.suggestedSlots.pickup || [],
+            dropoff: data.suggestedSlots.dropoff || [],
           });
-
-          console.log('[SlotFilter] now:', new Date().toISOString(), 'nowInLA:', nowInLA.toISOString(),
-            'selectedDate:', currentDate?.toDateString(), 'isToday:', isToday,
-            'pickup before:', data.suggestedSlots.pickup?.length, 'pickup after:', filterPastSlots(data.suggestedSlots.pickup || []).length);
-
-          // Do NOT auto-select — let user pick a slot explicitly
         }
 
         // Only set validated windows if we actually have both window times from the API
