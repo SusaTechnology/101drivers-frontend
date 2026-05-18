@@ -83,7 +83,7 @@ export default function DriverCompletedPage() {
 
   // Fetch driver's delivery assignments (completed)
   const { data: assignmentsData, isLoading, isError, refetch } = useDataQuery<any>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryAssignments?filter={"driverId":{"equals":"${driverId}"},"status":{"in":["DROPPED","COMPLETED"]}}&orderBy={"completedAt":"desc"}&take=50`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/drivers/${driverId}/deliveries?status=COMPLETED`,
     noFilter: true,
     enabled: Boolean(driverId),
   })
