@@ -480,7 +480,7 @@ async completeTrip(input: {
       where: { id: input.deliveryId },
       data: {
         status: EnumDeliveryRequestStatus.COMPLETED,
-        trackingShareExpiresAt: businessNow().toJSDate(),
+        trackingShareExpiresAt: businessNow().plus({ hours: 24 }).toJSDate(),
       },
     });
 

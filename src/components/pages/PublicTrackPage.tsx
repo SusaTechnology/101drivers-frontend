@@ -77,6 +77,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/public/tracking/${token}`,
     enabled: !!token,
     noFilter: true,
+    fetchWithoutRefresh: true,
     publicEndpoint: true,
     refetchInterval: 5000,
   })
