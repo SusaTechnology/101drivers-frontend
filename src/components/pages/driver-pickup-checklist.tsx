@@ -55,13 +55,14 @@ const PHOTO_LABELS = [
 ]
 
 // Reference images shown on each tile before the driver captures a photo
+// BASE_URL handles sub-path deployments (e.g. /app/) automatically
 const ANGLE_REF_IMAGES = [
-  '/assets/angle-1-left-front.png',
-  '/assets/angle-2-right-front.png',
-  '/assets/angle-3-passenger-side.png',
-  '/assets/angle-4-right-rear.png',
-  '/assets/angle-5-left-rear.png',
-  '/assets/angle-6-driver-side.png',
+  `${import.meta.env.BASE_URL}assets/angle-1-left-front.png`,
+  `${import.meta.env.BASE_URL}assets/angle-2-right-front.png`,
+  `${import.meta.env.BASE_URL}assets/angle-3-passenger-side.png`,
+  `${import.meta.env.BASE_URL}assets/angle-4-right-rear.png`,
+  `${import.meta.env.BASE_URL}assets/angle-5-left-rear.png`,
+  `${import.meta.env.BASE_URL}assets/angle-6-driver-side.png`,
 ]
 
 // localStorage persistence key scoped to delivery
@@ -1131,6 +1132,7 @@ const handleUploadOdometerPhoto = () => {
                                 <img
                                   src={ANGLE_REF_IMAGES[index]}
                                   alt={PHOTO_LABELS[index]}
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                                   className={cn(
                                     "absolute inset-0 w-full h-full object-cover transition-opacity",
                                     isCaptured ? "opacity-0" : "opacity-60"
@@ -1220,6 +1222,7 @@ const handleUploadOdometerPhoto = () => {
                                 </>
                               )}
                             </Button>
+                            <p className="mt-2 text-[11px] text-slate-400 text-center">After you take all 6 photos, click the upload button.</p>
                           )}
                         </div>
                       </>
@@ -1375,6 +1378,7 @@ const handleUploadOdometerPhoto = () => {
                             </>
                           )}
                         </Button>
+                        <p className="mt-2 text-[11px] text-slate-400 text-center">After you take a picture, click the upload button.</p>
                         {odometerError && (
                         <p className="mt-2 text-[12px] font-bold text-red-500">
                           {odometerError}
@@ -1510,6 +1514,7 @@ const handleUploadOdometerPhoto = () => {
                             </>
                           )}
                         </Button>
+                        <p className="mt-2 text-[11px] text-slate-400 text-center">After you take a picture, click the upload button.</p>
                       </>
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
