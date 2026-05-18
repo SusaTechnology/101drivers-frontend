@@ -206,6 +206,7 @@ export default function DriverActiveDeliveryPage() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${driverId}`,
     noFilter: true,
     enabled: Boolean(driverId),
+    staleTime: 0, // always refetch on mount — critical after start-trip navigation
     refetchInterval: 10000, // refresh every 10s
     onError: (error) => {
       toast.error('Failed to fetch deliveries')
