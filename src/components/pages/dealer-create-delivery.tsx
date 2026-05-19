@@ -2503,26 +2503,30 @@ const handleQuotePreview = () => {
                 {customerChose && !isLoadingSlots && (
                   <div className="space-y-3">
 
-                    {/* Same-day policy warnings */}
-                    {schedulePreviewData?.sameDay && !schedulePreviewData.sameDay.eligible && schedulePreviewData.sameDay.reasons.length > 0 && (
-                      <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
-                        <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
-                            Same-day delivery not available
-                          </p>
-                          <ul className="text-[11px] text-amber-800 dark:text-amber-300 space-y-0.5">
-                            {schedulePreviewData.sameDay.reasons.map((reason, i) => (
-                              <li key={i}>
-                                {reason === 'CUT_OFF_PASSED' && 'Cutoff time has passed for today. The time slots shown are for next-day delivery.'}
-                                {reason === 'DISTANCE_EXCEEDS_SAME_DAY_LIMIT' && 'Delivery distance exceeds the same-day limit. Only next-day slots are available.'}
-                                {reason !== 'CUT_OFF_PASSED' && reason !== 'DISTANCE_EXCEEDS_SAME_DAY_LIMIT' && reason}
-                              </li>
-                            ))}
-                          </ul>
+                    {/* Same-day policy warnings — only show when dealer picked today */}
+                    {(() => {
+                      const isToday = selectedDate && new Date(selectedDate.toDateString()) <= new Date(new Date().toDateString());
+                      const sameDay = schedulePreviewData?.sameDay;
+                      return isToday && sameDay && !sameDay.eligible && sameDay.reasons.length > 0 && (
+                        <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+                          <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                              Same-day delivery not available
+                            </p>
+                            <ul className="text-[11px] text-amber-800 dark:text-amber-300 space-y-0.5">
+                              {sameDay.reasons.map((reason, i) => (
+                                <li key={i}>
+                                  {reason === 'CUT_OFF_PASSED' && 'Cutoff time has passed for today. The time slots shown are for next-day delivery.'}
+                                  {reason === 'DISTANCE_EXCEEDS_SAME_DAY_LIMIT' && 'Delivery distance exceeds the same-day limit. Only next-day slots are available.'}
+                                  {reason !== 'CUT_OFF_PASSED' && reason !== 'DISTANCE_EXCEEDS_SAME_DAY_LIMIT' && reason}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                     {schedulePreviewData?.sameDay?.warnings && schedulePreviewData.sameDay.warnings.length > 0 && (
                       <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
                         <Info className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
