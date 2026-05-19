@@ -201,38 +201,40 @@ export class TimeSlotTemplatePolicyService {
   }
 
   /**
-   * If any active SAME_DAY policy has a cutoff time, warn when a slot
-   * starts at or after that cutoff — it won't be available for same-day.
+   * Validate slot against the latest active BUSINESS policy's cutoff time.
+   * Only checks the most recently created BUSINESS policy (sameDayCutoffTime set),
+   * not all policies — since time slot templates are global and shared across
+   * service types, each with their own policy.
    */
   private async warnIfAfterCutoff(
     client: PrismaClient,
     startTime: string
   ): Promise<void> {
-    const activePolicies = await client.schedulingPolicy.findMany({
+    const latestPolicy = await client.schedulingPolicy.findFirst({
       where: {
         active: true,
+        customerType: "BUSINESS",
         defaultMode: "SAME_DAY",
         sameDayCutoffTime: { not: null },
       },
+      orderBy: { createdAt: "desc" },
       select: { sameDayCutoffTime: true },
     });
 
-    if (activePolicies.length === 0) return;
+    if (!latestPolicy) return;
 
     const slotMinutes = this.toMinutes(startTime);
+    const cutoffMinutes = this.toMinutes(latestPolicy.sameDayCutoffTime!);
 
-    for (const policy of activePolicies) {
-      const cutoffMinutes = this.toMinutes(policy.sameDayCutoffTime!);
-      if (slotMinutes >= cutoffMinutes) {
-        const cutoff12 = this.to12Hour(policy.sameDayCutoffTime!);
-        const slot12 = this.to12Hour(startTime);
-        throw new AppException(
-          `This slot (${slot12}) starts at or after the daily cutoff time (${cutoff12}). ` +
-            `It will not be available to customers for same-day deliveries. ` +
-            `Please adjust the cutoff time in the Scheduling Policy first, or choose an earlier slot.`,
-          ErrorCodes.VALIDATION_ERROR
-        );
-      }
+    if (slotMinutes >= cutoffMinutes) {
+      const cutoff12 = this.to12Hour(latestPolicy.sameDayCutoffTime!);
+      const slot12 = this.to12Hour(startTime);
+      throw new AppException(
+        `This slot (${slot12}) starts at or after the latest BUSINESS cutoff time (${cutoff12}). ` +
+          `It will not be available to customers for same-day deliveries. ` +
+          `Please adjust the cutoff time in the Scheduling Policy first, or choose an earlier slot.`,
+        ErrorCodes.VALIDATION_ERROR
+      );
     }
   }
 
