@@ -2502,6 +2502,46 @@ const handleQuotePreview = () => {
                 {/* Step 2: Select a time slot (only shown after date is chosen) */}
                 {customerChose && !isLoadingSlots && (
                   <div className="space-y-3">
+
+                    {/* Same-day policy warnings */}
+                    {schedulePreviewData?.sameDay && !schedulePreviewData.sameDay.eligible && schedulePreviewData.sameDay.reasons.length > 0 && (
+                      <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+                        <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                            Same-day delivery not available
+                          </p>
+                          <ul className="text-[11px] text-amber-800 dark:text-amber-300 space-y-0.5">
+                            {schedulePreviewData.sameDay.reasons.map((reason, i) => (
+                              <li key={i}>
+                                {reason === 'CUT_OFF_PASSED' && 'Cutoff time has passed for today. The time slots shown are for next-day delivery.'}
+                                {reason === 'DISTANCE_EXCEEDS_SAME_DAY_LIMIT' && 'Delivery distance exceeds the same-day limit. Only next-day slots are available.'}
+                                {reason !== 'CUT_OFF_PASSED' && reason !== 'DISTANCE_EXCEEDS_SAME_DAY_LIMIT' && reason}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                    {schedulePreviewData?.sameDay?.warnings && schedulePreviewData.sameDay.warnings.length > 0 && (
+                      <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
+                        <Info className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-extrabold text-blue-900 dark:text-blue-200">
+                            Schedule notice
+                          </p>
+                          <ul className="text-[11px] text-blue-800 dark:text-blue-300 space-y-0.5">
+                            {schedulePreviewData.sameDay.warnings.map((warning, i) => (
+                              <li key={i}>
+                                {warning === 'DROPOFF_WINDOW_DOES_NOT_MATCH_CONFIGURED_SLOT_TEMPLATE' && 'Drop-off time is adjusted based on drive time and may not match a standard slot.'}
+                                {warning !== 'DROPOFF_WINDOW_DOES_NOT_MATCH_CONFIGURED_SLOT_TEMPLATE' && warning}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
                     <Label className="text-xs font-black uppercase tracking-widest">
                       {customerChose === "PICKUP_WINDOW" ? "Pickup time" : "Arrival time"} {!selectedSlot && <span className="text-red-500"> *</span>}
                     </Label>
