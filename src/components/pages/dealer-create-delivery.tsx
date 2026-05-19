@@ -2529,24 +2529,6 @@ const handleQuotePreview = () => {
                         </div>
                       );
                     })()}
-                    {schedulePreviewData?.sameDay?.warnings && schedulePreviewData.sameDay.warnings.length > 0 && (
-                      <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
-                        <Info className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <p className="text-sm font-extrabold text-blue-900 dark:text-blue-200">
-                            Schedule notice
-                          </p>
-                          <ul className="text-[11px] text-blue-800 dark:text-blue-300 space-y-0.5">
-                            {schedulePreviewData.sameDay.warnings.map((warning, i) => (
-                              <li key={i}>
-                                {warning === 'DROPOFF_WINDOW_DOES_NOT_MATCH_CONFIGURED_SLOT_TEMPLATE' && 'Drop-off time is adjusted based on drive time and may not match a standard slot.'}
-                                {warning !== 'DROPOFF_WINDOW_DOES_NOT_MATCH_CONFIGURED_SLOT_TEMPLATE' && warning}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    )}
 
                     <Label className="text-xs font-black uppercase tracking-widest">
                       {customerChose === "PICKUP_WINDOW" ? "Pickup time" : "Arrival time"} {!selectedSlot && <span className="text-red-500"> *</span>}
