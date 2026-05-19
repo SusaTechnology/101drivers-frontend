@@ -1462,7 +1462,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         setSchedulePreviewData(data);
         setIsLoadingSlots(false);
 
-        // Store suggested slots for dropdown — backend already filters out past slots
+        // Store suggested slots for dropdown — backend is the single source of truth
+        // No frontend filtering; backend already filters out past slots
         if (data.suggestedSlots) {
           setSuggestedSlots({
             pickup: data.suggestedSlots.pickup || [],
