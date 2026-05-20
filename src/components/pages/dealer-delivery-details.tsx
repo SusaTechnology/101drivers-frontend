@@ -192,29 +192,34 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     }
   })
 
-  // Close delivery dialog state
-  const [showCloseDialog, setShowCloseDialog] = useState(false)
+  // Delivery action dialog state
+  const [showActionDialog, setShowActionDialog] = useState(false)
 
-  const closeDeliveryMutation = useDataMutation({
+  const transitionDeliveryMutation = useDataMutation({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${id}/transition-status`,
     method: 'POST',
-    onSuccess: () => {
-      setShowCloseDialog(false)
-      toast.success('Delivery closed', { description: 'This delivery has been marked as completed.' })
+    onSuccess: (_data, variables) => {
+      setShowActionDialog(false)
+      const target = (variables as any)?.toStatus
+      if (target === 'COMPLETED') {
+        toast.success('Delivery closed', { description: 'This delivery has been marked as completed.' })
+      } else if (target === 'LISTED') {
+        toast.success('Delivery reverted', { description: 'The driver has been unassigned and the delivery is back on the board.' })
+      }
       refetch()
     },
     onError: (error: any) => {
-      toast.error('Failed to close delivery', { description: error.message || 'Something went wrong.' })
+      toast.error('Action failed', { description: error.message || 'Something went wrong.' })
     },
   })
 
-  const handleCloseDelivery = () => {
-    if (!deliveryData || (deliveryData.status !== 'ACTIVE' && deliveryData.status !== 'BOOKED')) return
-    closeDeliveryMutation.mutate({
-      toStatus: 'COMPLETED',
+  const handleTransitionDelivery = (toStatus: string, note: string) => {
+    if (!deliveryData) return
+    transitionDeliveryMutation.mutate({
+      toStatus,
       actorUserId: user?.id || null,
       actorRole: 'BUSINESS_CUSTOMER',
-      note: 'Dealer manually closed delivery',
+      note,
     })
   }
 
@@ -955,14 +960,24 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
         Live track the driver
       </Button>
     )}
-    {(deliveryData.status === 'BOOKED' || deliveryData.status === 'ACTIVE') && (
+    {deliveryData.status === 'ACTIVE' && (
       <Button
-        onClick={() => setShowCloseDialog(true)}
-        disabled={closeDeliveryMutation.isPending}
+        onClick={() => setShowActionDialog(true)}
+        disabled={transitionDeliveryMutation.isPending}
         className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white font-extrabold hover:bg-emerald-700 disabled:opacity-50"
       >
         <CheckSquare className="h-4 w-4" />
-        {closeDeliveryMutation.isPending ? 'Closing...' : 'Close Delivery'}
+        {transitionDeliveryMutation.isPending ? 'Closing...' : 'Close Delivery'}
+      </Button>
+    )}
+    {deliveryData.status === 'BOOKED' && (
+      <Button
+        onClick={() => setShowActionDialog(true)}
+        disabled={transitionDeliveryMutation.isPending}
+        className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-slate-800 text-white font-extrabold hover:bg-slate-900 disabled:opacity-50"
+      >
+        <Settings className="h-4 w-4" />
+        Manage Delivery
       </Button>
     )}
             <Button
@@ -1909,24 +1924,40 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       
       <Footer />
 
-      {/* Close Delivery Confirmation Dialog */}
-      <AlertDialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
+      {/* Delivery Action Dialog */}
+      <AlertDialog open={showActionDialog} onOpenChange={setShowActionDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Close Delivery</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deliveryData?.status === 'BOOKED' ? 'Manage Delivery' : 'Close Delivery'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to close this delivery? This will move it to Completed and cannot be undone.
+              {deliveryData?.status === 'BOOKED'
+                ? 'This delivery is booked but not yet started. You can complete it now or revert it to Listed so another driver can pick it up.'
+                : 'Are you sure you want to close this delivery? This will move it to Completed and cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={closeDeliveryMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCloseDelivery}
-              disabled={closeDeliveryMutation.isPending}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            <AlertDialogCancel disabled={transitionDeliveryMutation.isPending}>Cancel</AlertDialogCancel>
+            {deliveryData?.status === 'BOOKED' && (
+              <Button
+                onClick={() => handleTransitionDelivery('LISTED', 'Dealer reverted delivery to Listed')}
+                disabled={transitionDeliveryMutation.isPending}
+                variant="outline"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-full font-extrabold"
+              >
+                <RefreshCw className="h-4 w-4" />
+                {transitionDeliveryMutation.isPending ? 'Reverting...' : 'Revert to Listed'}
+              </Button>
+            )}
+            <Button
+              onClick={() => handleTransitionDelivery('COMPLETED', 'Dealer manually closed delivery')}
+              disabled={transitionDeliveryMutation.isPending}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-extrabold"
             >
-              {closeDeliveryMutation.isPending ? 'Closing...' : 'Yes, Close Delivery'}
-            </AlertDialogAction>
+              <CheckSquare className="h-4 w-4" />
+              {transitionDeliveryMutation.isPending ? 'Closing...' : 'Complete Delivery'}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
