@@ -933,7 +933,6 @@ async unsuspendCustomer(
              id: true,
              estimatedPrice: true,
              distanceMiles: true,
-             etaMinutes: true,
            },
          },
  
