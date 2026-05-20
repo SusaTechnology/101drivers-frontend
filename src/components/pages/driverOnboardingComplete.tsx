@@ -845,12 +845,13 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     License Front Photo {!errors.licenseFrontUrl && <span className="text-red-500">*</span>}
                   </Label>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Upload a clear photo of the front of your license
+                    Take a clear photo of the front of your license
                   </p>
                   <input
                     ref={licenseFrontInputRef}
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
+                    capture="environment"
                     onChange={handleLicenseFrontChange}
                     className="hidden"
                   />
@@ -870,7 +871,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                       className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-2 hover:border-lime-500 dark:hover:border-lime-500 transition-colors"
                     >
                       <Camera className="w-6 h-6 text-slate-400" />
-                      <span className="text-xs text-slate-500">{licenseFrontUploading ? "Uploading..." : "Click to upload"}</span>
+                      <span className="text-xs text-slate-500">{licenseFrontUploading ? "Uploading..." : "Tap to take photo"}</span>
                     </button>
                   )}
                   {errors.licenseFrontUrl && (
@@ -891,12 +892,13 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     License Back Photo {!errors.licenseBackUrl && <span className="text-red-500">*</span>}
                   </Label>
                   <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Upload a clear photo of the back of your license
+                    Take a clear photo of the back of your license
                   </p>
                   <input
                     ref={licenseBackInputRef}
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
+                    capture="environment"
                     onChange={handleLicenseBackChange}
                     className="hidden"
                   />
@@ -916,7 +918,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                       className="w-full h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-2 hover:border-lime-500 dark:hover:border-lime-500 transition-colors"
                     >
                       <Camera className="w-6 h-6 text-slate-400" />
-                      <span className="text-xs text-slate-500">{licenseBackUploading ? "Uploading..." : "Click to upload"}</span>
+                      <span className="text-xs text-slate-500">{licenseBackUploading ? "Uploading..." : "Tap to take photo"}</span>
                     </button>
                   )}
                   {errors.licenseBackUrl && (
