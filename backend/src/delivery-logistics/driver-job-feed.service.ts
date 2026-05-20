@@ -480,18 +480,34 @@ async getDriverJobFeed(input: {
         };
 
         // ── BACKWARD CHECK ──
-        // Find the last existing delivery the driver finishes before the new pickup.
-        // Check: estimatedFinish + driveTime + buffer ≤ newPickup
+        // Find the anchor delivery: the latest-finishing BOOKED/ACTIVE delivery
+        // that overlaps with or precedes the new pickup window.
+        // We compare against pickupWindowEnd (not pickupWindowStart) so that
+        // deliveries with the same pickup start but different durations are
+        // properly detected as constraints.
+        const newWindowEndMs = delivery.pickupWindowEnd
+          ? new Date(delivery.pickupWindowEnd).getTime()
+          : newPickupMs!;
+
         let anchorDropoff: { finishMs: number; dropoffLat: number | null; dropoffLng: number | null } | null = null;
 
         if (newPickupMs && sortedExisting.length > 0) {
-          // Walk sorted existing to find the one finishing closest to (but before) newPickup
           for (const ex of sortedExisting) {
             const finishMs = estimateFinishMs(ex);
-            if (finishMs !== null && finishMs <= newPickupMs) {
+            if (finishMs === null) continue;
+
+            const exPickupMs = ex.pickupWindowStart
+              ? new Date(ex.pickupWindowStart).getTime()
+              : null;
+
+            // Skip deliveries that start after the new window ends — those
+            // are future gigs handled by the forward check.
+            if (exPickupMs !== null && exPickupMs > newWindowEndMs) break;
+
+            // This delivery overlaps with or precedes the new pickup window.
+            // Track the one that finishes latest as the anchor.
+            if (!anchorDropoff || finishMs > anchorDropoff.finishMs) {
               anchorDropoff = { finishMs, dropoffLat: ex.dropoffLat, dropoffLng: ex.dropoffLng };
-            } else {
-              break; // past insertion point
             }
           }
 
@@ -503,7 +519,7 @@ async getDriverJobFeed(input: {
             }
           }
 
-          // Now validate: can the driver reach the new pickup from the anchor's dropoff?
+          // Validate: can the driver reach the new pickup before the window closes?
           if (anchorDropoff && delivery.pickupLat != null && delivery.pickupLng != null) {
             let driveMinutes: number | null = null;
             if (anchorDropoff.dropoffLat != null && anchorDropoff.dropoffLng != null) {
@@ -513,10 +529,12 @@ async getDriverJobFeed(input: {
             const driveMs = driveMinutes ? driveMinutes * 60 * 1000 : 0;
             const earliestArrivalMs = anchorDropoff.finishMs + driveMs + bufferMs;
 
-            if (newPickupMs < earliestArrivalMs) {
+            // The driver can start the gig as long as they arrive before the
+            // pickup window ENDS — they don't have to be there at window start.
+            if (newWindowEndMs < earliestArrivalMs) {
               const neededMin = Math.ceil((earliestArrivalMs - anchorDropoff.finishMs) / 60000);
-              const availableMin = Math.max(0, Math.ceil((newPickupMs - anchorDropoff.finishMs) / 60000));
-              stackingBlockedReason = `Not enough time after your previous delivery. You need ~${neededMin} min (drive + buffer) but only ${availableMin} min available.`;
+              const availableMin = Math.max(0, Math.ceil((newWindowEndMs - anchorDropoff.finishMs) / 60000));
+              stackingBlockedReason = `Not enough time after your previous delivery. You need ~${neededMin} min (drive + buffer) but only ${availableMin} min before this pickup window closes.`;
               matchReasons.push("stacking-blocked-backward");
             }
           }
@@ -999,16 +1017,32 @@ async getDriverJobFeed(input: {
     : null;
 
   // ── BACKWARD CHECK ──
-  // Find the anchor delivery: the last BOOKED/ACTIVE delivery that finishes
-  // before the new pickup. Check if driver can reach the new pickup in time.
+  // Find the anchor delivery: the latest-finishing BOOKED/ACTIVE delivery
+  // that overlaps with or precedes the new pickup window.
+  // Uses pickupWindowEnd (not pickupWindowStart) so same-window deliveries
+  // are properly detected as scheduling constraints.
+  const newWindowEndMs = delivery.pickupWindowEnd
+    ? new Date(delivery.pickupWindowEnd).getTime()
+    : newPickupStart;
+
   let anchorDelivery: typeof sortedAssignments[number] | null = null;
   if (newPickupStart) {
     for (const assignment of sortedAssignments) {
       const finishMs = estimateFinishMs(assignment);
-      if (finishMs !== null && finishMs <= newPickupStart) {
+      if (finishMs === null) continue;
+
+      const exPickupMs = assignment.pickupWindowStart
+        ? new Date(assignment.pickupWindowStart).getTime()
+        : null;
+
+      // Skip deliveries that start after the new window ends — those
+      // are future gigs handled by the forward check.
+      if (exPickupMs !== null && exPickupMs > newWindowEndMs!) break;
+
+      // This delivery overlaps with or precedes the new pickup window.
+      // Track the one that finishes latest as the anchor.
+      if (!anchorDelivery || finishMs > (estimateFinishMs(anchorDelivery) ?? 0)) {
         anchorDelivery = assignment;
-      } else {
-        break;
       }
     }
   }
@@ -1099,8 +1133,9 @@ async getDriverJobFeed(input: {
   }
 
   // ── Backward Stacking Check ──
-  // Check: estimatedFinish_anchor + driveTime_anchor→new + buffer ≤ newPickup
-  if (referenceFinishMs !== null && newPickupStart !== null) {
+  // Check: estimatedFinish_anchor + driveTime_anchor→new + buffer ≤ newWindowEnd
+  // The driver just needs to arrive before the pickup window CLOSES.
+  if (referenceFinishMs !== null && newWindowEndMs !== null) {
     let driveMinutes = 0;
     if (
       referenceDropoffLat != null && referenceDropoffLng != null &&
@@ -1125,16 +1160,16 @@ async getDriverJobFeed(input: {
     const driveMs = driveMinutes * 60 * 1000;
     const earliestArrivalMs = referenceFinishMs + driveMs + bufferMs;
 
-    if (newPickupStart < earliestArrivalMs) {
+    if (newWindowEndMs < earliestArrivalMs) {
       const neededMin = Math.ceil((earliestArrivalMs - referenceFinishMs) / 60000);
-      const availableMin = Math.max(0, Math.ceil((newPickupStart - referenceFinishMs) / 60000));
+      const availableMin = Math.max(0, Math.ceil((newWindowEndMs - referenceFinishMs) / 60000));
       const anchorLabel = anchorDelivery?.pickupWindowStart
         ? new Date(anchorDelivery.pickupWindowStart).toLocaleString()
         : new Date(referenceFinishMs).toLocaleString();
       throw new ConflictException(
         `Not enough time after your delivery at ${anchorLabel}. ` +
         `You need ~${neededMin} min (drive time + buffer) to reach this pickup, ` +
-        `but only ${availableMin} min are available between them.`
+        `but only ${availableMin} min remain before this pickup window closes.`
       );
     }
   }
