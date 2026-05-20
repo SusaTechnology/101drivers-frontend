@@ -41,6 +41,8 @@ export type DriverFeedItem = {
   dropoffLng: number | null;
   originSource: "current" | "homeBase" | "none";
   createdAt: Date;
+  /** If set, this gig cannot be booked right now. Contains the human-readable reason. */
+  stackingBlocked: string | null;
 };
 
 export type DriverJobFeedResult = {
@@ -401,21 +403,30 @@ async getDriverJobFeed(input: {
         matchReasons.push("geo-fallback");
       }
 
-      // ── Transit Buffer + Radius from last drop-off (feed filter) ──
-      // Filter out jobs that would fail booking validation to avoid showing
-      // unavailable gigs to the driver.
-      // Checks both BOOKED/ACTIVE assignments and COMPLETED deliveries today.
+      // ── Stacking + Radius Checks (feed filter) ──
+      // Instead of comparing raw time windows (which blocked all gigs in the
+      // same 2-hour slot), we now estimate when the driver actually finishes
+      // each existing delivery and check if they can reach the next pickup.
+      //
+      // Logic: estimatedFinish_prev + driveTime_prev→new + buffer ≤ newPickup
+      //
+      // Gigs that can't stack are still returned (with stackingBlocked reason)
+      // so drivers see them with an info flag instead of "no gigs available".
+      let stackingBlockedReason: string | null = null;
       try {
         const deliverySettings = await this.getDeliverySettings();
-
-        // Find the immediately preceding BOOKED/ACTIVE delivery
-        // (same logic as booking validation to stay in sync)
         const newPickupMs = delivery.pickupWindowStart
           ? new Date(delivery.pickupWindowStart).getTime()
           : null;
 
-        let precedingDropoff: { time: Date; dropoffLat: number | null; dropoffLng: number | null } | null = null;
-        let sorted: { pickupWindowStart: Date | string | null; dropoffWindowEnd: Date | string | null; dropoffLat: number | null; dropoffLng: number | null }[] = [];
+        // Fetch all BOOKED/ACTIVE assignments with etaMinutes for duration estimation
+        let sortedExisting: {
+          pickupWindowStart: Date | string | null;
+          dropoffWindowEnd: Date | string | null;
+          dropoffLat: number | null;
+          dropoffLng: number | null;
+          etaMinutes: number | null;
+        }[] = [];
 
         if (newPickupMs) {
           const assignments = await this.prisma.deliveryAssignment.findMany({
@@ -434,95 +445,148 @@ async getDriverJobFeed(input: {
                   dropoffWindowEnd: true,
                   dropoffLat: true,
                   dropoffLng: true,
+                  etaMinutes: true,
                 },
               },
             },
           });
 
-          sorted = assignments.map(a => a.delivery).sort(
+          sortedExisting = assignments.map(a => a.delivery).sort(
             (a, b) => new Date(a.pickupWindowStart!).getTime() - new Date(b.pickupWindowStart!).getTime()
           );
+        }
 
-          for (const a of sorted) {
-            const dropoffEnd = a.dropoffWindowEnd ? new Date(a.dropoffWindowEnd).getTime() : null;
-            if (dropoffEnd !== null && dropoffEnd <= newPickupMs) {
-              precedingDropoff = { time: new Date(dropoffEnd), dropoffLat: a.dropoffLat, dropoffLng: a.dropoffLng };
+        // Helper: estimate when driver finishes a delivery.
+        // Uses pickupWindowStart + etaMinutes (actual drive time).
+        // Falls back to pickupWindowEnd if no etaMinutes.
+        const estimateFinishMs = (d: typeof sortedExisting[number]): number | null => {
+          if (!d.pickupWindowStart) return null;
+          const pickupMs = new Date(d.pickupWindowStart).getTime();
+          if (d.etaMinutes != null && d.etaMinutes > 0) {
+            return pickupMs + d.etaMinutes * 60 * 1000;
+          }
+          // Fallback: use pickupWindowEnd (less accurate but safe)
+          if (d.dropoffWindowEnd) {
+            return new Date(d.dropoffWindowEnd).getTime();
+          }
+          return null;
+        };
+
+        // Helper: estimate drive time between two points using haversine.
+        // ~30 mph average urban speed → 2 minutes per mile.
+        const estimateDriveMinutes = (fromLat: number, fromLng: number, toLat: number, toLng: number): number => {
+          const miles = this.haversineFallback(fromLat, fromLng, toLat, toLng);
+          return Math.ceil(miles * 2); // ~30 mph avg in city
+        };
+
+        // ── BACKWARD CHECK ──
+        // Find the last existing delivery the driver finishes before the new pickup.
+        // Check: estimatedFinish + driveTime + buffer ≤ newPickup
+        let anchorDropoff: { finishMs: number; dropoffLat: number | null; dropoffLng: number | null } | null = null;
+
+        if (newPickupMs && sortedExisting.length > 0) {
+          // Walk sorted existing to find the one finishing closest to (but before) newPickup
+          for (const ex of sortedExisting) {
+            const finishMs = estimateFinishMs(ex);
+            if (finishMs !== null && finishMs <= newPickupMs) {
+              anchorDropoff = { finishMs, dropoffLat: ex.dropoffLat, dropoffLng: ex.dropoffLng };
             } else {
-              break;
+              break; // past insertion point
+            }
+          }
+
+          // If no anchor found among BOOKED/ACTIVE, check last completed delivery today
+          if (!anchorDropoff) {
+            const lastCompleted = await this.getLastCompletedDropoff(input.driverId);
+            if (lastCompleted) {
+              anchorDropoff = { finishMs: lastCompleted.updatedAt.getTime(), dropoffLat: lastCompleted.dropoffLat, dropoffLng: lastCompleted.dropoffLng };
+            }
+          }
+
+          // Now validate: can the driver reach the new pickup from the anchor's dropoff?
+          if (anchorDropoff && delivery.pickupLat != null && delivery.pickupLng != null) {
+            let driveMinutes: number | null = null;
+            if (anchorDropoff.dropoffLat != null && anchorDropoff.dropoffLng != null) {
+              driveMinutes = estimateDriveMinutes(anchorDropoff.dropoffLat, anchorDropoff.dropoffLng, delivery.pickupLat, delivery.pickupLng);
+            }
+            const bufferMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+            const driveMs = driveMinutes ? driveMinutes * 60 * 1000 : 0;
+            const earliestArrivalMs = anchorDropoff.finishMs + driveMs + bufferMs;
+
+            if (newPickupMs < earliestArrivalMs) {
+              const neededMin = Math.ceil((earliestArrivalMs - anchorDropoff.finishMs) / 60000);
+              const availableMin = Math.max(0, Math.ceil((newPickupMs - anchorDropoff.finishMs) / 60000));
+              stackingBlockedReason = `Not enough time after your previous delivery. You need ~${neededMin} min (drive + buffer) but only ${availableMin} min available.`;
+              matchReasons.push("stacking-blocked-backward");
             }
           }
         }
 
-        // Fall back to last completed delivery if no BOOKED/ACTIVE preceding delivery found
-        const lastCompleted = !precedingDropoff ? await this.getLastCompletedDropoff(input.driverId) : null;
-        const referenceForFilter = precedingDropoff
-          ? { updatedAt: precedingDropoff.time, dropoffLat: precedingDropoff.dropoffLat, dropoffLng: precedingDropoff.dropoffLng }
-          : lastCompleted;
+        // ── FORWARD CHECK ──
+        // If this new delivery were booked, would it block an existing next delivery?
+        // Check: newEstimatedFinish + driveTime_new→next + buffer ≤ nextPickup
+        if (!stackingBlockedReason && newPickupMs && sortedExisting.length > 0) {
+          const newEtaMinutes = delivery.etaMinutes ?? 30; // reasonable default if missing
+          const newFinishMs = newPickupMs + newEtaMinutes * 60 * 1000;
 
-        // Transit buffer check
-        if (referenceForFilter && delivery.pickupWindowStart) {
-          const nextAvailableAt = new Date(
-            referenceForFilter.updatedAt.getTime() + deliverySettings.transitBufferMinutes * 60 * 1000
-          );
-          if (new Date(delivery.pickupWindowStart) < nextAvailableAt) {
-            matchReasons.push("transit-buffer-blocked");
-            return null;
-          }
-        }
+          for (const ex of sortedExisting) {
+            if (!ex.pickupWindowStart) continue;
+            const exPickupMs = new Date(ex.pickupWindowStart).getTime();
 
-        // Overlap check: new delivery must not overlap any existing BOOKED/ACTIVE gig
-        if (newPickupMs && delivery.pickupWindowEnd) {
-          const newDropoffEndMs = new Date(delivery.pickupWindowEnd).getTime();
-          for (const a of sorted) {
-            if (!a.pickupWindowStart || !a.dropoffWindowEnd) continue;
-            const exPickupMs = new Date(a.pickupWindowStart).getTime();
-            const exDropoffMs = new Date(a.dropoffWindowEnd).getTime();
-            if (newPickupMs < exDropoffMs && newDropoffEndMs > exPickupMs) {
-              matchReasons.push("schedule-overlap");
-              return null;
-            }
-          }
-        }
+            // Only check deliveries that start after the new delivery finishes
+            if (exPickupMs > newFinishMs) {
+              let driveMinutes: number | null = null;
+              if (delivery.dropoffLat != null && delivery.dropoffLng != null &&
+                  ex.dropoffLat != null && ex.dropoffLng != null) {
+                // Drive from NEW delivery's dropoff to EXISTING delivery's pickup
+                // Use existing delivery's pickup coords as destination proxy
+              }
+              if (delivery.dropoffLat != null && delivery.dropoffLng != null &&
+                  ex.dropoffLat != null && ex.dropoffLng != null) {
+                driveMinutes = estimateDriveMinutes(delivery.dropoffLat, delivery.dropoffLng, ex.dropoffLat, ex.dropoffLng);
+              }
+              const bufferMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+              const driveMs = driveMinutes ? driveMinutes * 60 * 1000 : 0;
+              const earliestArrivalMs = newFinishMs + driveMs + bufferMs;
 
-        // Forward buffer check: new delivery must leave enough gap before the next gig
-        if (newPickupMs && delivery.pickupWindowEnd) {
-          const newDropoffEndMs = new Date(delivery.pickupWindowEnd).getTime();
-          const requiredGapMs = deliverySettings.transitBufferMinutes * 60 * 1000;
-          for (const a of sorted) {
-            if (!a.pickupWindowStart) continue;
-            const exPickupMs = new Date(a.pickupWindowStart).getTime();
-            if (exPickupMs > newDropoffEndMs) {
-              if (exPickupMs < newDropoffEndMs + requiredGapMs) {
-                matchReasons.push("forward-transit-buffer-blocked");
-                return null;
+              if (exPickupMs < earliestArrivalMs) {
+                const neededMin = Math.ceil((earliestArrivalMs - newFinishMs) / 60000);
+                const availableMin = Math.max(0, Math.ceil((exPickupMs - newFinishMs) / 60000));
+                stackingBlockedReason = `This delivery would make you late for your next booking. You'd need ~${neededMin} min but only ${availableMin} min available.`;
+                matchReasons.push("stacking-blocked-forward");
               }
               break; // Only check the immediately next delivery
             }
           }
         }
 
-        // Radius from last drop-off check
+        // ── RADIUS CHECK (kept as-is: distance cap from last dropoff) ──
         if (
-          referenceForFilter &&
-          referenceForFilter.dropoffLat != null &&
-          referenceForFilter.dropoffLng != null &&
+          !stackingBlockedReason &&
+          anchorDropoff &&
+          anchorDropoff.dropoffLat != null &&
+          anchorDropoff.dropoffLng != null &&
           delivery.pickupLat != null &&
           delivery.pickupLng != null
         ) {
           const straightMiles = this.haversineFallback(
-            referenceForFilter.dropoffLat,
-            referenceForFilter.dropoffLng,
+            anchorDropoff.dropoffLat,
+            anchorDropoff.dropoffLng,
             delivery.pickupLat,
             delivery.pickupLng,
           );
-          // Use 1.3x multiplier for haversine vs route distance approximation
           if (straightMiles > deliverySettings.maximumRadiusMiles * 1.3) {
+            stackingBlockedReason = `Pickup is too far from your last drop-off (>${deliverySettings.maximumRadiusMiles} miles).`;
             matchReasons.push("outside-max-radius");
-            return null;
           }
         }
       } catch {
-        // If settings fetch fails, don't block the feed
+        // If stacking check fails, don't block the feed — let the gig show as bookable
+      }
+
+      // Hide gigs that can't stack (for now — show only bookable gigs)
+      if (stackingBlockedReason) {
+        return null;
       }
 
       const payoutPreviewAmount = this.extractPayoutPreviewAmount(
@@ -559,6 +623,7 @@ async getDriverJobFeed(input: {
         dropoffLng: delivery.dropoffLng,
         originSource: origin.source,
         createdAt: delivery.createdAt,
+        stackingBlocked: stackingBlockedReason,
       };
 
       return item;
@@ -795,8 +860,12 @@ async getDriverJobFeed(input: {
       status: true,
       pickupLat: true,
       pickupLng: true,
+      dropoffLat: true,
+      dropoffLng: true,
       pickupWindowStart: true,
       pickupWindowEnd: true,
+      dropoffWindowEnd: true,
+      etaMinutes: true,
     },
   });
 
@@ -846,7 +915,7 @@ async getDriverJobFeed(input: {
   const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
 
   const DEFAULT_MAX_RADIUS_MILES = 20;
-  const DEFAULT_TRANSIT_BUFFER_MINUTES = 45;
+  const DEFAULT_TRANSIT_BUFFER_MINUTES = 15;
 
   let deliverySettings: {
     maximumRadiusMiles: number;
@@ -898,46 +967,53 @@ async getDriverJobFeed(input: {
           dropoffWindowEnd: true,
           dropoffLat: true,
           dropoffLng: true,
+          pickupLat: true,
+          pickupLng: true,
+          etaMinutes: true,
           updatedAt: true,
         },
       },
     },
   });
 
-  // The "anchor" delivery is the one the driver will finish just before
-  // the new booking's pickup. We need to find the BOOKED/ACTIVE delivery
-  // whose dropoffWindowEnd is closest to (but before or overlapping) the
-  // new delivery's pickupWindowStart — NOT the chronologically last one.
   const sortedAssignments = currentAssignments.map(a => a.delivery).sort(
     (a, b) => new Date(a.pickupWindowStart!).getTime() - new Date(b.pickupWindowStart!).getTime()
   );
 
-  // Find the immediately preceding delivery: the one whose dropoffWindowEnd
-  // is closest to (but <=) the new delivery's pickupWindowStart.
-  // This ensures A→B doesn't block B→C when they're properly sequenced.
+  // ── Helper: estimate when a delivery actually finishes ──
+  // Uses pickupWindowStart + etaMinutes (drive time). Falls back to dropoffWindowEnd.
+  const estimateFinishMs = (d: typeof sortedAssignments[number]): number | null => {
+    if (!d.pickupWindowStart) return null;
+    const pickupMs = new Date(d.pickupWindowStart).getTime();
+    if (d.etaMinutes != null && d.etaMinutes > 0) {
+      return pickupMs + d.etaMinutes * 60 * 1000;
+    }
+    if (d.dropoffWindowEnd) {
+      return new Date(d.dropoffWindowEnd).getTime();
+    }
+    return null;
+  };
+
   const newPickupStart = delivery.pickupWindowStart
     ? new Date(delivery.pickupWindowStart).getTime()
     : null;
 
+  // ── BACKWARD CHECK ──
+  // Find the anchor delivery: the last BOOKED/ACTIVE delivery that finishes
+  // before the new pickup. Check if driver can reach the new pickup in time.
   let anchorDelivery: typeof sortedAssignments[number] | null = null;
   if (newPickupStart) {
     for (const assignment of sortedAssignments) {
-      const dropoffEnd = assignment.dropoffWindowEnd
-        ? new Date(assignment.dropoffWindowEnd).getTime()
-        : null;
-      if (dropoffEnd !== null && dropoffEnd <= newPickupStart) {
+      const finishMs = estimateFinishMs(assignment);
+      if (finishMs !== null && finishMs <= newPickupStart) {
         anchorDelivery = assignment;
       } else {
-        // Past the insertion point — no need to look further
         break;
       }
     }
-  } else if (sortedAssignments.length > 0) {
-    // Fallback: if no pickupWindowStart, use the last one
-    anchorDelivery = sortedAssignments[sortedAssignments.length - 1];
   }
 
-  // Fall back to last completed delivery today if no active/booked exists
+  // Fall back to last completed delivery today if no anchor found
   let lastCompletedDelivery: {
     id: string;
     dropoffLat: number | null;
@@ -945,7 +1021,7 @@ async getDriverJobFeed(input: {
     updatedAt: Date;
   } | null = null;
 
-  if (!anchorDelivery) {
+  if (!anchorDelivery && newPickupStart) {
     lastCompletedDelivery = await db.deliveryRequest.findFirst({
       where: {
         assignments: {
@@ -967,28 +1043,32 @@ async getDriverJobFeed(input: {
     });
   }
 
-  // Determine the reference point for radius/buffer checks.
-  // Use anchorDelivery (BOOKED/ACTIVE) if exists, otherwise lastCompletedDelivery.
-  const referenceDelivery = anchorDelivery
-    ? { dropoffLat: anchorDelivery.dropoffLat, dropoffLng: anchorDelivery.dropoffLng, updatedAt: anchorDelivery.updatedAt }
-    : lastCompletedDelivery;
+  // Determine reference point for backward check
+  const referenceFinishMs = anchorDelivery
+    ? estimateFinishMs(anchorDelivery)
+    : lastCompletedDelivery
+      ? lastCompletedDelivery.updatedAt.getTime()
+      : null;
 
+  const referenceDropoffLat = anchorDelivery?.dropoffLat ?? lastCompletedDelivery?.dropoffLat ?? null;
+  const referenceDropoffLng = anchorDelivery?.dropoffLng ?? lastCompletedDelivery?.dropoffLng ?? null;
+
+  // ── Radius Check (from previous drop-off, using Google Maps) ──
   if (
-    referenceDelivery &&
-    referenceDelivery.dropoffLat != null &&
-    referenceDelivery.dropoffLng != null &&
+    referenceDropoffLat != null &&
+    referenceDropoffLng != null &&
     delivery.pickupLat != null &&
     delivery.pickupLng != null
   ) {
     const samePoint =
-      Math.abs(referenceDelivery.dropoffLat - delivery.pickupLat) < 0.000001 &&
-      Math.abs(referenceDelivery.dropoffLng - delivery.pickupLng) < 0.000001;
+      Math.abs(referenceDropoffLat - delivery.pickupLat) < 0.000001 &&
+      Math.abs(referenceDropoffLng - delivery.pickupLng) < 0.000001;
 
     if (!samePoint) {
       try {
         const route = await this.mapsService.computeRouteMetrics({
-          originLat: referenceDelivery.dropoffLat,
-          originLng: referenceDelivery.dropoffLng,
+          originLat: referenceDropoffLat,
+          originLng: referenceDropoffLng,
           destinationLat: delivery.pickupLat,
           destinationLng: delivery.pickupLng,
         });
@@ -1004,8 +1084,8 @@ async getDriverJobFeed(input: {
         }
         // If routing fails, use haversine fallback
         const straightMiles = this.haversineFallback(
-          referenceDelivery.dropoffLat,
-          referenceDelivery.dropoffLng,
+          referenceDropoffLat,
+          referenceDropoffLng,
           delivery.pickupLat,
           delivery.pickupLng,
         );
@@ -1018,79 +1098,95 @@ async getDriverJobFeed(input: {
     }
   }
 
-  // ── Overlap Check ──
-  // The new delivery's time window must not overlap with any existing BOOKED/ACTIVE delivery.
-  if (newPickupStart && delivery.pickupWindowEnd) {
-    const newDropoffEnd = new Date(delivery.pickupWindowEnd).getTime();
-
-    for (const existing of sortedAssignments) {
-      if (!existing.pickupWindowStart || !existing.dropoffWindowEnd) continue;
-      const exPickupStart = new Date(existing.pickupWindowStart).getTime();
-      const exDropoffEnd = new Date(existing.dropoffWindowEnd).getTime();
-
-      // Windows overlap if: new starts before existing ends AND new ends after existing starts
-      if (newPickupStart < exDropoffEnd && newDropoffEnd > exPickupStart) {
-        const existingLabel = `${new Date(existing.pickupWindowStart).toLocaleString()} – ${new Date(existing.dropoffWindowEnd).toLocaleString()}`;
-        throw new ConflictException(
-          `This delivery overlaps with your existing booking (${existingLabel}). ` +
-          `You cannot book two deliveries at the same time.`
-        );
+  // ── Backward Stacking Check ──
+  // Check: estimatedFinish_anchor + driveTime_anchor→new + buffer ≤ newPickup
+  if (referenceFinishMs !== null && newPickupStart !== null) {
+    let driveMinutes = 0;
+    if (
+      referenceDropoffLat != null && referenceDropoffLng != null &&
+      delivery.pickupLat != null && delivery.pickupLng != null
+    ) {
+      // Try Google Maps for precise drive time
+      try {
+        const route = await this.mapsService.computeRouteMetrics({
+          originLat: referenceDropoffLat,
+          originLng: referenceDropoffLng,
+          destinationLat: delivery.pickupLat,
+          destinationLng: delivery.pickupLng,
+        });
+        driveMinutes = route.durationMinutes;
+      } catch {
+        // Haversine fallback: ~2 min per mile at 30 mph urban average
+        const miles = this.haversineFallback(referenceDropoffLat, referenceDropoffLng, delivery.pickupLat, delivery.pickupLng);
+        driveMinutes = Math.ceil(miles * 2);
       }
+    }
+    const bufferMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+    const driveMs = driveMinutes * 60 * 1000;
+    const earliestArrivalMs = referenceFinishMs + driveMs + bufferMs;
+
+    if (newPickupStart < earliestArrivalMs) {
+      const neededMin = Math.ceil((earliestArrivalMs - referenceFinishMs) / 60000);
+      const availableMin = Math.max(0, Math.ceil((newPickupStart - referenceFinishMs) / 60000));
+      const anchorLabel = anchorDelivery?.pickupWindowStart
+        ? new Date(anchorDelivery.pickupWindowStart).toLocaleString()
+        : new Date(referenceFinishMs).toLocaleString();
+      throw new ConflictException(
+        `Not enough time after your delivery at ${anchorLabel}. ` +
+        `You need ~${neededMin} min (drive time + buffer) to reach this pickup, ` +
+        `but only ${availableMin} min are available between them.`
+      );
     }
   }
 
-  // ── Forward Buffer Check ──
-  // The new delivery must leave enough transit buffer before the NEXT booked delivery.
-  // Find the first existing delivery whose pickup starts after the new delivery ends.
-  if (newPickupStart && delivery.pickupWindowEnd) {
-    const newDropoffEnd = new Date(delivery.pickupWindowEnd).getTime();
+  // ── Forward Stacking Check ──
+  // If booked, would this new delivery make the driver late for their next booking?
+  // Check: newEstimatedFinish + driveTime_new→next + buffer ≤ nextPickup
+  if (newPickupStart && sortedAssignments.length > 0) {
+    const newEtaMinutes = delivery.etaMinutes ?? 30;
+    const newFinishMs = newPickupStart + newEtaMinutes * 60 * 1000;
 
     for (const existing of sortedAssignments) {
       if (!existing.pickupWindowStart) continue;
-      const exPickupStart = new Date(existing.pickupWindowStart).getTime();
+      const exPickupMs = new Date(existing.pickupWindowStart).getTime();
 
-      if (exPickupStart > newDropoffEnd) {
-        // This is the next delivery after the new one — check forward buffer
-        const requiredGapMs = deliverySettings.transitBufferMinutes * 60 * 1000;
-        if (exPickupStart < newDropoffEnd + requiredGapMs) {
-          const availableMinutes = Math.ceil((exPickupStart - newDropoffEnd) / 60000);
+      // Only check deliveries starting after the new delivery would finish
+      if (exPickupMs > newFinishMs) {
+        let driveMinutes = 0;
+        if (
+          delivery.dropoffLat != null && delivery.dropoffLng != null &&
+          existing.pickupLat != null && existing.pickupLng != null
+        ) {
+          // Drive from NEW delivery's dropoff to EXISTING delivery's pickup
+          try {
+            const route = await this.mapsService.computeRouteMetrics({
+              originLat: delivery.dropoffLat,
+              originLng: delivery.dropoffLng,
+              destinationLat: existing.pickupLat,
+              destinationLng: existing.pickupLng,
+            });
+            driveMinutes = route.durationMinutes;
+          } catch {
+            const miles = this.haversineFallback(delivery.dropoffLat, delivery.dropoffLng, existing.pickupLat, existing.pickupLng);
+            driveMinutes = Math.ceil(miles * 2);
+          }
+        }
+        const bufferMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+        const driveMs = driveMinutes * 60 * 1000;
+        const earliestArrivalMs = newFinishMs + driveMs + bufferMs;
+
+        if (exPickupMs < earliestArrivalMs) {
+          const neededMin = Math.ceil((earliestArrivalMs - newFinishMs) / 60000);
+          const availableMin = Math.max(0, Math.ceil((exPickupMs - newFinishMs) / 60000));
           const existingLabel = new Date(existing.pickupWindowStart).toLocaleString();
           throw new ConflictException(
-            `Not enough transit time before your next delivery starting at ${existingLabel}. ` +
-            `You need at least ${deliverySettings.transitBufferMinutes} minutes between deliveries, ` +
-            `but only ${Math.max(0, availableMinutes)} minutes are available.`
+            `This delivery would make you late for your next booking at ${existingLabel}. ` +
+            `You'd need ~${neededMin} min (drive time + buffer) after finishing this delivery, ` +
+            `but only ${availableMin} min are available.`
           );
         }
-        break; // Only need to check the immediately next delivery
+        break; // Only check the immediately next delivery
       }
-    }
-  }
-
-  // ── Transit Buffer Check (Backward) ──
-  // After completing (or finishing) a delivery, driver must wait transitBufferMinutes
-  // before starting the next pickup window.
-  // For BOOKED deliveries, we use the dropoff window end as the reference time
-  // (since the delivery hasn't been completed yet, we can't use updatedAt).
-  if (referenceDelivery && delivery.pickupWindowStart) {
-    // For BOOKED/ACTIVE deliveries, use dropoffWindowEnd as estimated finish time.
-    // For COMPLETED deliveries, use updatedAt (actual completion time).
-    const referenceTime = anchorDelivery?.dropoffWindowEnd
-      ? new Date(anchorDelivery.dropoffWindowEnd).getTime()
-      : referenceDelivery!.updatedAt.getTime();
-
-    const nextAvailableAt = new Date(referenceTime + deliverySettings.transitBufferMinutes * 60 * 1000);
-    if (new Date(delivery.pickupWindowStart) < nextAvailableAt) {
-      const gapMinutes = Math.ceil(
-        (nextAvailableAt.getTime() - new Date(delivery.pickupWindowStart).getTime()) / 60000
-      );
-      const anchorEndLabel = anchorDelivery?.dropoffWindowEnd
-        ? new Date(anchorDelivery.dropoffWindowEnd).toLocaleString()
-        : new Date(referenceTime).toLocaleString();
-      throw new ConflictException(
-        `Pickup window is too close to your previous delivery ending at ${anchorEndLabel}. ` +
-        `You need at least ${deliverySettings.transitBufferMinutes} minutes of transit time, ` +
-        `but only ${Math.max(0, deliverySettings.transitBufferMinutes - gapMinutes)} minutes are available.`
-      );
     }
   }
 }
@@ -1159,7 +1255,7 @@ async getDriverJobFeed(input: {
     maximumRadiusMiles: number;
     transitBufferMinutes: number;
   }> {
-    const defaults = { maximumRadiusMiles: 20, transitBufferMinutes: 45 };
+    const defaults = { maximumRadiusMiles: 20, transitBufferMinutes: 15 };
     try {
       const setting = await this.prisma.appSetting.findUnique({
         where: { key: "DELIVERY_SETTINGS" },

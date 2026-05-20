@@ -122,6 +122,24 @@ export class DeliveryLifecycleService {
       this.assertTransitionAllowed(delivery.status, toStatus);
       await this.assertTransitionGuards(tx, delivery.id, delivery.status, toStatus);
 
+      // When reverting from BOOKED/ACTIVE back to LISTED, release the active
+      // assignment so the delivery becomes visible in the driver job feed again.
+      if (
+        (delivery.status === EnumDeliveryRequestStatus.BOOKED ||
+          delivery.status === EnumDeliveryRequestStatus.ACTIVE) &&
+        toStatus === EnumDeliveryRequestStatus.LISTED
+      ) {
+        await tx.deliveryAssignment.updateMany({
+          where: {
+            deliveryId: delivery.id,
+            unassignedAt: null,
+          },
+          data: {
+            unassignedAt: new Date(),
+          },
+        });
+      }
+
       const updated = await tx.deliveryRequest.update({
         where: { id: delivery.id },
         data: { status: toStatus },

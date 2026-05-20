@@ -90,6 +90,15 @@ import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
@@ -260,6 +269,8 @@ interface JobItem {
   lng: number
   dropoffLat: number | null
   dropoffLng: number | null
+  // Stacking: null = bookable, string = reason it can't be booked right now
+  stackingBlocked: string | null
 }
 
 // ── Reusable Route Thumbnail SVG ────────────────────────────────
@@ -289,68 +300,124 @@ function RouteThumbnail() {
 
 // ── Reusable Gig Card Component ──────────────────────────────────
 function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => void; isMapsLoaded: boolean }) {
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false)
   const hasDropoffCoords = job.dropoffLat != null && job.dropoffLng != null
+  const isBlocked = Boolean(job.stackingBlocked)
+
+  const handleClick = () => {
+    if (isBlocked) {
+      setShowBlockedDialog(true)
+    } else {
+      onClick()
+    }
+  }
 
   return (
-    <Card
-      className="border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/60 active:scale-[0.98] transition-all duration-150 cursor-pointer bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden"
-      onClick={onClick}
-    >
-      {/* ── Main content ── */}
-      <CardContent className="px-4 py-3">
-        <div className="flex gap-3">
-          {/* Left: text block — route dominant, distance secondary */}
-          <div className="flex-1 min-w-0 flex flex-col">
-            {/* Date + time (small, secondary) */}
-            <div className="text-[12px] font-medium text-slate-400 dark:text-slate-500 leading-tight">
-              {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
-              {job.timeWindow && (
-                <>
-                  <span className="mx-1 text-slate-300 dark:text-slate-600">&middot;</span>
-                  <span>{job.timeWindow}</span>
-                </>
+    <>
+      <Card
+        className={cn(
+          "border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-150 cursor-pointer bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden",
+          isBlocked && "opacity-70 hover:opacity-90"
+        )}
+        onClick={handleClick}
+      >
+        {/* ── Main content ── */}
+        <CardContent className="px-4 py-3">
+          <div className="flex gap-3">
+            {/* Left: text block — route dominant, distance secondary */}
+            <div className="flex-1 min-w-0 flex flex-col">
+              {/* Date + time (small, secondary) */}
+              <div className="flex items-center gap-1.5">
+                <div className="text-[12px] font-medium text-slate-400 dark:text-slate-500 leading-tight">
+                  {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
+                  {job.timeWindow && (
+                    <>
+                      <span className="mx-1 text-slate-300 dark:text-slate-600">&middot;</span>
+                      <span>{job.timeWindow}</span>
+                    </>
+                  )}
+                </div>
+                {isBlocked && (
+                  <Badge variant="outline" className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-bold shrink-0">
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    Can't book
+                  </Badge>
+                )}
+              </div>
+
+              {/* Route — PRIMARY, dominant text */}
+              <div className="text-[17px] font-extrabold text-slate-900 dark:text-white mt-1.5 leading-snug tracking-tight">
+                {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
+              </div>
+
+              {/* Distance + ETA — medium, supporting */}
+              <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
+                {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
+              </div>
+            </div>
+
+            {/* Right: vertical stack — map + payout */}
+            <div className="flex flex-col items-end justify-between shrink-0">
+              {/* Live mini map on top */}
+              {hasDropoffCoords ? (
+                <MiniRouteMap
+                  pickup={{ lat: job.lat, lng: job.lng }}
+                  dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
+                  isLoaded={isMapsLoaded}
+                />
+              ) : (
+                <RouteThumbnail />
+              )}
+
+              {/* Payout — strong green accent, spaced below map */}
+              {job.payout != null && (
+                <span className="text-[22px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight mt-2.5">
+                  {formatCurrency(job.payout)}
+                </span>
               )}
             </div>
-
-            {/* Route — PRIMARY, dominant text */}
-            <div className="text-[17px] font-extrabold text-slate-900 dark:text-white mt-1.5 leading-snug tracking-tight">
-              {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
-            </div>
-
-            {/* Distance + ETA — medium, supporting */}
-            <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
-              {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
-            </div>
           </div>
+        </CardContent>
 
-          {/* Right: vertical stack — map + payout */}
-          <div className="flex flex-col items-end justify-between shrink-0">
-            {/* Live mini map on top */}
-            {hasDropoffCoords ? (
-              <MiniRouteMap
-                pickup={{ lat: job.lat, lng: job.lng }}
-                dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
-                isLoaded={isMapsLoaded}
-              />
-            ) : (
-              <RouteThumbnail />
-            )}
-
-            {/* Payout — strong green accent, spaced below map */}
-            {job.payout != null && (
-              <span className="text-[22px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight mt-2.5">
-                {formatCurrency(job.payout)}
-              </span>
-            )}
-          </div>
+        {/* ── Bottom CTA bar — fixed height, attached action strip ── */}
+        <div className={cn(
+          "h-11 border-t flex items-center justify-center",
+          isBlocked
+            ? "border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-900/20"
+            : "border-slate-200/80 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/40"
+        )}>
+          {isBlocked ? (
+            <Info className="w-6 h-6 text-amber-500 dark:text-amber-400" strokeWidth={2} />
+          ) : (
+            <ArrowRight className="w-7 h-7 text-green-600 dark:text-green-400" strokeWidth={3} />
+          )}
         </div>
-      </CardContent>
+      </Card>
 
-      {/* ── Bottom CTA bar — fixed height, attached action strip ── */}
-      <div className="h-11 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center bg-slate-50/60 dark:bg-slate-800/40">
-        <ArrowRight className="w-7 h-7 text-green-600 dark:text-green-400" strokeWidth={3} />
-      </div>
-    </Card>
+      {/* Stacking blocked info dialog */}
+      <AlertDialog open={showBlockedDialog} onOpenChange={setShowBlockedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              Can't Book This Gig
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+              {job.stackingBlocked}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+            <p className="font-semibold text-slate-700 dark:text-slate-300">{job.pickup} &rarr; {job.dropoff}</p>
+            <p>{job.timeWindow} &middot; {job.miles ? `${job.miles} mi` : 'Unknown distance'}</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogAction>Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
@@ -358,6 +425,8 @@ export default function DriverDashboardPage() {
   const [activeView, setActiveView] = useState<'map' | 'list'>('map')
   const [selectedJob, setSelectedJob] = useState<JobItem | null>(null)
   const [showSheet, setShowSheet] = useState(false)
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false)
+  const [blockedReason, setBlockedReason] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
   const user = getUser()
@@ -495,8 +564,15 @@ export default function DriverDashboardPage() {
     })
   }
 
-  // Navigate to full Gig Details page
+  // Navigate to full Gig Details page (only for bookable gigs)
   const handleViewJob = (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId)
+    if (job?.stackingBlocked) {
+      setBlockedReason(job.stackingBlocked)
+      setSelectedJob(job)
+      setShowBlockedDialog(true)
+      return
+    }
     navigate({ to: `/driver/job-details`, search: { jobId } })
   }
 
@@ -532,6 +608,7 @@ export default function DriverDashboardPage() {
       lng: item.pickupLat && item.pickupLng ? item.pickupLng : mockPickupLocations[index % mockPickupLocations.length].lng,
       dropoffLat: item.dropoffLat || null,
       dropoffLng: item.dropoffLng || null,
+      stackingBlocked: item.stackingBlocked || null,
     })) || []
   }, [deliveriesData])
 
@@ -1019,18 +1096,55 @@ export default function DriverDashboardPage() {
                 </Button>
                 <Button
                   onClick={() => {
-                    setShowSheet(false)
-                    handleViewJob(selectedJob.id)
+                    if (selectedJob?.stackingBlocked) {
+                      setShowSheet(false)
+                      setBlockedReason(selectedJob.stackingBlocked)
+                      setShowBlockedDialog(true)
+                    } else {
+                      setShowSheet(false)
+                      handleViewJob(selectedJob.id)
+                    }
                   }}
-                  className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 text-white transition text-sm font-bold"
+                  className={cn(
+                    "flex-1 h-12 rounded-2xl transition text-sm font-bold",
+                    selectedJob?.stackingBlocked
+                      ? "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700 text-white"
+                  )}
                 >
-                  Accept
+                  {selectedJob?.stackingBlocked ? 'Unavailable' : 'Accept'}
                 </Button>
               </div>
             </div>
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Stacking blocked info dialog (from bottom sheet or direct navigation) */}
+      <AlertDialog open={showBlockedDialog} onOpenChange={setShowBlockedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              Can't Book This Gig
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+              {blockedReason || 'This gig conflicts with your current schedule.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {selectedJob && (
+            <div className="py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+              <p className="font-semibold text-slate-700 dark:text-slate-300">{selectedJob.pickup} &rarr; {selectedJob.dropoff}</p>
+              <p>{selectedJob.timeWindow} &middot; {selectedJob.miles ? `${selectedJob.miles} mi` : 'Unknown distance'}</p>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogAction>Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ═══════════════════════════════════════ */}
       {/* BOTTOM TAB BAR — Map | List | Active   */}
