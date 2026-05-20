@@ -186,7 +186,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   // Close delivery mutation (dealer manual completion)
   const [isClosing, setIsClosing] = useState(false)
   const handleCloseDelivery = async () => {
-    if (!deliveryData || deliveryData.status !== 'ACTIVE') return
+    if (!deliveryData || (deliveryData.status !== 'ACTIVE' && deliveryData.status !== 'BOOKED')) return
     if (!confirm('Are you sure you want to close this delivery? This will move it to Completed.')) return
     setIsClosing(true)
     try {
@@ -951,7 +951,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
         Live track the driver
       </Button>
     )}
-    {deliveryData.status === 'ACTIVE' && (
+    {(deliveryData.status === 'BOOKED' || deliveryData.status === 'ACTIVE') && (
       <Button
         onClick={handleCloseDelivery}
         disabled={isClosing}
