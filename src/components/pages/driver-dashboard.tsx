@@ -796,7 +796,7 @@ export default function DriverDashboardPage() {
         </div>
       ) : (
         /* ─── GIG BOARD (LIST VIEW) ─── */
-        <main className="flex-1 w-full max-w-[480px] mx-auto px-4 sm:px-6 py-4 pb-24">
+        <main className="flex-1 w-full max-w-[480px] mx-auto px-4 sm:px-6 py-4">
           {/* Page Header */}
           <div className="mb-4">
             <h1 className="text-xl font-black text-slate-900 dark:text-white">

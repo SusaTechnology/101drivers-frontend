@@ -31,10 +31,10 @@ function DriverLayout() {
     //   {!hideNav && <DriverBottomNav activeTab={getActiveTab(pathname)} />}
     // </>
         <DriverRouteGuard>
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-dvh" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
 
-        {/* Page Content */}
-        <div className="flex-1 overflow-auto pb-18">
+        {/* Page Content — pb accounts for bottom nav height + iPhone home indicator */}
+        <div className="flex-1 overflow-auto" style={{ paddingBottom: hideNav ? 'env(safe-area-inset-bottom, 0px)' : 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}>
           <Outlet />
         </div>
 

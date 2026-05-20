@@ -536,7 +536,7 @@ export default function DriverGigBoardPage() {
       </header>
 
       {/* Main Content: Gig Board */}
-      <main className="flex-1 w-full max-w-[480px] mx-auto px-4 sm:px-6 py-4 pb-24">
+      <main className="flex-1 w-full max-w-[480px] mx-auto px-4 sm:px-6 py-4">
         <div className="mb-4">
           <h1 className="text-xl font-black text-slate-900 dark:text-white">
             Gig Board

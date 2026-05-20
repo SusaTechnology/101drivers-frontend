@@ -328,7 +328,7 @@ export default function DriverCompletedDetailsPage() {
 
   // ── Main content ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans antialiased pb-24">
+    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans antialiased">
       {/* ── Sticky header ── */}
       <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md">
         <div className="h-14 flex items-center justify-between px-4">

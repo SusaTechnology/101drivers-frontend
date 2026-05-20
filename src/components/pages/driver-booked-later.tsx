@@ -172,7 +172,7 @@ export default function DriverBookedLaterPage() {
         </div>
       </header>
 
-      <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-24">
+      <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6">
         {/* ── Page header ── */}
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">

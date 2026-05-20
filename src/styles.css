@@ -191,6 +191,14 @@
       source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
   }
 }
+/* Safe area utilities — used by fixed/sticky bottom elements on iOS */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* Custom utility classes for admin deliveries */
 .hover-lift {
   transition:
