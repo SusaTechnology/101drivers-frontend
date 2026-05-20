@@ -9,6 +9,16 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Label } from '@/components/ui/label'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useJsApiLoader } from '@react-google-maps/api'
 import RouteMap from '@/components/map/RouteMap'
@@ -183,17 +193,17 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     }
   })
 
-  // Close delivery mutation (dealer manual completion)
+  // Close delivery dialog state
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const handleCloseDelivery = async () => {
     if (!deliveryData || (deliveryData.status !== 'ACTIVE' && deliveryData.status !== 'BOOKED')) return
-    if (!confirm('Are you sure you want to close this delivery? This will move it to Completed.')) return
+    setShowCloseDialog(false)
     setIsClosing(true)
     try {
-      const token = localStorage.getItem('auth-token')
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryData.id}/transition-status`, {
+      await authFetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryData.id}/transition-status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           toStatus: 'COMPLETED',
           actorUserId: user?.id || null,
@@ -201,10 +211,6 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
           note: 'Dealer manually closed delivery',
         }),
       })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.message || 'Failed to close delivery')
-      }
       toast.success('Delivery closed', { description: 'This delivery has been marked as completed.' })
       refetch()
     } catch (err: any) {
@@ -953,7 +959,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     )}
     {(deliveryData.status === 'BOOKED' || deliveryData.status === 'ACTIVE') && (
       <Button
-        onClick={handleCloseDelivery}
+        onClick={() => setShowCloseDialog(true)}
         disabled={isClosing}
         className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white font-extrabold hover:bg-emerald-700 disabled:opacity-50"
       >
@@ -1904,6 +1910,28 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       </main>
       
       <Footer />
+
+      {/* Close Delivery Confirmation Dialog */}
+      <AlertDialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Delivery</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close this delivery? This will move it to Completed and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClosing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCloseDelivery}
+              disabled={isClosing}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              {isClosing ? 'Closing...' : 'Yes, Close Delivery'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
