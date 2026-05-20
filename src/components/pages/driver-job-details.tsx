@@ -38,6 +38,7 @@ import {
   GOOGLE_MAPS_LIBRARIES,
   GOOGLE_MAPS_SCRIPT_ID,
 } from '@/lib/google-maps-config'
+import { BUSINESS_TZ } from '@/lib/timezone'
 
 // ── Formatters ──────────────────────────────────────────────────────
 
@@ -50,15 +51,15 @@ const formatDate = (isoString?: string): string => {
 
   if (date.toDateString() === today.toDateString()) return 'Today'
   if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
 }
 
 const formatTimeRange = (startIso?: string | null, endIso?: string | null): string => {
   if (!startIso || !endIso) return ''
   const start = new Date(startIso)
   const end = new Date(endIso)
-  const startStr = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  const endStr = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
   return `${startStr}\u2013${endStr}`
 }
 

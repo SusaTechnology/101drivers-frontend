@@ -24,13 +24,14 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { getUser, getAccessToken } from '@/lib/tanstack/dataQuery';
+import { BUSINESS_TZ } from '@/lib/timezone';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 const formatDate = (dateString: string) => {
   if (!dateString) return '';
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+  return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', timeZone: BUSINESS_TZ });
 };
 
 // Service type labels

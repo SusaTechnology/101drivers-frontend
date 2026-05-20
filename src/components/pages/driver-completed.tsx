@@ -23,13 +23,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
 const formatTime = (isoString?: string | null): string => {
   if (!isoString) return '--'
-  return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+  return new Date(isoString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
 }
 
 const formatDate = (isoString?: string | null): string => {
@@ -38,6 +39,7 @@ const formatDate = (isoString?: string | null): string => {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    timeZone: BUSINESS_TZ,
   })
 }
 

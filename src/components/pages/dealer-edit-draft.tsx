@@ -44,6 +44,7 @@ import RouteMap from "@/components/map/RouteMap";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
 import { getUser, getAccessToken } from "@/lib/tanstack/dataQuery";
+import { BUSINESS_TZ } from '@/lib/timezone';
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -138,7 +139,7 @@ function isoToTimeWindow(startIso: string | undefined, endIso: string | undefine
   if (!startIso || !endIso) return "";
   const start = new Date(startIso);
   const end = new Date(endIso);
-  const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ });
   return `${formatTime(start)} – ${formatTime(end)}`;
 }
 

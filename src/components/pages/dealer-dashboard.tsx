@@ -69,24 +69,25 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
+import { BUSINESS_TZ } from '@/lib/timezone'
 
 // Helper functions
 const formatDate = (dateString: string) => {
   if (!dateString) return ''
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
 }
 
 const formatDateLong = (dateString: string) => {
   if (!dateString) return ''
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: BUSINESS_TZ })
 }
 
 const formatTime = (dateString: string) => {
   if (!dateString) return ''
   const date = new Date(dateString)
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
 }
 
 const formatTimeWindow = (start: string, end: string) => {
@@ -320,7 +321,7 @@ export default function DealerDashboard() {
         <div className="max-w-[980px] mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center"><div className="w-10 h-10 rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-200"><img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" /></div></Link>
-            <div className="leading-tight"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div><div className="text-sm font-extrabold text-slate-900 dark:text-white">{isPrivateCustomer ? 'My Deliveries' : 'Delivery Dashboard'}</div></div>
+            <div className="leading-tight"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: BUSINESS_TZ })}</div><div className="text-sm font-extrabold text-slate-900 dark:text-white">{isPrivateCustomer ? 'My Deliveries' : 'Delivery Dashboard'}</div></div>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">

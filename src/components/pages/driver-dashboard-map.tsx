@@ -93,6 +93,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
 import { usePickupZones } from '@/hooks/usePickupZones'
 import type { NotificationInboxResponse } from '@/types/notification'
@@ -108,16 +109,17 @@ const formatDate = (isoString?: string): string => {
 
   if (date.toDateString() === today.toDateString()) return 'Today'
   if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
 }
 
 const formatFullWeekdayDate = (isoString?: string): string => {
   if (!isoString) return ''
   const date = new Date(isoString)
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    timeZone: BUSINESS_TZ,
   })
 }
 
@@ -125,8 +127,8 @@ const formatTimeRange = (startIso?: string, endIso?: string): string => {
   if (!startIso || !endIso) return ''
   const start = new Date(startIso)
   const end = new Date(endIso)
-  const startStr = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  const endStr = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
   return `${startStr} - ${endStr}`
 }
 
@@ -398,11 +400,12 @@ export default function DriverMapPage() {
 
   const formatFullDate = (isoString?: string): string => {
     if (!isoString) return ''
-    return new Date(isoString).toLocaleDateString(undefined, {
+    return new Date(isoString).toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
       day: 'numeric',
       year: 'numeric',
+      timeZone: BUSINESS_TZ,
     })
   }
 

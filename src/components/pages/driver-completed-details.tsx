@@ -30,6 +30,7 @@ import {
   GOOGLE_MAPS_LIBRARIES,
   GOOGLE_MAPS_SCRIPT_ID,
 } from '@/lib/google-maps-config'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 
 // ── Formatters ──────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ const formatShortDayMonth = (isoString?: string | null): string => {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    timeZone: BUSINESS_TZ,
   })
 }
 
@@ -49,15 +51,15 @@ const formatDateTimeWindow = (startIso?: string | null, endIso?: string | null):
   const date = new Date(startIso)
   const start = new Date(startIso)
   const end = new Date(endIso)
-  const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
   return `${dayStr} \u2022 ${startStr} \u2013 ${endStr}`
 }
 
 const formatTime = (isoString?: string | null): string => {
   if (!isoString) return '--'
-  return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+  return new Date(isoString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
 }
 
 const formatDate = (isoString?: string | null): string => {
@@ -66,6 +68,7 @@ const formatDate = (isoString?: string | null): string => {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    timeZone: BUSINESS_TZ,
   })
 }
 

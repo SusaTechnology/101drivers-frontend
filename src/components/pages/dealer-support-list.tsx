@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import {
   STATUS_OPTIONS,
   PRIORITY_OPTIONS,
@@ -95,13 +96,13 @@ const CategoryIcon = ({ category }: { category: SupportRequestCategory }) => {
 const formatDate = (dateString: string) => {
   if (!dateString) return ''
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: BUSINESS_TZ })
 }
 
 const formatTime = (dateString: string) => {
   if (!dateString) return ''
   const date = new Date(dateString)
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
 }
 
 export default function DealerSupportList() {

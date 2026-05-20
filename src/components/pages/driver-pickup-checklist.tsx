@@ -43,6 +43,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
 import { savePhoto, getPhotosForDelivery, clearDeliveryPhotos } from '@/lib/pickup-photo-store'
+import { BUSINESS_TZ } from '@/lib/timezone'
 
 // Photo slot labels — matching reference image guide order
 const PHOTO_LABELS = [
@@ -914,7 +915,7 @@ const handleUploadOdometerPhoto = () => {
                   Start Pickup Now
                 </p>
                 <p className="text-[11px] text-green-700 dark:text-green-300 mt-0.5">
-                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
+                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })}.
                   GPS confirms you're at the pickup location — you can complete the checklist and start early.
                 </p>
               </div>
@@ -934,7 +935,7 @@ const handleUploadOdometerPhoto = () => {
                   First Pickup — Wait for Scheduled Time
                 </p>
                 <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-0.5">
-                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
+                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })}.
                   The first pickup of the day must start at the scheduled time. After your first delivery, you can start early on the next one.
                 </p>
               </div>
@@ -954,7 +955,7 @@ const handleUploadOdometerPhoto = () => {
                   Not at Pickup Location
                 </p>
                 <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
-                  Your window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
+                  Your window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })}.
                   GPS shows you're not at the pickup location yet. Head to the lot to unlock early pickup.
                 </p>
               </div>

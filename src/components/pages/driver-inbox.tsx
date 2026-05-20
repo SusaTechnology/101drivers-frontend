@@ -74,6 +74,7 @@ import {
   type ArchiveNotificationResponse,
   type TrackClickResponse,
 } from '@/types/notification'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Filter options
@@ -393,7 +394,7 @@ export default function DriverInboxPage() {
     if (diffHours < 24) return `${diffHours} hours ago`
     if (diffDays === 1) return 'Yesterday'
     if (diffDays < 7) return `${diffDays} days ago`
-    return date.toLocaleDateString()
+    return date.toLocaleDateString('en-US', { timeZone: BUSINESS_TZ })
   }
 
   return (

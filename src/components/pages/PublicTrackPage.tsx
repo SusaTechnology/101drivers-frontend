@@ -27,12 +27,13 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDataQuery } from '@/lib/tanstack/dataQuery'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 
 const formatTime = (dateString?: string) => {
   if (!dateString) return '—'
   const date = new Date(dateString)
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
 }
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -398,7 +399,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
                 )}
                 {trackingData.expiresAt && !isTripCompleted && (
                   <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                    Link expires at {new Date(trackingData.expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    Link expires at {new Date(trackingData.expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })}
                   </p>
                 )}
               </div>

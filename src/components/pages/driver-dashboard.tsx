@@ -97,6 +97,7 @@ import MiniRouteMap from '@/components/map/MiniRouteMap'
 import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
 import { usePickupZones } from '@/hooks/usePickupZones'
 import type { NotificationInboxResponse } from '@/types/notification'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Filter options matching backend API
@@ -130,17 +131,18 @@ const formatDate = (isoString?: string): string => {
 
   if (date.toDateString() === today.toDateString()) return 'Today'
   if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
 }
 
 // Full weekday date format: "Monday, April 20"
 const formatFullWeekdayDate = (isoString?: string): string => {
   if (!isoString) return ''
   const date = new Date(isoString)
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    timeZone: BUSINESS_TZ,
   })
 }
 
@@ -149,8 +151,8 @@ const formatTimeRange = (startIso?: string, endIso?: string): string => {
   if (!startIso || !endIso) return ''
   const start = new Date(startIso)
   const end = new Date(endIso)
-  const startStr = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  const endStr = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
   return `${startStr} - ${endStr}`
 }
 
@@ -579,11 +581,12 @@ export default function DriverDashboardPage() {
   // Format full date string for the bottom sheet
   const formatFullDate = (isoString?: string): string => {
     if (!isoString) return ''
-    return new Date(isoString).toLocaleDateString(undefined, {
+    return new Date(isoString).toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
       day: 'numeric',
       year: 'numeric',
+      timeZone: BUSINESS_TZ,
     })
   }
 

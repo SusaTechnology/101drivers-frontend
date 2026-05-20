@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDataQuery } from '@/lib/tanstack/dataQuery'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 
 // Mini map component for live tracking
@@ -164,7 +165,7 @@ function getRelativeTime(dateString?: string): string {
   if (diffSeconds < 60) return 'Just now'
   if (diffSeconds < 120) return '1 min ago'
   if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)} min ago`
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
 }
 
 interface LiveTrackingWidgetProps {

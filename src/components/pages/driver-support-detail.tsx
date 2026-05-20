@@ -30,6 +30,7 @@ import {
   Home,
   Car,
 } from 'lucide-react'
+import { BUSINESS_TZ } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
 import {
@@ -141,6 +142,7 @@ export default function DriverSupportDetailPage() {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: BUSINESS_TZ,
     })
   }
 
@@ -150,6 +152,7 @@ export default function DriverSupportDetailPage() {
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
+      timeZone: BUSINESS_TZ,
     })
   }
 

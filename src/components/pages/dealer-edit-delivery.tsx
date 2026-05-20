@@ -67,6 +67,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { BUSINESS_TZ } from '@/lib/timezone';
 
 // California bounds for address restriction (fallback)
 const CA_BOUNDS: google.maps.LatLngBoundsLiteral = {
@@ -252,7 +253,7 @@ const formatTimeRange = (startIso?: string, endIso?: string) => {
   if (!startIso || !endIso) return null;
   const start = new Date(startIso);
   const end = new Date(endIso);
-  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  return `${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })} – ${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })}`;
 };
 
 const formatDuration = (minutes: number) => {
@@ -272,7 +273,7 @@ function isoToTimeWindow(startIso: string | undefined, endIso: string | undefine
   if (!startIso || !endIso) return "";
   const start = new Date(startIso);
   const end = new Date(endIso);
-  const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ });
   return `${formatTime(start)} – ${formatTime(end)}`;
 }
 
@@ -1843,7 +1844,7 @@ export default function EditDeliveryPage() {
                           </div>
                           {validatedWindows.pickupWindowStart && (
                             <div className="text-xs text-slate-500 mt-1">
-                              {new Date(validatedWindows.pickupWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                              {new Date(validatedWindows.pickupWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })}
                             </div>
                           )}
                         </div>
@@ -1858,7 +1859,7 @@ export default function EditDeliveryPage() {
                           </div>
                           {validatedWindows.dropoffWindowStart && (
                             <div className="text-xs text-slate-500 mt-1">
-                              {new Date(validatedWindows.dropoffWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                              {new Date(validatedWindows.dropoffWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })}
                             </div>
                           )}
                         </div>
