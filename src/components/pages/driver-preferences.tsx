@@ -54,6 +54,7 @@ import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-
 import LocationAutocomplete from '@/components/map/LocationAutocomplete'
 import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
 import { usePickupZones } from '@/hooks/usePickupZones'
+// import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Form schema – includes all fields for the combined payload
 const preferencesSchema = z.object({
@@ -116,12 +117,12 @@ const MOCK_PREFERENCES = {
 }
 
 // Bottom navigation items
-const bottomNavItems = [
-  { href: '/driver-dashboard', label: 'Home', icon: Home },
-  { href: '/driver-active', label: 'Active', icon: Car },
-  { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
-  { href: '/driver-menu', label: 'Menu', icon: MenuIcon },
-]
+// const bottomNavItems = [
+//   { href: '/driver-dashboard', label: 'Home', icon: Home },
+//   { href: '/driver-active', label: 'Active', icon: Car },
+//   { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
+//   { href: '/driver-menu', label: 'Menu', icon: MenuIcon },
+// ]
 
 export default function DriverPreferencesPage() {
   const [mounted, setMounted] = useState(false)
@@ -878,7 +879,7 @@ export default function DriverPreferencesPage() {
       </main>
 
       {/* Bottom Navigation */}
-      <DriverBottomNav />
+      {/* <DriverBottomNav /> */}
 
     </div>
   )

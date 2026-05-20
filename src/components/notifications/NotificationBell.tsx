@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Bell, CheckCircle, Clock, Calendar, FileText, X, Truck, DollarSign, AlertCircle, AlertTriangle, Info, MessageSquare, XCircle, MailCheck, Archive, ExternalLink, ArchiveX, ArrowRight } from 'lucide-react'
+import { Bell, CheckCircle, Clock, Calendar, FileText, X, Truck, DollarSign, AlertCircle, AlertTriangle, Info, MessageSquare, XCircle, MailCheck, Archive, ExternalLink, ArchiveX, ArrowRight, Navigation as NavigationIcon, MapPin, Flag, Send, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -37,6 +37,111 @@ interface NotificationBellProps {
   userType?: 'admin' | 'dealer' // To determine navigation paths
 }
 
+// Parse tracking notification body into structured parts
+const parseTrackingBody = (body: string) => {
+  const lines = body.split('\n')
+  const parsed: { greeting?: string; message?: string; pickup?: string; dropoff?: string; status?: string; trackingUrl?: string; expiresAt?: string } = {}
+  const messageLines: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    if (/^Hi\s/i.test(trimmed) && trimmed.endsWith(',')) {
+      parsed.greeting = trimmed
+    } else if (trimmed.startsWith('Pickup:')) {
+      parsed.pickup = trimmed.replace(/^Pickup:\s*/i, '')
+    } else if (trimmed.startsWith('Drop-off:')) {
+      parsed.dropoff = trimmed.replace(/^Drop-off:\s*/i, '')
+    } else if (trimmed.startsWith('Status:')) {
+      parsed.status = trimmed.replace(/^Status:\s*/i, '')
+    } else if (trimmed.startsWith('Tracking link:')) {
+      parsed.trackingUrl = trimmed.replace(/^Tracking link:\s*/i, '')
+    } else if (trimmed.startsWith('Link expires at:')) {
+      const dateStr = trimmed.replace(/^Link expires at:\s*/i, '')
+      try {
+        const d = new Date(dateStr)
+        parsed.expiresAt = d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+      } catch {
+        parsed.expiresAt = dateStr
+      }
+    } else {
+      messageLines.push(trimmed)
+    }
+  }
+  parsed.message = messageLines.join(' ')
+  return parsed
+}
+
+// Send tracking link button component
+// On mobile: opens Messages app with recipient phone + link pre-filled
+// On desktop / fallback: copies link to clipboard with toast
+function SendTrackingButton({ trackingUrl, recipientPhone }: { trackingUrl: string; recipientPhone?: string | null }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleSend = async () => {
+    const smsBody = encodeURIComponent(
+      `Hi! Here is your delivery tracking link so you can follow the car in real time:\n\n${trackingUrl}`
+    )
+
+    // Build sms: URI — include recipient phone if available
+    const phone = recipientPhone?.replace(/[^\d+]/g, '') // strip non-digits except +
+    const smsLink = phone ? `sms:${phone}?body=${smsBody}` : `sms:?body=${smsBody}`
+
+    // Detect mobile device (iOS Safari / Android Chrome)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
+    if (isMobile) {
+      // On mobile: open Messages app directly
+      // Also copy to clipboard as a safety net
+      try {
+        await navigator.clipboard.writeText(trackingUrl)
+      } catch {
+        // Clipboard may fail on some mobile browsers — that's ok, SMS is the primary action
+      }
+      window.location.href = smsLink
+    } else {
+      // On desktop: copy to clipboard and show toast
+      try {
+        await navigator.clipboard.writeText(trackingUrl)
+        setCopied(true)
+        toast.success('Link copied \u2014 now text the customer', {
+          description: 'Tracking link is ready to paste.',
+          duration: 3000,
+        })
+        setTimeout(() => setCopied(false), 3000)
+      } catch {
+        // If clipboard fails, try opening SMS as last resort
+        window.location.href = smsLink
+      }
+    }
+  }
+
+  return (
+    <button
+      onClick={handleSend}
+      className={cn(
+        'w-full flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl font-extrabold text-sm transition shadow-lg',
+        copied
+          ? 'bg-emerald-600 text-white shadow-emerald-500/25'
+          : 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white shadow-green-500/25'
+      )}
+    >
+      {copied ? (
+        <>
+          <Check className='w-5 h-5' />
+          Link Copied
+        </>
+      ) : (
+        <>
+          <Send className='w-5 h-5' />
+          SEND TRACKING LINK
+        </>
+      )}
+    </button>
+  )
+}
+
 // Icon mapping
 const getNotificationIcon = (type: NotificationEventType) => {
   const iconMap: Record<string, React.ElementType> = {
@@ -44,6 +149,7 @@ const getNotificationIcon = (type: NotificationEventType) => {
     DELIVERY_ASSIGNED: Truck,
     DELIVERY_COMPLETED: CheckCircle,
     DELIVERY_CANCELLED: XCircle,
+    TRACKING_STARTED: NavigationIcon,
     PAYMENT_RECEIVED: DollarSign,
     PAYMENT_FAILED: AlertCircle,
     SCHEDULE_CHANGED: Calendar,
@@ -478,16 +584,141 @@ export default function NotificationBell({ className, userType }: NotificationBe
 
     {/* Notification Detail Dialog */}
     <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col overflow-hidden p-0">
         {selectedNotification && (() => {
           const Icon = getNotificationIcon(selectedNotification.type)
           const colorStyle = getNotificationColor(selectedNotification.type)
           const style = NOTIFICATION_TYPE_STYLES[selectedNotification.type] || NOTIFICATION_TYPE_STYLES.GENERAL
           const hasAction = hasNotificationAction(selectedNotification)
+          const isTracking = selectedNotification.type === 'TRACKING_STARTED'
 
+          // Special tracking dialog with SEND TRACKING LINK button
+          if (isTracking) {
+            const parsed = parseTrackingBody(selectedNotification.body)
+            const trackingUrl = selectedNotification.payload?.trackingUrl || parsed.trackingUrl || ''
+            const recipientPhone = selectedNotification.payload?.recipientPhone
+
+            return (
+              <div className="flex flex-col min-h-0 max-h-[90dvh]">
+                <DialogHeader className="p-6 pb-0 shrink-0">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-500/15 flex items-center justify-center shrink-0">
+                      <NavigationIcon className="w-6 h-6 text-blue-500" />
+                    </div>
+                    <div className="flex-1">
+                      <Badge variant="outline" className="text-[10px] font-extrabold mb-2">
+                        Tracking Link
+                      </Badge>
+                      <DialogTitle className="text-lg font-black leading-tight">
+                        Tracking link ready for your delivery
+                      </DialogTitle>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <div className="px-6 py-4 overflow-y-auto overscroll-contain flex-1 min-h-0 space-y-4">
+                  {/* Greeting + message */}
+                  {parsed.greeting && (
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                      {parsed.greeting}
+                    </p>
+                  )}
+                  {parsed.message && (
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      {parsed.message}
+                    </p>
+                  )}
+
+                  {/* Pickup / Dropoff */}
+                  <div className="space-y-2.5 pt-1">
+                    {parsed.pickup && (
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-6 h-6 rounded-lg bg-green-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                          <MapPin className="h-3.5 w-3.5 text-green-600" />
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup</div>
+                          <div className="text-sm font-medium text-slate-900 dark:text-white">{parsed.pickup}</div>
+                        </div>
+                      </div>
+                    )}
+                    {parsed.dropoff && (
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-6 h-6 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                          <Flag className="h-3.5 w-3.5 text-red-500" />
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drop-off</div>
+                          <div className="text-sm font-medium text-slate-900 dark:text-white">{parsed.dropoff}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tracking link */}
+                  {trackingUrl && (
+                    <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Tracking link</div>
+                      <a
+                        href={trackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary underline underline-offset-2 break-all hover:opacity-80 transition"
+                      >
+                        {trackingUrl}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Big green SEND button */}
+                  {trackingUrl && (
+                    <SendTrackingButton
+                      trackingUrl={trackingUrl}
+                      recipientPhone={recipientPhone}
+                    />
+                  )}
+
+                  {/* Expiry */}
+                  {parsed.expiresAt && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                      Link expires: {parsed.expiresAt}
+                    </p>
+                  )}
+
+                  {/* Timestamp */}
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <span>{formatTime(selectedNotification.createdAt)}</span>
+                  </div>
+                </div>
+
+                <DialogFooter className="flex-col sm:flex-row gap-2 p-6 pt-0 shrink-0">
+                  <Button
+                    variant="outline"
+                    onClick={handleArchiveFromDialog}
+                    disabled={archivingIds.has(selectedNotification.id)}
+                    className="w-full sm:w-auto"
+                  >
+                    <Archive className="w-4 h-4 mr-2" />
+                    Archive
+                  </Button>
+                  {hasAction && (
+                    <Button
+                      onClick={handleNavigateToRelated}
+                      className="w-full sm:w-auto bg-slate-900 text-white dark:bg-white dark:text-slate-950"
+                    >
+                      View Delivery
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  )}
+                </DialogFooter>
+              </div>
+            )
+          }
+
+          // Default dialog for all other notification types
           return (
-            <>
-              <DialogHeader>
+            <div className="flex flex-col min-h-0 max-h-[90dvh]">
+              <DialogHeader className="p-6 pb-0 shrink-0">
                 <div className="flex items-start gap-4">
                   <div className={cn(
                     'w-12 h-12 rounded-full flex items-center justify-center shrink-0',
@@ -513,8 +744,8 @@ export default function NotificationBell({ className, userType }: NotificationBe
                 </div>
               </DialogHeader>
 
-              <div className="py-4">
-                <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
+              <div className="px-6 py-4 overflow-y-auto overscroll-contain flex-1 min-h-0">
+                <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">
                   {selectedNotification.body}
                 </DialogDescription>
 
@@ -541,7 +772,7 @@ export default function NotificationBell({ className, userType }: NotificationBe
                 </div>
               </div>
 
-              <DialogFooter className="flex-col sm:flex-row gap-2">
+              <DialogFooter className="flex-col sm:flex-row gap-2 p-6 pt-0 shrink-0">
                 <Button
                   variant="outline"
                   onClick={handleArchiveFromDialog}
@@ -565,7 +796,7 @@ export default function NotificationBell({ className, userType }: NotificationBe
                   </Button>
                 )}
               </DialogFooter>
-            </>
+            </div>
           )
         })()}
       </DialogContent>

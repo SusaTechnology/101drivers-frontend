@@ -104,12 +104,12 @@ const priorityOptions = [
 ]
 
 // Bottom navigation items
-const bottomNavItems = [
-  { href: '/driver-dashboard', label: 'Home', icon: Home },
-  { href: '/driver-active', label: 'Active', icon: Car },
-  { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
-  { href: '/driver-menu', label: 'Menu', icon: Menu },
-]
+// const bottomNavItems = [
+//   { href: '/driver-dashboard', label: 'Home', icon: Home },
+//   { href: '/driver-active', label: 'Active', icon: Car },
+//   { href: '/driver/inbox', label: 'Inbox', icon: Inbox },
+//   { href: '/driver-menu', label: 'Menu', icon: Menu },
+// ]
 
 export default function DriverIssueReportPage() {
   const { state } = useLocation()
@@ -523,8 +523,24 @@ export default function DriverIssueReportPage() {
       </main>
 
       {/* Bottom navigation */}
-      <DriverBottomNav />
-
+      {/* <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800">
+        <div className="max-w-[900px] mx-auto px-5 sm:px-6 py-3">
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {bottomNavItems.map((item) => (
+              <Link
+                key={item.href}
+                to={item.href}
+                className="py-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-900 transition"
+              >
+                <item.icon className="w-5 h-5 mx-auto text-lime-500" />
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  {item.label}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </nav> */}
     </div>
   )
 }

@@ -173,11 +173,11 @@ export default function DriverStartingLocationPage() {
       locationData.address = selectedPlace.formatted_address
     }
     localStorage.setItem('driverStartingLocation', JSON.stringify(locationData))
-    navigate({ to: '/driver-proof-cam' })
+    navigate({ to: '/driver/proof-cam' })
   }
 
   const handleSkip = () => {
-    navigate({ to: '/driver-proof-cam' })
+    navigate({ to: '/driver/proof-cam' })
   }
 
   return (

@@ -21,7 +21,7 @@ export const Route = createFileRoute('/')({
         })
       } else if (roles.includes('DRIVER')) {
         throw redirect({
-          to: '/driver-dashboard',
+          to: '/driver/dashboard',
           replace: true,
         })
       } else if (roles.includes('BUSINESS_CUSTOMER') || roles.includes('PRIVATE_CUSTOMER')) {

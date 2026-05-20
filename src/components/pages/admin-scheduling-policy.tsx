@@ -490,7 +490,7 @@ export default function AdminSchedulingPolicyPage() {
       { pathParams: { id: tsId } },
       {
         onSuccess: () => toast.error('Time slot deactivated'),
-        onError: (error) => toast.error(error.message || 'Failed to deactivate time slot'),
+        onError: (error) => toast.error(error.message),
       }
     );
   }, [deactivateTsMutation]);

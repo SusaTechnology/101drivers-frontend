@@ -1023,34 +1023,72 @@ export default function LandingPage() {
                   <User className="h-6 w-6 text-lime-500" />
                 </div>
 
-                <h2 className="text-2xl font-black leading-tight text-slate-900 dark:text-white">
+                {/* <h2 className="text-2xl font-black leading-tight text-slate-900 dark:text-white">
                   Drivers
-                </h2>
+                </h2> */}
+                
                 <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mt-2">
-                  Move Cars in LA — Schedule Ahead, Know Your Pay
+                  Be Your Own Boss. Drive Different Cars. Know Your Pay Upfront.
                 </h3>
+                <h6 className="text-sm font-black leading-tight text-slate-600 dark:text-white mt-2">
+                  Choose when you work and plan your day with full visibility.
+                </h6>     
+                <div className="mt-7 space-y-2">
+                  <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mb-4">
+                  How It Works
+                </h3>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">See the exact route, pickup time, and earnings before you accept any job</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Drive different cars from one location to another across Los Angeles</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Work on your own schedule - no boss, no qoutas</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Keep 100% of your tips</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">No Passengers - just you and the car</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-slate-600 dark:text-slate-400">No car required - you don&apos;t have to worry about gas, insurance, or maintenance</p>
+                  </div>
+                </div>
 
-                <div className="mt-4 space-y-2">
+                  <div className="mt-7 space-y-2">
+                  <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mb-4">
+                  Requirements
+                </h3>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-slate-600 dark:text-slate-400">25+ years old, clean driving record</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Must be 25 years or older</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Greater LA area only</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Valid drivers&apos;s license</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-slate-600 dark:text-slate-400">No own car needed — use the customer&apos;s vehicle</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Clean DMV driving record</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-slate-600 dark:text-slate-400">No passengers — just you and the car</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Pass a background check</p>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Plan your routes, keep all tips</p>
+                    <span className="text-xs font-black leading-tight text-slate-900 dark:text-white mb-4">Service Area:</span><p className="text-xs text-slate-600 dark:text-slate-400">Greater Los Angeles Area</p>
                   </div>
+                  <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mb-4">
+                  Ready to take control of your schedule?
+                </h3>
                 </div>
 
                 <div className="mt-6 space-y-2.5">

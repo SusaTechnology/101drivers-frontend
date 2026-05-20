@@ -1,15 +1,15 @@
-import DriverBookedLaterPage from '@/components/pages/driver-booked-later'
+import DriverDashboardPage from '@/components/pages/driver-dashboard-map'
 import { createFileRoute } from '@tanstack/react-router'
 import { DriverRouteGuard } from '@/components/auth/DriverRouteGuard'
 
-export const Route = createFileRoute('/driver/booked-later')({
+export const Route = createFileRoute('/driver/dashboard')({
   component: RouteComponent,
 })
 
 function RouteComponent() {
   return (
     <DriverRouteGuard>
-      <DriverBookedLaterPage />
+      <DriverDashboardPage />
     </DriverRouteGuard>
   )
 }

@@ -70,6 +70,10 @@ interface RouteMapProps {
    * initial viewport focuses on the driver rather than the full route.
    */
   focusOnDriver?: boolean;
+  /**
+   * When true, hide the "A"/"B" labels on pickup/dropoff markers.
+   */
+  showMarkerLabels?: boolean;
 }
 
 export default function RouteMap({
@@ -91,6 +95,7 @@ export default function RouteMap({
   lockViewport = false,
   fitZonesBounds = false,
   focusOnDriver = false,
+  showMarkerLabels = true,
 }: RouteMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [internalDirections, setInternalDirections] = useState<google.maps.DirectionsResult | null>(null);
@@ -295,10 +300,10 @@ export default function RouteMap({
       }}
     >
       {/* Pickup marker */}
-      {pickup && <Marker position={pickup} label="A" />}
+      {pickup && <Marker position={pickup} {...(showMarkerLabels ? { label: 'A' } : {})} />}
 
       {/* Dropoff marker */}
-      {dropoff && <Marker position={dropoff} label="B" />}
+      {dropoff && <Marker position={dropoff} {...(showMarkerLabels ? { label: 'B' } : {})} />}
 
       {/* Driver position marker - custom car icon */}
       {driverPosition && (

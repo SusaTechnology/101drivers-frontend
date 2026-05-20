@@ -45,8 +45,6 @@ import {
   type SupportRequestCategory,
 } from '@/types/support'
 
-import { BUSINESS_TZ } from '@/lib/timezone'
-
 // Category icons
 const categoryIcons: Record<SupportRequestCategory, React.ReactNode> = {
   DELIVERY_ISSUE: <Package className="h-4 w-4" />,
@@ -78,12 +76,12 @@ const statusColors: Record<SupportRequestStatus, string> = {
 }
 
 // Bottom navigation items
-const bottomNavItems = [
-  { href: '/driver-dashboard', label: 'Home', icon: Home },
-  { href: '/driver-active', label: 'Active', icon: Car },
-  { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
-  { href: '/driver-menu', label: 'Menu', icon: Menu },
-]
+// const bottomNavItems = [
+//   { href: '/driver-dashboard', label: 'Home', icon: Home },
+//   { href: '/driver-active', label: 'Active', icon: Car },
+//   { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
+//   { href: '/driver-menu', label: 'Menu', icon: Menu },
+// ]
 
 export default function DriverSupportListPage() {
   const navigate = useNavigate()
@@ -123,7 +121,6 @@ export default function DriverSupportListPage() {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-      timeZone: BUSINESS_TZ,
     })
   }
 
@@ -133,7 +130,6 @@ export default function DriverSupportListPage() {
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
-      timeZone: BUSINESS_TZ,
     })
   }
 
@@ -317,7 +313,7 @@ export default function DriverSupportListPage() {
             {supportRequests.map((request) => (
               <Link
                 key={request.id}
-                to="/driver-support-detail"
+                to="/driver/support-detail"
                 state={{ id: request.id }}
                 className="block"
               >
@@ -371,8 +367,27 @@ export default function DriverSupportListPage() {
       </main>
 
       {/* Bottom navigation */}
-      <DriverBottomNav />
-
+      {/* <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800">
+        <div className="max-w-[900px] mx-auto px-5 sm:px-6 py-3">
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {bottomNavItems.map((item) => (
+              <Link
+                key={item.href}
+                to={item.href}
+                className={cn(
+                  "py-2 rounded-2xl transition",
+                  item.href === '/driver-menu' ? 'bg-slate-50 dark:bg-slate-900' : 'hover:bg-slate-50 dark:hover:bg-slate-900'
+                )}
+              >
+                <item.icon className="w-5 h-5 mx-auto text-lime-500" />
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  {item.label}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </nav> */}
     </div>
   )
 }

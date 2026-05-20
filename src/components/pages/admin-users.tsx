@@ -1100,7 +1100,7 @@ export default function AdminUsersPage() {
                             {/* Driver rejected - show Approve button */}
                             {!user.disabledAt && user.driver?.status === 'REJECTED' && (
                               <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg" onClick={() => openDialog('approve-driver', user)}>
-                                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
+                                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Reinstate
                               </Button>
                             )}
                             {/* Driver legacy pending - show badge */}

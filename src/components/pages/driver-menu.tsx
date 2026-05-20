@@ -71,6 +71,7 @@ import {
 import { Badge as UIBadge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Menu sections data
 const MENU_SECTIONS = [
@@ -127,7 +128,7 @@ const MENU_SECTIONS = [
         description: 'License, insurance, background check, and training records',
       },
       {
-        href: '/driver-pickup-checklist',
+        href: '/driver/pickup-checklist',
         icon: QrCode,
         title: 'Pickup checklist',
         description: 'VIN last-4, photos, odometer start',
@@ -139,13 +140,13 @@ const MENU_SECTIONS = [
     description: 'Help, safety, and documents.',
     items: [
       {
-        href: '/driver-issue-report',
+        href: '/driver/issue-report',
         icon: SupportAgent,
         title: 'Submit Support Request',
         description: 'Report issues, request schedule changes',
       },
       {
-        href: '/driver-support-list',
+        href: '/driver/support-list',
         icon: FileText,
         title: 'My Support Requests',
         description: 'View and track your submitted requests',
@@ -167,12 +168,12 @@ const MENU_SECTIONS = [
 ]
 
 // Bottom navigation items
-const bottomNavItems = [
-  { href: '/driver-dashboard', label: 'Home', icon: Home },
-  { href: '/driver-active', label: 'Active', icon: Car },
-  { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
-  { href: '/driver-menu', label: 'Menu', icon: MenuIcon, active: true },
-]
+// const bottomNavItems = [
+//   { href: '/driver-dashboard', label: 'Home', icon: Home },
+//   { href: '/driver-active', label: 'Active', icon: Car },
+//   { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
+//   { href: '/driver-menu', label: 'Menu', icon: MenuIcon, active: true },
+// ]
 
 export default function DriverMenuPage() {
   const [mounted, setMounted] = useState(false)
@@ -201,7 +202,7 @@ export default function DriverMenuPage() {
         <div className="max-w-[900px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              to="/driver-dashboard"
+              to="/driver/dashboard"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Back"
             >
@@ -285,7 +286,7 @@ export default function DriverMenuPage() {
               </div>
 
               <Link
-                to="/driver-dashboard"
+                to="/driver/dashboard"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl font-extrabold bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 transition"
               >
                 <span className="hidden sm:inline">Back to Home</span>

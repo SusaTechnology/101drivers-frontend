@@ -41,8 +41,6 @@ import {
   type ReplySupportRequestResponse,
 } from '@/types/support'
 
-import { BUSINESS_TZ } from '@/lib/timezone'
-
 // Category icons
 const categoryIcons: Record<SupportRequestCategory, React.ReactNode> = {
   DELIVERY_ISSUE: <Package className="h-4 w-4" />,
@@ -74,12 +72,12 @@ const statusColors: Record<SupportRequestStatus, string> = {
 }
 
 // Bottom navigation items
-const bottomNavItems = [
-  { href: '/driver-dashboard', label: 'Home', icon: Home },
-  { href: '/driver-active', label: 'Active', icon: Car },
-  { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
-  { href: '/driver-menu', label: 'Menu', icon: Menu },
-]
+// const bottomNavItems = [
+//   { href: '/driver-dashboard', label: 'Home', icon: Home },
+//   { href: '/driver-active', label: 'Active', icon: Car },
+//   { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
+//   { href: '/driver-menu', label: 'Menu', icon: Menu },
+// ]
 
 export default function DriverSupportDetailPage() {
   const { state } = useLocation()
@@ -143,7 +141,6 @@ export default function DriverSupportDetailPage() {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-      timeZone: BUSINESS_TZ,
     })
   }
 
@@ -153,7 +150,6 @@ export default function DriverSupportDetailPage() {
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
-      timeZone: BUSINESS_TZ,
     })
   }
 
@@ -169,7 +165,7 @@ export default function DriverSupportDetailPage() {
               Please select a support request from the list.
             </p>
             <Link
-              to="/driver-support-list"
+              to="/driver/support-list"
               className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"
             >
               View All Requests
@@ -187,7 +183,7 @@ export default function DriverSupportDetailPage() {
         <div className="max-w-[900px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              to="/driver-support-list"
+              to="/driver/support-list"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Back"
             >
@@ -416,8 +412,24 @@ export default function DriverSupportDetailPage() {
       </main>
 
       {/* Bottom navigation */}
-      <DriverBottomNav />
-
+      {/* <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800">
+        <div className="max-w-[900px] mx-auto px-5 sm:px-6 py-3">
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {bottomNavItems.map((item) => (
+              <Link
+                key={item.href}
+                to={item.href}
+                className="py-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-900 transition"
+              >
+                <item.icon className="w-5 h-5 mx-auto text-lime-500" />
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  {item.label}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </nav> */}
     </div>
   )
 }

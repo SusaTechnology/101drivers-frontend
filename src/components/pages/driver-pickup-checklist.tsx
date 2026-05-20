@@ -44,8 +44,6 @@ import { Badge } from '@/components/ui/badge'
 import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
 import { savePhoto, getPhotosForDelivery, clearDeliveryPhotos } from '@/lib/pickup-photo-store'
 
-import { BUSINESS_TZ } from '@/lib/timezone'
-
 // Photo slot labels — matching reference image guide order
 const PHOTO_LABELS = [
   'Left Front Corner',
@@ -59,12 +57,12 @@ const PHOTO_LABELS = [
 // Reference images shown on each tile before the driver captures a photo
 // BASE_URL handles sub-path deployments (e.g. /app/) automatically
 const ANGLE_REF_IMAGES = [
-  `${import.meta.env.BASE_URL}assets/angle-1-left-front.png`,
-  `${import.meta.env.BASE_URL}assets/angle-2-right-front.png`,
-  `${import.meta.env.BASE_URL}assets/angle-3-passenger-side.png`,
-  `${import.meta.env.BASE_URL}assets/angle-4-right-rear.png`,
-  `${import.meta.env.BASE_URL}assets/angle-5-left-rear.png`,
-  `${import.meta.env.BASE_URL}assets/angle-6-driver-side.png`,
+  `/assets/angle-1-left-front.jpeg`,
+  `/assets/angle-2-right-front.jpeg`,
+  `/assets/angle-3-passenger-side.jpeg`,
+  `/assets/angle-4-right-rear.jpeg`,
+  `/assets/angle-5-left-rear.jpeg`,
+  `/assets/angle-6-driver-side.jpeg`,
 ]
 
 // localStorage persistence key scoped to delivery
@@ -916,7 +914,7 @@ const handleUploadOdometerPhoto = () => {
                   Start Pickup Now
                 </p>
                 <p className="text-[11px] text-green-700 dark:text-green-300 mt-0.5">
-                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })}.
+                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
                   GPS confirms you're at the pickup location — you can complete the checklist and start early.
                 </p>
               </div>
@@ -936,7 +934,7 @@ const handleUploadOdometerPhoto = () => {
                   First Pickup — Wait for Scheduled Time
                 </p>
                 <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-0.5">
-                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })}.
+                  Your scheduled window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
                   The first pickup of the day must start at the scheduled time. After your first delivery, you can start early on the next one.
                 </p>
               </div>
@@ -956,7 +954,7 @@ const handleUploadOdometerPhoto = () => {
                   Not at Pickup Location
                 </p>
                 <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
-                  Your window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })}.
+                  Your window starts at {new Date(delivery.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}.
                   GPS shows you're not at the pickup location yet. Head to the lot to unlock early pickup.
                 </p>
               </div>

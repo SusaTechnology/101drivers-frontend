@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router'
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 import type { DriverTabId } from '@/components/layout/DriverBottomNav'
+import { DriverRouteGuard } from '@/components/auth/DriverRouteGuard'
 
 // Routes that should NOT show the bottom nav
 const HIDE_NAV_ROUTES = [
@@ -25,10 +26,23 @@ function DriverLayout() {
   const hideNav = HIDE_NAV_ROUTES.some((route) => pathname.startsWith(route))
 
   return (
-    <>
-      <Outlet />
+    // <>
+    //   <Outlet />
+    //   {!hideNav && <DriverBottomNav activeTab={getActiveTab(pathname)} />}
+    // </>
+        <DriverRouteGuard>
+      <div className="flex flex-col h-screen">
+
+        {/* Page Content */}
+        <div className="flex-1 overflow-auto pb-18">
+          <Outlet />
+        </div>
+
+        {/* Bottom Nav */}
       {!hideNav && <DriverBottomNav activeTab={getActiveTab(pathname)} />}
-    </>
+
+      </div>
+    </DriverRouteGuard>
   )
 }
 

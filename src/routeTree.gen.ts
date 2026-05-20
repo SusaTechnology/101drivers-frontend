@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as DriverRouteImport } from './routes/driver'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TermsIndexRouteImport } from './routes/terms/index'
 import { Route as QuoteDetailsIndexRouteImport } from './routes/quote-details/index'
@@ -19,6 +20,7 @@ import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as LandingIndexRouteImport } from './routes/landing/index'
 import { Route as HelpDriverIndexRouteImport } from './routes/help-driver/index'
 import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/index'
+import { Route as DriverIndexRouteImport } from './routes/driver/index'
 import { Route as DriverWalletIndexRouteImport } from './routes/driver-wallet/index'
 import { Route as DriverSupportListIndexRouteImport } from './routes/driver-support-list/index'
 import { Route as DriverSupportDetailIndexRouteImport } from './routes/driver-support-detail/index'
@@ -30,13 +32,14 @@ import { Route as DriverPreferencesIndexRouteImport } from './routes/driver-pref
 import { Route as DriverPickupChecklistIndexRouteImport } from './routes/driver-pickup-checklist/index'
 import { Route as DriverOnboardingIndexRouteImport } from './routes/driver-onboarding/index'
 import { Route as DriverOnboardingCompleteIndexRouteImport } from './routes/driver-onboarding-complete/index'
-import { Route as DriverApplicationSubmittedIndexRouteImport } from './routes/driver-application-submitted/index'
 import { Route as DriverMenuIndexRouteImport } from './routes/driver-menu/index'
 import { Route as DriverJobDetailsIndexRouteImport } from './routes/driver-job-details/index'
 import { Route as DriverIssueReportIndexRouteImport } from './routes/driver-issue-report/index'
 import { Route as DriverInboxIndexRouteImport } from './routes/driver-inbox/index'
 import { Route as DriverDashboardIndexRouteImport } from './routes/driver-dashboard/index'
+import { Route as DriverCompletedIndexRouteImport } from './routes/driver-completed/index'
 import { Route as DriverBookedLaterIndexRouteImport } from './routes/driver-booked-later/index'
+import { Route as DriverApplicationSubmittedIndexRouteImport } from './routes/driver-application-submitted/index'
 import { Route as DriverActiveIndexRouteImport } from './routes/driver-active/index'
 import { Route as DealerSupportRequestIndexRouteImport } from './routes/dealer-support-request/index'
 import { Route as DealerSupportListIndexRouteImport } from './routes/dealer-support-list/index'
@@ -79,6 +82,27 @@ import { Route as AdminDashboardIndexRouteImport } from './routes/admin-dashboar
 import { Route as AdminConfigIndexRouteImport } from './routes/admin-config/index'
 import { Route as AdminAuditLogsIndexRouteImport } from './routes/admin-audit-logs/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as DriverWalletRouteImport } from './routes/driver/wallet'
+import { Route as DriverSupportListRouteImport } from './routes/driver/support-list'
+import { Route as DriverSupportDetailRouteImport } from './routes/driver/support-detail'
+import { Route as DriverStartingLocationRouteImport } from './routes/driver/starting-location'
+import { Route as DriverSigninRouteImport } from './routes/driver/signin'
+import { Route as DriverRepositioningRouteImport } from './routes/driver/repositioning'
+import { Route as DriverProofCamRouteImport } from './routes/driver/proof-cam'
+import { Route as DriverPreferencesRouteImport } from './routes/driver/preferences'
+import { Route as DriverPickupChecklistRouteImport } from './routes/driver/pickup-checklist'
+import { Route as DriverOnboardingCompleteRouteImport } from './routes/driver/onboarding-complete'
+import { Route as DriverOnboardingRouteImport } from './routes/driver/onboarding'
+import { Route as DriverMenuRouteImport } from './routes/driver/menu'
+import { Route as DriverJobListRouteImport } from './routes/driver/job-list'
+import { Route as DriverJobDetailsRouteImport } from './routes/driver/job-details'
+import { Route as DriverIssueReportRouteImport } from './routes/driver/issue-report'
+import { Route as DriverInboxRouteImport } from './routes/driver/inbox'
+import { Route as DriverDashboardRouteImport } from './routes/driver/dashboard'
+import { Route as DriverCompletedDetailsRouteImport } from './routes/driver/completed-details'
+import { Route as DriverCompletedRouteImport } from './routes/driver/completed'
+import { Route as DriverBookedLaterRouteImport } from './routes/driver/booked-later'
+import { Route as DriverActiveRouteImport } from './routes/driver/active'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
 import { Route as AuthDealerSignupRouteImport } from './routes/auth/dealer-signup'
 import { Route as AuthDealerSigninRouteImport } from './routes/auth/dealer-signin'
@@ -88,6 +112,11 @@ import { Route as TrackTokenIndexRouteImport } from './routes/track/$token/index
 import { Route as AdminPricingConfigCreateIndexRouteImport } from './routes/admin-pricing-config/create/index'
 import { Route as AdminPricingConfigEditConfigIdRouteImport } from './routes/admin-pricing-config/edit/$configId'
 
+const DriverRoute = DriverRouteImport.update({
+  id: '/driver',
+  path: '/driver',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -137,6 +166,11 @@ const HelpCustomerIndexRoute = HelpCustomerIndexRouteImport.update({
   id: '/help-customer/',
   path: '/help-customer/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DriverIndexRoute = DriverIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DriverRoute,
 } as any)
 const DriverWalletIndexRoute = DriverWalletIndexRouteImport.update({
   id: '/driver-wallet/',
@@ -192,16 +226,12 @@ const DriverOnboardingIndexRoute = DriverOnboardingIndexRouteImport.update({
   path: '/driver-onboarding/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DriverOnboardingCompleteIndexRoute = DriverOnboardingCompleteIndexRouteImport.update({
-  id: '/driver-onboarding-complete/',
-  path: '/driver-onboarding-complete/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DriverApplicationSubmittedIndexRoute = DriverApplicationSubmittedIndexRouteImport.update({
-  id: '/driver-application-submitted/',
-  path: '/driver-application-submitted/',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const DriverOnboardingCompleteIndexRoute =
+  DriverOnboardingCompleteIndexRouteImport.update({
+    id: '/driver-onboarding-complete/',
+    path: '/driver-onboarding-complete/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DriverMenuIndexRoute = DriverMenuIndexRouteImport.update({
   id: '/driver-menu/',
   path: '/driver-menu/',
@@ -227,11 +257,22 @@ const DriverDashboardIndexRoute = DriverDashboardIndexRouteImport.update({
   path: '/driver-dashboard/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DriverCompletedIndexRoute = DriverCompletedIndexRouteImport.update({
+  id: '/driver-completed/',
+  path: '/driver-completed/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DriverBookedLaterIndexRoute = DriverBookedLaterIndexRouteImport.update({
   id: '/driver-booked-later/',
   path: '/driver-booked-later/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DriverApplicationSubmittedIndexRoute =
+  DriverApplicationSubmittedIndexRouteImport.update({
+    id: '/driver-application-submitted/',
+    path: '/driver-application-submitted/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DriverActiveIndexRoute = DriverActiveIndexRouteImport.update({
   id: '/driver-active/',
   path: '/driver-active/',
@@ -459,6 +500,112 @@ const AboutIndexRoute = AboutIndexRouteImport.update({
   path: '/about/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DriverWalletRoute = DriverWalletRouteImport.update({
+  id: '/wallet',
+  path: '/wallet',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverSupportListRoute = DriverSupportListRouteImport.update({
+  id: '/support-list',
+  path: '/support-list',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverSupportDetailRoute = DriverSupportDetailRouteImport.update({
+  id: '/support-detail',
+  path: '/support-detail',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverStartingLocationRoute = DriverStartingLocationRouteImport.update({
+  id: '/starting-location',
+  path: '/starting-location',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverSigninRoute = DriverSigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverRepositioningRoute = DriverRepositioningRouteImport.update({
+  id: '/repositioning',
+  path: '/repositioning',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverProofCamRoute = DriverProofCamRouteImport.update({
+  id: '/proof-cam',
+  path: '/proof-cam',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverPreferencesRoute = DriverPreferencesRouteImport.update({
+  id: '/preferences',
+  path: '/preferences',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverPickupChecklistRoute = DriverPickupChecklistRouteImport.update({
+  id: '/pickup-checklist',
+  path: '/pickup-checklist',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverOnboardingCompleteRoute =
+  DriverOnboardingCompleteRouteImport.update({
+    id: '/onboarding-complete',
+    path: '/onboarding-complete',
+    getParentRoute: () => DriverRoute,
+  } as any)
+const DriverOnboardingRoute = DriverOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverMenuRoute = DriverMenuRouteImport.update({
+  id: '/menu',
+  path: '/menu',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverJobListRoute = DriverJobListRouteImport.update({
+  id: '/job-list',
+  path: '/job-list',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverJobDetailsRoute = DriverJobDetailsRouteImport.update({
+  id: '/job-details',
+  path: '/job-details',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverIssueReportRoute = DriverIssueReportRouteImport.update({
+  id: '/issue-report',
+  path: '/issue-report',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverInboxRoute = DriverInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverDashboardRoute = DriverDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverCompletedDetailsRoute = DriverCompletedDetailsRouteImport.update({
+  id: '/completed-details',
+  path: '/completed-details',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverCompletedRoute = DriverCompletedRouteImport.update({
+  id: '/completed',
+  path: '/completed',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverBookedLaterRoute = DriverBookedLaterRouteImport.update({
+  id: '/booked-later',
+  path: '/booked-later',
+  getParentRoute: () => DriverRoute,
+} as any)
+const DriverActiveRoute = DriverActiveRouteImport.update({
+  id: '/active',
+  path: '/active',
+  getParentRoute: () => DriverRoute,
+} as any)
 const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
   id: '/auth/reset-password',
   path: '/auth/reset-password',
@@ -504,11 +651,33 @@ const AdminPricingConfigEditConfigIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/driver': typeof DriverRouteWithChildren
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/driver/active': typeof DriverActiveRoute
+  '/driver/booked-later': typeof DriverBookedLaterRoute
+  '/driver/completed': typeof DriverCompletedRoute
+  '/driver/completed-details': typeof DriverCompletedDetailsRoute
+  '/driver/dashboard': typeof DriverDashboardRoute
+  '/driver/inbox': typeof DriverInboxRoute
+  '/driver/issue-report': typeof DriverIssueReportRoute
+  '/driver/job-details': typeof DriverJobDetailsRoute
+  '/driver/job-list': typeof DriverJobListRoute
+  '/driver/menu': typeof DriverMenuRoute
+  '/driver/onboarding': typeof DriverOnboardingRoute
+  '/driver/onboarding-complete': typeof DriverOnboardingCompleteRoute
+  '/driver/pickup-checklist': typeof DriverPickupChecklistRoute
+  '/driver/preferences': typeof DriverPreferencesRoute
+  '/driver/proof-cam': typeof DriverProofCamRoute
+  '/driver/repositioning': typeof DriverRepositioningRoute
+  '/driver/signin': typeof DriverSigninRoute
+  '/driver/starting-location': typeof DriverStartingLocationRoute
+  '/driver/support-detail': typeof DriverSupportDetailRoute
+  '/driver/support-list': typeof DriverSupportListRoute
+  '/driver/wallet': typeof DriverWalletRoute
   '/about/': typeof AboutIndexRoute
   '/admin-audit-logs/': typeof AdminAuditLogsIndexRoute
   '/admin-config/': typeof AdminConfigIndexRoute
@@ -553,13 +722,14 @@ export interface FileRoutesByFullPath {
   '/driver-active/': typeof DriverActiveIndexRoute
   '/driver-application-submitted/': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
+  '/driver-completed/': typeof DriverCompletedIndexRoute
   '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-inbox/': typeof DriverInboxIndexRoute
   '/driver-issue-report/': typeof DriverIssueReportIndexRoute
   '/driver-job-details/': typeof DriverJobDetailsIndexRoute
   '/driver-menu/': typeof DriverMenuIndexRoute
-  '/driver-onboarding/': typeof DriverOnboardingIndexRoute
   '/driver-onboarding-complete/': typeof DriverOnboardingCompleteIndexRoute
+  '/driver-onboarding/': typeof DriverOnboardingIndexRoute
   '/driver-pickup-checklist/': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences/': typeof DriverPreferencesIndexRoute
   '/driver-proof-cam/': typeof DriverProofCamIndexRoute
@@ -569,6 +739,7 @@ export interface FileRoutesByFullPath {
   '/driver-support-detail/': typeof DriverSupportDetailIndexRoute
   '/driver-support-list/': typeof DriverSupportListIndexRoute
   '/driver-wallet/': typeof DriverWalletIndexRoute
+  '/driver/': typeof DriverIndexRoute
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
   '/landing/': typeof LandingIndexRoute
@@ -589,6 +760,27 @@ export interface FileRoutesByTo {
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/driver/active': typeof DriverActiveRoute
+  '/driver/booked-later': typeof DriverBookedLaterRoute
+  '/driver/completed': typeof DriverCompletedRoute
+  '/driver/completed-details': typeof DriverCompletedDetailsRoute
+  '/driver/dashboard': typeof DriverDashboardRoute
+  '/driver/inbox': typeof DriverInboxRoute
+  '/driver/issue-report': typeof DriverIssueReportRoute
+  '/driver/job-details': typeof DriverJobDetailsRoute
+  '/driver/job-list': typeof DriverJobListRoute
+  '/driver/menu': typeof DriverMenuRoute
+  '/driver/onboarding': typeof DriverOnboardingRoute
+  '/driver/onboarding-complete': typeof DriverOnboardingCompleteRoute
+  '/driver/pickup-checklist': typeof DriverPickupChecklistRoute
+  '/driver/preferences': typeof DriverPreferencesRoute
+  '/driver/proof-cam': typeof DriverProofCamRoute
+  '/driver/repositioning': typeof DriverRepositioningRoute
+  '/driver/signin': typeof DriverSigninRoute
+  '/driver/starting-location': typeof DriverStartingLocationRoute
+  '/driver/support-detail': typeof DriverSupportDetailRoute
+  '/driver/support-list': typeof DriverSupportListRoute
+  '/driver/wallet': typeof DriverWalletRoute
   '/about': typeof AboutIndexRoute
   '/admin-audit-logs': typeof AdminAuditLogsIndexRoute
   '/admin-config': typeof AdminConfigIndexRoute
@@ -633,13 +825,14 @@ export interface FileRoutesByTo {
   '/driver-active': typeof DriverActiveIndexRoute
   '/driver-application-submitted': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later': typeof DriverBookedLaterIndexRoute
+  '/driver-completed': typeof DriverCompletedIndexRoute
   '/driver-dashboard': typeof DriverDashboardIndexRoute
   '/driver-inbox': typeof DriverInboxIndexRoute
   '/driver-issue-report': typeof DriverIssueReportIndexRoute
   '/driver-job-details': typeof DriverJobDetailsIndexRoute
   '/driver-menu': typeof DriverMenuIndexRoute
-  '/driver-onboarding': typeof DriverOnboardingIndexRoute
   '/driver-onboarding-complete': typeof DriverOnboardingCompleteIndexRoute
+  '/driver-onboarding': typeof DriverOnboardingIndexRoute
   '/driver-pickup-checklist': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences': typeof DriverPreferencesIndexRoute
   '/driver-proof-cam': typeof DriverProofCamIndexRoute
@@ -649,6 +842,7 @@ export interface FileRoutesByTo {
   '/driver-support-detail': typeof DriverSupportDetailIndexRoute
   '/driver-support-list': typeof DriverSupportListIndexRoute
   '/driver-wallet': typeof DriverWalletIndexRoute
+  '/driver': typeof DriverIndexRoute
   '/help-customer': typeof HelpCustomerIndexRoute
   '/help-driver': typeof HelpDriverIndexRoute
   '/landing': typeof LandingIndexRoute
@@ -665,11 +859,33 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/driver': typeof DriverRouteWithChildren
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/driver/active': typeof DriverActiveRoute
+  '/driver/booked-later': typeof DriverBookedLaterRoute
+  '/driver/completed': typeof DriverCompletedRoute
+  '/driver/completed-details': typeof DriverCompletedDetailsRoute
+  '/driver/dashboard': typeof DriverDashboardRoute
+  '/driver/inbox': typeof DriverInboxRoute
+  '/driver/issue-report': typeof DriverIssueReportRoute
+  '/driver/job-details': typeof DriverJobDetailsRoute
+  '/driver/job-list': typeof DriverJobListRoute
+  '/driver/menu': typeof DriverMenuRoute
+  '/driver/onboarding': typeof DriverOnboardingRoute
+  '/driver/onboarding-complete': typeof DriverOnboardingCompleteRoute
+  '/driver/pickup-checklist': typeof DriverPickupChecklistRoute
+  '/driver/preferences': typeof DriverPreferencesRoute
+  '/driver/proof-cam': typeof DriverProofCamRoute
+  '/driver/repositioning': typeof DriverRepositioningRoute
+  '/driver/signin': typeof DriverSigninRoute
+  '/driver/starting-location': typeof DriverStartingLocationRoute
+  '/driver/support-detail': typeof DriverSupportDetailRoute
+  '/driver/support-list': typeof DriverSupportListRoute
+  '/driver/wallet': typeof DriverWalletRoute
   '/about/': typeof AboutIndexRoute
   '/admin-audit-logs/': typeof AdminAuditLogsIndexRoute
   '/admin-config/': typeof AdminConfigIndexRoute
@@ -714,13 +930,14 @@ export interface FileRoutesById {
   '/driver-active/': typeof DriverActiveIndexRoute
   '/driver-application-submitted/': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
+  '/driver-completed/': typeof DriverCompletedIndexRoute
   '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-inbox/': typeof DriverInboxIndexRoute
   '/driver-issue-report/': typeof DriverIssueReportIndexRoute
   '/driver-job-details/': typeof DriverJobDetailsIndexRoute
   '/driver-menu/': typeof DriverMenuIndexRoute
-  '/driver-onboarding/': typeof DriverOnboardingIndexRoute
   '/driver-onboarding-complete/': typeof DriverOnboardingCompleteIndexRoute
+  '/driver-onboarding/': typeof DriverOnboardingIndexRoute
   '/driver-pickup-checklist/': typeof DriverPickupChecklistIndexRoute
   '/driver-preferences/': typeof DriverPreferencesIndexRoute
   '/driver-proof-cam/': typeof DriverProofCamIndexRoute
@@ -730,6 +947,7 @@ export interface FileRoutesById {
   '/driver-support-detail/': typeof DriverSupportDetailIndexRoute
   '/driver-support-list/': typeof DriverSupportListIndexRoute
   '/driver-wallet/': typeof DriverWalletIndexRoute
+  '/driver/': typeof DriverIndexRoute
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
   '/landing/': typeof LandingIndexRoute
@@ -747,11 +965,33 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/driver'
     | '/admin-user-detail/$userId'
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
     | '/auth/reset-password'
+    | '/driver/active'
+    | '/driver/booked-later'
+    | '/driver/completed'
+    | '/driver/completed-details'
+    | '/driver/dashboard'
+    | '/driver/inbox'
+    | '/driver/issue-report'
+    | '/driver/job-details'
+    | '/driver/job-list'
+    | '/driver/menu'
+    | '/driver/onboarding'
+    | '/driver/onboarding-complete'
+    | '/driver/pickup-checklist'
+    | '/driver/preferences'
+    | '/driver/proof-cam'
+    | '/driver/repositioning'
+    | '/driver/signin'
+    | '/driver/starting-location'
+    | '/driver/support-detail'
+    | '/driver/support-list'
+    | '/driver/wallet'
     | '/about/'
     | '/admin-audit-logs/'
     | '/admin-config/'
@@ -794,15 +1034,16 @@ export interface FileRouteTypes {
     | '/dealer-support-list/'
     | '/dealer-support-request/'
     | '/driver-active/'
+    | '/driver-application-submitted/'
     | '/driver-booked-later/'
+    | '/driver-completed/'
     | '/driver-dashboard/'
     | '/driver-inbox/'
     | '/driver-issue-report/'
     | '/driver-job-details/'
     | '/driver-menu/'
-    | '/driver-onboarding/'
     | '/driver-onboarding-complete/'
-    | '/driver-application-submitted/'
+    | '/driver-onboarding/'
     | '/driver-pickup-checklist/'
     | '/driver-preferences/'
     | '/driver-proof-cam/'
@@ -812,6 +1053,7 @@ export interface FileRouteTypes {
     | '/driver-support-detail/'
     | '/driver-support-list/'
     | '/driver-wallet/'
+    | '/driver/'
     | '/help-customer/'
     | '/help-driver/'
     | '/landing/'
@@ -832,6 +1074,27 @@ export interface FileRouteTypes {
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
     | '/auth/reset-password'
+    | '/driver/active'
+    | '/driver/booked-later'
+    | '/driver/completed'
+    | '/driver/completed-details'
+    | '/driver/dashboard'
+    | '/driver/inbox'
+    | '/driver/issue-report'
+    | '/driver/job-details'
+    | '/driver/job-list'
+    | '/driver/menu'
+    | '/driver/onboarding'
+    | '/driver/onboarding-complete'
+    | '/driver/pickup-checklist'
+    | '/driver/preferences'
+    | '/driver/proof-cam'
+    | '/driver/repositioning'
+    | '/driver/signin'
+    | '/driver/starting-location'
+    | '/driver/support-detail'
+    | '/driver/support-list'
+    | '/driver/wallet'
     | '/about'
     | '/admin-audit-logs'
     | '/admin-config'
@@ -874,15 +1137,16 @@ export interface FileRouteTypes {
     | '/dealer-support-list'
     | '/dealer-support-request'
     | '/driver-active'
+    | '/driver-application-submitted'
     | '/driver-booked-later'
+    | '/driver-completed'
     | '/driver-dashboard'
     | '/driver-inbox'
     | '/driver-issue-report'
     | '/driver-job-details'
     | '/driver-menu'
-    | '/driver-onboarding'
     | '/driver-onboarding-complete'
-    | '/driver-application-submitted'
+    | '/driver-onboarding'
     | '/driver-pickup-checklist'
     | '/driver-preferences'
     | '/driver-proof-cam'
@@ -892,6 +1156,7 @@ export interface FileRouteTypes {
     | '/driver-support-detail'
     | '/driver-support-list'
     | '/driver-wallet'
+    | '/driver'
     | '/help-customer'
     | '/help-driver'
     | '/landing'
@@ -907,11 +1172,33 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/driver'
     | '/admin-user-detail/$userId'
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
     | '/auth/reset-password'
+    | '/driver/active'
+    | '/driver/booked-later'
+    | '/driver/completed'
+    | '/driver/completed-details'
+    | '/driver/dashboard'
+    | '/driver/inbox'
+    | '/driver/issue-report'
+    | '/driver/job-details'
+    | '/driver/job-list'
+    | '/driver/menu'
+    | '/driver/onboarding'
+    | '/driver/onboarding-complete'
+    | '/driver/pickup-checklist'
+    | '/driver/preferences'
+    | '/driver/proof-cam'
+    | '/driver/repositioning'
+    | '/driver/signin'
+    | '/driver/starting-location'
+    | '/driver/support-detail'
+    | '/driver/support-list'
+    | '/driver/wallet'
     | '/about/'
     | '/admin-audit-logs/'
     | '/admin-config/'
@@ -954,15 +1241,16 @@ export interface FileRouteTypes {
     | '/dealer-support-list/'
     | '/dealer-support-request/'
     | '/driver-active/'
+    | '/driver-application-submitted/'
     | '/driver-booked-later/'
+    | '/driver-completed/'
     | '/driver-dashboard/'
     | '/driver-inbox/'
     | '/driver-issue-report/'
     | '/driver-job-details/'
     | '/driver-menu/'
-    | '/driver-onboarding/'
     | '/driver-onboarding-complete/'
-    | '/driver-application-submitted/'
+    | '/driver-onboarding/'
     | '/driver-pickup-checklist/'
     | '/driver-preferences/'
     | '/driver-proof-cam/'
@@ -972,6 +1260,7 @@ export interface FileRouteTypes {
     | '/driver-support-detail/'
     | '/driver-support-list/'
     | '/driver-wallet/'
+    | '/driver/'
     | '/help-customer/'
     | '/help-driver/'
     | '/landing/'
@@ -988,6 +1277,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DriverRoute: typeof DriverRouteWithChildren
   AdminUserDetailUserIdRoute: typeof AdminUserDetailUserIdRoute
   AuthAdminSigninRoute: typeof AuthAdminSigninRoute
   AuthDealerSigninRoute: typeof AuthDealerSigninRoute
@@ -1037,11 +1327,13 @@ export interface RootRouteChildren {
   DriverActiveIndexRoute: typeof DriverActiveIndexRoute
   DriverApplicationSubmittedIndexRoute: typeof DriverApplicationSubmittedIndexRoute
   DriverBookedLaterIndexRoute: typeof DriverBookedLaterIndexRoute
+  DriverCompletedIndexRoute: typeof DriverCompletedIndexRoute
   DriverDashboardIndexRoute: typeof DriverDashboardIndexRoute
   DriverInboxIndexRoute: typeof DriverInboxIndexRoute
   DriverIssueReportIndexRoute: typeof DriverIssueReportIndexRoute
   DriverJobDetailsIndexRoute: typeof DriverJobDetailsIndexRoute
   DriverMenuIndexRoute: typeof DriverMenuIndexRoute
+  DriverOnboardingCompleteIndexRoute: typeof DriverOnboardingCompleteIndexRoute
   DriverOnboardingIndexRoute: typeof DriverOnboardingIndexRoute
   DriverPickupChecklistIndexRoute: typeof DriverPickupChecklistIndexRoute
   DriverPreferencesIndexRoute: typeof DriverPreferencesIndexRoute
@@ -1068,6 +1360,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/driver': {
+      id: '/driver'
+      path: '/driver'
+      fullPath: '/driver'
+      preLoaderRoute: typeof DriverRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -1137,6 +1436,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/help-customer/'
       preLoaderRoute: typeof HelpCustomerIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/driver/': {
+      id: '/driver/'
+      path: '/'
+      fullPath: '/driver/'
+      preLoaderRoute: typeof DriverIndexRouteImport
+      parentRoute: typeof DriverRoute
     }
     '/driver-wallet/': {
       id: '/driver-wallet/'
@@ -1208,6 +1514,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DriverOnboardingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/driver-onboarding-complete/': {
+      id: '/driver-onboarding-complete/'
+      path: '/driver-onboarding-complete'
+      fullPath: '/driver-onboarding-complete/'
+      preLoaderRoute: typeof DriverOnboardingCompleteIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/driver-menu/': {
       id: '/driver-menu/'
       path: '/driver-menu'
@@ -1243,11 +1556,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DriverDashboardIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/driver-completed/': {
+      id: '/driver-completed/'
+      path: '/driver-completed'
+      fullPath: '/driver-completed/'
+      preLoaderRoute: typeof DriverCompletedIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/driver-booked-later/': {
       id: '/driver-booked-later/'
       path: '/driver-booked-later'
       fullPath: '/driver-booked-later/'
       preLoaderRoute: typeof DriverBookedLaterIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/driver-application-submitted/': {
+      id: '/driver-application-submitted/'
+      path: '/driver-application-submitted'
+      fullPath: '/driver-application-submitted/'
+      preLoaderRoute: typeof DriverApplicationSubmittedIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/driver-active/': {
@@ -1544,6 +1871,153 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/driver/wallet': {
+      id: '/driver/wallet'
+      path: '/wallet'
+      fullPath: '/driver/wallet'
+      preLoaderRoute: typeof DriverWalletRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/support-list': {
+      id: '/driver/support-list'
+      path: '/support-list'
+      fullPath: '/driver/support-list'
+      preLoaderRoute: typeof DriverSupportListRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/support-detail': {
+      id: '/driver/support-detail'
+      path: '/support-detail'
+      fullPath: '/driver/support-detail'
+      preLoaderRoute: typeof DriverSupportDetailRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/starting-location': {
+      id: '/driver/starting-location'
+      path: '/starting-location'
+      fullPath: '/driver/starting-location'
+      preLoaderRoute: typeof DriverStartingLocationRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/signin': {
+      id: '/driver/signin'
+      path: '/signin'
+      fullPath: '/driver/signin'
+      preLoaderRoute: typeof DriverSigninRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/repositioning': {
+      id: '/driver/repositioning'
+      path: '/repositioning'
+      fullPath: '/driver/repositioning'
+      preLoaderRoute: typeof DriverRepositioningRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/proof-cam': {
+      id: '/driver/proof-cam'
+      path: '/proof-cam'
+      fullPath: '/driver/proof-cam'
+      preLoaderRoute: typeof DriverProofCamRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/preferences': {
+      id: '/driver/preferences'
+      path: '/preferences'
+      fullPath: '/driver/preferences'
+      preLoaderRoute: typeof DriverPreferencesRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/pickup-checklist': {
+      id: '/driver/pickup-checklist'
+      path: '/pickup-checklist'
+      fullPath: '/driver/pickup-checklist'
+      preLoaderRoute: typeof DriverPickupChecklistRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/onboarding-complete': {
+      id: '/driver/onboarding-complete'
+      path: '/onboarding-complete'
+      fullPath: '/driver/onboarding-complete'
+      preLoaderRoute: typeof DriverOnboardingCompleteRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/onboarding': {
+      id: '/driver/onboarding'
+      path: '/onboarding'
+      fullPath: '/driver/onboarding'
+      preLoaderRoute: typeof DriverOnboardingRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/menu': {
+      id: '/driver/menu'
+      path: '/menu'
+      fullPath: '/driver/menu'
+      preLoaderRoute: typeof DriverMenuRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/job-list': {
+      id: '/driver/job-list'
+      path: '/job-list'
+      fullPath: '/driver/job-list'
+      preLoaderRoute: typeof DriverJobListRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/job-details': {
+      id: '/driver/job-details'
+      path: '/job-details'
+      fullPath: '/driver/job-details'
+      preLoaderRoute: typeof DriverJobDetailsRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/issue-report': {
+      id: '/driver/issue-report'
+      path: '/issue-report'
+      fullPath: '/driver/issue-report'
+      preLoaderRoute: typeof DriverIssueReportRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/inbox': {
+      id: '/driver/inbox'
+      path: '/inbox'
+      fullPath: '/driver/inbox'
+      preLoaderRoute: typeof DriverInboxRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/dashboard': {
+      id: '/driver/dashboard'
+      path: '/dashboard'
+      fullPath: '/driver/dashboard'
+      preLoaderRoute: typeof DriverDashboardRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/completed-details': {
+      id: '/driver/completed-details'
+      path: '/completed-details'
+      fullPath: '/driver/completed-details'
+      preLoaderRoute: typeof DriverCompletedDetailsRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/completed': {
+      id: '/driver/completed'
+      path: '/completed'
+      fullPath: '/driver/completed'
+      preLoaderRoute: typeof DriverCompletedRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/booked-later': {
+      id: '/driver/booked-later'
+      path: '/booked-later'
+      fullPath: '/driver/booked-later'
+      preLoaderRoute: typeof DriverBookedLaterRouteImport
+      parentRoute: typeof DriverRoute
+    }
+    '/driver/active': {
+      id: '/driver/active'
+      path: '/active'
+      fullPath: '/driver/active'
+      preLoaderRoute: typeof DriverActiveRouteImport
+      parentRoute: typeof DriverRoute
+    }
     '/auth/reset-password': {
       id: '/auth/reset-password'
       path: '/auth/reset-password'
@@ -1603,8 +2077,62 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface DriverRouteChildren {
+  DriverActiveRoute: typeof DriverActiveRoute
+  DriverBookedLaterRoute: typeof DriverBookedLaterRoute
+  DriverCompletedRoute: typeof DriverCompletedRoute
+  DriverCompletedDetailsRoute: typeof DriverCompletedDetailsRoute
+  DriverDashboardRoute: typeof DriverDashboardRoute
+  DriverInboxRoute: typeof DriverInboxRoute
+  DriverIssueReportRoute: typeof DriverIssueReportRoute
+  DriverJobDetailsRoute: typeof DriverJobDetailsRoute
+  DriverJobListRoute: typeof DriverJobListRoute
+  DriverMenuRoute: typeof DriverMenuRoute
+  DriverOnboardingRoute: typeof DriverOnboardingRoute
+  DriverOnboardingCompleteRoute: typeof DriverOnboardingCompleteRoute
+  DriverPickupChecklistRoute: typeof DriverPickupChecklistRoute
+  DriverPreferencesRoute: typeof DriverPreferencesRoute
+  DriverProofCamRoute: typeof DriverProofCamRoute
+  DriverRepositioningRoute: typeof DriverRepositioningRoute
+  DriverSigninRoute: typeof DriverSigninRoute
+  DriverStartingLocationRoute: typeof DriverStartingLocationRoute
+  DriverSupportDetailRoute: typeof DriverSupportDetailRoute
+  DriverSupportListRoute: typeof DriverSupportListRoute
+  DriverWalletRoute: typeof DriverWalletRoute
+  DriverIndexRoute: typeof DriverIndexRoute
+}
+
+const DriverRouteChildren: DriverRouteChildren = {
+  DriverActiveRoute: DriverActiveRoute,
+  DriverBookedLaterRoute: DriverBookedLaterRoute,
+  DriverCompletedRoute: DriverCompletedRoute,
+  DriverCompletedDetailsRoute: DriverCompletedDetailsRoute,
+  DriverDashboardRoute: DriverDashboardRoute,
+  DriverInboxRoute: DriverInboxRoute,
+  DriverIssueReportRoute: DriverIssueReportRoute,
+  DriverJobDetailsRoute: DriverJobDetailsRoute,
+  DriverJobListRoute: DriverJobListRoute,
+  DriverMenuRoute: DriverMenuRoute,
+  DriverOnboardingRoute: DriverOnboardingRoute,
+  DriverOnboardingCompleteRoute: DriverOnboardingCompleteRoute,
+  DriverPickupChecklistRoute: DriverPickupChecklistRoute,
+  DriverPreferencesRoute: DriverPreferencesRoute,
+  DriverProofCamRoute: DriverProofCamRoute,
+  DriverRepositioningRoute: DriverRepositioningRoute,
+  DriverSigninRoute: DriverSigninRoute,
+  DriverStartingLocationRoute: DriverStartingLocationRoute,
+  DriverSupportDetailRoute: DriverSupportDetailRoute,
+  DriverSupportListRoute: DriverSupportListRoute,
+  DriverWalletRoute: DriverWalletRoute,
+  DriverIndexRoute: DriverIndexRoute,
+}
+
+const DriverRouteWithChildren =
+  DriverRoute._addFileChildren(DriverRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DriverRoute: DriverRouteWithChildren,
   AdminUserDetailUserIdRoute: AdminUserDetailUserIdRoute,
   AuthAdminSigninRoute: AuthAdminSigninRoute,
   AuthDealerSigninRoute: AuthDealerSigninRoute,
@@ -1652,15 +2180,16 @@ const rootRouteChildren: RootRouteChildren = {
   DealerSupportListIndexRoute: DealerSupportListIndexRoute,
   DealerSupportRequestIndexRoute: DealerSupportRequestIndexRoute,
   DriverActiveIndexRoute: DriverActiveIndexRoute,
+  DriverApplicationSubmittedIndexRoute: DriverApplicationSubmittedIndexRoute,
   DriverBookedLaterIndexRoute: DriverBookedLaterIndexRoute,
+  DriverCompletedIndexRoute: DriverCompletedIndexRoute,
   DriverDashboardIndexRoute: DriverDashboardIndexRoute,
   DriverInboxIndexRoute: DriverInboxIndexRoute,
   DriverIssueReportIndexRoute: DriverIssueReportIndexRoute,
   DriverJobDetailsIndexRoute: DriverJobDetailsIndexRoute,
   DriverMenuIndexRoute: DriverMenuIndexRoute,
-  DriverOnboardingIndexRoute: DriverOnboardingIndexRoute,
   DriverOnboardingCompleteIndexRoute: DriverOnboardingCompleteIndexRoute,
-  DriverApplicationSubmittedIndexRoute: DriverApplicationSubmittedIndexRoute,
+  DriverOnboardingIndexRoute: DriverOnboardingIndexRoute,
   DriverPickupChecklistIndexRoute: DriverPickupChecklistIndexRoute,
   DriverPreferencesIndexRoute: DriverPreferencesIndexRoute,
   DriverProofCamIndexRoute: DriverProofCamIndexRoute,

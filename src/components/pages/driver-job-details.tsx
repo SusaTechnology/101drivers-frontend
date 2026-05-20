@@ -1,18 +1,32 @@
 // app/pages/driver/job-details.tsx
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
+  LogOut,
+  Bolt,
+  QrCode,
+  Camera,
+  Gauge as Speed,
+  Route,
+  Info,
   Sun,
   Moon,
   MapPin,
-  ExternalLink,
   MessageSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getUser, useCreate, useDataQuery } from '@/lib/tanstack/dataQuery'
 import {
   useJsApiLoader,
@@ -26,51 +40,69 @@ import {
 } from '@/lib/google-maps-config'
 
 // ── Formatters ──────────────────────────────────────────────────────
-import { BUSINESS_TZ, formatShortDayMonth, formatDateTimeWindow, formatTimeRange } from '@/lib/timezone'
 
-// Keep: non-timezone helpers
+const formatDate = (isoString?: string): string => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  const today = new Date()
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  if (date.toDateString() === today.toDateString()) return 'Today'
+  if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+const formatTimeRange = (startIso?: string | null, endIso?: string | null): string => {
+  if (!startIso || !endIso) return ''
+  const start = new Date(startIso)
+  const end = new Date(endIso)
+  const startStr = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const endStr = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return `${startStr}\u2013${endStr}`
+}
+
 const formatDuration = (minutes?: number | null): string => {
-  if (!minutes) return ''
+  if (!minutes) return '\u2014'
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
   return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
 }
 
 const formatCurrency = (amount?: number | null): string => {
-  if (amount == null) return ''
+  if (amount == null) return '\u2014'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount)
 }
 
-// Extract short human-readable label from a full address.
-const extractRouteLabel = (fullAddress: string): string => {
-  if (!fullAddress) return ''
-  const trimmed = fullAddress.trim()
-
-  if (trimmed.includes(',')) {
-    const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean)
-
-    for (let i = 1; i < parts.length; i++) {
-      const seg = parts[i]
-      if (/^\d+$/.test(seg)) continue
-      if (/^[A-Z]{2}$/.test(seg)) continue
-      if (/^(USA|United States)$/i.test(seg)) continue
-      if (/^\d/.test(seg)) continue
-      const clean = seg.replace(/\s+\d{5}(-\d{4})?$/, '').trim()
-      if (clean.length >= 3) return clean
-    }
-
-    const street = parts[0].replace(/^\d+\s+/, '').replace(/\s+(Blvd|Ave|Avenue|Street|St|Drive|Dr|Road|Rd|Lane|Ln|Way|Ct|Court|Pl|Place|Pkwy|Parkway)$/i, '').trim()
-    if (street.length >= 3) return street
-  }
-
-  const match = trimmed.match(/^\d+\s+(.+)$/)
-  return match ? match[1].trim() : trimmed
+const getShortAddress = (address?: string): string => {
+  if (!address) return ''
+  const parts = address.split(',')
+  return parts[0]
 }
+
+// Service type mapping
+const serviceTypeLabels: Record<string, string> = {
+  HOME_DELIVERY: 'Car Transfer',
+  BETWEEN_LOCATIONS: 'Car Transfer',
+  SERVICE_PICKUP_RETURN: 'Car Transfer',
+}
+
+// Static requirements
+const pickupRequirements = [
+  { icon: QrCode, label: 'VIN last-4' },
+  { icon: Camera, label: '6 Pickup Photos' },
+  { icon: Speed, label: 'Odometer Start' },
+]
+const dropoffRequirements = [
+  { icon: Camera, label: '6 Drop-off Photos' },
+  { icon: Speed, label: 'Odometer End' },
+  { icon: Route, label: 'Tap Complete' },
+]
 
 // ── Hero Route Map ──────────────────────────────────────────────────
 
@@ -136,7 +168,7 @@ function HeroRouteMap({
     lng: (pickup.lng + dropoff.lng) / 2,
   }
 
-  // Clean map styles — focus on route
+  // Clean map styles
   const cleanStyles: google.maps.MapTypeStyle[] = [
     { featureType: 'poi', elementType: 'all', stylers: [{ visibility: 'off' }] },
     { featureType: 'poi.business', elementType: 'all', stylers: [{ visibility: 'off' }] },
@@ -232,8 +264,8 @@ export default function DriverJobDetailsPage() {
   const user = getUser()
   const { jobId } = useSearch({ strict: false }) as { jobId: string }
 
-  // Fetch real gig details
-  const { data: gig, isLoading, isError } = useDataQuery({
+  // Fetch real job details
+  const { data, isLoading, isError } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${user?.profileId}/${jobId}`,
     noFilter: true,
     enabled: Boolean(jobId && user?.profileId),
@@ -257,7 +289,7 @@ export default function DriverJobDetailsPage() {
     libraries: GOOGLE_MAPS_LIBRARIES,
   })
 
-  // Shared error handler for booking mutations
+  // Shared error handler for booking
   const handleBookingError = (error: any) => {
     const status = error?.status || error?.statusCode
     const msg = error?.message || ''
@@ -277,31 +309,38 @@ export default function DriverJobDetailsPage() {
     }
   }
 
-  // Single booking mutation — button label & destination change based on context
+  // Single booking mutation — context-aware destination
   const bookMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
     onSuccess: () => {
       if (hasActiveDelivery) {
         toast.success('Booked for later!', {
           description: 'You can find it in your Booked for Later queue.',
         })
-        navigate({ to: '/driver-booked-later' })
+        navigate({ to: '/driver/booked-later' })
       } else {
         toast.success('Gig accepted!', {
           description: 'Complete the pickup checklist to start your trip.',
         })
-        navigate({ to: '/driver-pickup-checklist', search: { jobId } as any })
+        navigate({ to: '/driver/pickup-checklist', search: { jobId } as any })
       }
     },
     onError: handleBookingError,
   })
 
-  const isBooking = bookMutation.isPending
-
+  // Theme handling
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Single booking handler — context-aware
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+  }
+
+  const handleSignOut = () => {
+    toast.success('Signed out successfully')
+    navigate({ to: '/driver-signin' })
+  }
+
   const handleBook = () => {
     if (!user?.profileId || !user?.id) {
       toast.error('User not authenticated')
@@ -314,113 +353,159 @@ export default function DriverJobDetailsPage() {
     })
   }
 
-  const handleDecline = () => {
-    navigate({ to: '/driver-dashboard' })
-  }
-
   const handleReportIssue = () => {
-    navigate({ to: '/driver-issue-report', state: { deliveryId: jobId } as any })
+    navigate({ to: '/driver/issue-report', state: { deliveryId: jobId } as any })
   }
 
-  // Derived display values
-  const pickupLabel = extractRouteLabel(gig?.pickupAddress || '')
-  const dropoffLabel = extractRouteLabel(gig?.dropoffAddress || '')
-  const hasCoords =
-    gig?.pickupLat != null &&
-    gig?.pickupLng != null &&
-    gig?.dropoffLat != null &&
-    gig?.dropoffLng != null
-
-  // ── Loading skeleton ─────────────────────────────────────────────
+  // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white dark:bg-slate-950 font-sans antialiased">
-        {/* Header skeleton */}
-        <div className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md">
-          <div className="h-14 flex items-center px-4">
-            <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
-            <div className="ml-3 h-4 w-48 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+        <header className="sticky top-0 z-40 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                  Delivery
+                </div>
+                <div className="text-sm font-extrabold">Loading...</div>
+              </div>
+            </div>
           </div>
-        </div>
+        </header>
         {/* Map skeleton */}
         <div className="w-full h-[220px] bg-slate-100 dark:bg-slate-800 animate-pulse" />
-        {/* Content skeleton */}
-        <div className="px-5 py-6 space-y-5">
-          <div className="h-7 w-3/4 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-          <div className="h-10 w-32 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-          <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-          <div className="h-4 w-2/3 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
-        </div>
+        <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
+          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+            <CardContent className="p-8 text-center">
+              <p className="text-slate-600 dark:text-slate-400">Loading job details...</p>
+            </CardContent>
+          </Card>
+        </main>
       </div>
     )
   }
 
-  // ── Error state ──────────────────────────────────────────────────
-  if (isError || !gig) {
+  // Error state
+  if (isError || !data) {
     return (
-      <div className="min-h-screen bg-white dark:bg-slate-950 font-sans antialiased">
-        <div className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md">
-          <div className="h-14 flex items-center px-4">
-            <Link
-              to="/driver-dashboard"
-              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
+      <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+        <header className="sticky top-0 z-40 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link
+                to="/driver/dashboard"
+                className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                  Delivery
+                </div>
+                <div className="text-sm font-extrabold">Error</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" className="w-10 h-10 rounded-2xl" onClick={toggleTheme}>
+                {mounted && theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </Button>
+              <Button onClick={handleSignOut} variant="link" className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition p-0 h-auto">
+                Sign Out
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="px-5 py-16 text-center">
-          <p className="text-lg font-bold text-slate-900 dark:text-white">Gig not found</p>
-          <p className="mt-1 text-sm text-slate-500">This gig may no longer be available.</p>
-          <Link to="/driver-dashboard">
-            <Button className="mt-6 rounded-2xl px-6 font-bold">Back to Dashboard</Button>
-          </Link>
-        </div>
+        </header>
+        <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
+          <Card className="border-red-200 dark:border-red-900 shadow-lg">
+            <CardContent className="p-8 text-center">
+              <p className="text-red-600 dark:text-red-400">Failed to load job details. Please try again.</p>
+            </CardContent>
+          </Card>
+        </main>
       </div>
     )
   }
 
-  // ── Main content ─────────────────────────────────────────────────
+  // Data is available
+  const job = data
+
+  // Compute display values
+  const route = `${getShortAddress(job.pickupAddress)} \u2192 ${getShortAddress(job.dropoffAddress)}`
+  const serviceLabel = serviceTypeLabels[job.serviceType] || job.serviceType
+  const typeLabel = job.originSource === 'homeBase' ? 'Near home base' : 'Matched job'
+  const urgent = job.isUrgent
+  const bonus = job.urgentBonusAmount
+  const payout = job.payoutPreviewAmount
+  const miles = job.pickupDistanceMiles
+  const windowDate = formatDate(job.pickupWindowStart)
+  const windowTime = formatTimeRange(job.pickupWindowStart, job.pickupWindowEnd)
+  const window = `${windowDate} \u2022 ${windowTime}`
+  const driveTime = formatDuration(job.etaMinutes)
+
+  const hasCoords =
+    job.pickupLat != null &&
+    job.pickupLng != null &&
+    job.dropoffLat != null &&
+    job.dropoffLng != null
+
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 font-sans antialiased pb-24">
-      {/* ── Sticky header ── */}
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md">
-        <div className="h-14 flex items-center justify-between px-4">
+    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               to="/driver-dashboard"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              aria-label="Back"
             >
-              <ArrowLeft className="w-5 h-5 text-slate-700 dark:text-slate-200" />
+              <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
               <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                Gig Details
+                Delivery
               </div>
-              <div className="text-sm font-extrabold text-slate-900 dark:text-white truncate max-w-[200px] sm:max-w-none">
-                {pickupLabel} &rarr; {dropoffLabel}
+              <div className="text-sm font-extrabold text-slate-900 dark:text-white">
+                {route}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Theme toggle */}
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
-              className="w-9 h-9 rounded-xl"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
             >
-              {mounted && theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {mounted && theme === 'dark' ? (
+                <Sun className="w-4 h-4" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </Button>
+
+            <Button
+              onClick={handleSignOut}
+              variant="link"
+              className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition p-0 h-auto"
+            >
+              Sign Out
             </Button>
           </div>
         </div>
       </header>
 
-      {/* ── 1. HERO MAP ── */}
+      {/* ── HERO MAP ── */}
       {hasCoords ? (
         <HeroRouteMap
-          pickup={{ lat: gig.pickupLat!, lng: gig.pickupLng! }}
-          dropoff={{ lat: gig.dropoffLat!, lng: gig.dropoffLng! }}
+          pickup={{ lat: job.pickupLat!, lng: job.pickupLng! }}
+          dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
           isLoaded={isMapsLoaded}
         />
       ) : (
@@ -429,142 +514,232 @@ export default function DriverJobDetailsPage() {
         </div>
       )}
 
-      {/* ── 2. PRIMARY INFO: Route + Payout ── */}
-      <div className="px-5 pt-5 pb-4">
-        {/* Urgent badge */}
-        {gig.isUrgent && (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 mb-3">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
-              Urgent
-            </span>
-          </div>
-        )}
+      <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
+        {/* Summary Card */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                {urgent && (
+                  <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 text-[11px] font-extrabold">
+                    <Bolt className="w-4 h-4 text-amber-500" />
+                    Urgent
+                  </Badge>
+                )}
 
-        {/* Route — BIG, BOLD */}
-        <h1 className="text-[22px] sm:text-[26px] font-black text-slate-900 dark:text-white leading-tight tracking-tight">
-          {pickupLabel}{' '}
-          <span className="text-slate-300 dark:text-slate-600 mx-1">&rarr;</span>{' '}
-          {dropoffLabel}
-        </h1>
+                <h1 className="mt-4 text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                  {route}
+                </h1>
 
-        {/* Payout — VERY PROMINENT, GREEN */}
-        {gig.payoutPreviewAmount != null && (
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-[36px] sm:text-[42px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight">
-              {formatCurrency(gig.payoutPreviewAmount)}
-            </span>
-            {gig.urgentBonusAmount != null && gig.urgentBonusAmount > 0 && (
-              <span className="text-[12px] font-bold text-amber-600 dark:text-amber-400">
-                incl. {formatCurrency(gig.urgentBonusAmount)} bonus
-              </span>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                  Service: {serviceLabel} &bull; {typeLabel}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">Status: {job.status}</p>
+              </div>
+
+              <div className="text-left sm:text-right">
+                <p className="text-3xl font-black text-primary">
+                  {formatCurrency(payout)}
+                </p>
+                {bonus ? (
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    Includes {formatCurrency(bonus)} bonus
+                  </p>
+                ) : (
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    No bonus
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Miles
+                </p>
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                  {miles ? `${miles} mi` : '\u2014'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Window
+                </p>
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                  {window}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Est. Drive Time
+                </p>
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                  {driveTime}
+                </p>
+              </div>
+            </div>
+
+            {/* Additional badges */}
+            {(job.afterHours || job.matchScore != null) && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {job.afterHours && (
+                  <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 text-amber-700 dark:text-amber-300">
+                    After Hours
+                  </Badge>
+                )}
+                {job.matchScore != null && (
+                  <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-300">
+                    Match Score: {job.matchScore}
+                  </Badge>
+                )}
+              </div>
             )}
-          </div>
-        )}
-      </div>
+          </CardContent>
+        </Card>
 
-      {/* ── 3. JOB SUMMARY — Stacked, not grid ── */}
-      <div className="mx-5 space-y-2">
-        {/* Pickup time window */}
-        <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">
-          Pickup: {formatDateTimeWindow(gig.pickupWindowStart, gig.pickupWindowEnd)}
-        </p>
-        {/* Dropoff time window */}
-        {gig.dropoffWindowStart && gig.dropoffWindowEnd && (
-          <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">
-            Drop-off: {formatDateTimeWindow(gig.dropoffWindowStart, gig.dropoffWindowEnd)}
-          </p>
-        )}
-        {/* Distance + ETA — single stacked line */}
-        <p className="text-[14px] font-medium text-slate-500 dark:text-slate-400">
-          {[gig.pickupDistanceMiles != null ? `${gig.pickupDistanceMiles} mi` : null, formatDuration(gig.etaMinutes) ? `Est. ${formatDuration(gig.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
-        </p>
-      </div>
+        {/* Pickup Requirements */}
+        <Card className="mt-6 border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg font-black">Required at Pickup</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-3">
+              {pickupRequirements.map((req, index) => (
+                <Badge
+                  key={index}
+                  variant="outline"
+                  className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
+                >
+                  <req.icon className="w-4 h-4 text-primary mr-1" />
+                  {req.label}
+                </Badge>
+              ))}
+            </div>
 
-      {/* ── 4. LOCATION DETAILS ── */}
-      <div className="px-5 mt-5 space-y-4">
-        <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
-          Locations
-        </h2>
-
-        {/* Pickup */}
-        <div className="flex gap-3">
-          <div className="flex flex-col items-center pt-1">
-            <div className="w-3 h-3 rounded-full bg-green-500 ring-2 ring-green-100 dark:ring-green-900/40" />
-            <div className="w-px flex-1 bg-slate-200 dark:bg-slate-700 mt-1" />
-          </div>
-          <div className="flex-1 pb-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-green-600 dark:text-green-400">
-              Pickup
+            <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
+              You cannot tap &quot;Start Delivery&quot; until all checklist items are completed.
             </p>
-            <p className="text-[14px] font-semibold text-slate-900 dark:text-white mt-1 leading-snug">
-              {gig.pickupAddress || '\u2014'}
-            </p>
-            {gig.pickupLat && gig.pickupLng && (
-              <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${gig.pickupLat},${gig.pickupLng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 mt-1.5 text-[12px] font-medium text-green-600 dark:text-green-400 hover:underline"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Open in Maps
-              </a>
-            )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Dropoff */}
-        <div className="flex gap-3">
-          <div className="flex flex-col items-center pt-1">
-            <div className="w-3 h-3 rounded-full bg-red-500 ring-2 ring-red-100 dark:ring-red-900/40" />
-          </div>
-          <div className="flex-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-red-500 dark:text-red-400">
-              Dropoff
-            </p>
-            <p className="text-[14px] font-semibold text-slate-900 dark:text-white mt-1 leading-snug">
-              {gig.dropoffAddress || '\u2014'}
-            </p>
-            {gig.dropoffLat && gig.dropoffLng && (
-              <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${gig.dropoffLat},${gig.dropoffLng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 mt-1.5 text-[12px] font-medium text-green-600 dark:text-green-400 hover:underline"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Open in Maps
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
+        {/* Drop-off Requirements */}
+        <Card className="mt-6 border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg font-black">Required at Drop-off</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-3">
+              {dropoffRequirements.map((req, index) => (
+                <Badge
+                  key={index}
+                  variant="outline"
+                  className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
+                >
+                  <req.icon className="w-4 h-4 text-primary mr-1" />
+                  {req.label}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* ── 5. STICKY BOTTOM CTA ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800">
-        <div className="max-w-lg mx-auto px-5 py-3 flex items-center gap-3">
-          {/* Report issue (text only) */}
-          <button
-            onClick={handleReportIssue}
-            className="shrink-0 w-11 h-11 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-          >
-            <MessageSquare className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-          </button>
+        {/* Job Details Card */}
+        <Card className="mt-6 border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg font-black">Additional Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Service Type</p>
+                <p className="font-medium">{serviceLabel}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
+                <p className="font-medium">{job.status}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Match Score</p>
+                <p className="font-medium">{job.matchScore ?? '\u2014'}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Match Reasons</p>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {job.matchReasons?.map((reason: string, i: number) => (
+                    <Badge key={i} variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100">
+                      {reason}
+                    </Badge>
+                  )) || '\u2014'}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup Distance (mi)</p>
+                <p className="font-medium">{job.pickupDistanceMiles ?? '\u2014'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup ETA (min)</p>
+                <p className="font-medium">{job.pickupEtaMinutes ?? '\u2014'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Origin Source</p>
+                <p className="font-medium">{job.originSource}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">After Hours</p>
+                <p className="font-medium">{job.afterHours ? 'Yes' : 'No'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Created At</p>
+                <p className="font-medium">{new Date(job.createdAt).toLocaleString()}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Single context-aware booking button */}
-          <Button
-            onClick={handleBook}
-            disabled={isBooking}
-            className={cn(
-              'flex-1 h-12 rounded-2xl text-white font-extrabold text-[14px] tracking-tight transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg',
-              hasActiveDelivery
-                ? 'bg-primary hover:bg-primary/90 shadow-primary/20'
-                : 'bg-green-600 hover:bg-green-700 shadow-green-600/20',
-            )}
-          >
-            {isBooking ? 'Booking\u2026' : hasActiveDelivery ? 'Book for Later' : 'Accept Gig'}
-          </Button>
+        {/* Policy Notes */}
+        <Alert className="mt-6 bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
+          <Info className="h-4 w-4 text-amber-500" />
+          <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm font-extrabold">
+            Important Policy
+          </AlertTitle>
+          <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-sm mt-1">
+            No cancellation from Driver UI. If an issue occurs, report it through Support. All actions are logged for audit purposes.
+          </AlertDescription>
+        </Alert>
+      </main>
+
+      {/* Bottom Action Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 safe-bottom">
+        <div className="max-w-[980px] mx-auto px-5 sm:px-6 py-4">
+          <div className="flex items-center gap-3">
+            {/* Report issue */}
+            <Button
+              onClick={handleReportIssue}
+              variant="outline"
+              className="shrink-0 w-12 h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition p-0 flex items-center justify-center"
+            >
+              <MessageSquare className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+            </Button>
+
+            {/* Context-aware booking button */}
+            <Button
+              onClick={handleBook}
+              disabled={bookMutation.isPending}
+              className={cn(
+                'flex-1 px-6 py-4 rounded-2xl text-white font-extrabold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed',
+                hasActiveDelivery
+                  ? 'bg-primary'
+                  : 'bg-green-600 hover:bg-green-700',
+              )}
+            >
+              {bookMutation.isPending
+                ? 'Booking\u2026'
+                : hasActiveDelivery
+                  ? 'Book for Later'
+                  : 'Accept Gig'}
+            </Button>
+          </div>
         </div>
       </nav>
     </div>

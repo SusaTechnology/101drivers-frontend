@@ -88,7 +88,7 @@ const dealerSignupSchema = z
     
     // Business primary contact info (fullName, phone) - businessEmail is optional
     fullName: z.string().min(1, "Business contact full name is required"),
-    businessEmail: z.string().email("Valid business email").optional().or(z.literal("")), // Optional - only if found from directory
+    businessEmail: z.string().email("invalid business email").optional().or(z.literal("")), // Optional - only if found from directory
     businessPhone: z.string().min(1, "Business phone is required").regex(/^\d{10}$/, "Business phone must be exactly 10 digits"),
     
     // Terms
@@ -870,6 +870,16 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         <Input
                           id="businessEmailDirectory"
                           {...registerSignup("businessEmail")}
+                          onChange={(e) => {
+                              // Update the field
+                              setSignupValue("businessEmail", e.target.value, { shouldValidate: false });
+                              // Run Zod validation right away
+                              // Clear the error manually if the email is now valid
+                              if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value)) {
+                                clearSignupErrors("businessEmail");
+                              }
+                            }}
+                          onBlur={() => trigger("businessEmail")}
                           type="email"
                           className="w-full h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                           placeholder="business@example.com (if available)"
@@ -1002,6 +1012,16 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             {...registerSignup("contactEmail")}
                             type="email"
                             autoComplete="off"
+                            value={watchContactEmail ?? ""}
+                            onChange={(e) => {
+                              // Update the field
+                              setSignupValue("contactEmail", e.target.value, { shouldValidate: false });
+                              // Run Zod validation right away
+                              // Clear the error manually if the email is now valid
+                              if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value)) {
+                                clearSignupErrors("contactEmail");
+                              }
+                            }}
                             className={cn(
                               "w-full h-14 pl-12 pr-4 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm transition-colors",
                               signupErrors.contactEmail
@@ -1010,10 +1030,12 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                                   ? "border-green-300 dark:border-green-700"
                                   : "border-slate-200 dark:border-slate-700"
                             )}
+                            onBlur={() => trigger("contactEmail")}
                             placeholder="your@email.com"
                             disabled={isPending}
                           />
                           {watchContactEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchContactEmail) && (
+                            
                             <div className="absolute right-3 top-1/2 -translate-y-1/2">
                               <CheckCircle className="w-5 h-5 text-green-500" />
                             </div>
@@ -1282,44 +1304,45 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                           : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
                       )}
                     >
-                      <div className="flex items-start space-x-3">
-                        <input
-                          type="checkbox"
-                          id="acceptTerms"
-                          {...registerSignup("acceptTerms")}
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary focus:ring-offset-0"
-                          disabled={isPending}
-                        />
-                        <Label
-                          htmlFor="acceptTerms"
-                          className={cn(
-                            "text-xs cursor-pointer leading-relaxed",
-                            signupErrors.acceptTerms
-                              ? "text-red-700 dark:text-red-300 font-bold"
-                              : acceptTerms
-                              ? "text-green-700 dark:text-green-300 font-medium"
-                              : "text-slate-600 dark:text-slate-400"
-                          )}
-                        >
-                          I agree to receive email notifications and accept the{" "}
-                          <Link
-                            to="/terms"
-                            className="font-extrabold hover:text-primary underline"
-                            target="_blank"
-                          >
-                            Terms of Service
-                          </Link>{" "}
-                          and{" "}
-                          <Link
-                            to="/privacy"
-                            className="font-extrabold hover:text-primary underline"
-                            target="_blank"
-                          >
-                            Privacy Policy
-                          </Link>
-                          .
-                        </Label>
-                      </div>
+<div className="flex items-start space-x-3">
+  <input
+    type="checkbox"
+    id="acceptTerms"
+    {...registerSignup("acceptTerms")}
+    className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-primary focus:ring-primary focus:ring-offset-0"
+    disabled={isPending}
+  />
+
+  <Label
+    htmlFor="acceptTerms"
+    className={cn(
+      "text-xs leading-relaxed cursor-pointer flex-1 flex-wrap",
+      signupErrors.acceptTerms
+        ? "text-red-700 dark:text-red-300 font-bold"
+        : acceptTerms
+        ? "text-green-700 dark:text-green-300 font-medium"
+        : "text-slate-600 dark:text-slate-400"
+    )}
+  >
+    I agree to receive email notifications and accept the{" "}
+    <Link
+      to="/terms"
+      className="font-extrabold hover:text-primary underline"
+      target="_blank"
+    >
+      Terms of Service
+    </Link>{" "}
+    and{" "}
+    <Link
+      to="/privacy"
+      className="font-extrabold hover:text-primary underline"
+      target="_blank"
+    >
+      Privacy Policy
+    </Link>
+    .
+  </Label>
+</div>
                       {signupErrors.acceptTerms && (
                         <p className="text-sm text-red-500 font-medium">
                           {signupErrors.acceptTerms.message}

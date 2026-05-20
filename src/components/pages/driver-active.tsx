@@ -96,6 +96,7 @@ import {
 import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
 import { BUSINESS_TZ } from '@/lib/timezone'
+import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Default delivery data (fallback while loading) – updated to match API shape
 const MOCK_DELIVERY = {
@@ -157,8 +158,8 @@ const MOCK_DELIVERY = {
 
 // Navigation items for mobile menu (optional)
 const navItems = [
-  { href: '/driver-dashboard', label: 'Dashboard' },
-  { href: '/driver-active', label: 'Active Delivery', active: true },
+  { href: '/driver/dashboard', label: 'Dashboard' },
+  { href: '/driver/active', label: 'Active Delivery', active: true },
 ]
 
 export default function DriverActiveDeliveryPage() {
@@ -431,7 +432,7 @@ export default function DriverActiveDeliveryPage() {
   const handleSupport = () => {
     // Navigate to support request page with delivery context
     navigate({
-      to: '/driver-issue-report',
+      to: '/driver/issue-report',
       state: { deliveryId: deliveryId }
     })
   }
@@ -703,7 +704,7 @@ export default function DriverActiveDeliveryPage() {
           </CardHeader>
           <CardContent>
             <Button
-              onClick={() => navigate({ to: '/driver-dashboard' })}
+              onClick={() => navigate({ to: '/driver/dashboard' })}
               className="w-full lime-btn rounded-2xl py-3 font-extrabold"
             >
               Browse Gigs
@@ -768,7 +769,7 @@ export default function DriverActiveDeliveryPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0">
                     <button
-                      onClick={() => navigate({ to: '/driver-dashboard' })}
+                      onClick={() => navigate({ to: '/drive/dashboard' })}
                       className="pointer-events-auto w-10 h-10 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-lg shrink-0"
                     >
                       <ArrowBack className="w-5 h-5" />
@@ -874,7 +875,7 @@ export default function DriverActiveDeliveryPage() {
             <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Link
-                  to="/driver-dashboard"
+                  to="/driver/dashboard"
                   className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
                   aria-label="Back to driver dashboard"
                 >
@@ -1409,9 +1410,11 @@ export default function DriverActiveDeliveryPage() {
           tripStartTime={deliveryData?.trackingSession?.startedAt}
           onDismiss={() => {
             setShowCompletion(false)
-            navigate({ to: '/driver-dashboard' })
+            navigate({ to: '/driver/dashboard' })
           }}
         />
       )}
       <DriverBottomNav activeTab="in-progress" />
     </div>
+ )
+}

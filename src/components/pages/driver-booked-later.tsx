@@ -37,6 +37,7 @@ import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 import { BUSINESS_TZ, formatTime, formatDate, formatTimeRange } from '@/lib/timezone'
+import DriverBottomNav from '../layout/DriverBottomNav'
 
 
 const formatCurrency = (amount?: number | null): string => {
@@ -131,7 +132,7 @@ export default function DriverBookedLaterPage() {
         <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              to="/driver-dashboard"
+              to="/driver/dashboard"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Back to dashboard"
             >
@@ -199,7 +200,7 @@ export default function DriverBookedLaterPage() {
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 text-center max-w-sm">
               When you find a gig you like, tap "Book for Later" on the gig details page to add it here.
             </p>
-            <Link to="/driver-dashboard">
+            <Link to="/driver/job-list">
               <Button className="mt-6 rounded-2xl px-6 font-extrabold lime-btn">
                 Browse Gigs
               </Button>

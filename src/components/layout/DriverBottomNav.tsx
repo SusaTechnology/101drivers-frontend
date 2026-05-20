@@ -1,31 +1,31 @@
 import React from 'react'
 import { Link } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
-import { Search, Bookmark, Truck, CheckCircle } from 'lucide-react'
+import { List, Bookmark, Truck, CheckCircle, Map } from 'lucide-react'
 
 const tabs = [
   {
     id: 'available' as const,
     label: 'Available',
-    href: '/driver-dashboard',
-    icon: Search,
+    href: '/driver/job-list',
+    icon: List,
   },
   {
     id: 'my-bookings' as const,
     label: 'My Bookings',
-    href: '/driver-booked-later',
+    href: '/driver/booked-later',
     icon: Bookmark,
   },
   {
     id: 'in-progress' as const,
-    label: 'In Progress',
-    href: '/driver-active',
+    label: 'Active',
+    href: '/driver/active',
     icon: Truck,
   },
   {
     id: 'completed' as const,
     label: 'Completed',
-    href: '/driver-completed',
+    href: '/driver/completed',
     icon: CheckCircle,
   },
 ]
@@ -48,15 +48,15 @@ export default function DriverBottomNav({ activeTab }: DriverBottomNavProps) {
                 key={tab.id}
                 to={tab.href}
                 className={cn(
-                  "flex flex-col items-center gap-1 py-3 transition",
+                  "flex flex-col items-center gap-1 py-2 transition",
                   isActive
                     ? 'text-green-600 dark:text-green-400'
                     : 'text-slate-400 dark:text-slate-500'
                 )}
               >
-                <tab.icon className="w-5 h-5" />
+                <tab.icon className="w-4 h-4" />
                 <span className={cn(
-                  "text-[10px] font-black uppercase tracking-widest",
+                  "text-[8px] font-black uppercase tracking-widest",
                   isActive && 'text-green-600 dark:text-green-400'
                 )}>
                   {tab.label}

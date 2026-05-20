@@ -384,6 +384,10 @@ export default function DriverMapPage() {
     streetViewControl: false,
     mapTypeControl: false,
     zoomControl: true,
+    // zoomControlOptions:{
+    //   position: google?.maps?.ControlPosition?.TOP_RIGHT,
+    // },
+    
     gestureHandling: 'auto' as const,
     disableDefaultUI: false,
     styles: [
@@ -391,16 +395,6 @@ export default function DriverMapPage() {
       { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'on' }] },
     ],
   }), [])
-
-  // Reposition zoom controls after map loads (can't use google in useMemo — not loaded yet)
-  const handleMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map
-    map.setOptions({
-      zoomControlOptions: {
-        position: google.maps.ControlPosition.RIGHT_BOTTOM,
-      },
-    })
-  }, [])
 
   const formatFullDate = (isoString?: string): string => {
     if (!isoString) return ''
@@ -486,7 +480,7 @@ export default function DriverMapPage() {
             center={{ lat: 33.94, lng: -118.40 }}
             zoom={11}
             options={mapOptions}
-            onLoad={handleMapLoad}
+            onLoad={(map) => { mapRef.current = map }}
           >
             {/* Driver location */}
             <Marker

@@ -74,8 +74,7 @@ import {
   type ArchiveNotificationResponse,
   type TrackClickResponse,
 } from '@/types/notification'
-
-import { BUSINESS_TZ } from '@/lib/timezone'
+import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Filter options
 const filterOptions = [
@@ -132,12 +131,36 @@ const getDeliveryLink = (notification: NotificationEventItem): string | null => 
   return null
 }
 
+// Render body text with clickable URLs
+const renderBodyWithLinks = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = text.split(urlRegex)
+  return parts.map((part, i) => {
+    if (urlRegex.test(part)) {
+      urlRegex.lastIndex = 0 // reset after test
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline underline-offset-2 break-all hover:opacity-80 transition"
+        >
+          {part}
+        </a>
+      )
+    }
+    urlRegex.lastIndex = 0
+    return <React.Fragment key={i}>{part}</React.Fragment>
+  })
+}
+
 // Bottom navigation items
 const bottomNavItems = [
-  { href: '/driver-dashboard', label: 'Home', icon: LayoutDashboard },
-  { href: '/driver-active', label: 'Active', icon: Truck },
-  { href: '/driver-inbox', label: 'Inbox', icon: InboxIcon, active: true },
-  { href: '/driver-menu', label: 'Menu', icon: MoreHorizontal },
+  { href: '/driver/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/driver/active', label: 'Active', icon: Truck },
+  { href: '/driver/inbox', label: 'Inbox', icon: InboxIcon, active: true },
+  { href: '/driver/menu', label: 'Menu', icon: MoreHorizontal },
 ]
 
 export default function DriverInboxPage() {
@@ -255,7 +278,7 @@ export default function DriverInboxPage() {
     if (deliveryLink) {
       targetUrl = deliveryLink
     } else if (selectedNotification.type.includes('SUPPORT')) {
-      targetUrl = '/driver-support-list'
+      targetUrl = '/driver/support-list'
     }
 
     if (targetUrl) {
@@ -327,7 +350,7 @@ export default function DriverInboxPage() {
   }
 
   const handleContactSupport = () => {
-    navigate({ to: '/driver-issue-report' })
+    navigate({ to: '/driver/issue-report' })
   }
 
   const handleGoToActiveDelivery = () => {
@@ -370,7 +393,7 @@ export default function DriverInboxPage() {
     if (diffHours < 24) return `${diffHours} hours ago`
     if (diffDays === 1) return 'Yesterday'
     if (diffDays < 7) return `${diffDays} days ago`
-    return date.toLocaleDateString('en-US', { timeZone: BUSINESS_TZ })
+    return date.toLocaleDateString()
   }
 
   return (
@@ -380,7 +403,7 @@ export default function DriverInboxPage() {
         <div className="max-w-[1100px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              to="/driver-dashboard"
+              to="/driver/dashboard"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Back"
             >
@@ -535,7 +558,7 @@ export default function DriverInboxPage() {
               // Loading skeleton
               Array(4).fill(null).map((_, i) => (
                 <div key={i} className="p-6 sm:p-7 flex gap-4">
-                  <Skeleton className="w-11 h-11 rounded-2xl" />
+                  <Skeleton className="w-11 h-11 rounded-full" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-4 w-1/3" />
                     <Skeleton className="h-3 w-3/4" />
@@ -573,27 +596,18 @@ export default function DriverInboxPage() {
                       onClick={() => handleNotificationClick(notification)}
                       className="w-full text-left flex items-start gap-4"
                     >
-                      <div className={cn(
-                        "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0",
-                        color === 'blue' && "bg-blue-500/15",
-                        color === 'green' && "bg-emerald-500/15",
-                        color === 'emerald' && "bg-emerald-500/15",
-                        color === 'amber' && "bg-amber-500/15",
-                        color === 'red' && "bg-red-500/15",
-                        color === 'slate' && "bg-slate-500/15",
-                      )}>
-                        <Icon className={cn(
-                          "w-5 h-5 text-primary",
-                          color === 'amber' && "text-amber-600",
-                          color === 'red' && "text-red-500",
-                        )} />
+                      {/* Read / Unread indicator circle */}
+                      <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                        {!notification.isRead && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                        )}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           {!notification.isRead && (
-                            <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/25 text-[11px] font-extrabold text-slate-800 dark:text-slate-200">
-                              <span className="w-2 h-2 rounded-full bg-primary" />
+                            <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-900/15 border border-red-200 dark:border-red-900/40 text-[11px] font-extrabold text-red-700 dark:text-red-300">
+                              <span className="w-2 h-2 rounded-full bg-red-500" />
                               Unread
                             </Badge>
                           )}
@@ -718,10 +732,9 @@ export default function DriverInboxPage() {
       {/* Bottom Navigation */}
       <DriverBottomNav />
 
-
       {/* Notification Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col overflow-hidden p-0">
           {selectedNotification && (() => {
             const Icon = getNotificationIcon(selectedNotification.type)
             const color = getNotificationColor(selectedNotification.type)
@@ -729,8 +742,8 @@ export default function DriverInboxPage() {
             const hasAction = deliveryLink || selectedNotification.type.includes('SUPPORT')
 
             return (
-              <>
-                <DialogHeader>
+                <div className="flex flex-col min-h-0 max-h-[90dvh]">
+                <DialogHeader className="p-6 pb-0 shrink-0">
                   <div className="flex items-start gap-4">
                     <div className={cn(
                       "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
@@ -765,9 +778,9 @@ export default function DriverInboxPage() {
                   </div>
                 </DialogHeader>
 
-                <div className="py-4">
-                  <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
-                    {selectedNotification.body}
+                <div className="px-6 py-4 overflow-y-auto overscroll-contain flex-1 min-h-0">
+                  <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">
+                    {renderBodyWithLinks(selectedNotification.body)}
                   </DialogDescription>
 
                   <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
@@ -793,7 +806,7 @@ export default function DriverInboxPage() {
                   </div>
                 </div>
 
-                <DialogFooter className="flex-col sm:flex-row gap-2">
+                <DialogFooter className="flex-col sm:flex-row gap-2 p-6 pt-0 shrink-0">
                   <Button
                     variant="outline"
                     onClick={handleArchiveFromDialog}
@@ -813,7 +826,7 @@ export default function DriverInboxPage() {
                     </Button>
                   )}
                 </DialogFooter>
-              </>
+              </div>
             )
           })()}
         </DialogContent>

@@ -15,7 +15,7 @@ export default function DriverProofCamPage() {
     try {
       const seen = localStorage.getItem(PROOF_CAM_FLAG);
       if (seen === "true") {
-        navigate({ to: "/driver-dashboard" });
+        navigate({ to: "/driver/dashboard" });
       }
     } catch {
       // localStorage may not be available (SSR, private browsing, etc.)
@@ -35,7 +35,7 @@ export default function DriverProofCamPage() {
       await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: false,
-          timeout: 10000,
+          timeout: 30000,
           maximumAge: 60000,
         });
       });
@@ -52,14 +52,14 @@ export default function DriverProofCamPage() {
     setIsRequesting(true);
 
     const granted = await requestPermissions();
-
+    console.log(granted)
     if (granted) {
       try {
         localStorage.setItem(PROOF_CAM_FLAG, "true");
       } catch {
         // Storage may not be available
       }
-      navigate({ to: "/driver-dashboard" });
+      navigate({ to: "/driver/dashboard" });
     } else {
       setPermissionError(
         "Camera and location access are required for deliveries. Please tap Allow on both prompts to continue."
@@ -70,9 +70,9 @@ export default function DriverProofCamPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col">
+    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col overflow-hidden">
       {/* Back link top-left */}
-      <div className="p-6">
+      <div className="sticky top-0 p-6">
         <Link
           to="/landing"
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
@@ -89,27 +89,88 @@ export default function DriverProofCamPage() {
             Proof Camera
           </h1>
 
-          <div className="space-y-4 text-lg text-slate-600 dark:text-slate-300 leading-relaxed text-left">
-            <p>
-              Your phone is your proof camera. That just means you use it to
-              take six pictures of the vehicle before and after each job. Those
-              photos get uploaded to the app so the customer has proof everything
-              was done right. You don&rsquo;t need to keep the pictures.
-            </p>
-            <p>
-              Location turns on only when you hit Start on a route, and it turns
-              off when you hit End.
-            </p>
-            <p>
-              This app requires a smartphone with a camera and GPS — works on
-              any iPhone or Android.
-            </p>
-            <p>
-              When you tap the button below, we&rsquo;ll ask you to allow
-              camera and location. Just tap Allow — it&rsquo;s only used while
-              you&rsquo;re on an active route.
-            </p>
-          </div>
+          {/* --- Beautiful, safe content --- */}
+<div className="space-y-6 text-left text-slate-700 dark:text-slate-200 leading-relaxed">
+  {/* Why it matters */}
+  <div className="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
+    <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+      📸 How Proof Camera works
+    </h2>
+    <p className="text-base">
+
+      Your phone <strong>is</strong> your proof camera. You’ll take six photos 
+      at the pickup location and six photos at the drop-off location. 
+      These 12 photos prove the vehicle was left in the same condition
+       as when you picked it up. The pictures upload instantly to the app, 
+       so they don’t get saved on your phone.Location only turns on when you hit Start on a route, 
+       and turns off when you hit End.This app requires a smartphone with a camera and GPS — works 
+       on any iPhone or Android
+    </p>
+    <p className="text-sm mt-2 text-slate-500 dark:text-slate-400">
+      Requires a smartphone with camera & GPS — works on any iPhone or Android.
+    </p>
+  </div>
+
+  {/* Permission steps */}
+  <div>
+    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">
+      How to enable camera & location permissions
+    </h3>
+
+    {/* iPhone steps */}
+    <div className="bg-white dark:bg-slate-800/50 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-700 mb-4">
+      <p className="font-medium text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
+        📱 iPhone
+      </p>
+      <ul className="space-y-2 text-sm">
+        <li className="flex gap-2">
+          <span className="text-blue-600 dark:text-blue-400 font-mono mr-1">1.</span>
+          <span>
+            <span className="font-medium">Safari:</span> Settings {'>'} Privacy & Security {'>'} Location Services {'>'} Safari → <em>While Using the App</em>.<br />
+            Also: Settings {'>'} Safari {'>'} Camera → Allow.
+          </span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-blue-600 dark:text-blue-400 font-mono mr-1">2.</span>
+          <span>
+            <span className="font-medium">Chrome:</span> Settings {'>'} Chrome {'>'} Location and Camera → <em>While Using the App</em>.
+          </span>
+        </li>
+      </ul>
+    </div>
+
+    {/* Android steps */}
+    <div className="bg-white dark:bg-slate-800/50 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-700">
+      <p className="font-medium text-sm uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
+        🤖 Android
+      </p>
+      <ul className="space-y-2 text-sm">
+        <li className="flex gap-2">
+          <span className="text-green-600 dark:text-green-400 font-mono mr-1">1.</span>
+          <span>
+            <span className="font-medium">Chrome</span> (most common): Settings {'>'} Apps {'>'} Chrome {'>'} Permissions → turn on <strong>Camera</strong> and <strong>Location</strong>.
+          </span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-green-600 dark:text-green-400 font-mono mr-1">2.</span>
+          <span>
+            For <span className="font-medium">Samsung Internet</span> or <span className="font-medium">Firefox</span>, do the same in their app settings.
+          </span>
+        </li>
+      </ul>
+    </div>
+
+    <p className="text-sm text-slate-500 dark:text-slate-400 mt-3">
+      After changing settings, come back here and tap <strong>“Allow”</strong> on both pop‑ups. If it still doesn’t work, refresh the page or reopen your browser.
+    </p>
+  </div>
+
+  {/* Call to action */}
+  <p className="text-sm text-slate-600 dark:text-slate-300 italic">
+    When you tap the button below, we’ll ask you to allow camera and location. 
+    Just tap Allow — it’s only used while you’re on an active route.
+  </p>
+</div>
 
           {/* Permission error / retry message */}
           {permissionError && (
@@ -123,7 +184,7 @@ export default function DriverProofCamPage() {
       </div>
 
       {/* Fixed bottom button */}
-      <div className="sticky bottom-0 w-full bg-gradient-to-t from-white via-white to-transparent dark:from-background-dark dark:via-background-dark pt-8 pb-6 px-6 safe-bottom">
+      <div className=" sticky bottom-0 w-full bg-background-light dark:from-background-dark dark:via-background-dark pt-8 pb-6 px-6 safe-bottom">
         <div className="max-w-md mx-auto">
           <Button
             onClick={handleContinue}

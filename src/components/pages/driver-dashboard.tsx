@@ -91,14 +91,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
-import DriverBottomNav from '@/components/layout/DriverBottomNav'
 import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import MiniRouteMap from '@/components/map/MiniRouteMap'
 import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
 import { usePickupZones } from '@/hooks/usePickupZones'
 import type { NotificationInboxResponse } from '@/types/notification'
-import { BUSINESS_TZ, formatFullWeekdayDate, formatTimeRange, formatFullDate } from '@/lib/timezone'
+import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Filter options matching backend API
 const FILTER_OPTIONS = {
@@ -131,7 +130,28 @@ const formatDate = (isoString?: string): string => {
 
   if (date.toDateString() === today.toDateString()) return 'Today'
   if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+// Full weekday date format: "Monday, April 20"
+const formatFullWeekdayDate = (isoString?: string): string => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+// Time range: "8:00 AM – 11:00 AM"
+const formatTimeRange = (startIso?: string, endIso?: string): string => {
+  if (!startIso || !endIso) return ''
+  const start = new Date(startIso)
+  const end = new Date(endIso)
+  const startStr = start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const endStr = end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return `${startStr} - ${endStr}`
 }
 
 const formatDuration = (minutes?: number): string => {
@@ -426,7 +446,7 @@ export default function DriverDashboardPage() {
     try {
       const seen = localStorage.getItem('hasSeenProofCam')
       if (seen !== 'true') {
-        navigate({ to: '/driver-proof-cam' })
+        navigate({ to: '/driver/proof-cam' })
       }
     } catch {
       // localStorage may not be available (SSR, private browsing, etc.)
@@ -475,7 +495,7 @@ export default function DriverDashboardPage() {
 
   // Navigate to full Gig Details page
   const handleViewJob = (jobId: string) => {
-    navigate({ to: `/driver-job-details`, search: { jobId } })
+    navigate({ to: `/driver/job-details`, search: { jobId } })
   }
 
   // Open bottom sheet for a specific job (from map bubble tap)
@@ -556,11 +576,19 @@ export default function DriverDashboardPage() {
     ],
   }), [])
 
+  // Format full date string for the bottom sheet
+  const formatFullDate = (isoString?: string): string => {
+    if (!isoString) return ''
+    return new Date(isoString).toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  }
+
   return (
-    <div className={cn(
-      "bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col",
-      activeView === 'map' ? "h-screen overflow-hidden" : "min-h-screen"
-    )}>
+    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col">
       {/* ═══════════════════════════════════════ */}
       {/* TOP APP BAR                           */}
       {/* ═══════════════════════════════════════ */}
@@ -579,12 +607,12 @@ export default function DriverDashboardPage() {
             </Link>
             <div className="leading-tight">
               <div className="text-[13px] font-black text-slate-900 dark:text-white">
-                {activeView === 'map' ? 'Map View' : 'Gig Board'}
+                {activeView === 'map' ? 'Map View' : 'Gig Board (List)'}
               </div>
             </div>
           </div>
 
-          {/* Right: Action icons */}
+          {/* Right: Action icons — Filter, Notifications, Settings only */}
           <div className="flex items-center gap-1.5">
             {/* Driver identity pill (desktop) */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40">
@@ -597,68 +625,36 @@ export default function DriverDashboardPage() {
               </span>
             </div>
 
-            {/* Filter / Funnel */}
+            {/* Filter */}
             <Link
-              to="/driver-preferences"
+              to="/driver/dashboard"
               className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Filter"
             >
-              <Funnel className="w-4 h-4" />
+              <Map className="w-4 h-4" />
             </Link>
 
-            {/* Gear / Preferences */}
+            {/* Notifications — with unread count badge */}
             <Link
-              to="/driver-preferences"
-              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-              aria-label="Preferences"
-            >
-              <Settings className="w-4 h-4" />
-            </Link>
-
-            {/* Inbox / Booked for Later */}
-            <Link
-              to="/driver-booked-later"
-              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-              aria-label="Booked for later"
-            >
-              <Inbox className="w-4 h-4" />
-            </Link>
-
-            {/* Briefcase / Active Deliveries */}
-            <Link
-              to="/driver-active"
-              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-              aria-label="Active deliveries"
-            >
-              <Briefcase className="w-4 h-4" />
-            </Link>
-
-            {/* List button — switches to Gig Board */}
-            <button
-              onClick={() => setActiveView('list')}
-              className={cn(
-                "w-9 h-9 rounded-xl border transition flex items-center justify-center",
-                activeView === 'list'
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
-              )}
-              aria-label="Switch to list view"
-            >
-              <List className="w-4 h-4" />
-            </button>
-
-            {/* Notifications */}
-            <Link
-              to="/driver-inbox"
+              to="/driver/inbox"
               className="relative w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-              aria-label="Inbox"
+              aria-label="Notifications"
             >
-              <Inbox className="w-4 h-4" />
+              <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-slate-950 text-[11px] font-black flex items-center justify-center border border-white dark:border-slate-900">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
+            </Link>
+
+            {/* Settings */}
+            <Link
+              to="/driver/preferences"
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              aria-label="Settings"
+            >
+              <Settings className="w-4 h-4" />
             </Link>
           </div>
         </div>
@@ -669,10 +665,11 @@ export default function DriverDashboardPage() {
       {/* ═══════════════════════════════════════ */}
       {activeView === 'map' ? (
         /* ─── MAP VIEW ─── */
-        <div className="flex-1 min-h-0 relative">
+        <div className="flex-1">
           {isLoaded ? (
             <GoogleMap
-              mapContainerStyle={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              mapContainerClassName="w-full"
+              mapContainerStyle={{ width: '100%', height: 'calc(100vh - 56px - 56px)' }}
               center={{ lat: 33.94, lng: -118.40 }}
               zoom={11}
               options={mapOptions}
@@ -709,7 +706,7 @@ export default function DriverDashboardPage() {
               ))}
             </GoogleMap>
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 56px - 56px)' }}>
               <div className="flex flex-col items-center gap-4">
                 <RefreshCw className="w-8 h-8 animate-spin text-primary" />
                 <p className="text-sm text-slate-600 dark:text-slate-400">Loading map...</p>
@@ -726,7 +723,7 @@ export default function DriverDashboardPage() {
               Gig Board
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Tap any gig to see details and book it.
+              Available deliveries near you. Tap to see details and book.
             </p>
           </div>
 
@@ -1032,7 +1029,10 @@ export default function DriverDashboardPage() {
         </SheetContent>
       </Sheet>
 
-      <DriverBottomNav activeTab="available" />
+      {/* ═══════════════════════════════════════ */}
+      {/* BOTTOM TAB BAR — Map | List | Active   */}
+      {/* ═══════════════════════════════════════ */}
+      <DriverBottomNav/>
     </div>
   )
 }

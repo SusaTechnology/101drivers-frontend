@@ -27,7 +27,19 @@ import DriverBottomNav from '@/components/layout/DriverBottomNav'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-import { BUSINESS_TZ, formatTime, formatDate } from '@/lib/timezone'
+const formatTime = (isoString?: string | null): string => {
+  if (!isoString) return '--'
+  return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+}
+
+const formatDate = (isoString?: string | null): string => {
+  if (!isoString) return ''
+  return new Date(isoString).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
 
 const formatCurrency = (amount?: number | null): string => {
   if (amount == null) return '--'

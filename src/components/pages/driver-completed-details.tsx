@@ -33,7 +33,41 @@ import {
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 
 // ── Formatters ──────────────────────────────────────────────────────
-import { BUSINESS_TZ, formatShortDayMonth, formatDateTimeWindow, formatTime, formatDate } from '@/lib/timezone'
+
+const formatShortDayMonth = (isoString?: string | null): string => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+const formatDateTimeWindow = (startIso?: string | null, endIso?: string | null): string => {
+  if (!startIso || !endIso) return ''
+  const date = new Date(startIso)
+  const start = new Date(startIso)
+  const end = new Date(endIso)
+  const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return `${dayStr} \u2022 ${startStr} \u2013 ${endStr}`
+}
+
+const formatTime = (isoString?: string | null): string => {
+  if (!isoString) return '--'
+  return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+}
+
+const formatDate = (isoString?: string | null): string => {
+  if (!isoString) return ''
+  return new Date(isoString).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
 
 const formatCurrency = (amount?: number | null): string => {
   if (amount == null) return '--'

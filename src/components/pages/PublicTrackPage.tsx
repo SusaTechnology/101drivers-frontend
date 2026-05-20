@@ -22,6 +22,8 @@ import {
   Loader2,
   RefreshCw,
   Car,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDataQuery } from '@/lib/tanstack/dataQuery'
@@ -58,6 +60,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
   const [driverPosition, setDriverPosition] = useState<google.maps.LatLngLiteral | null>(null)
   const [routePoints, setRoutePoints] = useState<google.maps.LatLngLiteral[]>([])
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
+  const [mapExpanded, setMapExpanded] = useState(false)
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
@@ -203,17 +206,27 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
         </div>
       </header>
 
-      <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-10">
+      <main className={cn(
+        "max-w-[980px] mx-auto px-5 sm:px-6 pb-10 transition-all duration-300",
+        mapExpanded ? "py-0 pb-0" : "py-6"
+      )}>
         {/* Page heading */}
-        <section className="mb-6">
+        {!mapExpanded && <section className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-            {isTripCompleted ? 'Delivery Completed' : 'Live Tracking'}
+            {isTripCompleted ? 'Delivery Completed' : 'Live Tracking (ACTIVE)'}
           </h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            {isTripCompleted
-              ? 'This delivery has been completed successfully.'
-              : 'Real-time location of your vehicle delivery. Updates every 5 seconds.'}
-          </p>
+          <div className="mt-1 space-y-1">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {isTripCompleted
+                ? 'This delivery has been completed successfully.'
+                : 'Real-time vehicle location. Updates every 5 seconds.'}
+            </p>
+            {!isTripCompleted && (
+              <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
+                Please allow location access in your browser (Chrome, Safari, or Firefox) — otherwise tracking will not work.
+              </p>
+            )}
+          </div>
 
           {/* Status indicators */}
           <div className="flex items-center gap-3 mt-3">
@@ -244,11 +257,21 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
               Refresh
             </Button>
           </div>
-        </section>
+        </section>}
 
         {/* Map */}
-        <Card className="border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-lg mb-6">
-          <div className="relative min-h-[350px] sm:min-h-[450px] bg-slate-50 dark:bg-slate-950">
+        <Card className={cn(
+          "border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-lg mb-6 transition-all duration-300",
+          mapExpanded
+            ? "!rounded-none !border-0 !shadow-none !mb-0 fixed inset-0 z-40"
+            : ""
+        )}>
+          <div className={cn(
+            "relative bg-slate-50 dark:bg-slate-950 transition-all duration-300",
+            mapExpanded
+              ? "w-full h-full min-h-0"
+              : "min-h-[350px] sm:min-h-[450px]"
+          )}>
             {isLoaded && pickupCoords && dropoffCoords ? (
               <RouteMap
                 pickup={pickupCoords}
@@ -257,6 +280,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
                 points={routePoints}
                 isLoaded={isLoaded}
                 focusOnDriver={true}
+                showMarkerLabels={false}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center min-h-[350px] sm:min-h-[450px]">
@@ -267,28 +291,22 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
               </div>
             )}
 
-            {/* Overlay badges */}
-            <div className="absolute bottom-4 left-4 flex flex-wrap gap-2 z-10">
-              <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur px-3 py-1.5 rounded-2xl text-[11px] font-black text-slate-900 dark:text-white shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-green-500" />
-                Pickup
-              </div>
-              <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur px-3 py-1.5 rounded-2xl text-[11px] font-black text-slate-900 dark:text-white shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
-                <Flag className="h-3.5 w-3.5 text-red-500" />
-                Drop-off
-              </div>
-              {driverPosition && !isTripCompleted && (
-                <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur px-3 py-1.5 rounded-2xl text-[11px] font-black text-slate-900 dark:text-white shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
-                  <Car className="h-3.5 w-3.5 text-blue-500" />
-                  Driver
-                </div>
-              )}
-            </div>
+            {/* Gray circular enlarge/collapse button */}
+            <button
+              onClick={() => setMapExpanded(prev => !prev)}
+              className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/95 dark:bg-slate-900/90 backdrop-blur shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-white dark:hover:bg-slate-800 transition"
+              title={mapExpanded ? 'Collapse map' : 'Expand map'}
+            >
+              {mapExpanded
+                ? <Minimize2 className="h-4.5 w-4.5 text-slate-700 dark:text-slate-300" />
+                : <Maximize2 className="h-4.5 w-4.5 text-slate-700 dark:text-slate-300" />
+              }
+            </button>
           </div>
         </Card>
 
         {/* Info cards grid */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {!mapExpanded && <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Pickup / Dropoff */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
             <CardContent className="p-5">
@@ -439,9 +457,10 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
               )}
             </CardContent>
           </Card>
-        </section>
+        </section>}
 
         {/* Footer */}
+        {!mapExpanded && (
         <footer className="mt-10 text-center">
           <Link to="/" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-lime-500 transition-colors">
             <MapPin className="h-4 w-4" />
@@ -449,6 +468,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
           </Link>
           <p className="text-xs text-slate-400 mt-2">Powered by 101 Drivers Inc.</p>
         </footer>
+        )}
       </main>
     </div>
   )
