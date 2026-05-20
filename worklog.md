@@ -1,23 +1,21 @@
 ---
 Task ID: 1
-Agent: Main Agent
-Task: Implement complete driver onboarding flow with signup confirmation, approval email, and secure onboarding form
+Agent: Main
+Task: Fix driver job feed — enable gig stacking within same time slot
 
 Work Log:
-- Analyzed existing driver sign-up flow (driverOnboarding.tsx, auth.service.ts, driverApproval.engine.ts)
-- Phase 1: Updated fullName label to "Full legal name (exactly as it appears on your driver's license)" in driverOnboarding.tsx
-- Phase 2: Injected NotificationEventEngine into AuthService, added confirmation email after successful driver sign-up using DRIVER_SIGNUP event type
-- Phase 3: Updated approval email in driverApproval.engine.ts with "Good news — we're now activating new drivers" message and link to onboarding form
-- Phase 4A: Added 8 new fields to Driver model in both schema.prisma and 101drivers.prisma (dateOfBirth, legalFullName, ssnLastFour, residentialAddressLine1/2, residentialCity, residentialState, residentialZip, onboardingCompletedAt), created migration SQL
-- Phase 4B: Created CompleteDriverOnboardingDto with class-validator decorators for all onboarding fields
-- Phase 4C: Added completeOnboarding() method to DriverService and two new endpoints (POST /drivers/onboarding-complete, GET /drivers/onboarding-status) to DriverController
-- Phase 4D: Created driverOnboardingComplete.tsx (1102 lines) with react-hook-form, zod validation, SSN masking, DOB auto-formatting, US states dropdown, success state
-- Phase 4E: Created route file with auth guard logic (checks authentication, DRIVER role, APPROVED status, onboarding completion)
-- Generated Prisma client (v5)
-- Committed all 12 files (8 modified, 4 new) and pushed to master branch
+- Analyzed the root cause: window-based overlap check blocks all gigs sharing the same 2-hour slot
+- Fixed orphan assignment bug in delivery-lifecycle.service.ts (BOOKED→LISTED now sets unassignedAt)
+- Added stackingBlocked field to DriverFeedItem type
+- Reduced DEFAULT_TRANSIT_BUFFER_MINUTES from 45 to 15
+- Rewrote feed filter stacking logic (lines 412-591): uses estimatedFinish (pickupStart + etaMinutes) + haversine drive time + small buffer instead of raw window overlap
+- Rewrote booking validation stacking logic (lines 985-1197): uses Google Maps route duration + haversine fallback instead of flat 45-min buffer
+- Updated frontend driver-dashboard.tsx: GigCard shows amber "Can't book" badge for blocked gigs, AlertDialog explains why, no navigation to detail page for blocked gigs
+- Bottom sheet Accept button disabled for blocked gigs
 
 Stage Summary:
-- Commit: 1be303f pushed to master on SusaTechnology/101drivers-frontend
-- 12 files changed, 1419 insertions(+), 10 deletions(-)
-- Key files: auth.service.ts, auth.module.ts, driverApproval.engine.ts, driver.service.ts, driver.controller.ts, driverOnboardingComplete.dto.ts, schema.prisma, 101drivers.prisma, driverOnboarding.tsx, driverOnboardingComplete.tsx
-- Existing sign-up flow remains completely untouched - new features are additive
+- Files modified: delivery-lifecycle.service.ts, driver-job-feed.service.ts, driver-dashboard.tsx
+- Drivers can now book multiple short deliveries within the same 2-hour slot
+- Stacking check: estimatedFinish_prev + driveTime + 15min buffer ≤ nextPickup
+- Non-stackable gigs still appear in feed with explanation dialog
+- Backend compiles cleanly (no new errors)
