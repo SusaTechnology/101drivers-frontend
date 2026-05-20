@@ -638,9 +638,9 @@ export class SchedulingPolicyEngine {
         slotTemplates,
         operatingHours
       );
-      // Remove slots that have already ended (only matters for today)
+      // Remove slots that have already started (only matters for today)
       const available = d === 0
-        ? slots.filter(s => s.end > now)
+        ? slots.filter(s => s.start > now)
         : slots;
       if (available.length > 0) {
         return available;
