@@ -525,7 +525,12 @@ async getDriverJobFeed(input: {
             if (anchorDropoff.dropoffLat != null && anchorDropoff.dropoffLng != null) {
               driveMinutes = estimateDriveMinutes(anchorDropoff.dropoffLat, anchorDropoff.dropoffLng, delivery.pickupLat, delivery.pickupLng);
             }
-            const bufferMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+            // Cross-day stacking: no buffer, only estimated drive time.
+            // Same-day stacking: apply transit buffer for safety margin.
+            const crossDay = anchorDropoff.anchorDate && delivery.pickupWindowStart
+              ? !businessIsSameDay(delivery.pickupWindowStart, anchorDropoff.anchorDate)
+              : true; // default to no buffer if we can't determine
+            const bufferMs = crossDay ? 0 : deliverySettings.transitBufferMinutes * 60 * 1000;
             const driveMs = driveMinutes ? driveMinutes * 60 * 1000 : 0;
             const earliestArrivalMs = anchorDropoff.finishMs + driveMs + bufferMs;
 
@@ -534,7 +539,8 @@ async getDriverJobFeed(input: {
             if (newWindowEndMs < earliestArrivalMs) {
               const neededMin = Math.ceil((earliestArrivalMs - anchorDropoff.finishMs) / 60000);
               const availableMin = Math.max(0, Math.ceil((newWindowEndMs - anchorDropoff.finishMs) / 60000));
-              stackingBlockedReason = `Not enough time after your previous delivery. You need ~${neededMin} min (drive + buffer) but only ${availableMin} min before this pickup window closes.`;
+              const bufferNote = crossDay ? '' : ' (drive + buffer)';
+              stackingBlockedReason = `Not enough time after your previous delivery. You need ~${neededMin} min${bufferNote} but only ${availableMin} min before this pickup window closes.`;
               matchReasons.push("stacking-blocked-backward");
             }
           }
@@ -563,7 +569,11 @@ async getDriverJobFeed(input: {
                   ex.dropoffLat != null && ex.dropoffLng != null) {
                 driveMinutes = estimateDriveMinutes(delivery.dropoffLat, delivery.dropoffLng, ex.dropoffLat, ex.dropoffLng);
               }
-              const bufferMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+              // Cross-day: no buffer. Same-day: apply transit buffer.
+              const crossDayForward = delivery.pickupWindowStart && ex.pickupWindowStart
+                ? !businessIsSameDay(delivery.pickupWindowStart, ex.pickupWindowStart)
+                : true;
+              const bufferMs = crossDayForward ? 0 : deliverySettings.transitBufferMinutes * 60 * 1000;
               const driveMs = driveMinutes ? driveMinutes * 60 * 1000 : 0;
               const earliestArrivalMs = newFinishMs + driveMs + bufferMs;
 
@@ -1177,7 +1187,9 @@ async getDriverJobFeed(input: {
         driveMinutes = Math.ceil(miles * 2);
       }
     }
-    const bufferMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+    // Cross-day stacking: no buffer, only estimated drive time.
+    // Same-day stacking: apply transit buffer for safety margin.
+    const bufferMs = isSameDayAsAnchor ? deliverySettings.transitBufferMinutes * 60 * 1000 : 0;
     const driveMs = driveMinutes * 60 * 1000;
     const earliestArrivalMs = referenceFinishMs + driveMs + bufferMs;
 
@@ -1187,9 +1199,10 @@ async getDriverJobFeed(input: {
       const anchorLabel = anchorDelivery?.pickupWindowStart
         ? new Date(anchorDelivery.pickupWindowStart).toLocaleString()
         : new Date(referenceFinishMs).toLocaleString();
+      const bufferNote = isSameDayAsAnchor ? ' (drive time + buffer)' : '';
       throw new ConflictException(
         `Not enough time after your delivery at ${anchorLabel}. ` +
-        `You need ~${neededMin} min (drive time + buffer) to reach this pickup, ` +
+        `You need ~${neededMin} min${bufferNote} to reach this pickup, ` +
         `but only ${availableMin} min remain before this pickup window closes.`
       );
     }
@@ -1227,7 +1240,11 @@ async getDriverJobFeed(input: {
             driveMinutes = Math.ceil(miles * 2);
           }
         }
-        const bufferMs = deliverySettings.transitBufferMinutes * 60 * 1000;
+        // Cross-day: no buffer. Same-day: apply transit buffer.
+        const crossDayFwd = delivery.pickupWindowStart && existing.pickupWindowStart
+          ? !businessIsSameDay(delivery.pickupWindowStart, existing.pickupWindowStart)
+          : true;
+        const bufferMs = crossDayFwd ? 0 : deliverySettings.transitBufferMinutes * 60 * 1000;
         const driveMs = driveMinutes * 60 * 1000;
         const earliestArrivalMs = newFinishMs + driveMs + bufferMs;
 
@@ -1235,9 +1252,10 @@ async getDriverJobFeed(input: {
           const neededMin = Math.ceil((earliestArrivalMs - newFinishMs) / 60000);
           const availableMin = Math.max(0, Math.ceil((exPickupMs - newFinishMs) / 60000));
           const existingLabel = new Date(existing.pickupWindowStart).toLocaleString();
+          const bufferNote = crossDayFwd ? '' : ' (drive time + buffer)';
           throw new ConflictException(
             `This delivery would make you late for your next booking at ${existingLabel}. ` +
-            `You'd need ~${neededMin} min (drive time + buffer) after finishing this delivery, ` +
+            `You'd need ~${neededMin} min${bufferNote} after finishing this delivery, ` +
             `but only ${availableMin} min are available.`
           );
         }
