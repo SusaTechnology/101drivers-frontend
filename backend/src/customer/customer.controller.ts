@@ -909,6 +909,8 @@ async unsuspendCustomer(
          payment: {
            select: {
              id: true,
+             amount: true,
+             status: true,
            },
          },
  
@@ -929,6 +931,9 @@ async unsuspendCustomer(
          quote: {
            select: {
              id: true,
+             estimatedPrice: true,
+             distanceMiles: true,
+             etaMinutes: true,
            },
          },
  
@@ -973,6 +978,28 @@ async unsuspendCustomer(
          vehicleMake: true,
          vehicleModel: true,
          vinVerificationCode: true,
+
+        // Driver assignment info - enables dealer to see driver name & phone
+        assignments: {
+          where: { unassignedAt: null },
+          take: 1,
+          orderBy: { assignedAt: 'desc' },
+          select: {
+            driver: {
+              select: {
+                id: true,
+                phone: true,
+                status: true,
+                profilePhotoUrl: true,
+                user: {
+                  select: {
+                    fullName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
        },
      });
      if (results === null) {

@@ -266,15 +266,17 @@ export default function DealerDashboard() {
     if (dateFrom) result = result.filter(d => new Date(d.pickupWindowStart || d.createdAt) >= dateFrom)
     if (dateTo) result = result.filter(d => new Date(d.pickupWindowStart || d.createdAt) <= dateTo)
     if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+      const query = searchQuery.replace(/^#/, '').toLowerCase()
       result = result.filter(d => 
         d.ref.toLowerCase().includes(query) ||
+        d.id.toLowerCase().includes(query) ||
         d.vehicle.licensePlate?.toLowerCase().includes(query) ||
         d.vehicle.make?.toLowerCase().includes(query) ||
         d.vehicle.model?.toLowerCase().includes(query) ||
         d.pickup.toLowerCase().includes(query) ||
         d.dropoff.toLowerCase().includes(query) ||
-        d.driver?.name?.toLowerCase().includes(query)
+        d.driver?.name?.toLowerCase().includes(query) ||
+        d.driver?.phone?.toLowerCase().includes(query)
       )
     }
     return result
@@ -441,7 +443,7 @@ export default function DealerDashboard() {
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-              <Input className="w-full h-12 pl-12 pr-12 rounded-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700" placeholder="Search by VIN, plate, driver name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              <Input className="w-full h-12 pl-12 pr-12 rounded-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700" placeholder="Search by #order, VIN, plate, driver name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               {isFetching && <RefreshCw className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 animate-spin" />}
             </div>
             <Popover open={showFilters} onOpenChange={setShowFilters}>
