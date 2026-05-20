@@ -111,7 +111,7 @@ interface ReviewDeliveryData {
   draftId?: string;
 }
 
-const BUSINESS_TZ = 'America/Los_Angeles';
+import { BUSINESS_TZ } from '@/lib/timezone'
 
 const formatTimeRange = (startIso?: string, endIso?: string) => {
   if (!startIso || !endIso) return "Not set";

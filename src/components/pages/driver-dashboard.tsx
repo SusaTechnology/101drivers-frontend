@@ -98,6 +98,7 @@ import MiniRouteMap from '@/components/map/MiniRouteMap'
 import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
 import { usePickupZones } from '@/hooks/usePickupZones'
 import type { NotificationInboxResponse } from '@/types/notification'
+import { BUSINESS_TZ, formatFullWeekdayDate, formatTimeRange, formatFullDate } from '@/lib/timezone'
 
 // Filter options matching backend API
 const FILTER_OPTIONS = {
@@ -120,8 +121,6 @@ const FILTER_OPTIONS = {
   ],
 }
 
-const BUSINESS_TZ = 'America/Los_Angeles'
-
 // Helper functions for formatting
 const formatDate = (isoString?: string): string => {
   if (!isoString) return ''
@@ -133,28 +132,6 @@ const formatDate = (isoString?: string): string => {
   if (date.toDateString() === today.toDateString()) return 'Today'
   if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
-}
-
-// Full weekday date format: "Monday, April 20"
-const formatFullWeekdayDate = (isoString?: string): string => {
-  if (!isoString) return ''
-  const date = new Date(isoString)
-  return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    timeZone: BUSINESS_TZ,
-  })
-}
-
-// Time range: "8:00 AM – 11:00 AM"
-const formatTimeRange = (startIso?: string, endIso?: string): string => {
-  if (!startIso || !endIso) return ''
-  const start = new Date(startIso)
-  const end = new Date(endIso)
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
-  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
-  return `${startStr} - ${endStr}`
 }
 
 const formatDuration = (minutes?: number): string => {
@@ -578,18 +555,6 @@ export default function DriverDashboardPage() {
       { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'on' }] },
     ],
   }), [])
-
-  // Format full date string for the bottom sheet
-  const formatFullDate = (isoString?: string): string => {
-    if (!isoString) return ''
-    return new Date(isoString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: BUSINESS_TZ,
-    })
-  }
 
   return (
     <div className={cn(

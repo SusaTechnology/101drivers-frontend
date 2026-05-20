@@ -75,7 +75,7 @@ import {
   type TrackClickResponse,
 } from '@/types/notification'
 
-const BUSINESS_TZ = 'America/Los_Angeles'
+import { BUSINESS_TZ } from '@/lib/timezone'
 
 // Filter options
 const filterOptions = [

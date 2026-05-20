@@ -95,7 +95,7 @@ import {
 } from '@/lib/tanstack/dataQuery'
 import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
-const BUSINESS_TZ = 'America/Los_Angeles'
+import { BUSINESS_TZ } from '@/lib/timezone'
 
 // Default delivery data (fallback while loading) – updated to match API shape
 const MOCK_DELIVERY = {
@@ -590,7 +590,7 @@ export default function DriverActiveDeliveryPage() {
     }
   }, [dropoffPhotoSlots])
 
-  // Helper to format time from ISO string
+  // Helper to format time from ISO string (custom: returns em-dash instead of '--')
   const formatTime = (isoString?: string) => {
     if (!isoString) return '—'
     const date = new Date(isoString)

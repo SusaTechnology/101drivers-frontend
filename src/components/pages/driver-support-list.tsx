@@ -45,7 +45,7 @@ import {
   type SupportRequestCategory,
 } from '@/types/support'
 
-const BUSINESS_TZ = 'America/Los_Angeles'
+import { BUSINESS_TZ } from '@/lib/timezone'
 
 // Category icons
 const categoryIcons: Record<SupportRequestCategory, React.ReactNode> = {

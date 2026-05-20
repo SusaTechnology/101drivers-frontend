@@ -26,40 +26,9 @@ import {
 } from '@/lib/google-maps-config'
 
 // ── Formatters ──────────────────────────────────────────────────────
+import { BUSINESS_TZ, formatShortDayMonth, formatDateTimeWindow, formatTimeRange } from '@/lib/timezone'
 
-const BUSINESS_TZ = 'America/Los_Angeles'
-
-const formatShortDayMonth = (isoString?: string | null): string => {
-  if (!isoString) return ''
-  const date = new Date(isoString)
-  return date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: BUSINESS_TZ,
-  })
-}
-
-const formatDateTimeWindow = (startIso?: string | null, endIso?: string | null): string => {
-  if (!startIso || !endIso) return ''
-  const date = new Date(startIso)
-  const start = new Date(startIso)
-  const end = new Date(endIso)
-  const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
-  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
-  return `${dayStr} \u2022 ${startStr} \u2013 ${endStr}`
-}
-
-const formatTimeRange = (startIso?: string | null, endIso?: string | null): string => {
-  if (!startIso || !endIso) return ''
-  const start = new Date(startIso)
-  const end = new Date(endIso)
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
-  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
-  return `${startStr} \u2013 ${endStr}`
-}
-
+// Keep: non-timezone helpers
 const formatDuration = (minutes?: number | null): string => {
   if (!minutes) return ''
   const hours = Math.floor(minutes / 60)

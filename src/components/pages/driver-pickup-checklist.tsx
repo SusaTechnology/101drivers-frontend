@@ -44,7 +44,7 @@ import { Badge } from '@/components/ui/badge'
 import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
 import { savePhoto, getPhotosForDelivery, clearDeliveryPhotos } from '@/lib/pickup-photo-store'
 
-const BUSINESS_TZ = 'America/Los_Angeles'
+import { BUSINESS_TZ } from '@/lib/timezone'
 
 // Photo slot labels — matching reference image guide order
 const PHOTO_LABELS = [

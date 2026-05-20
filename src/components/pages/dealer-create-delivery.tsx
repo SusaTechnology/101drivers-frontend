@@ -254,12 +254,13 @@ function parseWindowTimes(windowStr: string): { start: string; end: string } {
   const parts = windowStr.split(" – ");
   return { start: parts[0], end: parts[1] };
 }
+import { BUSINESS_TZ } from '@/lib/timezone'
+
 const formatTimeRange = (startIso?: string, endIso?: string) => {
   if (!startIso || !endIso) return null;
   const start = new Date(startIso);
   const end = new Date(endIso);
-  const tz = 'America/Los_Angeles';
-  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })}`;
+  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })}`;
 };
 
 const formatDuration = (minutes: number) => {
@@ -298,7 +299,7 @@ function isoToTimeWindow(startIso: string | undefined, endIso: string | undefine
   if (!startIso || !endIso) return "";
   const start = new Date(startIso);
   const end = new Date(endIso);
-  const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Los_Angeles' });
+  const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ });
   return `${formatTime(start)} – ${formatTime(end)}`;
 }
 
@@ -2596,7 +2597,7 @@ const handleQuotePreview = () => {
                       </div>
                       {validatedWindows.pickupWindowStart && (
                         <div className="text-xs text-slate-500 mt-1">
-                          {new Date(validatedWindows.pickupWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' })}
+                          {new Date(validatedWindows.pickupWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })}
                         </div>
                       )}
                       <div className="text-[11px] text-slate-400 mt-1">
@@ -2619,7 +2620,7 @@ const handleQuotePreview = () => {
                       </div>
                       {validatedWindows.dropoffWindowStart && (
                         <div className="text-xs text-slate-500 mt-1">
-                          {new Date(validatedWindows.dropoffWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Los_Angeles' })}
+                          {new Date(validatedWindows.dropoffWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })}
                         </div>
                       )}
                       <div className="text-[11px] text-slate-400 mt-1">
