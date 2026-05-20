@@ -45,6 +45,8 @@ import {
   type SupportRequestCategory,
 } from '@/types/support'
 
+const BUSINESS_TZ = 'America/Los_Angeles'
+
 // Category icons
 const categoryIcons: Record<SupportRequestCategory, React.ReactNode> = {
   DELIVERY_ISSUE: <Package className="h-4 w-4" />,
@@ -121,6 +123,7 @@ export default function DriverSupportListPage() {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: BUSINESS_TZ,
     })
   }
 
@@ -130,6 +133,7 @@ export default function DriverSupportListPage() {
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
+      timeZone: BUSINESS_TZ,
     })
   }
 

@@ -75,6 +75,8 @@ import {
   type TrackClickResponse,
 } from '@/types/notification'
 
+const BUSINESS_TZ = 'America/Los_Angeles'
+
 // Filter options
 const filterOptions = [
   { value: 'all', label: 'All' },
@@ -368,7 +370,7 @@ export default function DriverInboxPage() {
     if (diffHours < 24) return `${diffHours} hours ago`
     if (diffDays === 1) return 'Yesterday'
     if (diffDays < 7) return `${diffDays} days ago`
-    return date.toLocaleDateString()
+    return date.toLocaleDateString('en-US', { timeZone: BUSINESS_TZ })
   }
 
   return (

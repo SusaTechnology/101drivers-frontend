@@ -37,9 +37,11 @@ import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
+const BUSINESS_TZ = 'America/Los_Angeles'
+
 const formatTime = (isoString?: string | null): string => {
   if (!isoString) return '--'
-  return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+  return new Date(isoString).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
 }
 
 const formatDate = (isoString?: string | null): string => {
@@ -48,6 +50,7 @@ const formatDate = (isoString?: string | null): string => {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    timeZone: BUSINESS_TZ,
   })
 }
 
@@ -86,8 +89,8 @@ const formatTimeRange = (startIso?: string | null, endIso?: string | null): stri
   if (!startIso || !endIso) return '--'
   const start = new Date(startIso)
   const end = new Date(endIso)
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ })
   return `${startStr} - ${endStr}`
 }
 

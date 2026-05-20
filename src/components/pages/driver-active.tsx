@@ -95,6 +95,8 @@ import {
 } from '@/lib/tanstack/dataQuery'
 import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
+const BUSINESS_TZ = 'America/Los_Angeles'
+
 // Default delivery data (fallback while loading) – updated to match API shape
 const MOCK_DELIVERY = {
   id: 'DLV-20418',
@@ -592,7 +594,7 @@ export default function DriverActiveDeliveryPage() {
   const formatTime = (isoString?: string) => {
     if (!isoString) return '—'
     const date = new Date(isoString)
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TZ })
   }
 
   // Build timeline dynamically from actual data
@@ -1313,10 +1315,10 @@ export default function DriverActiveDeliveryPage() {
               {queuedAssignments.map((qa: any, idx: number) => {
                 const d = qa.delivery
                 const pickupTime = d.pickupWindowStart
-                  ? new Date(d.pickupWindowStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  ? new Date(d.pickupWindowStart).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TZ })
                   : '—'
                 const dropoffTime = d.dropoffWindowEnd
-                  ? new Date(d.dropoffWindowEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  ? new Date(d.dropoffWindowEnd).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TZ })
                   : '—'
                 return (
                   <Card key={d.id} className="border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/80 hover:shadow-md transition cursor-pointer" onClick={() => navigate({ to: '/driver-pickup-checklist', search: { jobId: d.id } as any })}>
