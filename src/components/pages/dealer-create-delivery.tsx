@@ -2359,11 +2359,11 @@ const handleQuotePreview = () => {
                       <Clock className="h-3 w-3 mr-1" />
                       One-side-at-a-time
                     </Badge>
-                    {schedulePreviewData?.sameDayEligible && (
+                    {/* {schedulePreviewData?.sameDayEligible && (
                       <Badge className="bg-lime-500 text-slate-900 animate-pulse">
                         Same-day eligible!
                       </Badge>
-                    )}
+                    )} */}
                   </div>
                 </div>
               </CardHeader>
@@ -2635,11 +2635,11 @@ const handleQuotePreview = () => {
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Feasible
                       </Badge>
-                      {schedulePreviewData.sameDayEligible && (
+                      {/* {schedulePreviewData.sameDayEligible && (
                         <Badge className="bg-lime-500 text-slate-900 text-[10px]">
                           ✨ Same-day eligible
                         </Badge>
-                      )}
+                      )} */}
                       {schedulePreviewData.sameDay?.status && (
                         <Badge variant="outline" className="text-[10px]">
                           Same-day: {schedulePreviewData.sameDay.status}
