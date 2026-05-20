@@ -108,10 +108,25 @@ function clearPersistedState(deliveryId: string) {
   clearDeliveryPhotos(deliveryId).catch(() => { /* best effort */ })
 }
 
+// Detect if the user is on a device without a real camera (desktop/laptop).
+// On mobile, `capture` triggers the native camera. On desktop, browsers
+// ignore it and fall back to the file picker — we want to block that.
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(false)
+  useEffect(() => {
+    // 'ontouchstart' missing + no small screen = likely desktop
+    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    const isSmallScreen = window.innerWidth < 1024
+    setIsDesktop(!hasTouchScreen && !isSmallScreen)
+  }, [])
+  return isDesktop
+}
+
 export default function DriverPickupChecklistPage() {
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
   const user = getUser()
+  const isDesktop = useIsDesktop()
   const driverId = user?.profileId
   const userId = user?.id
   const navigate = useNavigate()
@@ -835,6 +850,23 @@ const handleUploadOdometerPhoto = () => {
           </Card>
         )}
 
+        {/* Desktop warning — photos must be taken on a phone with a camera */}
+        {isDesktop && (
+          <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border-2 border-amber-300 dark:border-amber-800 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                Use Your Phone to Take Photos
+              </p>
+              <p className="text-[12px] text-amber-700 dark:text-amber-300 mt-1">
+                All pickup photos must be captured live with your phone's camera. Desktop and laptop browsers cannot take camera photos — please open this page on your mobile device to continue.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Header Card */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <CardContent className="p-6 sm:p-7">
@@ -1119,7 +1151,8 @@ const handleUploadOdometerPhoto = () => {
                               <button
                                 key={index}
                                 type="button"
-                                onClick={() => !photosUploading && handleAddCarPhoto(index)}
+                                onClick={() => !isDesktop && !photosUploading && handleAddCarPhoto(index)}
+                                disabled={isDesktop || photosUploading}
                                 className={cn(
                                   "aspect-[3/4] rounded-2xl border-2 overflow-hidden relative flex flex-col items-center justify-end transition",
                                   isCaptured
@@ -1320,8 +1353,8 @@ const handleUploadOdometerPhoto = () => {
                         <div className="mt-4">
                           <Button
                             variant="outline"
-                            onClick={handleAddOdometerPhoto}
-                            disabled={odometerUploading}
+                            onClick={() => !isDesktop && handleAddOdometerPhoto()}
+                            disabled={isDesktop || odometerUploading}
                             className={cn(
                               "w-full h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
                               odometerPhoto.preview
@@ -1456,8 +1489,8 @@ const handleUploadOdometerPhoto = () => {
                         <div className="mt-5">
                           <Button
                             variant="outline"
-                            onClick={handleAddVinPhoto}
-                            disabled={vinPhotoUploading}
+                            onClick={() => !isDesktop && handleAddVinPhoto()}
+                            disabled={isDesktop || vinPhotoUploading}
                             className={cn(
                               "w-full h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
                               vinPhoto.preview

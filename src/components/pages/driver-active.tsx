@@ -167,12 +167,20 @@ export default function DriverActiveDeliveryPage() {
   const [drivingMode, setDrivingMode] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [showCompletion, setShowCompletion] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
   const [odometerEnd, setOdometerEnd] = useState('')
   const [deliveryNotes, setDeliveryNotes] = useState('')
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null)
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null)
   const [driverPosition, setDriverPosition] = useState<google.maps.LatLngLiteral | null>(null)
   const [workflowStatus, setWorkflowStatus] = useState<any>(null)
+
+  // Detect desktop (no touch screen + not small screen)
+  useEffect(() => {
+    const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    const isSmallScreen = window.innerWidth < 1024
+    setIsDesktop(!hasTouchScreen && !isSmallScreen)
+  }, [])
 
   // State for multiple routes
   const [routes, setRoutes] = useState<google.maps.DirectionsResult[]>([])
@@ -439,6 +447,13 @@ export default function DriverActiveDeliveryPage() {
 
   // Dropoff photo handlers
   const handleAddDropoffPhoto = (index: number) => {
+    if (isDesktop) {
+      toast.error('Use your phone', {
+        description: 'Drop-off photos must be taken with your phone camera. Please open this page on your mobile device.',
+        duration: 5000,
+      })
+      return
+    }
     currentSlotIndex.current = index
     fileInputRef.current?.click()
   }
@@ -1190,6 +1205,19 @@ export default function DriverActiveDeliveryPage() {
               </div>
             </CardHeader>
             <CardContent>
+              {isDesktop && (
+                <div className="mb-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border-2 border-amber-300 dark:border-amber-800 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                      Use Your Phone to Take Photos
+                    </p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
+                      Drop-off photos must be captured live with your phone camera. Please open this page on your mobile device.
+                    </p>
+                  </div>
+                </div>
+              )}
               <input
                 ref={fileInputRef}
                 type="file"
