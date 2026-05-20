@@ -111,12 +111,13 @@ interface ReviewDeliveryData {
   draftId?: string;
 }
 
+const BUSINESS_TZ = 'America/Los_Angeles';
+
 const formatTimeRange = (startIso?: string, endIso?: string) => {
   if (!startIso || !endIso) return "Not set";
   const start = new Date(startIso);
   const end = new Date(endIso);
-  const tz = 'America/Los_Angeles';
-  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })}`;
+  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })}`;
 };
 
 const formatDuration = (minutes: number) => {
@@ -158,6 +159,10 @@ export default function ReviewDeliveryPage() {
   const [editField, setEditField] = useState<string | null>(null);
   const [editedValues, setEditedValues] = useState<Partial<ReviewDeliveryData>>({});
   const customer = getUser();
+
+  // Schedule edit state
+  const [availableSlots, setAvailableSlots] = useState<{ label: string; start: string; end: string }[]>([]);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
@@ -216,6 +221,115 @@ export default function ReviewDeliveryPage() {
       navigate({ to: "/dealer-create-delivery" });
     }
   }, [navigate]);
+
+  // Fetch available slots from schedule-preview API (discovery mode)
+  const handleEditSchedule = async () => {
+    setEditField("schedule");
+    if (!reviewData?.quoteId) {
+      toast.error("Missing quote — cannot load slots");
+      return;
+    }
+
+    setIsLoadingSlots(true);
+    try {
+      // Derive preferredDate from existing window in business timezone
+      const preferredDate = reviewData.pickupWindowStart
+        ? new Date(reviewData.pickupWindowStart).toLocaleDateString('en-CA', { timeZone: BUSINESS_TZ })
+        : undefined;
+
+      const response = await authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/schedule-preview`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quoteId: reviewData.quoteId,
+            serviceType: reviewData.serviceType,
+            customerType: 'BUSINESS',
+            customerId: customer?.profileId,
+            customerChose: reviewData.customerChose || 'PICKUP_WINDOW',
+            preferredDate,
+          }),
+        }
+      );
+
+      if (response?.suggestedSlots?.pickup) {
+        setAvailableSlots(response.suggestedSlots.pickup);
+      } else {
+        setAvailableSlots([]);
+        toast.error("No available time slots");
+      }
+    } catch (e) {
+      console.error('Failed to fetch schedule slots:', e);
+      toast.error("Failed to load available time slots");
+    } finally {
+      setIsLoadingSlots(false);
+    }
+  };
+
+  // Validate a selected slot and update review data
+  const handleScheduleSlotSelect = async (slot: { label: string; start: string; end: string }) => {
+    if (!reviewData?.quoteId) return;
+
+    setIsLoadingSlots(true);
+    try {
+      const preferredDate = reviewData.pickupWindowStart
+        ? new Date(reviewData.pickupWindowStart).toLocaleDateString('en-CA', { timeZone: BUSINESS_TZ })
+        : undefined;
+
+      const chose = reviewData.customerChose || 'PICKUP_WINDOW';
+
+      const body: Record<string, unknown> = {
+        quoteId: reviewData.quoteId,
+        serviceType: reviewData.serviceType,
+        customerType: 'BUSINESS',
+        customerId: customer?.profileId,
+        customerChose: chose,
+        preferredDate,
+      };
+
+      if (chose === 'PICKUP_WINDOW') {
+        body.pickupWindowStart = slot.start;
+        body.pickupWindowEnd = slot.end;
+      } else {
+        body.dropoffWindowStart = slot.start;
+        body.dropoffWindowEnd = slot.end;
+      }
+
+      const response = await authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/schedule-preview`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (response?.pickupWindowStart && response?.dropoffWindowStart) {
+        const updatedData = {
+          ...reviewData,
+          pickupWindowStart: response.pickupWindowStart,
+          pickupWindowEnd: response.pickupWindowEnd,
+          dropoffWindowStart: response.dropoffWindowStart,
+          dropoffWindowEnd: response.dropoffWindowEnd,
+          etaMinutes: response.etaMinutes ?? reviewData.etaMinutes,
+          bufferMinutes: response.bufferMinutes ?? reviewData.bufferMinutes,
+        };
+        setReviewData(updatedData);
+        sessionStorage.setItem("reviewDeliveryData", JSON.stringify(updatedData));
+        setEditField(null);
+        setAvailableSlots([]);
+        toast.success("Schedule updated");
+      } else {
+        toast.error("Selected slot is not available");
+      }
+    } catch (e) {
+      console.error('Failed to validate slot:', e);
+      toast.error("Failed to update schedule");
+    } finally {
+      setIsLoadingSlots(false);
+    }
+  };
 
   // Mutation for submitting delivery
   const submitDelivery = useMutation({
@@ -330,6 +444,7 @@ export default function ReviewDeliveryPage() {
   const handleCancelEdit = () => {
     setEditField(null);
     setEditedValues({});
+    setAvailableSlots([]);
   };
 
   const handleSaveEdit = () => {
@@ -461,6 +576,9 @@ export default function ReviewDeliveryPage() {
     );
   }
 
+  // Determine which side the user chose for slot editing
+  const scheduleChoseLabel = reviewData.customerChose === 'DROPOFF_WINDOW' ? 'dropoff' : 'pickup';
+
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
       {/* Top App Bar */}
@@ -554,33 +672,94 @@ export default function ReviewDeliveryPage() {
           {/* Schedule */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-black">Schedule</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-black">Schedule</CardTitle>
+                {editField !== "schedule" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditSchedule}
+                    className="text-lime-600 hover:text-lime-700"
+                  >
+                    <Edit2 className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs font-bold text-slate-500">Pickup Time</p>
-                  <p className="text-sm font-bold">{formatTimeRange(reviewData.pickupWindowStart, reviewData.pickupWindowEnd)}</p>
-                  {reviewData.pickupWindowStart && (
-                    <p className="text-xs text-slate-500 mt-1">
-                      {new Date(reviewData.pickupWindowStart).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' })}
+              {editField === "schedule" ? (
+                <div className="space-y-4 p-5 bg-lime-50 dark:bg-lime-900/10 rounded-2xl border border-lime-200 dark:border-lime-900/30">
+                  <p className="text-xs font-bold text-slate-500">Choose a new {scheduleChoseLabel} time:</p>
+                  {isLoadingSlots ? (
+                    <div className="flex items-center justify-center py-6">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-lime-500"></div>
+                      <span className="ml-2 text-sm text-slate-500">Loading available slots...</span>
+                    </div>
+                  ) : availableSlots.length > 0 ? (
+                    <div className="space-y-2">
+                      {availableSlots.map((slot, i) => {
+                        const currentStart = reviewData.customerChose === 'DROPOFF_WINDOW'
+                          ? reviewData.dropoffWindowStart
+                          : reviewData.pickupWindowStart;
+                        const isSelected = currentStart === slot.start;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => handleScheduleSlotSelect(slot)}
+                            disabled={isLoadingSlots}
+                            className={`w-full text-left p-3 rounded-xl border transition flex items-center justify-between ${
+                              isSelected
+                                ? 'border-lime-500 bg-lime-100 dark:bg-lime-900/30'
+                                : 'border-slate-200 dark:border-slate-700 hover:border-lime-300 hover:bg-white dark:hover:bg-slate-800/80'
+                            }`}
+                          >
+                            <span className="text-sm font-bold">{slot.label}</span>
+                            {isSelected && (
+                              <Badge className="text-[10px] px-2 py-0 h-5 bg-lime-500 text-slate-900">Current</Badge>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 py-2">No available slots found for this date.</p>
+                  )}
+                  <div className="flex justify-end gap-3 pt-2">
+                    <Button variant="outline" onClick={handleCancelEdit} className="h-11 px-5 rounded-xl">
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                      <p className="text-xs font-bold text-slate-500">Pickup Time</p>
+                      <p className="text-sm font-bold">{formatTimeRange(reviewData.pickupWindowStart, reviewData.pickupWindowEnd)}</p>
+                      {reviewData.pickupWindowStart && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          {new Date(reviewData.pickupWindowStart).toLocaleDateString('en-US', { timeZone: BUSINESS_TZ })}
+                        </p>
+                      )}
+                    </div>
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                      <p className="text-xs font-bold text-slate-500">Arrival Time</p>
+                      <p className="text-sm font-bold">{formatTimeRange(reviewData.dropoffWindowStart, reviewData.dropoffWindowEnd)}</p>
+                      {reviewData.dropoffWindowStart && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          {new Date(reviewData.dropoffWindowStart).toLocaleDateString('en-US', { timeZone: BUSINESS_TZ })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {reviewData.etaMinutes && (
+                    <p className="text-xs text-slate-500 mt-3">
+                      Estimated trip duration: {formatDuration(reviewData.etaMinutes)}
                     </p>
                   )}
-                </div>
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs font-bold text-slate-500">Arrival Time</p>
-                  <p className="text-sm font-bold">{formatTimeRange(reviewData.dropoffWindowStart, reviewData.dropoffWindowEnd)}</p>
-                  {reviewData.dropoffWindowStart && (
-                    <p className="text-xs text-slate-500 mt-1">
-                      {new Date(reviewData.dropoffWindowStart).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' })}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {reviewData.etaMinutes && (
-                <p className="text-xs text-slate-500 mt-3">
-                  Estimated trip duration: {formatDuration(reviewData.etaMinutes)}
-                </p>
+                </>
               )}
             </CardContent>
           </Card>
@@ -877,7 +1056,7 @@ export default function ReviewDeliveryPage() {
           {/* Price Estimate */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-black">Price Estimate</CardTitle>
+              <CardTitle className="text-lg font-black">Delivery Price</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50">
@@ -892,10 +1071,10 @@ export default function ReviewDeliveryPage() {
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 space-y-1">
-                  <div className="flex justify-between"><span>Base fare:</span><span>{formatCurrency(reviewData.base)}</span></div>
+                  {/*<div className="flex justify-between"><span>Base fare:</span><span>{formatCurrency(reviewData.base)}</span></div>
                   <div className="flex justify-between"><span>Distance charge:</span><span>{formatCurrency(reviewData.distance)}</span></div>
-                  <div className="flex justify-between"><span>Insurance fee:</span><span>{formatCurrency(reviewData.insurance)}</span></div>
-                  <div className="flex justify-between"><span>Transaction fee:</span><span>{formatCurrency(reviewData.transaction)}</span></div>
+                   <div className="flex justify-between"><span>Insurance fee:</span><span>{formatCurrency(reviewData.insurance)}</span></div>
+                  <div className="flex justify-between"><span>Transaction fee:</span><span>{formatCurrency(reviewData.transaction)}</span></div> */}
                 </div>
               </div>
             </CardContent>
