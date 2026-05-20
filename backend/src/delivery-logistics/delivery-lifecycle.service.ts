@@ -77,6 +77,7 @@ export class DeliveryLifecycleService {
     ],
     [EnumDeliveryRequestStatus.BOOKED]: [
       EnumDeliveryRequestStatus.ACTIVE,
+      EnumDeliveryRequestStatus.COMPLETED,
       EnumDeliveryRequestStatus.CANCELLED,
       EnumDeliveryRequestStatus.DISPUTED,
       EnumDeliveryRequestStatus.LISTED,

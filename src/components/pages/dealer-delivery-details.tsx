@@ -69,9 +69,8 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getUser, useDataQuery, useCreate, authFetch } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useCreate, useDataMutation } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
-import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 // Helper to format date
@@ -195,29 +194,28 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
   // Close delivery dialog state
   const [showCloseDialog, setShowCloseDialog] = useState(false)
-  const [isClosing, setIsClosing] = useState(false)
-  const handleCloseDelivery = async () => {
-    if (!deliveryData || (deliveryData.status !== 'ACTIVE' && deliveryData.status !== 'BOOKED')) return
-    setShowCloseDialog(false)
-    setIsClosing(true)
-    try {
-      await authFetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryData.id}/transition-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          toStatus: 'COMPLETED',
-          actorUserId: user?.id || null,
-          actorRole: 'BUSINESS_CUSTOMER',
-          note: 'Dealer manually closed delivery',
-        }),
-      })
+
+  const closeDeliveryMutation = useDataMutation({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${id}/transition-status`,
+    method: 'POST',
+    onSuccess: () => {
+      setShowCloseDialog(false)
       toast.success('Delivery closed', { description: 'This delivery has been marked as completed.' })
       refetch()
-    } catch (err: any) {
-      toast.error('Failed to close delivery', { description: err.message || 'Something went wrong.' })
-    } finally {
-      setIsClosing(false)
-    }
+    },
+    onError: (error: any) => {
+      toast.error('Failed to close delivery', { description: error.message || 'Something went wrong.' })
+    },
+  })
+
+  const handleCloseDelivery = () => {
+    if (!deliveryData || (deliveryData.status !== 'ACTIVE' && deliveryData.status !== 'BOOKED')) return
+    closeDeliveryMutation.mutate({
+      toStatus: 'COMPLETED',
+      actorUserId: user?.id || null,
+      actorRole: 'BUSINESS_CUSTOMER',
+      note: 'Dealer manually closed delivery',
+    })
   }
 
   // Tip mutation
@@ -960,11 +958,11 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     {(deliveryData.status === 'BOOKED' || deliveryData.status === 'ACTIVE') && (
       <Button
         onClick={() => setShowCloseDialog(true)}
-        disabled={isClosing}
+        disabled={closeDeliveryMutation.isPending}
         className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white font-extrabold hover:bg-emerald-700 disabled:opacity-50"
       >
         <CheckSquare className="h-4 w-4" />
-        {isClosing ? 'Closing...' : 'Close Delivery'}
+        {closeDeliveryMutation.isPending ? 'Closing...' : 'Close Delivery'}
       </Button>
     )}
             <Button
@@ -1921,13 +1919,13 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isClosing}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={closeDeliveryMutation.isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleCloseDelivery}
-              disabled={isClosing}
+              disabled={closeDeliveryMutation.isPending}
               className="bg-emerald-600 text-white hover:bg-emerald-700"
             >
-              {isClosing ? 'Closing...' : 'Yes, Close Delivery'}
+              {closeDeliveryMutation.isPending ? 'Closing...' : 'Yes, Close Delivery'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
