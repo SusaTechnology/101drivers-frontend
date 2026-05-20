@@ -115,7 +115,8 @@ const formatTimeRange = (startIso?: string, endIso?: string) => {
   if (!startIso || !endIso) return "Not set";
   const start = new Date(startIso);
   const end = new Date(endIso);
-  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  const tz = 'America/Los_Angeles';
+  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })}`;
 };
 
 const formatDuration = (minutes: number) => {
@@ -562,7 +563,7 @@ export default function ReviewDeliveryPage() {
                   <p className="text-sm font-bold">{formatTimeRange(reviewData.pickupWindowStart, reviewData.pickupWindowEnd)}</p>
                   {reviewData.pickupWindowStart && (
                     <p className="text-xs text-slate-500 mt-1">
-                      {new Date(reviewData.pickupWindowStart).toLocaleDateString()}
+                      {new Date(reviewData.pickupWindowStart).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' })}
                     </p>
                   )}
                 </div>
@@ -571,7 +572,7 @@ export default function ReviewDeliveryPage() {
                   <p className="text-sm font-bold">{formatTimeRange(reviewData.dropoffWindowStart, reviewData.dropoffWindowEnd)}</p>
                   {reviewData.dropoffWindowStart && (
                     <p className="text-xs text-slate-500 mt-1">
-                      {new Date(reviewData.dropoffWindowStart).toLocaleDateString()}
+                      {new Date(reviewData.dropoffWindowStart).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles' })}
                     </p>
                   )}
                 </div>
