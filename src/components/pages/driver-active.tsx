@@ -1337,7 +1337,7 @@ export default function DriverActiveDeliveryPage() {
                 <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               </div>
               <h3 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Up Next — {queuedAssignments.length} Booked
+                Upcoming Gigs
               </h3>
             </div>
             <div className="space-y-3">
@@ -1375,7 +1375,7 @@ export default function DriverActiveDeliveryPage() {
                           <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1">{dropoffTime}</p>
                           <p className="text-[10px] text-slate-400">dropoff</p>
                           {activeAssignment && (
-                            <p className="text-[9px] text-red-500 font-bold mt-1.5">Complete current first</p>
+                            <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-1.5">Complete current delivery first</p>
                           )}
                         </div>
                       </div>

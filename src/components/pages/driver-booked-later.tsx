@@ -141,10 +141,10 @@ export default function DriverBookedLaterPage() {
 
             <div>
               <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                Your Queue
+                My Bookings
               </div>
               <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                Booked for Later
+                Upcoming Gigs
               </div>
             </div>
           </div>
@@ -177,13 +177,13 @@ export default function DriverBookedLaterPage() {
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-              <Inbox className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             </div>
-            Booked for Later
+            Upcoming Gigs
           </h1>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
             {bookedDeliveries.length > 0
-              ? `You have ${bookedDeliveries.length} gig${bookedDeliveries.length > 1 ? 's' : ''} booked. Tap to start the pickup checklist when you're ready.`
+              ? `You have ${bookedDeliveries.length} gig${bookedDeliveries.length > 1 ? 's' : ''} scheduled. When you arrive at the pickup location, tap this card to start the checklist.`
               : 'No gigs booked yet. Browse available gigs and tap "Book for Later" to queue them up.'}
           </p>
         </div>
@@ -325,7 +325,7 @@ export default function DriverBookedLaterPage() {
                         <div className="mt-3 flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
                           <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                           <p className="text-[11px] text-amber-800 dark:text-amber-200 font-semibold">
-                            Complete your current active delivery first, then come back to start this one.
+                            Complete your current active delivery first, then tap this card to start this gig.
                           </p>
                         </div>
                       )}
@@ -349,8 +349,7 @@ export default function DriverBookedLaterPage() {
                   How it works
                 </p>
                 <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                  Tap any booked gig above to open the pickup checklist. Complete the checklist and tap "Start Trip" when you're at the pickup location.
-                  If you have another delivery in progress, you'll need to complete it first.
+                  Tap your scheduled gig when you're at the pickup location to open the checklist. Complete the checklist, then tap "Start Trip." You must finish any active delivery before you can start the next one.
                 </p>
               </div>
             </div>

@@ -1037,11 +1037,11 @@ export default function DriverDashboardPage() {
 
                 <Separator className="bg-slate-100 dark:bg-slate-800" />
 
-                {/* Mileage */}
+                {/* Distance */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-0.5">
-                      Mileage
+                      Distance
                     </div>
                     <div className="text-sm font-bold text-slate-900 dark:text-white">
                       {selectedJob.miles ? `${selectedJob.miles} mi` : '\u2014'}
