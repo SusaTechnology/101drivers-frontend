@@ -247,7 +247,19 @@ export class SchedulingPolicyEngine {
       reasons.push("DISTANCE_EXCEEDS_SAME_DAY_LIMIT");
     }
 
-    if (!this.isWithinCutoff(requestCreatedAt.toJSDate(), policy.sameDayCutoffTime)) {
+    // Only enforce cutoff when scheduling for TODAY.
+    // If the user selected a future date via preferredDate, the cutoff
+    // is irrelevant — it should not block or flag the request.
+    const isSchedulingForToday = input.preferredDate
+      ? this.toBusinessDateTime(new Date(input.preferredDate)).hasSame(
+          this.businessNow(),
+          "day",
+        )
+      : true; // No preferred date → default is same-day, so cutoff applies
+    if (
+      isSchedulingForToday &&
+      !this.isWithinCutoff(requestCreatedAt.toJSDate(), policy.sameDayCutoffTime)
+    ) {
       sameDayEligible = false;
       reasons.push("CUT_OFF_PASSED");
     }

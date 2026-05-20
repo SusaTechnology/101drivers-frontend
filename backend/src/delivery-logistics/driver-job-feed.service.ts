@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, GoneException, ConflictException } from "@nestjs/common";
-import { businessStartOfDay, businessStartOfTomorrow, businessStartOfDayAfterTomorrow, businessEndOfWeek, businessNow } from "./business-time";
+import { businessStartOfDay, businessStartOfTomorrow, businessStartOfDayAfterTomorrow, businessEndOfWeek, businessNow, businessIsSameDay } from "./business-time";
 import {
   EnumDeliveryRequestStatus,
   EnumDriverStatus,
@@ -578,9 +578,15 @@ async getDriverJobFeed(input: {
           }
         }
 
-        // ── RADIUS CHECK (kept as-is: distance cap from last dropoff) ──
+        // ── RADIUS CHECK (same-day only: distance cap from last dropoff) ──
+        // The 20-mile radius rule only applies to same-day bookings.
+        // Next-day or later bookings have no distance restriction.
+        const isPickupToday = delivery.pickupWindowStart
+          ? businessIsSameDay(delivery.pickupWindowStart, new Date())
+          : false;
         if (
           !stackingBlockedReason &&
+          isPickupToday &&
           anchorDropoff &&
           anchorDropoff.dropoffLat != null &&
           anchorDropoff.dropoffLng != null &&
@@ -1087,8 +1093,14 @@ async getDriverJobFeed(input: {
   const referenceDropoffLat = anchorDelivery?.dropoffLat ?? lastCompletedDelivery?.dropoffLat ?? null;
   const referenceDropoffLng = anchorDelivery?.dropoffLng ?? lastCompletedDelivery?.dropoffLng ?? null;
 
-  // ── Radius Check (from previous drop-off, using Google Maps) ──
+  // ── Radius Check (same-day only: from previous drop-off, using Google Maps) ──
+  // The 20-mile radius rule only applies to same-day bookings.
+  // Next-day or later bookings have no distance restriction.
+  const isPickupToday = delivery.pickupWindowStart
+    ? businessIsSameDay(delivery.pickupWindowStart, new Date())
+    : false;
   if (
+    isPickupToday &&
     referenceDropoffLat != null &&
     referenceDropoffLng != null &&
     delivery.pickupLat != null &&

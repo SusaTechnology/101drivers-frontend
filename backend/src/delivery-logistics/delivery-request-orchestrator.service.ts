@@ -668,12 +668,17 @@ private async createIndividualDeliveryForResolvedCustomer(
     routeMetrics?.distanceMiles ?? null
   );
 
-  // Hard-block same-day delivery creation after cutoff
+  // Hard-block same-day delivery creation after cutoff.
+  // Only applies when the pickup is actually TODAY in business timezone.
+  // A delivery for tomorrow or later should never be blocked by today's cutoff.
   const isSameDay = this.isSameCalendarDay(
     schedule.pickupWindowStart,
     schedule.dropoffWindowEnd
   );
-  if (isSameDay) {
+  const isPickupToday = schedule.pickupWindowStart
+    ? businessIsSameDay(schedule.pickupWindowStart, new Date())
+    : false;
+  if (isSameDay && isPickupToday) {
     const cutoffResult = this.enforceSameDayCutoff(policy);
     if (cutoffResult === 'blocked') {
       throw new BadRequestException(
@@ -1342,12 +1347,17 @@ private async resolveIndividualCustomerForCreate(
       routeMetrics?.distanceMiles ?? null
     );
 
-    // Hard-block same-day delivery creation after cutoff
+    // Hard-block same-day delivery creation after cutoff.
+    // Only applies when the pickup is actually TODAY in business timezone.
+    // A delivery for tomorrow or later should never be blocked by today's cutoff.
     const isSameDay = this.isSameCalendarDay(
       input.pickupWindowStart,
       input.dropoffWindowEnd
     );
-    if (isSameDay) {
+    const isPickupToday = input.pickupWindowStart
+      ? businessIsSameDay(input.pickupWindowStart, new Date())
+      : false;
+    if (isSameDay && isPickupToday) {
       const cutoffResult = this.enforceSameDayCutoff(policy);
       if (cutoffResult === 'blocked') {
         throw new BadRequestException(
