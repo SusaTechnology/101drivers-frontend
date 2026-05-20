@@ -183,6 +183,37 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     }
   })
 
+  // Close delivery mutation (dealer manual completion)
+  const [isClosing, setIsClosing] = useState(false)
+  const handleCloseDelivery = async () => {
+    if (!deliveryData || deliveryData.status !== 'ACTIVE') return
+    if (!confirm('Are you sure you want to close this delivery? This will move it to Completed.')) return
+    setIsClosing(true)
+    try {
+      const token = localStorage.getItem('auth-token')
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryData.id}/transition-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          toStatus: 'COMPLETED',
+          actorUserId: user?.id || null,
+          actorRole: 'BUSINESS_CUSTOMER',
+          note: 'Dealer manually closed delivery',
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || 'Failed to close delivery')
+      }
+      toast.success('Delivery closed', { description: 'This delivery has been marked as completed.' })
+      refetch()
+    } catch (err: any) {
+      toast.error('Failed to close delivery', { description: err.message || 'Something went wrong.' })
+    } finally {
+      setIsClosing(false)
+    }
+  }
+
   // Tip mutation
   const tipMutation = useCreate<TipPayload, TipPayload>(`${import.meta.env.VITE_API_URL}/api/tips`, {
     onSuccess: () => {
@@ -918,6 +949,16 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       >
         <Navigation className="h-4 w-4" />
         Live track the driver
+      </Button>
+    )}
+    {deliveryData.status === 'ACTIVE' && (
+      <Button
+        onClick={handleCloseDelivery}
+        disabled={isClosing}
+        className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white font-extrabold hover:bg-emerald-700 disabled:opacity-50"
+      >
+        <CheckSquare className="h-4 w-4" />
+        {isClosing ? 'Closing...' : 'Close Delivery'}
       </Button>
     )}
             <Button
