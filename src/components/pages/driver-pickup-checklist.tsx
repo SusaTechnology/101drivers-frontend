@@ -146,6 +146,7 @@ export default function DriverPickupChecklistPage() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${driverId}`,
     noFilter: true,
     enabled: Boolean(driverId),
+    staleTime: 0, // always refetch — critical after booking navigation from job-details
   })
 
   const assignments = Array.isArray(activeData) ? activeData : []

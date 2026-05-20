@@ -280,7 +280,7 @@ export default function DriverJobDetailsPage() {
   })
 
   const hasActiveDelivery = Array.isArray(activeDeliveries) && activeDeliveries.some(
-    (d: any) => d.status === 'ACTIVE',
+    (d: any) => d.delivery?.status === 'ACTIVE',
   )
 
   // Load Google Maps API
@@ -312,6 +312,10 @@ export default function DriverJobDetailsPage() {
 
   // Single booking mutation — context-aware destination
   const bookMutation = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${jobId}/book`, {
+    invalidateQueryKey: [
+      ["data", `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/active-delivery/${user?.profileId}`],
+      ["data", `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${user?.profileId}`],
+    ],
     onSuccess: () => {
       if (hasActiveDelivery) {
         toast.success('Booked for later!', {
