@@ -15,6 +15,8 @@ import { businessNow } from "./business-time";
  * LISTED  → EXPIRED : every 15 min, if pickupWindowEnd < now
  * DRAFT   → EXPIRED : every hour, if updatedAt > 7 days ago
  * QUOTED  → EXPIRED : every hour, if createdAt > 48 hours ago and not yet listed
+ * BOOKED  → LISTED  : every 15 min, if pickupWindowEnd < now (driver ghosted)
+ * ACTIVE  → flag    : every hour, if updatedAt > 24 hours ago (stale alert, no transition)
  */
 @Injectable()
 export class DeliveryExpiryScheduler {
@@ -204,6 +206,127 @@ export class DeliveryExpiryScheduler {
 
     this.logger.log(
       `QUOTED expiry complete: ${expired} expired, ${failed} failed`
+    );
+  }
+
+  /**
+   * Revert BOOKED deliveries to LISTED if the pickup window has passed
+   * without the driver starting the trip (driver ghosted).
+   * Runs every 15 minutes.
+   */
+  @Cron("*/15 * * * *")
+  async revertStaleBookedDeliveries() {
+    const now = businessNow().toJSDate();
+
+    const staleBooked = await this.prisma.deliveryRequest.findMany({
+      where: {
+        status: EnumDeliveryRequestStatus.BOOKED,
+        pickupWindowEnd: { lt: now },
+      },
+      select: { id: true },
+      take: 100,
+    });
+
+    if (staleBooked.length === 0) {
+      return;
+    }
+
+    this.logger.log(
+      `Found ${staleBooked.length} BOOKED delivery(ies) past pickup window`
+    );
+
+    let reverted = 0;
+    let failed = 0;
+
+    for (const delivery of staleBooked) {
+      try {
+        await this.lifecycle.transitionStatus(
+          delivery.id,
+          EnumDeliveryRequestStatus.LISTED,
+          {
+            actorType: EnumDeliveryStatusHistoryActorType.SYSTEM,
+            note: "Auto-reverted: driver did not start before pickup window ended",
+          }
+        );
+
+        await this.notifications.notifyDeliveryRevertedToListed({
+          deliveryId: delivery.id,
+          reason: "pickup_window_passed",
+        });
+
+        reverted++;
+      } catch (error) {
+        failed++;
+        this.logger.error(
+          `Failed to revert BOOKED delivery ${delivery.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+
+    this.logger.log(
+      `BOOKED revert complete: ${reverted} reverted, ${failed} failed`
+    );
+  }
+
+  /**
+   * Flag ACTIVE deliveries that have been active for 24+ hours.
+   * Sends a notification email to the dealer — does NOT change the status.
+   * Humans decide what to do (close, revert, or wait).
+   * Runs every hour at minute 40.
+   */
+  @Cron("40 * * * *")
+  async flagStaleActiveDeliveries() {
+    const cutoff = businessNow().minus({ hours: 24 }).toJSDate();
+
+    const staleActive = await this.prisma.deliveryRequest.findMany({
+      where: {
+        status: EnumDeliveryRequestStatus.ACTIVE,
+        updatedAt: { lt: cutoff },
+      },
+      select: {
+        id: true,
+        updatedAt: true,
+      },
+      take: 100,
+    });
+
+    if (staleActive.length === 0) {
+      return;
+    }
+
+    this.logger.log(
+      `Found ${staleActive.length} ACTIVE delivery(ies) stale for 24+ hours`
+    );
+
+    let notified = 0;
+    let failed = 0;
+
+    for (const delivery of staleActive) {
+      try {
+        const hoursStale =
+          (Date.now() - new Date(delivery.updatedAt).getTime()) /
+          (1000 * 60 * 60);
+
+        await this.notifications.notifyStaleActiveDelivery({
+          deliveryId: delivery.id,
+          hoursStale,
+        });
+
+        notified++;
+      } catch (error) {
+        failed++;
+        this.logger.error(
+          `Failed to notify stale ACTIVE delivery ${delivery.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+
+    this.logger.log(
+      `Stale ACTIVE flag complete: ${notified} notified, ${failed} failed`
     );
   }
 }

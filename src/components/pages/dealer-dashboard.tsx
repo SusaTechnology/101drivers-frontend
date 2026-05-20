@@ -21,6 +21,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Home,
   Truck,
   Wrench,
@@ -56,6 +66,9 @@ import {
   Activity,
   Timer,
   ArrowRight,
+  CheckSquare,
+  Settings,
+  XCircle,
   Map,
   Download,
   Filter,
@@ -64,7 +77,7 @@ import {
   Layers,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getUser, useDataQuery, authFetch, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useDataMutation, authFetch, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader } from '@react-google-maps/api'
@@ -284,6 +297,46 @@ export default function DealerDashboard() {
   }, [deliveries, activeFilter, showAll, searchQuery, dealerId, dateFrom, dateTo])
 
   const activeDeliveriesForMap = useMemo(() => deliveries.filter(d => d.status === 'ACTIVE' && d.pickupLat && d.dropoffLat), [deliveries])
+
+  // ── Quick action: manage/close delivery from dashboard cards ──
+  const [actionDialogDeliveryId, setActionDialogDeliveryId] = useState<string | null>(null)
+  const [actionDialogStatus, setActionDialogStatus] = useState<'ACTIVE' | 'BOOKED' | null>(null)
+
+  const transitionMutation = useDataMutation({
+    apiEndPoint: actionDialogDeliveryId
+      ? `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${actionDialogDeliveryId}/transition-status`
+      : '',
+    method: 'POST',
+    onSuccess: (_data, variables) => {
+      setActionDialogDeliveryId(null)
+      setActionDialogStatus(null)
+      const target = (variables as any)?.toStatus
+      if (target === 'COMPLETED') {
+        toast.success('Delivery closed', { description: 'This delivery has been marked as completed.' })
+      } else if (target === 'LISTED') {
+        toast.success('Delivery reverted', { description: 'The driver has been unassigned and the delivery is back on the board.' })
+      }
+      refetch()
+    },
+    onError: (error: any) => {
+      toast.error('Action failed', { description: error.message || 'Something went wrong.' })
+    },
+  })
+
+  const openActionDialog = (deliveryId: string, status: 'ACTIVE' | 'BOOKED') => {
+    setActionDialogDeliveryId(deliveryId)
+    setActionDialogStatus(status)
+  }
+
+  const handleTransition = (toStatus: string, note: string) => {
+    if (!actionDialogDeliveryId) return
+    transitionMutation.mutate({
+      toStatus,
+      actorUserId: user?.id || null,
+      actorRole: 'BUSINESS_CUSTOMER',
+      note,
+    })
+  }
 
   const handleExportCSV = () => {
     const headers = ['Reference', 'Status', 'Vehicle', 'License Plate', 'Pickup', 'Dropoff', 'Date', 'Price', 'Driver']
@@ -553,9 +606,9 @@ export default function DealerDashboard() {
                     )}
                     <div className="mt-4 flex gap-2">
                       {delivery.status === 'ACTIVE' ? (
-                        <Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"><Navigation className="h-5 w-5" />Track Live<ChevronRight className="h-5 w-5" /></Link>
+                        <><Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"><Navigation className="h-5 w-5" />Track Live<ChevronRight className="h-5 w-5" /></Link><button onClick={() => openActionDialog(delivery.id, 'ACTIVE')} className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 hover:bg-emerald-200 transition" title="Close Delivery"><CheckSquare className="h-5 w-5" /></button></>
                       ) : delivery.status === 'BOOKED' ? (
-                        <><Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition"><Eye className="h-5 w-5" />View</Link>{delivery.driver && <a href={`tel:${delivery.driver.phone}`} className="w-12 h-12 rounded-2xl bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center text-lime-600 hover:bg-lime-200 transition"><Phone className="h-5 w-5" /></a>}</>
+                        <><Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition"><Eye className="h-5 w-5" />View</Link><button onClick={() => openActionDialog(delivery.id, 'BOOKED')} className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition" title="Manage Delivery"><Settings className="h-5 w-5" /></button>{delivery.driver && <a href={`tel:${delivery.driver.phone}`} className="w-12 h-12 rounded-2xl bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center text-lime-600 hover:bg-lime-200 transition"><Phone className="h-5 w-5" /></a>}</>
                       ) : delivery.status === 'LISTED' || delivery.status === 'QUOTED' || delivery.status === 'EXPIRED' ? (
                         <Link to="/dealer-edit-delivery" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition"><Edit3 className="h-5 w-5" />{delivery.status === 'EXPIRED' ? 'Reactivate' : 'Edit'}</Link>
                       ) : (
@@ -569,6 +622,43 @@ export default function DealerDashboard() {
           )}
         </div>
       </main>
+
+      {/* Quick Action Dialog — Manage / Close Delivery */}
+      <AlertDialog open={!!actionDialogDeliveryId} onOpenChange={(open) => { if (!open) { setActionDialogDeliveryId(null); setActionDialogStatus(null) } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {actionDialogStatus === 'BOOKED' ? 'Manage Delivery' : 'Close Delivery'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {actionDialogStatus === 'BOOKED'
+                ? 'This delivery is booked but not yet started. You can complete it now or revert it to Listed so another driver can pick it up.'
+                : 'Are you sure you want to close this delivery? This will move it to Completed and cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={transitionMutation.isPending}>Cancel</AlertDialogCancel>
+            {actionDialogStatus === 'BOOKED' && (
+              <button
+                onClick={() => handleTransition('LISTED', 'Dealer reverted delivery to Listed')}
+                disabled={transitionMutation.isPending}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-full font-extrabold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition"
+              >
+                <RefreshCw className="h-4 w-4" />
+                {transitionMutation.isPending ? 'Reverting...' : 'Revert to Listed'}
+              </button>
+            )}
+            <button
+              onClick={() => handleTransition('COMPLETED', 'Dealer manually closed delivery')}
+              disabled={transitionMutation.isPending}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-extrabold disabled:opacity-50 transition"
+            >
+              <CheckSquare className="h-4 w-4" />
+              {transitionMutation.isPending ? 'Closing...' : 'Complete Delivery'}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Notification Settings Dialog */}
       <Dialog open={notificationSettingsOpen} onOpenChange={setNotificationSettingsOpen}>

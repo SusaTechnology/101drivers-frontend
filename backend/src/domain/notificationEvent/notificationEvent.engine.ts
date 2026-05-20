@@ -983,6 +983,184 @@ async notifyTripCompleted(input: {
     });
   }
 
+  /**
+   * Notify dealer and admin that an ACTIVE delivery has been stale for 24+ hours.
+   * Flag-only — no status change. Humans decide what to do.
+   */
+  async notifyStaleActiveDelivery(input: {
+    deliveryId: string;
+    hoursStale: number;
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        pickupWindowStart: true,
+        pickupWindowEnd: true,
+        updatedAt: true,
+        assignments: {
+          where: { unassignedAt: null },
+          orderBy: { assignedAt: "desc" },
+          take: 1,
+          select: {
+            driverId: true,
+            driver: {
+              select: {
+                user: { select: { email: true, fullName: true } },
+              },
+            },
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            contactEmail: true,
+            contactName: true,
+            businessName: true,
+            user: { select: { email: true, fullName: true } },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyStaleActiveDelivery: delivery ${input.deliveryId} not found, skipping`
+      );
+      return null;
+    }
+
+    const toEmail =
+      delivery.customer?.user?.email ??
+      delivery.customer?.contactEmail ??
+      null;
+
+    const displayName =
+      delivery.customer?.user?.fullName ??
+      delivery.customer?.contactName ??
+      delivery.customer?.businessName ??
+      "Customer";
+
+    const driverName =
+      delivery.assignments?.[0]?.driver?.user?.fullName ?? "Unknown";
+
+    return this.queueAndSend({
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DELIVERY_STATUS_CHANGED,
+      templateCode: "stale-active-delivery",
+      toEmail,
+      subject: `Action needed: Delivery has been active for ${Math.floor(input.hoursStale)}+ hours`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `One of your deliveries has been in Active status for over ${Math.floor(input.hoursStale)} hours without being completed. This may indicate an issue with the delivery.`,
+        "",
+        "You can close the delivery or revert it to Listed from your dashboard.",
+        "",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Driver: ${driverName}`,
+        `Status: ACTIVE (stale)`,
+      ].join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        reason: "stale_active",
+        status: "ACTIVE",
+        hoursStale: input.hoursStale,
+      },
+    });
+  }
+
+  /**
+   * Notify dealer that a BOOKED delivery was reverted to LISTED
+   * because the pickup window passed without the driver starting the trip.
+   */
+  async notifyDeliveryRevertedToListed(input: {
+    deliveryId: string;
+    reason: "pickup_window_passed";
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        pickupWindowStart: true,
+        pickupWindowEnd: true,
+        customer: {
+          select: {
+            id: true,
+            contactEmail: true,
+            contactName: true,
+            businessName: true,
+            user: { select: { email: true, fullName: true } },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyDeliveryRevertedToListed: delivery ${input.deliveryId} not found, skipping`
+      );
+      return null;
+    }
+
+    const toEmail =
+      delivery.customer?.user?.email ??
+      delivery.customer?.contactEmail ??
+      null;
+
+    const displayName =
+      delivery.customer?.user?.fullName ??
+      delivery.customer?.contactName ??
+      delivery.customer?.businessName ??
+      "Customer";
+
+    return this.queueAndSend({
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DELIVERY_STATUS_CHANGED,
+      templateCode: "delivery-reverted-to-listed",
+      toEmail,
+      subject: "Delivery reverted: Driver did not start the trip",
+      body: [
+        `Hi ${displayName},`,
+        "",
+        "A booked delivery has been automatically reverted to Listed because the driver did not start the trip before the pickup window ended. The delivery is now available for other drivers on the board.",
+        "",
+        "If you'd like to close this delivery instead, you can do so from your dashboard.",
+        "",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        delivery.pickupWindowStart
+          ? `Pickup window: ${this.formatWindow(
+              delivery.pickupWindowStart,
+              delivery.pickupWindowEnd
+            )}`
+          : null,
+        "Status: LISTED",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        reason: input.reason,
+        fromStatus: "BOOKED",
+        toStatus: "LISTED",
+      },
+    });
+  }
+
   private async notifyStatusChangeInternal(input: {
     deliveryId: string;
     actorUserId?: string | null;
