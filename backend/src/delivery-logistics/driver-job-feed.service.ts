@@ -489,7 +489,7 @@ async getDriverJobFeed(input: {
           ? new Date(delivery.pickupWindowEnd).getTime()
           : newPickupMs!;
 
-        let anchorDropoff: { finishMs: number; dropoffLat: number | null; dropoffLng: number | null } | null = null;
+        let anchorDropoff: { finishMs: number; dropoffLat: number | null; dropoffLng: number | null; anchorDate: Date | null } | null = null;
 
         if (newPickupMs && sortedExisting.length > 0) {
           for (const ex of sortedExisting) {
@@ -507,7 +507,7 @@ async getDriverJobFeed(input: {
             // This delivery overlaps with or precedes the new pickup window.
             // Track the one that finishes latest as the anchor.
             if (!anchorDropoff || finishMs > anchorDropoff.finishMs) {
-              anchorDropoff = { finishMs, dropoffLat: ex.dropoffLat, dropoffLng: ex.dropoffLng };
+              anchorDropoff = { finishMs, dropoffLat: ex.dropoffLat, dropoffLng: ex.dropoffLng, anchorDate: ex.pickupWindowStart ? new Date(ex.pickupWindowStart) : null };
             }
           }
 
@@ -515,7 +515,7 @@ async getDriverJobFeed(input: {
           if (!anchorDropoff) {
             const lastCompleted = await this.getLastCompletedDropoff(input.driverId);
             if (lastCompleted) {
-              anchorDropoff = { finishMs: lastCompleted.updatedAt.getTime(), dropoffLat: lastCompleted.dropoffLat, dropoffLng: lastCompleted.dropoffLng };
+              anchorDropoff = { finishMs: lastCompleted.updatedAt.getTime(), dropoffLat: lastCompleted.dropoffLat, dropoffLng: lastCompleted.dropoffLng, anchorDate: lastCompleted.updatedAt };
             }
           }
 
@@ -579,14 +579,16 @@ async getDriverJobFeed(input: {
         }
 
         // ── RADIUS CHECK (same-day only: distance cap from last dropoff) ──
-        // The 20-mile radius rule only applies to same-day bookings.
-        // Next-day or later bookings have no distance restriction.
-        const isPickupToday = delivery.pickupWindowStart
-          ? businessIsSameDay(delivery.pickupWindowStart, new Date())
+        // The 20-mile radius rule only applies when the new gig and the
+        // anchor (previous) gig are on the SAME calendar day.
+        // If they're on different days (e.g., last drop-off was today but
+        // new pickup is tomorrow), no distance restriction applies.
+        const isSameDayAsAnchor = delivery.pickupWindowStart && anchorDropoff?.anchorDate
+          ? businessIsSameDay(delivery.pickupWindowStart, anchorDropoff.anchorDate)
           : false;
         if (
           !stackingBlockedReason &&
-          isPickupToday &&
+          isSameDayAsAnchor &&
           anchorDropoff &&
           anchorDropoff.dropoffLat != null &&
           anchorDropoff.dropoffLng != null &&
@@ -1094,13 +1096,20 @@ async getDriverJobFeed(input: {
   const referenceDropoffLng = anchorDelivery?.dropoffLng ?? lastCompletedDelivery?.dropoffLng ?? null;
 
   // ── Radius Check (same-day only: from previous drop-off, using Google Maps) ──
-  // The 20-mile radius rule only applies to same-day bookings.
-  // Next-day or later bookings have no distance restriction.
-  const isPickupToday = delivery.pickupWindowStart
-    ? businessIsSameDay(delivery.pickupWindowStart, new Date())
+  // The 20-mile radius rule only applies when the new gig and the
+  // anchor (previous) gig are on the SAME calendar day.
+  // If they're on different days (e.g., last drop-off was today but
+  // new pickup is tomorrow), no distance restriction applies.
+  const anchorDate = anchorDelivery
+    ? (anchorDelivery.pickupWindowStart ? new Date(anchorDelivery.pickupWindowStart) : null)
+    : lastCompletedDelivery
+      ? lastCompletedDelivery.updatedAt
+      : null;
+  const isSameDayAsAnchor = delivery.pickupWindowStart && anchorDate
+    ? businessIsSameDay(delivery.pickupWindowStart, anchorDate)
     : false;
   if (
-    isPickupToday &&
+    isSameDayAsAnchor &&
     referenceDropoffLat != null &&
     referenceDropoffLng != null &&
     delivery.pickupLat != null &&
