@@ -445,14 +445,16 @@ async createQuotePreview(
     type: errors.ForbiddenException,
   })
   async createDeliveryFromAcceptedQuote(
-    @common.Body() body: CreateDeliveryFromQuoteBody
+    @common.Body() body: CreateDeliveryFromQuoteBody,
+    @common.Req() request: Request
   ): Promise<DeliveryRequest> {
+    const authenticatedUser = request.user as any;
     return this.service.createDeliveryFromAcceptedQuote({
       customerId: body.customerId,
       quoteId: body.quoteId,
       serviceType: body.serviceType,
-      createdByUserId: body.createdByUserId ?? null,
-      createdByRole: body.createdByRole ?? null,
+      createdByUserId: body.createdByUserId ?? authenticatedUser?.id ?? null,
+      createdByRole: body.createdByRole ?? ("DEALER" as any),
       customerChose: body.customerChose ?? null,
       pickupWindowStart: new Date(body.pickupWindowStart),
       pickupWindowEnd: new Date(body.pickupWindowEnd),

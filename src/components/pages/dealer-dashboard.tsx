@@ -256,7 +256,7 @@ export default function DealerDashboard() {
         carPhoto,
         progress,
         etaMinutes,
-        createdById: item.createdBy || item.customer?.id,
+        createdById: item.customer?.id,
         createdAt: item.createdAt,
       }
     })

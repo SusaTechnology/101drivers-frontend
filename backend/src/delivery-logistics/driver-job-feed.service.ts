@@ -43,6 +43,8 @@ export type DriverFeedItem = {
   createdAt: Date;
   /** If set, this gig cannot be booked right now. Contains the human-readable reason. */
   stackingBlocked: string | null;
+  /** If true, pickup is outside the driver's preferred radius filter. */
+  outsidePreferredRadius: boolean;
 };
 
 export type DriverJobFeedResult = {
@@ -374,7 +376,8 @@ async getDriverJobFeed(input: {
               matchReasons.push("within-radius");
             } else {
               matchReasons.push("outside-radius");
-              return null;
+              // Don't hide — flag it so the UI can show a badge
+              matchScore -= 15;
             }
           }
 
@@ -620,10 +623,8 @@ async getDriverJobFeed(input: {
         // If stacking check fails, don't block the feed — let the gig show as bookable
       }
 
-      // Hide gigs that can't stack (for now — show only bookable gigs)
-      if (stackingBlockedReason) {
-        return null;
-      }
+      // Don't hide stacking-blocked gigs — return them with the reason
+      // so the UI can show a flag and block accept at tap time.
 
       const payoutPreviewAmount = this.extractPayoutPreviewAmount(
         delivery.quote?.estimatedPrice,
@@ -660,6 +661,7 @@ async getDriverJobFeed(input: {
         originSource: origin.source,
         createdAt: delivery.createdAt,
         stackingBlocked: stackingBlockedReason,
+        outsidePreferredRadius: matchReasons.includes("outside-radius"),
       };
 
       return item;

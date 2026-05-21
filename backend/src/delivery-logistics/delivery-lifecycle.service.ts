@@ -273,7 +273,7 @@ async startTrip(input: {
 
       if (!completedToday && now < windowStart) {
         throw new ConflictException(
-          `First pickup of the day must wait until the scheduled time. You can start at ${windowStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}.`
+          `First pickup of the day must wait until the scheduled time. You can start at ${windowStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" })}.`
         );
       }
     }

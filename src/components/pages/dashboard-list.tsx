@@ -86,6 +86,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
@@ -241,6 +242,8 @@ interface JobItem {
   lng: number
   dropoffLat: number | null
   dropoffLng: number | null
+  stackingBlocked: string | null
+  outsidePreferredRadius: boolean
 }
 
 // ── Reusable Route Thumbnail SVG ──────────────────────────────────
@@ -267,11 +270,17 @@ function RouteThumbnail() {
 // ── Gig Card Component ────────────────────────────────────────────
 function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => void; isMapsLoaded: boolean }) {
   const hasDropoffCoords = job.dropoffLat != null && job.dropoffLng != null
+  const isBlocked = !!job.stackingBlocked
+  const isOutsideRadius = !!job.outsidePreferredRadius
 
   return (
     <Card
-      className="border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/60 active:scale-[0.98] transition-all duration-150 cursor-pointer bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden"
-      onClick={onClick}
+      className={cn(
+        "border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/60 active:scale-[0.98] transition-all duration-150 rounded-2xl overflow-hidden",
+        isBlocked ? "opacity-70 cursor-not-allowed" : "cursor-pointer",
+        isOutsideRadius && !isBlocked ? "cursor-pointer" : ""
+      )}
+      onClick={isBlocked ? undefined : onClick}
     >
       <CardContent className="px-4 py-3">
         <div className="flex gap-3">
@@ -286,8 +295,40 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
               )}
             </div>
 
-            <div className="text-[17px] font-extrabold text-slate-900 dark:text-white mt-1.5 leading-snug tracking-tight">
-              {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
+            <div className="flex items-start gap-2 mt-1.5">
+              <div className="text-[17px] font-extrabold text-slate-900 dark:text-white leading-snug tracking-tight flex-1">
+                {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
+              </div>
+              {isBlocked && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="shrink-0 mt-0.5">
+                        <ShieldX className="w-4.5 h-4.5 text-amber-500" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[260px] text-xs">
+                      <p className="font-semibold text-amber-700 dark:text-amber-300">Cannot accept this gig</p>
+                      <p className="mt-1 text-slate-600 dark:text-slate-300">{job.stackingBlocked}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {isOutsideRadius && !isBlocked && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="shrink-0 mt-0.5">
+                        <Navigation className="w-4.5 h-4.5 text-blue-500" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[240px] text-xs">
+                      <p className="font-semibold text-blue-700 dark:text-blue-300">Outside your preferred radius</p>
+                      <p className="mt-1 text-slate-600 dark:text-slate-300">This delivery is beyond your selected distance filter, but you can still accept it.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
 
             <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
@@ -316,7 +357,14 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
       </CardContent>
 
       <div className="h-11 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center bg-slate-50/60 dark:bg-slate-800/40">
-        <ArrowRight className="w-7 h-7 text-green-600 dark:text-green-400" strokeWidth={3} />
+        {isBlocked ? (
+          <div className="flex items-center gap-1.5">
+            <ShieldX className="w-4 h-4 text-amber-500" />
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Schedule Conflict</span>
+          </div>
+        ) : (
+          <ArrowRight className="w-7 h-7 text-green-600 dark:text-green-400" strokeWidth={3} />
+        )}
       </div>
     </Card>
   )
@@ -469,6 +517,8 @@ export default function DriverGigBoardPage() {
       lng: item.pickupLat && item.pickupLng ? item.pickupLng : mockPickupLocations[index % mockPickupLocations.length].lng,
       dropoffLat: item.dropoffLat || null,
       dropoffLng: item.dropoffLng || null,
+      stackingBlocked: item.stackingBlocked || null,
+      outsidePreferredRadius: item.outsidePreferredRadius || false,
     })) || []
   }, [deliveriesData])
 
