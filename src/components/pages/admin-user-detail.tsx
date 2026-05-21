@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { zodResolver } from '@hookform/resolvers/zod/v4';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';

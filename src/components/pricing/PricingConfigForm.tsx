@@ -1,7 +1,7 @@
 // components/pricing/PricingConfigForm.tsx
 import React from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { zodResolver } from '@hookform/resolvers/zod/v4';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
