@@ -268,8 +268,8 @@ export function SummaryCards({ data, isLoading }: SummaryCardsProps) {
 
   return (
     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      {cards.map((card) => (
-        <KPICard key={card.key} {...card} />
+      {cards.map(({ key, ...rest }) => (
+        <KPICard key={key} {...rest} />
       ))}
     </section>
   );
