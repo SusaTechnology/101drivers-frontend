@@ -271,6 +271,25 @@ interface JobItem {
   dropoffLng: number | null
   // Stacking: null = bookable, string = reason it can't be booked right now
   stackingBlocked: string | null
+  stackingDetails: {
+    checkType: 'backward' | 'forward' | 'radius' | null;
+    isCrossDay: boolean;
+    conflictingDelivery: {
+      id: string;
+      pickupAddress: string;
+      dropoffAddress: string;
+      pickupWindowStart: string | null;
+      estimatedFinishTime: string | null;
+      etaMinutes: number | null;
+    } | null;
+    transit: {
+      driveMinutes: number;
+      driveMiles: number;
+      bufferMinutes: number;
+      totalNeededMinutes: number;
+      availableMinutes: number;
+    } | null;
+  } | null;
 }
 
 // ── Reusable Route Thumbnail SVG ────────────────────────────────
@@ -404,8 +423,26 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
               </div>
               Can't Book This Gig
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-              {job.stackingBlocked}
+            <AlertDialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2 whitespace-pre-line">
+              {job.stackingDetails?.transit
+                ? (() => {
+                    const d = job.stackingDetails!
+                    if (d.checkType === 'backward') {
+                      const c = d.conflictingDelivery
+                      const est = c?.estimatedFinishTime ? new Date(c.estimatedFinishTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : 'unknown'
+                      return `You have a delivery that conflicts with this one:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your previous delivery'}\nEstimated finish time: ${est}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to this pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
+                    }
+                    if (d.checkType === 'forward') {
+                      const c = d.conflictingDelivery
+                      const pt = c?.pickupWindowStart ? new Date(c.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : 'unknown'
+                      return `This would make you late for another booked gig:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your next delivery'}\nThat pickup time: ${pt}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to that pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
+                    }
+                    if (d.checkType === 'radius') {
+                      return `Pickup is too far from your last drop-off (${d.transit.driveMiles} mi). Maximum allowed: 20 miles.`
+                    }
+                    return job.stackingBlocked || 'This gig conflicts with your schedule.'
+                  })()
+                : (job.stackingBlocked || 'This gig conflicts with your schedule.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 space-y-1">
@@ -609,6 +646,7 @@ export default function DriverDashboardPage() {
       dropoffLat: item.dropoffLat || null,
       dropoffLng: item.dropoffLng || null,
       stackingBlocked: item.stackingBlocked || null,
+      stackingDetails: item.stackingDetails || null,
     })) || []
   }, [deliveriesData])
 
@@ -1130,8 +1168,26 @@ export default function DriverDashboardPage() {
               </div>
               Can't Book This Gig
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-              {blockedReason || 'This gig conflicts with your current schedule.'}
+            <AlertDialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2 whitespace-pre-line">
+              {selectedJob?.stackingDetails?.transit
+                ? (() => {
+                    const d = selectedJob!.stackingDetails!
+                    if (d.checkType === 'backward') {
+                      const c = d.conflictingDelivery
+                      const est = c?.estimatedFinishTime ? new Date(c.estimatedFinishTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : 'unknown'
+                      return `You have a delivery that conflicts with this one:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your previous delivery'}\nEstimated finish time: ${est}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to this pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
+                    }
+                    if (d.checkType === 'forward') {
+                      const c = d.conflictingDelivery
+                      const pt = c?.pickupWindowStart ? new Date(c.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : 'unknown'
+                      return `This would make you late for another booked gig:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your next delivery'}\nThat pickup time: ${pt}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to that pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
+                    }
+                    if (d.checkType === 'radius') {
+                      return `Pickup is too far from your last drop-off (${d.transit.driveMiles} mi). Maximum allowed: 20 miles.`
+                    }
+                    return blockedReason || 'This gig conflicts with your current schedule.'
+                  })()
+                : (blockedReason || 'This gig conflicts with your current schedule.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {selectedJob && (

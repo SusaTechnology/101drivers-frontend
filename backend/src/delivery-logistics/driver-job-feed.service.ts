@@ -16,6 +16,30 @@ type DriverOrigin = {
   source: "current" | "homeBase" | "none";
 };
 
+export type StackingDetails = {
+  /** Which check failed */
+  checkType: 'backward' | 'forward' | 'radius' | null;
+  /** Whether the conflict spans different calendar days (buffer waived for cross-day) */
+  isCrossDay: boolean;
+  /** The booked delivery that conflicts with this gig */
+  conflictingDelivery: {
+    id: string;
+    pickupAddress: string;
+    dropoffAddress: string;
+    pickupWindowStart: string | null;
+    estimatedFinishTime: string | null;
+    etaMinutes: number | null;
+  } | null;
+  /** Breakdown of transit time between locations */
+  transit: {
+    driveMinutes: number;
+    driveMiles: number;
+    bufferMinutes: number;
+    totalNeededMinutes: number;
+    availableMinutes: number;
+  } | null;
+};
+
 export type DriverFeedItem = {
   deliveryId: string;
   serviceType: string;
@@ -43,6 +67,8 @@ export type DriverFeedItem = {
   createdAt: Date;
   /** If set, this gig cannot be booked right now. Contains the human-readable reason. */
   stackingBlocked: string | null;
+  /** Structured stacking conflict details for rich UI display. */
+  stackingDetails: StackingDetails | null;
   /** If true, pickup is outside the driver's preferred radius filter. */
   outsidePreferredRadius: boolean;
 };
@@ -416,6 +442,7 @@ async getDriverJobFeed(input: {
       // Gigs that can't stack are still returned (with stackingBlocked reason)
       // so drivers see them with an info flag instead of "no gigs available".
       let stackingBlockedReason: string | null = null;
+      let stackingDetails: StackingDetails | null = null;
       try {
         const deliverySettings = await this.getDeliverySettings();
         const newPickupMs = delivery.pickupWindowStart
@@ -424,6 +451,9 @@ async getDriverJobFeed(input: {
 
         // Fetch all BOOKED/ACTIVE assignments with etaMinutes for duration estimation
         let sortedExisting: {
+          id: string;
+          pickupAddress: string;
+          dropoffAddress: string;
           pickupWindowStart: Date | string | null;
           dropoffWindowEnd: Date | string | null;
           dropoffLat: number | null;
@@ -444,6 +474,9 @@ async getDriverJobFeed(input: {
             select: {
               delivery: {
                 select: {
+                  id: true,
+                  pickupAddress: true,
+                  dropoffAddress: true,
                   pickupWindowStart: true,
                   dropoffWindowEnd: true,
                   dropoffLat: true,
@@ -454,7 +487,16 @@ async getDriverJobFeed(input: {
             },
           });
 
-          sortedExisting = assignments.map(a => a.delivery).sort(
+          sortedExisting = assignments.map(a => ({
+            id: a.delivery.id,
+            pickupAddress: a.delivery.pickupAddress,
+            dropoffAddress: a.delivery.dropoffAddress,
+            pickupWindowStart: a.delivery.pickupWindowStart,
+            dropoffWindowEnd: a.delivery.dropoffWindowEnd,
+            dropoffLat: a.delivery.dropoffLat,
+            dropoffLng: a.delivery.dropoffLng,
+            etaMinutes: a.delivery.etaMinutes,
+          })).sort(
             (a, b) => new Date(a.pickupWindowStart!).getTime() - new Date(b.pickupWindowStart!).getTime()
           );
         }
@@ -492,7 +534,7 @@ async getDriverJobFeed(input: {
           ? new Date(delivery.pickupWindowEnd).getTime()
           : newPickupMs!;
 
-        let anchorDropoff: { finishMs: number; dropoffLat: number | null; dropoffLng: number | null; anchorDate: Date | null } | null = null;
+        let anchorDropoff: { finishMs: number; dropoffLat: number | null; dropoffLng: number | null; anchorDate: Date | null; anchorDelivery: typeof sortedExisting[number] | null } | null = null;
 
         if (newPickupMs && sortedExisting.length > 0) {
           for (const ex of sortedExisting) {
@@ -510,7 +552,7 @@ async getDriverJobFeed(input: {
             // This delivery overlaps with or precedes the new pickup window.
             // Track the one that finishes latest as the anchor.
             if (!anchorDropoff || finishMs > anchorDropoff.finishMs) {
-              anchorDropoff = { finishMs, dropoffLat: ex.dropoffLat, dropoffLng: ex.dropoffLng, anchorDate: ex.pickupWindowStart ? new Date(ex.pickupWindowStart) : null };
+              anchorDropoff = { finishMs, dropoffLat: ex.dropoffLat, dropoffLng: ex.dropoffLng, anchorDate: ex.pickupWindowStart ? new Date(ex.pickupWindowStart) : null, anchorDelivery: ex };
             }
           }
 
@@ -518,7 +560,7 @@ async getDriverJobFeed(input: {
           if (!anchorDropoff) {
             const lastCompleted = await this.getLastCompletedDropoff(input.driverId);
             if (lastCompleted) {
-              anchorDropoff = { finishMs: lastCompleted.updatedAt.getTime(), dropoffLat: lastCompleted.dropoffLat, dropoffLng: lastCompleted.dropoffLng, anchorDate: lastCompleted.updatedAt };
+              anchorDropoff = { finishMs: lastCompleted.updatedAt.getTime(), dropoffLat: lastCompleted.dropoffLat, dropoffLng: lastCompleted.dropoffLng, anchorDate: lastCompleted.updatedAt, anchorDelivery: null };
             }
           }
 
@@ -545,6 +587,28 @@ async getDriverJobFeed(input: {
               const bufferNote = crossDay ? '' : ' (drive + buffer)';
               stackingBlockedReason = `Not enough time after your previous delivery. You need ~${neededMin} min${bufferNote} but only ${availableMin} min before this pickup window closes.`;
               matchReasons.push("stacking-blocked-backward");
+              const driveMilesVal = anchorDropoff.dropoffLat != null && anchorDropoff.dropoffLng != null && delivery.pickupLat != null && delivery.pickupLng != null
+                ? this.haversineFallback(anchorDropoff.dropoffLat, anchorDropoff.dropoffLng, delivery.pickupLat, delivery.pickupLng)
+                : 0;
+              stackingDetails = {
+                checkType: 'backward',
+                isCrossDay: crossDay,
+                conflictingDelivery: anchorDropoff.anchorDelivery ? {
+                  id: anchorDropoff.anchorDelivery.id,
+                  pickupAddress: anchorDropoff.anchorDelivery.pickupAddress,
+                  dropoffAddress: anchorDropoff.anchorDelivery.dropoffAddress,
+                  pickupWindowStart: anchorDropoff.anchorDelivery.pickupWindowStart ?? null,
+                  estimatedFinishTime: new Date(anchorDropoff.finishMs).toISOString(),
+                  etaMinutes: anchorDropoff.anchorDelivery.etaMinutes,
+                } : null,
+                transit: {
+                  driveMinutes: driveMinutes ?? 0,
+                  driveMiles: Math.round(driveMilesVal * 10) / 10,
+                  bufferMinutes: crossDay ? 0 : deliverySettings.transitBufferMinutes,
+                  totalNeededMinutes: neededMin,
+                  availableMinutes: availableMin,
+                },
+              };
             }
           }
         }
@@ -585,6 +649,28 @@ async getDriverJobFeed(input: {
                 const availableMin = Math.max(0, Math.ceil((exPickupMs - newFinishMs) / 60000));
                 stackingBlockedReason = `This delivery would make you late for your next booking. You'd need ~${neededMin} min but only ${availableMin} min available.`;
                 matchReasons.push("stacking-blocked-forward");
+                const driveMilesVal = delivery.dropoffLat != null && delivery.dropoffLng != null && ex.dropoffLat != null && ex.dropoffLng != null
+                  ? this.haversineFallback(delivery.dropoffLat, delivery.dropoffLng, ex.dropoffLat, ex.dropoffLng)
+                  : 0;
+                stackingDetails = {
+                  checkType: 'forward',
+                  isCrossDay: crossDayForward,
+                  conflictingDelivery: {
+                    id: ex.id,
+                    pickupAddress: ex.pickupAddress,
+                    dropoffAddress: ex.dropoffAddress,
+                    pickupWindowStart: ex.pickupWindowStart ?? null,
+                    estimatedFinishTime: null,
+                    etaMinutes: ex.etaMinutes,
+                  },
+                  transit: {
+                    driveMinutes: driveMinutes ?? 0,
+                    driveMiles: Math.round(driveMilesVal * 10) / 10,
+                    bufferMinutes: crossDayForward ? 0 : deliverySettings.transitBufferMinutes,
+                    totalNeededMinutes: neededMin,
+                    availableMinutes: availableMin,
+                  },
+                };
               }
               break; // Only check the immediately next delivery
             }
@@ -617,6 +703,25 @@ async getDriverJobFeed(input: {
           if (straightMiles > deliverySettings.maximumRadiusMiles * 1.3) {
             stackingBlockedReason = `Pickup is too far from your last drop-off (>${deliverySettings.maximumRadiusMiles} miles).`;
             matchReasons.push("outside-max-radius");
+            stackingDetails = {
+              checkType: 'radius',
+              isCrossDay: false,
+              conflictingDelivery: anchorDropoff?.anchorDelivery ? {
+                id: anchorDropoff.anchorDelivery.id,
+                pickupAddress: anchorDropoff.anchorDelivery.pickupAddress,
+                dropoffAddress: anchorDropoff.anchorDelivery.dropoffAddress,
+                pickupWindowStart: anchorDropoff.anchorDelivery.pickupWindowStart ?? null,
+                estimatedFinishTime: new Date(anchorDropoff.finishMs).toISOString(),
+                etaMinutes: anchorDropoff.anchorDelivery.etaMinutes,
+              } : null,
+              transit: {
+                driveMinutes: 0,
+                driveMiles: Math.round(straightMiles * 10) / 10,
+                bufferMinutes: 0,
+                totalNeededMinutes: 0,
+                availableMinutes: 0,
+              },
+            };
           }
         }
       } catch {
@@ -661,6 +766,7 @@ async getDriverJobFeed(input: {
         originSource: origin.source,
         createdAt: delivery.createdAt,
         stackingBlocked: stackingBlockedReason,
+        stackingDetails,
         outsidePreferredRadius: matchReasons.includes("outside-radius"),
       };
 

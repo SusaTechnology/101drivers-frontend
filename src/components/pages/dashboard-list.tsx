@@ -251,6 +251,25 @@ interface JobItem {
   dropoffLat: number | null
   dropoffLng: number | null
   stackingBlocked: string | null
+  stackingDetails: {
+    checkType: 'backward' | 'forward' | 'radius' | null;
+    isCrossDay: boolean;
+    conflictingDelivery: {
+      id: string;
+      pickupAddress: string;
+      dropoffAddress: string;
+      pickupWindowStart: string | null;
+      estimatedFinishTime: string | null;
+      etaMinutes: number | null;
+    } | null;
+    transit: {
+      driveMinutes: number;
+      driveMiles: number;
+      bufferMinutes: number;
+      totalNeededMinutes: number;
+      availableMinutes: number;
+    } | null;
+  } | null;
   outsidePreferredRadius: boolean
 }
 
@@ -285,6 +304,76 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
   // Friendly explanation for the driver based on the backend reason
   const blockedExplanation = (() => {
     const reason = job.stackingBlocked || ''
+    const details = job.stackingDetails
+
+    // If we have structured details, build a rich breakdown
+    if (details && details.transit) {
+      if (details.checkType === 'backward') {
+        const conf = details.conflictingDelivery
+        const estFinish = conf?.estimatedFinishTime
+          ? new Date(conf.estimatedFinishTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+          : 'unknown'
+        const confRoute = conf
+          ? `${extractRouteLabel(conf.pickupAddress)} → ${extractRouteLabel(conf.dropoffAddress)}`
+          : 'Your previous delivery'
+        const parts = [
+          `You have a delivery that conflicts with this one:`,
+          confRoute,
+          `Estimated finish time: ${estFinish}`,
+          conf?.etaMinutes ? `Estimated drive time of that delivery: ${formatDuration(conf.etaMinutes)}` : null,
+          `Drive time from that dropoff to this pickup: ~${details.transit.driveMinutes} min (${details.transit.driveMiles} mi)`,
+          details.transit.bufferMinutes > 0 ? `Buffer time between deliveries: ${details.transit.bufferMinutes} min` : null,
+          `Total time needed: ${details.transit.totalNeededMinutes} min`,
+          `Available before this pickup window closes: ${details.transit.availableMinutes} min`,
+        ].filter(Boolean)
+        return {
+          title: "Schedule Overlap",
+          body: parts.join('\n'),
+        }
+      }
+      if (details.checkType === 'forward') {
+        const conf = details.conflictingDelivery
+        const confPickup = conf?.pickupWindowStart
+          ? new Date(conf.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+          : 'unknown'
+        const confRoute = conf
+          ? `${extractRouteLabel(conf.pickupAddress)} → ${extractRouteLabel(conf.dropoffAddress)}`
+          : 'Your next delivery'
+        const parts = [
+          `If you accept this delivery, you'd arrive late for another gig you already booked:`,
+          confRoute,
+          `That delivery's pickup time: ${confPickup}`,
+          conf?.etaMinutes ? `Estimated drive time of that delivery: ${formatDuration(conf.etaMinutes)}` : null,
+          `Drive time from this dropoff to that pickup: ~${details.transit.driveMinutes} min (${details.transit.driveMiles} mi)`,
+          details.transit.bufferMinutes > 0 ? `Buffer time between deliveries: ${details.transit.bufferMinutes} min` : null,
+          `Total time needed: ${details.transit.totalNeededMinutes} min`,
+          `Available before that pickup: ${details.transit.availableMinutes} min`,
+        ].filter(Boolean)
+        return {
+          title: "Would Make You Late",
+          body: parts.join('\n'),
+        }
+      }
+      if (details.checkType === 'radius') {
+        const conf = details.conflictingDelivery
+        const confRoute = conf
+          ? `${extractRouteLabel(conf.pickupAddress)} → ${extractRouteLabel(conf.dropoffAddress)}`
+          : 'Your last delivery'
+        const parts = [
+          `The pickup location for this delivery is too far from where your last delivery ends.`,
+          confRoute,
+          `Distance from last dropoff to this pickup: ~${details.transit.driveMiles} miles`,
+          `Maximum allowed distance: 20 miles`,
+          `This limit ensures you can reliably reach each pickup on time.`,
+        ].filter(Boolean)
+        return {
+          title: "Too Far From Last Drop-off",
+          body: parts.join('\n'),
+        }
+      }
+    }
+
+    // Fallback to generic text pattern matching
     if (reason.includes("Not enough time after your previous delivery") || reason.includes("after your delivery at")) {
       return {
         title: "Schedule Overlap",
@@ -409,7 +498,7 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
                 {isBlocked ? blockedExplanation.title : "Outside Your Distance Filter"}
               </AlertDialogTitle>
             </div>
-            <AlertDialogDescription className="text-left text-sm leading-relaxed">
+            <AlertDialogDescription className="text-left text-sm leading-relaxed whitespace-pre-line">
               {isBlocked
                 ? blockedExplanation.body
                 : "This delivery is farther than the distance you selected in your filters. You can change your distance filter to \u201cAny\u201d to see it normally, or you can tap \u201cView Details\u201d to check it out anyway."
@@ -598,6 +687,7 @@ export default function DriverGigBoardPage() {
       dropoffLat: item.dropoffLat || null,
       dropoffLng: item.dropoffLng || null,
       stackingBlocked: item.stackingBlocked || null,
+      stackingDetails: item.stackingDetails || null,
       outsidePreferredRadius: item.outsidePreferredRadius || false,
     })) || []
   }, [deliveriesData])
