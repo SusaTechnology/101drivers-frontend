@@ -1,9 +1,8 @@
-import { Controller, Get, Post, Body, Param, Logger, UseGuards } from "@nestjs/common";
+import { Controller, Get, Post, Param, Logger, UseGuards } from "@nestjs/common";
 import { StripeService } from "../providers/stripe/stripe.service";
-import { PrismaService } from "../prisma";
+import { PrismaService } from "../prisma/prisma.service";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
 import * as nestAccessControl from "nest-access-control";
-import { Permissions } from "../decorators/permissions.decorator";
 
 @Controller("api/payments")
 export class StripePaymentController {
@@ -30,8 +29,7 @@ export class StripePaymentController {
    * If a PaymentIntent already exists for this delivery, return its clientSecret.
    */
   @Post("stripe/payment-intent/:deliveryId")
-  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.AcgGuard)
-  @Permissions({ create: "Payment", read: "Payment" })
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
   async getOrCreatePaymentIntent(@Param("deliveryId") deliveryId: string) {
     // Check if a PaymentIntent already exists for this delivery
     const payment = await this.prisma.payment.findUnique({

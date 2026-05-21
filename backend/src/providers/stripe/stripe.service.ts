@@ -4,22 +4,23 @@ import Stripe from "stripe";
 
 @Injectable()
 export class StripeService {
-  public readonly stripe: Stripe;
+  public readonly stripe: ReturnType<typeof Stripe>;
   public readonly publishableKey: string;
 
   constructor(private readonly configService: ConfigService) {
     const secretKey = this.configService.get<string>("STRIPE_SECRET_KEY");
+    const apiVersion = Stripe.API_VERSION as any;
     if (!secretKey) {
       // In development without keys, create a no-op instance
       // so the app doesn't crash. Real calls will fail gracefully.
       this.stripe = new Stripe("sk_test_placeholder", {
-        apiVersion: "2025-04-30.basil",
+        apiVersion,
         typescript: true,
       });
       this.publishableKey = "";
     } else {
       this.stripe = new Stripe(secretKey, {
-        apiVersion: "2025-04-30.basil",
+        apiVersion,
         typescript: true,
       });
       this.publishableKey = this.configService.get<string>("STRIPE_PUBLISHABLE_KEY") || "";
@@ -65,21 +66,21 @@ export class StripeService {
    * Capture a previously created PaymentIntent.
    * Called when delivery is completed.
    */
-  async capturePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  async capturePaymentIntent(paymentIntentId: string) {
     return this.stripe.paymentIntents.capture(paymentIntentId);
   }
 
   /**
    * Cancel (void) a PaymentIntent.
    */
-  async cancelPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  async cancelPaymentIntent(paymentIntentId: string) {
     return this.stripe.paymentIntents.cancel(paymentIntentId);
   }
 
   /**
    * Get a PaymentIntent by ID.
    */
-  async getPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  async getPaymentIntent(paymentIntentId: string) {
     return this.stripe.paymentIntents.retrieve(paymentIntentId);
   }
 
@@ -91,13 +92,13 @@ export class StripeService {
   async createRefund(params: {
     chargeId: string;
     amount?: number; // in dollars — omit for full refund
-    reason?: Stripe.RefundCreateParams.Reason;
+    reason?: string;
     metadata?: Record<string, string>;
-  }): Promise<Stripe.Refund> {
+  }) {
     return this.stripe.refunds.create({
       charge: params.chargeId,
       ...(params.amount ? { amount: Math.round(params.amount * 100) } : {}),
-      ...(params.reason ? { reason: params.reason } : {}),
+      ...(params.reason ? { reason: params.reason as any } : {}),
       metadata: params.metadata,
     });
   }
@@ -113,7 +114,7 @@ export class StripeService {
     destinationAccountId: string;
     transferGroup?: string; // e.g., delivery ID for reconciliation
     metadata?: Record<string, string>;
-  }): Promise<Stripe.Transfer> {
+  }) {
     return this.stripe.transfers.create({
       amount: Math.round(params.amount * 100), // cents
       currency: "usd",
@@ -133,7 +134,7 @@ export class StripeService {
     accountId: string;
     refreshUrl: string;
     returnUrl: string;
-  }): Promise<Stripe.AccountLink> {
+  }) {
     return this.stripe.accountLinks.create({
       account: params.accountId,
       refresh_url: params.refreshUrl,
@@ -149,7 +150,7 @@ export class StripeService {
     email: string;
     driverId: string;
     country?: string;
-  }): Promise<Stripe.Account> {
+  }) {
     return this.stripe.accounts.create({
       type: "express",
       country: params.country || "US",
@@ -164,7 +165,7 @@ export class StripeService {
   /**
    * Retrieve a Connect account.
    */
-  async getConnectAccount(accountId: string): Promise<Stripe.Account> {
+  async getConnectAccount(accountId: string) {
     return this.stripe.accounts.retrieve(accountId);
   }
 
@@ -174,7 +175,7 @@ export class StripeService {
    * Verify and parse a Stripe webhook event.
    * Throws if signature is invalid.
    */
-  verifyWebhookEvent(rawBody: string, signature: string): Stripe.Event {
+  verifyWebhookEvent(rawBody: string, signature: string) {
     const webhookSecret = this.configService.get<string>("STRIPE_WEBHOOK_SECRET");
     if (!webhookSecret) {
       throw new Error("STRIPE_WEBHOOK_SECRET not configured");

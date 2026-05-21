@@ -799,7 +799,7 @@ private async createIndividualDeliveryForResolvedCustomer(
       const result = await this.stripeService.createPaymentIntent({
         amount: quote.estimatedPrice,
         deliveryId: delivery.id,
-        customerEmail: input.recipientEmail || customer.email || undefined,
+        customerEmail: input.recipientEmail || customer.user?.email || undefined,
       });
       paymentIntentId = result.paymentIntentId;
       clientSecret = result.clientSecret;

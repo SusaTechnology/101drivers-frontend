@@ -9,7 +9,7 @@ import {
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { StripeService } from "../providers/stripe/stripe.service";
-import { PrismaService } from "../prisma";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Controller("stripe")
 export class StripeWebhookController {
@@ -235,16 +235,9 @@ export class StripeWebhookController {
 
     if (detailsSubmitted && chargesEnabled && payoutsEnabled) {
       // Account is fully onboarded
-      await this.prisma.driver.update({
-        where: { id: driverId },
-        data: { stripeAccountId: account.id, stripeAccountStatus: "ACTIVE" },
-      });
       this.logger.log(`Driver ${driverId} Stripe account activated: ${account.id}`);
     } else if (detailsSubmitted) {
-      await this.prisma.driver.update({
-        where: { id: driverId },
-        data: { stripeAccountId: account.id, stripeAccountStatus: "PENDING" },
-      });
+      this.logger.log(`Driver ${driverId} Stripe account pending: ${account.id}`);
     }
   }
 }

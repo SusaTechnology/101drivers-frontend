@@ -51,7 +51,6 @@ import { ApolloDriver, ApolloDriverConfig } from "@nestjs/apollo";
 import { ACLModule } from "./auth/acl.module";
 import { AuthModule } from "./auth/auth.module";
 import { EmailVerificationModule } from "./auth/email-verification/email-verification.module";
-import { UploadModule } from "./upload/upload.module";
 import { AdminDashboardModule } from "./adminDashboard/adminDashboard.module";
 import { ReportsModule } from "./reports/reports.module";
 import { EmailVerificationTokenModule } from "./emailVerificationToken/emailVerificationToken.module";
@@ -106,7 +105,6 @@ import { StripeWebhookController } from "./payment/stripe-webhook.controller";
     PrismaModule,
     SecretsManagerModule,
     StripeModule,
-    UploadModule,
     AdminDashboardModule,
     ReportsModule,
     EmailVerificationModule,

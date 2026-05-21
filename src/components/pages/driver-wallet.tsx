@@ -203,16 +203,18 @@ export default function DriverWalletPage() {
       }
 
   // Fetch saved bank account
-  const bankAccountQuery = useDataQuery<any>({
+  const { data: bankAccountData } = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-bank-account`,
     noFilter: true,
   })
-      if (bankAccountQuery) {
-        setAccountHolder(bankAccountQuery?.accountHolderName || '')
-        setRoutingNumber(bankAccountQuery?.routingNumber || '')
-        setAccountNumber(bankAccountQuery?.accountNumber || '')
-        if (bankAccountQuery?.accountType) setPayoutType(bankAccountQuery?.accountType === 'debit' ? 'debit' : bankAccountQuery?.accountType === 'check' ? 'check' : 'ach')
-      }
+  useEffect(() => {
+    if (bankAccountData) {
+      setAccountHolder(bankAccountData?.accountHolderName || '')
+      setRoutingNumber(bankAccountData?.routingNumber || '')
+      setAccountNumber(bankAccountData?.accountNumber || '')
+      if (bankAccountData?.accountType) setPayoutType(bankAccountData?.accountType === 'debit' ? 'debit' : bankAccountData?.accountType === 'check' ? 'check' : 'ach')
+    }
+  }, [bankAccountData])
   // Save bank account
   const saveBankAccountMutation = useDataMutation<any, any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-bank-account`,
@@ -452,12 +454,12 @@ export default function DriverWalletPage() {
               </div>
               <Badge variant="outline" className={cn(
                 "chip",
-                bankAccountQuery.data
+                bankAccountData
                   ? "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200"
                   : "bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200"
               )}>
                 <Info className="w-3.5 h-3.5 mr-1" />
-                {bankAccountQuery.data ? 'Connected' : 'Not connected'}
+                {bankAccountData ? 'Connected' : 'Not connected'}
               </Badge>
             </div>
           </CardHeader>

@@ -146,7 +146,6 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
         driverSharePct: true,
         insuranceFee: true,
         platformFee: true,
-        tipAmount: true,
         netAmount: true,
         status: true,
         paidAt: true,
@@ -182,13 +181,10 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
 
     for (const p of payouts) {
       const net = p.netAmount || 0;
-      const tip = p.tipAmount || 0;
-
       if (p.status === "ELIGIBLE") availableBalance += net;
       if (p.status === "PENDING") pendingAmount += net;
 
       totalEarnings += net;
-      totalTips += tip;
 
       const created = new Date(p.createdAt);
       if (created >= startOfWeek) weeklyEarnings += net;

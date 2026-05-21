@@ -21,13 +21,16 @@ export default function StripePaymentWrapper({
   const [error, setError] = useState<string | null>(null);
 
   // Fetch Stripe config (publishable key)
-  useDataQuery({
+  const { data: configData } = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/config`,
-    enabled: true,
-    onSuccess: (data: any) => {
-      setPublishableKey(data?.publishableKey || "");
-    },
+    noFilter: true,
   });
+
+  useEffect(() => {
+    if (configData?.publishableKey) {
+      setPublishableKey(configData.publishableKey);
+    }
+  }, [configData]);
 
   // Create or get PaymentIntent
   useEffect(() => {
