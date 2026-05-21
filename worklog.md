@@ -40,3 +40,29 @@ Stage Summary:
 - Tomorrow/later deliveries no longer blocked by today's cutoff time
 - Future driver bookings no longer restricted by 20-mile same-day radius rule
 - Time stacking checks unchanged (naturally handle multi-day via window non-overlap)
+
+---
+Task ID: 1
+Agent: Main
+Task: Fix delivery visibility - show all gigs with flags, fix dealer dashboard filter, fix timezone, fix controller session injection
+
+Work Log:
+- Analyzed complete delivery creation → dashboard → driver feed pipeline
+- Found radius filter silently hiding beyond-radius gigs (return null)
+- Found stacking-blocked gigs silently removed (return null)
+- Found dealer dashboard "My" filter comparing User ID vs Customer ID (masked by || fallback)
+- Found startTrip error message missing timezone in toLocaleTimeString
+- Found controller not injecting session user as fallback for createdByUserId
+
+Changes made:
+1. `driver-job-feed.service.ts`: Radius filter now flags instead of hiding (matchScore -= 15, outsidePreferredRadius field). Stacking-blocked gigs now returned with reason instead of return null.
+2. `dashboard-list.tsx`: Added stackingBlocked/outsidePreferredRadius to JobItem interface. GigCard shows amber ShieldX icon + tooltip for blocked gigs, blue Navigation icon for beyond-radius. Blocked gigs non-clickable with "Schedule Conflict" footer.
+3. `dealer-dashboard.tsx`: Fixed createdById to use item.customer?.id instead of item.createdBy || item.customer?.id
+4. `delivery-lifecycle.service.ts`: Added timeZone: "America/Los_Angeles" to toLocaleTimeString in startTrip first-pickup gate
+5. `deliveryRequest.controller.ts`: Added @Req() request param to createDeliveryFromAcceptedQuote, auto-injects createdByUserId from authenticated session
+
+Stage Summary:
+- Commit f010523 pushed to master
+- 5 files changed, 69 insertions, 15 deletions
+- Zero new TS errors introduced
+- Booking endpoint (assertDriverCanBookDelivery) still enforces stacking/radius at accept time — feed just shows more gigs with flags
