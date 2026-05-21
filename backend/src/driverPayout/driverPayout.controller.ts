@@ -126,4 +126,86 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
       },
     });
   }
+
+  @common.Get("my-earnings")
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "read",
+    possession: "own",
+  })
+  async getMyEarnings(@common.Req() req: any): Promise<any> {
+    const driverId = (req.user as any)?.driver?.id;
+    if (!driverId) throw new common.NotFoundException("Driver profile not found");
+
+    const payouts = await this.prisma.driverPayout.findMany({
+      where: { driverId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        grossAmount: true,
+        driverSharePct: true,
+        insuranceFee: true,
+        platformFee: true,
+        tipAmount: true,
+        netAmount: true,
+        status: true,
+        paidAt: true,
+        createdAt: true,
+        delivery: {
+          select: {
+            id: true,
+            serviceType: true,
+            pickupAddress: true,
+            dropoffAddress: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    // Aggregate totals
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+    let availableBalance = 0;
+    let pendingAmount = 0;
+    let weeklyEarnings = 0;
+    let monthlyEarnings = 0;
+    let yearlyEarnings = 0;
+    let totalEarnings = 0;
+    let totalTips = 0;
+
+    for (const p of payouts) {
+      const net = p.netAmount || 0;
+      const tip = p.tipAmount || 0;
+
+      if (p.status === "ELIGIBLE") availableBalance += net;
+      if (p.status === "PENDING") pendingAmount += net;
+
+      totalEarnings += net;
+      totalTips += tip;
+
+      const created = new Date(p.createdAt);
+      if (created >= startOfWeek) weeklyEarnings += net;
+      if (created >= startOfMonth) monthlyEarnings += net;
+      if (created >= startOfYear) yearlyEarnings += net;
+    }
+
+    return {
+      availableBalance: Math.round(availableBalance * 100) / 100,
+      pendingAmount: Math.round(pendingAmount * 100) / 100,
+      weeklyEarnings: Math.round(weeklyEarnings * 100) / 100,
+      monthlyEarnings: Math.round(monthlyEarnings * 100) / 100,
+      yearlyEarnings: Math.round(yearlyEarnings * 100) / 100,
+      totalEarnings: Math.round(totalEarnings * 100) / 100,
+      totalTips: Math.round(totalTips * 100) / 100,
+      payoutCount: payouts.length,
+      payouts,
+    };
+  }
 }

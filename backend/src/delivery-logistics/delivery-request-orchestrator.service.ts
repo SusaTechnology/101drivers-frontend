@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
+  Inject,
 } from "@nestjs/common";
 import {
   EnumCustomerApprovalStatus,
@@ -229,7 +231,8 @@ export class DeliveryRequestOrchestratorService {
     private readonly pricingEngineService: PricingEngineService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly passwordService: PasswordService,
-    private readonly notificationEventEngine: NotificationEventEngine
+    private readonly notificationEventEngine: NotificationEventEngine,
+    @Optional() @Inject("STRIPE_SERVICE") private readonly stripeService?: any,
   ) {}
 
   async createDeliveryDraftFromQuote(input: CreateDeliveryDraftFromQuoteInput) {
@@ -782,11 +785,38 @@ private async createIndividualDeliveryForResolvedCustomer(
       deliveryId: delivery.id,
       amount: quote.estimatedPrice,
       paymentType: EnumPaymentPaymentType.PREPAID,
-      provider: EnumPaymentProvider.MANUAL,
+      provider: EnumPaymentProvider.STRIPE,
       status: EnumPaymentStatus.AUTHORIZED,
       authorizedAt: businessNow().toJSDate(),
     },
   });
+
+  // Create Stripe PaymentIntent if Stripe is configured
+  let paymentIntentId: string | null = null;
+  let clientSecret: string | null = null;
+  if (this.stripeService) {
+    try {
+      const result = await this.stripeService.createPaymentIntent({
+        amount: quote.estimatedPrice,
+        deliveryId: delivery.id,
+        customerEmail: input.recipientEmail || customer.email || undefined,
+      });
+      paymentIntentId = result.paymentIntentId;
+      clientSecret = result.clientSecret;
+
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { providerPaymentIntentId: paymentIntentId },
+      });
+    } catch (err: any) {
+      // Stripe not available — keep as MANUAL, log the error
+      console.warn(`[Stripe] PaymentIntent creation failed, falling back to MANUAL: ${err.message}`);
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { provider: EnumPaymentProvider.MANUAL },
+      });
+    }
+  }
 
   await this.prisma.paymentEvent.create({
     data: {

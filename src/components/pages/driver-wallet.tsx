@@ -161,6 +161,47 @@ export default function DriverWalletPage() {
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
 
+  // Fetch real earnings data
+  const { data: earningsData } = useDataQuery<any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-earnings`,
+    noFilter: true,
+  })
+
+  // Use real data when available, fall back to zeros
+  const wallet = earningsData
+    ? {
+        availableBalance: earningsData.availableBalance || 0,
+        pending: earningsData.pendingAmount || 0,
+        thisWeek: earningsData.weeklyEarnings || 0,
+        ytd: earningsData.yearlyEarnings || 0,
+        monthlyEarnings: earningsData.monthlyEarnings || 0,
+        totalEarnings: earningsData.totalEarnings || 0,
+        totalTips: earningsData.totalTips || 0,
+        payouts: (earningsData.payouts || []).map((p: any) => ({
+          date: new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          amount: p.netAmount,
+          method: 'ACH',
+          deliveryId: p.delivery?.id,
+          pickup: p.delivery?.pickupAddress,
+          dropoff: p.delivery?.dropoffAddress,
+          status: {
+            label: p.status === 'PAID' ? 'Paid' : p.status === 'ELIGIBLE' ? 'Available' : p.status === 'PENDING' ? 'Processing' : p.status,
+            color: p.status === 'PAID' ? 'primary' : p.status === 'ELIGIBLE' ? 'green' : p.status === 'PENDING' ? 'slate' : 'amber',
+            icon: p.status === 'PAID' ? CheckCircle : p.status === 'ELIGIBLE' ? CheckCircle : p.status === 'PENDING' ? Schedule : AlertCircle,
+          },
+        })),
+      }
+    : {
+        availableBalance: 0,
+        pending: 0,
+        thisWeek: 0,
+        ytd: 0,
+        monthlyEarnings: 0,
+        totalEarnings: 0,
+        totalTips: 0,
+        payouts: [],
+      }
+
   // Fetch saved bank account
   const bankAccountQuery = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-bank-account`,
@@ -203,7 +244,7 @@ export default function DriverWalletPage() {
 
   const handleRequestPayout = () => {
     toast.success('Payout requested', {
-      description: `$${MOCK_WALLET.availableBalance.toFixed(2)} will be sent to your account.`,
+      description: `$${wallet.availableBalance.toFixed(2)} will be sent to your account.`,
     })
   }
 
@@ -230,7 +271,7 @@ export default function DriverWalletPage() {
 
   const handleViewPayoutDetails = (index: number) => {
     toast.info(`Viewing payout details`, {
-      description: `Payout from ${MOCK_WALLET.payoutHistory[index].date}`,
+      description: `Payout from ${wallet.payouts[index]?.date || 'N/A'}`,
     })
   }
 
@@ -334,7 +375,7 @@ export default function DriverWalletPage() {
 
               <div className="text-left sm:text-right">
                 <p className="text-4xl font-black text-primary">
-                  ${MOCK_WALLET.availableBalance.toFixed(2)}
+                  ${wallet.availableBalance.toFixed(2)}
                 </p>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
                   Ready for payout
@@ -346,7 +387,7 @@ export default function DriverWalletPage() {
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Pending</p>
                 <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">
-                  ${MOCK_WALLET.pending.toFixed(2)}
+                  ${wallet.pending.toFixed(2)}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">Awaiting completion</p>
               </div>
@@ -354,7 +395,7 @@ export default function DriverWalletPage() {
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">This week</p>
                 <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">
-                  ${MOCK_WALLET.thisWeek.toFixed(2)}
+                  ${wallet.thisWeek.toFixed(2)}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">Completed jobs</p>
               </div>
@@ -362,7 +403,7 @@ export default function DriverWalletPage() {
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">YTD</p>
                 <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">
-                  ${MOCK_WALLET.ytd.toFixed(2)}
+                  ${wallet.ytd.toFixed(2)}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">Total earnings</p>
               </div>
@@ -525,36 +566,32 @@ export default function DriverWalletPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {MOCK_WALLET.earningsBreakdown.map((item, index) => {
-                if (item.total) {
-                  return (
-                    <div key={index} className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-extrabold text-slate-900 dark:text-white">
-                          {item.label}
-                        </span>
-                        <span className="text-lg font-black text-slate-900 dark:text-white">
-                          ${item.amount.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                }
-
-                return (
-                  <div key={index} className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                      {item.label}
-                    </span>
-                    <span className={cn(
-                      "text-sm font-black",
-                      item.highlight ? "text-primary" : "text-slate-900 dark:text-white"
-                    )}>
-                      ${item.amount.toFixed(2)}
-                    </span>
-                  </div>
-                )
-              })}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                  Total earnings (net)
+                </span>
+                <span className="text-sm font-black text-slate-900 dark:text-white">
+                  ${wallet.totalEarnings.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                  Tips received
+                </span>
+                <span className="text-sm font-black text-primary">
+                  ${wallet.totalTips.toFixed(2)}
+                </span>
+              </div>
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                    Total (earnings + tips)
+                  </span>
+                  <span className="text-lg font-black text-slate-900 dark:text-white">
+                    ${(wallet.totalEarnings + wallet.totalTips).toFixed(2)}
+                  </span>
+                </div>
+              </div>
 
               <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                 Notes: pricing rules and payout formulas are controlled by Admin (pricing + payment policy).
@@ -595,7 +632,14 @@ export default function DriverWalletPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {MOCK_WALLET.payoutHistory.map((item, index) => (
+                  {wallet.payouts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                        No payouts yet. Complete deliveries to start earning.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    wallet.payouts.map((item, index) => (
                     <TableRow key={index} className="hover:bg-primary/5 transition">
                       <TableCell className="py-4 pr-4 text-slate-600 dark:text-slate-400">
                         {item.date}
@@ -630,7 +674,8 @@ export default function DriverWalletPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ))
+                  )}
                 </TableBody>
               </Table>
             </div>

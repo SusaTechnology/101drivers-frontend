@@ -7,6 +7,7 @@ import { PaymentResolver } from "./payment.resolver";
 import { PaymentDomain } from "src/domain/payment/payment.domain";
 import { PaymentPolicyService } from "src/domain/payment/paymentPolicy.service";
 import { DeliveryLogisticsModule } from "../delivery-logistics/delivery-logistics.module";
+import { StripePaymentController } from "./stripe-payment.controller";
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { DeliveryLogisticsModule } from "../delivery-logistics/delivery-logistic
     forwardRef(() => AuthModule),
     DeliveryLogisticsModule,
   ],
-  controllers: [PaymentController],
+  controllers: [PaymentController, StripePaymentController],
   providers: [
     PaymentService,
     PaymentResolver,

@@ -57,8 +57,10 @@ import { ReportsModule } from "./reports/reports.module";
 import { EmailVerificationTokenModule } from "./emailVerificationToken/emailVerificationToken.module";
 import { SupportRequestModule } from "./supportRequest/supportRequest.module";
 import { SupportRequestNoteModule } from "./supportRequestNote/supportRequestNote.module";
+import { StripeModule } from "./providers/stripe/stripe.module";
+import { StripeWebhookController } from "./payment/stripe-webhook.controller";
 @Module({
-  controllers: [],
+  controllers: [StripeWebhookController],
   imports: [
     ACLModule,
     AuthModule,
@@ -103,6 +105,7 @@ import { SupportRequestNoteModule } from "./supportRequestNote/supportRequestNot
     HealthModule,
     PrismaModule,
     SecretsManagerModule,
+    StripeModule,
     UploadModule,
     AdminDashboardModule,
     ReportsModule,

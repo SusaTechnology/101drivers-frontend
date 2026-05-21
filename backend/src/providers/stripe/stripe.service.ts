@@ -1,0 +1,184 @@
+import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import Stripe from "stripe";
+
+@Injectable()
+export class StripeService {
+  public readonly stripe: Stripe;
+  public readonly publishableKey: string;
+
+  constructor(private readonly configService: ConfigService) {
+    const secretKey = this.configService.get<string>("STRIPE_SECRET_KEY");
+    if (!secretKey) {
+      // In development without keys, create a no-op instance
+      // so the app doesn't crash. Real calls will fail gracefully.
+      this.stripe = new Stripe("sk_test_placeholder", {
+        apiVersion: "2025-04-30.basil",
+        typescript: true,
+      });
+      this.publishableKey = "";
+    } else {
+      this.stripe = new Stripe(secretKey, {
+        apiVersion: "2025-04-30.basil",
+        typescript: true,
+      });
+      this.publishableKey = this.configService.get<string>("STRIPE_PUBLISHABLE_KEY") || "";
+    }
+  }
+
+  // ── Payment Intents ──────────────────────────────────────────────
+
+  /**
+   * Create a PaymentIntent for a delivery.
+   * Returns the clientSecret for the frontend to use.
+   */
+  async createPaymentIntent(params: {
+    amount: number; // in dollars, e.g. 150.00
+    deliveryId: string;
+    customerEmail?: string;
+    metadata?: Record<string, string>;
+  }): Promise<{ paymentIntentId: string; clientSecret: string }> {
+    // Stripe expects amount in cents
+    const amountCents = Math.round(params.amount * 100);
+
+    const paymentIntent = await this.stripe.paymentIntents.create({
+      amount: amountCents,
+      currency: "usd",
+      metadata: {
+        deliveryId: params.deliveryId,
+        ...params.metadata,
+      },
+      ...(params.customerEmail
+        ? { receipt_email: params.customerEmail }
+        : {}),
+      // Use automatic payment methods (card, etc.)
+      automatic_payment_methods: { enabled: true },
+    });
+
+    return {
+      paymentIntentId: paymentIntent.id,
+      clientSecret: paymentIntent.client_secret!,
+    };
+  }
+
+  /**
+   * Capture a previously created PaymentIntent.
+   * Called when delivery is completed.
+   */
+  async capturePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    return this.stripe.paymentIntents.capture(paymentIntentId);
+  }
+
+  /**
+   * Cancel (void) a PaymentIntent.
+   */
+  async cancelPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    return this.stripe.paymentIntents.cancel(paymentIntentId);
+  }
+
+  /**
+   * Get a PaymentIntent by ID.
+   */
+  async getPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    return this.stripe.paymentIntents.retrieve(paymentIntentId);
+  }
+
+  // ── Refunds ──────────────────────────────────────────────────────
+
+  /**
+   * Create a full or partial refund for a charge.
+   */
+  async createRefund(params: {
+    chargeId: string;
+    amount?: number; // in dollars — omit for full refund
+    reason?: Stripe.RefundCreateParams.Reason;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Refund> {
+    return this.stripe.refunds.create({
+      charge: params.chargeId,
+      ...(params.amount ? { amount: Math.round(params.amount * 100) } : {}),
+      ...(params.reason ? { reason: params.reason } : {}),
+      metadata: params.metadata,
+    });
+  }
+
+  // ── Transfers (Connect) ──────────────────────────────────────────
+
+  /**
+   * Transfer money to a Stripe Connected Account (driver payout).
+   * Used when a driver's Stripe Connect account is set up.
+   */
+  async createTransfer(params: {
+    amount: number; // in dollars
+    destinationAccountId: string;
+    transferGroup?: string; // e.g., delivery ID for reconciliation
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Transfer> {
+    return this.stripe.transfers.create({
+      amount: Math.round(params.amount * 100), // cents
+      currency: "usd",
+      destination: params.destinationAccountId,
+      ...(params.transferGroup ? { transfer_group: params.transferGroup } : {}),
+      metadata: params.metadata,
+    });
+  }
+
+  // ── Connect Onboarding ───────────────────────────────────────────
+
+  /**
+   * Create an Account Link for Stripe Connect onboarding.
+   * The driver opens this URL to complete KYC + bank setup.
+   */
+  async createAccountLink(params: {
+    accountId: string;
+    refreshUrl: string;
+    returnUrl: string;
+  }): Promise<Stripe.AccountLink> {
+    return this.stripe.accountLinks.create({
+      account: params.accountId,
+      refresh_url: params.refreshUrl,
+      return_url: params.returnUrl,
+      type: "account_onboarding",
+    });
+  }
+
+  /**
+   * Create a Stripe Connect account for a driver.
+   */
+  async createConnectAccount(params: {
+    email: string;
+    driverId: string;
+    country?: string;
+  }): Promise<Stripe.Account> {
+    return this.stripe.accounts.create({
+      type: "express",
+      country: params.country || "US",
+      email: params.email,
+      metadata: { driverId: params.driverId },
+      capabilities: {
+        transfers: { requested: true },
+      },
+    });
+  }
+
+  /**
+   * Retrieve a Connect account.
+   */
+  async getConnectAccount(accountId: string): Promise<Stripe.Account> {
+    return this.stripe.accounts.retrieve(accountId);
+  }
+
+  // ── Webhooks ─────────────────────────────────────────────────────
+
+  /**
+   * Verify and parse a Stripe webhook event.
+   * Throws if signature is invalid.
+   */
+  verifyWebhookEvent(rawBody: string, signature: string): Stripe.Event {
+    const webhookSecret = this.configService.get<string>("STRIPE_WEBHOOK_SECRET");
+    if (!webhookSecret) {
+      throw new Error("STRIPE_WEBHOOK_SECRET not configured");
+    }
+    return this.stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+  }
+}
