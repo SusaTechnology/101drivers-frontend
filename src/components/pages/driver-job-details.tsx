@@ -318,12 +318,12 @@ export default function DriverJobDetailsPage() {
     ],
     onSuccess: () => {
       if (hasActiveDelivery) {
-        toast.success('Booked for later!', {
+        toast.success('Accepted!', {
           description: 'You can find it in your Booked for Later queue.',
         })
         navigate({ to: '/driver/booked-later' })
       } else {
-        toast.success('Gig accepted!', {
+        toast.success('Accepted!', {
           description: 'Complete the pickup checklist to start your trip.',
         })
         navigate({ to: '/driver/pickup-checklist', search: { jobId } as any })
@@ -536,10 +536,7 @@ export default function DriverJobDetailsPage() {
                   {route}
                 </h1>
 
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                  Service: {serviceLabel} &bull; {typeLabel}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">Status: {job.status}</p>
+                <p className="mt-2 text-xs text-slate-500">Status: {job.status === 'LISTED' ? 'Available' : job.status}</p>
               </div>
 
               <div className="text-left sm:text-right">
@@ -569,7 +566,7 @@ export default function DriverJobDetailsPage() {
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Window
+                  Pickup Time
                 </p>
                 <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
                   {window}
@@ -731,18 +728,11 @@ export default function DriverJobDetailsPage() {
             <Button
               onClick={handleBook}
               disabled={bookMutation.isPending}
-              className={cn(
-                'flex-1 px-6 py-4 rounded-2xl text-white font-extrabold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed',
-                hasActiveDelivery
-                  ? 'bg-primary'
-                  : 'bg-green-600 hover:bg-green-700',
-              )}
+              className="flex-1 px-6 py-4 rounded-2xl font-extrabold transition disabled:opacity-50 disabled:cursor-not-allowed bg-[#34C759] hover:bg-[#2db84e] text-white"
             >
               {bookMutation.isPending
-                ? 'Booking\u2026'
-                : hasActiveDelivery
-                  ? 'Book for Later'
-                  : 'Accept Gig'}
+                ? 'Accepting\u2026'
+                : 'Accept'}
             </Button>
           </div>
         </div>
