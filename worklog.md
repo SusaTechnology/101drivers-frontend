@@ -66,3 +66,26 @@ Stage Summary:
 - 5 files changed, 69 insertions, 15 deletions
 - Zero new TS errors introduced
 - Booking endpoint (assertDriverCanBookDelivery) still enforces stacking/radius at accept time — feed just shows more gigs with flags
+---
+Task ID: 1
+Agent: main
+Task: Add detailed stacking conflict breakdown in driver blocked delivery dialogs
+
+Work Log:
+- Read and analyzed driver-job-feed.service.ts, dashboard-list.tsx, driver-dashboard.tsx
+- Added StackingDetails type to backend with checkType, conflictingDelivery, transit fields
+- Extended the assignments query to include id, pickupAddress, dropoffAddress
+- Populated stackingDetails in backward check (anchor delivery info, drive time, miles, buffer)
+- Populated stackingDetails in forward check (next delivery info, drive time, miles, buffer)
+- Populated stackingDetails in radius check (anchor delivery info, distance)
+- Updated JobItem interface in both frontend files with stackingDetails field
+- Updated 4 AlertDialog instances across dashboard-list.tsx and driver-dashboard.tsx
+- Each dialog now shows rich breakdown: conflicting route, est. finish time, drive time, miles, buffer, total needed vs available
+- Fallback to generic text if stackingDetails unavailable
+- Committed as 36c87f9 and pushed to origin/master
+
+Stage Summary:
+- 3 files changed, 261 insertions, 9 deletions
+- Backend now returns structured stackingDetails alongside existing stackingBlocked string (backward compatible)
+- Frontend dialogs show specific conflicting delivery info instead of generic messages
+- No changes to booking logic or database schema
