@@ -199,6 +199,44 @@ export default function DriverActiveDeliveryPage() {
   const trackingInterval = useRef<NodeJS.Timeout>()
   // 👇 NEW: ref to store latest position for interval
   const latestPositionRef = useRef<google.maps.LatLngLiteral | null>(null)
+  const dropoffSectionRef = useRef<HTMLDivElement>(null)
+
+  // ── Geofence: distance to dropoff ──
+  const GEO_RADIUS_MILES = 0.1
+  const [distanceToDropoff, setDistanceToDropoff] = useState<number | null>(null)
+  const lastCheckedPositionRef = useRef<google.maps.LatLngLiteral | null>(null)
+
+  function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 3959
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLng = ((lng2 - lng1) * Math.PI) / 180
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  }
+
+  const isWithinGeofence = distanceToDropoff !== null && distanceToDropoff <= GEO_RADIUS_MILES
+
+  // Update distance with throttling: only recompute when moved >25 meters
+  useEffect(() => {
+    if (!driverPosition || !dropoffCoords) return
+    const last = lastCheckedPositionRef.current
+    if (last) {
+      const movedMeters = haversineMiles(last.lat, last.lng, driverPosition.lat, driverPosition.lng) * 1609.34
+      if (movedMeters < 25) return
+    }
+    lastCheckedPositionRef.current = driverPosition
+    const dist = haversineMiles(driverPosition.lat, driverPosition.lng, dropoffCoords.lat, dropoffCoords.lng)
+    setDistanceToDropoff(dist)
+  }, [driverPosition, dropoffCoords])
+
+  // Open detail mode focused on dropoff section (when geofence passes)
+  const handleOpenCompleteFlow = () => {
+    if (!isWithinGeofence) return
+    setDrivingMode(false)
+    setTimeout(() => {
+      dropoffSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 150)
+  }
 
   // Location health tracking
   const [locationHealth, setLocationHealth] = useState<'healthy' | 'warning' | 'lost'>('healthy')
@@ -845,20 +883,49 @@ export default function DriverActiveDeliveryPage() {
             </div>
           )}
 
-          {/* Bottom — toggle + contact buttons */}
+          {/* Bottom — 2x2 action grid */}
           <div className="fixed bottom-0 left-0 right-0 z-10">
             <div className="bg-gradient-to-t from-white/95 dark:from-slate-950/95 via-white/85 dark:via-slate-950/85 to-transparent pt-8 pb-6 px-5 sm:px-6">
               <div className="max-w-[980px] mx-auto">
-                <button
-                  onClick={() => setDrivingMode(false)}
-                  className="w-full mb-3 py-2.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-700 text-sm font-extrabold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2 shadow-md hover:bg-white dark:hover:bg-slate-800 transition"
-                >
-                  <Info className="w-4 h-4 text-primary" />
-                  View Details
-                </button>
+                {/* Distance label */}
+                {distanceToDropoff !== null && !isWithinGeofence && (
+                  <p className="text-center text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
+                    {distanceToDropoff.toFixed(1)} mi away
+                  </p>
+                )}
+                {isWithinGeofence && (
+                  <p className="text-center text-xs font-bold text-green-600 dark:text-green-400 mb-2">
+                    You&apos;ve arrived
+                  </p>
+                )}
 
-                {deliveryData?.recipientPhone && (
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Top-left: View Details */}
+                  <button
+                    onClick={() => setDrivingMode(false)}
+                    className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-700 text-sm font-extrabold text-slate-700 dark:text-slate-200 shadow-md hover:bg-white dark:hover:bg-slate-800 transition active:scale-[0.98]"
+                  >
+                    <Info className="w-4 h-4 text-primary" />
+                    View Details
+                  </button>
+
+                  {/* Top-right: Complete Delivery (geofenced) */}
+                  <button
+                    onClick={handleOpenCompleteFlow}
+                    disabled={!isWithinGeofence}
+                    className={cn(
+                      'flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-extrabold shadow-lg transition active:scale-[0.98]',
+                      isWithinGeofence
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50'
+                    )}
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                    Complete Delivery
+                  </button>
+
+                  {/* Bottom-left: Call Recipient */}
+                  {deliveryData?.recipientPhone ? (
                     <a
                       href={`tel:${deliveryData.recipientPhone}`}
                       className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-extrabold text-sm shadow-lg transition active:scale-[0.98]"
@@ -866,6 +933,12 @@ export default function DriverActiveDeliveryPage() {
                       <Phone className="w-5 h-5" />
                       Call Recipient
                     </a>
+                  ) : (
+                    <div />
+                  )}
+
+                  {/* Bottom-right: Text Recipient */}
+                  {deliveryData?.recipientPhone ? (
                     <a
                       href={`sms:${deliveryData.recipientPhone}`}
                       className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg transition active:scale-[0.98]"
@@ -873,8 +946,10 @@ export default function DriverActiveDeliveryPage() {
                       <MessageSquare className="w-5 h-5" />
                       Text Recipient
                     </a>
-                  </div>
-                )}
+                  ) : (
+                    <div />
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1195,6 +1270,7 @@ export default function DriverActiveDeliveryPage() {
           </Card>
 
           {/* Drop-off evidence - upload functionality */}
+          <div ref={dropoffSectionRef}>
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover-lift">
             <CardHeader>
               <div>
@@ -1306,6 +1382,7 @@ export default function DriverActiveDeliveryPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
         </section>
         </React.Fragment>
         )}
