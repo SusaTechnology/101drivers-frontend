@@ -1,7 +1,7 @@
 // 101 Drivers Service Worker for PWA
-const CACHE_NAME = '101-drivers-v2';
-const STATIC_CACHE_NAME = '101-drivers-static-v2';
-const DYNAMIC_CACHE_NAME = '101-drivers-dynamic-v2';
+const CACHE_NAME = '101-drivers-v3';
+const STATIC_CACHE_NAME = '101-drivers-static-v3';
+const DYNAMIC_CACHE_NAME = '101-drivers-dynamic-v3';
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -22,7 +22,7 @@ const STATIC_ASSETS = [
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker v2...');
+  console.log('[SW] Installing service worker v3...');
   event.waitUntil(
     caches.open(STATIC_CACHE_NAME)
       .then((cache) => {
@@ -41,7 +41,7 @@ self.addEventListener('install', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker v2...');
+  console.log('[SW] Activating service worker v3...');
   event.waitUntil(
     caches.keys()
       .then((cacheNames) => {
@@ -68,6 +68,15 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET requests
   if (request.method !== 'GET') {
+    return;
+  }
+
+  // Skip Vite dev server dependency chunks (pre-bundled deps)
+  // These change frequently during dev and must never be cached by the SW
+  if (url.pathname.startsWith('/node_modules/') ||
+      url.pathname.startsWith('/@vite/') ||
+      url.pathname.startsWith('/@tanstack/') ||
+      url.pathname.includes('.vite/deps/')) {
     return;
   }
 
@@ -170,4 +179,4 @@ self.addEventListener('notificationclick', (event) => {
   }
 });
 
-console.log('[SW] Service worker v2 loaded');
+console.log('[SW] Service worker v3 loaded');
