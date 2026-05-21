@@ -86,8 +86,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Separator } from '@/components/ui/separator'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -272,101 +280,173 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
   const hasDropoffCoords = job.dropoffLat != null && job.dropoffLng != null
   const isBlocked = !!job.stackingBlocked
   const isOutsideRadius = !!job.outsidePreferredRadius
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false)
+
+  // Friendly explanation for the driver based on the backend reason
+  const blockedExplanation = (() => {
+    const reason = job.stackingBlocked || ''
+    if (reason.includes("Not enough time after your previous delivery") || reason.includes("after your delivery at")) {
+      return {
+        title: "Schedule Overlap",
+        body: "This delivery overlaps with another one you already have booked. You won\u2019t have enough time to finish your current delivery and get to this pickup on time. Complete your active delivery first, then check back \u2014 this gig may become available.",
+      }
+    }
+    if (reason.includes("would make you late for your next booking")) {
+      return {
+        title: "Would Make You Late",
+        body: "If you accept this delivery, you\u2019d arrive late for another gig you already accepted. You can only accept deliveries that fit your schedule without making you late for your existing bookings.",
+      }
+    }
+    if (reason.includes("too far from your last drop-off") || reason.includes("Pickup is too far")) {
+      return {
+        title: "Too Far From Last Drop-off",
+        body: "The pickup location for this delivery is too far from where your last delivery ends. Our system limits the distance between consecutive deliveries so you can reliably make it on time.",
+      }
+    }
+    return {
+      title: "Schedule Conflict",
+      body: "This delivery conflicts with your current schedule. You may have another delivery that overlaps with this time window. Try again after completing your current deliveries.",
+    }
+  })()
 
   return (
-    <Card
-      className={cn(
-        "border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/60 active:scale-[0.98] transition-all duration-150 rounded-2xl overflow-hidden",
-        isBlocked ? "opacity-70 cursor-not-allowed" : "cursor-pointer",
-        isOutsideRadius && !isBlocked ? "cursor-pointer" : ""
-      )}
-      onClick={isBlocked ? undefined : onClick}
-    >
-      <CardContent className="px-4 py-3">
-        <div className="flex gap-3">
-          <div className="flex-1 min-w-0 flex flex-col">
-            <div className="text-[12px] font-medium text-slate-400 dark:text-slate-500 leading-tight">
-              {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
-              {job.timeWindow && (
-                <>
-                  <span className="mx-1 text-slate-300 dark:text-slate-600">&middot;</span>
-                  <span>{job.timeWindow}</span>
-                </>
-              )}
-            </div>
-
-            <div className="flex items-start gap-2 mt-1.5">
-              <div className="text-[17px] font-extrabold text-slate-900 dark:text-white leading-snug tracking-tight flex-1">
-                {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
-              </div>
-              {isBlocked && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="shrink-0 mt-0.5">
-                        <ShieldX className="w-4.5 h-4.5 text-amber-500" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[260px] text-xs">
-                      <p className="font-semibold text-amber-700 dark:text-amber-300">Cannot accept this gig</p>
-                      <p className="mt-1 text-slate-600 dark:text-slate-300">{job.stackingBlocked}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              {isOutsideRadius && !isBlocked && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="shrink-0 mt-0.5">
-                        <Navigation className="w-4.5 h-4.5 text-blue-500" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[240px] text-xs">
-                      <p className="font-semibold text-blue-700 dark:text-blue-300">Outside your preferred radius</p>
-                      <p className="mt-1 text-slate-600 dark:text-slate-300">This delivery is beyond your selected distance filter, but you can still accept it.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
-
-            <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
-              {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end justify-between shrink-0">
-            {hasDropoffCoords ? (
-              <MiniRouteMap
-                pickup={{ lat: job.lat, lng: job.lng }}
-                dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
-                isLoaded={isMapsLoaded}
-              />
-            ) : (
-              <RouteThumbnail />
-            )}
-
-            {job.payout != null && (
-              <span className="text-[22px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight mt-2.5">
-                {formatCurrency(job.payout)}
-              </span>
-            )}
-          </div>
-        </div>
-      </CardContent>
-
-      <div className="h-11 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center bg-slate-50/60 dark:bg-slate-800/40">
-        {isBlocked ? (
-          <div className="flex items-center gap-1.5">
-            <ShieldX className="w-4 h-4 text-amber-500" />
-            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Schedule Conflict</span>
-          </div>
-        ) : (
-          <ArrowRight className="w-7 h-7 text-green-600 dark:text-green-400" strokeWidth={3} />
+    <>
+      <Card
+        className={cn(
+          "border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg hover:border-slate-300/80 dark:hover:border-slate-600/60 active:scale-[0.98] transition-all duration-150 rounded-2xl overflow-hidden",
+          isBlocked ? "opacity-70" : "cursor-pointer",
+          isOutsideRadius && !isBlocked ? "cursor-pointer" : ""
         )}
-      </div>
-    </Card>
+        onClick={isBlocked ? () => setShowBlockedDialog(true) : (isOutsideRadius ? () => setShowBlockedDialog(true) : onClick)}
+      >
+        <CardContent className="px-4 py-3">
+          <div className="flex gap-3">
+            <div className="flex-1 min-w-0 flex flex-col">
+              <div className="text-[12px] font-medium text-slate-400 dark:text-slate-500 leading-tight">
+                {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
+                {job.timeWindow && (
+                  <>
+                    <span className="mx-1 text-slate-300 dark:text-slate-600">&middot;</span>
+                    <span>{job.timeWindow}</span>
+                  </>
+                )}
+              </div>
+
+              <div className="flex items-start gap-2 mt-1.5">
+                <div className="text-[17px] font-extrabold text-slate-900 dark:text-white leading-snug tracking-tight flex-1">
+                  {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
+                </div>
+                {isBlocked && (
+                  <div className="shrink-0 mt-0.5">
+                    <ShieldX className="w-4.5 h-4.5 text-amber-500" />
+                  </div>
+                )}
+                {isOutsideRadius && !isBlocked && (
+                  <div className="shrink-0 mt-0.5">
+                    <Navigation className="w-4.5 h-4.5 text-blue-500" />
+                  </div>
+                )}
+              </div>
+
+              <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
+                {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end justify-between shrink-0">
+              {hasDropoffCoords ? (
+                <MiniRouteMap
+                  pickup={{ lat: job.lat, lng: job.lng }}
+                  dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
+                  isLoaded={isMapsLoaded}
+                />
+              ) : (
+                <RouteThumbnail />
+              )}
+
+              {job.payout != null && (
+                <span className="text-[22px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight mt-2.5">
+                  {formatCurrency(job.payout)}
+                </span>
+              )}
+            </div>
+          </div>
+        </CardContent>
+
+        <div className="h-11 border-t border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center bg-slate-50/60 dark:bg-slate-800/40">
+          {isBlocked ? (
+            <div className="flex items-center gap-1.5">
+              <ShieldX className="w-4 h-4 text-amber-500" />
+              <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Schedule Conflict</span>
+            </div>
+          ) : isOutsideRadius ? (
+            <div className="flex items-center gap-1.5">
+              <Navigation className="w-4 h-4 text-blue-500" />
+              <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Beyond Your Radius</span>
+            </div>
+          ) : (
+            <ArrowRight className="w-7 h-7 text-green-600 dark:text-green-400" strokeWidth={3} />
+          )}
+        </div>
+      </Card>
+
+      {/* Blocked gig detail dialog — tap to see why */}
+      <AlertDialog open={showBlockedDialog} onOpenChange={setShowBlockedDialog}>
+        <AlertDialogContent className="rounded-2xl max-w-[340px]">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className={cn(
+                "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+                isBlocked ? "bg-amber-100 dark:bg-amber-900/20" : "bg-blue-100 dark:bg-blue-900/20"
+              )}>
+                {isBlocked ? (
+                  <ShieldX className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                ) : (
+                  <Navigation className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                )}
+              </div>
+              <AlertDialogTitle className="text-left text-base">
+                {isBlocked ? blockedExplanation.title : "Outside Your Distance Filter"}
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-left text-sm leading-relaxed">
+              {isBlocked
+                ? blockedExplanation.body
+                : "This delivery is farther than the distance you selected in your filters. You can change your distance filter to \u201cAny\u201d to see it normally, or you can tap \u201cView Details\u201d to check it out anyway."
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2.5 mb-3">
+            <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
+              {job.pickup} <span className="mx-0.5">&rarr;</span> {job.dropoff}
+            </p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+              {job.timeWindow}{job.miles ? ` \u00b7 ${job.miles} mi` : ''}
+            </p>
+          </div>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            {!isBlocked && (
+              <AlertDialogAction
+                className="w-full rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold"
+                onClick={() => { setShowBlockedDialog(false); onClick() }}
+              >
+                View Details
+              </AlertDialogAction>
+            )}
+            <AlertDialogAction
+              className={cn(
+                "w-full rounded-xl font-bold",
+                isBlocked
+                  ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200"
+                  : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600"
+              )}
+            >
+              Got It
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 
