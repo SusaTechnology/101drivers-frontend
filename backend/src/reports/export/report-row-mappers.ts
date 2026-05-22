@@ -101,14 +101,17 @@ export function mapReportRows(
 
     case "insurance-mileage":
       return rows.map((r) => ({
-        period: r.period,
-        tripCount: r.tripCount,
-        totalDrivenMiles: r.totalDrivenMiles,
-        averageMilesPerTrip: r.averageMilesPerTrip,
-        totalDrivenHours: r.totalDrivenHours ?? 0,
-        averageDrivenHoursPerTrip: r.averageDrivenHoursPerTrip ?? 0,
-        uniqueDriverCount: r.uniqueDriverCount,
-        uniqueCustomerCount: r.uniqueCustomerCount,
+        deliveryId: r.deliveryId ?? r.id,
+        status: r.status ?? "",
+        drivenMiles: r.drivenMiles ?? 0,
+        drivenHours: r.drivenHours ?? 0,
+        startedAt: r.startedAt,
+        stoppedAt: r.stoppedAt,
+        period: r.period ?? "",
+        driverName: nameOfUser(r.assignedDriver),
+        pickupAddress: r.delivery?.pickupAddress ?? "",
+        dropoffAddress: r.delivery?.dropoffAddress ?? "",
+        customerName: nameOfBusiness(r.delivery?.customer),
       }));
 
     default:

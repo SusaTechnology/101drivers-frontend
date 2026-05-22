@@ -1090,18 +1090,26 @@ export class ReportsDomain {
     };
 
     return {
-      rows: rows.map((row) => {
-        const drivenHours = computeDrivenHours(row.startedAt, row.stoppedAt);
-        return {
-          ...row,
-          drivenHours: drivenHours !== null ? Math.round(drivenHours * 100) / 100 : null,
-          assignedDriver: row.delivery.assignments[0]?.driver ?? null,
-          period:
-            query.groupBy === "week"
-              ? this.weekKeyUtc(row.startedAt ?? row.createdAt)
-              : this.monthKeyUtc(row.startedAt ?? row.createdAt),
-        };
-      }),
+      rows: rows
+        .map((row) => {
+          const drivenHours = computeDrivenHours(row.startedAt, row.stoppedAt);
+          return {
+            ...row,
+            drivenHours: drivenHours !== null ? Math.round(drivenHours * 100) / 100 : null,
+            assignedDriver: row.delivery.assignments[0]?.driver ?? null,
+            period:
+              query.groupBy === "week"
+                ? this.weekKeyUtc(row.startedAt ?? row.createdAt)
+                : this.monthKeyUtc(row.startedAt ?? row.createdAt),
+          };
+        })
+        .filter((row) => {
+          if (!hasHoursFilter) return true;
+          if (row.drivenHours === null) return false;
+          if (query.minDrivenHours != null && row.drivenHours < query.minDrivenHours) return false;
+          if (query.maxDrivenHours != null && row.drivenHours > query.maxDrivenHours) return false;
+          return true;
+        }),
       summary,
       groupings: {
         byPeriod,
