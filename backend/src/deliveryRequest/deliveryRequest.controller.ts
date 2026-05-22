@@ -4,6 +4,7 @@ import * as nestAccessControl from "nest-access-control";
 import { DeliveryRequestService } from "./deliveryRequest.service";
 import { DeliveryRequestControllerBase } from "./base/deliveryRequest.controller.base";
 import { isRecordNotFoundError } from "../prisma.util";
+import { EnumDeliveryRequestCreatedByRole } from "./base/EnumDeliveryRequestCreatedByRole";
 import * as errors from "../errors";
 import { Request } from "express";
 import { plainToClass } from "class-transformer";
@@ -454,7 +455,7 @@ async createQuotePreview(
       quoteId: body.quoteId,
       serviceType: body.serviceType,
       createdByUserId: body.createdByUserId ?? authenticatedUser?.id ?? null,
-      createdByRole: body.createdByRole ?? ("DEALER" as any),
+      createdByRole: body.createdByRole ?? EnumDeliveryRequestCreatedByRole.BusinessCustomer,
       customerChose: body.customerChose ?? null,
       pickupWindowStart: new Date(body.pickupWindowStart),
       pickupWindowEnd: new Date(body.pickupWindowEnd),
