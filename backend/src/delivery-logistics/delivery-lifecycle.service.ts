@@ -4,7 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { businessStartOfDay, businessNow } from "./business-time";
+import { businessStartOfDay, businessNow, toBusinessDateTime, BUSINESS_TZ } from "./business-time";
+import { DateTime } from "luxon";
 import {
   EnumDeliveryRequestStatus,
   EnumDeliveryStatusHistoryActorRole,
@@ -22,6 +23,7 @@ import { DriverJobFeedService } from "./driver-job-feed.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { DeliveryComplianceEngine } from "../domain/deliveryCompliance/deliveryCompliance.engine";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
+import { Logger } from "@nestjs/common";
 
 type Tx = Prisma.TransactionClient;
 
@@ -34,6 +36,7 @@ type StatusActor = {
 
 @Injectable()
 export class DeliveryLifecycleService {
+  private readonly logger = new Logger(DeliveryLifecycleService.name);
   private readonly appDomain: string;
 
   constructor(
@@ -268,12 +271,25 @@ async startTrip(input: {
         select: { id: true },
       });
 
-      const now = businessNow().toJSDate();
-      const windowStart = new Date(deliveryWithWindow.pickupWindowStart);
+      // Compare in business timezone (America/Los_Angeles) using Luxon
+      // to avoid any Date/UTC parsing ambiguity.
+      const nowBusiness = businessNow();
+      const windowStartBusiness = toBusinessDateTime(deliveryWithWindow.pickupWindowStart);
 
-      if (!completedToday && now < windowStart) {
+      this.logger.debug(
+        `Pickup window check: now=${nowBusiness.toISO()} windowStart=${windowStartBusiness.toISO()} ` +
+        `completedToday=${!!completedToday} now < windowStart=${nowBusiness < windowStartBusiness}`
+      );
+
+      if (!completedToday && nowBusiness < windowStartBusiness) {
+        this.logger.warn(
+          `BLOCKED trip start: deliveryId=${input.deliveryId} driverId=${input.driverId} ` +
+          `now=${nowBusiness.toISO()} windowStart=${windowStartBusiness.toISO()} ` +
+          `completedToday=${!!completedToday} windowDate=${windowStartBusiness.toFormat('yyyy-MM-dd')} today=${nowBusiness.toFormat('yyyy-MM-dd')}`
+        );
         throw new ConflictException(
-          `First pickup of the day must wait until the scheduled time. You can start at ${windowStart.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles" })}.`
+          `First pickup of the day must wait until the scheduled time. ` +
+          `You can start at ${windowStartBusiness.toFormat('MMM d, h:mm a')} (${BUSINESS_TZ}). Current time: ${nowBusiness.toFormat('MMM d, h:mm a')}.`
         );
       }
     }
