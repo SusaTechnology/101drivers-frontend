@@ -647,17 +647,6 @@ async getDriverJobDetail(
     });
   }
 
-  @common.Get("public/tracking/:token")
-  @common.UseGuards()
-  @swagger.ApiOkResponse({ type: Object })
-  async getPublicTracking(
-    @common.Param("token") token: string
-  ): Promise<any> {
-    return this.service.getPublicTracking({
-      token,
-    });
-  }
-
   @common.Post(":id/start-trip")
   @swagger.ApiOkResponse({ type: DeliveryRequest })
   @nestAccessControl.UseRoles({

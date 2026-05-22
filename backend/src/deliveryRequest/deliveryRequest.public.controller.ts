@@ -111,4 +111,15 @@ async createIndividualDeliveryDraftFromQuote(
       isUrgent: body.isUrgent === true,
     });
   }
+
+  @common.Get("public/tracking/:token")
+  @swagger.ApiOperation({
+    summary: "Public tracking — no auth required. Uses a share token.",
+  })
+  @swagger.ApiOkResponse({ type: Object })
+  async getPublicTracking(
+    @common.Param("token") token: string
+  ): Promise<any> {
+    return this.service.getPublicTracking({ token });
+  }
 }
