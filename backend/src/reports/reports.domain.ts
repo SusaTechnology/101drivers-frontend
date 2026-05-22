@@ -890,92 +890,9 @@ export class ReportsDomain {
   }
 
   async getInsuranceMileageReport(query: InsuranceMileageReportQueryDto) {
-    const where: Prisma.TrackingSessionWhereInput = {
+    const baseWhere: Prisma.TrackingSessionWhereInput = {
       ...this.trackingBaseWhere(query),
     };
-
-    const totalRows = await this.prisma.trackingSession.count({ where });
-
-    const rows = await this.prisma.trackingSession.findMany({
-      where,
-      ...this.paginate(query.page, query.pageSize),
-      orderBy: {
-        [query.sortBy || "createdAt"]: query.sortOrder,
-      } as Prisma.TrackingSessionOrderByWithRelationInput,
-      select: {
-        id: true,
-        deliveryId: true,
-        status: true,
-        startedAt: true,
-        stoppedAt: true,
-        drivenMiles: true,
-        createdAt: true,
-        delivery: {
-          select: {
-            id: true,
-            status: true,
-            serviceType: true,
-            customer: {
-              select: {
-                id: true,
-                businessName: true,
-                user: {
-                  select: {
-                    id: true,
-                    fullName: true,
-                    email: true,
-                  },
-                },
-              },
-            },
-            assignments: {
-              where: { unassignedAt: null },
-              orderBy: { assignedAt: "desc" },
-              take: 1,
-              select: {
-                driver: {
-                  select: {
-                    id: true,
-                    user: {
-                      select: {
-                        id: true,
-                        fullName: true,
-                        email: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    const allForGrouping = await this.prisma.trackingSession.findMany({
-      where,
-      select: {
-        id: true,
-        drivenMiles: true,
-        startedAt: true,
-        stoppedAt: true,
-        createdAt: true,
-        delivery: {
-          select: {
-            customerId: true,
-            serviceType: true,
-            assignments: {
-              where: { unassignedAt: null },
-              orderBy: { assignedAt: "desc" },
-              take: 1,
-              select: {
-                driverId: true,
-              },
-            },
-          },
-        },
-      },
-    });
 
     // ── Driven hours helper ──
     const computeDrivenHours = (
@@ -986,18 +903,158 @@ export class ReportsDomain {
       return (stoppedAt.getTime() - startedAt.getTime()) / (1000 * 60 * 60);
     };
 
-    // ── Filter by driven hours if requested ──
     const hasHoursFilter = query.minDrivenHours != null || query.maxDrivenHours != null;
-    const filteredForGrouping = hasHoursFilter
-      ? allForGrouping.filter((row) => {
-          const hours = computeDrivenHours(row.startedAt, row.stoppedAt);
-          if (hours === null) return false;
-          if (query.minDrivenHours != null && hours < query.minDrivenHours) return false;
-          if (query.maxDrivenHours != null && hours > query.maxDrivenHours) return false;
-          return true;
-        })
-      : allForGrouping;
 
+    const rowSelect: Prisma.TrackingSessionSelect = {
+      id: true,
+      deliveryId: true,
+      status: true,
+      startedAt: true,
+      stoppedAt: true,
+      drivenMiles: true,
+      createdAt: true,
+      delivery: {
+        select: {
+          id: true,
+          status: true,
+          serviceType: true,
+          customer: {
+            select: {
+              id: true,
+              businessName: true,
+              user: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          assignments: {
+            where: { unassignedAt: null },
+            orderBy: { assignedAt: "desc" },
+            take: 1,
+            select: {
+              driver: {
+                select: {
+                  id: true,
+                  user: {
+                    select: {
+                      id: true,
+                      fullName: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    let filteredRows: any[];
+    let totalRows: number;
+
+    if (hasHoursFilter) {
+      // When driven hours filter is active, we need in-memory filtering
+      // because driven hours is a computed field (stoppedAt - startedAt).
+      // Add NOT NULL constraints to eliminate rows that can never match.
+      const where: Prisma.TrackingSessionWhereInput = {
+        ...baseWhere,
+        startedAt: { not: null },
+        stoppedAt: { not: null },
+      };
+
+      // Fetch ALL rows (no DB pagination) since we must filter in-memory.
+      const allRows = await this.prisma.trackingSession.findMany({
+        where,
+        orderBy: {
+          [query.sortBy || "createdAt"]: query.sortOrder,
+        } as Prisma.TrackingSessionOrderByWithRelationInput,
+        select: rowSelect,
+      });
+
+      // Filter by driven hours range in-memory
+      filteredRows = allRows.filter((row) => {
+        const hours = computeDrivenHours(row.startedAt, row.stoppedAt);
+        if (hours === null) return false;
+        if (query.minDrivenHours != null && hours < query.minDrivenHours) return false;
+        if (query.maxDrivenHours != null && hours > query.maxDrivenHours) return false;
+        return true;
+      });
+
+      totalRows = filteredRows.length;
+    } else {
+      // No hours filter — use efficient DB-level pagination
+      totalRows = await this.prisma.trackingSession.count({ where: baseWhere });
+
+      const rows = await this.prisma.trackingSession.findMany({
+        where: baseWhere,
+        ...this.paginate(query.page, query.pageSize),
+        orderBy: {
+          [query.sortBy || "createdAt"]: query.sortOrder,
+        } as Prisma.TrackingSessionOrderByWithRelationInput,
+        select: rowSelect,
+      });
+
+      filteredRows = rows;
+    }
+
+    // Map rows with driven hours computation
+    const mappedRows = filteredRows.map((row) => {
+      const drivenHours = computeDrivenHours(row.startedAt, row.stoppedAt);
+      return {
+        ...row,
+        drivenHours: drivenHours !== null ? Math.round(drivenHours * 100) / 100 : null,
+        assignedDriver: row.delivery.assignments[0]?.driver ?? null,
+        period:
+          query.groupBy === "week"
+            ? this.weekKeyUtc(row.startedAt ?? row.createdAt)
+            : this.monthKeyUtc(row.startedAt ?? row.createdAt),
+      };
+    });
+
+    // When hours filter is active, apply in-memory pagination after filtering.
+    // Otherwise DB already handled pagination.
+    const displayRows = hasHoursFilter
+      ? mappedRows.slice(
+          (query.page - 1) * query.pageSize,
+          query.page * query.pageSize,
+        )
+      : mappedRows;
+
+    // Grouping data — reuse filtered rows when hours filter is active,
+    // otherwise fetch separately for aggregation.
+    const allForGrouping = hasHoursFilter
+      ? filteredRows
+      : await this.prisma.trackingSession.findMany({
+          where: baseWhere,
+          select: {
+            id: true,
+            drivenMiles: true,
+            startedAt: true,
+            stoppedAt: true,
+            createdAt: true,
+            delivery: {
+              select: {
+                customerId: true,
+                serviceType: true,
+                assignments: {
+                  where: { unassignedAt: null },
+                  orderBy: { assignedAt: "desc" },
+                  take: 1,
+                  select: {
+                    driverId: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+    // ── Grouping ──
     const groupedMap = new Map<
       string,
       {
@@ -1010,7 +1067,7 @@ export class ReportsDomain {
       }
     >();
 
-    for (const row of filteredForGrouping) {
+    for (const row of allForGrouping) {
       const anchor = row.startedAt ?? row.createdAt;
       const period =
         query.groupBy === "week"
@@ -1054,12 +1111,13 @@ export class ReportsDomain {
         uniqueCustomerCount: g.customerIds.size,
       }));
 
-    const totalDrivenMiles = filteredForGrouping.reduce(
+    // ── Summary ──
+    const totalDrivenMiles = allForGrouping.reduce(
       (sum, row) => sum + (row.drivenMiles ?? 0),
       0
     );
 
-    const totalDrivenHours = filteredForGrouping.reduce(
+    const totalDrivenHours = allForGrouping.reduce(
       (sum, row) => {
         const hours = computeDrivenHours(row.startedAt, row.stoppedAt);
         return sum + (hours ?? 0);
@@ -1067,49 +1125,34 @@ export class ReportsDomain {
       0
     );
 
-    const sessionsWithHours = filteredForGrouping.filter(
+    const sessionsWithHours = allForGrouping.filter(
       (row) => computeDrivenHours(row.startedAt, row.stoppedAt) !== null
     ).length;
 
     const summary = {
-      totalTrackingSessions: hasHoursFilter ? filteredForGrouping.length : totalRows,
+      totalTrackingSessions: hasHoursFilter ? allForGrouping.length : totalRows,
       totalDrivenMiles,
       averageMilesPerTrip:
-        filteredForGrouping.length > 0 ? totalDrivenMiles / filteredForGrouping.length : 0,
+        allForGrouping.length > 0 ? totalDrivenMiles / allForGrouping.length : 0,
       totalDrivenHours: Math.round(totalDrivenHours * 100) / 100,
       averageDrivenHoursPerTrip:
         sessionsWithHours > 0
           ? Math.round((totalDrivenHours / sessionsWithHours) * 100) / 100
           : 0,
-      startedCount: await this.prisma.trackingSession.count({
-        where: { ...where, startedAt: { not: null } },
-      }),
-      stoppedCount: await this.prisma.trackingSession.count({
-        where: { ...where, stoppedAt: { not: null } },
-      }),
+      startedCount: hasHoursFilter
+        ? allForGrouping.filter((r) => r.startedAt !== null).length
+        : await this.prisma.trackingSession.count({
+            where: { ...baseWhere, startedAt: { not: null } },
+          }),
+      stoppedCount: hasHoursFilter
+        ? allForGrouping.filter((r) => r.stoppedAt !== null).length
+        : await this.prisma.trackingSession.count({
+            where: { ...baseWhere, stoppedAt: { not: null } },
+          }),
     };
 
     return {
-      rows: rows
-        .map((row) => {
-          const drivenHours = computeDrivenHours(row.startedAt, row.stoppedAt);
-          return {
-            ...row,
-            drivenHours: drivenHours !== null ? Math.round(drivenHours * 100) / 100 : null,
-            assignedDriver: row.delivery.assignments[0]?.driver ?? null,
-            period:
-              query.groupBy === "week"
-                ? this.weekKeyUtc(row.startedAt ?? row.createdAt)
-                : this.monthKeyUtc(row.startedAt ?? row.createdAt),
-          };
-        })
-        .filter((row) => {
-          if (!hasHoursFilter) return true;
-          if (row.drivenHours === null) return false;
-          if (query.minDrivenHours != null && row.drivenHours < query.minDrivenHours) return false;
-          if (query.maxDrivenHours != null && row.drivenHours > query.maxDrivenHours) return false;
-          return true;
-        }),
+      rows: displayRows,
       summary,
       groupings: {
         byPeriod,
