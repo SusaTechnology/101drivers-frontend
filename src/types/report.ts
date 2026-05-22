@@ -467,12 +467,16 @@ export interface InsuranceMileageReportFilters {
   driverId: string | null;
   serviceType: string | null;
   groupBy: 'week' | 'month' | null;
+  minDrivenHours: number | null;
+  maxDrivenHours: number | null;
 }
 
 export interface InsuranceMileageReportSummary {
   totalTrackingSessions: number;
   totalDrivenMiles: number;
   averageMilesPerTrip: number;
+  totalDrivenHours: number;
+  averageDrivenHoursPerTrip: number;
   startedCount: number;
   stoppedCount: number;
 }
@@ -483,6 +487,8 @@ export interface InsuranceMileageReportGrouping {
     tripCount: number;
     totalDrivenMiles: number;
     averageMilesPerTrip: number;
+    totalDrivenHours: number;
+    averageDrivenHoursPerTrip: number;
     uniqueDriverCount: number;
     uniqueCustomerCount: number;
   }>;
@@ -495,6 +501,7 @@ export interface InsuranceMileageReportRow {
   startedAt: string | null;
   stoppedAt: string | null;
   drivenMiles: number;
+  drivenHours: number | null;
   period: string;
   assignedDriver?: {
     id: string;
@@ -527,6 +534,8 @@ export interface InsuranceMileageReportParams {
   driverId?: string;
   serviceType?: string;
   groupBy?: 'week' | 'month';
+  minDrivenHours?: number;
+  maxDrivenHours?: number;
   format?: string;
   page?: number;
   pageSize?: number;

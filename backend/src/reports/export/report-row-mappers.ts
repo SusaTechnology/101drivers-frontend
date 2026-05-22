@@ -105,6 +105,8 @@ export function mapReportRows(
         tripCount: r.tripCount,
         totalDrivenMiles: r.totalDrivenMiles,
         averageMilesPerTrip: r.averageMilesPerTrip,
+        totalDrivenHours: r.totalDrivenHours ?? 0,
+        averageDrivenHoursPerTrip: r.averageDrivenHoursPerTrip ?? 0,
         uniqueDriverCount: r.uniqueDriverCount,
         uniqueCustomerCount: r.uniqueCustomerCount,
       }));

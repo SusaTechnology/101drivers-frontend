@@ -15,6 +15,7 @@ import {
   IsEnum,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -187,4 +188,18 @@ export class InsuranceMileageReportQueryDto extends BaseReportQueryDto {
   @IsOptional()
   @IsEnum(EnumDeliveryRequestServiceType)
   serviceType?: EnumDeliveryRequestServiceType;
+
+  @ApiPropertyOptional({ description: "Minimum driven hours (inclusive)" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minDrivenHours?: number;
+
+  @ApiPropertyOptional({ description: "Maximum driven hours (inclusive)" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxDrivenHours?: number;
 }

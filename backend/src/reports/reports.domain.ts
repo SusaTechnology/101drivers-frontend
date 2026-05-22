@@ -958,6 +958,7 @@ export class ReportsDomain {
         id: true,
         drivenMiles: true,
         startedAt: true,
+        stoppedAt: true,
         createdAt: true,
         delivery: {
           select: {
@@ -976,18 +977,40 @@ export class ReportsDomain {
       },
     });
 
+    // ── Driven hours helper ──
+    const computeDrivenHours = (
+      startedAt: Date | null,
+      stoppedAt: Date | null,
+    ): number | null => {
+      if (!startedAt || !stoppedAt) return null;
+      return (stoppedAt.getTime() - startedAt.getTime()) / (1000 * 60 * 60);
+    };
+
+    // ── Filter by driven hours if requested ──
+    const hasHoursFilter = query.minDrivenHours != null || query.maxDrivenHours != null;
+    const filteredForGrouping = hasHoursFilter
+      ? allForGrouping.filter((row) => {
+          const hours = computeDrivenHours(row.startedAt, row.stoppedAt);
+          if (hours === null) return false;
+          if (query.minDrivenHours != null && hours < query.minDrivenHours) return false;
+          if (query.maxDrivenHours != null && hours > query.maxDrivenHours) return false;
+          return true;
+        })
+      : allForGrouping;
+
     const groupedMap = new Map<
       string,
       {
         period: string;
         tripCount: number;
         totalDrivenMiles: number;
+        totalDrivenHours: number;
         driverIds: Set<string>;
         customerIds: Set<string>;
       }
     >();
 
-    for (const row of allForGrouping) {
+    for (const row of filteredForGrouping) {
       const anchor = row.startedAt ?? row.createdAt;
       const period =
         query.groupBy === "week"
@@ -999,6 +1022,7 @@ export class ReportsDomain {
           period,
           tripCount: 0,
           totalDrivenMiles: 0,
+          totalDrivenHours: 0,
           driverIds: new Set<string>(),
           customerIds: new Set<string>(),
         });
@@ -1007,6 +1031,8 @@ export class ReportsDomain {
       const bucket = groupedMap.get(period)!;
       bucket.tripCount += 1;
       bucket.totalDrivenMiles += row.drivenMiles ?? 0;
+      const hours = computeDrivenHours(row.startedAt, row.stoppedAt);
+      if (hours !== null) bucket.totalDrivenHours += hours;
 
       const driverId = row.delivery.assignments[0]?.driverId;
       if (driverId) bucket.driverIds.add(driverId);
@@ -1021,20 +1047,40 @@ export class ReportsDomain {
         totalDrivenMiles: g.totalDrivenMiles,
         averageMilesPerTrip:
           g.tripCount > 0 ? g.totalDrivenMiles / g.tripCount : 0,
+        totalDrivenHours: Math.round(g.totalDrivenHours * 100) / 100,
+        averageDrivenHoursPerTrip:
+          g.tripCount > 0 ? Math.round((g.totalDrivenHours / g.tripCount) * 100) / 100 : 0,
         uniqueDriverCount: g.driverIds.size,
         uniqueCustomerCount: g.customerIds.size,
       }));
 
-    const totalDrivenMiles = allForGrouping.reduce(
+    const totalDrivenMiles = filteredForGrouping.reduce(
       (sum, row) => sum + (row.drivenMiles ?? 0),
       0
     );
 
+    const totalDrivenHours = filteredForGrouping.reduce(
+      (sum, row) => {
+        const hours = computeDrivenHours(row.startedAt, row.stoppedAt);
+        return sum + (hours ?? 0);
+      },
+      0
+    );
+
+    const sessionsWithHours = filteredForGrouping.filter(
+      (row) => computeDrivenHours(row.startedAt, row.stoppedAt) !== null
+    ).length;
+
     const summary = {
-      totalTrackingSessions: totalRows,
+      totalTrackingSessions: hasHoursFilter ? filteredForGrouping.length : totalRows,
       totalDrivenMiles,
       averageMilesPerTrip:
-        totalRows > 0 ? totalDrivenMiles / totalRows : 0,
+        filteredForGrouping.length > 0 ? totalDrivenMiles / filteredForGrouping.length : 0,
+      totalDrivenHours: Math.round(totalDrivenHours * 100) / 100,
+      averageDrivenHoursPerTrip:
+        sessionsWithHours > 0
+          ? Math.round((totalDrivenHours / sessionsWithHours) * 100) / 100
+          : 0,
       startedCount: await this.prisma.trackingSession.count({
         where: { ...where, startedAt: { not: null } },
       }),
@@ -1044,14 +1090,18 @@ export class ReportsDomain {
     };
 
     return {
-      rows: rows.map((row) => ({
-        ...row,
-        assignedDriver: row.delivery.assignments[0]?.driver ?? null,
-        period:
-          query.groupBy === "week"
-            ? this.weekKeyUtc(row.startedAt ?? row.createdAt)
-            : this.monthKeyUtc(row.startedAt ?? row.createdAt),
-      })),
+      rows: rows.map((row) => {
+        const drivenHours = computeDrivenHours(row.startedAt, row.stoppedAt);
+        return {
+          ...row,
+          drivenHours: drivenHours !== null ? Math.round(drivenHours * 100) / 100 : null,
+          assignedDriver: row.delivery.assignments[0]?.driver ?? null,
+          period:
+            query.groupBy === "week"
+              ? this.weekKeyUtc(row.startedAt ?? row.createdAt)
+              : this.monthKeyUtc(row.startedAt ?? row.createdAt),
+        };
+      }),
       summary,
       groupings: {
         byPeriod,

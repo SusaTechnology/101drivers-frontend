@@ -104,6 +104,8 @@ export const REPORT_COLUMNS: Record<
     { key: "tripCount", label: "Trip Count", type: "number", width: 14 },
     { key: "totalDrivenMiles", label: "Total Driven Miles", type: "miles", width: 18 },
     { key: "averageMilesPerTrip", label: "Average Miles / Trip", type: "miles", width: 18 },
+    { key: "totalDrivenHours", label: "Total Driven Hours", type: "number", width: 18 },
+    { key: "averageDrivenHoursPerTrip", label: "Avg Hours / Trip", type: "number", width: 16 },
     { key: "uniqueDriverCount", label: "Unique Drivers", type: "number", width: 16 },
     { key: "uniqueCustomerCount", label: "Unique Customers", type: "number", width: 18 },
   ],

@@ -80,6 +80,21 @@ const SORT_BY_OPTIONS = [
   { value: 'createdAt', label: 'Created Date' },
 ];
 
+function formatDrivenHours(hours: number | null): string {
+  if (hours === null || hours === undefined) return '—';
+  if (hours < 1) {
+    const mins = Math.round(hours * 60);
+    return `${mins}m`;
+  }
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatDrivenHoursDecimal(hours: number): string {
+  return hours.toFixed(2);
+}
+
 const SORT_ORDER_OPTIONS = [
   { value: 'desc', label: 'Newest First' },
   { value: 'asc', label: 'Oldest First' },
@@ -97,6 +112,8 @@ export default function AdminInsuranceReportingPage() {
   const [serviceType, setServiceType] = useState('all');
   const [sortBy, setSortBy] = useState('startedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [minDrivenHours, setMinDrivenHours] = useState('');
+  const [maxDrivenHours, setMaxDrivenHours] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
 
@@ -150,8 +167,10 @@ export default function AdminInsuranceReportingPage() {
     if (customerId.trim()) params.customerId = customerId.trim();
     if (driverId.trim()) params.driverId = driverId.trim();
     if (serviceType && serviceType !== 'all') params.serviceType = serviceType;
+    if (minDrivenHours !== '') params.minDrivenHours = parseFloat(minDrivenHours);
+    if (maxDrivenHours !== '') params.maxDrivenHours = parseFloat(maxDrivenHours);
     return params;
-  }, [dateFrom, dateTo, customerId, driverId, groupBy, serviceType, sortBy, sortOrder, page, pageSize]);
+  }, [dateFrom, dateTo, customerId, driverId, groupBy, serviceType, sortBy, sortOrder, minDrivenHours, maxDrivenHours, page, pageSize]);
 
   const { data, isLoading, isFetching, isError, refetch } = useInsuranceMileageReport(queryParams);
 
@@ -178,6 +197,8 @@ export default function AdminInsuranceReportingPage() {
     setServiceType('all');
     setSortBy('startedAt');
     setSortOrder('desc');
+    setMinDrivenHours('');
+    setMaxDrivenHours('');
     setPage(1);
     setCustomerSearch('');
     setDriverSearch('');
@@ -201,6 +222,9 @@ export default function AdminInsuranceReportingPage() {
       </td>
       <td className="px-4 py-3 text-sm font-bold text-slate-900 dark:text-white">
         {formatReportMiles(row.drivenMiles)}
+      </td>
+      <td className="px-4 py-3 text-sm font-bold text-slate-900 dark:text-white">
+        {formatDrivenHours(row.drivenHours)}
       </td>
       <td className="px-4 py-3 text-xs text-slate-500">
         {formatReportDate(row.startedAt)}
@@ -261,7 +285,7 @@ export default function AdminInsuranceReportingPage() {
         </section>
 
         {data?.summary && (
-          <section className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
             <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3">
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tracking Sessions</div>
               <div className="text-xl font-black mt-1">{data.summary.totalTrackingSessions}</div>
@@ -273,6 +297,15 @@ export default function AdminInsuranceReportingPage() {
             <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3">
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Avg Miles/Trip</div>
               <div className="text-xl font-black mt-1">{formatReportMiles(data.summary.averageMilesPerTrip)}</div>
+            </Card>
+            <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-amber-50 dark:bg-amber-900/20 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Total Driven Hours</div>
+              <div className="text-xl font-black mt-1 text-amber-600 dark:text-amber-400">{formatDrivenHoursDecimal(data.summary.totalDrivenHours)}</div>
+              <div className="text-[10px] text-amber-400 mt-0.5">${(data.summary.totalDrivenHours * 0.30).toFixed(2)} est. cost</div>
+            </Card>
+            <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-orange-50 dark:bg-orange-900/20 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-orange-500">Avg Hrs/Trip</div>
+              <div className="text-xl font-black mt-1 text-orange-600 dark:text-orange-400">{formatDrivenHoursDecimal(data.summary.averageDrivenHoursPerTrip)}</div>
             </Card>
             <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-900/20 p-3">
               <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Started</div>
@@ -304,6 +337,8 @@ export default function AdminInsuranceReportingPage() {
                         <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Trips</th>
                         <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Total Miles</th>
                         <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Avg Miles</th>
+                        <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-amber-500 text-right">Total Hours</th>
+                        <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-orange-500 text-right">Avg Hrs/Trip</th>
                         <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Drivers</th>
                         <th className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Customers</th>
                       </tr>
@@ -315,6 +350,8 @@ export default function AdminInsuranceReportingPage() {
                           <td className="px-3 py-2 text-sm text-right text-slate-600">{period.tripCount}</td>
                           <td className="px-3 py-2 text-sm font-bold text-right">{formatReportMiles(period.totalDrivenMiles)}</td>
                           <td className="px-3 py-2 text-sm text-right text-slate-600">{formatReportMiles(period.averageMilesPerTrip)}</td>
+                          <td className="px-3 py-2 text-sm font-bold text-right text-amber-600 dark:text-amber-400">{formatDrivenHoursDecimal(period.totalDrivenHours)}</td>
+                          <td className="px-3 py-2 text-sm text-right text-orange-600 dark:text-orange-400">{formatDrivenHoursDecimal(period.averageDrivenHoursPerTrip)}</td>
                           <td className="px-3 py-2 text-sm text-right text-slate-600">{period.uniqueDriverCount}</td>
                           <td className="px-3 py-2 text-sm text-right text-slate-600">{period.uniqueCustomerCount}</td>
                         </tr>
@@ -519,6 +556,32 @@ export default function AdminInsuranceReportingPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {/* Min Driven Hours */}
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Driven Hrs</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.25"
+                    placeholder="0"
+                    value={minDrivenHours}
+                    onChange={(e) => { setMinDrivenHours(e.target.value); setPage(1); }}
+                    className="mt-1.5 rounded-xl h-9 text-sm"
+                  />
+                </div>
+                {/* Max Driven Hours */}
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Driven Hrs</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.25"
+                    placeholder="Any"
+                    value={maxDrivenHours}
+                    onChange={(e) => { setMaxDrivenHours(e.target.value); setPage(1); }}
+                    className="mt-1.5 rounded-xl h-9 text-sm"
+                  />
+                </div>
                 {/* Group By */}
                 <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Group By</Label>
@@ -586,6 +649,7 @@ export default function AdminInsuranceReportingPage() {
                         <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Delivery</th>
                         <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Status</th>
                         <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Miles</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-amber-500 text-left">Driven Hours</th>
                         <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Started</th>
                         <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Stopped</th>
                         <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Route</th>
