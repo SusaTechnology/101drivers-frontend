@@ -684,10 +684,10 @@ export default function DriverOnboardingPage() {
 
             <div>
               <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
-                Become a certified 101 Driver
+                Join the 101 Drivers Waitlist
               </h1>
               <p className="text-slate-600 dark:text-slate-400 text-lg max-w-2xl mt-4">
-                Drivers can complete signup and join the
+                You can complete signup and join the
                 <span className="font-extrabold text-lime-600 dark:text-lime-400">
                   {" "}
                   Waitlist{" "}
@@ -822,12 +822,8 @@ export default function DriverOnboardingPage() {
                         Step 1
                       </CardDescription>
                       <CardTitle className="text-2xl font-black mt-2">
-                        Create your driver account
+                        Sign up for the waitlist
                       </CardTitle>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                        Use email + password. Email verification is required.
-                        Phone is collected for operational calls/notifications.
-                      </p>
                     </div>
                     <Badge variant="outline" className="hidden sm:flex">
                       <Lock className="h-3 w-3 mr-1" />
@@ -870,7 +866,7 @@ export default function DriverOnboardingPage() {
                         Date of birth{!watchDateOfBirth?.trim() && <span className="text-red-500">*</span>}
                       </Label>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">
-                        You must be at least 25 years old to apply as a driver.
+                        You must be at least 25 years old to join the waitlist.
                       </p>
                       <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                         <PopoverTrigger asChild>
@@ -928,7 +924,7 @@ export default function DriverOnboardingPage() {
                         <div className="flex items-start gap-2 mt-1">
                           <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
                           <p className="text-xs text-red-600 dark:text-red-400 font-medium">
-                            You are <span className="font-black">{computedAge} years old</span>. You must be at least <span className="font-black">25 years old</span> to apply as a 101 Driver. Please enter a correct date of birth.
+                            You are <span className="font-black">{computedAge} years old</span>. You must be at least <span className="font-black">25 years old</span> to join the waitlist. Please enter a correct date of birth.
                           </p>
                         </div>
                       ) : errors.dateOfBirth ? (
@@ -948,7 +944,7 @@ export default function DriverOnboardingPage() {
                               Sorry, you do not meet the age requirement
                             </p>
                             <p className="text-xs text-red-800/80 dark:text-red-300/80 mt-1">
-                              You are {computedAge} years old. You must be at least 25 years old to apply as a 101 Driver. If you entered the wrong date, please correct it above.
+                              You are {computedAge} years old. You must be at least 25 years old to join the waitlist. If you entered the wrong date, please correct it above.
                             </p>
                           </div>
                         </div>
@@ -962,7 +958,7 @@ export default function DriverOnboardingPage() {
                               Age Requirement — 25 or Older
                             </p>
                             <p className="text-xs text-blue-800/80 dark:text-blue-300/80 mt-1">
-                              You must be at least 25 years old to apply as a 101 Driver. Enter your date of birth above to unlock the rest of the application form.
+                              You must be at least 25 years old to join the waitlist. Enter your date of birth above to unlock the rest of the form.
                             </p>
                           </div>
                         </div>
