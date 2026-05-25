@@ -704,12 +704,14 @@ export default function DriverOnboardingPage() {
             {/* Agreement Gate — must accept before seeing the form */}
             <div className="max-w-2xl space-y-4">
               <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
-                <Info className="h-4 w-4 text-amber-500" />
-                <AlertTitle className="text-amber-900 dark:text-amber-200">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm">
                   Important Policy Information
                 </AlertTitle>
                 <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
-                  Email verification is required before accessing protected features. Phone is collected for operational contact. You must read and accept the agreements below to continue with your driver application.
+                  Drivers cannot cancel/reassign jobs in-app. Operations
+                  handles reassignment. You can report issues and request
+                  schedule changes after booking.
                 </AlertDescription>
               </Alert>
 
@@ -914,7 +916,7 @@ export default function DriverOnboardingPage() {
                               minDate.setFullYear(minDate.getFullYear() - 25);
                               // Disable dates after today, before 1920, or that would make driver under 25
                               return date > today || date < new Date("1920-01-01") || date > minDate;
-                            }
+                            }}
                             defaultMonth={parseDOBtoDate(dobDisplay) || undefined}
                             captionLayout="dropdown"
                             fromYear={1920}
