@@ -2,7 +2,7 @@
 import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod/v4";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
@@ -656,7 +656,7 @@ export default function DriverOnboardingPage() {
         {/* Title Section (unchanged) */}
         <section className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10">
           <div className="space-y-6">
-            <div className="flex flex-wrap gap-2">
+            {/* <div className="flex flex-wrap gap-2">
               <Badge className="bg-lime-100 dark:bg-lime-900/20 text-lime-800 dark:text-lime-200 border-lime-200">
                 <User className="h-3 w-3 mr-1" />
                 Driver Onboarding
@@ -675,7 +675,7 @@ export default function DriverOnboardingPage() {
                 <Phone className="h-3 w-3 mr-1" />
                 Mobile-first (PWA-ready)
               </Badge>
-            </div>
+            </div> */}
 
             <div>
               <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
@@ -1150,7 +1150,7 @@ export default function DriverOnboardingPage() {
               </Card>
 
               {/* Camera + Location Note (unchanged) */}
-              <Card className="mt-6 border-slate-200 dark:border-slate-800">
+              {/* <Card className="mt-6 border-slate-200 dark:border-slate-800">
                 <CardContent className="pt-6">
                   <div className="flex gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-lime-100 dark:bg-lime-900/20 flex items-center justify-center flex-shrink-0">
@@ -1168,7 +1168,7 @@ export default function DriverOnboardingPage() {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
+              </Card> */}
             </div>
 
             {/* Right: Service Area Preferences */}
@@ -1178,7 +1178,7 @@ export default function DriverOnboardingPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                        Step 2 <span className="text-slate-400 font-normal">(Optional)</span>
+                        Step 2 
                       </CardDescription>
                       <CardTitle className="text-2xl font-black mt-2">
                         Service area preferences
@@ -1188,10 +1188,10 @@ export default function DriverOnboardingPage() {
                         You can set these later in your profile settings.
                       </p>
                     </div>
-                    <Badge variant="outline" className="hidden sm:flex">
+                    {/* <Badge variant="outline" className="hidden sm:flex">
                       <Filter className="h-3 w-3 mr-1" />
                       Optional
-                    </Badge>
+                    </Badge> */}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -1247,7 +1247,7 @@ export default function DriverOnboardingPage() {
                     )}
                   </div>
 
-                  <div className="space-y-3">
+                  {/* <div className="space-y-3">
                     <Label className="text-xs font-bold">
                       Job alerts (optional)
                     </Label>
@@ -1273,7 +1273,7 @@ export default function DriverOnboardingPage() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Code Input Field - appears only after code sent */}
                   {otpSent && (
