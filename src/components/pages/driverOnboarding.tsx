@@ -193,11 +193,6 @@ export default function DriverOnboardingPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Agreement gate: driver must check the box and click Continue before seeing the form
-  const [agreementGatePassed, setAgreementGatePassed] = useState(false);
-  const dobSectionRef = React.useRef<HTMLDivElement>(null);
-
-  
   const navigate = useNavigate();
 
   // Redirect to the application submitted page after registration.
@@ -700,103 +695,6 @@ export default function DriverOnboardingPage() {
                 can book jobs. You must be at least 25 years old.
               </p>
             </div>
-
-            {/* Agreement Gate — must accept before seeing the form */}
-            <div className="max-w-2xl space-y-4">
-              <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
-                <AlertCircle className="h-4 w-4 text-amber-500" />
-                <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm">
-                  Important Policy Information
-                </AlertTitle>
-                <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
-                  Drivers cannot cancel/reassign jobs in-app. Operations
-                  handles reassignment. You can report issues and request
-                  schedule changes after booking.
-                </AlertDescription>
-              </Alert>
-
-              <div
-                className={cn(
-                  "space-y-3 p-4 rounded-2xl border transition-all duration-300",
-                  acceptTerms
-                    ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
-                    : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
-                )}
-              >
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="agreementGate"
-                    checked={acceptTerms}
-                    onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
-                    className="mt-0.5 w-5 h-5 rounded accent-lime-500"
-                  />
-                  <Label
-                    htmlFor="agreementGate"
-                    className={cn(
-                      "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
-                      acceptTerms
-                        ? "text-green-700 dark:text-green-300 font-medium"
-                        : "text-slate-700 dark:text-slate-300"
-                    )}
-                  >
-                    I acknowledge and accept the{" "}
-                    <Link
-                      to="/agreement"
-                      className="font-extrabold hover:text-lime-500 underline"
-                      target="_blank"
-                    >
-                      Independent Driver Agreement
-                    </Link>
-                    ,{" "}
-                    <Link
-                      to="/terms"
-                      className="font-extrabold hover:text-lime-500 underline"
-                      target="_blank"
-                    >
-                      Terms of Service
-                    </Link>
-                    , and{" "}
-                    <a
-                      href="/privacy#privacy-top"
-                      className="font-extrabold hover:text-lime-500 underline"
-                      target="_blank"
-                    >
-                      Privacy Policy
-                    </a>
-                    .
-                  </Label>
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                disabled={!acceptTerms}
-                onClick={() => {
-                  if (acceptTerms) {
-                    setAgreementGatePassed(true);
-                    // Scroll to Date of Birth field after a short delay for re-render
-                    setTimeout(() => {
-                      dobSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }, 100);
-                  }
-                }}
-                className={cn(
-                  "w-full max-w-xs py-5 rounded-2xl transition flex items-center justify-center gap-2 text-base font-extrabold",
-                  acceptTerms
-                    ? "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20"
-                    : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                )}
-              >
-                {acceptTerms ? (
-                  <>
-                    Continue
-                    <ArrowRight className="ml-1 h-4 w-4" />
-                  </>
-                ) : (
-                  "Check the box above to continue"
-                )}
-              </Button>
-            </div>
           </div>
 
           <div className="flex gap-3">
@@ -811,7 +709,7 @@ export default function DriverOnboardingPage() {
         </section>
 
         {!registrationComplete ? (
-          <section className={cn("grid grid-cols-1 lg:grid-cols-12 gap-8 items-start transition-opacity duration-300", !agreementGatePassed && "opacity-50 pointer-events-none")}>
+          <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Left: Account Basics (unchanged) */}
             <div className="lg:col-span-7">
               <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
@@ -856,7 +754,7 @@ export default function DriverOnboardingPage() {
                     </div> */}
 
                     {/* Date of Birth */}
-                    <div ref={dobSectionRef} className={cn(
+                    <div className={cn(
                       "space-y-2 p-4 rounded-2xl border transition-all duration-300",
                       isUnder25 || errors.dateOfBirth
                         ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
@@ -1247,16 +1145,6 @@ export default function DriverOnboardingPage() {
                         US phone number format. Used for operational contact.
                       </p>
                     </div>
-
-                    {/* Agreement already accepted at the gate — show compact confirmation */}
-                    <div className="space-y-2 p-3 rounded-2xl border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        <p className="text-xs font-bold text-green-800 dark:text-green-200">
-                          Agreements accepted. You may continue with your application.
-                        </p>
-                      </div>
-                    </div>
                   </form>
                 </CardContent>
               </Card>
@@ -1437,11 +1325,57 @@ export default function DriverOnboardingPage() {
                       Important Policy Information
                     </AlertTitle>
                     <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
-                      Drivers cannot cancel/reassign jobs in-app. Operations
-                      handles reassignment. You can report issues and request
-                      schedule changes after booking.
+                      Drivers cannot cancel or reassign jobs in the app. Only book
+                      a job if you can complete it. For rare emergencies that arise
+                      after booking, contact customer support.
                     </AlertDescription>
                   </Alert>
+
+                  <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="acceptTerms"
+                        checked={acceptTerms}
+                        onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
+                        className="mt-0.5 w-5 h-5 rounded accent-lime-500"
+                      />
+                      <Label
+                        htmlFor="acceptTerms"
+                        className={cn(
+                          "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
+                          acceptTerms
+                            ? "text-green-700 dark:text-green-300 font-medium"
+                            : "text-slate-700 dark:text-slate-300"
+                        )}
+                      >
+                        By checking this box, I acknowledge that I have read, understood, and agree to be bound by the{" "}
+                        <Link
+                          to="/agreement"
+                          className="font-extrabold hover:text-lime-500 underline"
+                          target="_blank"
+                        >
+                          Independent Driver Agreement
+                        </Link>
+                        , the{" "}
+                        <Link
+                          to="/terms"
+                          className="font-extrabold hover:text-lime-500 underline"
+                          target="_blank"
+                        >
+                          Terms of Service
+                        </Link>
+                        , and the{" "}
+                        <a
+                          href="/privacy#privacy-top"
+                          className="font-extrabold hover:text-lime-500 underline"
+                          target="_blank"
+                        >
+                          Privacy Policy
+                        </a>
+                        .
+                      </Label>
+                    </div>
+                  </div>
 
                   <Button
                     type="submit"
