@@ -112,6 +112,7 @@ model Driver {
   licenseNumber      String?
   licenseState       String?
   selfiePhotoUrl   String?
+  agreementAcceptedAt  DateTime?
   ssnLastFour      String?
   status           EnumDriverStatus           @default(WAITLISTED)
   updatedAt        DateTime                   @updatedAt

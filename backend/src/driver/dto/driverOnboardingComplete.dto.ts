@@ -108,4 +108,12 @@ export class CompleteDriverOnboardingDto {
   @IsNotEmpty({ message: "Selfie photo is required" })
   @IsString()
   selfiePhotoUrl!: string;
+
+  @ApiProperty({
+    description: "ISO timestamp when the driver accepted the Independent Driver Agreement",
+    example: "2026-05-25T12:00:00.000Z",
+    required: false,
+  })
+  @IsOptional()
+  agreementAcceptedAt?: string;
 }

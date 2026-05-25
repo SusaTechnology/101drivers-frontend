@@ -548,6 +548,9 @@ async completeOnboarding(
         selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
         status: EnumDriverStatus.PENDING_APPROVAL,
         onboardingCompletedAt: new Date(),
+        ...(dto.agreementAcceptedAt
+          ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
+          : {}),
       },
     }),
   ]);
@@ -628,6 +631,9 @@ async completeOnboardingByToken(
         selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
         status: EnumDriverStatus.PENDING_APPROVAL,
         onboardingCompletedAt: new Date(),
+        ...(dto.agreementAcceptedAt
+          ? { agreementAcceptedAt: new Date(dto.agreementAcceptedAt) }
+          : {}),
       },
     }),
   ]);
