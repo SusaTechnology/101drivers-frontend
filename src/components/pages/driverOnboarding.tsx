@@ -2,7 +2,7 @@
 import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod/v4";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
@@ -809,7 +809,7 @@ export default function DriverOnboardingPage() {
                               // Disable dates after today, before 1920, or that would make driver under 25
                               return date > today || date < new Date("1920-01-01") || date > minDate;
                             }}
-                            defaultMonth={parseDOBtoDate(dobDisplay) || undefined}
+                            defaultMonth={parseDOBtoDate(dobDisplay) || (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 25); return d; })()}
                             captionLayout="dropdown"
                             fromYear={1920}
                             toYear={new Date().getFullYear()}
@@ -1317,9 +1317,10 @@ export default function DriverOnboardingPage() {
                     </div>
                   )}
 
-                  {/* Agreements & Submit Section */}
-                  <div className="space-y-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-5">
-                    <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
+                  {/* Agreements & Submit Section — 3 separate boxes */}
+                  <div className="space-y-4">
+                    {/* Box 1: Important Policy Information */}
+                    <Alert className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 shadow-md rounded-2xl">
                       <AlertCircle className="h-4 w-4 text-amber-500" />
                       <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm">
                         Important Policy Information
@@ -1331,7 +1332,8 @@ export default function DriverOnboardingPage() {
                       </AlertDescription>
                     </Alert>
 
-                    <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                    {/* Box 2: Agreement Checkbox */}
+                    <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-md">
                       <div className="flex items-start space-x-3">
                         <Checkbox
                           id="acceptTerms"
@@ -1377,46 +1379,38 @@ export default function DriverOnboardingPage() {
                       </div>
                     </div>
 
-                    <Button
-                      type="submit"
-                      onClick={handleSubmit(onSubmit)}
-                      disabled={isPending || !isAgeVerified || !isFormReady || (otpSent && !otpValue.trim())}
-                      className={cn(
-                        "w-full py-6 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
-                        (!isAgeVerified || !isFormReady)
-                          ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                          : "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20",
-                      )}
-                    >
-                      {isPending ? (
-                        <>
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></div>
-                          {sendOtpMutation.isPending || resendCodeMutation.isPending ? "Sending Code..." : "Verifying..."}
-                        </>
-                      ) : !isAgeVerified ? (
-                        "Enter Your Date of Birth First"
-                      ) : !allRequiredFieldsFilled ? (
-                        "Complete All Required Fields"
-                      ) : !acceptTerms ? (
-                        "Accept Agreements to Continue"
-                      ) : otpSent ? (
-                        <>
-                          Verify & Submit
-                          <ArrowRight className="ml-2 h-5 w-5" />
-                        </>
-                      ) : (
-                        <>
-                          Continue
-                          <ArrowRight className="ml-2 h-5 w-5" />
-                        </>
-                      )}
-                    </Button>
+                    {/* Box 3: Submit Button */}
+                    <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-md">
+                      <Button
+                        type="submit"
+                        onClick={handleSubmit(onSubmit)}
+                        disabled={isPending || !isAgeVerified || !isFormReady || (otpSent && !otpValue.trim())}
+                        className={cn(
+                          "w-full py-6 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
+                          (!isAgeVerified || !isFormReady)
+                            ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                            : "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20",
+                        )}
+                      >
+                        {isPending ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></div>
+                            Continue...
+                          </>
+                        ) : (
+                          <>
+                            Continue
+                            <ArrowRight className="ml-2 h-5 w-5" />
+                          </>
+                        )}
+                      </Button>
 
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
-                      {otpSent
-                        ? "After verification, your application will be submitted for admin approval."
-                        : "After submission, you'll receive a verification code via email."}
-                    </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center mt-3">
+                        {otpSent
+                          ? "After verification, your application will be submitted for admin approval."
+                          : "After submission, you'll receive a verification code via email."}
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
