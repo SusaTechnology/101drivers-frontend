@@ -195,6 +195,7 @@ export default function DriverOnboardingPage() {
 
   // Agreement gate: driver must check the box and click Continue before seeing the form
   const [agreementGatePassed, setAgreementGatePassed] = useState(false);
+  const dobSectionRef = React.useRef<HTMLDivElement>(null);
 
   
   const navigate = useNavigate();
@@ -771,6 +772,10 @@ export default function DriverOnboardingPage() {
                 onClick={() => {
                   if (acceptTerms) {
                     setAgreementGatePassed(true);
+                    // Scroll to Date of Birth field after a short delay for re-render
+                    setTimeout(() => {
+                      dobSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
                   }
                 }}
                 className={cn(
@@ -853,7 +858,7 @@ export default function DriverOnboardingPage() {
                     </div> */}
 
                     {/* Date of Birth */}
-                    <div className={cn(
+                    <div ref={dobSectionRef} className={cn(
                       "space-y-2 p-4 rounded-2xl border transition-all duration-300",
                       isUnder25 || errors.dateOfBirth
                         ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
