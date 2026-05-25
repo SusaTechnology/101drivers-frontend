@@ -590,6 +590,7 @@ export default function DriverGigBoardPage() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${driverId}?${queryParams}`,
     noFilter: true,
     enabled: Boolean(driverId),
+    staleTime: 0, // always refetch on mount so booked deliveries disappear immediately
     refetchInterval: 30 * 1000, // auto-refresh every 30 seconds
   })
 
