@@ -718,7 +718,7 @@ export default function DriverOnboardingPage() {
                   "space-y-3 p-4 rounded-2xl border transition-all duration-300",
                   acceptTerms
                     ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
-                    : "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10"
+                    : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
                 )}
               >
                 <div className="flex items-start space-x-3">
