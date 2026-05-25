@@ -47,6 +47,13 @@ export default function PrivacyPolicy() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('terms')
 
+  // If the URL has #privacy-top hash, activate the privacy tab on load
+  useEffect(() => {
+    if (window.location.hash === '#privacy-top') {
+      setActiveSection('privacy')
+    }
+  }, [])
+
   // Header component
   const Header = () => (
     <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">

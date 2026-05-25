@@ -754,13 +754,13 @@ export default function DriverOnboardingPage() {
                       Terms of Service
                     </Link>
                     , and{" "}
-                    <Link
-                      to="/privacy"
+                    <a
+                      href="/privacy#privacy-top"
                       className="font-extrabold hover:text-lime-500 underline"
                       target="_blank"
                     >
                       Privacy Policy
-                    </Link>
+                    </a>
                     .
                   </Label>
                 </div>
@@ -908,8 +908,12 @@ export default function DriverOnboardingPage() {
                                 setCalendarOpen(false);
                               }
                             }}
-                            disabled={(date: Date) =>
-                              date > new Date() || date < new Date("1900-01-01")
+                            disabled={(date: Date) => {
+                              const today = new Date();
+                              const minDate = new Date(today);
+                              minDate.setFullYear(minDate.getFullYear() - 25);
+                              // Disable dates after today, before 1920, or that would make driver under 25
+                              return date > today || date < new Date("1920-01-01") || date > minDate;
                             }
                             defaultMonth={parseDOBtoDate(dobDisplay) || undefined}
                             captionLayout="dropdown"
