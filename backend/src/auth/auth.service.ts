@@ -427,6 +427,7 @@ export class AuthService {
         selfiePhotoUrl: dto.selfiePhotoUrl ?? null,
         dateOfBirth: parsedDob,
         user: { connect: { id: user.id } },
+        agreementAcceptedAt: dto.agreementAcceptedAt ? new Date(dto.agreementAcceptedAt) : null,
 
         ...(this.buildDriverPreferenceCreate(dto)),
         ...(this.buildDriverAlertsCreate(dto)),

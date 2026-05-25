@@ -129,6 +129,7 @@ interface DriverSignupPayload {
   preferredRadius?: string;
   districts?: string[];
   emailAlerts?: boolean;
+  agreementAcceptedAt?: string;
 }
 
 interface DriverSignupPayloadWithOtp extends DriverSignupPayload {
@@ -325,7 +326,7 @@ export default function DriverOnboardingPage() {
     resolver: zodResolver(onboardingSchema),
     defaultValues: {
       alerts: true,
-      acceptTerms: true,
+      acceptTerms: false,
       districts: [],
     },
   });
@@ -442,6 +443,7 @@ export default function DriverOnboardingPage() {
       preferredRadius: data.radius,
       districts: data.districts,
       emailAlerts: data.alerts,
+      agreementAcceptedAt: new Date().toISOString(),
     };
 
     if (!otpSent) {
@@ -694,12 +696,10 @@ export default function DriverOnboardingPage() {
             <Alert className="max-w-2xl bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
               <Info className="h-4 w-4 text-amber-500" />
               <AlertTitle className="text-amber-900 dark:text-amber-200">
-                Important Information
+                Important Policy Information
               </AlertTitle>
               <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
-                Email verification is required before accessing protected
-                features (email-first). Phone is collected for operational
-                contact; phone verification may be optional per policy.
+                Email verification is required before accessing protected features. Phone is collected for operational contact. Please review and accept the agreements below before continuing.
               </AlertDescription>
             </Alert>
           </div>
@@ -1153,15 +1153,15 @@ export default function DriverOnboardingPage() {
                       </p>
                     </div>
 
-                    {/* Terms and Conditions */}
+                    {/* Policy Acknowledgment */}
                     <div 
                       className={cn(
-                        "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                        "space-y-3 p-4 rounded-2xl border transition-all duration-300",
                         allRequiredFieldsFilled && !acceptTerms
-                          ? "border-red-400 dark:border-red-600 bg-red-100 dark:bg-red-900/30 shadow-lg shadow-red-200 dark:shadow-red-900/30 animate-pulse"
+                          ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20 shadow-lg shadow-red-200 dark:shadow-red-900/30"
                           : acceptTerms
                           ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
-                          : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
+                          : "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10"
                       )}
                     >
                       <div className="flex items-start space-x-3">
@@ -1171,29 +1171,38 @@ export default function DriverOnboardingPage() {
                           onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
                           disabled={isPending || !isAgeVerified}
                           className={cn(
-                            allRequiredFieldsFilled && !acceptTerms && "data-[state=unchecked]:border-red-500 data-[state=unchecked]:bg-red-100"
+                            "mt-0.5 w-5 h-5 rounded accent-lime-500",
+                            allRequiredFieldsFilled && !acceptTerms && "accent-red-500"
                           )}
                         />
                         <Label
                           htmlFor="acceptTerms"
                           className={cn(
-                            "text-sm cursor-pointer leading-relaxed whitespace-nowrap flex items-center flex-wrap",
+                            "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
                             allRequiredFieldsFilled && !acceptTerms
                               ? "text-red-700 dark:text-red-300 font-bold"
                               : acceptTerms
                               ? "text-green-700 dark:text-green-300 font-medium"
-                              : "text-slate-600 dark:text-slate-400"
+                              : "text-slate-700 dark:text-slate-300"
                           )}
                         >
-                          By continuing, you agree to our{" "}
+                          I acknowledge and accept the{" "}
+                          <Link
+                            to="/agreement"
+                            className="font-extrabold hover:text-lime-500 underline"
+                            target="_blank"
+                          >
+                            Independent Driver Agreement
+                          </Link>
+                          ,{" "}
                           <Link
                             to="/terms"
                             className="font-extrabold hover:text-lime-500 underline"
                             target="_blank"
                           >
-                            Terms
-                          </Link>{" "}
-                          and{" "}
+                            Terms of Service
+                          </Link>
+                          , and{" "}
                           <Link
                             to="/privacy"
                             className="font-extrabold hover:text-lime-500 underline"
@@ -1205,14 +1214,14 @@ export default function DriverOnboardingPage() {
                         </Label>
                       </div>
                       {errors.acceptTerms && (
-                        <p className="text-xs text-red-500">
+                        <p className="text-xs text-red-500 ml-8">
                           {errors.acceptTerms.message}
                         </p>
                       )}
                       {allRequiredFieldsFilled && !acceptTerms && (
-                        <p className="text-sm text-red-600 dark:text-red-400 font-bold flex items-center gap-2 bg-red-200 dark:bg-red-800/50 p-2 rounded-lg">
-                          <AlertCircle className="h-4 w-4" />
-                          Please check the box above to accept terms and continue
+                        <p className="text-xs text-red-600 dark:text-red-400 font-bold flex items-center gap-2 ml-8">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          Please check the box above to accept the agreements and continue
                         </p>
                       )}
                     </div>
@@ -1423,7 +1432,7 @@ export default function DriverOnboardingPage() {
                     ) : !allRequiredFieldsFilled ? (
                       "Complete All Required Fields"
                     ) : !acceptTerms ? (
-                      "Accept Terms & Conditions"
+                      "Accept Agreements to Continue"
                     ) : otpSent ? (
                       <>
                         Verify & Submit

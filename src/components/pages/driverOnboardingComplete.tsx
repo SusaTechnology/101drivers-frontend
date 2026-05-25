@@ -224,12 +224,8 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [licenseBackUploading, setLicenseBackUploading] = useState(false);
   const licenseFrontInputRef = useRef<HTMLInputElement>(null);
   const licenseBackInputRef = useRef<HTMLInputElement>(null);
-  // Agreement step state
-  const [step, setStep] = useState<"agreement" | "form">("agreement");
-  const [agreementChecked, setAgreementChecked] = useState(false);
-  const [agreementScrolledToBottom, setAgreementScrolledToBottom] = useState(false);
-  const [agreementAcceptedAt, setAgreementAcceptedAt] = useState<string | null>(null);
-  const agreementScrollRef = useRef<HTMLDivElement>(null);
+  // Agreement was accepted during driver signup — no step needed here
+  const [agreementAcceptedAt] = useState<string | null>(null);
   // Determine if we're using token-based (from email) or auth-based (from login) flow
   const usingToken = !!token;
 
@@ -326,23 +322,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     }
   }, [setValue]);
 
-  // Agreement scroll handler
-  const handleAgreementScroll = useCallback(() => {
-    const el = agreementScrollRef.current;
-    if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 10;
-    if (atBottom && !agreementScrolledToBottom) {
-      setAgreementScrolledToBottom(true);
-    }
-  }, [agreementScrolledToBottom]);
-
-  // Handle agreement acceptance
-  const handleAcceptAgreement = useCallback(() => {
-    if (!agreementChecked || !agreementScrolledToBottom) return;
-    const now = new Date().toISOString();
-    setAgreementAcceptedAt(now);
-    setStep("form");
-  }, [agreementChecked, agreementScrolledToBottom]);
+  // Agreement was accepted during driver signup — scroll and accept handlers removed
 
   // Submit mutation
   const submitOnboarding = async (data: OnboardingCompleteFormData) => {
@@ -638,157 +618,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     );
   }
 
-  // ==================== AGREEMENT SCREEN ====================
-
-  if (step === "agreement") {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-        <Header
-          mobileMenuOpen={mobileMenuOpen}
-          setMobileMenuOpen={setMobileMenuOpen}
-        />
-
-        <main className="w-full max-w-[700px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
-          {/* Step indicator */}
-          <section className="mb-8 space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Badge className="bg-lime-100 dark:bg-lime-900/20 text-lime-800 dark:text-lime-200 border-lime-200">
-                <FileCheck className="h-3 w-3 mr-1" />
-                Step 1 of 2
-              </Badge>
-              <Badge
-                variant="outline"
-                className="bg-slate-100 dark:bg-slate-800/50"
-              >
-                <Shield className="h-3 w-3 mr-1" />
-                Independent Driver Agreement
-              </Badge>
-            </div>
-
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
-                Independent Driver Agreement
-              </h1>
-              <p className="text-slate-600 dark:text-slate-400 text-lg max-w-2xl mt-4">
-                Please read the following agreement carefully. You must scroll to the bottom and check the box to confirm your acceptance before proceeding.
-              </p>
-            </div>
-          </section>
-
-          {/* Agreement Card */}
-          <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-            <CardHeader className="border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-xl font-black flex items-center gap-2">
-                <Shield className="w-5 h-5 text-lime-500" />
-                Independent Contractor Agreement
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              {/* Scrollable agreement text */}
-              <div
-                ref={agreementScrollRef}
-                onScroll={handleAgreementScroll}
-                className="h-[400px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-slate-700 dark:text-slate-300 leading-relaxed space-y-4"
-              >
-                <p className="font-bold text-base text-slate-900 dark:text-white">INDEPENDENT DRIVER AGREEMENT</p>
-                <p>This Independent Driver Agreement ("Agreement") is entered into by and between the driver ("Driver") and 101 Drivers LLC ("Company"). By checking the box below and clicking "I Agree," the Driver acknowledges and agrees to the following terms and conditions.</p>
-
-                <p className="font-bold">1. INDEPENDENT CONTRACTOR STATUS</p>
-                <p>The Driver acknowledges and agrees that they are an independent contractor and not an employee of the Company. The Driver shall be solely responsible for determining the manner and means by which services are performed. The Company does not control the Driver&apos;s work schedule, methods, or procedures, except as may be reasonably necessary to ensure the quality of services provided. Nothing in this Agreement shall be construed to create an employment relationship, partnership, joint venture, or agency relationship between the Driver and the Company.</p>
-
-                <p className="font-bold">2. SERVICES</p>
-                <p>The Driver agrees to perform vehicle delivery services as requested through the Company&apos;s platform. The Driver shall use their own vehicle, equipment, and tools to perform the services. The Driver represents that they possess a valid driver&apos;s license, appropriate insurance coverage, and any other licenses or permits required by law to perform the services.</p>
-
-                <p className="font-bold">3. COMPENSATION</p>
-                <p>The Driver shall be compensated for completed delivery services as outlined on the Company&apos;s platform. Compensation rates may be adjusted by the Company from time to time with reasonable notice. The Driver acknowledges that they are responsible for all taxes, including self-employment taxes, related to the compensation received under this Agreement.</p>
-
-                <p className="font-bold">4. INSURANCE AND LIABILITY</p>
-                <p>The Driver shall maintain, at their own expense, appropriate automobile liability insurance that meets or exceeds the minimum requirements of the state(s) in which they operate. The Driver agrees to indemnify and hold harmless the Company from any claims, damages, or liabilities arising from the Driver&apos;s negligent acts or omissions in the performance of services under this Agreement.</p>
-
-                <p className="font-bold">5. BACKGROUND CHECK</p>
-                <p>The Driver consents to a background check and driving record review as a condition of providing services through the Company&apos;s platform. The Company reserves the right to suspend or terminate this Agreement if the results of such checks do not meet the Company&apos;s standards.</p>
-
-                <p className="font-bold">6. CONFIDENTIALITY</p>
-                <p>The Driver agrees to maintain the confidentiality of any proprietary or sensitive information received from the Company or its customers, including but not limited to customer contact information, delivery addresses, and business practices. This obligation survives the termination of this Agreement.</p>
-
-                <p className="font-bold">7. TERMINATION</p>
-                <p>Either party may terminate this Agreement at any time, with or without cause, by providing written notice to the other party. Upon termination, the Driver shall return any Company property and cease representing themselves as affiliated with the Company.</p>
-
-                <p className="font-bold">8. GOVERNING LAW</p>
-                <p>This Agreement shall be governed by and construed in accordance with the laws of the State of Georgia, without regard to its conflict of laws provisions. Any disputes arising under this Agreement shall be resolved in the courts located in the State of Georgia.</p>
-
-                <p className="font-bold">9. ENTIRE AGREEMENT</p>
-                <p>This Agreement constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior or contemporaneous agreements, representations, and understandings, whether written or oral.</p>
-
-                <p className="font-bold">10. ACKNOWLEDGMENT</p>
-                <p>BY CHECKING THE BOX BELOW AND CLICKING &quot;I AGREE,&quot; THE DRIVER ACKNOWLEDGES THAT THEY HAVE READ, UNDERSTAND, AND AGREE TO BE BOUND BY THE TERMS AND CONDITIONS OF THIS AGREEMENT. THE DRIVER FURTHER ACKNOWLEDGES THAT THEY HAVE HAD THE OPPORTUNITY TO REVIEW THIS AGREEMENT AND TO ASK QUESTIONS ABOUT ITS PROVISIONS.</p>
-              </div>
-
-              {/* Scroll indicator */}
-              {!agreementScrolledToBottom && (
-                <div className="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-center">
-                  <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-                    <ArrowRight className="w-3 h-3 inline mr-1" />
-                    Please scroll to the bottom to read the full agreement before accepting
-                  </p>
-                </div>
-              )}
-
-              {agreementScrolledToBottom && (
-                <div className="mt-4 p-3 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 text-center">
-                  <p className="text-xs text-green-700 dark:text-green-300 font-medium">
-                    <CheckCircle className="w-3 h-3 inline mr-1" />
-                    You have read the full agreement. You may now accept below.
-                  </p>
-                </div>
-              )}
-
-              {/* Checkbox + Accept button */}
-              <div className="mt-6 space-y-4">
-                <label
-                  className={cn(
-                    "flex items-start gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all",
-                    agreementChecked
-                      ? "border-lime-400 dark:border-lime-600 bg-lime-50 dark:bg-lime-900/10"
-                      : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={agreementChecked}
-                    disabled={!agreementScrolledToBottom}
-                    onChange={(e) => setAgreementChecked(e.target.checked)}
-                    className="mt-0.5 w-5 h-5 rounded accent-lime-500"
-                  />
-                  <span className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                    I have read and agree to the Independent Driver Agreement above. I understand that by checking this box and proceeding, I am entering into a binding agreement as an independent contractor with 101 Drivers LLC.
-                  </span>
-                </label>
-
-                <Button
-                  onClick={handleAcceptAgreement}
-                  disabled={!agreementChecked || !agreementScrolledToBottom}
-                  className={cn(
-                    "w-full h-14 rounded-2xl font-black text-base shadow-lg transition-all",
-                    agreementChecked && agreementScrolledToBottom
-                      ? "bg-lime-500 hover:bg-lime-600 text-black shadow-lime-500/20"
-                      : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                  )}
-                >
-                  I Agree &mdash; Continue to Onboarding Form
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </main>
-
-        <Footer />
-      </div>
-    );
-  }
-
-  // ==================== MAIN FORM (Step 2) ====================
+  // ==================== MAIN FORM ====================
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -810,7 +640,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
               className="bg-slate-100 dark:bg-slate-800/50"
             >
               <FileCheck className="h-3 w-3 mr-1" />
-              Step 2 of 2
+              Driver Onboarding
             </Badge>
             <Badge
               variant="outline"

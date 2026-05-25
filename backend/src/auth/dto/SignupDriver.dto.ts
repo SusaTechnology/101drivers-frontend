@@ -126,4 +126,15 @@ export class SignupDriverDto {
   @IsOptional()
   @IsBoolean()
   smsAlertsEnabled?: boolean;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "ISO timestamp of when the driver accepted the agreement during signup",
+    example: "2026-05-25T12:00:00.000Z",
+  })
+  @IsOptional()
+  @IsString()
+  agreementAcceptedAt?: string | null;
 }
