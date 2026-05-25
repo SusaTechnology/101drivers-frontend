@@ -1316,104 +1316,104 @@ export default function DriverOnboardingPage() {
                       </p>
                     </div>
                   )}
-
-                  {/* Agreements & Submit Section — 3 separate boxes */}
-                  <div className="space-y-4">
-                    {/* Box 1: Important Policy Information */}
-                    <Alert className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 shadow-md rounded-2xl">
-                      <AlertCircle className="h-4 w-4 text-amber-500" />
-                      <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm">
-                        Important Policy Information
-                      </AlertTitle>
-                      <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
-                        Drivers cannot cancel or reassign jobs in the app. Only book
-                        a job if you can complete it. For rare emergencies that arise
-                        after booking, contact customer support.
-                      </AlertDescription>
-                    </Alert>
-
-                    {/* Box 2: Agreement Checkbox */}
-                    <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-md">
-                      <div className="flex items-start space-x-3">
-                        <Checkbox
-                          id="acceptTerms"
-                          checked={acceptTerms}
-                          onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
-                          className="mt-0.5 w-5 h-5 rounded accent-lime-500"
-                        />
-                        <Label
-                          htmlFor="acceptTerms"
-                          className={cn(
-                            "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
-                            acceptTerms
-                              ? "text-green-700 dark:text-green-300 font-medium"
-                              : "text-slate-700 dark:text-slate-300"
-                          )}
-                        >
-                          By checking this box, I acknowledge that I have read, understood, and agree to be bound by the{" "}
-                          <Link
-                            to="/agreement"
-                            className="font-extrabold hover:text-lime-500 underline"
-                            target="_blank"
-                          >
-                            Independent Driver Agreement
-                          </Link>
-                          , the{" "}
-                          <Link
-                            to="/terms"
-                            className="font-extrabold hover:text-lime-500 underline"
-                            target="_blank"
-                          >
-                            Terms of Service
-                          </Link>
-                          , and the{" "}
-                          <a
-                            href="/privacy#privacy-top"
-                            className="font-extrabold hover:text-lime-500 underline"
-                            target="_blank"
-                          >
-                            Privacy Policy
-                          </a>
-                          .
-                        </Label>
-                      </div>
-                    </div>
-
-                    {/* Box 3: Submit Button */}
-                    <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-md">
-                      <Button
-                        type="submit"
-                        onClick={handleSubmit(onSubmit)}
-                        disabled={isPending || !isAgeVerified || !isFormReady || (otpSent && !otpValue.trim())}
-                        className={cn(
-                          "w-full py-6 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
-                          (!isAgeVerified || !isFormReady)
-                            ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                            : "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20",
-                        )}
-                      >
-                        {isPending ? (
-                          <>
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></div>
-                            Continue...
-                          </>
-                        ) : (
-                          <>
-                            Continue
-                            <ArrowRight className="ml-2 h-5 w-5" />
-                          </>
-                        )}
-                      </Button>
-
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center mt-3">
-                        {otpSent
-                          ? "After verification, your application will be submitted for admin approval."
-                          : "After submission, you'll receive a verification code via email."}
-                      </p>
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
+
+              {/* Agreements & Submit Section — below Step 2, separate section */}
+              <div className="mt-6 space-y-4 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg">
+                {/* Box 1: Important Policy Information */}
+                <Alert className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 shadow-md rounded-2xl">
+                  <AlertCircle className="h-4 w-4 text-amber-500" />
+                  <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm">
+                    Important Policy Information
+                  </AlertTitle>
+                  <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
+                    Drivers cannot cancel or reassign jobs in the app. Only book
+                    a job if you can complete it. For rare emergencies that arise
+                    after booking, contact customer support.
+                  </AlertDescription>
+                </Alert>
+
+                {/* Box 2: Agreement Checkbox */}
+                <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 shadow-md">
+                  <div className="flex items-start space-x-3">
+                    <Checkbox
+                      id="acceptTerms"
+                      checked={acceptTerms}
+                      onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
+                      className="mt-0.5 w-5 h-5 rounded accent-lime-500"
+                    />
+                    <Label
+                      htmlFor="acceptTerms"
+                      className={cn(
+                        "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
+                        acceptTerms
+                          ? "text-green-700 dark:text-green-300 font-medium"
+                          : "text-slate-700 dark:text-slate-300"
+                      )}
+                    >
+                      By checking this box, I acknowledge that I have read, understood, and agree to be bound by the{" "}
+                      <Link
+                        to="/agreement"
+                        className="font-extrabold hover:text-lime-500 underline"
+                        target="_blank"
+                      >
+                        Independent Driver Agreement
+                      </Link>
+                      , the{" "}
+                      <Link
+                        to="/terms"
+                        className="font-extrabold hover:text-lime-500 underline"
+                        target="_blank"
+                      >
+                        Terms of Service
+                      </Link>
+                      , and the{" "}
+                      <a
+                        href="/privacy#privacy-top"
+                        className="font-extrabold hover:text-lime-500 underline"
+                        target="_blank"
+                      >
+                        Privacy Policy
+                      </a>
+                      .
+                    </Label>
+                  </div>
+                </div>
+
+                {/* Box 3: Submit Button */}
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 shadow-md">
+                  <Button
+                    type="submit"
+                    onClick={handleSubmit(onSubmit)}
+                    disabled={isPending || !isAgeVerified || !isFormReady || (otpSent && !otpValue.trim())}
+                    className={cn(
+                      "w-full py-6 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
+                      (!isAgeVerified || !isFormReady)
+                        ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                        : "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20",
+                    )}
+                  >
+                    {isPending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></div>
+                        Continue...
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                      </>
+                    )}
+                  </Button>
+
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center mt-3">
+                    {otpSent
+                      ? "After verification, your application will be submitted for admin approval."
+                      : "After submission, you'll receive a verification code via email."}
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
         ) : (
