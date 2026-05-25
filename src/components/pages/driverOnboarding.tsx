@@ -404,10 +404,8 @@ export default function DriverOnboardingPage() {
             setOtpValue(urlOtp);
             setOtpSent(true);
             setDraftLoaded(true);
-            // Agreement was already accepted when the draft was saved — skip the gate
-            if (draft.formData.acceptTerms) {
-              setAgreementGatePassed(true);
-            }
+            // Agreement was already accepted when the draft was saved
+            // acceptTerms is restored via reset() above
             console.log("Draft restored from localStorage for OTP verification");
           }
         } catch (e) {
@@ -1319,104 +1317,107 @@ export default function DriverOnboardingPage() {
                     </div>
                   )}
 
-                  <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
-                    <AlertCircle className="h-4 w-4 text-amber-500" />
-                    <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm">
-                      Important Policy Information
-                    </AlertTitle>
-                    <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
-                      Drivers cannot cancel or reassign jobs in the app. Only book
-                      a job if you can complete it. For rare emergencies that arise
-                      after booking, contact customer support.
-                    </AlertDescription>
-                  </Alert>
+                  {/* Agreements & Submit Section */}
+                  <div className="space-y-4 rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50/50 dark:bg-amber-950/10 p-5">
+                    <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
+                      <AlertCircle className="h-4 w-4 text-amber-500" />
+                      <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm">
+                        Important Policy Information
+                      </AlertTitle>
+                      <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
+                        Drivers cannot cancel or reassign jobs in the app. Only book
+                        a job if you can complete it. For rare emergencies that arise
+                        after booking, contact customer support.
+                      </AlertDescription>
+                    </Alert>
 
-                  <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                    <div className="flex items-start space-x-3">
-                      <Checkbox
-                        id="acceptTerms"
-                        checked={acceptTerms}
-                        onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
-                        className="mt-0.5 w-5 h-5 rounded accent-lime-500"
-                      />
-                      <Label
-                        htmlFor="acceptTerms"
-                        className={cn(
-                          "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
-                          acceptTerms
-                            ? "text-green-700 dark:text-green-300 font-medium"
-                            : "text-slate-700 dark:text-slate-300"
-                        )}
-                      >
-                        By checking this box, I acknowledge that I have read, understood, and agree to be bound by the{" "}
-                        <Link
-                          to="/agreement"
-                          className="font-extrabold hover:text-lime-500 underline"
-                          target="_blank"
+                    <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                      <div className="flex items-start space-x-3">
+                        <Checkbox
+                          id="acceptTerms"
+                          checked={acceptTerms}
+                          onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
+                          className="mt-0.5 w-5 h-5 rounded accent-lime-500"
+                        />
+                        <Label
+                          htmlFor="acceptTerms"
+                          className={cn(
+                            "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
+                            acceptTerms
+                              ? "text-green-700 dark:text-green-300 font-medium"
+                              : "text-slate-700 dark:text-slate-300"
+                          )}
                         >
-                          Independent Driver Agreement
-                        </Link>
-                        , the{" "}
-                        <Link
-                          to="/terms"
-                          className="font-extrabold hover:text-lime-500 underline"
-                          target="_blank"
-                        >
-                          Terms of Service
-                        </Link>
-                        , and the{" "}
-                        <a
-                          href="/privacy#privacy-top"
-                          className="font-extrabold hover:text-lime-500 underline"
-                          target="_blank"
-                        >
-                          Privacy Policy
-                        </a>
-                        .
-                      </Label>
+                          By checking this box, I acknowledge that I have read, understood, and agree to be bound by the{" "}
+                          <Link
+                            to="/agreement"
+                            className="font-extrabold hover:text-lime-500 underline"
+                            target="_blank"
+                          >
+                            Independent Driver Agreement
+                          </Link>
+                          , the{" "}
+                          <Link
+                            to="/terms"
+                            className="font-extrabold hover:text-lime-500 underline"
+                            target="_blank"
+                          >
+                            Terms of Service
+                          </Link>
+                          , and the{" "}
+                          <a
+                            href="/privacy#privacy-top"
+                            className="font-extrabold hover:text-lime-500 underline"
+                            target="_blank"
+                          >
+                            Privacy Policy
+                          </a>
+                          .
+                        </Label>
+                      </div>
                     </div>
+
+                    <Button
+                      type="submit"
+                      onClick={handleSubmit(onSubmit)}
+                      disabled={isPending || !isAgeVerified || !isFormReady || (otpSent && !otpValue.trim())}
+                      className={cn(
+                        "w-full py-6 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
+                        (!isAgeVerified || !isFormReady)
+                          ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                          : "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20",
+                      )}
+                    >
+                      {isPending ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></div>
+                          {sendOtpMutation.isPending || resendCodeMutation.isPending ? "Sending Code..." : "Verifying..."}
+                        </>
+                      ) : !isAgeVerified ? (
+                        "Enter Your Date of Birth First"
+                      ) : !allRequiredFieldsFilled ? (
+                        "Complete All Required Fields"
+                      ) : !acceptTerms ? (
+                        "Accept Agreements to Continue"
+                      ) : otpSent ? (
+                        <>
+                          Verify & Submit
+                          <ArrowRight className="ml-2 h-5 w-5" />
+                        </>
+                      ) : (
+                        <>
+                          Continue
+                          <ArrowRight className="ml-2 h-5 w-5" />
+                        </>
+                      )}
+                    </Button>
+
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
+                      {otpSent
+                        ? "After verification, your application will be submitted for admin approval."
+                        : "After submission, you'll receive a verification code via email."}
+                    </p>
                   </div>
-
-                  <Button
-                    type="submit"
-                    onClick={handleSubmit(onSubmit)}
-                    disabled={isPending || !isAgeVerified || !isFormReady || (otpSent && !otpValue.trim())}
-                    className={cn(
-                      "w-full py-6 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
-                      (!isAgeVerified || !isFormReady)
-                        ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                        : "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20",
-                    )}
-                  >
-                    {isPending ? (
-                      <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></div>
-                        {sendOtpMutation.isPending || resendCodeMutation.isPending ? "Sending Code..." : "Verifying..."}
-                      </>
-                    ) : !isAgeVerified ? (
-                      "Enter Your Date of Birth First"
-                    ) : !allRequiredFieldsFilled ? (
-                      "Complete All Required Fields"
-                    ) : !acceptTerms ? (
-                      "Accept Agreements to Continue"
-                    ) : otpSent ? (
-                      <>
-                        Verify & Submit
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </>
-                    ) : (
-                      <>
-                        Send Code to Email
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </>
-                    )}
-                  </Button>
-
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
-                    {otpSent
-                      ? "After verification, your application will be submitted for admin approval."
-                      : "After submission, you'll receive a verification code via email."}
-                  </p>
                 </CardContent>
               </Card>
             </div>
