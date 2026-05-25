@@ -2,7 +2,7 @@
 import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@hookform/resolvers/zod/v4";
 import { z } from "zod";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
@@ -1318,7 +1318,7 @@ export default function DriverOnboardingPage() {
                   )}
 
                   {/* Agreements & Submit Section */}
-                  <div className="space-y-4 rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50/50 dark:bg-amber-950/10 p-5">
+                  <div className="space-y-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-5">
                     <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
                       <AlertCircle className="h-4 w-4 text-amber-500" />
                       <AlertTitle className="text-amber-900 dark:text-amber-200 text-sm">
