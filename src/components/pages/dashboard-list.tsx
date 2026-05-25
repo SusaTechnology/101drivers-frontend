@@ -589,7 +589,8 @@ export default function DriverGigBoardPage() {
   } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${driverId}?${queryParams}`,
     noFilter: true,
-    enabled: Boolean(driverId)
+    enabled: Boolean(driverId),
+    refetchInterval: 30 * 1000, // auto-refresh every 30 seconds
   })
 
   // Notification count
