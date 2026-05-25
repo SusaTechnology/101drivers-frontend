@@ -207,7 +207,8 @@ export default function DealerDashboard() {
   const { data: deliveriesData, isLoading, isFetching, isError, error, refetch } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${dealerId}/deliveries`,
     noFilter: true,
-    enabled: Boolean(dealerId)
+    enabled: Boolean(dealerId),
+    refetchInterval: 30 * 1000, // auto-refresh every 30 seconds
   })
 
 
@@ -377,6 +378,12 @@ export default function DealerDashboard() {
             <div className="leading-tight"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: BUSINESS_TZ })}</div><div className="text-sm font-extrabold text-slate-900 dark:text-white">{isPrivateCustomer ? 'My Deliveries' : 'Delivery Dashboard'}</div></div>
           </div>
           <div className="flex items-center gap-2">
+            {isFetching && !isLoading && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-50 dark:bg-lime-950/30 border border-lime-200 dark:border-lime-800">
+                <RefreshCw className="h-3 w-3 text-lime-600 animate-spin" />
+                <span className="text-[10px] font-bold text-lime-700 dark:text-lime-400 hidden sm:inline">Syncing</span>
+              </div>
+            )}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <span className={cn("text-xs font-bold transition-colors", !showAll ? "text-lime-600" : "text-slate-400")}>My</span>
               <Switch checked={showAll} onCheckedChange={setShowAll} className="data-[state=checked]:bg-lime-500" />
