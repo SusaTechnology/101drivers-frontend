@@ -193,6 +193,9 @@ export default function DriverOnboardingPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Agreement gate: driver must check the box and click Continue before seeing the form
+  const [agreementGatePassed, setAgreementGatePassed] = useState(false);
+
   
   const navigate = useNavigate();
 
@@ -405,6 +408,10 @@ export default function DriverOnboardingPage() {
             setOtpValue(urlOtp);
             setOtpSent(true);
             setDraftLoaded(true);
+            // Agreement was already accepted when the draft was saved — skip the gate
+            if (draft.formData.acceptTerms) {
+              setAgreementGatePassed(true);
+            }
             console.log("Draft restored from localStorage for OTP verification");
           }
         } catch (e) {
@@ -693,15 +700,96 @@ export default function DriverOnboardingPage() {
               </p>
             </div>
 
-            <Alert className="max-w-2xl bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
-              <Info className="h-4 w-4 text-amber-500" />
-              <AlertTitle className="text-amber-900 dark:text-amber-200">
-                Important Policy Information
-              </AlertTitle>
-              <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
-                Email verification is required before accessing protected features. Phone is collected for operational contact. Please review and accept the agreements below before continuing.
-              </AlertDescription>
-            </Alert>
+            {/* Agreement Gate — must accept before seeing the form */}
+            <div className="max-w-2xl space-y-4">
+              <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
+                <Info className="h-4 w-4 text-amber-500" />
+                <AlertTitle className="text-amber-900 dark:text-amber-200">
+                  Important Policy Information
+                </AlertTitle>
+                <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs">
+                  Email verification is required before accessing protected features. Phone is collected for operational contact. You must read and accept the agreements below to continue with your driver application.
+                </AlertDescription>
+              </Alert>
+
+              <div
+                className={cn(
+                  "space-y-3 p-4 rounded-2xl border transition-all duration-300",
+                  acceptTerms
+                    ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
+                    : "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10"
+                )}
+              >
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="agreementGate"
+                    checked={acceptTerms}
+                    onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
+                    className="mt-0.5 w-5 h-5 rounded accent-lime-500"
+                  />
+                  <Label
+                    htmlFor="agreementGate"
+                    className={cn(
+                      "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
+                      acceptTerms
+                        ? "text-green-700 dark:text-green-300 font-medium"
+                        : "text-slate-700 dark:text-slate-300"
+                    )}
+                  >
+                    I acknowledge and accept the{" "}
+                    <Link
+                      to="/agreement"
+                      className="font-extrabold hover:text-lime-500 underline"
+                      target="_blank"
+                    >
+                      Independent Driver Agreement
+                    </Link>
+                    ,{" "}
+                    <Link
+                      to="/terms"
+                      className="font-extrabold hover:text-lime-500 underline"
+                      target="_blank"
+                    >
+                      Terms of Service
+                    </Link>
+                    , and{" "}
+                    <Link
+                      to="/privacy"
+                      className="font-extrabold hover:text-lime-500 underline"
+                      target="_blank"
+                    >
+                      Privacy Policy
+                    </Link>
+                    .
+                  </Label>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                disabled={!acceptTerms}
+                onClick={() => {
+                  if (acceptTerms) {
+                    setAgreementGatePassed(true);
+                  }
+                }}
+                className={cn(
+                  "w-full max-w-xs py-5 rounded-2xl transition flex items-center justify-center gap-2 text-base font-extrabold",
+                  acceptTerms
+                    ? "bg-lime-500 hover:bg-lime-600 text-slate-950 hover:shadow-xl hover:shadow-lime-500/20"
+                    : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                )}
+              >
+                {acceptTerms ? (
+                  <>
+                    Continue
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </>
+                ) : (
+                  "Check the box above to continue"
+                )}
+              </Button>
+            </div>
           </div>
 
           <div className="flex gap-3">
@@ -715,7 +803,7 @@ export default function DriverOnboardingPage() {
           </div>
         </section>
 
-        {!registrationComplete ? (
+        {!registrationComplete && agreementGatePassed ? (
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Left: Account Basics (unchanged) */}
             <div className="lg:col-span-7">
@@ -1153,77 +1241,14 @@ export default function DriverOnboardingPage() {
                       </p>
                     </div>
 
-                    {/* Policy Acknowledgment */}
-                    <div 
-                      className={cn(
-                        "space-y-3 p-4 rounded-2xl border transition-all duration-300",
-                        allRequiredFieldsFilled && !acceptTerms
-                          ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20 shadow-lg shadow-red-200 dark:shadow-red-900/30"
-                          : acceptTerms
-                          ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
-                          : "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10"
-                      )}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <Checkbox
-                          id="acceptTerms"
-                          checked={acceptTerms}
-                          onCheckedChange={(checked) => setValue("acceptTerms", checked as boolean)}
-                          disabled={isPending || !isAgeVerified}
-                          className={cn(
-                            "mt-0.5 w-5 h-5 rounded accent-lime-500",
-                            allRequiredFieldsFilled && !acceptTerms && "accent-red-500"
-                          )}
-                        />
-                        <Label
-                          htmlFor="acceptTerms"
-                          className={cn(
-                            "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
-                            allRequiredFieldsFilled && !acceptTerms
-                              ? "text-red-700 dark:text-red-300 font-bold"
-                              : acceptTerms
-                              ? "text-green-700 dark:text-green-300 font-medium"
-                              : "text-slate-700 dark:text-slate-300"
-                          )}
-                        >
-                          I acknowledge and accept the{" "}
-                          <Link
-                            to="/agreement"
-                            className="font-extrabold hover:text-lime-500 underline"
-                            target="_blank"
-                          >
-                            Independent Driver Agreement
-                          </Link>
-                          ,{" "}
-                          <Link
-                            to="/terms"
-                            className="font-extrabold hover:text-lime-500 underline"
-                            target="_blank"
-                          >
-                            Terms of Service
-                          </Link>
-                          , and{" "}
-                          <Link
-                            to="/privacy"
-                            className="font-extrabold hover:text-lime-500 underline"
-                            target="_blank"
-                          >
-                            Privacy Policy
-                          </Link>
-                          .
-                        </Label>
+                    {/* Agreement already accepted at the gate — show compact confirmation */}
+                    <div className="space-y-2 p-3 rounded-2xl border border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                        <p className="text-xs font-bold text-green-800 dark:text-green-200">
+                          Agreements accepted. You may continue with your application.
+                        </p>
                       </div>
-                      {errors.acceptTerms && (
-                        <p className="text-xs text-red-500 ml-8">
-                          {errors.acceptTerms.message}
-                        </p>
-                      )}
-                      {allRequiredFieldsFilled && !acceptTerms && (
-                        <p className="text-xs text-red-600 dark:text-red-400 font-bold flex items-center gap-2 ml-8">
-                          <AlertCircle className="h-3.5 w-3.5" />
-                          Please check the box above to accept the agreements and continue
-                        </p>
-                      )}
                     </div>
                   </form>
                 </CardContent>
