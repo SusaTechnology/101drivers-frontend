@@ -803,8 +803,8 @@ export default function DriverOnboardingPage() {
           </div>
         </section>
 
-        {!registrationComplete && agreementGatePassed ? (
-          <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {!registrationComplete ? (
+          <section className={cn("grid grid-cols-1 lg:grid-cols-12 gap-8 items-start transition-opacity duration-300", !agreementGatePassed && "opacity-50 pointer-events-none")}>
             {/* Left: Account Basics (unchanged) */}
             <div className="lg:col-span-7">
               <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
