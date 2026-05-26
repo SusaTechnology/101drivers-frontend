@@ -1,0 +1,5552 @@
+[
+  {
+    "role": "ADMIN",
+    "resource": "User",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "User",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "User",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "User",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "User",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "User",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "User",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "User",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "User",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "User",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "User",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "User",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "User",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "User",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "User",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "User",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "User",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "User",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "User",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "User",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "User",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "User",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "User",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "User",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "User",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Customer",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Customer",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Customer",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Customer",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Customer",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Customer",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Customer",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Customer",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Customer",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Customer",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Customer",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Customer",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Customer",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Customer",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Customer",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Customer",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Customer",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Customer",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Customer",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Customer",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Customer",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Customer",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Customer",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Customer",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Customer",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Driver",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Driver",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Driver",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Driver",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Driver",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Driver",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Driver",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Driver",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Driver",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Driver",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Driver",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Driver",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Driver",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Driver",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Driver",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Driver",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Driver",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Driver",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Driver",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Driver",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Driver",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Driver",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Driver",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Driver",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Driver",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedAddress",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedAddress",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedAddress",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedAddress",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedAddress",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedAddress",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedAddress",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedAddress",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedAddress",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedAddress",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedAddress",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedAddress",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedAddress",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedAddress",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedAddress",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedAddress",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedVehicle",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedVehicle",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedVehicle",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedVehicle",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedVehicle",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedVehicle",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedVehicle",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedVehicle",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedVehicle",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedVehicle",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedVehicle",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedVehicle",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SavedVehicle",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SavedVehicle",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SavedVehicle",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SavedVehicle",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingConfig",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingConfig",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingConfig",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingConfig",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingConfig",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingConfig",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingConfig",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingConfig",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingConfig",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingConfig",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingConfig",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingConfig",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingConfig",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingConfig",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingConfig",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingConfig",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingTier",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingTier",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingTier",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingTier",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingTier",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingTier",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingTier",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingTier",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingTier",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingTier",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingTier",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingTier",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingTier",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingTier",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingTier",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingTier",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingCategoryRule",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingCategoryRule",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingCategoryRule",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingCategoryRule",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingCategoryRule",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingCategoryRule",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingCategoryRule",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingCategoryRule",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingCategoryRule",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingCategoryRule",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingCategoryRule",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingCategoryRule",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PricingCategoryRule",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PricingCategoryRule",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PricingCategoryRule",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PricingCategoryRule",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Quote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Quote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Quote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Quote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Quote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Quote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Quote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Quote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Quote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Quote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Quote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Quote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Quote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Quote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Quote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Quote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Quote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Quote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Quote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Quote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Quote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Quote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Quote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Quote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Quote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SchedulingPolicy",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SchedulingPolicy",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SchedulingPolicy",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SchedulingPolicy",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SchedulingPolicy",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SchedulingPolicy",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SchedulingPolicy",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SchedulingPolicy",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SchedulingPolicy",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SchedulingPolicy",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SchedulingPolicy",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SchedulingPolicy",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "SchedulingPolicy",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "SchedulingPolicy",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "SchedulingPolicy",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "SchedulingPolicy",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "OperatingHour",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "OperatingHour",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "OperatingHour",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "OperatingHour",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "OperatingHour",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "OperatingHour",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "OperatingHour",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "OperatingHour",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "OperatingHour",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "OperatingHour",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "OperatingHour",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "OperatingHour",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "OperatingHour",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "OperatingHour",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "OperatingHour",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "OperatingHour",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TimeSlotTemplate",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TimeSlotTemplate",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TimeSlotTemplate",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TimeSlotTemplate",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TimeSlotTemplate",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TimeSlotTemplate",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TimeSlotTemplate",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TimeSlotTemplate",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TimeSlotTemplate",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TimeSlotTemplate",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TimeSlotTemplate",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TimeSlotTemplate",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TimeSlotTemplate",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TimeSlotTemplate",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TimeSlotTemplate",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TimeSlotTemplate",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryAssignment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryAssignment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryAssignment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryAssignment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryAssignment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryAssignment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryAssignment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryAssignment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryAssignment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryAssignment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryAssignment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryAssignment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryAssignment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryAssignment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryAssignment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryAssignment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingSession",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingSession",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingSession",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingSession",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingSession",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingSession",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingSession",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingSession",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingSession",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingSession",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingSession",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingSession",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingSession",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingSession",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingSession",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingSession",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingPoint",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingPoint",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingPoint",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingPoint",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingPoint",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingPoint",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingPoint",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingPoint",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingPoint",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingPoint",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingPoint",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingPoint",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "TrackingPoint",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "TrackingPoint",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "TrackingPoint",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "TrackingPoint",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryEvidence",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryEvidence",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryEvidence",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryEvidence",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryEvidence",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryEvidence",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryEvidence",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryEvidence",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryEvidence",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryEvidence",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryEvidence",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryEvidence",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryEvidence",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryEvidence",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryEvidence",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryEvidence",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryCompliance",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryCompliance",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryCompliance",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryCompliance",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryCompliance",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryCompliance",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryCompliance",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryCompliance",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryCompliance",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryCompliance",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryCompliance",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryCompliance",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryCompliance",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryCompliance",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryCompliance",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryCompliance",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "EvidenceExport",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "EvidenceExport",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "EvidenceExport",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "EvidenceExport",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "EvidenceExport",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "EvidenceExport",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "EvidenceExport",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "EvidenceExport",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "EvidenceExport",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "EvidenceExport",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "EvidenceExport",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "EvidenceExport",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "EvidenceExport",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "EvidenceExport",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "EvidenceExport",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "EvidenceExport",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryStatusHistory",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryStatusHistory",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryStatusHistory",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryStatusHistory",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryStatusHistory",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryStatusHistory",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryStatusHistory",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryStatusHistory",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryStatusHistory",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryStatusHistory",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ScheduleChangeRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ScheduleChangeRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ScheduleChangeRequest",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ScheduleChangeRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ScheduleChangeRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ScheduleChangeRequest",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ScheduleChangeRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ScheduleChangeRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ScheduleChangeRequest",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ScheduleChangeRequest",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Payment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Payment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Payment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Payment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Payment",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Payment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Payment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Payment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Payment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Payment",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Payment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Payment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Payment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Payment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Payment",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Payment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Payment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Payment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Payment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Payment",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Payment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Payment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Payment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Payment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Payment",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PaymentEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PaymentEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PaymentEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PaymentEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PaymentEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PaymentEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PaymentEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PaymentEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PaymentEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PaymentEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PaymentEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PaymentEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "PaymentEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "PaymentEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "PaymentEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "PaymentEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPayout",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPayout",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPayout",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPayout",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPayout",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPayout",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPayout",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPayout",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPayout",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPayout",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPayout",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPayout",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPayout",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPayout",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPayout",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPayout",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ServiceDistrict",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ServiceDistrict",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ServiceDistrict",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ServiceDistrict",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ServiceDistrict",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ServiceDistrict",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ServiceDistrict",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ServiceDistrict",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ServiceDistrict",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ServiceDistrict",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ServiceDistrict",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ServiceDistrict",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "ServiceDistrict",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "ServiceDistrict",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "ServiceDistrict",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "ServiceDistrict",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverDistrictPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverDistrictPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverDistrictPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverDistrictPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverDistrictPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverDistrictPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverDistrictPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverDistrictPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverDistrictPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverDistrictPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverDistrictPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverDistrictPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverDistrictPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverDistrictPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverDistrictPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverDistrictPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverAlertPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverAlertPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverAlertPreference",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverAlertPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverAlertPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverAlertPreference",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverAlertPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverAlertPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverAlertPreference",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverAlertPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverAlertPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverAlertPreference",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DriverAlertPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DriverAlertPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DriverAlertPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DriverAlertPreference",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeCase",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeCase",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeCase",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeCase",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeCase",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeCase",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeCase",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeCase",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeCase",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeCase",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeCase",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeCase",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeCase",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeCase",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeCase",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeCase",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeNote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeNote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeNote",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeNote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeNote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeNote",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeNote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeNote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeNote",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeNote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeNote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeNote",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DisputeNote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DisputeNote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DisputeNote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DisputeNote",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRating",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRating",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRating",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRating",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRating",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRating",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRating",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRating",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRating",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRating",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRating",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRating",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DeliveryRating",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DeliveryRating",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DeliveryRating",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DeliveryRating",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Tip",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Tip",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Tip",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Tip",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Tip",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Tip",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Tip",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Tip",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Tip",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Tip",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Tip",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Tip",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Tip",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Tip",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Tip",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Tip",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Tip",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Tip",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Tip",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Tip",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "Tip",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "Tip",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "Tip",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "Tip",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "Tip",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "NotificationEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "NotificationEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "NotificationEvent",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "NotificationEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "NotificationEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "NotificationEvent",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "NotificationEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "NotificationEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "NotificationEvent",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "NotificationEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "NotificationEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "NotificationEvent",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "NotificationEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "NotificationEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "NotificationEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "NotificationEvent",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AdminAuditLog",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AdminAuditLog",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AdminAuditLog",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AdminAuditLog",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AdminAuditLog",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AdminAuditLog",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AdminAuditLog",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AdminAuditLog",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AdminAuditLog",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AdminAuditLog",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AdminAuditLog",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AdminAuditLog",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AdminAuditLog",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AdminAuditLog",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AdminAuditLog",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AdminAuditLog",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AppSetting",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AppSetting",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AppSetting",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AppSetting",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AppSetting",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AppSetting",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AppSetting",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AppSetting",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AppSetting",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AppSetting",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AppSetting",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AppSetting",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "AppSetting",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "AppSetting",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "AppSetting",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "AppSetting",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DealerLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DealerLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DealerLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DealerLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DealerLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DealerLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DealerLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DealerLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DealerLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DealerLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DealerLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DealerLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "DealerLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "DealerLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "DealerLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "DealerLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "InvestorLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "InvestorLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "InvestorLead",
+    "action": "read:own",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "InvestorLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "InvestorLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "InvestorLead",
+    "action": "create:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "InvestorLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "InvestorLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "InvestorLead",
+    "action": "update:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "InvestorLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "InvestorLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "InvestorLead",
+    "action": "delete:any",
+    "attributes": "*"
+  },
+  {
+    "role": "ADMIN",
+    "resource": "InvestorLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "BUSINESS_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "DRIVER",
+    "resource": "InvestorLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "PRIVATE_CUSTOMER",
+    "resource": "InvestorLead",
+    "action": "read:any",
+    "attributes": "*"
+  },
+  {
+    "role": "user",
+    "resource": "InvestorLead",
+    "action": "read:any",
+    "attributes": "*"
+  }
+]

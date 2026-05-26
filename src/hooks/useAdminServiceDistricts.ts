@@ -1,0 +1,144 @@
+import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery';
+import { useQueryClient } from '@tanstack/react-query';
+
+const BASE_URL = `${import.meta.env.VITE_API_URL}/api/serviceDistricts`;
+
+export interface ServiceDistrict {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  geoJson: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fetch all service districts (admin) */
+export function useAdminServiceDistricts() {
+  const { data, isLoading, isError, error, refetch } = useDataQuery<ServiceDistrict[]>({
+    apiEndPoint: BASE_URL,
+    noFilter: true,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  return {
+    districts: data || [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  };
+}
+
+/** Create a new service district */
+export function useCreateServiceDistrict(options?: {
+  onSuccess?: (data: any) => void;
+  onError?: (error: Error) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useDataMutation<any, Partial<ServiceDistrict>>({
+    apiEndPoint: BASE_URL,
+    method: 'POST',
+    getBody: (variables) => JSON.stringify(variables),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['data', BASE_URL] });
+      options?.onSuccess?.(data);
+    },
+    onError: options?.onError,
+  });
+}
+
+/** Update a service district */
+export function useUpdateServiceDistrict(options?: {
+  onSuccess?: (data: any) => void;
+  onError?: (error: Error) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useDataMutation<
+    any,
+    { id: string; data: Partial<ServiceDistrict> } & { pathParams?: Record<string, string> }
+  >({
+    apiEndPoint: `${BASE_URL}/:id`,
+    method: 'PATCH',
+    getBody: (variables) => {
+      const { data, pathParams: _pp, ...rest } = variables as any;
+      return JSON.stringify(data);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['data', BASE_URL] });
+      options?.onSuccess?.(data);
+    },
+    onError: options?.onError,
+  });
+}
+
+/** Delete a service district */
+export function useDeleteServiceDistrict(options?: {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useDataMutation<
+    any,
+    { id: string } & { pathParams?: Record<string, string> }
+  >({
+    apiEndPoint: `${BASE_URL}/:id`,
+    method: 'DELETE',
+    getBody: () => null as any,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data', BASE_URL] });
+      options?.onSuccess?.();
+    },
+    onError: options?.onError,
+  });
+}
+
+/** Convert a google.maps.Polygon path array to GeoJSON Feature */
+export function polygonToGeoJson(
+  paths: google.maps.MVCArray<google.maps.LatLng> | google.maps.LatLng[],
+  properties?: Record<string, any>,
+): any {
+  const coords: [number, number][] = [];
+  const path = 'getArray' in paths ? paths.getArray() : paths;
+
+  path.forEach((latLng) => {
+    // Handle both google.maps.LatLng (has .lat() method) and LatLngLiteral (has .lat property)
+    const lat = typeof latLng.lat === 'function' ? (latLng as any).lat() : latLng.lat;
+    const lng = typeof latLng.lng === 'function' ? (latLng as any).lng() : latLng.lng;
+    coords.push([lng, lat]);
+  });
+
+  // Close the ring if not already closed
+  if (coords.length > 0) {
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      coords.push([first[0], first[1]]);
+    }
+  }
+
+  return {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [coords],
+    },
+    properties: properties || {
+      type: 'pickup_zone',
+    },
+  };
+}
+
+/** Convert GeoJSON Feature to Google Maps LatLngLiteral array */
+export function geoJsonToPaths(geoJson: any): google.maps.LatLngLiteral[] {
+  if (!geoJson?.geometry?.coordinates) return [];
+
+  const ring = geoJson.geometry.coordinates[0]; // outer ring
+  return ring.map((coord: number[]) => ({
+    lat: coord[1],
+    lng: coord[0],
+  }));
+}
