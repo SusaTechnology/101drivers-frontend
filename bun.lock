@@ -56,6 +56,10 @@
       },
     },
   },
+  "overrides": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+  },
   "packages": {
     "@acemir/cssom": ["@acemir/cssom@0.9.31", "", {}, "sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA=="],
 
