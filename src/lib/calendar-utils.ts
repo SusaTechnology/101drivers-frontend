@@ -1,11 +1,13 @@
 /**
  * Calendar event utilities for delivery gigs.
  *
- * Generates an RFC 5545 .ics file from delivery data and exports it
- * via the Web Share API (mobile) or a .ics file download (desktop).
+ * Platform-specific calendar integration:
+ *  - iOS:  Opens .ics blob → Safari shows native "Add to Calendar" (Apple Calendar)
+ *  - Android / Desktop: Opens Google Calendar deep link with pre-filled event
+ *
+ * The calling component is responsible for showing a confirmation dialog
+ * before calling openCalendarEvent().
  */
-
-import { BUSINESS_TZ } from '@/lib/timezone'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -26,13 +28,18 @@ export interface CalendarEventInput {
   serviceType?: string
 }
 
-// ── ICS Generation ───────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────
 
 /**
- * Format a Date to ICS UTC datetime string: `YYYYMMDDTHHMMSSZ`
+ * Detect iOS (iPhone, iPad, iPod).
+ * iPad Pro reports as MacIntel, so also check maxTouchPoints.
  */
-function toICSDate(date: Date): string {
-  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  )
 }
 
 /**
@@ -44,35 +51,42 @@ function shortAddress(address?: string): string {
 }
 
 /**
+ * Format a Date to ICS UTC datetime string: `YYYYMMDDTHHMMSSZ`
+ */
+function toICSDate(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+}
+
+/**
+ * Compute end date from available data.
+ */
+function computeEndDate(
+  startDate: Date,
+  event: CalendarEventInput,
+): Date {
+  if (event.dropoffWindowEnd) return new Date(event.dropoffWindowEnd)
+  if (event.etaMinutes)
+    return new Date(startDate.getTime() + event.etaMinutes * 60_000)
+  return new Date(startDate.getTime() + 60 * 60_000) // 1 hour fallback
+}
+
+// ── ICS Generation (for iOS) ────────────────────────────────────────
+
+/**
  * Build an RFC 5545 .ics file string.
  */
-export function buildICSFile(event: CalendarEventInput): string {
+function buildICSFile(event: CalendarEventInput): string {
   const now = new Date()
-
-  // Determine event start: use pickupWindowStart
   const startDate = event.pickupWindowStart
     ? new Date(event.pickupWindowStart)
     : null
+  const endDate = startDate ? computeEndDate(startDate, event) : null
 
-  // Determine event end: prefer dropoffWindowEnd, else start + eta, else start + 1h
-  let endDate: Date | null = null
-  if (event.dropoffWindowEnd) {
-    endDate = new Date(event.dropoffWindowEnd)
-  } else if (startDate && event.etaMinutes) {
-    endDate = new Date(startDate.getTime() + event.etaMinutes * 60_000)
-  } else if (startDate) {
-    endDate = new Date(startDate.getTime() + 60 * 60_000) // 1 hour fallback
-  }
-
-  // If no start time, we can't create a valid calendar event
-  if (!startDate || !endDate) {
-    return ''
-  }
+  if (!startDate || !endDate) return ''
 
   const uid = `delivery-${event.deliveryId}@101drivers.com`
-  const title = `Car Delivery: ${shortAddress(event.pickupAddress)} → ${shortAddress(event.dropoffAddress)}`
+  const title = `Car Delivery: ${shortAddress(event.pickupAddress)} \u2192 ${shortAddress(event.dropoffAddress)}`
 
-  // Build description lines
   const descParts: string[] = []
   descParts.push(`Dropoff: ${event.dropoffAddress || 'TBD'}`)
   if (event.payoutPreviewAmount != null) {
@@ -81,12 +95,13 @@ export function buildICSFile(event: CalendarEventInput): string {
   if (event.isUrgent) descParts.push('Priority: URGENT')
   if (event.licensePlate) descParts.push(`Plate: ${event.licensePlate}`)
   if (event.vehicleMake || event.vehicleModel) {
-    descParts.push(`Vehicle: ${[event.vehicleColor, event.vehicleMake, event.vehicleModel].filter(Boolean).join(' ')}`)
+    descParts.push(
+      `Vehicle: ${[event.vehicleColor, event.vehicleMake, event.vehicleModel].filter(Boolean).join(' ')}`,
+    )
   }
   descParts.push(`ID: ${event.deliveryId}`)
   const description = descParts.join('\\n')
 
-  // Escape special ICS characters in text fields
   const escape = (str: string) =>
     str.replace(/[\\;,\n]/g, (ch) => {
       if (ch === '\\') return '\\\\'
@@ -118,60 +133,84 @@ export function buildICSFile(event: CalendarEventInput): string {
   return lines.join('\r\n')
 }
 
-// ── Export / Share ───────────────────────────────────────────────────
+// ── Google Calendar URL (for Android / Desktop) ─────────────────────
 
 /**
- * Trigger a .ics file download (fallback for desktop / unsupported browsers).
+ * Build a Google Calendar deep-link URL with pre-filled event data.
  */
-function downloadICS(icsContent: string, filename: string) {
-  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+function buildGoogleCalendarURL(event: CalendarEventInput): string {
+  const startDate = event.pickupWindowStart
+    ? new Date(event.pickupWindowStart)
+    : null
+  if (!startDate) return ''
+
+  const endDate = computeEndDate(startDate, event)
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+
+  const detailsParts: string[] = []
+  detailsParts.push(`Dropoff: ${event.dropoffAddress || 'TBD'}`)
+  if (event.payoutPreviewAmount != null) {
+    detailsParts.push(`Payout: $${event.payoutPreviewAmount.toFixed(2)}`)
+  }
+  if (event.isUrgent) detailsParts.push('Priority: URGENT')
+  if (event.licensePlate) detailsParts.push(`Plate: ${event.licensePlate}`)
+  if (event.vehicleMake || event.vehicleModel) {
+    detailsParts.push(
+      `Vehicle: ${[event.vehicleColor, event.vehicleMake, event.vehicleModel].filter(Boolean).join(' ')}`,
+    )
+  }
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `Car Delivery: ${shortAddress(event.pickupAddress)} \u2192 ${shortAddress(event.dropoffAddress)}`,
+    dates: `${fmt(startDate)}/${fmt(endDate)}`,
+    location: event.pickupAddress || '',
+    details: detailsParts.join('\n'),
+  })
+
+  return `https://www.google.com/calendar/render?${params.toString()}`
 }
 
-/**
- * Share via Web Share API if available, otherwise download the .ics file.
- *
- * Returns `true` if sharing was attempted (even if user cancelled),
- * `false` if the feature is unsupported and download was used instead.
- */
-export async function exportCalendarEvent(event: CalendarEventInput): Promise<void> {
-  const icsContent = buildICSFile(event)
+// ── Main Export ──────────────────────────────────────────────────────
 
-  // Can't build a valid event without a start time
-  if (!icsContent) {
+/**
+ * Open the delivery event in the appropriate calendar app.
+ *
+ * - iOS (iPhone/iPad):  Opens .ics blob URL → Safari triggers native
+ *   "Add to Calendar" prompt (Apple Calendar).
+ * - Android / Desktop:  Opens Google Calendar with pre-filled event
+ *   in a new tab. User taps "Save" to add it.
+ *
+ * Throws if no pickup time is available.
+ * The calling component should show a confirmation dialog before calling this.
+ */
+export function openCalendarEvent(event: CalendarEventInput): void {
+  if (!event.pickupWindowStart) {
     throw new Error('No scheduled pickup time available for this delivery.')
   }
 
-  const filename = `delivery-${event.deliveryId}.ics`
-  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
-  const file = new File([blob], filename, { type: 'text/calendar;charset=utf-8' })
-
-  // Try Web Share API (works well on mobile — opens native share sheet)
-  if (navigator.share && navigator.canShare) {
-    const shareData: ShareData = {
-      title: `Car Delivery: ${shortAddress(event.pickupAddress)} → ${shortAddress(event.dropoffAddress)}`,
-      text: `Delivery from ${event.pickupAddress || 'TBD'} to ${event.dropoffAddress || 'TBD'}`,
-      files: [file],
-    }
-
-    if (navigator.canShare(shareData)) {
-      try {
-        await navigator.share(shareData)
-        return // User shared (or cancelled) via native sheet
-      } catch {
-        // User cancelled the share sheet — not an error
-        return
-      }
+  if (isIOS()) {
+    // iOS: Create .ics blob URL → Safari shows native "Add to Calendar"
+    const icsContent = buildICSFile(event)
+    if (!icsContent) return
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    // Revoke after 10 seconds to free memory
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  } else {
+    // Android / Desktop: Open Google Calendar deep link
+    const gcalUrl = buildGoogleCalendarURL(event)
+    if (gcalUrl) {
+      window.open(gcalUrl, '_blank')
     }
   }
+}
 
-  // Fallback: download the .ics file
-  downloadICS(icsContent, filename)
+/**
+ * Validate that a delivery has enough data for a calendar event.
+ * Returns true if a pickup time is set.
+ */
+export function canAddToCalendar(event: CalendarEventInput): boolean {
+  return Boolean(event.pickupWindowStart)
 }

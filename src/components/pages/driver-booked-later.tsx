@@ -38,8 +38,18 @@ import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 import { BUSINESS_TZ, formatTime, formatDate, formatTimeRange } from '@/lib/timezone'
-import { exportCalendarEvent } from '@/lib/calendar-utils'
+import { openCalendarEvent } from '@/lib/calendar-utils'
 import DriverBottomNav from '../layout/DriverBottomNav'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
 
 
 const formatCurrency = (amount?: number | null): string => {
@@ -108,24 +118,26 @@ export default function DriverBookedLaterPage() {
     navigate({ to: '/driver-signin' })
   }
 
-  const handleAddToCalendar = async (e: React.MouseEvent, delivery: any) => {
-    e.stopPropagation() // prevent card navigation
+  const [calendarDelivery, setCalendarDelivery] = useState<any>(null)
+
+  const handleConfirmCalendar = () => {
+    if (!calendarDelivery) return
     try {
-      await exportCalendarEvent({
-        deliveryId: delivery.id,
-        pickupAddress: delivery.pickupAddress,
-        dropoffAddress: delivery.dropoffAddress,
-        pickupWindowStart: delivery.pickupWindowStart,
-        pickupWindowEnd: delivery.pickupWindowEnd,
-        dropoffWindowEnd: delivery.dropoffWindowEnd,
-        etaMinutes: delivery.etaMinutes,
-        payoutPreviewAmount: delivery.payoutPreviewAmount,
-        licensePlate: delivery.licensePlate,
-        vehicleMake: delivery.vehicleMake,
-        vehicleModel: delivery.vehicleModel,
-        vehicleColor: delivery.vehicleColor,
-        isUrgent: delivery.isUrgent,
-        serviceType: delivery.serviceType,
+      openCalendarEvent({
+        deliveryId: calendarDelivery.id,
+        pickupAddress: calendarDelivery.pickupAddress,
+        dropoffAddress: calendarDelivery.dropoffAddress,
+        pickupWindowStart: calendarDelivery.pickupWindowStart,
+        pickupWindowEnd: calendarDelivery.pickupWindowEnd,
+        dropoffWindowEnd: calendarDelivery.dropoffWindowEnd,
+        etaMinutes: calendarDelivery.etaMinutes,
+        payoutPreviewAmount: calendarDelivery.payoutPreviewAmount,
+        licensePlate: calendarDelivery.licensePlate,
+        vehicleMake: calendarDelivery.vehicleMake,
+        vehicleModel: calendarDelivery.vehicleModel,
+        vehicleColor: calendarDelivery.vehicleColor,
+        isUrgent: calendarDelivery.isUrgent,
+        serviceType: calendarDelivery.serviceType,
       })
     } catch {
       toast.error('Cannot add to calendar', {
@@ -312,7 +324,10 @@ export default function DriverBookedLaterPage() {
                             {/* Add to Calendar — only when pickup time exists */}
                             {d.pickupWindowStart && (
                               <button
-                                onClick={(e) => handleAddToCalendar(e, d)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setCalendarDelivery(d)
+                                }}
                                 className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                                 aria-label="Add to calendar"
                               >
@@ -396,6 +411,30 @@ export default function DriverBookedLaterPage() {
           </div>
         )}
       </main>
+
+      {/* Calendar confirmation dialog */}
+      <AlertDialog open={Boolean(calendarDelivery)} onOpenChange={(open) => !open && setCalendarDelivery(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add to Calendar</AlertDialogTitle>
+            <AlertDialogDescription>
+              {calendarDelivery?.pickupWindowStart
+                ? `Add this delivery (${formatDate(calendarDelivery.pickupWindowStart)} ${formatTimeRange(calendarDelivery.pickupWindowStart, calendarDelivery.pickupWindowEnd)}) to your calendar? You'll be redirected to your calendar app to confirm.`
+                : 'This delivery has no scheduled pickup time.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmCalendar}
+              disabled={!calendarDelivery?.pickupWindowStart}
+              className="bg-[#34C759] hover:bg-[#2db84e] text-white font-extrabold"
+            >
+              Add to Calendar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Floating action button: browse gigs ── */}
       {bookedDeliveries.length >= 0 && (
