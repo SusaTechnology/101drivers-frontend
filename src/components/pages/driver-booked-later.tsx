@@ -13,6 +13,7 @@ import {
   Clock,
   Car,
   Calendar,
+  CalendarPlus,
   Navigation,
   Package,
   ChevronRight,
@@ -37,6 +38,7 @@ import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 import { BUSINESS_TZ, formatTime, formatDate, formatTimeRange } from '@/lib/timezone'
+import { exportCalendarEvent } from '@/lib/calendar-utils'
 import DriverBottomNav from '../layout/DriverBottomNav'
 
 
@@ -104,6 +106,32 @@ export default function DriverBookedLaterPage() {
   const handleSignOut = () => {
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
+  }
+
+  const handleAddToCalendar = async (e: React.MouseEvent, delivery: any) => {
+    e.stopPropagation() // prevent card navigation
+    try {
+      await exportCalendarEvent({
+        deliveryId: delivery.id,
+        pickupAddress: delivery.pickupAddress,
+        dropoffAddress: delivery.dropoffAddress,
+        pickupWindowStart: delivery.pickupWindowStart,
+        pickupWindowEnd: delivery.pickupWindowEnd,
+        dropoffWindowEnd: delivery.dropoffWindowEnd,
+        etaMinutes: delivery.etaMinutes,
+        payoutPreviewAmount: delivery.payoutPreviewAmount,
+        licensePlate: delivery.licensePlate,
+        vehicleMake: delivery.vehicleMake,
+        vehicleModel: delivery.vehicleModel,
+        vehicleColor: delivery.vehicleColor,
+        isUrgent: delivery.isUrgent,
+        serviceType: delivery.serviceType,
+      })
+    } catch {
+      toast.error('Cannot add to calendar', {
+        description: 'This delivery has no scheduled pickup time.',
+      })
+    }
   }
 
   // ── Loading state ──
@@ -273,14 +301,26 @@ export default function DriverBookedLaterPage() {
                           </p>
                         </div>
 
-                        {/* Payout + nav arrow */}
-                        <div className="text-right shrink-0">
+                        {/* Payout + calendar + nav arrow */}
+                        <div className="text-right shrink-0 flex flex-col items-end gap-1">
                           {d.payoutPreviewAmount != null && (
                             <p className="text-xl font-black text-green-600 dark:text-green-400">
                               {formatCurrency(d.payoutPreviewAmount)}
                             </p>
                           )}
-                          <ChevronRight className="w-5 h-5 text-slate-300 dark:text-slate-600 group-hover:text-primary transition mt-1 ml-auto" />
+                          <div className="flex items-center gap-1">
+                            {/* Add to Calendar — only when pickup time exists */}
+                            {d.pickupWindowStart && (
+                              <button
+                                onClick={(e) => handleAddToCalendar(e, d)}
+                                className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                aria-label="Add to calendar"
+                              >
+                                <CalendarPlus className="w-4 h-4 text-slate-400 hover:text-primary transition" />
+                              </button>
+                            )}
+                            <ChevronRight className="w-5 h-5 text-slate-300 dark:text-slate-600 group-hover:text-primary transition" />
+                          </div>
                         </div>
                       </div>
 
