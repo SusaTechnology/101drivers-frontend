@@ -229,6 +229,25 @@ export default function DriverActiveDeliveryPage() {
     setDistanceToDropoff(dist)
   }, [driverPosition, dropoffCoords])
 
+  // ── Dropoff readiness: computed from existing state ──
+  const odometerEndNum = odometerEnd && !isNaN(Number(odometerEnd)) ? Number(odometerEnd) : null
+  const odometerStartNum = deliveryData?.compliance?.odometerStart ?? null
+  const missingDropoffPhotos = 6 - uploadedDropoffPhotos.length
+  const odometerValid = odometerEndNum !== null && (odometerStartNum === null || odometerEndNum > odometerStartNum)
+  const dropoffReady = missingDropoffPhotos <= 0 && odometerValid && locationHealth !== 'lost'
+
+  // Build missing items list for display
+  const missingItems: string[] = []
+  if (missingDropoffPhotos > 0) missingItems.push(`${missingDropoffPhotos} dropoff photo${missingDropoffPhotos > 1 ? 's' : ''}`)
+  if (!odometerValid) {
+    if (odometerEndNum === null) {
+      missingItems.push('Odometer reading')
+    } else {
+      missingItems.push('Odometer must be greater than start')
+    }
+  }
+  if (locationHealth === 'lost') missingItems.push('GPS signal')
+
   // Open detail mode focused on dropoff section (when geofence passes)
   const handleOpenCompleteFlow = () => {
     if (!isWithinGeofence) return
@@ -1370,15 +1389,29 @@ export default function DriverActiveDeliveryPage() {
 
                 <Button
                   onClick={handleCompleteDelivery}
-                  disabled={submitComplianceMutation.isPending || completeTripMutation.isPending}
-                  className="w-full lime-btn rounded-2xl py-3 font-extrabold flex items-center justify-center gap-2"
+                  disabled={!dropoffReady || submitComplianceMutation.isPending || completeTripMutation.isPending}
+                  className={cn(
+                    "w-full rounded-2xl py-3 font-extrabold flex items-center justify-center gap-2 transition",
+                    dropoffReady
+                      ? "lime-btn"
+                      : "bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed"
+                  )}
                 >
                   {(submitComplianceMutation.isPending || completeTripMutation.isPending) ? 'Completing delivery...' : 'Complete Delivery'}
                   <ArrowForward className="w-5 h-5" />
                 </Button>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
-                  Upload photos + enter odometer, then tap to finish
-                </p>
+                {missingItems.length > 0 ? (
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
+                      Before completing: {missingItems.join(' \u00B7 ')}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
+                    All required fields complete. Tap to finish.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
