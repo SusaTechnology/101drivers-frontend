@@ -31,17 +31,15 @@ type GoogleGeocodeResponse = {
   error_message?: string;
 };
 
-type RouteType = {
-  distanceMeters?: number;
-  duration?: string;
-  staticDuration?: string;
-  polyline?: {
-    encodedPolyline?: string;
-  };
-};
-
 type GoogleRoutesResponse = {
-  routes?: RouteType[];
+  routes?: Array<{
+    distanceMeters?: number;
+    duration?: string;
+    staticDuration?: string;
+    polyline?: {
+      encodedPolyline?: string;
+    };
+  }>;
   error?: unknown;
 };
 
@@ -360,7 +358,7 @@ export class GoogleMapsService {
       },
       travelMode: "DRIVE",
       routingPreference: "TRAFFIC_AWARE",
-      computeAlternativeRoutes: true,
+      computeAlternativeRoutes: false,
       languageCode: "en-US",
       units: "IMPERIAL",
     };
@@ -431,28 +429,14 @@ export class GoogleMapsService {
       );
     }
 
-    // Pick the route with the SHORTEST distance, not the fastest time.
-    // Google returns multiple routes when computeAlternativeRoutes=true;
-    // route[0] is the "best" (fastest), but we need shortest miles for
-    // insurance-per-mile billing accuracy.
-    const allRoutes = data.routes ?? [];
-    const route = allRoutes.reduce<RouteType | undefined>(
-      (shortest, r) =>
-        (r.distanceMeters ?? Infinity) <
-        (shortest?.distanceMeters ?? Infinity)
-          ? r
-          : shortest,
-      undefined
-    );
+    const route = data.routes?.[0];
 
-    this.logger.debug(
-      `Routes parsed response: ${allRoutes.length} route(s) returned by Google. Picked shortest-distance route.`
-    );
-    this.logger.debug(`Selected route: ${JSON.stringify(route)}`);
+    this.logger.debug(`Routes parsed response: ${JSON.stringify(data)}`);
+    this.logger.debug(`Routes first route: ${JSON.stringify(route)}`);
 
     if (!route || typeof route.distanceMeters !== "number") {
       this.logger.warn(
-        `Route result incomplete from Google API. Tried ${allRoutes.length} routes, best: ${JSON.stringify(
+        `Route result incomplete from Google API. First route: ${JSON.stringify(
           route
         )}. Falling back to haversine estimate. origin=(${input.originLat}, ${input.originLng}), destination=(${input.destinationLat}, ${input.destinationLng})`
       );
