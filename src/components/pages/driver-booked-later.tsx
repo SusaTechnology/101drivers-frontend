@@ -13,6 +13,7 @@ import {
   Clock,
   Car,
   Calendar,
+  CalendarPlus,
   Navigation,
   Package,
   ChevronRight,
@@ -37,7 +38,18 @@ import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 import { BUSINESS_TZ, formatTime, formatDate, formatTimeRange } from '@/lib/timezone'
+import { openCalendarEvent } from '@/lib/calendar-utils'
 import DriverBottomNav from '../layout/DriverBottomNav'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
 
 
 const formatCurrency = (amount?: number | null): string => {
@@ -104,6 +116,34 @@ export default function DriverBookedLaterPage() {
   const handleSignOut = () => {
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
+  }
+
+  const [calendarDelivery, setCalendarDelivery] = useState<any>(null)
+
+  const handleConfirmCalendar = () => {
+    if (!calendarDelivery) return
+    try {
+      openCalendarEvent({
+        deliveryId: calendarDelivery.id,
+        pickupAddress: calendarDelivery.pickupAddress,
+        dropoffAddress: calendarDelivery.dropoffAddress,
+        pickupWindowStart: calendarDelivery.pickupWindowStart,
+        pickupWindowEnd: calendarDelivery.pickupWindowEnd,
+        dropoffWindowEnd: calendarDelivery.dropoffWindowEnd,
+        etaMinutes: calendarDelivery.etaMinutes,
+        payoutPreviewAmount: calendarDelivery.payoutPreviewAmount,
+        licensePlate: calendarDelivery.licensePlate,
+        vehicleMake: calendarDelivery.vehicleMake,
+        vehicleModel: calendarDelivery.vehicleModel,
+        vehicleColor: calendarDelivery.vehicleColor,
+        isUrgent: calendarDelivery.isUrgent,
+        serviceType: calendarDelivery.serviceType,
+      })
+    } catch {
+      toast.error('Cannot add to calendar', {
+        description: 'This delivery has no scheduled pickup time.',
+      })
+    }
   }
 
   // ── Loading state ──
@@ -273,14 +313,29 @@ export default function DriverBookedLaterPage() {
                           </p>
                         </div>
 
-                        {/* Payout + nav arrow */}
-                        <div className="text-right shrink-0">
+                        {/* Payout + calendar + nav arrow */}
+                        <div className="text-right shrink-0 flex flex-col items-end gap-1">
                           {d.payoutPreviewAmount != null && (
                             <p className="text-xl font-black text-green-600 dark:text-green-400">
                               {formatCurrency(d.payoutPreviewAmount)}
                             </p>
                           )}
-                          <ChevronRight className="w-5 h-5 text-slate-300 dark:text-slate-600 group-hover:text-primary transition mt-1 ml-auto" />
+                          <div className="flex items-center gap-1">
+                            {/* Add to Calendar — only when pickup time exists */}
+                            {d.pickupWindowStart && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setCalendarDelivery(d)
+                                }}
+                                className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                aria-label="Add to calendar"
+                              >
+                                <CalendarPlus className="w-4 h-4 text-slate-400 hover:text-primary transition" />
+                              </button>
+                            )}
+                            <ChevronRight className="w-5 h-5 text-slate-300 dark:text-slate-600 group-hover:text-primary transition" />
+                          </div>
                         </div>
                       </div>
 
@@ -356,6 +411,30 @@ export default function DriverBookedLaterPage() {
           </div>
         )}
       </main>
+
+      {/* Calendar confirmation dialog */}
+      <AlertDialog open={Boolean(calendarDelivery)} onOpenChange={(open) => !open && setCalendarDelivery(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add to Calendar</AlertDialogTitle>
+            <AlertDialogDescription>
+              {calendarDelivery?.pickupWindowStart
+                ? `Add this delivery (${formatDate(calendarDelivery.pickupWindowStart)} ${formatTimeRange(calendarDelivery.pickupWindowStart, calendarDelivery.pickupWindowEnd)}) to your calendar? You'll be redirected to your calendar app to confirm.`
+                : 'This delivery has no scheduled pickup time.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmCalendar}
+              disabled={!calendarDelivery?.pickupWindowStart}
+              className="bg-[#34C759] hover:bg-[#2db84e] text-white font-extrabold"
+            >
+              Add to Calendar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Floating action button: browse gigs ── */}
       {bookedDeliveries.length >= 0 && (

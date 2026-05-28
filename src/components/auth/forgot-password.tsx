@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod/v4";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,9 +83,17 @@ export function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
   
-  // Get email from URL params (passed from sign-in page)
+  // Get email and user-type from URL params (passed from sign-in page)
   const search = useSearch({ from: '/auth/reset-password' });
   const emailFromUrl = search?.email || "";
+  const fromUserType = search?.from || "dealer";
+
+  // Determine the correct sign-in route based on user type
+  const signinRoute = fromUserType === "driver"
+    ? "/driver-signin"
+    : fromUserType === "admin"
+      ? "/auth/admin-signin"
+      : "/auth/dealer-signin";
 
   const {
     register,
@@ -140,9 +149,9 @@ export function ResetPassword() {
         description: data.message || "You can now sign in with your new password.",
       });
       reset();
-      // Redirect to sign-in page after 1.5 seconds
+      // Redirect to the correct sign-in page after 1.5 seconds
       setTimeout(() => {
-        navigate({ to: "/auth/dealer-signin" }); // or driver? but we'll go to generic signin? Actually we might want to preserve userType? For now generic.
+        navigate({ to: signinRoute });
       }, 1500);
     },
     onError: (error) => {
@@ -159,6 +168,50 @@ export function ResetPassword() {
       newPassword: data.newPassword,
     };
     resetPasswordMutation.mutate(payload);
+  };
+
+  // Resend code cooldown state
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Resend code mutation (reuses forgot-password endpoint)
+  const resendCodeMutation = useDataMutation<
+    { message: string },
+    { email: string }
+  >({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/forgot-password`,
+    method: "POST",
+    fetchWithoutRefresh: true,
+    publicEndpoint: true,
+    onSuccess: () => {
+      toast.success("New code sent", {
+        description: "Check your email for the new verification code.",
+      });
+      // Start 60-second cooldown
+      setResendCooldown(60);
+    },
+    onError: (error) => {
+      toast.error("Failed to resend code", {
+        description: error.message || "Please try again.",
+      });
+    },
+  });
+
+  // Cooldown timer effect
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const handleResendCode = () => {
+    const email = emailFromUrl || watch("email");
+    if (!email) {
+      toast.error("Please enter your email first");
+      return;
+    }
+    resendCodeMutation.mutate({ email });
   };
 
   return (
@@ -212,7 +265,7 @@ export function ResetPassword() {
               className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
               asChild
             >
-              <Link to="/auth/dealer-signin">
+              <Link to={signinRoute}>
                 <ArrowLeft className="w-4 h-4" />
                 Back to Sign In
               </Link>
@@ -272,7 +325,7 @@ export function ResetPassword() {
                   asChild
                 >
                   <Link
-                    to="/auth/dealer-signin"
+                    to={signinRoute}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Back to Sign In
@@ -562,6 +615,27 @@ export function ResetPassword() {
               )}
             </Button>
 
+            {/* Resend Code */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
+                Didn't receive the code?{" "}
+                <Button
+                  variant="link"
+                  className="font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={resendCodeMutation.isPending || resendCooldown > 0}
+                >
+                  {resendCodeMutation.isPending
+                    ? "Sending..."
+                    : resendCooldown > 0
+                      ? `Resend in ${resendCooldown}s`
+                      : "Resend Code"
+                  }
+                </Button>
+              </p>
+            </div>
+
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
               <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
                 Remember your password?{" "}
@@ -571,7 +645,7 @@ export function ResetPassword() {
                   asChild
                   type="button"
                 >
-                  <Link to="/auth/dealer-signin">Sign in</Link>
+                  <Link to={signinRoute}>Sign in</Link>
                 </Button>
               </p>
             </div>
@@ -585,7 +659,10 @@ export function ResetPassword() {
             className="text-sm font-extrabold text-primary hover:opacity-90 transition"
             asChild
           >
-  
+            <Link to="/">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Home
+            </Link>
           </Button>
         </div>
       </main>

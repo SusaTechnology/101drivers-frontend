@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod/v4";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
@@ -18,7 +18,6 @@ import {
   Lock,
   Clock,
   Home,
-  LogIn as LoginIcon,
   X,
   Info,
   Settings,
@@ -281,11 +280,6 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       const { password, ...safeData } = variables;
       localStorage.setItem("dealerSignupData", JSON.stringify(safeData));
       setRegistrationComplete(true);
-      
-      // Auto-redirect to sign in page after 5 seconds
-      setTimeout(() => {
-        window.location.href = '/auth/dealer-signin';
-      }, 5000);
     },
     onError: (error) => {
       toast.error("Verification failed", {
@@ -1431,14 +1425,14 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     Application Submitted!
                   </h2>
                   <p className="text-lg text-slate-600 dark:text-slate-400 mt-3 max-w-md">
-                    Your account application has been received and is pending admin approval.
+                    Thank you. Our team has received your application. We will review your details and contact you within 1-2 business days to schedule a discussion call.
                   </p>
                   
                   {/* Status Badge */}
                   <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
                     <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                     <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                      Pending Approval
+                      Under Review
                     </span>
                   </div>
                 </div>
@@ -1456,22 +1450,22 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                       <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-3">
                         <span className="text-lg font-black text-blue-600 dark:text-blue-400">1</span>
                       </div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Admin Review</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Our team will verify your business details within 1-2 business days.</p>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Application Review</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Our team will carefully review your submitted information.</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
                       <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-3">
                         <span className="text-lg font-black text-purple-600 dark:text-purple-400">2</span>
                       </div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Email Confirmation</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">You'll receive an email once your account is approved.</p>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Discussion Call</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">We will contact you directly to schedule a call and walk you through the platform.</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
                       <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-3">
                         <span className="text-lg font-black text-green-600 dark:text-green-400">3</span>
                       </div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Start Delivering</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Access your dashboard and start creating deliveries!</p>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Account Activation</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Once approved, you'll receive access to your dashboard to start creating delivery orders.</p>
                     </div>
                   </div>
                 </div>
@@ -1483,22 +1477,14 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     <div>
                       <p className="text-sm font-bold text-slate-900 dark:text-white">While You Wait</p>
                       <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        You can bookmark the sign-in page. Once approved, you'll use your email and password to access your dashboard.
+                        Our team typically responds within 1-2 business days. If you handle high delivery volume, please have your monthly order numbers ready when we contact you — this allows us to offer you the best possible rates.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Action Buttons */}
+                {/* Action Button */}
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link
-                    to="/auth/dealer-signin"
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-bold hover:opacity-90 transition shadow-lg"
-                  >
-                    <LoginIcon className="w-5 h-5" />
-                    Go to Log In
-                  </Link>
-
                   <Link
                     to="/"
                     className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"

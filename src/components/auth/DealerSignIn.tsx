@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   MapPin,
   MailCheck,
+  Mail,
   Lock,
   Info,
   Menu,
@@ -22,6 +23,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { setAccessToken, setUser, startSessionKeepAlive } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
@@ -77,6 +86,8 @@ export function DealerSignIn({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
   const navigate = useNavigate();
 
   const isDealer = userType === "dealer";
@@ -247,14 +258,15 @@ export function DealerSignIn({
     fetchWithoutRefresh: true,
     publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint
     onSuccess: (data) => {
-      toast.success("Password reset email sent", {
-        description: data.message || "Please check your inbox for instructions.",
+      toast.success("Password reset code sent", {
+        description: data.message || "Check your email for the verification code.",
       });
-      // Pass email to reset-password page via URL params
-      navigate({ to: "/auth/reset-password", search: { email: usernameValue } });
+      setForgotPasswordOpen(false);
+      // Pass email and user-type context to reset-password page via URL params
+      navigate({ to: "/auth/reset-password", search: { email: forgotEmail, from: userType } });
     },
     onError: (error) => {
-      toast.error("Failed to send reset email", {
+      toast.error("Failed to send reset code", {
         description: error.message || "Please try again later.",
       });
     },
@@ -266,17 +278,27 @@ export function DealerSignIn({
   };
 
   const handleForgotPassword = () => {
-    if (!usernameValue) {
+    // Pre-fill modal email from the username field if available
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (usernameValue && emailRegex.test(usernameValue)) {
+      setForgotEmail(usernameValue);
+    } else {
+      setForgotEmail("");
+    }
+    setForgotPasswordOpen(true);
+  };
+
+  const handleSendResetCode = () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!forgotEmail.trim()) {
       toast.error("Please enter your email address");
       return;
     }
-    // Simple email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(usernameValue)) {
+    if (!emailRegex.test(forgotEmail.trim())) {
       toast.error("Please enter a valid email address");
       return;
     }
-    forgotPasswordMutation.mutate({ email: usernameValue });
+    forgotPasswordMutation.mutate({ email: forgotEmail.trim().toLowerCase() });
   };
 
   return (
@@ -496,15 +518,15 @@ export function DealerSignIn({
                     className="text-sm font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
                     type="button"
                     onClick={handleForgotPassword}
-                    disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                    disabled={loginMutation.isPending}
                   >
-                    {forgotPasswordMutation.isPending ? "Sending..." : "Forgot password?"}
+                    Forgot password?
                   </Button>
                 </div>
 
                 <Button
                   type="submit"
-                  disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                  disabled={loginMutation.isPending}
                   className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-14 text-base"
                 >
                   {loginMutation.isPending ? (
@@ -760,7 +782,7 @@ export function DealerSignIn({
                       <Checkbox
                         id="rememberMe"
                         className="rounded border-slate-300 text-primary focus:ring-primary/20"
-                        disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                        disabled={loginMutation.isPending}
                         {...register("rememberMe" as any)}
                       />
                       <Label htmlFor="rememberMe" className="text-sm font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
@@ -772,15 +794,15 @@ export function DealerSignIn({
                       className="text-sm font-extrabold text-primary hover:opacity-90 transition p-0 h-auto"
                       type="button"
                       onClick={handleForgotPassword}
-                      disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                      disabled={loginMutation.isPending}
                     >
-                      {forgotPasswordMutation.isPending ? "Sending..." : "Forgot password?"}
+                      Forgot password?
                     </Button>
                   </div>
 
                   <Button
                     type="submit"
-                    disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
+                    disabled={loginMutation.isPending}
                     className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-14 text-base"
                   >
                     {loginMutation.isPending ? (
@@ -824,6 +846,86 @@ export function DealerSignIn({
           </div>
         )}
       </main>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl p-0 overflow-hidden">
+          <div className="p-6 sm:p-8">
+            <DialogHeader className="text-left space-y-0 mb-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+                  <Mail className="text-primary w-5 h-5" />
+                </div>
+                <DialogTitle className="text-xl font-black text-slate-900 dark:text-white">
+                  Forgot Password?
+                </DialogTitle>
+              </div>
+              <DialogDescription className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                Enter your email address and we'll send you a verification code to reset your password.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email" className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Email Address
+                </Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSendResetCode();
+                    }
+                  }}
+                  disabled={forgotPasswordMutation.isPending}
+                  className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                  autoFocus
+                />
+              </div>
+
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                A 6-digit code will be sent to your email. The code expires in 15 minutes.
+              </p>
+            </div>
+          </div>
+
+          <div className="px-6 sm:px-8 py-4 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+            <Button
+              variant="outline"
+              className="rounded-xl px-5 h-11 text-sm font-bold"
+              onClick={() => setForgotPasswordOpen(false)}
+              disabled={forgotPasswordMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="rounded-xl px-5 h-11 text-sm font-bold lime-btn"
+              onClick={handleSendResetCode}
+              disabled={forgotPasswordMutation.isPending}
+            >
+              {forgotPasswordMutation.isPending ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  Send Code
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Footer */}
       <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">

@@ -17,6 +17,7 @@ import {
   Moon,
   MapPin,
   MessageSquare,
+  CalendarPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -39,6 +40,17 @@ import {
   GOOGLE_MAPS_SCRIPT_ID,
 } from '@/lib/google-maps-config'
 import { BUSINESS_TZ } from '@/lib/timezone'
+import { openCalendarEvent } from '@/lib/calendar-utils'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
 
 // ── Formatters ──────────────────────────────────────────────────────
 
@@ -360,6 +372,29 @@ export default function DriverJobDetailsPage() {
 
   const handleReportIssue = () => {
     navigate({ to: '/driver/issue-report', state: { deliveryId: jobId } as any })
+  }
+
+  const [showCalendarDialog, setShowCalendarDialog] = useState(false)
+
+  const handleConfirmCalendar = () => {
+    try {
+      openCalendarEvent({
+        deliveryId: job.deliveryId,
+        pickupAddress: job.pickupAddress,
+        dropoffAddress: job.dropoffAddress,
+        pickupWindowStart: job.pickupWindowStart,
+        pickupWindowEnd: job.pickupWindowEnd,
+        dropoffWindowEnd: job.dropoffWindowEnd,
+        etaMinutes: job.etaMinutes,
+        payoutPreviewAmount: job.payoutPreviewAmount,
+        isUrgent: job.isUrgent,
+        serviceType: job.serviceType,
+      })
+    } catch {
+      toast.error('Cannot add to calendar', {
+        description: 'This delivery has no scheduled pickup time.',
+      })
+    }
   }
 
   // Loading state
@@ -723,6 +758,42 @@ export default function DriverJobDetailsPage() {
             >
               <MessageSquare className="w-5 h-5 text-slate-500 dark:text-slate-400" />
             </Button>
+
+            {/* Add to Calendar — only when pickup time exists */}
+            {job.pickupWindowStart && (
+              <Button
+                onClick={() => setShowCalendarDialog(true)}
+                variant="outline"
+                className="shrink-0 w-12 h-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition p-0 flex items-center justify-center"
+                aria-label="Add to calendar"
+              >
+                <CalendarPlus className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+              </Button>
+            )}
+
+            {/* Calendar confirmation dialog */}
+            <AlertDialog open={showCalendarDialog} onOpenChange={setShowCalendarDialog}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Add to Calendar</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {job.pickupWindowStart
+                      ? `Add this delivery (${window}) to your calendar? You’ll be redirected to your calendar app to confirm.`
+                      : 'This delivery has no scheduled pickup time.'}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleConfirmCalendar}
+                    disabled={!job.pickupWindowStart}
+                    className="bg-[#34C759] hover:bg-[#2db84e] text-white font-extrabold"
+                  >
+                    Add to Calendar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             {/* Context-aware booking button */}
             <Button
