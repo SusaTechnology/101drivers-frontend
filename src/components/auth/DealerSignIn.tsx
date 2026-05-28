@@ -250,8 +250,8 @@ export function DealerSignIn({
       toast.success("Password reset email sent", {
         description: data.message || "Please check your inbox for instructions.",
       });
-      // Pass email to reset-password page via URL params
-      navigate({ to: "/auth/reset-password", search: { email: usernameValue } });
+      // Pass email and user-type context to reset-password page via URL params
+      navigate({ to: "/auth/reset-password", search: { email: usernameValue, from: userType } });
     },
     onError: (error) => {
       toast.error("Failed to send reset email", {

@@ -5,6 +5,7 @@ import { z } from 'zod'
 // Search params schema for reset-password route
 const resetPasswordSearchSchema = z.object({
   email: z.string().optional(),
+  from: z.enum(['dealer', 'driver', 'admin']).optional(),
 })
 
 export const Route = createFileRoute('/auth/reset-password')({

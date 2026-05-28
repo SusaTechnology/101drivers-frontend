@@ -99,12 +99,14 @@ export class MailService {
     fullName?: string | null;
     audience?: VerificationAudience;
   }): Promise<void> {
+    const normalizedEmail = params.toEmail.trim().toLowerCase();
     const displayName = params.fullName?.trim() || "there";
     const audience = params.audience ?? "DRIVER";
 
     const destinationUrl = this.getVerificationDestinationUrl(
       audience,
-      params.token
+      params.token,
+      audience === "PASSWORD_RESET" ? normalizedEmail : undefined
     );
 
     const subject =
@@ -208,7 +210,8 @@ export class MailService {
 
   private getVerificationDestinationUrl(
     audience: VerificationAudience,
-    token: string
+    token: string,
+    email?: string
   ): string {
     switch (audience) {
       case "BUSINESS_CUSTOMER":
@@ -216,7 +219,9 @@ export class MailService {
       case "PRIVATE_CUSTOMER":
         return `${this.appDomain}/quote-details?otp=${encodeURIComponent(token)}`;
       case "PASSWORD_RESET":
-        return `${this.appDomain}/auth/reset-password`;
+        const params = new URLSearchParams();
+        if (email) params.set("email", email);
+        return `${this.appDomain}/auth/reset-password?${params.toString()}`;
       case "DRIVER":
       default:
         return `${this.appDomain}/driver-onboarding?otp=${encodeURIComponent(token)}`;
