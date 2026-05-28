@@ -315,13 +315,13 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       icon: CheckCircle,
     },
     {
-      status: 'Booked (driver assigned)',
+      status: 'Booked',
       time: assignment?.assignedAt ? formatDateTime(assignment.assignedAt) : (deliveryData?.status !== 'LISTED' ? 'Pending' : '—'),
       completed: !!assignment,
       icon: Hourglass,
     },
     {
-      status: 'Active (pickup → in transit)',
+      status: 'Active',
       time: deliveryData?.trackingSession?.startedAt ? formatDateTime(deliveryData.trackingSession.startedAt) : (deliveryData?.status === 'ACTIVE' || deliveryData?.status === 'COMPLETED' ? 'In progress' : '—'),
       completed: !!deliveryData?.trackingSession?.startedAt,
       icon: Package,
@@ -1153,9 +1153,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                 <Card className="border-slate-200 dark:border-slate-800 rounded-3xl">
                   <CardHeader className="flex flex-row items-start justify-between gap-4">
                     <div>
-                      <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">Status timeline</CardTitle>
+                      <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">Delivery Status</CardTitle>
                       <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                        Track delivery status end-to-end (Requested → Booked → Active → Completed).
+                        Track your delivery status (Listed → Booked → Active → Completed). Expired requests and past deliveries can be found in History.
                       </p>
                     </div>
 
@@ -1191,10 +1191,10 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                                   <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.time}</div>
                                 </div>
                                 <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                                  {index === 0 && 'Confirmation email sent to dealer contact.'}
-                                  {index === 1 && 'Driver identity is visible after booking (name + photo + profile).'}
-                                  {index === 2 && 'Tracking begins when driver taps Start and ends on completion.'}
-                                  {index === 3 && 'Post-trip report available with photos and odometer evidence.'}
+                                  {index === 0 && 'Confirmation email sent to you.'}
+                                  {index === 1 && 'Driver has accepted your delivery. You can now see the driver\'s name, photo, and profile.'}
+                                  {index === 2 && 'Driver has picked up the vehicle and is heading to the drop-off location. Real-time tracking is now available.'}
+                                  {index === 3 && 'Delivery is complete. Final odometer reading and six vehicle pictures with geolocation are now available.'}
                                 </div>
                               </div>
                             </div>
