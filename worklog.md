@@ -66,3 +66,25 @@ Stage Summary:
 - MINOR: Frontend password validation stricter than backend (acceptable)
 - MINOR: File naming confusion (forgot-password.tsx exports ResetPassword)
 - Backend logic is correct: forgot-password API, reset-password API, email OTP generation/consumption all work properly
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix all reset password flow issues
+
+Work Log:
+- Fixed zod v4 import to v3 (@hookform/resolvers/zod) in forgot-password.tsx (ResetPassword form)
+- Added email parameter to PASSWORD_RESET email link in mail.service.ts (getVerificationDestinationUrl now accepts optional email param)
+- Added 'from' param (dealer/driver/admin) to DealerSignIn forgot password navigation
+- Added 'from' search param to reset-password route schema (z.enum)
+- All "Back to Sign In", "Sign in", and post-reset redirect links now route to correct sign-in page based on user type
+- Added "Resend Code" button with 60-second cooldown timer on reset password page
+- Fixed empty "Back to Home" button at bottom of reset password page (now has proper Link to "/")
+- Added RotateCcw icon import (unused for now, available for future use)
+- Pushed to both main and master branches
+
+Stage Summary:
+- All P0, P1, and P2 issues from the reset password analysis have been fixed
+- The forgot-password step 1 is handled inline on sign-in pages (no separate /forgot-password page needed)
+- Backend: email now pre-filled in reset link when user clicks from password reset email
+- Frontend: proper user-type context preserved through the entire flow
