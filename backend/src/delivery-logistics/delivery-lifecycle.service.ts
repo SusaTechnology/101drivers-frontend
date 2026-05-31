@@ -67,6 +67,7 @@ export class DeliveryLifecycleService {
    */
   private emitStatusChanged(deliveryId: string, status: string): void {
     if (!this.trackingGateway) return;
+    const gateway = this.trackingGateway;
     this.prisma.deliveryRequest
       .findUnique({
         where: { id: deliveryId },
@@ -78,14 +79,14 @@ export class DeliveryLifecycleService {
       .then((row) => {
         if (!row) return;
         try {
-          this.trackingGateway.emitStatusChange({
+          gateway.emitStatusChange({
             deliveryId,
             status,
             dealerId: row.customer?.approvedByUserId ?? undefined,
             shareToken: row.trackingShareToken ?? undefined,
           });
           if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
-            this.trackingGateway.emitFeedUpdate({ deliveryId, status });
+            gateway.emitFeedUpdate({ deliveryId, status });
           }
         } catch (err) {
           this.logger.warn("Failed to emit status change via WebSocket:", err);
@@ -705,6 +706,7 @@ async completeTrip(input: {
             select: {
               id: true,
               status: true,
+              trackingShareToken: true,
               trackingSession: {
                 select: {
                   id: true,
@@ -783,6 +785,7 @@ async completeTrip(input: {
           trackingSessionId,
           trackingPointCreated,
           drivenMiles,
+          shareToken: activeAssignment?.delivery?.trackingShareToken ?? null,
         },
       };
     });
