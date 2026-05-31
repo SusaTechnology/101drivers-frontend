@@ -1464,6 +1464,9 @@ private async resolveIndividualCustomerForCreate(
         etaMinutes: true,
         sameDayEligible: true,
         requiresOpsConfirmation: true,
+        pickupWindowStart: true,
+        pickupWindowEnd: true,
+        createdAt: true,
       },
     });
 
