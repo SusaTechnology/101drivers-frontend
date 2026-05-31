@@ -217,7 +217,13 @@ export default function DealerDashboard() {
     refetchInterval: socketConnected ? false : 30 * 1000,
   })
 
-
+  // ── Error-recovery polling: if socket connected but API is failing, keep retrying ──
+  useEffect(() => {
+    if (isError && socketConnected) {
+      const interval = setInterval(() => refetch(), 30 * 1000)
+      return () => clearInterval(interval)
+    }
+  }, [isError, socketConnected, refetch])
 
   const deliveries = useMemo(() => {
     if (!deliveriesData) return []

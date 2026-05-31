@@ -599,6 +599,14 @@ export default function DriverGigBoardPage() {
     refetchInterval: socketConnected ? false : 60 * 1000, // only poll when socket is down
   })
 
+  // ── Error-recovery polling: if socket connected but API is failing, keep retrying ──
+  useEffect(() => {
+    if (isError && socketConnected) {
+      const interval = setInterval(() => refetch(), 60 * 1000)
+      return () => clearInterval(interval)
+    }
+  }, [isError, socketConnected, refetch])
+
   const queryClient = useQueryClient()
 
   // ── SOCKET.IO: Join driver feed room ──
