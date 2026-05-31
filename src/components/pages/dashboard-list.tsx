@@ -591,6 +591,7 @@ export default function DriverGigBoardPage() {
     refetch
   } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${driverId}?${queryParams}`,
+    queryKey: ['driverFeed', driverId],
     noFilter: true,
     enabled: Boolean(driverId),
     staleTime: 0, // always refetch on mount so booked deliveries disappear immediately

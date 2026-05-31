@@ -208,6 +208,7 @@ export default function DealerDashboard() {
 
   const { data: deliveriesData, isLoading, isFetching, isError, error, refetch } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${dealerId}/deliveries`,
+    queryKey: ['deliveries', dealerId],
     noFilter: true,
     enabled: Boolean(dealerId),
     staleTime: 0,
