@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -125,11 +125,11 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
   }, [token])
 
   // ── SOCKET.IO: Listen for real-time location updates ──
-  useSocketEvent('delivery:location-update', (data: any) => {
+  const handleLocationUpdate = useCallback((data: any) => {
     setDriverPosition({ lat: data.lat, lng: data.lng })
-    // Append latest point to route
     setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
-  })
+  }, [])
+  useSocketEvent('delivery:location-update', handleLocationUpdate)
 
   // Handle token expiration
   useEffect(() => {

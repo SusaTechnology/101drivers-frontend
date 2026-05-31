@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
@@ -282,7 +282,7 @@ export default function DealerDashboard() {
   }, [dealerId])
 
   // ── SOCKET.IO: Listen for delivery status changes ──
-  useSocketEvent('delivery:status-changed', (data: any) => {
+  const handleStatusChanged = useCallback((data: any) => {
     if (data?.deliveryId && dealerId) {
       queryClient.setQueryData(deliveriesQueryKey, (old: any) => {
         if (!old) return old
@@ -291,7 +291,8 @@ export default function DealerDashboard() {
         )
       })
     }
-  })
+  }, [dealerId, deliveriesQueryKey, queryClient])
+  useSocketEvent('delivery:status-changed', handleStatusChanged)
 
   const stats = useMemo(() => ({
     active: deliveries.filter(d => d.status === 'ACTIVE').length,

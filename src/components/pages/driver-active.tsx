@@ -490,14 +490,15 @@ export default function DriverActiveDeliveryPage() {
   }, [deliveryId])
 
   // ── SOCKET.IO: Listen for status changes from backend (e.g. admin completes delivery) ──
-  useSocketEvent('delivery:status-changed', (data: any) => {
+  const handleDriverStatusChanged = useCallback((data: any) => {
     if (data.deliveryId === deliveryId) {
       toast.info(`Delivery status updated: ${data.status}`, {
         description: 'Refreshing delivery details...',
       })
       activeDeliveryQuery.refetch()
     }
-  })
+  }, [deliveryId, activeDeliveryQuery])
+  useSocketEvent('delivery:status-changed', handleDriverStatusChanged)
 
   // Mobile menu handling
   useEffect(() => {

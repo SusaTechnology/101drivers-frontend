@@ -54,7 +54,7 @@ export function socketConnect(token?: string | null): Socket | null {
     return null;
   }
 
-  // Don't reconnect if already connected to same URL
+  // Don't reconnect if already connected — preserve existing authenticated session
   if (socket?.connected) {
     return socket;
   }
