@@ -28,6 +28,7 @@ import {
   EnumSchedulingPolicyServiceType,
   EnumUserRoles,
 } from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
 import { Logger } from "@nestjs/common";
 import { TrackingGateway } from "../gateways/tracking.gateway";
 import { GoogleMapsService } from "./google-maps.service";

@@ -27,6 +27,8 @@ import { DriverJobFeedService } from "./driver-job-feed.service";
 
 import { ConfigService } from "@nestjs/config";
 
+type Tx = Prisma.TransactionClient;
+
 type StatusActor = {
   actorUserId?: string | null;
   actorRole?: EnumDeliveryStatusHistoryActorRole | null;
