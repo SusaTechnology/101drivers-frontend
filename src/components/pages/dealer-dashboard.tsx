@@ -83,7 +83,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import { BUSINESS_TZ } from '@/lib/timezone'
-import { useSocketEvent } from '@/hooks/useSocket'
+import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
 import { socketJoinDealer, socketLeaveDealer } from '@/lib/socket'
 
 // Helper functions
@@ -206,13 +206,15 @@ export default function DealerDashboard() {
 
   const isPrivateCustomer = customerProfile?.customerType === 'PRIVATE'
 
+  const socketConnected = useSocketConnected()
+
   const { data: deliveriesData, isLoading, isFetching, isError, error, refetch } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${dealerId}/deliveries`,
     queryKey: ['deliveries', dealerId],
     noFilter: true,
     enabled: Boolean(dealerId),
     staleTime: 0,
-    refetchInterval: 15000,
+    refetchInterval: socketConnected ? false : 30 * 1000,
   })
 
 

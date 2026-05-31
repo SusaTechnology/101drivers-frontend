@@ -100,7 +100,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
-import { useSocketEvent } from '@/hooks/useSocket'
+import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
 import { socketJoinDriverFeed, socketLeaveDriverFeed } from '@/lib/socket'
 import { useQueryClient } from '@tanstack/react-query'
 import MiniRouteMap from '@/components/map/MiniRouteMap'
@@ -580,6 +580,7 @@ export default function DriverGigBoardPage() {
   }
 
   const queryParams = buildQueryParams()
+  const socketConnected = useSocketConnected()
 
   // Data fetch with filters
   const {
@@ -595,7 +596,7 @@ export default function DriverGigBoardPage() {
     noFilter: true,
     enabled: Boolean(driverId),
     staleTime: 0, // always refetch on mount so booked deliveries disappear immediately
-    refetchInterval: 30 * 1000, // auto-refresh every 30 seconds
+    refetchInterval: socketConnected ? false : 60 * 1000, // only poll when socket is down
   })
 
   const queryClient = useQueryClient()

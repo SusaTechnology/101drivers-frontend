@@ -11,6 +11,39 @@ const TRACKING_NS = '/tracking';
 
 let socket: Socket | null = null;
 
+// ── Room tracking: auto re-join on reconnect ──
+type RoomEntry = { event: string; payload?: Record<string, string> };
+const activeRooms = new Set<string>();
+
+function trackRoom(roomKey: string, event: string, payload?: Record<string, string>): void {
+  activeRooms.add(roomKey);
+  // Store the event + payload so we can re-emit on reconnect
+  if (!socket) return;
+  (socket as any).__rooms = (socket as any).__rooms || {};
+  (socket as any).__rooms[roomKey] = { event, payload };
+}
+
+function untrackRoom(roomKey: string): void {
+  activeRooms.delete(roomKey);
+  if (socket) {
+    (socket as any).__rooms = (socket as any).__rooms || {};
+    delete (socket as any).__rooms[roomKey];
+  }
+}
+
+function rejoinAllRooms(): void {
+  if (!socket) return;
+  const rooms = (socket as any).__rooms || {};
+  for (const [roomKey, entry] of Object.entries<RoomEntry>(rooms)) {
+    if (entry.payload) {
+      socket.emit(entry.event, entry.payload);
+    } else {
+      socket.emit(entry.event);
+    }
+    console.log(`[Socket] Re-joined room: ${roomKey}`);
+  }
+}
+
 /**
  * Connect to the tracking WebSocket namespace with JWT auth.
  * Safe to call multiple times — won't create duplicate connections.
@@ -46,6 +79,8 @@ export function socketConnect(token?: string | null): Socket | null {
 
   socket.on('connect', () => {
     console.log('[Socket] Connected to tracking namespace');
+    // Re-join all tracked rooms after reconnect
+    rejoinAllRooms();
   });
 
   socket.on('disconnect', (reason) => {
@@ -64,6 +99,7 @@ export function socketConnect(token?: string | null): Socket | null {
  * Safe to call even if not connected.
  */
 export function socketDisconnect(): void {
+  activeRooms.clear();
   if (socket) {
     socket.disconnect();
     socket = null;
@@ -78,11 +114,19 @@ export function getSocket(): Socket | null {
 }
 
 /**
+ * Whether the socket is currently connected.
+ */
+export function isSocketConnected(): boolean {
+  return socket?.connected ?? false;
+}
+
+/**
  * Join a delivery room (authenticated).
  * If socket is still connecting, queues the join for when it connects.
  */
 export function socketJoinDelivery(deliveryId: string): void {
   if (!socket) return;
+  trackRoom(`delivery:${deliveryId}`, 'join:delivery', { deliveryId });
   if (socket.connected) {
     socket.emit('join:delivery', { deliveryId });
   } else {
@@ -96,6 +140,7 @@ export function socketJoinDelivery(deliveryId: string): void {
  * Leave a delivery room.
  */
 export function socketLeaveDelivery(deliveryId: string): void {
+  untrackRoom(`delivery:${deliveryId}`);
   if (socket?.connected) {
     socket.emit('leave:delivery', { deliveryId });
   }
@@ -107,6 +152,7 @@ export function socketLeaveDelivery(deliveryId: string): void {
  */
 export function socketJoinPublic(token: string): void {
   if (!socket) return;
+  trackRoom(`public:${token}`, 'join:public', { token });
   if (socket.connected) {
     socket.emit('join:public', { token });
   } else {
@@ -121,6 +167,7 @@ export function socketJoinPublic(token: string): void {
  * Leave a public tracking room.
  */
 export function socketLeavePublic(token: string): void {
+  untrackRoom(`public:${token}`);
   if (socket?.connected) {
     socket.emit('leave:public', { token });
   }
@@ -131,6 +178,7 @@ export function socketLeavePublic(token: string): void {
  */
 export function socketJoinDealer(dealerId: string): void {
   if (!socket) return;
+  trackRoom(`dealer:${dealerId}`, 'join:dealer', { dealerId });
   if (socket.connected) {
     socket.emit('join:dealer', { dealerId });
   } else {
@@ -144,6 +192,7 @@ export function socketJoinDealer(dealerId: string): void {
  * Leave a dealer dashboard room.
  */
 export function socketLeaveDealer(dealerId: string): void {
+  untrackRoom(`dealer:${dealerId}`);
   if (socket?.connected) {
     socket.emit('leave:dealer', { dealerId });
   }
@@ -154,6 +203,7 @@ export function socketLeaveDealer(dealerId: string): void {
  */
 export function socketJoinDriverFeed(): void {
   if (!socket) return;
+  trackRoom('driver-feed', 'join:driver-feed');
   if (socket.connected) {
     socket.emit('join:driver-feed');
   } else {
@@ -167,6 +217,7 @@ export function socketJoinDriverFeed(): void {
  * Leave the driver gig board feed room.
  */
 export function socketLeaveDriverFeed(): void {
+  untrackRoom('driver-feed');
   if (socket?.connected) {
     socket.emit('leave:driver-feed');
   }

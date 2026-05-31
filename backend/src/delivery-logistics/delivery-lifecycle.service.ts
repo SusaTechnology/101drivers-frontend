@@ -63,35 +63,27 @@ export class DeliveryLifecycleService {
 
   /**
    * Emit socket events after a status change (fire-and-forget).
-   * Fetches dealerId and shareToken for room targeting.
+   * Single query with Prisma include to fetch dealerId + shareToken for room targeting.
    */
   private emitStatusChanged(deliveryId: string, status: string): void {
     if (!this.trackingGateway) return;
-    // Fire-and-forget: fetch dealerId + shareToken so gateway can target rooms
     this.prisma.deliveryRequest
       .findUnique({
         where: { id: deliveryId },
-        select: { customerId: true, trackingShareToken: true },
+        select: {
+          trackingShareToken: true,
+          customer: { select: { approvedByUserId: true } },
+        },
       })
-      .then(async (row) => {
+      .then((row) => {
         if (!row) return;
-        // Resolve dealer (approvedByUserId) from the customer
-        let dealerId: string | undefined;
-        try {
-          const customer = await this.prisma.customer.findUnique({
-            where: { id: row.customerId },
-            select: { approvedByUserId: true },
-          });
-          dealerId = customer?.approvedByUserId ?? undefined;
-        } catch { /* best-effort */ }
         try {
           this.trackingGateway.emitStatusChange({
             deliveryId,
             status,
-            dealerId,
+            dealerId: row.customer?.approvedByUserId ?? undefined,
             shareToken: row.trackingShareToken ?? undefined,
           });
-          // Also broadcast to driver feed for relevant transitions
           if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
             this.trackingGateway.emitFeedUpdate({ deliveryId, status });
           }
@@ -99,9 +91,7 @@ export class DeliveryLifecycleService {
           this.logger.warn("Failed to emit status change via WebSocket:", err);
         }
       })
-      .catch(() => {
-        // Silently ignore — socket is best-effort, polling still works as fallback
-      });
+      .catch(() => {});
   }
 
   private readonly allowedTransitions: Record<
