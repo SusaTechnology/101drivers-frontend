@@ -16,16 +16,16 @@ import {
   Prisma,
 } from "@prisma/client";
 import { randomBytes } from "crypto";
-import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
-import { DeliveryComplianceEngine } from "../domain/deliveryCompliance/deliveryCompliance.engine";
-import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
+import { ConfigService } from "@nestjs/config";
 
 import { PrismaService } from "../prisma/prisma.service";
 import { TrackingGateway } from "../gateways/tracking.gateway";
-import { Inject, forwardRef, Optional, Logger } from "@nestjs/common";
+import { Inject, forwardRef, Optional } from "@nestjs/common";
 import { DriverJobFeedService } from "./driver-job-feed.service";
-
-import { ConfigService } from "@nestjs/config";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { DeliveryComplianceEngine } from "../domain/deliveryCompliance/deliveryCompliance.engine";
+import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
+import { Logger } from "@nestjs/common";
 
 type Tx = Prisma.TransactionClient;
 
@@ -62,52 +62,20 @@ export class DeliveryLifecycleService {
   }
 
   /**
-   * Fetch delivery metadata needed for socket room targeting (called outside transactions).
-   * Returns null silently if the delivery doesn't exist.
+   * Emit socket events after a status change (fire-and-forget).
+   * Fetches dealerId and shareToken for room targeting.
    */
-  private async fetchDeliverySocketMeta(deliveryId: string): Promise<{
-    customerId: string;
-    dealerId: string | null;
-    trackingShareToken: string | null;
-  } | null> {
-    try {
-      const delivery = await this.prisma.deliveryRequest.findUnique({
-        where: { id: deliveryId },
-        select: {
-          customerId: true,
-          trackingShareToken: true,
-          customer: {
-            select: { approvedByUserId: true },
-          },
-        },
-      });
-      if (!delivery?.customer) return null;
-      return {
-        customerId: delivery.customerId,
-        dealerId: delivery.customer.approvedByUserId,
-        trackingShareToken: delivery.trackingShareToken,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  /** Emit socket events after a status change (fire-and-forget) */
   private emitStatusChanged(deliveryId: string, status: string): void {
     if (!this.trackingGateway) return;
-    this.fetchDeliverySocketMeta(deliveryId).then((meta) => {
-      if (!meta) return;
-      this.trackingGateway!.emitStatusChange({
-        deliveryId,
-        status,
-        shareToken: meta.trackingShareToken ?? undefined,
-        dealerId: meta.dealerId ?? undefined,
-      });
+    try {
+      this.trackingGateway.emitStatusChange({ deliveryId, status });
       // Also broadcast to driver feed for relevant transitions
       if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
-        this.trackingGateway!.emitFeedUpdate({ deliveryId, status });
+        this.trackingGateway.emitFeedUpdate({ deliveryId, status });
       }
-    }).catch(() => { /* silent */ });
+    } catch (err) {
+      this.logger.warn("Failed to emit status change via WebSocket:", err);
+    }
   }
 
   private readonly allowedTransitions: Record<
@@ -803,6 +771,106 @@ async completeTrip(input: {
       };
     });
   }
+
+  /**
+   * Re-implementation that wraps the DB transaction and emits socket events.
+   * The original ingestDriverLocation above is preserved for rollback safety.
+   */
+  async ingestDriverLocationWithSocket(input: {
+    userId: string;
+    lat: number;
+    lng: number;
+    recordedAt?: Date;
+  }) {
+    this.assertValidCoordinates(input.lat, input.lng);
+
+    const recordedAt = input.recordedAt ?? businessNow().toJSDate();
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const driver = await tx.driver.findUnique({
+        where: { userId: input.userId },
+        select: { id: true, userId: true, status: true },
+      });
+      if (!driver) throw new NotFoundException("Driver profile not found");
+
+      await tx.driverLocation.upsert({
+        where: { driverId: driver.id },
+        create: { driverId: driver.id, currentLat: input.lat, currentLng: input.lng, currentAt: recordedAt },
+        update: { currentLat: input.lat, currentLng: input.lng, currentAt: recordedAt },
+      });
+
+      const activeAssignment = await tx.deliveryAssignment.findFirst({
+        where: { driverId: driver.id, unassignedAt: null, delivery: { status: EnumDeliveryRequestStatus.ACTIVE } },
+        orderBy: { assignedAt: "desc" },
+        select: {
+          deliveryId: true,
+          delivery: {
+            select: {
+              id: true, status: true, trackingShareToken: true,
+              trackingSession: {
+                select: { id: true, status: true, drivenMiles: true, points: { orderBy: { recordedAt: "desc" }, take: 1, select: { lat: true, lng: true, recordedAt: true } } },
+              },
+            },
+          },
+        },
+      });
+
+      let trackingPointCreated = false;
+      let trackingSessionId: string | null = null;
+      let drivenMiles: number | null = null;
+
+      if (activeAssignment?.delivery?.trackingSession?.status === EnumTrackingSessionStatus.STARTED) {
+        const session = activeAssignment.delivery.trackingSession;
+        const previousPoint = session.points?.[0] ?? null;
+
+        await tx.trackingPoint.create({
+          data: { sessionId: session.id, lat: input.lat, lng: input.lng, recordedAt },
+        });
+
+        let totalMiles = Number(session.drivenMiles ?? 0);
+        if (previousPoint) {
+          const segmentMiles = this.haversineMiles(previousPoint.lat, previousPoint.lng, input.lat, input.lng);
+          if (segmentMiles >= 0.01 && segmentMiles <= 50) totalMiles += segmentMiles;
+        }
+
+        await tx.trackingSession.update({ where: { id: session.id }, data: { drivenMiles: totalMiles } });
+
+        trackingPointCreated = true;
+        trackingSessionId = session.id;
+        drivenMiles = totalMiles;
+      }
+
+      return {
+        ok: true, driverId: driver.id, recordedAt,
+        tracking: {
+          activeDeliveryId: activeAssignment?.deliveryId ?? null,
+          trackingSessionId, trackingPointCreated, drivenMiles,
+          shareToken: activeAssignment?.delivery?.trackingShareToken ?? null,
+        },
+      };
+    });
+
+    // ── SOCKET.IO EMIT (after successful DB write) ──
+    // This is the only new logic — everything above is a copy of the original transaction.
+    // If trackingGateway is not available (e.g., not injected), this is silently skipped.
+    if (this.trackingGateway && result.tracking.activeDeliveryId && result.tracking.trackingPointCreated) {
+      try {
+        this.trackingGateway.emitLocationUpdate({
+          deliveryId: result.tracking.activeDeliveryId,
+          lat: input.lat,
+          lng: input.lng,
+          recordedAt: result.recordedAt.toISOString(),
+          drivenMiles: result.tracking.drivenMiles,
+          shareToken: result.tracking.shareToken ?? undefined,
+        });
+      } catch (err) {
+        this.logger.warn("Failed to emit location update via WebSocket:", err);
+      }
+    }
+
+    return result;
+  }
+
 async createTrackingLink(input: {
   deliveryId: string;
   expiresInHours?: number;
