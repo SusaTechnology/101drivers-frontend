@@ -134,7 +134,7 @@ const statusConfig = {
 export default function DealerDashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState<'ACTIVE' | 'LISTED' | 'BOOKED' | 'HISTORY'>('ACTIVE')
+  const [activeFilter, setActiveFilter] = useState<'LISTED' | 'BOOKED' | 'ACTIVE' | 'EXPIRED' | 'HISTORY'>('LISTED')
   const [showAll, setShowAll] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -210,7 +210,8 @@ export default function DealerDashboard() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${dealerId}/deliveries`,
     noFilter: true,
     enabled: Boolean(dealerId),
-    refetchInterval: 120 * 1000, // socket is primary (120s fallback)
+    staleTime: 0,
+    refetchInterval: 15000,
   })
 
 
@@ -219,12 +220,16 @@ export default function DealerDashboard() {
     if (!deliveriesData) return []
     return deliveriesData.filter((item: any) => item.status !== 'DRAFT').map((item: any) => {
       const assignment = item.assignments?.[0]
+      const driverRatings = assignment?.driver?.ratingsReceived || []
+      const driverAvgRating = driverRatings.length > 0
+        ? driverRatings.reduce((sum: number, r: any) => sum + r.stars, 0) / driverRatings.length
+        : null
       const driver = assignment?.driver ? {
         id: assignment.driver.id,
         name: assignment.driver.user?.fullName || assignment.driver.name || 'Driver',
         phone: assignment.driver.phone,
-        rating: assignment.driver.rating,
-        avatar: assignment.driver.user?.avatar || assignment.driver.avatar,
+        rating: driverAvgRating,
+        avatar: assignment.driver.selfiePhotoUrl || assignment.driver.profilePhotoUrl || assignment.driver.user?.avatar || assignment.driver.avatar,
         verified: assignment.driver.status === 'APPROVED',
       } : null
 
@@ -296,8 +301,9 @@ export default function DealerDashboard() {
   const filteredDeliveries = useMemo(() => {
     let result = deliveries
     if (activeFilter === 'ACTIVE') result = result.filter(d => d.status === 'ACTIVE')
-    else if (activeFilter === 'LISTED') result = result.filter(d => d.status === 'LISTED' || d.status === 'QUOTED' || d.status === 'EXPIRED')
+    else if (activeFilter === 'LISTED') result = result.filter(d => d.status === 'LISTED' || d.status === 'QUOTED')
     else if (activeFilter === 'BOOKED') result = result.filter(d => d.status === 'BOOKED')
+    else if (activeFilter === 'EXPIRED') result = result.filter(d => d.status === 'EXPIRED')
     else if (activeFilter === 'HISTORY') result = result.filter(d => ['COMPLETED', 'CANCELLED'].includes(d.status))
     if (!showAll && dealerId) result = result.filter(d => d.createdById === dealerId)
     if (dateFrom) result = result.filter(d => new Date(d.pickupWindowStart || d.createdAt) >= dateFrom)
@@ -400,12 +406,6 @@ export default function DealerDashboard() {
             <div className="leading-tight"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: BUSINESS_TZ })}</div><div className="text-sm font-extrabold text-slate-900 dark:text-white">{isPrivateCustomer ? 'My Deliveries' : 'Delivery Dashboard'}</div></div>
           </div>
           <div className="flex items-center gap-2">
-            {isFetching && !isLoading && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-lime-50 dark:bg-lime-950/30 border border-lime-200 dark:border-lime-800">
-                <RefreshCw className="h-3 w-3 text-lime-600 animate-spin" />
-                <span className="text-[10px] font-bold text-lime-700 dark:text-lime-400 hidden sm:inline">Syncing</span>
-              </div>
-            )}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <span className={cn("text-xs font-bold transition-colors", !showAll ? "text-lime-600" : "text-slate-400")}>My</span>
               <Switch checked={showAll} onCheckedChange={setShowAll} className="data-[state=checked]:bg-lime-500" />
@@ -570,7 +570,7 @@ export default function DealerDashboard() {
       <div className="px-4 py-3">
         <div className="max-w-[980px] mx-auto">
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {[{ id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: stats.active }, { id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: stats.listed + (stats.expired ?? 0) }, { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: stats.booked }, { id: 'HISTORY', label: 'History', icon: <History className="h-4 w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CANCELLED'].includes(d.status)).length }].map((tab) => (
+            {[{ id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: stats.listed }, { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: stats.booked }, { id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: stats.active }, { id: 'EXPIRED', label: 'Expired', icon: <Timer className="h-4 w-4" />, count: stats.expired }, { id: 'HISTORY', label: 'History', icon: <History className="h-4 w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CANCELLED'].includes(d.status)).length }].map((tab) => (
               <Button key={tab.id} variant={activeFilter === tab.id ? "default" : "outline"} className={cn("flex items-center gap-2 px-4 py-2 rounded-full h-auto shrink-0", activeFilter === tab.id ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "bg-white dark:bg-slate-900")} onClick={() => setActiveFilter(tab.id)}>
                 {tab.icon}<span className="font-bold">{tab.label}</span>{tab.count > 0 && <Badge variant="secondary" className="ml-1 px-2 py-0.5 text-xs rounded-full">{tab.count}</Badge>}
               </Button>
@@ -586,10 +586,10 @@ export default function DealerDashboard() {
           {filteredDeliveries.length === 0 ? (
             <Card className="border-slate-200 dark:border-slate-800 rounded-3xl">
               <CardContent className="p-8 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">{activeFilter === 'ACTIVE' ? <Navigation className="h-8 w-8 text-slate-400" /> : activeFilter === 'HISTORY' ? <History className="h-8 w-8 text-slate-400" /> : <Package className="h-8 w-8 text-slate-400" />}</div>
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">{activeFilter === 'ACTIVE' ? <Navigation className="h-8 w-8 text-slate-400" /> : activeFilter === 'HISTORY' ? <History className="h-8 w-8 text-slate-400" /> : activeFilter === 'EXPIRED' ? <Timer className="h-8 w-8 text-slate-400" /> : <Package className="h-8 w-8 text-slate-400" />}</div>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">No {activeFilter.toLowerCase()} deliveries</h3>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{activeFilter === 'ACTIVE' ? "You don't have any active deliveries right now" : activeFilter === 'HISTORY' ? "Completed and past deliveries will appear here" : "Create a new delivery to get started"}</p>
-                {activeFilter !== 'HISTORY' && <Link to="/dealer-create-delivery" className="inline-flex items-center gap-2 mt-6 px-6 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"><Plus className="h-5 w-5" />New Delivery</Link>}
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{activeFilter === 'ACTIVE' ? "You don't have any active deliveries right now" : activeFilter === 'HISTORY' ? "Completed and past deliveries will appear here" : activeFilter === 'EXPIRED' ? "Expired listings will appear here. You can reactivate them." : "Create a new delivery to get started"}</p>
+                {!['HISTORY', 'EXPIRED'].includes(activeFilter) && <Link to="/dealer-create-delivery" className="inline-flex items-center gap-2 mt-6 px-6 py-3 rounded-2xl bg-lime-500 text-slate-950 font-bold hover:bg-lime-600 transition"><Plus className="h-5 w-5" />New Delivery</Link>}
               </CardContent>
             </Card>
           ) : (
@@ -710,7 +710,7 @@ export default function DealerDashboard() {
       </Dialog>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 safe-area-pb">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 safe-bottom">
         <div className="max-w-[980px] mx-auto px-4">
           <div className="flex items-center justify-around h-16">
             <Link to="/dealer-create-delivery" className="flex flex-col items-center gap-1 py-2 px-4 text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition"><Plus className="h-6 w-6" /><span className="text-[10px] font-bold uppercase tracking-wider">Create</span></Link>
