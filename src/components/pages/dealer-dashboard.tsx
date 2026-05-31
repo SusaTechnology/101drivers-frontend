@@ -279,7 +279,6 @@ export default function DealerDashboard() {
     })
   }, [deliveriesData])
 
-  const deliveriesQueryKey = ['deliveries', dealerId]
 
   // ── SOCKET.IO: Join dealer room for real-time updates ──
   useEffect(() => {
@@ -290,14 +289,9 @@ export default function DealerDashboard() {
   // ── SOCKET.IO: Listen for delivery status changes ──
   const handleStatusChanged = useCallback((data: any) => {
     if (data?.deliveryId && dealerId) {
-      queryClient.setQueryData(deliveriesQueryKey, (old: any) => {
-        if (!old) return old
-        return old.map((d: any) =>
-          d.id === data.deliveryId ? { ...d, status: data.status } : d
-        )
-      })
+      queryClient.invalidateQueries({ queryKey: ['deliveries', dealerId] })
     }
-  }, [dealerId, deliveriesQueryKey, queryClient])
+  }, [dealerId, queryClient])
   useSocketEvent('delivery:status-changed', handleStatusChanged)
 
   const stats = useMemo(() => ({

@@ -73,7 +73,7 @@ export class DeliveryLifecycleService {
         where: { id: deliveryId },
         select: {
           trackingShareToken: true,
-          customer: { select: { approvedByUserId: true } },
+          customer: { select: { id: true } },
         },
       })
       .then((row) => {
@@ -82,7 +82,7 @@ export class DeliveryLifecycleService {
           gateway.emitStatusChange({
             deliveryId,
             status,
-            dealerId: row.customer?.approvedByUserId ?? undefined,
+            dealerId: row.customer?.id ?? undefined,
             shareToken: row.trackingShareToken ?? undefined,
           });
           if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
