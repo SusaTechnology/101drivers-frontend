@@ -71,16 +71,25 @@ export class DeliveryLifecycleService {
     this.prisma.deliveryRequest
       .findUnique({
         where: { id: deliveryId },
-        select: { dealerId: true, shareToken: true },
+        select: { customerId: true, trackingShareToken: true },
       })
-      .then((row) => {
+      .then(async (row) => {
         if (!row) return;
+        // Resolve dealer (approvedByUserId) from the customer
+        let dealerId: string | undefined;
+        try {
+          const customer = await this.prisma.customer.findUnique({
+            where: { id: row.customerId },
+            select: { approvedByUserId: true },
+          });
+          dealerId = customer?.approvedByUserId ?? undefined;
+        } catch { /* best-effort */ }
         try {
           this.trackingGateway.emitStatusChange({
             deliveryId,
             status,
-            dealerId: row.dealerId ?? undefined,
-            shareToken: row.shareToken ?? undefined,
+            dealerId,
+            shareToken: row.trackingShareToken ?? undefined,
           });
           // Also broadcast to driver feed for relevant transitions
           if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
