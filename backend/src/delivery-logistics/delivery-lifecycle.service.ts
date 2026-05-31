@@ -67,15 +67,32 @@ export class DeliveryLifecycleService {
    */
   private emitStatusChanged(deliveryId: string, status: string): void {
     if (!this.trackingGateway) return;
-    try {
-      this.trackingGateway.emitStatusChange({ deliveryId, status });
-      // Also broadcast to driver feed for relevant transitions
-      if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
-        this.trackingGateway.emitFeedUpdate({ deliveryId, status });
-      }
-    } catch (err) {
-      this.logger.warn("Failed to emit status change via WebSocket:", err);
-    }
+    // Fire-and-forget: fetch dealerId + shareToken so gateway can target rooms
+    this.prisma.deliveryRequest
+      .findUnique({
+        where: { id: deliveryId },
+        select: { dealerId: true, shareToken: true },
+      })
+      .then((row) => {
+        if (!row) return;
+        try {
+          this.trackingGateway.emitStatusChange({
+            deliveryId,
+            status,
+            dealerId: row.dealerId ?? undefined,
+            shareToken: row.shareToken ?? undefined,
+          });
+          // Also broadcast to driver feed for relevant transitions
+          if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
+            this.trackingGateway.emitFeedUpdate({ deliveryId, status });
+          }
+        } catch (err) {
+          this.logger.warn("Failed to emit status change via WebSocket:", err);
+        }
+      })
+      .catch(() => {
+        // Silently ignore — socket is best-effort, polling still works as fallback
+      });
   }
 
   private readonly allowedTransitions: Record<
