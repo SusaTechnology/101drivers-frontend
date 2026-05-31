@@ -88,3 +88,24 @@ Stage Summary:
 - The forgot-password step 1 is handled inline on sign-in pages (no separate /forgot-password page needed)
 - Backend: email now pre-filled in reset link when user clicks from password reset email
 - Frontend: proper user-type context preserved through the entire flow
+---
+Task ID: 1-3
+Agent: Main Agent
+Task: Restore driver-active.tsx, PublicTrackPage.tsx, dashboard-list.tsx to user original + keep socket additions
+
+Work Log:
+- Analyzed git diff between pre-Phase2 commit (02d4262) and HEAD to identify all unauthorized changes
+- Wrote user exact original driver-active.tsx (restored: useCallback, image-compress import, Inbox icon, socket var naming, console.warn, multi-line socket join/leave, toast description, photo compression upload, await locationPing before complete-trip, safe-bottom, GPS indicator in header, Back to Navigation, useCallback dismiss handler, showCompletion guard, safe-area-inset-top, footer, Vehicle Drop-off Proof title, correct navigate path)
+- Wrote user exact original PublicTrackPage.tsx (restored: socketDisconnect import, multi-line socket cleanup with Dont disconnect comment, removed unauthorized delivery:status-changed listener)
+- Fixed dashboard-list.tsx refetchInterval from 120*1000 back to 30*1000
+- Committed as 3b3b707, pushed to both master and main
+
+Stage Summary:
+- All 6 frontend files now restored to user original with ONLY approved Phase 2 socket additions
+- dealer-dashboard.tsx: Fixed in commit 64ad075 (previous session)
+- socket.ts: Fixed in commit 64ad075 (previous session)  
+- useSocket.ts: Fixed in commit 64ad075 (previous session)
+- driver-active.tsx: Fixed in commit 3b3b707 (this session)
+- PublicTrackPage.tsx: Fixed in commit 3b3b707 (this session)
+- dashboard-list.tsx: Fixed in commit 3b3b707 (this session)
+---
