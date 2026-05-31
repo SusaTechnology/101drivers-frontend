@@ -1,5 +1,7 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinDelivery, socketLeaveDelivery, getSocket } from '@/lib/socket'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
@@ -71,6 +73,7 @@ import {
   Save,
   Maximize,
   Minimize,
+  Inbox,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -95,10 +98,10 @@ import {
 } from '@/lib/tanstack/dataQuery'
 import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
+import { compressPhoto, compressPhotos, buildCompressedUploadPayload } from '@/lib/image-compress'
+
 import { BUSINESS_TZ } from '@/lib/timezone'
 import DriverBottomNav from '../layout/DriverBottomNav'
-import { useSocketEvent } from '@/hooks/useSocket'
-import { socketJoinDelivery, socketLeaveDelivery, getSocket } from '@/lib/socket'
 
 // Default delivery data (fallback while loading) – updated to match API shape
 const MOCK_DELIVERY = {
@@ -149,7 +152,7 @@ const MOCK_DELIVERY = {
     },
     {
       id: 3,
-      title: 'Drop-off evidence',
+      title: 'Vehicle Drop-off Proof',
       description: 'Drop-off photos + odometer end required to complete.',
       time: 'Locked',
       icon: RadioButtonUnchecked,
@@ -258,7 +261,7 @@ export default function DriverActiveDeliveryPage() {
     noFilter: true,
     enabled: Boolean(driverId),
     staleTime: 0, // always refetch on mount — critical after start-trip navigation
-    refetchInterval: 60000, // socket is primary (60s fallback)
+    refetchInterval: 60000, // SOCKET.IO: slowed from 10s to 60s as fallback (location via socket)
     onError: (error) => {
       toast.error('Failed to fetch deliveries')
     },
@@ -300,7 +303,7 @@ export default function DriverActiveDeliveryPage() {
 
   // ==================== MUTATIONS & QUERIES ====================
 
-  // NEW: Location ping mutation (every 3 seconds)
+  // Location ping mutation (every 10 seconds via interval)
   const locationPingMutation = useDataMutation<any, { lat: number; lng: number; recordedAt: string }>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/location-ping`,
     method: 'POST',
@@ -419,7 +422,8 @@ export default function DriverActiveDeliveryPage() {
     )
   }, [isLoaded, pickupCoords, dropoffCoords])
 
-  // Send location ping (used by interval and manual check-in)
+  // Send location ping — prefers Socket.io (lightweight), falls back to HTTP POST
+  // Returns a Promise so the caller can await it (needed before complete-trip)
   const sendLocationPing = (position: google.maps.LatLngLiteral): Promise<void> => {
     return new Promise((resolve) => {
       if (!deliveryId) { resolve(); return }
@@ -428,10 +432,15 @@ export default function DriverActiveDeliveryPage() {
         lng: position.lng,
         recordedAt: new Date().toISOString(),
       }
-      const sock = getSocket()
-      if (sock?.connected) {
-        sock.emit('driver:location', payload, (ack: any) => {
+
+      // Prefer socket.io — open WebSocket connection, no HTTP overhead
+      const socket = getSocket()
+      if (socket?.connected) {
+        socket.emit('driver:location', payload, (ack: any) => {
+          // Ack callback — server confirms receipt (fire-and-forget if no ack)
           if (ack?.ok === false) {
+            // Socket server rejected — fall back to HTTP
+            console.warn('[Driver] Socket location rejected, falling back to HTTP')
             locationPingMutation.mutate(payload, {
               onSuccess: () => resolve(),
               onError: () => resolve(),
@@ -440,45 +449,55 @@ export default function DriverActiveDeliveryPage() {
             resolve()
           }
         })
+        // Timeout fallback: if server doesn't ack within 3s, don't block
         setTimeout(() => resolve(), 3000)
       } else {
+        // Socket not connected — use HTTP POST as fallback
         locationPingMutation.mutate(payload, {
           onSuccess: () => resolve(),
-          onError: () => resolve(),
+          onError: () => resolve(), // resolve even on error — don't block completion
         })
       }
     })
   }
 
-  // 👇 UPDATED: stable interval that reads from ref
+  // 👇 UPDATED: stable interval that reads from ref (fire-and-forget is fine here)
   useEffect(() => {
     const interval = setInterval(() => {
       if (latestPositionRef.current) {
         sendLocationPing(latestPositionRef.current)
       }
-    }, 5000) // every 5 seconds — socket is lightweight
+    }, 5000) // every 5 seconds — socket is lightweight enough for this frequency
 
     return () => clearInterval(interval)
   }, []) // empty dependency array – runs once
-
-  // ── SOCKET.IO: Join delivery room for status updates ──
-  useEffect(() => {
-    if (deliveryId) socketJoinDelivery(deliveryId)
-    return () => { if (deliveryId) socketLeaveDelivery(deliveryId) }
-  }, [deliveryId])
-
-  // ── SOCKET.IO: Listen for status changes ──
-  useSocketEvent('delivery:status-changed', (data: any) => {
-    if (data.deliveryId === deliveryId) {
-      toast.info(`Delivery status updated: ${data.status}`)
-      activeDeliveryQuery.refetch()
-    }
-  })
 
   // Theme handling
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // ── SOCKET.IO: Join delivery room so driver gets real-time status updates ──
+  useEffect(() => {
+    if (deliveryId) {
+      socketJoinDelivery(deliveryId)
+    }
+    return () => {
+      if (deliveryId) {
+        socketLeaveDelivery(deliveryId)
+      }
+    }
+  }, [deliveryId])
+
+  // ── SOCKET.IO: Listen for status changes from backend (e.g. admin completes delivery) ──
+  useSocketEvent('delivery:status-changed', (data: any) => {
+    if (data.deliveryId === deliveryId) {
+      toast.info(`Delivery status updated: ${data.status}`, {
+        description: 'Refreshing delivery details...',
+      })
+      activeDeliveryQuery.refetch()
+    }
+  })
 
   // Mobile menu handling
   useEffect(() => {
@@ -586,22 +605,22 @@ export default function DriverActiveDeliveryPage() {
     }
   )
 
-  const handleUploadDropoffPhotos = () => {
+  const handleUploadDropoffPhotos = async () => {
     const selectedCount = dropoffPhotoSlots.filter(slot => slot.file !== null).length
-    if (selectedCount === 0) {
-      toast.error('No photos selected', { description: 'Please take at least one dropoff photo.' })
+    if (selectedCount < 6) {
+      toast.error('Need 6 photos', { description: `Please take all 6 dropoff photos. You have ${selectedCount}/6.` })
       return
     }
 
     setIsUploading(true)
-    const formData = new FormData()
-    dropoffPhotoSlots.forEach((slot, i) => {
-      if (slot.file) formData.append('files', slot.file)
-    })
-    formData.append('deliveryId', deliveryId)
-    formData.append('phase', 'DROPOFF')
-
-    uploadDropoffPhotosMutation.mutate(formData)
+    try {
+      const rawFiles = dropoffPhotoSlots.map(slot => slot.file!).filter(Boolean)
+      const formData = await buildCompressedUploadPayload(rawFiles, deliveryId, 'DROPOFF')
+      uploadDropoffPhotosMutation.mutate(formData)
+    } catch (err) {
+      setIsUploading(false)
+      toast.error('Photo compression failed', { description: 'Please try again.' })
+    }
   }
 
   // Complete trip mutation
@@ -619,12 +638,23 @@ export default function DriverActiveDeliveryPage() {
   )
 
   // Actual trip completion — only called after compliance succeeds
-  const handleCompleteTrip = () => {
+  const handleCompleteTrip = async () => {
     if (!driverId || !userId) return
 
-    // Send a final location ping right before completing to ensure tracking data exists
-    if (latestPositionRef.current) {
-      sendLocationPing(latestPositionRef.current)
+    // Send a final location ping and AWAIT it before completing the trip.
+    // Previously this was fire-and-forget, causing a race condition where
+    // complete-trip hit the backend before the ping arrived, resulting in
+    // "insufficient tracking data" errors on short trips.
+    try {
+      if (latestPositionRef.current) {
+        await locationPingMutation.mutateAsync({
+          lat: latestPositionRef.current.lat,
+          lng: latestPositionRef.current.lng,
+          recordedAt: new Date().toISOString(),
+        })
+      }
+    } catch {
+      // Ping failed — still attempt completion with existing tracking data
     }
 
     const payload = {
@@ -668,8 +698,8 @@ export default function DriverActiveDeliveryPage() {
       return
     }
 
-    if (uploadedDropoffPhotos.length === 0) {
-      toast.error('Photos required', { description: 'Please upload dropoff photos before completing.' })
+    if (uploadedDropoffPhotos.length < 6) {
+      toast.error('Photos required', { description: `Upload all 6 dropoff photos first. You have ${uploadedDropoffPhotos.length}/6.` })
       return
     }
 
@@ -724,7 +754,7 @@ export default function DriverActiveDeliveryPage() {
     },
     {
       id: 3,
-      title: 'Drop-off evidence',
+      title: 'Vehicle Drop-off Proof',
       description: deliveryData.compliance?.odometerEnd
         ? 'Drop-off completed'
         : 'Drop-off photos + odometer end required.',
@@ -793,9 +823,17 @@ export default function DriverActiveDeliveryPage() {
     (e: any) => e.phase === 'PICKUP' && e.type === 'PICKUP_PHOTO'
   ) || []
 
+  // Dismiss handler for PostTripCompletion — stable reference via useCallback
+  // so the auto-dismiss timer in PostTripCompletion doesn't reset on every GPS re-render
+  const handleDismissCompletion = useCallback(() => {
+    setShowCompletion(false)
+    navigate({ to: '/driver/dashboard' })
+  }, [navigate])
+
   // If there's no data (and not loading), show a message
+  // BUT skip early return when completion overlay is showing — let it dismiss naturally
   // hasOnlyBooked = driver has booked deliveries but no active one — show queue below
-  if (hasNoData) {
+  if (hasNoData && !showCompletion) {
     return (
       <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex items-center justify-center">
         <Card className="w-full max-w-md border-slate-200 dark:border-slate-800 shadow-lg">
@@ -847,32 +885,14 @@ export default function DriverActiveDeliveryPage() {
             )}
           </div>
 
-          {/* GPS tracking status indicator */}
-          <div className="fixed bottom-28 right-4 z-10">
-            <div className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-full backdrop-blur shadow-lg text-[10px] font-extrabold uppercase tracking-widest',
-              locationHealth === 'healthy'
-                ? 'bg-green-500/90 text-white'
-                : locationHealth === 'warning'
-                ? 'bg-amber-500/90 text-white'
-                : 'bg-red-500/90 text-white'
-            )}>
-              <span className={cn(
-                'w-1.5 h-1.5 rounded-full',
-                locationHealth === 'healthy' ? 'bg-white animate-pulse' : 'bg-white/70'
-              )} />
-              {locationHealth === 'healthy' ? 'Tracking' : locationHealth === 'warning' ? 'Weak GPS' : 'No GPS'}
-            </div>
-          </div>
-
           {/* Top overlay — address + ETA + payout */}
           <div className="fixed top-0 left-0 right-0 z-10 pointer-events-none">
             <div className="bg-gradient-to-b from-white/90 dark:from-slate-950/90 via-white/70 dark:via-slate-950/70 to-transparent pb-8">
-              <div className="max-w-[980px] mx-auto px-5 sm:px-6 pt-4">
+              <div className="max-w-[980px] mx-auto px-5 sm:px-6" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0">
                     <button
-                      onClick={() => navigate({ to: '/drive/dashboard' })}
+                      onClick={() => navigate({ to: '/driver/dashboard' })}
                       className="pointer-events-auto w-10 h-10 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-lg shrink-0"
                     >
                       <ArrowBack className="w-5 h-5" />
@@ -902,6 +922,24 @@ export default function DriverActiveDeliveryPage() {
                     <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
                       Est. payout
                     </p>
+                  </div>
+                </div>
+
+                {/* GPS tracking status indicator — inside header overlay, below content */}
+                <div className="mt-3 pointer-events-auto">
+                  <div className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full backdrop-blur shadow-lg text-[10px] font-extrabold uppercase tracking-widest',
+                    locationHealth === 'healthy'
+                      ? 'bg-green-500/90 text-white'
+                      : locationHealth === 'warning'
+                      ? 'bg-amber-500/90 text-white'
+                      : 'bg-red-500/90 text-white'
+                  )}>
+                    <span className={cn(
+                      'w-1.5 h-1.5 rounded-full',
+                      locationHealth === 'healthy' ? 'bg-white animate-pulse' : 'bg-white/70'
+                    )} />
+                    {locationHealth === 'healthy' ? 'Tracking' : locationHealth === 'warning' ? 'Weak GPS' : 'No GPS'}
                   </div>
                 </div>
               </div>
@@ -934,8 +972,8 @@ export default function DriverActiveDeliveryPage() {
           )}
 
           {/* Bottom — 2x2 action grid */}
-          <div className="fixed bottom-0 left-0 right-0 z-10">
-            <div className="bg-gradient-to-t from-white/95 dark:from-slate-950/95 via-white/85 dark:via-slate-950/85 to-transparent pt-8 pb-6 px-5 sm:px-6">
+          <div className="fixed bottom-0 left-0 right-0 z-10 safe-bottom">
+            <div className="bg-gradient-to-t from-white/95 dark:from-slate-950/95 via-white/85 dark:via-slate-950/85 to-transparent pt-8 pb-20 px-5 sm:px-6">
               <div className="max-w-[980px] mx-auto">
                 {/* Distance label */}
                 {distanceToDropoff !== null && !isWithinGeofence && (
@@ -1324,9 +1362,9 @@ export default function DriverActiveDeliveryPage() {
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover-lift">
             <CardHeader>
               <div>
-                <CardTitle className="text-lg font-black">Drop-off evidence</CardTitle>
+                <CardTitle className="text-lg font-black">Vehicle Drop-off Proof</CardTitle>
                 <CardDescription className="text-sm mt-1">
-                  {dropoffPhotosSaved ? 'Uploaded' : 'Pending'}
+                  {dropoffPhotosSaved ? 'Photos Uploaded' : 'Pending'}
                 </CardDescription>
               </div>
             </CardHeader>
@@ -1378,18 +1416,16 @@ export default function DriverActiveDeliveryPage() {
               <div className="mt-4 flex flex-col gap-3">
                 <Button
                   onClick={handleUploadDropoffPhotos}
-                  disabled={dropoffPhotosSaved || isUploading}
+                  disabled={isUploading}
                   className={cn(
                     "w-full font-extrabold rounded-2xl py-3 flex items-center justify-center gap-2 transition",
-                    dropoffPhotosSaved
-                      ? "bg-slate-300 text-slate-500 dark:bg-slate-700 dark:text-slate-400 cursor-not-allowed"
-                      : isUploading
-                        ? "bg-amber-500 text-white cursor-wait"
-                        : "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-300"
+                    isUploading
+                      ? "bg-amber-500 text-white cursor-wait"
+                      : "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-300"
                   )}
                 >
                   <CloudUpload className="w-4 h-4" />
-                  {dropoffPhotosSaved ? 'Photos uploaded' : isUploading ? 'Uploading...' : 'Upload photos'}
+                  {dropoffPhotosSaved ? `Photos Uploaded (${uploadedDropoffPhotos.length}/6)` : isUploading ? 'Uploading...' : `Upload photos (${uploadedDropoffPhotos.length}/6)`}
                 </Button>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1447,80 +1483,28 @@ export default function DriverActiveDeliveryPage() {
         )}
 
         {/* Between deliveries — no active trip right now */}
-        {!deliveryData && queuedAssignments.length > 0 && (
-          <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-emerald-50 dark:bg-emerald-900/10">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
-                <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">All caught up!</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Your next delivery is listed below. Go to the pickup location and start when ready.
-                </p>
+        {!deliveryData && (
+          <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-slate-50 dark:bg-slate-900/50">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 mt-0.5">
+                  <Inbox className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">No active delivery right now</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Check your upcoming deliveries to see what's next.
+                  </p>
+                  <Button
+                    onClick={() => navigate({ to: '/driver/booked-later' })}
+                    className="mt-3 lime-btn rounded-2xl px-5 py-2.5 text-sm font-extrabold"
+                  >
+                    Go to Upcoming Deliveries
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
-        )}
-
-        {/* ═══════════════════════════════════════════ */}
-        {/* UPCOMING QUEUE (Booked but not yet started) */}
-        {/* ═══════════════════════════════════════════ */}
-        {queuedAssignments.length > 0 && (
-          <section className="mt-6">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-7 h-7 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-              </div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Upcoming Gigs
-              </h3>
-            </div>
-            <div className="space-y-3">
-              {queuedAssignments.map((qa: any, idx: number) => {
-                const d = qa.delivery
-                const pickupTime = d.pickupWindowStart
-                  ? new Date(d.pickupWindowStart).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TZ })
-                  : '—'
-                const dropoffTime = d.dropoffWindowEnd
-                  ? new Date(d.dropoffWindowEnd).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: BUSINESS_TZ })
-                  : '—'
-                return (
-                  <Card key={d.id} className="border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/80 hover:shadow-md transition cursor-pointer" onClick={() => navigate({ to: '/driver-pickup-checklist', search: { jobId: d.id } as any })}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                              #{idx + 1} in queue
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-400">
-                              {d.serviceType?.replace(/_/g, ' ')}
-                            </span>
-                          </div>
-                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                            {d.pickupAddress}
-                          </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                            → {d.dropoffAddress}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{pickupTime}</p>
-                          <p className="text-[10px] text-slate-400">pickup</p>
-                          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1">{dropoffTime}</p>
-                          <p className="text-[10px] text-slate-400">dropoff</p>
-                          {activeAssignment && (
-                            <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-1.5">Complete current delivery first</p>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          </section>
         )}
 
         {/* Workflow Status Display */}
@@ -1572,10 +1556,7 @@ export default function DriverActiveDeliveryPage() {
         <PostTripCompletion
           payout={deliveryData?.quote?.estimatedPrice ?? 0}
           tripStartTime={deliveryData?.trackingSession?.startedAt}
-          onDismiss={() => {
-            setShowCompletion(false)
-            navigate({ to: '/driver/dashboard' })
-          }}
+          onDismiss={handleDismissCompletion}
         />
       )}
       <DriverBottomNav activeTab="in-progress" />

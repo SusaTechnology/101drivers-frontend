@@ -30,7 +30,7 @@ import { useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 import { useSocketEvent } from '@/hooks/useSocket'
-import { socketJoinPublic, socketLeavePublic, socketConnect } from '@/lib/socket'
+import { socketJoinPublic, socketLeavePublic, socketConnect, socketDisconnect } from '@/lib/socket'
 
 const formatTime = (dateString?: string) => {
   if (!dateString) return '—'
@@ -85,7 +85,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
     noFilter: true,
     fetchWithoutRefresh: true,
     publicEndpoint: true,
-    refetchInterval: 60000, // socket is primary (60s fallback)
+    refetchInterval: 60000, // SOCKET.IO: slowed from 5s to 60s as fallback
   })
 
   // Update coordinates and route points when tracking data arrives
@@ -112,27 +112,23 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
     }
   }, [trackingData])
 
-  // ── SOCKET.IO: Connect + join public tracking room ──
+  // ── SOCKET.IO: Connect (unauthenticated) and join public tracking room ──
   useEffect(() => {
     if (!token) return
+    // Public tracking link — visitor may not be logged in, so connect without auth
     socketConnect(null)
     socketJoinPublic(token)
-    return () => { socketLeavePublic(token) }
+    return () => {
+      socketLeavePublic(token)
+      // Don't disconnect here — other pages might be using the socket
+    }
   }, [token])
 
-  // ── SOCKET.IO: Real-time location updates ──
+  // ── SOCKET.IO: Listen for real-time location updates ──
   useSocketEvent('delivery:location-update', (data: any) => {
-    if (data?.lat && data?.lng) {
-      setDriverPosition({ lat: data.lat, lng: data.lng })
-      setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
-    }
-  })
-
-  // ── SOCKET.IO: Real-time status changes ──
-  useSocketEvent('delivery:status-changed', (data: any) => {
-    if (data?.status) {
-      refetchTracking()
-    }
+    setDriverPosition({ lat: data.lat, lng: data.lng })
+    // Append latest point to route
+    setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
   })
 
   // Handle token expiration
@@ -311,7 +307,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
             ) : (
               <div className="w-full h-full flex items-center justify-center min-h-[350px] sm:min-h-[450px]">
                 <div className="text-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-lime-500 mx-auto" />
+                  <Loader2 className="h-8 h-8 animate-spin text-lime-500 mx-auto" />
                   <p className="mt-2 text-sm text-slate-500">Loading map...</p>
                 </div>
               </div>
@@ -366,7 +362,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 mb-3">
                   <div className="w-10 h-10 rounded-xl bg-lime-500/15 flex items-center justify-center">
-                    <Truck className="h-5 w-5 text-lime-500" />
+                    <Truck className="h-5 h-5 text-lime-500" />
                   </div>
                   <div>
                     <div className="font-black text-slate-900 dark:text-white text-sm">
@@ -442,7 +438,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
                 <>
                   <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 mb-3">
                     <div className="w-10 h-10 rounded-full bg-lime-500/15 flex items-center justify-center">
-                      <User className="h-5 w-5 text-lime-500" />
+                      <User className="h-5 h-5 text-lime-500" />
                     </div>
                     <div>
                       <div className="font-bold text-sm text-slate-900 dark:text-white">

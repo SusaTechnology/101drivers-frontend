@@ -594,7 +594,7 @@ export default function DriverGigBoardPage() {
     noFilter: true,
     enabled: Boolean(driverId),
     staleTime: 0, // always refetch on mount so booked deliveries disappear immediately
-    refetchInterval: 120 * 1000, // socket is primary (120s fallback)
+    refetchInterval: 30 * 1000, // auto-refresh every 30 seconds
   })
 
   const queryClient = useQueryClient()
