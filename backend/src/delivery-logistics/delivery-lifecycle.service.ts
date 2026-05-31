@@ -16,16 +16,16 @@ import {
   Prisma,
 } from "@prisma/client";
 import { randomBytes } from "crypto";
-import { ConfigService } from "@nestjs/config";
-
-import { PrismaService } from "../prisma/prisma.service";
-import { DriverJobFeedService } from "./driver-job-feed.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { DeliveryComplianceEngine } from "../domain/deliveryCompliance/deliveryCompliance.engine";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
-import { Logger } from "@nestjs/common";
 
-type Tx = Prisma.TransactionClient;
+import { PrismaService } from "../prisma/prisma.service";
+import { TrackingGateway } from "../gateways/tracking.gateway";
+import { Inject, forwardRef, Optional, Logger } from "@nestjs/common";
+import { DriverJobFeedService } from "./driver-job-feed.service";
+
+import { ConfigService } from "@nestjs/config";
 
 type StatusActor = {
   actorUserId?: string | null;
@@ -45,7 +45,9 @@ export class DeliveryLifecycleService {
     private readonly notificationEventEngine: NotificationEventEngine,
     private readonly deliveryComplianceEngine: DeliveryComplianceEngine,
     private readonly paymentPayoutEngine: PaymentPayoutEngine,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    @Optional() @Inject(forwardRef(() => TrackingGateway))
+    private readonly trackingGateway?: TrackingGateway
   ) {
     this.appDomain = this.normalizeBaseUrl(
       this.configService.get<string>("101_DOMAIN") ??
@@ -55,6 +57,55 @@ export class DeliveryLifecycleService {
 
   private normalizeBaseUrl(url: string): string {
     return (url || "").trim().replace(/\/+$/, "");
+  }
+
+  /**
+   * Fetch delivery metadata needed for socket room targeting (called outside transactions).
+   * Returns null silently if the delivery doesn't exist.
+   */
+  private async fetchDeliverySocketMeta(deliveryId: string): Promise<{
+    customerId: string;
+    dealerId: string | null;
+    trackingShareToken: string | null;
+  } | null> {
+    try {
+      const delivery = await this.prisma.deliveryRequest.findUnique({
+        where: { id: deliveryId },
+        select: {
+          customerId: true,
+          trackingShareToken: true,
+          customer: {
+            select: { approvedByUserId: true },
+          },
+        },
+      });
+      if (!delivery?.customer) return null;
+      return {
+        customerId: delivery.customerId,
+        dealerId: delivery.customer.approvedByUserId,
+        trackingShareToken: delivery.trackingShareToken,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Emit socket events after a status change (fire-and-forget) */
+  private emitStatusChanged(deliveryId: string, status: string): void {
+    if (!this.trackingGateway) return;
+    this.fetchDeliverySocketMeta(deliveryId).then((meta) => {
+      if (!meta) return;
+      this.trackingGateway!.emitStatusChange({
+        deliveryId,
+        status,
+        shareToken: meta.trackingShareToken ?? undefined,
+        dealerId: meta.dealerId ?? undefined,
+      });
+      // Also broadcast to driver feed for relevant transitions
+      if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
+        this.trackingGateway!.emitFeedUpdate({ deliveryId, status });
+      }
+    }).catch(() => { /* silent */ });
   }
 
   private readonly allowedTransitions: Record<
@@ -167,6 +218,9 @@ export class DeliveryLifecycleService {
       });
 
       return updated;
+    }).then((updated) => {
+      this.emitStatusChanged(deliveryId, toStatus);
+      return updated;
     });
   }
 
@@ -217,6 +271,7 @@ async bookDelivery(input: {
       driverId: input.driverId,
       actorUserId: input.bookedByUserId ?? null,
     });
+    this.emitStatusChanged(input.deliveryId, "BOOKED");
 
     return booking;
   });
@@ -385,6 +440,7 @@ async startTrip(input: {
     trackingUrl: this.buildPublicTrackingUrl(result.trackingShareToken),
     expiresAt: result.trackingShareExpiresAt,
   });
+  this.emitStatusChanged(input.deliveryId, "ACTIVE");
 
   return result;
 });
@@ -545,6 +601,7 @@ async completeTrip(input: {
       deliveryId: input.deliveryId,
       actorUserId: input.actorUserId ?? null,
     });
+    this.emitStatusChanged(input.deliveryId, "COMPLETED");
 
     return result;
   });

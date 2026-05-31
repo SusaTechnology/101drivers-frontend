@@ -97,6 +97,8 @@ import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
 import { BUSINESS_TZ } from '@/lib/timezone'
 import DriverBottomNav from '../layout/DriverBottomNav'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinDelivery, socketLeaveDelivery, getSocket } from '@/lib/socket'
 
 // Default delivery data (fallback while loading) – updated to match API shape
 const MOCK_DELIVERY = {
@@ -256,7 +258,7 @@ export default function DriverActiveDeliveryPage() {
     noFilter: true,
     enabled: Boolean(driverId),
     staleTime: 0, // always refetch on mount — critical after start-trip navigation
-    refetchInterval: 10000, // refresh every 10s
+    refetchInterval: 60000, // socket is primary (60s fallback)
     onError: (error) => {
       toast.error('Failed to fetch deliveries')
     },
@@ -418,14 +420,34 @@ export default function DriverActiveDeliveryPage() {
   }, [isLoaded, pickupCoords, dropoffCoords])
 
   // Send location ping (used by interval and manual check-in)
-  const sendLocationPing = (position: google.maps.LatLngLiteral) => {
-    if (!deliveryId) return // 👈 ensure we have a deliveryId
-    const payload = {
-      lat: position.lat,
-      lng: position.lng,
-      recordedAt: new Date().toISOString(),
-    }
-    locationPingMutation.mutate(payload)
+  const sendLocationPing = (position: google.maps.LatLngLiteral): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!deliveryId) { resolve(); return }
+      const payload = {
+        lat: position.lat,
+        lng: position.lng,
+        recordedAt: new Date().toISOString(),
+      }
+      const sock = getSocket()
+      if (sock?.connected) {
+        sock.emit('driver:location', payload, (ack: any) => {
+          if (ack?.ok === false) {
+            locationPingMutation.mutate(payload, {
+              onSuccess: () => resolve(),
+              onError: () => resolve(),
+            })
+          } else {
+            resolve()
+          }
+        })
+        setTimeout(() => resolve(), 3000)
+      } else {
+        locationPingMutation.mutate(payload, {
+          onSuccess: () => resolve(),
+          onError: () => resolve(),
+        })
+      }
+    })
   }
 
   // 👇 UPDATED: stable interval that reads from ref
@@ -434,10 +456,24 @@ export default function DriverActiveDeliveryPage() {
       if (latestPositionRef.current) {
         sendLocationPing(latestPositionRef.current)
       }
-    }, 30000) // every 30 seconds
+    }, 5000) // every 5 seconds — socket is lightweight
 
     return () => clearInterval(interval)
   }, []) // empty dependency array – runs once
+
+  // ── SOCKET.IO: Join delivery room for status updates ──
+  useEffect(() => {
+    if (deliveryId) socketJoinDelivery(deliveryId)
+    return () => { if (deliveryId) socketLeaveDelivery(deliveryId) }
+  }, [deliveryId])
+
+  // ── SOCKET.IO: Listen for status changes ──
+  useSocketEvent('delivery:status-changed', (data: any) => {
+    if (data.deliveryId === deliveryId) {
+      toast.info(`Delivery status updated: ${data.status}`)
+      activeDeliveryQuery.refetch()
+    }
+  })
 
   // Theme handling
   useEffect(() => {

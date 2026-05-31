@@ -100,6 +100,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinDriverFeed, socketLeaveDriverFeed } from '@/lib/socket'
+import { useQueryClient } from '@tanstack/react-query'
 import MiniRouteMap from '@/components/map/MiniRouteMap'
 import type { NotificationInboxResponse } from '@/types/notification'
 import DriverBottomNav from '../layout/DriverBottomNav'
@@ -591,7 +594,27 @@ export default function DriverGigBoardPage() {
     noFilter: true,
     enabled: Boolean(driverId),
     staleTime: 0, // always refetch on mount so booked deliveries disappear immediately
-    refetchInterval: 30 * 1000, // auto-refresh every 30 seconds
+    refetchInterval: 120 * 1000, // socket is primary (120s fallback)
+  })
+
+  const queryClient = useQueryClient()
+
+  // ── SOCKET.IO: Join driver feed room ──
+  useEffect(() => {
+    if (driverId) socketJoinDriverFeed()
+    return () => socketLeaveDriverFeed()
+  }, [driverId])
+
+  // ── SOCKET.IO: Listen for feed updates (new bookings, unbookings) ──
+  useSocketEvent('delivery:feed-update', (data: any) => {
+    if (!data?.deliveryId) return
+    if (data.status === 'BOOKED') {
+      // Remove from visible list (unless booked by this driver)
+      queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
+    } else if (data.status === 'LISTED') {
+      // New delivery available — refresh the list
+      queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
+    }
   })
 
   // Notification count

@@ -4,6 +4,7 @@ import {
   NotFoundException,
   Optional,
   Inject,
+  forwardRef,
 } from "@nestjs/common";
 import {
   EnumCustomerApprovalStatus,
@@ -27,7 +28,8 @@ import {
   EnumSchedulingPolicyServiceType,
   EnumUserRoles,
 } from "@prisma/client";
-import { PrismaService } from "../prisma/prisma.service";
+import { Logger } from "@nestjs/common";
+import { TrackingGateway } from "../gateways/tracking.gateway";
 import { GoogleMapsService } from "./google-maps.service";
 import { PricingEngineService } from "./pricing-engine.service";
 import { EmailVerificationService } from "../auth/email-verification/email-verification.service";
@@ -233,6 +235,7 @@ export class DeliveryRequestOrchestratorService {
     private readonly passwordService: PasswordService,
     private readonly notificationEventEngine: NotificationEventEngine,
     @Optional() @Inject("STRIPE_SERVICE") private readonly stripeService?: any,
+    @Optional() @Inject(forwardRef(() => TrackingGateway)) private readonly trackingGateway?: TrackingGateway,
   ) {}
 
   async createDeliveryDraftFromQuote(input: CreateDeliveryDraftFromQuoteInput) {
@@ -1527,6 +1530,31 @@ private async resolveIndividualCustomerForCreate(
       deliveryId: delivery.id,
       actorUserId: input.createdByUserId ?? null,
     });
+
+    // Emit socket event to dealer dashboard
+    if (this.trackingGateway) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: input.customerId },
+        select: { approvedByUserId: true },
+      });
+      if (customer?.approvedByUserId) {
+        this.trackingGateway.emitNewDelivery({
+          deliveryId: delivery.id,
+          dealerId: customer.approvedByUserId,
+          delivery: {
+            id: delivery.id,
+            status: delivery.status,
+            pickupAddress: delivery.pickupAddress,
+            dropoffAddress: delivery.dropoffAddress,
+            pickupWindowStart: delivery.pickupWindowStart?.toISOString() ?? null,
+            pickupWindowEnd: delivery.pickupWindowEnd?.toISOString() ?? null,
+            createdAt: delivery.createdAt.toISOString(),
+          },
+        });
+      }
+      // Also broadcast to driver feed
+      this.trackingGateway.emitFeedUpdate({ deliveryId: delivery.id, status: "LISTED" });
+    }
 
     return delivery;
   }

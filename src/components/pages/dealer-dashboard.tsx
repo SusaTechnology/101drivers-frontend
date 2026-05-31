@@ -83,6 +83,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import { BUSINESS_TZ } from '@/lib/timezone'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinDealer, socketLeaveDealer } from '@/lib/socket'
 
 // Helper functions
 const formatDate = (dateString: string) => {
@@ -208,7 +210,7 @@ export default function DealerDashboard() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${dealerId}/deliveries`,
     noFilter: true,
     enabled: Boolean(dealerId),
-    refetchInterval: 30 * 1000, // auto-refresh every 30 seconds
+    refetchInterval: 120 * 1000, // socket is primary (120s fallback)
   })
 
 
@@ -262,6 +264,26 @@ export default function DealerDashboard() {
       }
     })
   }, [deliveriesData])
+
+  const deliveriesQueryKey = ['deliveries', dealerId]
+
+  // ── SOCKET.IO: Join dealer room for real-time updates ──
+  useEffect(() => {
+    if (dealerId) socketJoinDealer(dealerId)
+    return () => { if (dealerId) socketLeaveDealer(dealerId) }
+  }, [dealerId])
+
+  // ── SOCKET.IO: Listen for delivery status changes ──
+  useSocketEvent('delivery:status-changed', (data: any) => {
+    if (data?.deliveryId && dealerId) {
+      queryClient.setQueryData(deliveriesQueryKey, (old: any) => {
+        if (!old) return old
+        return old.map((d: any) =>
+          d.id === data.deliveryId ? { ...d, status: data.status } : d
+        )
+      })
+    }
+  })
 
   const stats = useMemo(() => ({
     active: deliveries.filter(d => d.status === 'ACTIVE').length,

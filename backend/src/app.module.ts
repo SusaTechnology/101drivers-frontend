@@ -42,6 +42,7 @@ import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SecretsManagerModule } from "./providers/secrets/secretsManager.module";
 import { ServeStaticModule } from "@nestjs/serve-static";
+import { GatewayModule } from "./gateways/gateway.module";
 import { ServeStaticOptionsService } from "./serveStaticOptions.service";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
@@ -110,6 +111,7 @@ import { StripeWebhookController } from "./payment/stripe-webhook.controller";
     EmailVerificationModule,
     SupportRequestModule,
     SupportRequestNoteModule,
+    GatewayModule,
     ScheduleModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true }),
     ServeStaticModule.forRootAsync({

@@ -29,6 +29,8 @@ import { cn } from '@/lib/utils'
 import { useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinPublic, socketLeavePublic, socketConnect } from '@/lib/socket'
 
 const formatTime = (dateString?: string) => {
   if (!dateString) return '—'
@@ -83,7 +85,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
     noFilter: true,
     fetchWithoutRefresh: true,
     publicEndpoint: true,
-    refetchInterval: 5000,
+    refetchInterval: 60000, // socket is primary (60s fallback)
   })
 
   // Update coordinates and route points when tracking data arrives
@@ -109,6 +111,29 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
       setRoutePoints([])
     }
   }, [trackingData])
+
+  // ── SOCKET.IO: Connect + join public tracking room ──
+  useEffect(() => {
+    if (!token) return
+    socketConnect(null)
+    socketJoinPublic(token)
+    return () => { socketLeavePublic(token) }
+  }, [token])
+
+  // ── SOCKET.IO: Real-time location updates ──
+  useSocketEvent('delivery:location-update', (data: any) => {
+    if (data?.lat && data?.lng) {
+      setDriverPosition({ lat: data.lat, lng: data.lng })
+      setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
+    }
+  })
+
+  // ── SOCKET.IO: Real-time status changes ──
+  useSocketEvent('delivery:status-changed', (data: any) => {
+    if (data?.status) {
+      refetchTracking()
+    }
+  })
 
   // Handle token expiration
   useEffect(() => {

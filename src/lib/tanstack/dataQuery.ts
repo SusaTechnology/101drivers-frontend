@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
+import { socketConnect, socketDisconnect } from "@/lib/socket";
 
 // ==================== TOKEN & USER MANAGEMENT ====================
 const ACCESS_TOKEN_KEY = "accessToken";
@@ -41,6 +42,8 @@ export function setAccessToken(token: string) {
   currentAccessToken = token;
   if (token) localStorage.setItem(ACCESS_TOKEN_KEY, token);
   else localStorage.removeItem(ACCESS_TOKEN_KEY);
+  // Connect WebSocket when user logs in
+  socketConnect(token);
 }
 
 export function getUser() {
@@ -61,9 +64,11 @@ export function clearAuth() {
   currentAccessToken = null;
   currentUser = null;
   refreshTokenPromise = null;
-  lastRefreshAttemptTime = 0; // Reset cooldown
+  lastRefreshAttemptTime = 0;
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  // Disconnect WebSocket when user logs out
+  socketDisconnect();
 }
 
 // Check if user is currently authenticated
@@ -121,6 +126,8 @@ if (typeof window !== 'undefined') {
   // Check on load
   if (isAuthenticated()) {
     startSessionKeepAlive();
+    // Connect WebSocket on page load if already authenticated
+    socketConnect(getAccessToken());
   }
   
   // Also refresh token when tab becomes visible (user returns to app)
