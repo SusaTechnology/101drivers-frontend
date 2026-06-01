@@ -66,7 +66,10 @@ export class DeliveryLifecycleService {
    * Single query with Prisma include to fetch dealerId + shareToken for room targeting.
    */
   private emitStatusChanged(deliveryId: string, status: string): void {
-    if (!this.trackingGateway) return;
+    if (!this.trackingGateway) {
+      this.logger.warn(`emitStatusChanged SKIPPED: trackingGateway is ${this.trackingGateway}`);
+      return;
+    }
     const gateway = this.trackingGateway;
     this.prisma.deliveryRequest
       .findUnique({

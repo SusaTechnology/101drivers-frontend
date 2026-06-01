@@ -20,8 +20,12 @@ import { getSocket, isSocketConnected } from '@/lib/socket';
 export function useSocketEvent<T = any>(event: string, handler: (data: T) => void): void {
   useEffect(() => {
     const socket = getSocket();
-    if (!socket) return;
+    if (!socket) {
+      console.warn(`[Socket] useSocketEvent("${event}"): socket is null — event will NOT be received`);
+      return;
+    }
 
+    console.log(`[Socket] useSocketEvent: registering listener for "${event}" (connected=${socket.connected})`);
     socket.on(event, handler);
 
     return () => {
