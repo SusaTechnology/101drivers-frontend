@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,7 +25,7 @@ import { useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 import { useSocketEvent } from '@/hooks/useSocket'
-import { socketJoinPublic, socketLeavePublic, socketConnect } from '@/lib/socket'
+import { socketJoinPublic, socketLeavePublic } from '@/lib/socket'
 
 // Mini map component for live tracking
 function MiniMap({ 
@@ -227,21 +227,17 @@ export default function LiveTrackingWidget({
 
   const token = trackingLink?.token
 
-  // ── SOCKET.IO: Join public tracking room for real-time location updates ──
+  // ── SOCKET.IO: Join public tracking room ──
   useEffect(() => {
-    if (!token) return
-    socketConnect(null)
-    socketJoinPublic(token)
-    return () => { socketLeavePublic(token) }
+    if (token) socketJoinPublic(token)
+    return () => { if (token) socketLeavePublic(token) }
   }, [token])
 
   // ── SOCKET.IO: Listen for real-time location updates ──
-  const handleSocketLocation = useCallback((data: any) => {
-    if (data?.lat && data?.lng) {
-      setDriverPosition({ lat: data.lat, lng: data.lng })
-    }
-  }, [])
-  useSocketEvent('delivery:location-update', handleSocketLocation)
+  useSocketEvent('delivery:location-update', (data: any) => {
+    setDriverPosition({ lat: data.lat, lng: data.lng })
+    setIsDataStale(false)
+  })
 
   // Fetch public tracking data using token (poll every 5 seconds as fallback)
   const { 
