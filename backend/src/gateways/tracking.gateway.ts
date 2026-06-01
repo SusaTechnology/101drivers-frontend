@@ -136,8 +136,7 @@ export class TrackingGateway
   @SubscribeMessage("join:driver-feed")
   handleJoinDriverFeed(@ConnectedSocket() client: Socket) {
     client.join("driver-feed");
-    const roomSize = this.server.sockets.adapter.rooms.get("driver-feed")?.size ?? 0;
-    this.logger.log(`Driver ${(client as AuthenticatedSocket).user?.sub} joined driver-feed (room size: ${roomSize})`);
+    this.logger.log(`Driver ${(client as AuthenticatedSocket).user?.sub} joined driver-feed`);
     return { joined: "driver-feed" };
   }
 
@@ -257,8 +256,6 @@ export class TrackingGateway
       this.logger.warn("emitFeedUpdate: server not initialized, skipping");
       return;
     }
-    const roomSize = this.server.sockets.adapter.rooms.get("driver-feed")?.size ?? 0;
-    this.logger.log(`emitFeedUpdate → driver-feed (room size: ${roomSize}) delivery=${data.deliveryId} status=${data.status}`);
     this.server.to("driver-feed").emit("delivery:feed-update", {
       deliveryId: data.deliveryId,
       status: data.status,

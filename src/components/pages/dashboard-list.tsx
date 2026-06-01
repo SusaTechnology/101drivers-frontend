@@ -617,13 +617,10 @@ export default function DriverGigBoardPage() {
 
   // ── SOCKET.IO: Listen for feed updates (new bookings, unbookings) ──
   const handleFeedUpdate = useCallback((data: any) => {
-    console.log('[DriverFeed] Received delivery:feed-update:', data)
     if (!data?.deliveryId) return
     if (['BOOKED', 'CANCELLED', 'EXPIRED'].includes(data.status)) {
-      console.log('[DriverFeed] Invalidating driverFeed query (status=' + data.status + ')')
       queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
     } else if (data.status === 'LISTED') {
-      console.log('[DriverFeed] Invalidating driverFeed query (status=LISTED)')
       queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
     }
   }, [driverId, queryClient])

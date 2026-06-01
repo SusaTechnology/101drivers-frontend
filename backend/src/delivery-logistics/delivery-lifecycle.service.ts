@@ -66,17 +66,14 @@ export class DeliveryLifecycleService {
    * Single query with Prisma include to fetch dealerId + shareToken for room targeting.
    */
   private emitStatusChanged(deliveryId: string, status: string): void {
-    if (!this.trackingGateway) {
-      this.logger.warn(`emitStatusChanged SKIPPED: trackingGateway is ${this.trackingGateway}`);
-      return;
-    }
+    if (!this.trackingGateway) return;
     const gateway = this.trackingGateway;
     this.prisma.deliveryRequest
       .findUnique({
         where: { id: deliveryId },
         select: {
           trackingShareToken: true,
-          customer: { select: { id: true } },
+          customer: { select: { approvedByUserId: true } },
         },
       })
       .then((row) => {
@@ -85,7 +82,7 @@ export class DeliveryLifecycleService {
           gateway.emitStatusChange({
             deliveryId,
             status,
-            dealerId: row.customer?.id ?? undefined,
+            dealerId: row.customer?.approvedByUserId ?? undefined,
             shareToken: row.trackingShareToken ?? undefined,
           });
           if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
