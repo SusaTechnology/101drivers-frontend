@@ -166,14 +166,14 @@ export default function DriverPickupChecklistPage() {
   // GPS proximity check for "Start Pickup Now" — verifies driver is at the lot
   const [isDriverAtPickup, setIsDriverAtPickup] = useState<boolean | null>(null) // null = not yet checked
 
-  // First-pickup-of-day check: if driver has other BOOKED/ACTIVE deliveries besides this one,
-  // they've already done or are doing a gig today. If this is their ONLY delivery and it's
-  // before the window start, it's the first pickup and early start is blocked.
-  const hasOtherAssignments = assignments.filter(
-    (a: any) => a.delivery?.id !== deliveryId
-  ).length > 0
-  const isBeforeWindow = delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date()
-  const isFirstPickupOfDay = !hasOtherAssignments && !!isBeforeWindow
+  // TODO(TEMPORARY): First-pickup-of-day check — commented out for testing.
+  // Re-enable to enforce scheduled pickup windows.
+  // const hasOtherAssignments = assignments.filter(
+  //   (a: any) => a.delivery?.id !== deliveryId
+  // ).length > 0
+  // const isBeforeWindow = delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date()
+  // const isFirstPickupOfDay = !hasOtherAssignments && !!isBeforeWindow
+  const isFirstPickupOfDay = false // TEMPORARY: always false, allows early start for testing
 
   useEffect(() => {
     if (!deliveryId || !delivery?.pickupWindowStart) return
@@ -679,14 +679,15 @@ const handleUploadOdometerPhoto = () => {
       return
     }
 
-    // If before pickup window, verify driver is actually at the pickup location (GPS check)
-    if (delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === false) {
-      toast.error('Not at pickup location', {
-        description: 'GPS shows you are not at the pickup lot yet. Please go to the pickup location to start early.',
-        duration: 8000,
-      })
-      return
-    }
+    // TODO(TEMPORARY): Early-start GPS proximity check — commented out for testing.
+    // Re-enable to require driver to be at pickup location before scheduled window.
+    // if (delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === false) {
+    //   toast.error('Not at pickup location', {
+    //     description: 'GPS shows you are not at the pickup lot yet. Please go to the pickup location to start early.',
+    //     duration: 8000,
+    //   })
+    //   return
+    // }
 
     startTripMutation.mutate({
       driverId,

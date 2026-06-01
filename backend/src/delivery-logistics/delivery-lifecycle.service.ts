@@ -294,50 +294,49 @@ async startTrip(input: {
 
     await this.assertDriverAssignedToDeliveryTx(tx, input.deliveryId, input.driverId);
 
-    // First-pickup-of-day lock: if driver hasn't completed any delivery today,
-    // they must wait until the scheduled pickup window start time.
-    const deliveryWithWindow = await tx.deliveryRequest.findUnique({
-      where: { id: input.deliveryId },
-      select: { pickupWindowStart: true },
-    });
-
-    if (deliveryWithWindow?.pickupWindowStart) {
-      const todayStart = businessStartOfDay();
-
-      const completedToday = await tx.deliveryAssignment.findFirst({
-        where: {
-          driverId: input.driverId,
-          unassignedAt: null,
-          delivery: {
-            status: EnumDeliveryRequestStatus.COMPLETED,
-            updatedAt: { gte: todayStart },
-          },
-        },
-        select: { id: true },
-      });
-
-      // Compare in business timezone (America/Los_Angeles) using Luxon
-      // to avoid any Date/UTC parsing ambiguity.
-      const nowBusiness = businessNow();
-      const windowStartBusiness = toBusinessDateTime(deliveryWithWindow.pickupWindowStart);
-
-      this.logger.debug(
-        `Pickup window check: now=${nowBusiness.toISO()} windowStart=${windowStartBusiness.toISO()} ` +
-        `completedToday=${!!completedToday} now < windowStart=${nowBusiness < windowStartBusiness}`
-      );
-
-      if (!completedToday && nowBusiness < windowStartBusiness) {
-        this.logger.warn(
-          `BLOCKED trip start: deliveryId=${input.deliveryId} driverId=${input.driverId} ` +
-          `now=${nowBusiness.toISO()} windowStart=${windowStartBusiness.toISO()} ` +
-          `completedToday=${!!completedToday} windowDate=${windowStartBusiness.toFormat('yyyy-MM-dd')} today=${nowBusiness.toFormat('yyyy-MM-dd')}`
-        );
-        throw new ConflictException(
-          `First pickup of the day must wait until the scheduled time. ` +
-          `You can start at ${windowStartBusiness.toFormat('MMM d, h:mm a')} (${BUSINESS_TZ}). Current time: ${nowBusiness.toFormat('MMM d, h:mm a')}.`
-        );
-      }
-    }
+    // TODO(TEMPORARY): First-pickup-of-day time lock — commented out for testing.
+    // Re-enable when ready to enforce scheduled pickup windows.
+    //
+    // const deliveryWithWindow = await tx.deliveryRequest.findUnique({
+    //   where: { id: input.deliveryId },
+    //   select: { pickupWindowStart: true },
+    // });
+    //
+    // if (deliveryWithWindow?.pickupWindowStart) {
+    //   const todayStart = businessStartOfDay();
+    //
+    //   const completedToday = await tx.deliveryAssignment.findFirst({
+    //     where: {
+    //       driverId: input.driverId,
+    //       unassignedAt: null,
+    //       delivery: {
+    //         status: EnumDeliveryRequestStatus.COMPLETED,
+    //         updatedAt: { gte: todayStart },
+    //       },
+    //     },
+    //     select: { id: true },
+    //   });
+    //
+    //   const nowBusiness = businessNow();
+    //   const windowStartBusiness = toBusinessDateTime(deliveryWithWindow.pickupWindowStart);
+    //
+    //   this.logger.debug(
+    //     `Pickup window check: now=${nowBusiness.toISO()} windowStart=${windowStartBusiness.toISO()} ` +
+    //     `completedToday=${!!completedToday} now < windowStart=${nowBusiness < windowStartBusiness}`
+    //   );
+    //
+    //   if (!completedToday && nowBusiness < windowStartBusiness) {
+    //     this.logger.warn(
+    //       `BLOCKED trip start: deliveryId=${input.deliveryId} driverId=${input.driverId} ` +
+    //       `now=${nowBusiness.toISO()} windowStart=${windowStartBusiness.toISO()} ` +
+    //       `completedToday=${!!completedToday} windowDate=${windowStartBusiness.toFormat('yyyy-MM-dd')} today=${nowBusiness.toFormat('yyyy-MM-dd')}`
+    //     );
+    //     throw new ConflictException(
+    //       `First pickup of the day must wait until the scheduled time. ` +
+    //       `You can start at ${windowStartBusiness.toFormat('MMM d, h:mm a')} (${BUSINESS_TZ}). Current time: ${nowBusiness.toFormat('MMM d, h:mm a')}.`
+    //     );
+    //   }
+    // }
 
     // Guard: only one delivery can be ACTIVE at a time.
     // If the driver already has an ACTIVE delivery, reject the start.
