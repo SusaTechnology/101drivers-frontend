@@ -702,7 +702,7 @@ const handleUploadOdometerPhoto = async () => {
       return
     }
 
-    if (!vinVerified || !photosSaved || !odometerSaved || !vinPhotoSaved) {
+    if (!vinVerified || !photosSaved || !odometerSaved || !vinPhotoSaved || !pinVerified) {
       toast.error('Cannot start trip', {
         description: 'Please complete all required steps first.',
       })
@@ -758,9 +758,9 @@ const handleUploadOdometerPhoto = async () => {
   }
 
   // Check if all steps are complete (used for disabling button after submission)
-  const allStepsComplete = greeted && photosSaved && odometerSaved && vinPhotoSaved && vinVerified
+  const allStepsComplete = greeted && photosSaved && odometerSaved && vinPhotoSaved && vinVerified && pinVerified
   // Check if all inputs are filled (ready to submit — turns button green)
-  const readyToSubmit = greeted && photosSaved && odometerSaved && vinPhotoSaved && /^\d{4}$/.test(vinValue) && !!odometerValue && !isNaN(Number(odometerValue))
+  const readyToSubmit = greeted && photosSaved && odometerSaved && vinPhotoSaved && /^\d{4}$/.test(vinValue) && !!odometerValue && !isNaN(Number(odometerValue)) && pinVerified
 
   // PIN verification handler
   const handleVerifyPin = async () => {
@@ -1862,7 +1862,7 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
 
-            {/* ── Step 6: Customer PIN (optional) ── */}
+            {/* ── Step 6: Customer PIN (required) ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               pinVerified && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10"
@@ -1887,6 +1887,27 @@ const handleUploadOdometerPhoto = async () => {
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                           Enter the 4-digit PIN from the customer who created this order.
                         </p>
+                        {(() => {
+                          const isBusiness = delivery?.customer?.customerType === 'BUSINESS'
+                          const pinPhone = isBusiness
+                            ? delivery?.customer?.contactPhone
+                            : delivery?.recipientPhone
+                          const pinContactName = isBusiness
+                            ? (delivery?.customer?.contactName || delivery?.customer?.businessName || 'Staff')
+                            : (delivery?.recipientName || 'Customer')
+                          return pinPhone ? (
+                            <div className="mt-3 flex items-center gap-2">
+                              <a
+                                href={`tel:${pinPhone}`}
+                                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40 text-green-700 dark:text-green-300 text-[12px] font-bold hover:bg-green-100 dark:hover:bg-green-900/20 transition"
+                              >
+                                <Phone className="w-3.5 h-3.5" />
+                                <span>Call {pinContactName} to get PIN</span>
+                                <span className="text-green-500 dark:text-green-400 text-[11px] font-mono">{pinPhone}</span>
+                              </a>
+                            </div>
+                          ) : null
+                        })()}
                       </div>
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
                         <Shield className="w-3.5 h-3.5 text-primary mr-1" />
@@ -1898,7 +1919,7 @@ const handleUploadOdometerPhoto = async () => {
                       <>
                         <div className="mt-5 space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                            Verify PIN (optional — customer authorization)
+                            Verify PIN (required — customer authorization)
                           </label>
                           <div className="relative">
                             <Input
