@@ -204,6 +204,10 @@ export class TrackingGateway
     drivenMiles: number | null;
     shareToken?: string;
   }) {
+    if (!this.server) {
+      this.logger.warn("emitLocationUpdate: server not initialized, skipping");
+      return;
+    }
     const payload = {
       deliveryId: data.deliveryId,
       lat: data.lat,
@@ -226,6 +230,10 @@ export class TrackingGateway
     shareToken?: string;
     dealerId?: string;
   }) {
+    if (!this.server) {
+      this.logger.warn("emitStatusChange: server not initialized, skipping");
+      return;
+    }
     const payload = { deliveryId: data.deliveryId, status: data.status };
 
     this.server.to(`delivery:${data.deliveryId}`).emit("delivery:status-changed", payload);
@@ -245,6 +253,10 @@ export class TrackingGateway
     status: string;
     bookedByDriverId?: string;
   }) {
+    if (!this.server) {
+      this.logger.warn("emitFeedUpdate: server not initialized, skipping");
+      return;
+    }
     const roomSize = this.server.sockets.adapter.rooms.get("driver-feed")?.size ?? 0;
     this.logger.log(`emitFeedUpdate → driver-feed (room size: ${roomSize}) delivery=${data.deliveryId} status=${data.status}`);
     this.server.to("driver-feed").emit("delivery:feed-update", {
@@ -260,6 +272,10 @@ export class TrackingGateway
     dealerId: string;
     delivery: Record<string, any>;
   }) {
+    if (!this.server) {
+      this.logger.warn("emitNewDelivery: server not initialized, skipping");
+      return;
+    }
     this.server.to(`dealer:${data.dealerId}`).emit("delivery:created", {
       deliveryId: data.deliveryId,
       ...data.delivery,

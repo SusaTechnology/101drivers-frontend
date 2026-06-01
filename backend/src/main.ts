@@ -10,11 +10,13 @@ import {
   swaggerSetupOptions,
 } from "./swagger";
 import { configureCors } from "./common/cors-cookie.util";
+import { IoAdapter } from "@nestjs/platform-socket.io";
 
 const { PORT = 6000 } = process.env;
 
 async function main() {
   const app = await NestFactory.create(AppModule);
+  app.useWebSocketAdapter(new IoAdapter(app));
   configureCors(app);
 
   app.setGlobalPrefix("api");
