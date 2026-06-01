@@ -883,6 +883,7 @@ async getDriverJobFeed(input: {
             vehicleMake: true,
             vehicleModel: true,
             vinVerificationCode: true,
+            pickupPin: true,
             customer: {
               select: {
                 id: true,

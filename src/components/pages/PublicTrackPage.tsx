@@ -24,6 +24,7 @@ import {
   Car,
   Maximize2,
   Minimize2,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDataQuery } from '@/lib/tanstack/dataQuery'
@@ -375,6 +376,28 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Customer PIN */}
+          {trackingData?.pickupPin && (
+            <div className="mt-4 p-4 rounded-2xl bg-lime-50 dark:bg-lime-900/10 border-2 border-lime-200 dark:border-lime-900/30">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-lime-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <Shield className="h-5 w-5 text-lime-600 dark:text-lime-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-lime-700 dark:text-lime-300">
+                    Your PIN
+                  </p>
+                  <p className="text-2xl font-black text-lime-600 dark:text-lime-400 mt-0.5">
+                    {trackingData.pickupPin}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Share this PIN only with the assigned driver at pickup. This authorizes the vehicle release.
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Tracking status */}

@@ -72,6 +72,7 @@ import {
   LegalHoldAdminBody,
   ApproveComplianceAdminBody,
   CheckPickupProximityBody,
+  VerifyPickupPinBody,
 } from "./dto/deliveryRequestLogistics.dto";
 import { SupportRequestWhereUniqueInput } from "src/supportRequest/base/SupportRequestWhereUniqueInput";
 import { SupportRequestFindManyArgs } from "src/supportRequest/base/SupportRequestFindManyArgs";
@@ -687,6 +688,24 @@ async checkPickupProximity(
     deliveryId: params.id,
     driverLat: body.driverLat,
     driverLng: body.driverLng,
+  });
+}
+
+@common.Post(":id/verify-pin")
+@swagger.ApiOkResponse({ type: Object })
+@swagger.ApiBadRequestResponse({ description: "Invalid PIN" })
+@nestAccessControl.UseRoles({
+  resource: "DeliveryRequest",
+  action: "update",
+  possession: "any",
+})
+async verifyPickupPin(
+  @common.Param() params: DeliveryRequestWhereUniqueInput,
+  @common.Body() body: VerifyPickupPinBody
+): Promise<{ valid: boolean }> {
+  return this.service.verifyPickupPin({
+    deliveryId: params.id,
+    pin: body.pin,
   });
 }
 

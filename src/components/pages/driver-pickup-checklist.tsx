@@ -34,6 +34,8 @@ import {
   Shield,
   Play,
   Clock,
+  Phone,
+  MessageSquare,
 } from 'lucide-react'
 import {
   AlertDialog,
@@ -308,6 +310,12 @@ export default function DriverPickupChecklistPage() {
   const [vinValue, setVinValue] = useState(saved?.vinValue ?? '')
   const [vinError, setVinError] = useState<string | null>(null)
   const [vinVerified, setVinVerified] = useState(saved?.vinVerified ?? false)
+
+  // ── Step 6: Customer PIN (optional) ──
+  const [pinValue, setPinValue] = useState('')
+  const [pinError, setPinError] = useState<string | null>(null)
+  const [pinVerified, setPinVerified] = useState(false)
+  const [pinVerifying, setPinVerifying] = useState(false)
 
   // Refs for file inputs
   const carPhotoInputRef = useRef<HTMLInputElement>(null)
@@ -754,6 +762,42 @@ const handleUploadOdometerPhoto = async () => {
   // Check if all inputs are filled (ready to submit — turns button green)
   const readyToSubmit = greeted && photosSaved && odometerSaved && vinPhotoSaved && /^\d{4}$/.test(vinValue) && !!odometerValue && !isNaN(Number(odometerValue))
 
+  // PIN verification handler
+  const handleVerifyPin = async () => {
+    if (!/^\d{4}$/.test(pinValue)) {
+      setPinError('PIN must be 4 digits')
+      return
+    }
+    if (!deliveryId) return
+    setPinVerifying(true)
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/verify-pin`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pinValue }),
+        }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        if (data.valid) {
+          setPinVerified(true)
+          setPinError(null)
+          toast.success('PIN verified!', { description: 'Customer authorization confirmed.' })
+        } else {
+          setPinError('Incorrect PIN. Please try again.')
+          toast.error('PIN incorrect', { description: 'The PIN you entered is not correct. Contact the customer to verify.' })
+        }
+      } else {
+        setPinError('Failed to verify PIN')
+      }
+    } catch {
+      setPinError('Network error')
+    }
+    setPinVerifying(false)
+  }
+
   // Status helper
   const getStepStatus = (stepId: number) => {
     switch (stepId) {
@@ -762,6 +806,7 @@ const handleUploadOdometerPhoto = async () => {
       case 3: return vinPhotoSaved ? 'Done' : 'Pending'
       case 4: return odometerSaved ? 'Done' : 'Pending'
       case 5: return vinVerified ? 'Done' : 'Pending'
+      case 6: return pinVerified ? 'Done' : 'Pending'
       default: return 'Pending'
     }
   }
@@ -899,6 +944,58 @@ const handleUploadOdometerPhoto = async () => {
           </Card>
         )}
 
+        {/* Get PIN Card — Customer Authorization */}
+        {delivery && (() => {
+          const isBusiness = delivery.customer?.customerType === 'BUSINESS'
+          const pinPhone = isBusiness
+            ? delivery.customer?.contactPhone
+            : delivery.recipientPhone
+          const pinContactName = isBusiness
+            ? (delivery.customer?.contactName || delivery.customer?.businessName || 'Staff')
+            : (delivery.recipientName || 'Customer')
+
+          return pinPhone ? (
+            <Card className="border-slate-200 dark:border-slate-800 shadow-lg mb-5">
+              <CardContent className="p-5">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-2xl bg-blue-500/10 border border-blue-200 dark:border-blue-800/40 flex items-center justify-center shrink-0">
+                    <Shield className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-[15px] font-black text-slate-900 dark:text-white">Get PIN — Customer Authorization</h3>
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">
+                      The customer who created this order has a 4-digit PIN. Call or text them to get it.
+                    </p>
+                    <p className="text-[12px] text-slate-600 dark:text-slate-300 mt-2">
+                      Contact: <span className="font-bold">{pinContactName}</span>{' '}
+                      <span className="text-slate-400">({pinPhone})</span>
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <a
+                        href={`tel:${pinPhone}`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-[12px] font-bold transition"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        Call
+                      </a>
+                      <a
+                        href={`sms:${pinPhone}?body=Hi%2C%20I%20need%20the%20pickup%20PIN%20for%20your%20vehicle%20delivery.`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold transition"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Text
+                      </a>
+                    </div>
+                    <p className="mt-3 text-[10px] text-slate-400 italic">
+                      PIN is a 4-digit code. Enter it in the final step after entering the VIN.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null
+        })()}
+
         {/* Desktop warning — photos must be taken on a phone with a camera */}
         {isDesktop && (
           <div className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border-2 border-amber-300 dark:border-amber-800 flex items-start gap-3">
@@ -944,6 +1041,10 @@ const handleUploadOdometerPhoto = async () => {
                   <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
                     <Speed className="w-3.5 h-3.5 text-primary mr-1" />
                     Odometer
+                  </Badge>
+                  <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
+                    <Shield className="w-3.5 h-3.5 text-primary mr-1" />
+                    PIN
                   </Badge>
                 </div>
               </div>
@@ -1753,6 +1854,106 @@ const handleUploadOdometerPhoto = async () => {
                         </div>
                         <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">
                           Tracking and location services are now active. Drive slow and safe!
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Step 6: Customer PIN (optional) ── */}
+            <Card className={cn(
+              "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
+              pinVerified && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10"
+            )}>
+              <CardContent className="p-6 sm:p-7">
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
+                    pinVerified
+                      ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
+                      : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                  )}>
+                    {pinVerified ? <Check className="w-4 h-4" /> : 6}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-lg font-black text-slate-900 dark:text-white">Customer PIN</h2>
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                          Enter the 4-digit PIN from the customer who created this order.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
+                        <Shield className="w-3.5 h-3.5 text-primary mr-1" />
+                        Step 6
+                      </Badge>
+                    </div>
+
+                    {!pinVerified ? (
+                      <>
+                        <div className="mt-5 space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                            Verify PIN (optional — customer authorization)
+                          </label>
+                          <div className="relative">
+                            <Input
+                              value={pinValue}
+                              onChange={(e) => {
+                                const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
+                                setPinValue(digits)
+                                setPinError(null)
+                              }}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              maxLength={4}
+                              placeholder="0000"
+                              className={cn(
+                                "h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-lg font-black tracking-[0.3em] text-center pr-12",
+                                pinError && "border-red-400 dark:border-red-500"
+                              )}
+                            />
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 tabular-nums">
+                              {pinValue.length}/4
+                            </span>
+                          </div>
+                          {pinError && (
+                            <p className="text-[11px] font-bold text-red-500 mt-1">{pinError}</p>
+                          )}
+                        </div>
+
+                        {pinValue.length === 4 && !pinVerified && (
+                          <Button
+                            onClick={handleVerifyPin}
+                            disabled={pinVerifying}
+                            className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {pinVerifying ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                Verifying PIN...
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="w-4 h-4" />
+                                Verify PIN
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <p className="text-sm font-extrabold text-green-700 dark:text-green-300">PIN verified!</p>
+                        </div>
+                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">
+                          Customer authorization confirmed.
                         </p>
                       </div>
                     )}

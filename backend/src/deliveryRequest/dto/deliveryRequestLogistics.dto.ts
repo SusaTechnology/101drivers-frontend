@@ -1597,3 +1597,18 @@ export class CheckPickupProximityResponseBody {
   @swagger.ApiProperty()
   distanceMeters!: number;
 }
+
+export class VerifyPickupPinBody {
+  @swagger.ApiProperty({
+    required: true,
+    description: "The 4-digit PIN to verify",
+  })
+  @IsString()
+  @IsNotEmpty()
+  pin!: string;
+}
+
+export class VerifyPickupPinResponseBody {
+  @swagger.ApiProperty()
+  valid!: boolean;
+}

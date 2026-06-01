@@ -759,6 +759,7 @@ private async createIndividualDeliveryForResolvedCustomer(
       isUrgent: input.isUrgent === true,
       trackingShareToken: null,
       trackingShareExpiresAt: null,
+      pickupPin: this.generateIndividualPin(),
     },
     select: {
       id: true,
@@ -1264,6 +1265,10 @@ private async resolveIndividualCustomerForCreate(
     customer,
   };
 }
+
+  private generateIndividualPin(): string {
+    return String(Math.floor(1000 + Math.random() * 9000));
+  }
 
   private generateUsernameFromEmail(email: string): string {
     const base = email.split("@")[0].replace(/[^a-zA-Z0-9._-]/g, "");

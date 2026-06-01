@@ -368,6 +368,7 @@ model DeliveryRequest {
   vehicleMake         String?
   vehicleModel        String?
   vinVerificationCode String?
+  pickupPin          String?
 
   @@index([status, createdAt])
   @@index([customerId, createdAt])

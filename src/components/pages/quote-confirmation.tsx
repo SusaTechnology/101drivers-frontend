@@ -226,6 +226,35 @@ export default function QuoteConfirmation() {
                   </div>
                 </div>
 
+                {/* PIN Display */}
+                <Card className="mt-6 border-lime-200 dark:border-lime-900/30 rounded-3xl bg-lime-50 dark:bg-lime-900/10 overflow-hidden">
+                  <div className="bg-gradient-to-r from-lime-500 to-lime-600 px-7 sm:px-9 py-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                        <Shield className="h-7 w-7 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-lime-950/70 text-xs font-black uppercase tracking-widest">
+                          Customer Authorization PIN
+                        </p>
+                        <h1 className="text-3xl sm:text-4xl font-black text-white tracking-widest">
+                          {deliveryData?.pickupPin || '----'}
+                        </h1>
+                      </div>
+                    </div>
+                  </div>
+                  <CardContent className="p-6 sm:p-7">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      Your PIN: <span className="text-2xl font-black text-lime-600 dark:text-lime-400 ml-1">{deliveryData?.pickupPin || '----'}</span>
+                    </p>
+                    <p className="mt-3 text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      The driver will need this PIN when they arrive to pick up your vehicle.
+                      Keep it ready and only share it with the assigned driver at pickup.
+                      This PIN serves as your digital authorization for the vehicle release.
+                    </p>
+                  </CardContent>
+                </Card>
+
                 <p className="text-base text-slate-600 dark:text-slate-400 leading-relaxed">
                   Your delivery request has been submitted successfully. Our team will review the details 
                   and match you with an available driver. You'll receive status updates 

@@ -226,6 +226,13 @@ async bookDelivery(input: {
       deliveryId: input.deliveryId,
     });
 
+    // Generate pickup PIN if not already set
+    const existingDelivery = await tx.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: { pickupPin: true },
+    });
+    const pickupPin = existingDelivery?.pickupPin ?? this.generatePickupPin();
+
     const booking = await tx.deliveryAssignment.create({
       data: {
         deliveryId: input.deliveryId,
@@ -239,6 +246,7 @@ async bookDelivery(input: {
       where: { id: input.deliveryId },
       data: {
         status: EnumDeliveryRequestStatus.BOOKED,
+        ...(existingDelivery?.pickupPin ? {} : { pickupPin }),
       },
     });
 
@@ -983,6 +991,7 @@ async getTrackingLink(input: {
         id: true,
         status: true,
         serviceType: true,
+        pickupPin: true,
         pickupAddress: true,
         pickupLat: true,
         pickupLng: true,
@@ -1028,6 +1037,7 @@ async getTrackingLink(input: {
       deliveryId: delivery.id,
       status: delivery.status,
       serviceType: delivery.serviceType,
+      pickupPin: delivery.pickupPin,
       expiresAt: delivery.trackingShareExpiresAt.toISOString(),
       pickup: {
         address: delivery.pickupAddress,
@@ -1132,6 +1142,32 @@ async getTrackingLink(input: {
 
   private generateTrackingToken(): string {
     return randomBytes(24).toString("hex");
+  }
+
+  /**
+   * Generate a random 4-digit PIN for pickup authorization.
+   * Always returns exactly 4 numeric digits (1000-9999).
+   */
+  generatePickupPin(): string {
+    return String(Math.floor(1000 + Math.random() * 9000));
+  }
+
+  /**
+   * Verify a 4-digit PIN against the delivery's pickupPin.
+   * Returns true if it matches, false otherwise.
+   */
+  async verifyPickupPin(input: {
+    deliveryId: string;
+    pin: string;
+  }): Promise<{ valid: boolean }> {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: { id: true, pickupPin: true },
+    });
+    if (!delivery || !delivery.pickupPin) {
+      return { valid: false };
+    }
+    return { valid: delivery.pickupPin === input.pin };
   }
 
   private haversineMiles(

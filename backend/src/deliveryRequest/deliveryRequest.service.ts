@@ -324,6 +324,16 @@ async checkPickupProximity(input: {
   });
 }
 
+async verifyPickupPin(input: {
+  deliveryId: string;
+  pin: string;
+}): Promise<{ valid: boolean }> {
+  return this.lifecycleService.verifyPickupPin({
+    deliveryId: input.deliveryId,
+    pin: input.pin,
+  });
+}
+
 async completeTrip(input: {
   deliveryId: string;
   driverId: string;
