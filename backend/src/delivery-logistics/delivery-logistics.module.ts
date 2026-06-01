@@ -1,6 +1,7 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { PrismaModule } from "../prisma/prisma.module";
+import { GatewayModule } from "../gateways/gateway.module";
 
 import { GoogleMapsService } from "./google-maps.service";
 import { PricingEngineService } from "./pricing-engine.service";
@@ -19,7 +20,7 @@ import { DeliveryEvidenceEngine } from "src/domain/deliveryEvidence/deliveryEvid
 import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.engine";
 
 @Module({
-  imports: [ConfigModule, PrismaModule],
+  imports: [ConfigModule, PrismaModule, forwardRef(() => GatewayModule)],
   providers: [
     GoogleMapsService,
     PricingEngineService,
