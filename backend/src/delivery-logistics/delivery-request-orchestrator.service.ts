@@ -1535,31 +1535,6 @@ private async resolveIndividualCustomerForCreate(
       actorUserId: input.createdByUserId ?? null,
     });
 
-    // Emit socket event to dealer dashboard
-    if (this.trackingGateway) {
-      const customer = await this.prisma.customer.findUnique({
-        where: { id: input.customerId },
-        select: { approvedByUserId: true },
-      });
-      if (customer?.approvedByUserId) {
-        this.trackingGateway.emitNewDelivery({
-          deliveryId: delivery.id,
-          dealerId: customer.approvedByUserId,
-          delivery: {
-            id: delivery.id,
-            status: delivery.status,
-            pickupAddress: delivery.pickupAddress,
-            dropoffAddress: delivery.dropoffAddress,
-            pickupWindowStart: delivery.pickupWindowStart?.toISOString() ?? null,
-            pickupWindowEnd: delivery.pickupWindowEnd?.toISOString() ?? null,
-            createdAt: delivery.createdAt.toISOString(),
-          },
-        });
-      }
-      // Also broadcast to driver feed
-      this.trackingGateway.emitFeedUpdate({ deliveryId: delivery.id, status: "LISTED" });
-    }
-
     return delivery;
   }
 
