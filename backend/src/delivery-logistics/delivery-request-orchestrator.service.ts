@@ -237,7 +237,12 @@ export class DeliveryRequestOrchestratorService {
     private readonly notificationEventEngine: NotificationEventEngine,
     @Optional() @Inject("STRIPE_SERVICE") private readonly stripeService?: any,
     @Optional() @Inject(forwardRef(() => TrackingGateway)) private readonly trackingGateway?: TrackingGateway,
-  ) {}
+  ) {
+    const logger = new Logger(DeliveryRequestOrchestratorService.name);
+    logger.log(
+      `TrackingGateway ${this.trackingGateway ? 'INJECTED' : 'NOT INJECTED (undefined)'}`
+    );
+  }
 
   async createDeliveryDraftFromQuote(input: CreateDeliveryDraftFromQuoteInput) {
     const customer = await this.prisma.customer.findUnique({

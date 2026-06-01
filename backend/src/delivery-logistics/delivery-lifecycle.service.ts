@@ -51,6 +51,9 @@ export class DeliveryLifecycleService {
     @Optional() @Inject(forwardRef(() => TrackingGateway))
     private readonly trackingGateway?: TrackingGateway
   ) {
+    this.logger.log(
+      `TrackingGateway ${this.trackingGateway ? 'INJECTED' : 'NOT INJECTED (undefined)'}`
+    );
     this.appDomain = this.normalizeBaseUrl(
       this.configService.get<string>("101_DOMAIN") ??
         "https://101drivers.techbee.et"
