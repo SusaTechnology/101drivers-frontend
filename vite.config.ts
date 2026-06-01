@@ -6,19 +6,25 @@ import tailwindcss from '@tailwindcss/vite'
 
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { fileURLToPath, URL } from 'node:url'
-import path from 'node:path'
 
 // https://vitejs.dev/config/
+//
 // "Invalid hook call" fix for Vite 7 + @tanstack/react-router autoCodeSplitting:
 //
-// PROBLEM: Vite pre-bundles react-dom into react-dom_client.js (hash A) while
-// @tanstack/react-router (code-split into its own chunk) resolves react from
-// a different pre-bundle pass (hash B). Two React module instances = useContext
-// returns null inside router hooks (useRouter, useNavigate, etc).
+// ROOT CAUSE: resolve.alias entries for react/react-dom defeat Vite's dep
+// optimization. When the alias resolves "import React from 'react'" to an
+// absolute path like "/abs/node_modules/react", Vite no longer recognises it
+// as a pre-bundled dependency and serves the RAW CJS source instead. That raw
+// source is a separate module instance with its own ReactSharedInternals
+// object (where the dispatcher H is null), while the pre-bundled react-dom
+// chunk sets the dispatcher on ITS copy. Result: two ReactSharedInternals
+// objects → hooks return null → "Invalid hook call".
 //
-// FIX: resolve.alias forces ALL react-family imports to the same physical
-// files. optimizeDeps.include forces Vite to pre-bundle react, react-dom,
-// and react-dom/client together in a SINGLE pass so they share one chunk hash.
+// FIX: Remove all react-family aliases. Let Vite resolve bare specifiers
+// ("react", "react-dom/client") naturally so the dep optimizer can redirect
+// them to the shared pre-bundle. The dedupe flag tells Rollup to
+// de-duplicate react module entries inside code-split chunks produced by
+// @tanstack/router-plugin.
 //
 // After changing this file, ALWAYS delete node_modules/.vite and restart.
 export default defineConfig({
@@ -35,19 +41,9 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'react-is'],
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-
-      // Force ALL react imports → project's own copies, no matter who imports
-      'react': path.resolve(__dirname, 'node_modules/react'),
-      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
-      'react-dom/client': path.resolve(__dirname, 'node_modules/react-dom/client'),
-      'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime'),
-      'react/jsx-dev-runtime': path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime'),
-      'react-is': path.resolve(__dirname, 'node_modules/react-is'),
     },
   },
   optimizeDeps: {
-    // Force react + react-dom + sub-paths into the SAME pre-bundle pass
-    // so they all get the same hash (no react-dom_client.js vs chunk split)
     include: [
       'react',
       'react-dom',
