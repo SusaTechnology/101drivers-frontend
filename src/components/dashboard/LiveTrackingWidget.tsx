@@ -24,6 +24,8 @@ import { cn } from '@/lib/utils'
 import { useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinPublic, socketLeavePublic, socketConnect } from '@/lib/socket'
 
 // Mini map component for live tracking
 function MiniMap({ 
@@ -225,7 +227,23 @@ export default function LiveTrackingWidget({
 
   const token = trackingLink?.token
 
-  // Fetch public tracking data using token (poll every 5 seconds)
+  // ── SOCKET.IO: Join public tracking room for real-time location updates ──
+  useEffect(() => {
+    if (!token) return
+    socketConnect(null)
+    socketJoinPublic(token)
+    return () => { socketLeavePublic(token) }
+  }, [token])
+
+  // ── SOCKET.IO: Listen for real-time location updates ──
+  const handleSocketLocation = useCallback((data: any) => {
+    if (data?.lat && data?.lng) {
+      setDriverPosition({ lat: data.lat, lng: data.lng })
+    }
+  }, [])
+  useSocketEvent('delivery:location-update', handleSocketLocation)
+
+  // Fetch public tracking data using token (poll every 5 seconds as fallback)
   const { 
     data: trackingData, 
     refetch,

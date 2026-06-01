@@ -844,7 +844,7 @@ async ingestDriverLocation(input: {
   lng: number;
   recordedAt?: Date;
 }): Promise<any> {
-  return this.lifecycleService.ingestDriverLocation({
+  return this.lifecycleService.ingestDriverLocationWithSocket({
     userId: input.userId,
     lat: input.lat,
     lng: input.lng,

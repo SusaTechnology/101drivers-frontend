@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useSearch, useNavigate } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,8 @@ import { cn } from '@/lib/utils'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinPublic, socketLeavePublic, socketConnect } from '@/lib/socket'
 
 // Helper to format time
 const formatTime = (dateString?: string) => {
@@ -246,6 +248,23 @@ export default function DealerLiveTrack() {
   })
 
   const token = trackingLink?.token
+
+  // ── SOCKET.IO: Join public tracking room for real-time location updates ──
+  useEffect(() => {
+    if (!token) return
+    socketConnect(null) // dealer is authenticated but public room uses token
+    socketJoinPublic(token)
+    return () => { socketLeavePublic(token) }
+  }, [token])
+
+  // ── SOCKET.IO: Listen for real-time location updates ──
+  const handleSocketLocation = useCallback((data: any) => {
+    if (data?.lat && data?.lng) {
+      setDriverPosition({ lat: data.lat, lng: data.lng })
+      setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
+    }
+  }, [])
+  useSocketEvent('delivery:location-update', handleSocketLocation)
 
   // 2. Fetch public tracking data using token
   const {
