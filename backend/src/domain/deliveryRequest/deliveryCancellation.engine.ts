@@ -1,7 +1,11 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
+  forwardRef,
 } from "@nestjs/common";
 import {
   EnumDeliveryRequestStatus,
@@ -18,15 +22,54 @@ import {
 
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
+import { TrackingGateway } from "../../gateways/tracking.gateway";
 
 type Tx = Prisma.TransactionClient | PrismaService;
 
 @Injectable()
 export class DeliveryCancellationEngine {
+  private readonly logger = new Logger(DeliveryCancellationEngine.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationEventEngine: NotificationEventEngine
+    private readonly notificationEventEngine: NotificationEventEngine,
+    @Optional() @Inject(forwardRef(() => TrackingGateway))
+    private readonly trackingGateway?: TrackingGateway
   ) {}
+
+  /**
+   * Emit socket events after a status change (fire-and-forget).
+   * Mirrors the pattern in DeliveryLifecycleService.emitStatusChanged.
+   */
+  private emitStatusChanged(deliveryId: string, status: string, customerId?: string | null): void {
+    if (!this.trackingGateway) return;
+    const gateway = this.trackingGateway;
+    this.prisma.deliveryRequest
+      .findUnique({
+        where: { id: deliveryId },
+        select: {
+          trackingShareToken: true,
+          customer: { select: { id: true } },
+        },
+      })
+      .then((row) => {
+        if (!row) return;
+        try {
+          gateway.emitStatusChange({
+            deliveryId,
+            status,
+            dealerId: row.customer?.id ?? customerId ?? undefined,
+            shareToken: row.trackingShareToken ?? undefined,
+          });
+          if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
+            gateway.emitFeedUpdate({ deliveryId, status });
+          }
+        } catch (err) {
+          this.logger.warn("Failed to emit status change via WebSocket:", err);
+        }
+      })
+      .catch(() => {});
+  }
 
   async cancelDelivery(input: {
     deliveryId: string;
@@ -174,6 +217,8 @@ export class DeliveryCancellationEngine {
       actorUserId: input.actorUserId ?? null,
       driverId: result.driverId,
     });
+
+    this.emitStatusChanged(result.deliveryId, EnumDeliveryRequestStatus.CANCELLED, result.customerId);
 
     return result;
   }
