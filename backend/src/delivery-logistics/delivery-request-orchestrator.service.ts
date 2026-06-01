@@ -879,6 +879,24 @@ private async createIndividualDeliveryForResolvedCustomer(
     });
   }
 
+  // Emit socket events so driver feed and dealer dashboard update in real-time
+  if (this.trackingGateway) {
+    this.trackingGateway.emitNewDelivery({
+      deliveryId: delivery.id,
+      dealerId: customer.id,
+      delivery: {
+        id: delivery.id,
+        status: "LISTED",
+        pickupAddress: quote.pickupAddress,
+        dropoffAddress: quote.dropoffAddress,
+        pickupWindowStart: schedule.pickupWindowStart?.toISOString() ?? null,
+        pickupWindowEnd: schedule.pickupWindowEnd?.toISOString() ?? null,
+        createdAt: new Date().toISOString(),
+      },
+    });
+    this.trackingGateway.emitFeedUpdate({ deliveryId: delivery.id, status: "LISTED" });
+  }
+
   return this.prisma.deliveryRequest.findUniqueOrThrow({
     where: { id: delivery.id },
   });
@@ -1537,25 +1555,19 @@ private async resolveIndividualCustomerForCreate(
 
     // Emit socket event to dealer dashboard
     if (this.trackingGateway) {
-      const customer = await this.prisma.customer.findUnique({
-        where: { id: input.customerId },
-        select: { approvedByUserId: true },
+      this.trackingGateway.emitNewDelivery({
+        deliveryId: delivery.id,
+        dealerId: input.customerId,
+        delivery: {
+          id: delivery.id,
+          status: delivery.status,
+          pickupAddress: delivery.pickupAddress,
+          dropoffAddress: delivery.dropoffAddress,
+          pickupWindowStart: delivery.pickupWindowStart?.toISOString() ?? null,
+          pickupWindowEnd: delivery.pickupWindowEnd?.toISOString() ?? null,
+          createdAt: delivery.createdAt.toISOString(),
+        },
       });
-      if (customer?.approvedByUserId) {
-        this.trackingGateway.emitNewDelivery({
-          deliveryId: delivery.id,
-          dealerId: customer.approvedByUserId,
-          delivery: {
-            id: delivery.id,
-            status: delivery.status,
-            pickupAddress: delivery.pickupAddress,
-            dropoffAddress: delivery.dropoffAddress,
-            pickupWindowStart: delivery.pickupWindowStart?.toISOString() ?? null,
-            pickupWindowEnd: delivery.pickupWindowEnd?.toISOString() ?? null,
-            createdAt: delivery.createdAt.toISOString(),
-          },
-        });
-      }
       // Also broadcast to driver feed
       this.trackingGateway.emitFeedUpdate({ deliveryId: delivery.id, status: "LISTED" });
     }
