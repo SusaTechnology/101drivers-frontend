@@ -879,6 +879,24 @@ private async createIndividualDeliveryForResolvedCustomer(
     });
   }
 
+  // Emit socket events so driver feed and dealer dashboard update in real-time
+  if (this.trackingGateway) {
+    this.trackingGateway.emitNewDelivery({
+      deliveryId: delivery.id,
+      dealerId: customer.id,
+      delivery: {
+        id: delivery.id,
+        status: "LISTED",
+        pickupAddress: quote.pickupAddress,
+        dropoffAddress: quote.dropoffAddress,
+        pickupWindowStart: schedule.pickupWindowStart?.toISOString() ?? null,
+        pickupWindowEnd: schedule.pickupWindowEnd?.toISOString() ?? null,
+        createdAt: new Date().toISOString(),
+      },
+    });
+    this.trackingGateway.emitFeedUpdate({ deliveryId: delivery.id, status: "LISTED" });
+  }
+
   return this.prisma.deliveryRequest.findUniqueOrThrow({
     where: { id: delivery.id },
   });
