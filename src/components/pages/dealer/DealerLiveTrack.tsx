@@ -249,18 +249,6 @@ export default function DealerLiveTrack() {
 
   const token = trackingLink?.token
 
-  // ── SOCKET.IO: Join public tracking room ──
-  useEffect(() => {
-    if (token) socketJoinPublic(token)
-    return () => { if (token) socketLeavePublic(token) }
-  }, [token])
-
-  // ── SOCKET.IO: Listen for real-time location updates ──
-  useSocketEvent('delivery:location-update', (data: any) => {
-    setDriverPosition({ lat: data.lat, lng: data.lng })
-    setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
-  })
-
   // 2. Fetch public tracking data using token
   const {
     data: trackingData,
@@ -272,7 +260,7 @@ export default function DealerLiveTrack() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/public/tracking/${token}`,
     enabled: !!token,
     noFilter: true,
-    refetchInterval: 5000, // poll every 5 seconds for live updates
+    refetchInterval: 60000, // SOCKET.IO: slowed from 5s to 60s as fallback
   })
 
   // Update coordinates and route points when tracking data arrives
@@ -299,6 +287,18 @@ export default function DealerLiveTrack() {
       setRoutePoints([])
     }
   }, [trackingData])
+
+  // ── SOCKET.IO: Join public tracking room ──
+  useEffect(() => {
+    if (token) socketJoinPublic(token)
+    return () => { if (token) socketLeavePublic(token) }
+  }, [token])
+
+  // ── SOCKET.IO: Listen for real-time location updates ──
+  useSocketEvent('delivery:location-update', (data: any) => {
+    setDriverPosition({ lat: data.lat, lng: data.lng })
+    setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
+  })
 
   // Handle token expiration
   useEffect(() => {

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -227,19 +227,7 @@ export default function LiveTrackingWidget({
 
   const token = trackingLink?.token
 
-  // ── SOCKET.IO: Join public tracking room ──
-  useEffect(() => {
-    if (token) socketJoinPublic(token)
-    return () => { if (token) socketLeavePublic(token) }
-  }, [token])
-
-  // ── SOCKET.IO: Listen for real-time location updates ──
-  useSocketEvent('delivery:location-update', (data: any) => {
-    setDriverPosition({ lat: data.lat, lng: data.lng })
-    setIsDataStale(false)
-  })
-
-  // Fetch public tracking data using token (poll every 5 seconds as fallback)
+  // Fetch public tracking data using token (poll every 5 seconds)
   const { 
     data: trackingData, 
     refetch,
@@ -248,7 +236,7 @@ export default function LiveTrackingWidget({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/public/tracking/${token}`,
     enabled: !!token,
     noFilter: true,
-    refetchInterval: 5000, // Poll every 5 seconds
+    refetchInterval: 60000, // SOCKET.IO: slowed from 5s to 60s as fallback
   })
 
   // Update coordinates when tracking data arrives
@@ -276,6 +264,18 @@ export default function LiveTrackingWidget({
       setIsDataStale((now - lastUpdate) > 2 * 60 * 1000)
     }
   }, [trackingData, pickup, dropoff])
+
+  // ── SOCKET.IO: Join public tracking room ──
+  useEffect(() => {
+    if (token) socketJoinPublic(token)
+    return () => { if (token) socketLeavePublic(token) }
+  }, [token])
+
+  // ── SOCKET.IO: Listen for real-time location updates ──
+  useSocketEvent('delivery:location-update', (data: any) => {
+    setDriverPosition({ lat: data.lat, lng: data.lng })
+    setIsDataStale(false)
+  })
 
   // Get last update text
   const lastUpdateText = getRelativeTime(trackingData?.trackingSession?.latestPoint?.recordedAt)
