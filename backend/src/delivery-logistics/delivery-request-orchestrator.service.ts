@@ -325,6 +325,7 @@ export class DeliveryRequestOrchestratorService {
         recipientPhone: input.recipientPhone?.trim() || null,
 
         isUrgent: input.isUrgent === true,
+        pickupPin: this.generateIndividualPin(),
       },
       select: {
         id: true,
@@ -481,6 +482,7 @@ export class DeliveryRequestOrchestratorService {
         recipientPhone: input.recipientPhone?.trim() || null,
 
         isUrgent: input.isUrgent === true,
+        pickupPin: this.generateIndividualPin(),
       },
       select: {
         id: true,
@@ -1482,6 +1484,7 @@ private async resolveIndividualCustomerForCreate(
         recipientPhone: input.recipientPhone?.trim() || null,
 
         isUrgent: input.isUrgent === true,
+        pickupPin: this.generateIndividualPin(),
       },
       select: {
         id: true,
