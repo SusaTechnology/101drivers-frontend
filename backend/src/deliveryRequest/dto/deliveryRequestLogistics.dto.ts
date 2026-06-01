@@ -831,6 +831,13 @@ export class SchedulePreviewResponseBody {
     type: () => SchedulePreviewSuggestedSlotsBody,
   })
   suggestedSlots!: SchedulePreviewSuggestedSlotsBody;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description: "The actual date slots were resolved for (may differ from requested date)",
+  })
+  actualSlotDate?: Date | null;
 }
 
 export class CancelDeliveryAdminBody {
