@@ -9,15 +9,16 @@ import { fileURLToPath, URL } from 'node:url'
 import path from 'node:path'
 
 // https://vitejs.dev/config/
-// The "Invalid hook call" error is caused by Vite pre-bundling react/react-dom
-// into a separate optimized chunk (react-dom_client.js) while code-split
-// route chunks (@tanstack/react-router with autoCodeSplitting) resolve react
-// from the raw source. Two different module sources = two React instances =
-// useContext returns null.
+// "Invalid hook call" fix for Vite 7 + @tanstack/react-router autoCodeSplitting:
 //
-// FIX: resolve.alias forces ALL react imports to project's own copies.
-// optimizeDeps.exclude prevents Vite from creating a separate pre-bundled
-// react-dom_client.js chunk. Result: every chunk resolves the same React.
+// PROBLEM: Vite pre-bundles react-dom into react-dom_client.js (hash A) while
+// @tanstack/react-router (code-split into its own chunk) resolves react from
+// a different pre-bundle pass (hash B). Two React module instances = useContext
+// returns null inside router hooks (useRouter, useNavigate, etc).
+//
+// FIX: resolve.alias forces ALL react-family imports to the same physical
+// files. optimizeDeps.include forces Vite to pre-bundle react, react-dom,
+// and react-dom/client together in a SINGLE pass so they share one chunk hash.
 //
 // After changing this file, ALWAYS delete node_modules/.vite and restart.
 export default defineConfig({
@@ -35,17 +36,25 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
 
-      // Force ALL react imports → project's own react, no matter who imports
+      // Force ALL react imports → project's own copies, no matter who imports
       'react': path.resolve(__dirname, 'node_modules/react'),
       'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+      'react-dom/client': path.resolve(__dirname, 'node_modules/react-dom/client'),
       'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime'),
       'react/jsx-dev-runtime': path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime'),
       'react-is': path.resolve(__dirname, 'node_modules/react-is'),
     },
   },
   optimizeDeps: {
-    // Exclude react family from pre-bundling — serve raw so all chunks
-    // resolve the exact same module instance (no react-dom_client.js split)
-    exclude: ['react', 'react-dom', 'react-is'],
+    // Force react + react-dom + sub-paths into the SAME pre-bundle pass
+    // so they all get the same hash (no react-dom_client.js vs chunk split)
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      'react-is',
+    ],
   },
 })
