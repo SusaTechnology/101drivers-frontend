@@ -9,14 +9,17 @@ import { fileURLToPath, URL } from 'node:url'
 import path from 'node:path'
 
 // https://vitejs.dev/config/
-// resolve.dedupe: tells Vite to always resolve these from project root.
-// resolve.alias: forces react/react-dom/react-is to ALWAYS point to the
-// project's own copies — even when libraries (like @stripe/react-stripe-js
-// using CJS require('react'), recharts pulling react-is@18) try to import
-// from a different location. This eliminates the "Invalid hook call" /
-// "older version of React" error caused by dual React instances.
+// The "Invalid hook call" error is caused by Vite pre-bundling react/react-dom
+// into a separate optimized chunk (react-dom_client.js) while code-split
+// route chunks (@tanstack/react-router with autoCodeSplitting) resolve react
+// from the raw source. Two different module sources = two React instances =
+// useContext returns null.
 //
-// IMPORTANT: after changing this file, delete node_modules/.vite and restart.
+// FIX: resolve.alias forces ALL react imports to project's own copies.
+// optimizeDeps.exclude prevents Vite from creating a separate pre-bundled
+// react-dom_client.js chunk. Result: every chunk resolves the same React.
+//
+// After changing this file, ALWAYS delete node_modules/.vite and restart.
 export default defineConfig({
   plugins: [
     devtools(),
@@ -28,13 +31,7 @@ export default defineConfig({
     tailwindcss(),
   ],
   resolve: {
-    dedupe: [
-      'react',
-      'react-dom',
-      'react-is',
-      'react/jsx-runtime',
-      'react/jsx-dev-runtime',
-    ],
+    dedupe: ['react', 'react-dom', 'react-is'],
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
 
@@ -47,18 +44,8 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    // Force Vite to pre-bundle these together so they share one React instance
-    include: [
-      'react',
-      'react-dom',
-      'react-is',
-      'react/jsx-runtime',
-      'react/jsx-dev-runtime',
-      'recharts > d3-scale',
-      'recharts > react-is',
-      'radix-ui',
-      'sonner',
-      '@stripe/react-stripe-js',
-    ],
+    // Exclude react family from pre-bundling — serve raw so all chunks
+    // resolve the exact same module instance (no react-dom_client.js split)
+    exclude: ['react', 'react-dom', 'react-is'],
   },
 })
