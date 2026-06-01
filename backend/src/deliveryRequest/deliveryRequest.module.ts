@@ -7,6 +7,7 @@ import { DeliveryRequestResolver } from "./deliveryRequest.resolver";
 import { DeliveryRequestPolicyService } from "src/domain/deliveryRequest/deliveryRequestPolicy.service";
 import { DeliveryRequestDomain } from "src/domain/deliveryRequest/deliveryRequest.domain";
 import { DeliveryLogisticsModule } from "../delivery-logistics/delivery-logistics.module";
+import { GatewayModule } from "../gateways/gateway.module";
 import { DeliveryCancellationEngine } from "src/domain/deliveryRequest/deliveryCancellation.engine";
 import { AdminDeliveryEngine } from "src/domain/deliveryRequest/adminDelivery.engine";
 import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.engine";
@@ -18,6 +19,7 @@ import { SchedulingPolicyEngineModule } from "../domain/schedulingPolicy/schedul
     DeliveryRequestModuleBase,
     forwardRef(() => AuthModule),
     DeliveryLogisticsModule,
+    forwardRef(() => GatewayModule),
     SchedulingPolicyEngineModule,
   ],
   controllers: [DeliveryRequestController, DeliveryRequestPublicController],

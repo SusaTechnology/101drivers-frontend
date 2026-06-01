@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, Inject, Optional, forwardRef, Logger, NotFoundException } from "@nestjs/common";
 import {
   EnumAdminAuditLogAction,
   EnumAdminAuditLogActorType,
@@ -11,13 +11,52 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
+import { TrackingGateway } from "../../gateways/tracking.gateway";
 
 @Injectable()
 export class AdminDeliveryEngine {
+  private readonly logger = new Logger(AdminDeliveryEngine.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationEventEngine: NotificationEventEngine
+    private readonly notificationEventEngine: NotificationEventEngine,
+    @Optional() @Inject(forwardRef(() => TrackingGateway))
+    private readonly trackingGateway?: TrackingGateway
   ) {}
+
+  /**
+   * Emit socket events after a status change (fire-and-forget).
+   * Mirrors the pattern in DeliveryLifecycleService.emitStatusChanged.
+   */
+  private emitStatusChanged(deliveryId: string, status: string, customerId?: string | null): void {
+    if (!this.trackingGateway) return;
+    const gateway = this.trackingGateway;
+    this.prisma.deliveryRequest
+      .findUnique({
+        where: { id: deliveryId },
+        select: {
+          trackingShareToken: true,
+          customer: { select: { id: true } },
+        },
+      })
+      .then((row) => {
+        if (!row) return;
+        try {
+          gateway.emitStatusChange({
+            deliveryId,
+            status,
+            dealerId: row.customer?.id ?? customerId ?? undefined,
+            shareToken: row.trackingShareToken ?? undefined,
+          });
+          if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
+            gateway.emitFeedUpdate({ deliveryId, status });
+          }
+        } catch (err) {
+          this.logger.warn("Failed to emit status change via WebSocket:", err);
+        }
+      })
+      .catch(() => {});
+  }
 async assignDriver(input: {
   deliveryId: string;
   driverId: string;
@@ -173,6 +212,8 @@ async assignDriver(input: {
     driverId: input.driverId,
     actorUserId: input.actorUserId ?? null,
   });
+
+  this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.BOOKED, delivery.customerId);
 }
   async cancelDelivery(input: {
     deliveryId: string;
@@ -255,6 +296,8 @@ async assignDriver(input: {
         afterJson: afterDelivery ?? Prisma.JsonNull,
       },
     });
+
+    this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.CANCELLED);
   }
 
   async forceCancelDelivery(input: {
@@ -421,6 +464,8 @@ async assignDriver(input: {
       driverId: activeDriverId,
       reason: input.reason,
     });
+
+    this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.CANCELLED, delivery.customerId);
   }
 
   async openDispute(input: {
@@ -539,6 +584,8 @@ async assignDriver(input: {
       reason: input.reason,
       legalHold: input.legalHold === true,
     });
+
+    this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.DISPUTED, delivery.customerId);
   }
 
   async setLegalHold(input: {
@@ -841,5 +888,7 @@ async assignDriver(input: {
         },
       },
     });
+
+    this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.BOOKED);
   }
 }
