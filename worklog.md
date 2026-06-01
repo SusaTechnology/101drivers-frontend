@@ -109,3 +109,28 @@ Stage Summary:
 - PublicTrackPage.tsx: Fixed in commit 3b3b707 (this session)
 - dashboard-list.tsx: Fixed in commit 3b3b707 (this session)
 ---
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Add socket emit to AdminDeliveryEngine and DeliveryCancellationEngine
+
+Work Log:
+- Audited all delivery status transition paths for socket emit coverage
+- Found that DeliveryLifecycleService covers driver-initiated transitions (book, start, complete)
+- Found 6 MISSING paths in AdminDeliveryEngine (assignDriver, cancelDelivery, forceCancelDelivery, openDispute, reassignDelivery) — no socket emits
+- Found 1 MISSING path in DeliveryCancellationEngine (cancelDelivery) — no socket emits
+- Added TrackingGateway injection (Optional + forwardRef) to both engines
+- Added emitStatusChanged private method to both engines (mirrors DeliveryLifecycleService pattern)
+- Added emitStatusChanged calls after each status-changing operation
+- Added GatewayModule import to DeliveryRequestModule with forwardRef
+- Pushed commit a87e72c to both main and master branches
+
+Stage Summary:
+- ALL delivery status transitions now emit socket events to both dealer room and driver feed
+- Admin assign/reassign → emits BOOKED to dealer + driver feed
+- Admin cancel/force-cancel → emits CANCELLED to dealer + driver feed
+- Admin open dispute → emits DISPUTED to dealer
+- Customer cancel (via DeliveryCancellationEngine) → emits CANCELLED to dealer + driver feed
+- useSocket.ts hook already has polling fix from previous session — no changes needed
+- Total coverage: 100% of status transitions now have socket emits
