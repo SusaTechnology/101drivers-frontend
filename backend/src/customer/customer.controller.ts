@@ -923,6 +923,7 @@ async unsuspendCustomer(
          pickupAddress: true,
          pickupLat: true,
          pickupLng: true,
+         pickupPin: true,
          pickupPlaceId: true,
          pickupState: true,
          pickupWindowEnd: true,

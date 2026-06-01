@@ -267,6 +267,7 @@ export default function DealerDashboard() {
         scheduleDate,
         scheduleTime,
         pickupWindowStart: item.pickupWindowStart,
+        pickupPin: item.pickupPin,
         price,
         miles,
         driver,
@@ -627,7 +628,7 @@ export default function DealerDashboard() {
                       </div>
                       <div className="text-right"><div className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(delivery.price)}</div><div className="text-[10px] font-bold text-slate-400 uppercase">Est.</div></div>
                     </div>
-                    <div className="mt-4 flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400"><div className="flex items-center gap-1.5"><CalendarIcon className="h-4 w-4" /><span>{delivery.scheduleDate}</span></div><div className="flex items-center gap-1.5"><Clock className="h-4 w-4" /><span>{delivery.scheduleTime}</span></div></div>
+                    <div className="mt-4 flex items-center justify-between text-sm text-slate-500 dark:text-slate-400"><div className="flex items-center gap-4"><div className="flex items-center gap-1.5"><CalendarIcon className="h-4 w-4" /><span>{delivery.scheduleDate}</span></div><div className="flex items-center gap-1.5"><Clock className="h-4 w-4" /><span>{delivery.scheduleTime}</span></div></div>{delivery.pickupPin && (<span className="text-sm font-bold text-green-600 dark:text-green-400">PIN: {delivery.pickupPin}</span>)}</div>
                     {delivery.driver && (
                       <div className="mt-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
                         <div className="flex items-center gap-3">
