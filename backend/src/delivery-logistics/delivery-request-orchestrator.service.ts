@@ -1558,6 +1558,29 @@ private async resolveIndividualCustomerForCreate(
       actorUserId: input.createdByUserId ?? null,
     });
 
+    // Emit socket events so driver feed updates in real-time.
+    // Gateway methods have null checks on this.server, so this is safe even if
+    // the circular dependency leaves trackingGateway partially injected.
+    if (this.trackingGateway) {
+      this.trackingGateway.emitNewDelivery({
+        deliveryId: delivery.id,
+        dealerId: customer.id,
+        delivery: {
+          id: delivery.id,
+          status: delivery.status,
+          pickupAddress: delivery.pickupAddress,
+          dropoffAddress: delivery.dropoffAddress,
+          pickupWindowStart: delivery.pickupWindowStart?.toISOString() ?? null,
+          pickupWindowEnd: delivery.pickupWindowEnd?.toISOString() ?? null,
+          createdAt: delivery.createdAt?.toISOString() ?? new Date().toISOString(),
+        },
+      });
+      this.trackingGateway.emitFeedUpdate({
+        deliveryId: delivery.id,
+        status: delivery.status,
+      });
+    }
+
     return delivery;
   }
 
