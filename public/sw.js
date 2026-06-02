@@ -61,6 +61,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Check if a URL is a Vite dev server asset that must NEVER be cached.
+// Vite 7 serves pre-bundled deps, HMR chunks, and virtual modules at
+// various paths that change on every restart or cache clear.
+function isViteDevAsset(url) {
+  const p = url.pathname;
+
+  // Vite internal paths
+  if (p.startsWith('/node_modules/') ||
+      p.startsWith('/@vite/') ||
+      p.startsWith('/@tanstack/') ||
+      p.startsWith('/@react-refresh/') ||
+      p.includes('.vite/deps/') ||
+      p.includes('tsr-split') ||
+      p.includes('/@id/')) {
+    return true;
+  }
+
+  // Any URL with a ?v= query param is a Vite dep optimization hash —
+  // these change when the pre-bundle is regenerated and must never be cached.
+  if (url.searchParams.has('v') || url.searchParams.has('t')) {
+    return true;
+  }
+
+  // Virtual chunk filenames (Vite 7 pre-bundle output)
+  if (/^\/chunk-[A-Z0-9]+\.js$/.test(p)) {
+    return true;
+  }
+
+  // react-dom_client, react_jsx-runtime, etc. — Vite pre-bundled entry points
+  if (/^(\/react|\/react-dom|\/react-dom_client|\/react_jsx)/.test(p)) {
+    return true;
+  }
+
+  // All .js files under /src/ in dev mode (ESM modules, not production bundles)
+  if (p.startsWith('/src/') && p.endsWith('.js')) {
+    return true;
+  }
+
+  return false;
+}
+
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -71,12 +112,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip Vite dev server dependency chunks (pre-bundled deps)
-  // These change frequently during dev and must never be cached by the SW
-  if (url.pathname.startsWith('/node_modules/') ||
-      url.pathname.startsWith('/@vite/') ||
-      url.pathname.startsWith('/@tanstack/') ||
-      url.pathname.includes('.vite/deps/')) {
+  // NEVER cache Vite dev server assets
+  if (isViteDevAsset(url)) {
     return;
   }
 
