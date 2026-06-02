@@ -198,14 +198,14 @@ function HeroRouteMap({
 
   if (!isLoaded) {
     return (
-      <div className="w-full h-[220px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+      <div className="w-full h-[320px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
         <div className="w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-600 animate-pulse" />
       </div>
     )
   }
 
   return (
-    <div className="w-full h-[220px] bg-slate-100 dark:bg-slate-800">
+    <div className="w-full h-[320px] bg-slate-100 dark:bg-slate-800">
       <GoogleMap
         mapContainerStyle={{ width: '100%', height: '100%' }}
         center={initialCenter}
@@ -555,16 +555,16 @@ export default function DriverJobDetailsPage() {
           isLoaded={isMapsLoaded}
         />
       ) : (
-        <div className="w-full h-[220px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+        <div className="w-full h-[320px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
           <MapPin className="w-8 h-8 text-slate-300 dark:text-slate-600" />
         </div>
       )}
 
-      <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-6 pb-32">
+      <main className="max-w-[980px] mx-auto px-5 sm:px-6 py-4 pb-32">
         {/* Summary Card */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-          <CardContent className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
                 {urgent && (
                   <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 text-[11px] font-extrabold">
@@ -573,17 +573,17 @@ export default function DriverJobDetailsPage() {
                   </Badge>
                 )}
 
-                <h1 className="mt-4 text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                <h1 className="mt-2 text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                   <AddressLink address={getShortAddress(job.pickupAddress)} />
                   <span className="mx-1.5 text-slate-400">&rarr;</span>
                   <AddressLink address={getShortAddress(job.dropoffAddress)} />
                 </h1>
 
-                <p className="mt-2 text-xs text-slate-500">Status: {job.status === 'LISTED' ? 'Available' : job.status}</p>
+                <p className="mt-1 text-xs text-slate-500">Status: {job.status === 'LISTED' ? 'Available' : job.status}</p>
               </div>
 
               <div className="text-left sm:text-right">
-                <p className="text-3xl font-black text-primary">
+                <p className="text-2xl font-black text-primary">
                   {formatCurrency(payout)}
                 </p>
                 {bonus ? (
@@ -598,12 +598,12 @@ export default function DriverJobDetailsPage() {
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Distance
                 </p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white">
                   {miles ? `${miles} mi` : '\u2014'}
                 </p>
               </div>
@@ -611,7 +611,7 @@ export default function DriverJobDetailsPage() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Pickup Time
                 </p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white">
                   {window}
                 </p>
               </div>
@@ -619,7 +619,7 @@ export default function DriverJobDetailsPage() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Est. Drive Time
                 </p>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
+                <p className="text-sm font-extrabold text-slate-900 dark:text-white">
                   {driveTime}
                 </p>
               </div>
