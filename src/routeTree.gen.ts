@@ -53,6 +53,7 @@ import { Route as DealerDraftsIndexRouteImport } from './routes/dealer-drafts/in
 import { Route as DealerDeliveryDetailsIndexRouteImport } from './routes/dealer-delivery-details/index'
 import { Route as DealerDashboardIndexRouteImport } from './routes/dealer-dashboard/index'
 import { Route as DealerCreateDeliveryIndexRouteImport } from './routes/dealer-create-delivery/index'
+import { Route as AgreementIndexRouteImport } from './routes/agreement/index'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin-users/index'
 import { Route as AdminSupportListIndexRouteImport } from './routes/admin-support-list/index'
 import { Route as AdminSupportDetailIndexRouteImport } from './routes/admin-support-detail/index'
@@ -343,6 +344,11 @@ const DealerCreateDeliveryIndexRoute =
     path: '/dealer-create-delivery/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AgreementIndexRoute = AgreementIndexRouteImport.update({
+  id: '/agreement/',
+  path: '/agreement/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   id: '/admin-users/',
   path: '/admin-users/',
@@ -707,6 +713,7 @@ export interface FileRoutesByFullPath {
   '/admin-support-detail/': typeof AdminSupportDetailIndexRoute
   '/admin-support-list/': typeof AdminSupportListIndexRoute
   '/admin-users/': typeof AdminUsersIndexRoute
+  '/agreement/': typeof AgreementIndexRoute
   '/dealer-create-delivery/': typeof DealerCreateDeliveryIndexRoute
   '/dealer-dashboard/': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details/': typeof DealerDeliveryDetailsIndexRoute
@@ -810,6 +817,7 @@ export interface FileRoutesByTo {
   '/admin-support-detail': typeof AdminSupportDetailIndexRoute
   '/admin-support-list': typeof AdminSupportListIndexRoute
   '/admin-users': typeof AdminUsersIndexRoute
+  '/agreement': typeof AgreementIndexRoute
   '/dealer-create-delivery': typeof DealerCreateDeliveryIndexRoute
   '/dealer-dashboard': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details': typeof DealerDeliveryDetailsIndexRoute
@@ -915,6 +923,7 @@ export interface FileRoutesById {
   '/admin-support-detail/': typeof AdminSupportDetailIndexRoute
   '/admin-support-list/': typeof AdminSupportListIndexRoute
   '/admin-users/': typeof AdminUsersIndexRoute
+  '/agreement/': typeof AgreementIndexRoute
   '/dealer-create-delivery/': typeof DealerCreateDeliveryIndexRoute
   '/dealer-dashboard/': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details/': typeof DealerDeliveryDetailsIndexRoute
@@ -1021,6 +1030,7 @@ export interface FileRouteTypes {
     | '/admin-support-detail/'
     | '/admin-support-list/'
     | '/admin-users/'
+    | '/agreement/'
     | '/dealer-create-delivery/'
     | '/dealer-dashboard/'
     | '/dealer-delivery-details/'
@@ -1124,6 +1134,7 @@ export interface FileRouteTypes {
     | '/admin-support-detail'
     | '/admin-support-list'
     | '/admin-users'
+    | '/agreement'
     | '/dealer-create-delivery'
     | '/dealer-dashboard'
     | '/dealer-delivery-details'
@@ -1228,6 +1239,7 @@ export interface FileRouteTypes {
     | '/admin-support-detail/'
     | '/admin-support-list/'
     | '/admin-users/'
+    | '/agreement/'
     | '/dealer-create-delivery/'
     | '/dealer-dashboard/'
     | '/dealer-delivery-details/'
@@ -1312,6 +1324,7 @@ export interface RootRouteChildren {
   AdminSupportDetailIndexRoute: typeof AdminSupportDetailIndexRoute
   AdminSupportListIndexRoute: typeof AdminSupportListIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
+  AgreementIndexRoute: typeof AgreementIndexRoute
   DealerCreateDeliveryIndexRoute: typeof DealerCreateDeliveryIndexRoute
   DealerDashboardIndexRoute: typeof DealerDashboardIndexRoute
   DealerDeliveryDetailsIndexRoute: typeof DealerDeliveryDetailsIndexRoute
@@ -1666,6 +1679,13 @@ declare module '@tanstack/react-router' {
       path: '/dealer-create-delivery'
       fullPath: '/dealer-create-delivery/'
       preLoaderRoute: typeof DealerCreateDeliveryIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agreement/': {
+      id: '/agreement/'
+      path: '/agreement'
+      fullPath: '/agreement/'
+      preLoaderRoute: typeof AgreementIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-users/': {
@@ -2167,6 +2187,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminSupportDetailIndexRoute: AdminSupportDetailIndexRoute,
   AdminSupportListIndexRoute: AdminSupportListIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
+  AgreementIndexRoute: AgreementIndexRoute,
   DealerCreateDeliveryIndexRoute: DealerCreateDeliveryIndexRoute,
   DealerDashboardIndexRoute: DealerDashboardIndexRoute,
   DealerDeliveryDetailsIndexRoute: DealerDeliveryDetailsIndexRoute,
