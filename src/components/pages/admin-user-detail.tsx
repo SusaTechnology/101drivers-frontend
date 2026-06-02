@@ -953,12 +953,22 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                     Resend Invite
                   </Button>
                 )}
-                {/* Driver waitlisted - show Invite Driver */}
+                {/* Driver waitlisted - show Invite / Reject */}
                 {!user.disabledAt && user.driver?.status === 'WAITLISTED' && (
-                  <Button onClick={() => openDialog('invite-driver')} className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-sky-600 text-white hover:opacity-90 transition">
-                    <Send className="w-4 h-4" />
-                    Invite Driver
-                  </Button>
+                  <>
+                    <Button onClick={() => openDialog('invite-driver')} className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-sky-600 text-white hover:opacity-90 transition">
+                      <Send className="w-4 h-4" />
+                      Invite Driver
+                    </Button>
+                    <Button
+                      onClick={() => openDialog('reject-driver')}
+                      variant="destructive"
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject Driver
+                    </Button>
+                  </>
                 )}
                 {/* Driver pending approval - show Approve/Reject */}
                 {!user.disabledAt && user.driver?.status === 'PENDING_APPROVAL' && (
