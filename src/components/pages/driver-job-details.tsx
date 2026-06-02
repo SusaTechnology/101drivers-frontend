@@ -21,6 +21,7 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AddressLink } from '@/components/shared/AddressLink'
 import {
   Card,
   CardContent,
@@ -511,7 +512,9 @@ export default function DriverJobDetailsPage() {
                 Delivery
               </div>
               <div className="text-sm font-extrabold text-slate-900 dark:text-white">
-                {route}
+                <AddressLink address={getShortAddress(job.pickupAddress)} />
+                <span className="mx-1.5 text-slate-400">&rarr;</span>
+                <AddressLink address={getShortAddress(job.dropoffAddress)} />
               </div>
             </div>
           </div>
@@ -570,7 +573,9 @@ export default function DriverJobDetailsPage() {
                 )}
 
                 <h1 className="mt-4 text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                  {route}
+                  <AddressLink address={getShortAddress(job.pickupAddress)} />
+                  <span className="mx-1.5 text-slate-400">&rarr;</span>
+                  <AddressLink address={getShortAddress(job.dropoffAddress)} />
                 </h1>
 
                 <p className="mt-2 text-xs text-slate-500">Status: {job.status === 'LISTED' ? 'Available' : job.status}</p>
@@ -787,7 +792,9 @@ export default function DriverJobDetailsPage() {
                   <div className="flex items-center gap-2">
                     <Route className="w-4 h-4 text-primary shrink-0" />
                     <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                      {route}
+                      <AddressLink address={getShortAddress(job.pickupAddress)} />
+                      <span className="mx-1 text-slate-400">&rarr;</span>
+                      <AddressLink address={getShortAddress(job.dropoffAddress)} />
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-3 text-center">

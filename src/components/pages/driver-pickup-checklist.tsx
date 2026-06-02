@@ -907,14 +907,14 @@ const handleUploadOdometerPhoto = async () => {
                   <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pickup</p>
-                    <AddressLink address={delivery.pickupAddress} className="text-[13px] font-medium text-blue-600 dark:text-blue-400 hover:underline" />
+                    <AddressLink address={delivery.pickupAddress} className="text-[13px] font-medium" />
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Dropoff</p>
-                    <AddressLink address={delivery.dropoffAddress} className="text-[13px] font-medium text-blue-600 dark:text-blue-400 hover:underline" />
+                    <AddressLink address={delivery.dropoffAddress} className="text-[13px] font-medium" />
                   </div>
                 </div>
               </div>

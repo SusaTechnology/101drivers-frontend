@@ -23,7 +23,7 @@ export function AddressLink({ address, className }: AddressLinkProps) {
       href={mapsUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className={className}
+      className={`cursor-pointer hover:text-green-600 dark:hover:text-green-400 transition-colors ${className || ''}`}
     >
       {address}
       <ExternalLink className="inline w-3 h-3 ml-1 opacity-50" />
