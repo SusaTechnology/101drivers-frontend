@@ -763,12 +763,15 @@ const handleUploadOdometerPhoto = async () => {
   const readyToSubmit = greeted && photosSaved && odometerSaved && vinPhotoSaved && /^\d{4}$/.test(vinValue) && !!odometerValue && !isNaN(Number(odometerValue)) && pinVerified
 
   // PIN verification handler
-  const handleVerifyPin = async () => {
-    if (!/^\d{4}$/.test(pinValue)) {
+  const verifyPinLock = useRef(false)
+  const handleVerifyPin = async (pinOverride?: string) => {
+    const pin = pinOverride || pinValue
+    if (!/^\d{4}$/.test(pin)) {
       setPinError('PIN must be 4 digits')
       return
     }
-    if (!deliveryId) return
+    if (!deliveryId || verifyPinLock.current) return
+    verifyPinLock.current = true
     setPinVerifying(true)
     try {
       const res = await fetch(
@@ -776,17 +779,19 @@ const handleUploadOdometerPhoto = async () => {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: pinValue }),
+          body: JSON.stringify({ pin }),
         }
       )
       if (res.ok) {
         const data = await res.json()
         if (data.valid) {
           setPinVerified(true)
+          setPinValue(pin)
           setPinError(null)
           toast.success('PIN verified!', { description: 'Customer authorization confirmed.' })
         } else {
           setPinError('Incorrect PIN. Please try again.')
+          setPinValue('')
           toast.error('PIN incorrect', { description: 'The PIN you entered is not correct. Contact the customer to verify.' })
         }
       } else {
@@ -796,6 +801,7 @@ const handleUploadOdometerPhoto = async () => {
       setPinError('Network error')
     }
     setPinVerifying(false)
+    verifyPinLock.current = false
   }
 
   // Status helper
@@ -962,33 +968,28 @@ const handleUploadOdometerPhoto = async () => {
                     <Shield className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-[15px] font-black text-slate-900 dark:text-white">Get PIN — Customer Authorization</h3>
-                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">
-                      The customer who created this order has a 4-digit PIN. Call or text them to get it.
+                    <h3 className="text-[15px] font-black text-slate-900 dark:text-white">Customer Authorization</h3>
+                    <p className="text-[13px] text-slate-600 dark:text-slate-400 mt-2">
+                      The customer has a 4-digit PIN. Ask them for it.
                     </p>
-                    <p className="text-[12px] text-slate-600 dark:text-slate-300 mt-2">
-                      Contact: <span className="font-bold">{pinContactName}</span>{' '}
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-3">
+                      Contact: <span className="font-bold text-slate-700 dark:text-slate-300">{pinContactName}</span>{' '}
                       <span className="text-slate-400">({pinPhone})</span>
                     </p>
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-4 flex gap-2">
                       <a
                         href={`tel:${pinPhone}`}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-[12px] font-bold transition"
+                        className="w-10 h-10 rounded-xl bg-lime-500 flex items-center justify-center text-slate-950 hover:bg-lime-600 transition"
                       >
-                        <Phone className="w-3.5 h-3.5" />
-                        Call
+                        <Phone className="w-5 h-5" />
                       </a>
                       <a
                         href={`sms:${pinPhone}?body=Hi%2C%20I%20need%20the%20pickup%20PIN%20for%20your%20vehicle%20delivery.`}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold transition"
+                        className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 hover:bg-blue-200 transition"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        Text
+                        <MessageSquare className="w-5 h-5" />
                       </a>
                     </div>
-                    <p className="mt-3 text-[10px] text-slate-400 italic">
-                      PIN is a 4-digit code. Enter it in the final step after entering the VIN.
-                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -1882,10 +1883,10 @@ const handleUploadOdometerPhoto = async () => {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h2 className="text-lg font-black text-slate-900 dark:text-white">Customer PIN</h2>
+                          <h2 className="text-lg font-black text-slate-900 dark:text-white">Driver Authorization</h2>
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Enter the 4-digit PIN from the customer who created this order.
+                          Enter PIN
                         </p>
                         {(() => {
                           const isBusiness = delivery?.customer?.customerType === 'BUSINESS'
@@ -1899,11 +1900,15 @@ const handleUploadOdometerPhoto = async () => {
                             <div className="mt-3 flex items-center gap-2">
                               <a
                                 href={`tel:${pinPhone}`}
-                                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40 text-green-700 dark:text-green-300 text-[12px] font-bold hover:bg-green-100 dark:hover:bg-green-900/20 transition"
+                                className="w-10 h-10 rounded-xl bg-lime-500 flex items-center justify-center text-slate-950 hover:bg-lime-600 transition"
                               >
-                                <Phone className="w-3.5 h-3.5" />
-                                <span>Call {pinContactName} to get PIN</span>
-                                <span className="text-green-500 dark:text-green-400 text-[11px] font-mono">{pinPhone}</span>
+                                <Phone className="w-5 h-5" />
+                              </a>
+                              <a
+                                href={`sms:${pinPhone}?body=Hi%2C%20I%20need%20the%20pickup%20PIN%20for%20your%20vehicle%20delivery.`}
+                                className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 hover:bg-blue-200 transition"
+                              >
+                                <MessageSquare className="w-5 h-5" />
                               </a>
                             </div>
                           ) : null
@@ -1918,9 +1923,6 @@ const handleUploadOdometerPhoto = async () => {
                     {!pinVerified ? (
                       <>
                         <div className="mt-5 space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                            Verify PIN (required — customer authorization)
-                          </label>
                           <div className="relative">
                             <Input
                               value={pinValue}
@@ -1928,6 +1930,10 @@ const handleUploadOdometerPhoto = async () => {
                                 const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
                                 setPinValue(digits)
                                 setPinError(null)
+                                // Auto-verify on 4th digit
+                                if (digits.length === 4) {
+                                  setTimeout(() => handleVerifyPin(digits), 150)
+                                }
                               }}
                               inputMode="numeric"
                               pattern="[0-9]*"
@@ -1945,26 +1951,16 @@ const handleUploadOdometerPhoto = async () => {
                           {pinError && (
                             <p className="text-[11px] font-bold text-red-500 mt-1">{pinError}</p>
                           )}
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            PIN is a 4-digit code.
+                          </p>
                         </div>
 
-                        {pinValue.length === 4 && !pinVerified && (
-                          <Button
-                            onClick={handleVerifyPin}
-                            disabled={pinVerifying}
-                            className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                          >
-                            {pinVerifying ? (
-                              <>
-                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                Verifying PIN...
-                              </>
-                            ) : (
-                              <>
-                                <Shield className="w-4 h-4" />
-                                Verify PIN
-                              </>
-                            )}
-                          </Button>
+                        {pinVerifying && (
+                          <div className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 flex items-center justify-center gap-2 opacity-70">
+                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Verifying PIN...
+                          </div>
                         )}
                       </>
                     ) : (
