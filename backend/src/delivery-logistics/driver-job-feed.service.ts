@@ -59,6 +59,8 @@ export type DriverFeedItem = {
   matchReasons: string[];
   pickupDistanceMiles: number | null;
   pickupEtaMinutes: number | null;
+  /** Total trip distance from pickup to dropoff (from quote). */
+  deliveryDistanceMiles: number | null;
   pickupLat: number | null;
   pickupLng: number | null;
   dropoffLat: number | null;
@@ -263,6 +265,7 @@ async getDriverJobFeed(input: {
           estimatedPrice: true,
           pricingSnapshot: true,
           feesBreakdown: true,
+          distanceMiles: true,
         },
       },
     },
@@ -759,6 +762,7 @@ async getDriverJobFeed(input: {
         matchReasons,
         pickupDistanceMiles,
         pickupEtaMinutes,
+        deliveryDistanceMiles: delivery.quote?.distanceMiles ?? null,
         pickupLat: delivery.pickupLat,
         pickupLng: delivery.pickupLng,
         dropoffLat: delivery.dropoffLat,

@@ -479,7 +479,7 @@ export default function DriverJobDetailsPage() {
   const urgent = job.isUrgent
   const bonus = job.urgentBonusAmount
   const payout = job.payoutPreviewAmount
-  const miles = job.pickupDistanceMiles
+  const miles = job.deliveryDistanceMiles
   const windowDate = formatDate(job.pickupWindowStart)
   const windowTime = formatTimeRange(job.pickupWindowStart, job.pickupWindowEnd)
   const window = `${windowDate} \u2022 ${windowTime}`
@@ -593,7 +593,7 @@ export default function DriverJobDetailsPage() {
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Distance
+                  Trip Distance
                 </p>
                 <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
                   {miles ? `${miles} mi` : '\u2014'}
@@ -711,8 +711,8 @@ export default function DriverJobDetailsPage() {
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Distance (mi)</p>
-                <p className="font-medium">{job.pickupDistanceMiles ?? '\u2014'}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trip Distance (mi)</p>
+                <p className="font-medium">{job.deliveryDistanceMiles ?? '\u2014'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup ETA (min)</p>
