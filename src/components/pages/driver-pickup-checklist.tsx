@@ -95,6 +95,14 @@ type PersistedState = {
   step1Timestamp: string | null
 }
 
+function buildPinSmsBody(driverName: string | null | undefined, delivery: any): string {
+  const vehicle = [delivery?.vehicleColor, delivery?.vehicleMake, delivery?.vehicleModel].filter(Boolean).join(' ')
+  const plate = delivery?.licensePlate || ''
+  const address = delivery?.pickupAddress || ''
+  const name = driverName || 'your driver'
+  return `Hi, this is ${name} with 101 Drivers. I'm the driver picking up the ${vehicle}${plate ? ` with license plate ${plate}` : ''} at ${address}. Can you please send me the 4-digit pickup PIN? Thank you.`
+}
+
 function loadPersistedState(deliveryId: string): Partial<PersistedState> | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY(deliveryId))
@@ -980,7 +988,7 @@ const handleUploadOdometerPhoto = async () => {
                         <Phone className="w-5 h-5" />
                       </a>
                       <a
-                        href={`sms:${pinPhone}?body=Hi%2C%20I%20need%20the%20pickup%20PIN%20for%20your%20vehicle%20delivery.`}
+                        href={`sms:${pinPhone}?body=${encodeURIComponent(buildPinSmsBody(user?.fullName, delivery))}`}
                         className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 hover:bg-blue-200 transition"
                       >
                         <MessageSquare className="w-5 h-5" />
@@ -1830,7 +1838,7 @@ const handleUploadOdometerPhoto = async () => {
                                 <Phone className="w-5 h-5" />
                               </a>
                               <a
-                                href={`sms:${pinPhone}?body=Hi%2C%20I%20need%20the%20pickup%20PIN%20for%20your%20vehicle%20delivery.`}
+                                href={`sms:${pinPhone}?body=${encodeURIComponent(buildPinSmsBody(user?.fullName, delivery))}`}
                                 className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 hover:bg-blue-200 transition"
                               >
                                 <MessageSquare className="w-5 h-5" />
