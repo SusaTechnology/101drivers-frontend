@@ -22,9 +22,14 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
-    dedupe: ['react', 'react-dom', 'react-is'],
+    dedupe: ['react', 'react-dom', 'react-is', '@tanstack/router-core'],
   },
   optimizeDeps: {
+    // Force Vite to always re-bundle deps from scratch on server start.
+    // Prevents stale cache from creating duplicate React instances
+    // when code-split virtual modules (tsr-split) resolve to different
+    // pre-bundled chunks after an HMR update or partial cache invalidation.
+    force: true,
     include: [
       'react',
       'react-dom',
@@ -35,6 +40,7 @@ export default defineConfig({
       '@tanstack/react-router-devtools',
       '@tanstack/react-devtools',
       '@tanstack/react-query',
+      '@tanstack/router-core',
     ],
   },
 })
