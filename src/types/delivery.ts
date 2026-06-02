@@ -124,7 +124,13 @@ export interface Payment {
   id: string;
   status: string;
   amount?: number | null;
+  paymentType?: string | null;
+  provider?: string | null;
+  authorizedAt?: string | null;
+  capturedAt?: string | null;
+  paidAt?: string | null;
   createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 // Payout type
