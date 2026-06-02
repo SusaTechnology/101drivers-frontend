@@ -881,6 +881,7 @@ async getDriverJobFeed(input: {
     nextCursor,
   };
 }
+
   async getDriverJobDetail(input: {
     driverId: string;
     deliveryId: string;
@@ -892,9 +893,99 @@ async getDriverJobFeed(input: {
       limit: 50,
     });
 
-    return (
-      feed.items.find((item) => item.deliveryId === input.deliveryId) ?? null
+    const fromFeed = feed.items.find(
+      (item) => item.deliveryId === input.deliveryId,
     );
+    if (fromFeed) return fromFeed;
+
+    // Fallback: query the delivery directly (covers BOOKED/ACTIVE etc.)
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        serviceType: true,
+        status: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        pickupWindowStart: true,
+        pickupWindowEnd: true,
+        dropoffWindowStart: true,
+        dropoffWindowEnd: true,
+        etaMinutes: true,
+        isUrgent: true,
+        afterHours: true,
+        urgentBonusAmount: true,
+        pickupLat: true,
+        pickupLng: true,
+        dropoffLat: true,
+        dropoffLng: true,
+        createdAt: true,
+        quote: {
+          select: {
+            estimatedPrice: true,
+            pricingSnapshot: true,
+            feesBreakdown: true,
+            distanceMiles: true,
+          },
+        },
+      },
+    });
+
+    if (!delivery) return null;
+
+    const payoutPreviewAmount = this.extractPayoutPreviewAmount(
+      delivery.quote?.estimatedPrice,
+      delivery.quote?.pricingSnapshot,
+      delivery.quote?.feesBreakdown,
+    );
+
+    const deliveryDistanceMiles =
+      delivery.quote?.distanceMiles ??
+      (delivery.pickupLat != null &&
+      delivery.pickupLng != null &&
+      delivery.dropoffLat != null &&
+      delivery.dropoffLng != null
+        ? this.haversineMiles(
+            delivery.pickupLat,
+            delivery.pickupLng,
+            delivery.dropoffLat,
+            delivery.dropoffLng,
+          )
+        : null);
+
+    return {
+      deliveryId: delivery.id,
+      serviceType: delivery.serviceType,
+      status: delivery.status,
+      pickupAddress: delivery.pickupAddress,
+      dropoffAddress: delivery.dropoffAddress,
+      pickupWindowStart: delivery.pickupWindowStart,
+      pickupWindowEnd: delivery.pickupWindowEnd,
+      dropoffWindowStart: delivery.dropoffWindowStart,
+      dropoffWindowEnd: delivery.dropoffWindowEnd,
+      etaMinutes: delivery.etaMinutes,
+      isUrgent: delivery.isUrgent,
+      afterHours: delivery.afterHours,
+      urgentBonusAmount:
+        delivery.urgentBonusAmount != null
+          ? Number(delivery.urgentBonusAmount)
+          : null,
+      payoutPreviewAmount,
+      matchScore: 0,
+      matchReasons: ["direct-lookup"],
+      pickupDistanceMiles: null,
+      pickupEtaMinutes: null,
+      deliveryDistanceMiles,
+      pickupLat: delivery.pickupLat,
+      pickupLng: delivery.pickupLng,
+      dropoffLat: delivery.dropoffLat,
+      dropoffLng: delivery.dropoffLng,
+      originSource: "none",
+      createdAt: delivery.createdAt,
+      stackingBlocked: null,
+      stackingDetails: null,
+      outsidePreferredRadius: false,
+    };
   }
 
   async getActiveDeliveryForDriver(driverId: string) {
