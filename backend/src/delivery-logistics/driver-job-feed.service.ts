@@ -803,7 +803,19 @@ async getDriverJobFeed(input: {
         matchReasons,
         pickupDistanceMiles,
         pickupEtaMinutes,
-        deliveryDistanceMiles: delivery.quote?.distanceMiles ?? null,
+        deliveryDistanceMiles:
+          delivery.quote?.distanceMiles ??
+          (delivery.pickupLat != null &&
+          delivery.pickupLng != null &&
+          delivery.dropoffLat != null &&
+          delivery.dropoffLng != null
+            ? this.haversineMiles(
+                delivery.pickupLat,
+                delivery.pickupLng,
+                delivery.dropoffLat,
+                delivery.dropoffLng,
+              )
+            : null),
         pickupLat: delivery.pickupLat,
         pickupLng: delivery.pickupLng,
         dropoffLat: delivery.dropoffLat,
@@ -1650,5 +1662,26 @@ async getDriverJobFeed(input: {
   private toNumber(value: unknown): number | null {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  /** Haversine straight-line distance in miles (×1.35 road factor for realistic estimate). */
+  private haversineMiles(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const R = 3959; // Earth radius in miles
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Number((R * c * 1.35).toFixed(1)); // 1.35× road factor
   }
 }
