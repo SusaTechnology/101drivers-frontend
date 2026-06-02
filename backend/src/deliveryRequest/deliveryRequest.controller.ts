@@ -1228,12 +1228,27 @@ async schedulePreview(
         payment: {
           select: {
             id: true,
+            amount: true,
+            paymentType: true,
+            provider: true,
+            status: true,
+            authorizedAt: true,
+            capturedAt: true,
+            paidAt: true,
+            createdAt: true,
+            updatedAt: true,
           },
         },
 
         payout: {
           select: {
             id: true,
+            driverId: true,
+            grossAmount: true,
+            insuranceFee: true,
+            platformFee: true,
+            status: true,
+            createdAt: true,
           },
         },
 
@@ -1248,12 +1263,16 @@ async schedulePreview(
         quote: {
           select: {
             id: true,
+            serviceType: true,
+            estimatedPrice: true,
+            feesBreakdown: true,
           },
         },
 
         rating: {
           select: {
             id: true,
+            stars: true,
           },
         },
 
@@ -1265,6 +1284,7 @@ async schedulePreview(
         resubmittedFrom: {
           select: {
             id: true,
+            status: true,
           },
         },
 
@@ -1275,12 +1295,14 @@ async schedulePreview(
         tip: {
           select: {
             id: true,
+            amount: true,
           },
         },
 
         trackingSession: {
           select: {
             id: true,
+            status: true,
           },
         },
 
