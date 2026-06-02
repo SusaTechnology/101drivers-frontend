@@ -19,6 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import StripePaymentWrapper from '@/components/stripe/StripePaymentWrapper'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useJsApiLoader } from '@react-google-maps/api'
 import RouteMap from '@/components/map/RouteMap'
@@ -194,6 +202,31 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
   // Delivery action dialog state
   const [showActionDialog, setShowActionDialog] = useState(false)
+
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentCompleted, setPaymentCompleted] = useState(false)
+
+  // Payment status from delivery data
+  const paymentStatus = deliveryData?.payment?.status
+  const paymentType = deliveryData?.payment?.paymentType
+  const paymentProvider = deliveryData?.payment?.provider
+  const paymentAmount = deliveryData?.payment?.amount
+
+  // Show "Pay Now" button only for prepaid Stripe payments that are still AUTHORIZED
+  const showPayButton = paymentType === 'PREPAID' && paymentProvider === 'STRIPE' && paymentStatus === 'AUTHORIZED' && !paymentCompleted
+  const showPaymentSuccess = paymentType === 'PREPAID' && paymentProvider === 'STRIPE' && (paymentStatus === 'CAPTURED' || paymentStatus === 'PAID' || paymentCompleted)
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false)
+    setPaymentCompleted(true)
+    toast.success('Payment confirmed!', { description: 'Your payment has been processed successfully.' })
+    refetch()
+  }
+
+  const handlePaymentError = (message: string) => {
+    toast.error('Payment failed', { description: message })
+  }
 
   const transitionDeliveryMutation = useDataMutation({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${id}/transition-status`,
@@ -1114,13 +1147,25 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                           </div>
                         </div>
                       </div>
-                      <Link
-                        // to="/dealer/payment"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-extrabold hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm"
-                      >
-                        <CreditCard className="h-4 w-4 text-lime-500" />
-                        Payment
-                      </Link>
+                      {showPaymentSuccess ? (
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30">
+                          <CheckCircle className="h-4 w-4 text-emerald-500" />
+                          <span className="text-sm font-extrabold text-emerald-600">Paid</span>
+                        </div>
+                      ) : showPayButton ? (
+                        <Button
+                          onClick={() => setShowPaymentModal(true)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-lime-500 text-slate-950 hover:bg-lime-600 font-extrabold transition text-sm"
+                        >
+                          <CreditCard className="h-4 w-4" />
+                          Pay Now
+                        </Button>
+                      ) : (
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-extrabold">
+                          <CreditCard className="h-4 w-4" />
+                          {paymentStatus === 'FAILED' ? 'Failed' : paymentStatus === 'INVOICED' ? 'Invoiced' : paymentStatus || 'N/A'}
+                        </div>
+                      )}
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
                       {priceType} price based on category and mileage.
@@ -1961,6 +2006,28 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Payment Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-lime-500" />
+              Complete Payment
+            </DialogTitle>
+            <DialogDescription>
+              Enter your card details to pay <span className="font-extrabold text-slate-900 dark:text-white">${paymentAmount ? paymentAmount.toFixed(2) : price?.toFixed(2) || '—'}</span> for this delivery.
+            </DialogDescription>
+          </DialogHeader>
+          {id && (
+            <StripePaymentWrapper
+              deliveryId={id}
+              onSuccess={handlePaymentSuccess}
+              onError={handlePaymentError}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -61,10 +61,32 @@ export default function StripePaymentWrapper({
       });
   }, [deliveryId]);
 
+  // Handle Stripe redirect return (e.g., after 3DS authentication)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirectStatus = params.get("redirect_status");
+    const paymentIntentId = params.get("payment_intent");
+
+    if (redirectStatus === "succeeded" && paymentIntentId) {
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+      setClientSecret(""); // Clear to show success state
+      onSuccess?.(paymentIntentId);
+    } else if (redirectStatus && redirectStatus !== "succeeded") {
+      // Payment failed or was cancelled after redirect
+      window.history.replaceState({}, "", window.location.pathname);
+      setError(
+        redirectStatus === "cancelled"
+          ? "Payment was cancelled"
+          : "Payment failed. Please try again.",
+      );
+    }
+  }, [onSuccess]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-600" />
       </div>
     );
   }
