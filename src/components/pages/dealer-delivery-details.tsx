@@ -213,9 +213,10 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const paymentProvider = deliveryData?.payment?.provider
   const paymentAmount = deliveryData?.payment?.amount
 
-  // Show "Pay Now" button only for prepaid Stripe payments that are still AUTHORIZED
-  const showPayButton = paymentType === 'PREPAID' && paymentProvider === 'STRIPE' && paymentStatus === 'AUTHORIZED' && !paymentCompleted
-  const showPaymentSuccess = paymentType === 'PREPAID' && paymentProvider === 'STRIPE' && (paymentStatus === 'CAPTURED' || paymentStatus === 'PAID' || paymentCompleted)
+  // Show "Pay Now" button for prepaid payments (MANUAL or STRIPE) that are still AUTHORIZED
+  // Backend upgrades MANUAL → STRIPE when the payment-intent endpoint is called
+  const showPayButton = paymentType === 'PREPAID' && paymentStatus === 'AUTHORIZED' && !paymentCompleted && (paymentProvider === 'STRIPE' || paymentProvider === 'MANUAL')
+  const showPaymentSuccess = paymentType === 'PREPAID' && (paymentProvider === 'STRIPE' || paymentProvider === 'MANUAL') && (paymentStatus === 'CAPTURED' || paymentStatus === 'PAID' || paymentCompleted)
 
   const handlePaymentSuccess = () => {
     setShowPaymentModal(false)
