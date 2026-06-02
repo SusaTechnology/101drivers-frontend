@@ -803,19 +803,7 @@ async getDriverJobFeed(input: {
         matchReasons,
         pickupDistanceMiles,
         pickupEtaMinutes,
-        deliveryDistanceMiles:
-          delivery.quote?.distanceMiles ??
-          (delivery.pickupLat != null &&
-          delivery.pickupLng != null &&
-          delivery.dropoffLat != null &&
-          delivery.dropoffLng != null
-            ? this.haversineMiles(
-                delivery.pickupLat,
-                delivery.pickupLng,
-                delivery.dropoffLat,
-                delivery.dropoffLng,
-              )
-            : null),
+        deliveryDistanceMiles: delivery.quote?.distanceMiles ?? null,
         pickupLat: delivery.pickupLat,
         pickupLng: delivery.pickupLng,
         dropoffLat: delivery.dropoffLat,
@@ -939,19 +927,36 @@ async getDriverJobFeed(input: {
       delivery.quote?.feesBreakdown,
     );
 
-    const deliveryDistanceMiles =
-      delivery.quote?.distanceMiles ??
-      (delivery.pickupLat != null &&
+    // Use quote distance if available, otherwise call Google Routes API
+    // for real road distance (same API used at quote creation — picks shortest route)
+    let deliveryDistanceMiles = delivery.quote?.distanceMiles ?? null;
+    let resolvedEtaMinutes = delivery.etaMinutes;
+
+    if (
+      deliveryDistanceMiles == null &&
+      delivery.pickupLat != null &&
       delivery.pickupLng != null &&
       delivery.dropoffLat != null &&
       delivery.dropoffLng != null
-        ? this.haversineMiles(
-            delivery.pickupLat,
-            delivery.pickupLng,
-            delivery.dropoffLat,
-            delivery.dropoffLng,
-          )
-        : null);
+    ) {
+      try {
+        const route = await this.mapsService.computeRouteMetrics({
+          originLat: delivery.pickupLat,
+          originLng: delivery.pickupLng,
+          destinationLat: delivery.dropoffLat,
+          destinationLng: delivery.dropoffLng,
+        });
+        deliveryDistanceMiles = route.distanceMiles;
+        // Use route ETA if delivery has no stored etaMinutes
+        if (resolvedEtaMinutes == null) {
+          resolvedEtaMinutes = route.durationMinutes;
+        }
+      } catch {
+        this.logger.debug(
+          `Failed to compute route for getDriverJobDetail fallback, deliveryId=${delivery.id}`,
+        );
+      }
+    }
 
     return {
       deliveryId: delivery.id,
@@ -963,7 +968,7 @@ async getDriverJobFeed(input: {
       pickupWindowEnd: delivery.pickupWindowEnd,
       dropoffWindowStart: delivery.dropoffWindowStart,
       dropoffWindowEnd: delivery.dropoffWindowEnd,
-      etaMinutes: delivery.etaMinutes,
+      etaMinutes: resolvedEtaMinutes,
       isUrgent: delivery.isUrgent,
       afterHours: delivery.afterHours,
       urgentBonusAmount:
@@ -1753,26 +1758,5 @@ async getDriverJobFeed(input: {
   private toNumber(value: unknown): number | null {
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
-  }
-
-  /** Haversine straight-line distance in miles (×1.35 road factor for realistic estimate). */
-  private haversineMiles(
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number,
-  ): number {
-    const R = 3959; // Earth radius in miles
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) *
-        Math.cos(toRad(lat2)) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return Number((R * c * 1.35).toFixed(1)); // 1.35× road factor
   }
 }
