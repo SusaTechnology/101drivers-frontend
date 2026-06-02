@@ -1092,11 +1092,16 @@ export default function AdminUsersPage() {
                                 <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
                               </Button>
                             )}
-                            {/* Driver waitlisted - show Invite */}
+                            {/* Driver waitlisted - show Invite / Reject */}
                             {!user.disabledAt && user.driver?.status === 'WAITLISTED' && (
-                              <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('invite-driver', user)}>
-                                <Send className="w-3.5 h-3.5 mr-1" /> Invite
-                              </Button>
+                              <>
+                                <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('invite-driver', user)}>
+                                  <Send className="w-3.5 h-3.5 mr-1" /> Invite
+                                </Button>
+                                <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => openDialog('reject-driver', user)}>
+                                  <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
+                                </Button>
+                              </>
                             )}
                             {/* Driver pending approval - show Approve/Reject */}
                             {!user.disabledAt && user.driver?.status === 'PENDING_APPROVAL' && (
