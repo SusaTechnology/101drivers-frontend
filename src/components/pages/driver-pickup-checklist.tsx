@@ -764,7 +764,31 @@ const handleUploadOdometerPhoto = async () => {
 
   // PIN verification handler
   const verifyPinLock = useRef(false)
-  const handleVerifyPin = async (pinOverride?: string) => {
+  const verifyPinMutation = useCreate<{ valid: boolean }, { pin: string }>(
+    `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/verify-pin`,
+    {
+      onSuccess: (data) => {
+        if (data?.valid) {
+          setPinVerified(true)
+          setPinError(null)
+          toast.success('PIN verified!', { description: 'Customer authorization confirmed.' })
+        } else {
+          setPinError('Incorrect PIN. Please try again.')
+          setPinValue('')
+          toast.error('PIN incorrect', { description: 'The PIN you entered is not correct. Contact the customer to verify.' })
+        }
+        setPinVerifying(false)
+        verifyPinLock.current = false
+      },
+      onError: (error: any) => {
+        setPinError(error?.message || 'Failed to verify PIN')
+        setPinVerifying(false)
+        verifyPinLock.current = false
+      },
+    }
+  )
+
+  const handleVerifyPin = (pinOverride?: string) => {
     const pin = pinOverride || pinValue
     if (!/^\d{4}$/.test(pin)) {
       setPinError('PIN must be 4 digits')
@@ -773,39 +797,7 @@ const handleUploadOdometerPhoto = async () => {
     if (!deliveryId || verifyPinLock.current) return
     verifyPinLock.current = true
     setPinVerifying(true)
-    try {
-      const token = localStorage.getItem('accessToken')
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/verify-pin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ pin }),
-        }
-      )
-      if (res.ok) {
-        const data = await res.json()
-        if (data.valid) {
-          setPinVerified(true)
-          setPinValue(pin)
-          setPinError(null)
-          toast.success('PIN verified!', { description: 'Customer authorization confirmed.' })
-        } else {
-          setPinError('Incorrect PIN. Please try again.')
-          setPinValue('')
-          toast.error('PIN incorrect', { description: 'The PIN you entered is not correct. Contact the customer to verify.' })
-        }
-      } else {
-        setPinError('Failed to verify PIN')
-      }
-    } catch {
-      setPinError('Network error')
-    }
-    setPinVerifying(false)
-    verifyPinLock.current = false
+    verifyPinMutation.mutate({ pin })
   }
 
   // Status helper
