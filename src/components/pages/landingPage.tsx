@@ -393,35 +393,35 @@ export default function LandingPage() {
       step: 1,
       title: "Pickup",
       description:
-        "Driver takes 6 photos, logs mileage, you see instantly.",
+        "Driver arrives, shows ID, introduces himself, and gets the authorization PIN from you. Takes GPS-stamped photos of the car, odometer reading, and VIN. Enters the last four digits of the VIN to start the delivery and live tracking.",
       icon: Camera,
     },
     {
       step: 2,
       title: "Drop-Off",
       description:
-        "Six more photos. Final mileage check. Keys handed over.",
+        "Final inspection with GPS-stamped photos of the car and final odometer reading at the delivery location. Keys handed over.",
       icon: KeyRound,
     },
     {
       step: 3,
       title: "Proof",
       description:
-        "Email report: before/after shots, mileage, times.",
+        "You receive a detailed email report of the delivery. Full report is also available on your dashboard.",
       icon: FileText,
     },
     {
       step: 4,
       title: "Payment",
       description:
-        "Only after delivery—no upfront risk.",
+        "Only after successful delivery — no upfront fees.",
       icon: CreditCard,
     },
     {
       step: 5,
       title: "Insurance",
       description:
-        "Mile-for-mile coverage while on the road.",
+        "Drivers are fully covered between pickup and drop-off.",
       icon: Shield,
     },
   ];
