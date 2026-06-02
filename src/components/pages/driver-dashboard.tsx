@@ -371,7 +371,7 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
 
               {/* Distance + ETA — medium, supporting */}
               <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
-                {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
+                {job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null}{job.miles ? ` \u00b7 ${job.miles} mi` : ''}
               </div>
             </div>
 
@@ -447,7 +447,7 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
           </AlertDialogHeader>
           <div className="py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 space-y-1">
             <p className="font-semibold text-slate-700 dark:text-slate-300">{job.pickup} &rarr; {job.dropoff}</p>
-            <p>{job.timeWindow} &middot; {job.miles ? `${job.miles} mi` : 'Unknown distance'}</p>
+            <p>{job.timeWindow}{job.miles ? ` &middot; ${job.miles} mi` : ''}</p>
           </div>
           <AlertDialogFooter>
             <AlertDialogAction>Got it</AlertDialogAction>
@@ -630,7 +630,7 @@ export default function DriverDashboardPage() {
       pickup: extractRouteLabel(item.pickupAddress || ''),
       dropoff: extractRouteLabel(item.dropoffAddress || ''),
       service: serviceTypeLabels[item.serviceType] || item.serviceType,
-      miles: item.pickupDistanceMiles || null,
+      miles: item.deliveryDistanceMiles || null,
       duration: formatDuration(item.etaMinutes),
       payout: item.payoutPreviewAmount,
       bonus: item.urgentBonusAmount,

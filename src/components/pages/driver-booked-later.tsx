@@ -350,11 +350,11 @@ export default function DriverBookedLaterPage() {
                           )}
                         </div>
 
-                        {/* Distance */}
-                        {d.pickupDistanceMiles != null && (
+                        {/* Distance — use quote.distanceMiles (pickup→dropoff) */}
+                        {d.quote?.distanceMiles != null && (
                           <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
                             <Navigation className="w-3.5 h-3.5 text-primary" />
-                            <span>{d.pickupDistanceMiles} mi</span>
+                            <span>{d.quote.distanceMiles} mi</span>
                           </div>
                         )}
 
