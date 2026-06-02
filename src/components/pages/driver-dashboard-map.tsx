@@ -217,6 +217,7 @@ interface JobItem {
   pickupWindowEndFull?: string
   etaMinutes?: number
   isUrgent?: boolean
+  stackingBlocked?: string | null
   lat: number
   lng: number
   dropoffLat: number | null
@@ -348,6 +349,7 @@ export default function DriverMapPage() {
       pickupWindowEndFull: item.pickupWindowEnd || '',
       etaMinutes: item.etaMinutes || null,
       isUrgent: item.isUrgent || false,
+      stackingBlocked: item.stackingBlocked || null,
       lat: item.pickupLat && item.pickupLng ? item.pickupLat : mockPickupLocations[index % mockPickupLocations.length].lat,
       lng: item.pickupLat && item.pickupLng ? item.pickupLng : mockPickupLocations[index % mockPickupLocations.length].lng,
       dropoffLat: item.dropoffLat || null,
@@ -505,8 +507,8 @@ export default function DriverMapPage() {
             {/* Service district overlay */}
             {pickupZones.length > 0 && <PickupZoneOverlay zones={pickupZones} />}
 
-            {/* Job pay bubbles */}
-            {jobs.map((job) => (
+            {/* Job pay bubbles — hide unavailable (stacking-blocked) */}
+            {jobs.filter((job) => !job.stackingBlocked).map((job) => (
               <Marker
                 key={job.id}
                 position={{ lat: job.lat, lng: job.lng }}
@@ -656,7 +658,7 @@ export default function DriverMapPage() {
                   }}
                   className="flex-1 h-12 rounded-2xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm font-bold text-slate-600 dark:text-slate-300"
                 >
-                  Decline
+                  Back
                 </Button>
                 <Button
                   onClick={() => {
