@@ -774,11 +774,15 @@ const handleUploadOdometerPhoto = async () => {
     verifyPinLock.current = true
     setPinVerifying(true)
     try {
+      const token = localStorage.getItem('accessToken')
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/verify-pin`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({ pin }),
         }
       )
