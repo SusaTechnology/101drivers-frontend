@@ -377,6 +377,7 @@ export default function DriverJobDetailsPage() {
   }
 
   const [showCalendarDialog, setShowCalendarDialog] = useState(false)
+  const [showImportantNotice, setShowImportantNotice] = useState(false)
   const [showConfirmAccept, setShowConfirmAccept] = useState(false)
 
   const handleConfirmCalendar = () => {
@@ -777,6 +778,49 @@ export default function DriverJobDetailsPage() {
               </Button>
             )}
 
+            {/* ── Important - Read Carefully Dialog ── */}
+            <AlertDialog open={showImportantNotice} onOpenChange={setShowImportantNotice}>
+              <AlertDialogContent className="max-w-[440px] rounded-2xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-lg font-black">Important - Read Carefully</AlertDialogTitle>
+                  <AlertDialogDescription className="sr-only">
+                    Important information before confirming delivery acceptance.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                <div className="mt-2 space-y-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                  <p>
+                    Before you confirm this delivery, please note:
+                    After the customer gives you the PIN, you must upload all required photos, enter the odometer reading, enter the last 4 digits of the VIN, and enter the PIN before you start driving.
+                  </p>
+                  <p>
+                    You will not be able to complete the delivery or get paid if these steps are not completed correctly.
+                  </p>
+                  <p>
+                    Once the trip starts, you must follow the route shown in the app. Going off route may void your insurance coverage.
+                  </p>
+                </div>
+
+                <AlertDialogFooter className="flex-row gap-3 mt-2">
+                  <AlertDialogCancel
+                    className="flex-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
+                    onClick={() => setShowImportantNotice(false)}
+                  >
+                    Go Back
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    className="flex-1 rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-white font-extrabold"
+                    onClick={() => {
+                      setShowImportantNotice(false)
+                      setTimeout(() => setShowConfirmAccept(true), 100)
+                    }}
+                  >
+                    I Understand
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             {/* ── Confirm Accept Dialog ── */}
             <AlertDialog open={showConfirmAccept} onOpenChange={setShowConfirmAccept}>
               <AlertDialogContent className="max-w-[440px] rounded-2xl">
@@ -868,7 +912,7 @@ export default function DriverJobDetailsPage() {
 
             {/* Context-aware booking button */}
             <Button
-              onClick={() => setShowConfirmAccept(true)}
+              onClick={() => setShowImportantNotice(true)}
               className="flex-1 px-6 py-4 rounded-2xl font-extrabold transition bg-[#34C759] hover:bg-[#2db84e] text-white"
             >
               Accept
