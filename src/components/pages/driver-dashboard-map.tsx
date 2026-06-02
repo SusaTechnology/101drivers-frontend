@@ -337,7 +337,7 @@ export default function DriverMapPage() {
       pickup: extractRouteLabel(item.pickupAddress || ''),
       dropoff: extractRouteLabel(item.dropoffAddress || ''),
       service: serviceTypeLabels[item.serviceType] || item.serviceType,
-      miles: item.pickupDistanceMiles || null,
+      miles: item.deliveryDistanceMiles || null,
       duration: formatDuration(item.etaMinutes),
       payout: item.payoutPreviewAmount,
       bonus: item.urgentBonusAmount,
