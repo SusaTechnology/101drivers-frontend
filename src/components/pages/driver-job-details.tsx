@@ -481,7 +481,7 @@ export default function DriverJobDetailsPage() {
   const urgent = job.isUrgent
   const bonus = job.urgentBonusAmount
   const payout = job.payoutPreviewAmount
-  const miles = job.pickupDistanceMiles
+  const miles = job.deliveryDistanceMiles
   const windowDate = formatDate(job.pickupWindowStart)
   const windowTime = formatTimeRange(job.pickupWindowStart, job.pickupWindowEnd)
   const window = `${windowDate} \u2022 ${windowTime}`
