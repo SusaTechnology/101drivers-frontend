@@ -201,6 +201,19 @@ export default function DriverPickupChecklistPage() {
   const isBeforeWindow = delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date()
   const isFirstPickupOfDay = !hasOtherAssignments && !!isBeforeWindow
 
+  // GPS proximity check mutation — verifies driver is at the pickup lot for early start
+  const proximityCheckMutation = useCreate<{ withinRadius: boolean }, { driverLat: number; driverLng: number }>(
+    `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/check-pickup-proximity`,
+    {
+      onSuccess: (data) => {
+        setIsDriverAtPickup(data.withinRadius)
+      },
+      onError: () => {
+        setIsDriverAtPickup(null) // check failed, don't block
+      },
+    }
+  )
+
   useEffect(() => {
     if (!deliveryId || !delivery?.pickupWindowStart) return
     // Don't check proximity if it's the first pickup of the day (early start blocked)
@@ -213,28 +226,11 @@ export default function DriverPickupChecklistPage() {
     const now = new Date()
     if (windowStart > now) {
       navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const res = await fetch(
-              `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/check-pickup-proximity`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  driverLat: position.coords.latitude,
-                  driverLng: position.coords.longitude,
-                }),
-              }
-            )
-            if (res.ok) {
-              const data = await res.json()
-              setIsDriverAtPickup(data.withinRadius)
-            } else {
-              setIsDriverAtPickup(null) // check failed, don't block
-            }
-          } catch {
-            setIsDriverAtPickup(null)
-          }
+        (position) => {
+          proximityCheckMutation.mutate({
+            driverLat: position.coords.latitude,
+            driverLng: position.coords.longitude,
+          })
         },
         () => {
           setIsDriverAtPickup(null) // location denied, don't block
