@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod/v4";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
