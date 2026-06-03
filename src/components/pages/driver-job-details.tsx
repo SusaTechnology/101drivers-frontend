@@ -365,11 +365,36 @@ export default function DriverJobDetailsPage() {
       toast.error('User not authenticated')
       return
     }
-    bookMutation.mutate({
-      driverId: user.profileId,
-      bookedByUserId: user.id,
-      reason: '',
-    })
+
+    // Get fresh GPS at accept time for accurate stacking/time validation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          bookMutation.mutate({
+            driverId: user.profileId,
+            bookedByUserId: user.id,
+            reason: '',
+            driverLat: position.coords.latitude,
+            driverLng: position.coords.longitude,
+          })
+        },
+        () => {
+          // If GPS fails, proceed without it (backend will use fallback)
+          bookMutation.mutate({
+            driverId: user.profileId,
+            bookedByUserId: user.id,
+            reason: '',
+          })
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      )
+    } else {
+      bookMutation.mutate({
+        driverId: user.profileId,
+        bookedByUserId: user.id,
+        reason: '',
+      })
+    }
   }
 
   const handleReportIssue = () => {

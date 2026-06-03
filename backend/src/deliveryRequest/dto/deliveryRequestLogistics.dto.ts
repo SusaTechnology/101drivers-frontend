@@ -385,6 +385,20 @@ export class BookDeliveryBody {
     nullable: true,
   })
   reason?: string | null;
+
+  @ApiProperty({
+    required: false,
+    type: Number,
+    nullable: true,
+  })
+  driverLat?: number | null;
+
+  @ApiProperty({
+    required: false,
+    type: Number,
+    nullable: true,
+  })
+  driverLng?: number | null;
 }
 
 export class TransitionDeliveryStatusBody {

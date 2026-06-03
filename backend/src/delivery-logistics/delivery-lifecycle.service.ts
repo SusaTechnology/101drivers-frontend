@@ -219,11 +219,15 @@ async bookDelivery(input: {
   driverId: string;
   bookedByUserId?: string | null;
   reason?: string | null;
+  driverLat?: number | null;
+  driverLng?: number | null;
 }) {
   return this.prisma.$transaction(async (tx) => {
     await this.driverJobFeedService.assertDriverCanBookDelivery(tx, {
       driverId: input.driverId,
       deliveryId: input.deliveryId,
+      driverLat: input.driverLat ?? null,
+      driverLng: input.driverLng ?? null,
     });
 
     // Generate pickup PIN if not already set

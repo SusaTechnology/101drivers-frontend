@@ -569,6 +569,8 @@ async getDriverJobDetail(
       driverId: body.driverId,
       bookedByUserId: body.bookedByUserId ?? null,
       reason: body.reason ?? null,
+      driverLat: body.driverLat ?? null,
+      driverLng: body.driverLng ?? null,
     });
   }
 

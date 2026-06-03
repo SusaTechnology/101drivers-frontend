@@ -264,12 +264,16 @@ async getDriverActiveDelivery(driverId: string): Promise<any> {
     driverId: string;
     bookedByUserId?: string | null;
     reason?: string | null;
+    driverLat?: number | null;
+    driverLng?: number | null;
   }): Promise<any> {
     await this.lifecycleService.bookDelivery({
       deliveryId: input.deliveryId,
       driverId: input.driverId,
       bookedByUserId: input.bookedByUserId ?? null,
       reason: this.trimOptionalString(input.reason) ?? null,
+      driverLat: input.driverLat ?? null,
+      driverLng: input.driverLng ?? null,
     });
 
     return this.domain.findUnique({ id: input.deliveryId });

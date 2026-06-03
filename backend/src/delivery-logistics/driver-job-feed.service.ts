@@ -1110,6 +1110,8 @@ async getDriverJobFeed(input: {
   input: {
     driverId: string;
     deliveryId: string;
+    driverLat?: number | null;
+    driverLng?: number | null;
   }
 ): Promise<void> {
   const driver = await db.driver.findUnique({
@@ -1438,45 +1440,67 @@ async getDriverJobFeed(input: {
   // ── Backward Stacking Check ──
   // Check: estimatedFinish_anchor + driveTime_anchor→new + buffer ≤ newWindowEnd
   // The driver just needs to arrive before the pickup window CLOSES.
+  //
+  // If the frontend sent fresh driverLat/driverLng (captured at Accept tap):
+  //   - Driver within 1 mile of pickup → skip time check (they're already there)
+  //   - Otherwise → use fresh GPS as origin for drive time (more accurate)
+  // If no fresh GPS → fall back to previous dropoff location (original behavior)
   if (referenceFinishMs !== null && newWindowEndMs !== null) {
-    let driveMinutes = 0;
-    if (
-      referenceDropoffLat != null && referenceDropoffLng != null &&
-      delivery.pickupLat != null && delivery.pickupLng != null
-    ) {
-      // Try Google Maps for precise drive time
-      try {
-        const route = await this.mapsService.computeRouteMetrics({
-          originLat: referenceDropoffLat,
-          originLng: referenceDropoffLng,
-          destinationLat: delivery.pickupLat,
-          destinationLng: delivery.pickupLng,
-        });
-        driveMinutes = route.durationMinutes;
-      } catch {
-        // Haversine fallback: ~2 min per mile at 30 mph urban average
-        const miles = this.haversineFallback(referenceDropoffLat, referenceDropoffLng, delivery.pickupLat, delivery.pickupLng);
-        driveMinutes = Math.ceil(miles * 2);
+    const freshDriverLat = input.driverLat;
+    const freshDriverLng = input.driverLng;
+
+    // Check if driver is already at the pickup location
+    let driverAtPickup = false;
+    if (freshDriverLat != null && freshDriverLng != null && delivery.pickupLat != null && delivery.pickupLng != null) {
+      const driverToPickupMiles = this.haversineFallback(freshDriverLat, freshDriverLng, delivery.pickupLat, delivery.pickupLng);
+      if (driverToPickupMiles <= 1) {
+        driverAtPickup = true;
       }
     }
-    // Cross-day stacking: no buffer, only estimated drive time.
-    // Same-day stacking: apply transit buffer for safety margin.
-    const bufferMs = isSameDayAsAnchor ? deliverySettings.transitBufferMinutes * 60 * 1000 : 0;
-    const driveMs = driveMinutes * 60 * 1000;
-    const earliestArrivalMs = referenceFinishMs + driveMs + bufferMs;
 
-    if (newWindowEndMs < earliestArrivalMs) {
-      const neededMin = Math.ceil((earliestArrivalMs - referenceFinishMs) / 60000);
-      const availableMin = Math.max(0, Math.ceil((newWindowEndMs - referenceFinishMs) / 60000));
-      const anchorLabel = anchorDelivery?.pickupWindowStart
-        ? new Date(anchorDelivery.pickupWindowStart).toLocaleString()
-        : new Date(referenceFinishMs).toLocaleString();
-      const bufferNote = isSameDayAsAnchor ? ' (drive time + buffer)' : '';
-      throw new ConflictException(
-        `Not enough time after your delivery at ${anchorLabel}. ` +
-        `You need ~${neededMin} min${bufferNote} to reach this pickup, ` +
-        `but only ${availableMin} min remain before this pickup window closes.`
-      );
+    if (!driverAtPickup) {
+      let driveMinutes = 0;
+      // Use fresh driver GPS if available, otherwise fall back to reference dropoff
+      const originLat = freshDriverLat ?? referenceDropoffLat;
+      const originLng = freshDriverLng ?? referenceDropoffLng;
+      if (
+        originLat != null && originLng != null &&
+        delivery.pickupLat != null && delivery.pickupLng != null
+      ) {
+        // Try Google Maps for precise drive time
+        try {
+          const route = await this.mapsService.computeRouteMetrics({
+            originLat: originLat,
+            originLng: originLng,
+            destinationLat: delivery.pickupLat,
+            destinationLng: delivery.pickupLng,
+          });
+          driveMinutes = route.durationMinutes;
+        } catch {
+          // Haversine fallback: ~2 min per mile at 30 mph urban average
+          const miles = this.haversineFallback(originLat, originLng, delivery.pickupLat, delivery.pickupLng);
+          driveMinutes = Math.ceil(miles * 2);
+        }
+      }
+      // Cross-day stacking: no buffer, only estimated drive time.
+      // Same-day stacking: apply transit buffer for safety margin.
+      const bufferMs = isSameDayAsAnchor ? deliverySettings.transitBufferMinutes * 60 * 1000 : 0;
+      const driveMs = driveMinutes * 60 * 1000;
+      const earliestArrivalMs = referenceFinishMs + driveMs + bufferMs;
+
+      if (newWindowEndMs < earliestArrivalMs) {
+        const neededMin = Math.ceil((earliestArrivalMs - referenceFinishMs) / 60000);
+        const availableMin = Math.max(0, Math.ceil((newWindowEndMs - referenceFinishMs) / 60000));
+        const anchorLabel = anchorDelivery?.pickupWindowStart
+          ? new Date(anchorDelivery.pickupWindowStart).toLocaleString()
+          : new Date(referenceFinishMs).toLocaleString();
+        const bufferNote = isSameDayAsAnchor ? ' (drive time + buffer)' : '';
+        throw new ConflictException(
+          `Not enough time after your delivery at ${anchorLabel}. ` +
+          `You need ~${neededMin} min${bufferNote} to reach this pickup, ` +
+          `but only ${availableMin} min remain before this pickup window closes.`
+        );
+      }
     }
   }
 
