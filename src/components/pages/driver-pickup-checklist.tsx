@@ -955,7 +955,7 @@ const handleUploadOdometerPhoto = async () => {
         )}
 
         {/* Get PIN Card — Customer Authorization */}
-        {delivery && (() => {
+        {/* {delivery && (() => {
           const isBusiness = delivery.customer?.customerType === 'BUSINESS'
           const pinPhone = isBusiness
             ? delivery.customer?.contactPhone
@@ -999,7 +999,7 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
           ) : null
-        })()}
+        })()} */}
 
         {/* Desktop warning — photos must be taken on a phone with a camera */}
         {isDesktop && (
