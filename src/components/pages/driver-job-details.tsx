@@ -903,9 +903,9 @@ export default function DriverJobDetailsPage() {
                   <AlertDialogAction
                     onClick={handleBook}
                     disabled={bookMutation.isPending}
-                    className="flex-1 rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-white font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-black font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {bookMutation.isPending ? 'Accepting\u2026' : 'Confirm Accept'}
+                    {bookMutation.isPending ? 'Accepting\u2026' : 'Confirm'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
