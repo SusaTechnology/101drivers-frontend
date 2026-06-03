@@ -18,6 +18,7 @@ import {
   MapPin,
   MessageSquare,
   CalendarPlus,
+  TriangleAlert,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -375,6 +376,7 @@ export default function DriverJobDetailsPage() {
   }
 
   const [showCalendarDialog, setShowCalendarDialog] = useState(false)
+  const [showConfirmAccept, setShowConfirmAccept] = useState(false)
 
   const handleConfirmCalendar = () => {
     try {
@@ -479,7 +481,7 @@ export default function DriverJobDetailsPage() {
   const urgent = job.isUrgent
   const bonus = job.urgentBonusAmount
   const payout = job.payoutPreviewAmount
-  const miles = job.deliveryDistanceMiles
+  const miles = job.pickupDistanceMiles
   const windowDate = formatDate(job.pickupWindowStart)
   const windowTime = formatTimeRange(job.pickupWindowStart, job.pickupWindowEnd)
   const window = `${windowDate} \u2022 ${windowTime}`
@@ -593,7 +595,7 @@ export default function DriverJobDetailsPage() {
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  Trip Distance
+                  Distance
                 </p>
                 <p className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
                   {miles ? `${miles} mi` : '\u2014'}
@@ -711,8 +713,8 @@ export default function DriverJobDetailsPage() {
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trip Distance (mi)</p>
-                <p className="font-medium">{job.deliveryDistanceMiles ?? '\u2014'}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Distance (mi)</p>
+                <p className="font-medium">{job.pickupDistanceMiles ?? '\u2014'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup ETA (min)</p>
@@ -771,6 +773,69 @@ export default function DriverJobDetailsPage() {
               </Button>
             )}
 
+            {/* ── Confirm Accept Dialog ── */}
+            <AlertDialog open={showConfirmAccept} onOpenChange={setShowConfirmAccept}>
+              <AlertDialogContent className="max-w-[440px] rounded-2xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-xl font-black">Confirm Accept</AlertDialogTitle>
+                  <AlertDialogDescription className="sr-only">
+                    Review and confirm this delivery acceptance.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                {/* Trip Summary */}
+                <div className="mt-2 space-y-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
+                  <div className="flex items-center gap-2">
+                    <Route className="w-4 h-4 text-primary shrink-0" />
+                    <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                      {route}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Payout</p>
+                      <p className="text-base font-black text-primary mt-0.5">{formatCurrency(payout)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Distance</p>
+                      <p className="text-base font-black text-slate-900 dark:text-white mt-0.5">{miles ? `${miles} mi` : '\u2014'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drive Time</p>
+                      <p className="text-base font-black text-slate-900 dark:text-white mt-0.5">{driveTime}</p>
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{window}</p>
+                  </div>
+                </div>
+
+                {/* No-cancellation warning */}
+                <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-3.5">
+                  <TriangleAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200 leading-relaxed">
+                    Once accepted, this delivery <span className="underline">cannot be cancelled</span> from the Driver app. Report any issues through Support.
+                  </p>
+                </div>
+
+                <AlertDialogFooter className="flex-row gap-3 mt-2">
+                  <AlertDialogCancel
+                    className="flex-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
+                    onClick={() => setShowConfirmAccept(false)}
+                  >
+                    Go Back
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleBook}
+                    disabled={bookMutation.isPending}
+                    className="flex-1 rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-white font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bookMutation.isPending ? 'Accepting\u2026' : 'Confirm Accept'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             {/* Calendar confirmation dialog */}
             <AlertDialog open={showCalendarDialog} onOpenChange={setShowCalendarDialog}>
               <AlertDialogContent>
@@ -797,13 +862,10 @@ export default function DriverJobDetailsPage() {
 
             {/* Context-aware booking button */}
             <Button
-              onClick={handleBook}
-              disabled={bookMutation.isPending}
-              className="flex-1 px-6 py-4 rounded-2xl font-extrabold transition disabled:opacity-50 disabled:cursor-not-allowed bg-[#34C759] hover:bg-[#2db84e] text-white"
+              onClick={() => setShowConfirmAccept(true)}
+              className="flex-1 px-6 py-4 rounded-2xl font-extrabold transition bg-[#34C759] hover:bg-[#2db84e] text-white"
             >
-              {bookMutation.isPending
-                ? 'Accepting\u2026'
-                : 'Accept'}
+              Accept
             </Button>
           </div>
         </div>

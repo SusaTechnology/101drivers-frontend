@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, GoneException, ConflictException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException, ForbiddenException, GoneException, ConflictException } from "@nestjs/common";
 import { businessStartOfDay, businessStartOfTomorrow, businessStartOfDayAfterTomorrow, businessEndOfWeek, businessNow, businessIsSameDay } from "./business-time";
 import {
   EnumDeliveryRequestStatus,
@@ -38,6 +38,8 @@ export type StackingDetails = {
     totalNeededMinutes: number;
     availableMinutes: number;
   } | null;
+  /** The effective max radius in miles that applied at check time (accounts for time-based tiers) */
+  effectiveMaxRadiusMiles?: number;
 };
 
 export type DriverFeedItem = {
@@ -59,8 +61,6 @@ export type DriverFeedItem = {
   matchReasons: string[];
   pickupDistanceMiles: number | null;
   pickupEtaMinutes: number | null;
-  /** Total trip distance from pickup to dropoff (from quote). */
-  deliveryDistanceMiles: number | null;
   pickupLat: number | null;
   pickupLng: number | null;
   dropoffLat: number | null;
@@ -82,6 +82,13 @@ export type DriverJobFeedResult = {
 
 @Injectable()
 export class DriverJobFeedService {
+  private readonly logger = new Logger(DriverJobFeedService.name);
+
+  /** Cache TTL: reuse cached route if less than this old */
+  private readonly CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+  /** Max driver movement (miles) before cache is considered stale */
+  private readonly CACHE_MAX_DRIVER_MOVED_MILES = 1;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mapsService: GoogleMapsService
@@ -265,7 +272,6 @@ async getDriverJobFeed(input: {
           estimatedPrice: true,
           pricingSnapshot: true,
           feesBreakdown: true,
-          distanceMiles: true,
         },
       },
     },
@@ -389,12 +395,35 @@ async getDriverJobFeed(input: {
         delivery.pickupLng != null
       ) {
         try {
-          const route = await this.mapsService.computeRouteMetrics({
-            originLat: origin.lat,
-            originLng: origin.lng,
-            destinationLat: delivery.pickupLat,
-            destinationLng: delivery.pickupLng,
-          });
+          // ── Check route cache before calling Google API ──
+          let route = await this.getCachedRoute(
+            input.driverId,
+            delivery.id,
+            origin.lat,
+            origin.lng,
+          );
+
+          if (!route) {
+            route = await this.mapsService.computeRouteMetrics({
+              originLat: origin.lat,
+              originLng: origin.lng,
+              destinationLat: delivery.pickupLat,
+              destinationLng: delivery.pickupLng,
+            });
+
+            // Store result in cache for future feed loads
+            await this.setCachedRoute(
+              input.driverId,
+              delivery.id,
+              origin.lat,
+              origin.lng,
+              route.distanceMiles,
+              route.durationMinutes,
+            ).catch(() => {
+              // Cache write failure is non-critical — log and continue
+              this.logger.debug('Failed to write route cache');
+            });
+          }
 
           pickupDistanceMiles = route.distanceMiles;
           pickupEtaMinutes = route.durationMinutes;
@@ -681,10 +710,11 @@ async getDriverJobFeed(input: {
         }
 
         // ── RADIUS CHECK (same-day only: distance cap from last dropoff) ──
-        // The 20-mile radius rule only applies when the new gig and the
-        // anchor (previous) gig are on the SAME calendar day.
-        // If they're on different days (e.g., last drop-off was today but
-        // new pickup is tomorrow), no distance restriction applies.
+        // Time-based tiered radius:
+        //   0–90 min after dropoff: strict (maximumRadiusMiles)
+        //   90–180 min after dropoff: relaxed (1.5× maximumRadiusMiles)
+        //   180+ min after dropoff: no restriction
+        // If they're on different days, no distance restriction applies.
         const isSameDayAsAnchor = delivery.pickupWindowStart && anchorDropoff?.anchorDate
           ? businessIsSameDay(delivery.pickupWindowStart, anchorDropoff.anchorDate)
           : false;
@@ -697,34 +727,42 @@ async getDriverJobFeed(input: {
           delivery.pickupLat != null &&
           delivery.pickupLng != null
         ) {
-          const straightMiles = this.haversineFallback(
-            anchorDropoff.dropoffLat,
-            anchorDropoff.dropoffLng,
-            delivery.pickupLat,
-            delivery.pickupLng,
+          const minutesSinceDropoff = (Date.now() - anchorDropoff.finishMs) / 60000;
+          const effectiveMaxMiles = this.getEffectiveMaxRadius(
+            deliverySettings.maximumRadiusMiles,
+            minutesSinceDropoff,
           );
-          if (straightMiles > deliverySettings.maximumRadiusMiles * 1.3) {
-            stackingBlockedReason = `Pickup is too far from your last drop-off (>${deliverySettings.maximumRadiusMiles} miles).`;
-            matchReasons.push("outside-max-radius");
-            stackingDetails = {
-              checkType: 'radius',
-              isCrossDay: false,
-              conflictingDelivery: anchorDropoff?.anchorDelivery ? {
-                id: anchorDropoff.anchorDelivery.id,
-                pickupAddress: anchorDropoff.anchorDelivery.pickupAddress,
-                dropoffAddress: anchorDropoff.anchorDelivery.dropoffAddress,
-                pickupWindowStart: anchorDropoff.anchorDelivery.pickupWindowStart ? new Date(anchorDropoff.anchorDelivery.pickupWindowStart).toISOString() : null,
-                estimatedFinishTime: new Date(anchorDropoff.finishMs).toISOString(),
-                etaMinutes: anchorDropoff.anchorDelivery.etaMinutes,
-              } : null,
-              transit: {
-                driveMinutes: 0,
-                driveMiles: Math.round(straightMiles * 10) / 10,
-                bufferMinutes: 0,
-                totalNeededMinutes: 0,
-                availableMinutes: 0,
-              },
-            };
+          if (effectiveMaxMiles > 0) {
+            const straightMiles = this.haversineFallback(
+              anchorDropoff.dropoffLat,
+              anchorDropoff.dropoffLng,
+              delivery.pickupLat,
+              delivery.pickupLng,
+            );
+            if (straightMiles > effectiveMaxMiles * 1.3) {
+              stackingBlockedReason = `Pickup is too far from your last drop-off (>${Math.round(effectiveMaxMiles)} miles).`;
+              matchReasons.push("outside-max-radius");
+              stackingDetails = {
+                checkType: 'radius',
+                isCrossDay: false,
+                conflictingDelivery: anchorDropoff?.anchorDelivery ? {
+                  id: anchorDropoff.anchorDelivery.id,
+                  pickupAddress: anchorDropoff.anchorDelivery.pickupAddress,
+                  dropoffAddress: anchorDropoff.anchorDelivery.dropoffAddress,
+                  pickupWindowStart: anchorDropoff.anchorDelivery.pickupWindowStart ? new Date(anchorDropoff.anchorDelivery.pickupWindowStart).toISOString() : null,
+                  estimatedFinishTime: new Date(anchorDropoff.finishMs).toISOString(),
+                  etaMinutes: anchorDropoff.anchorDelivery.etaMinutes,
+                } : null,
+                transit: {
+                  driveMinutes: 0,
+                  driveMiles: Math.round(straightMiles * 10) / 10,
+                  bufferMinutes: 0,
+                  totalNeededMinutes: 0,
+                  availableMinutes: 0,
+                },
+                effectiveMaxRadiusMiles: Math.round(effectiveMaxMiles),
+              };
+            }
           }
         }
       } catch {
@@ -762,7 +800,6 @@ async getDriverJobFeed(input: {
         matchReasons,
         pickupDistanceMiles,
         pickupEtaMinutes,
-        deliveryDistanceMiles: delivery.quote?.distanceMiles ?? null,
         pickupLat: delivery.pickupLat,
         pickupLng: delivery.pickupLng,
         dropoffLat: delivery.dropoffLat,
@@ -1063,8 +1100,8 @@ async getDriverJobFeed(input: {
   // last completed drop-off location.
   const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
 
-  const DEFAULT_MAX_RADIUS_MILES = 20;
-  const DEFAULT_TRANSIT_BUFFER_MINUTES = 45;
+  const DEFAULT_MAX_RADIUS_MILES = 25;
+  const DEFAULT_TRANSIT_BUFFER_MINUTES = 60;
 
   let deliverySettings: {
     maximumRadiusMiles: number;
@@ -1219,10 +1256,10 @@ async getDriverJobFeed(input: {
   const referenceDropoffLng = anchorDelivery?.dropoffLng ?? lastCompletedDelivery?.dropoffLng ?? null;
 
   // ── Radius Check (same-day only: from previous drop-off, using Google Maps) ──
-  // The 20-mile radius rule only applies when the new gig and the
-  // anchor (previous) gig are on the SAME calendar day.
-  // If they're on different days (e.g., last drop-off was today but
-  // new pickup is tomorrow), no distance restriction applies.
+  // Time-based tiered radius:
+  //   0–90 min after dropoff: strict (maximumRadiusMiles)
+  //   90–180 min after dropoff: relaxed (1.5× maximumRadiusMiles)
+  //   180+ min after dropoff: no restriction
   const anchorDate = anchorDelivery
     ? (anchorDelivery.pickupWindowStart ? new Date(anchorDelivery.pickupWindowStart) : null)
     : lastCompletedDelivery
@@ -1243,34 +1280,44 @@ async getDriverJobFeed(input: {
       Math.abs(referenceDropoffLng - delivery.pickupLng) < 0.000001;
 
     if (!samePoint) {
-      try {
-        const route = await this.mapsService.computeRouteMetrics({
-          originLat: referenceDropoffLat,
-          originLng: referenceDropoffLng,
-          destinationLat: delivery.pickupLat,
-          destinationLng: delivery.pickupLng,
-        });
+      // Determine effective max radius based on time since last dropoff
+      const minutesSinceDropoff = referenceFinishMs ? (Date.now() - referenceFinishMs) / 60000 : 0;
+      const effectiveMaxMiles = this.getEffectiveMaxRadius(
+        deliverySettings.maximumRadiusMiles,
+        minutesSinceDropoff,
+      );
 
-        if (route.distanceMiles > deliverySettings.maximumRadiusMiles) {
-          throw new ConflictException(
-            `Pickup is ${route.distanceMiles.toFixed(1)} miles from your last drop-off. Maximum radius is ${deliverySettings.maximumRadiusMiles} miles.`
+      // If 3+ hours, no restriction — skip the check entirely
+      if (effectiveMaxMiles > 0) {
+        try {
+          const route = await this.mapsService.computeRouteMetrics({
+            originLat: referenceDropoffLat,
+            originLng: referenceDropoffLng,
+            destinationLat: delivery.pickupLat,
+            destinationLng: delivery.pickupLng,
+          });
+
+          if (route.distanceMiles > effectiveMaxMiles) {
+            throw new ConflictException(
+              `Pickup is ${route.distanceMiles.toFixed(1)} miles from your last drop-off. Maximum radius is ${Math.round(effectiveMaxMiles)} miles.`
+            );
+          }
+        } catch (error) {
+          if (error instanceof ConflictException || error instanceof NotFoundException) {
+            throw error;
+          }
+          // If routing fails, use haversine fallback
+          const straightMiles = this.haversineFallback(
+            referenceDropoffLat,
+            referenceDropoffLng,
+            delivery.pickupLat,
+            delivery.pickupLng,
           );
-        }
-      } catch (error) {
-        if (error instanceof ConflictException || error instanceof NotFoundException) {
-          throw error;
-        }
-        // If routing fails, use haversine fallback
-        const straightMiles = this.haversineFallback(
-          referenceDropoffLat,
-          referenceDropoffLng,
-          delivery.pickupLat,
-          delivery.pickupLng,
-        );
-        if (straightMiles > deliverySettings.maximumRadiusMiles * 1.3) {
-          throw new ConflictException(
-            `Pickup appears too far from your last drop-off (>${deliverySettings.maximumRadiusMiles} miles).`
-          );
+          if (straightMiles > effectiveMaxMiles * 1.3) {
+            throw new ConflictException(
+              `Pickup appears too far from your last drop-off (>${Math.round(effectiveMaxMiles)} miles).`
+            );
+          }
         }
       }
     }
@@ -1418,6 +1465,81 @@ async getDriverJobFeed(input: {
     };
   }
 
+  /**
+   * Time-based tiered radius: the longer a driver has been away from their
+   * last drop-off, the larger the allowed radius becomes.
+   *   0–90 min  → base radius (strict)
+   *   90–180 min → 1.5× base radius (relaxed)
+   *   180+ min  → no restriction (returns 0 = unlimited)
+   */
+  private getEffectiveMaxRadius(baseRadiusMiles: number, minutesSinceDropoff: number): number {
+    if (minutesSinceDropoff >= 180) return 0; // no restriction
+    if (minutesSinceDropoff >= 90) return baseRadiusMiles * 1.5; // relaxed
+    return baseRadiusMiles; // strict
+  }
+
+  /** Check if a fresh cached route exists for this driver+delivery pair */
+  private async getCachedRoute(
+    driverId: string,
+    deliveryId: string,
+    driverLat: number,
+    driverLng: number,
+  ): Promise<{ distanceMiles: number; durationMinutes: number } | null> {
+    try {
+      const cache = await this.prisma.driverRouteCache.findUnique({
+        where: { driverId_deliveryId: { driverId, deliveryId } },
+      });
+
+      if (!cache) return null;
+      if (cache.pickupDistanceMiles == null && cache.pickupEtaMinutes == null) return null;
+
+      const ageMs = Date.now() - cache.computedAt.getTime();
+      if (ageMs > this.CACHE_TTL_MS) return null;
+
+      // Check if driver has moved significantly since cache was written
+      const driverMovedMiles = this.haversineFallback(
+        driverLat, driverLng, cache.driverLat, cache.driverLng,
+      );
+      if (driverMovedMiles > this.CACHE_MAX_DRIVER_MOVED_MILES) return null;
+
+      return {
+        distanceMiles: cache.pickupDistanceMiles ?? 0,
+        durationMinutes: cache.pickupEtaMinutes ?? 0,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Store (or update) route cache for a driver+delivery pair */
+  private async setCachedRoute(
+    driverId: string,
+    deliveryId: string,
+    driverLat: number,
+    driverLng: number,
+    distanceMiles: number,
+    etaMinutes: number,
+  ): Promise<void> {
+    await this.prisma.driverRouteCache.upsert({
+      where: { driverId_deliveryId: { driverId, deliveryId } },
+      create: {
+        driverId,
+        deliveryId,
+        pickupDistanceMiles: distanceMiles,
+        pickupEtaMinutes: etaMinutes,
+        driverLat,
+        driverLng,
+      },
+      update: {
+        pickupDistanceMiles: distanceMiles,
+        pickupEtaMinutes: etaMinutes,
+        driverLat,
+        driverLng,
+        computedAt: new Date(),
+      },
+    });
+  }
+
   private haversineFallback(
     lat1: number,
     lng1: number,
@@ -1442,7 +1564,7 @@ async getDriverJobFeed(input: {
     maximumRadiusMiles: number;
     transitBufferMinutes: number;
   }> {
-    const defaults = { maximumRadiusMiles: 20, transitBufferMinutes: 45 };
+    const defaults = { maximumRadiusMiles: 25, transitBufferMinutes: 60 };
     try {
       const setting = await this.prisma.appSetting.findUnique({
         where: { key: "DELIVERY_SETTINGS" },

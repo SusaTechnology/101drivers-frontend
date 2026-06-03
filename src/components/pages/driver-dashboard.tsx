@@ -289,6 +289,7 @@ interface JobItem {
       totalNeededMinutes: number;
       availableMinutes: number;
     } | null;
+    effectiveMaxRadiusMiles?: number;
   } | null;
 }
 
@@ -371,7 +372,7 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
 
               {/* Distance + ETA — medium, supporting */}
               <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
-                {job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null}{job.miles ? ` \u00b7 ${job.miles} mi` : ''}
+                {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
               </div>
             </div>
 
@@ -438,7 +439,7 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
                       return `This would make you late for another booked gig:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your next delivery'}\nThat pickup time: ${pt}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to that pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
                     }
                     if (d.checkType === 'radius') {
-                      return `Pickup is too far from your last drop-off (${d.transit.driveMiles} mi). Maximum allowed: 20 miles.`
+                      return `Pickup is too far from your last drop-off (${d.transit.driveMiles} mi). Maximum allowed: ${d.effectiveMaxRadiusMiles ?? 25} miles.`
                     }
                     return job.stackingBlocked || 'This gig conflicts with your schedule.'
                   })()
@@ -447,7 +448,7 @@ function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => 
           </AlertDialogHeader>
           <div className="py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 space-y-1">
             <p className="font-semibold text-slate-700 dark:text-slate-300">{job.pickup} &rarr; {job.dropoff}</p>
-            <p>{job.timeWindow}{job.miles ? ` &middot; ${job.miles} mi` : ''}</p>
+            <p>{job.timeWindow} &middot; {job.miles ? `${job.miles} mi` : 'Unknown distance'}</p>
           </div>
           <AlertDialogFooter>
             <AlertDialogAction>Got it</AlertDialogAction>
@@ -630,7 +631,7 @@ export default function DriverDashboardPage() {
       pickup: extractRouteLabel(item.pickupAddress || ''),
       dropoff: extractRouteLabel(item.dropoffAddress || ''),
       service: serviceTypeLabels[item.serviceType] || item.serviceType,
-      miles: item.deliveryDistanceMiles || null,
+      miles: item.pickupDistanceMiles || null,
       duration: formatDuration(item.etaMinutes),
       payout: item.payoutPreviewAmount,
       bonus: item.urgentBonusAmount,
@@ -1183,7 +1184,7 @@ export default function DriverDashboardPage() {
                       return `This would make you late for another booked gig:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your next delivery'}\nThat pickup time: ${pt}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to that pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
                     }
                     if (d.checkType === 'radius') {
-                      return `Pickup is too far from your last drop-off (${d.transit.driveMiles} mi). Maximum allowed: 20 miles.`
+                      return `Pickup is too far from your last drop-off (${d.transit.driveMiles} mi). Maximum allowed: ${d.effectiveMaxRadiusMiles ?? 25} miles.`
                     }
                     return blockedReason || 'This gig conflicts with your current schedule.'
                   })()
