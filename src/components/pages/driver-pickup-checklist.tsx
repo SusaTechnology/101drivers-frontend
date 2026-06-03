@@ -1010,77 +1010,6 @@ const handleUploadOdometerPhoto = async () => {
           </div>
         )}
 
-        {/* Header Card */}
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-          <CardContent className="p-6 sm:p-7">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                  Pickup Checklist
-                </h1>
-                <p className="mt-2 text-slate-600 dark:text-slate-400">
-                  Follow each step in order. Complete all steps to start the trip.
-                </p>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Badge variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
-                    <CarFront className="w-3.5 h-3.5 text-primary mr-1" />
-                    Arrive
-                  </Badge>
-                  <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-                    <Camera className="w-3.5 h-3.5 text-primary mr-1" />
-                    6 Photos
-                  </Badge>
-                  <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-                    <QrCode className="w-3.5 h-3.5 text-primary mr-1" />
-                    VIN
-                  </Badge>
-                  <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-                    <Speed className="w-3.5 h-3.5 text-primary mr-1" />
-                    Odometer
-                  </Badge>
-                  <Badge variant="outline" className="chip bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200">
-                    <Shield className="w-3.5 h-3.5 text-primary mr-1" />
-                    PIN
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="text-left sm:text-right">
-                {/* Active delivery guard warning */}
-                {hasOtherActiveDelivery && (
-                  <div className="mt-3 flex items-start gap-2 p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
-                    <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-amber-800 dark:text-amber-200 font-semibold">
-                      You have an active delivery in progress. Complete it first, then return here to start this trip.
-                    </p>
-                  </div>
-                )}
-
-                {/* Location status warning */}
-                {locationStatus === 'denied' && allStepsComplete && (
-                  <div className="mt-3 flex items-start gap-2 p-3 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
-                    <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-red-800 dark:text-red-200 font-semibold">
-                      Location must be on to start this trip. Please enable GPS and tap Start Trip again.
-                    </p>
-                  </div>
-                )}
-
-                <div className="mt-4 flex sm:justify-end gap-2">
-                  <Button
-                    variant="link"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl font-extrabold text-slate-700 dark:text-slate-200 hover:text-primary transition"
-                    onClick={() => toast.info('Contacting support')}
-                  >
-                    <SupportAgent className="w-4 h-4 text-primary" />
-                    Support
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Early Start Banner — show when before scheduled window AND GPS-verified at pickup */}
         {delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === true && (
@@ -1882,7 +1811,7 @@ const handleUploadOdometerPhoto = async () => {
                           <h2 className="text-lg font-black text-slate-900 dark:text-white">Driver Authorization</h2>
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Enter PIN
+                          Please ask the customer for their their 4-digit PIN
                         </p>
                         {(() => {
                           const isBusiness = delivery?.customer?.customerType === 'BUSINESS'
