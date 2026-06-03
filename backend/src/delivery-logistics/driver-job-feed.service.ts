@@ -1440,12 +1440,15 @@ async getDriverJobFeed(input: {
   // ── Backward Stacking Check ──
   // Check: estimatedFinish_anchor + driveTime_anchor→new + buffer ≤ newWindowEnd
   // The driver just needs to arrive before the pickup window CLOSES.
-  // If frontend sent fresh GPS and driver is within 1 mile of pickup, skip this check
-  // (they're already there). Otherwise use reference dropoff as origin for drive time.
+  // GPS bypass: if driver has NO active delivery AND is within 1 mile of pickup,
+  // skip this check (they're free and already there).
+  // If driver has an ACTIVE delivery, GPS is ignored — time check always runs.
   if (referenceFinishMs !== null && newWindowEndMs !== null) {
-    // Skip if driver's fresh GPS shows they're already at the pickup location
+    const hasActiveDelivery = anchorDelivery?.status === EnumDeliveryRequestStatus.ACTIVE;
+
+    // Skip only if: no active delivery + fresh GPS + within 1 mile of pickup
     let driverAtPickup = false;
-    if (input.driverLat != null && input.driverLng != null && delivery.pickupLat != null && delivery.pickupLng != null) {
+    if (!hasActiveDelivery && input.driverLat != null && input.driverLng != null && delivery.pickupLat != null && delivery.pickupLng != null) {
       const driverToPickupMiles = this.haversineFallback(input.driverLat, input.driverLng, delivery.pickupLat, delivery.pickupLng);
       if (driverToPickupMiles <= 1) {
         driverAtPickup = true;
