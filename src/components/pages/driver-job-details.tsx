@@ -331,17 +331,10 @@ export default function DriverJobDetailsPage() {
       ["data", `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${user?.profileId}`],
     ],
     onSuccess: () => {
-      if (hasActiveDelivery) {
-        toast.success('Accepted!', {
-          description: 'You can find it in your Booked for Later queue.',
-        })
-        navigate({ to: '/driver/booked-later' })
-      } else {
-        toast.success('Accepted!', {
-          description: 'Complete the pickup checklist to start your trip.',
-        })
-        navigate({ to: '/driver/pickup-checklist', search: { jobId } as any })
-      }
+      toast.success('Accepted!', {
+        description: 'Gig booked. Check your queue.',
+      })
+      navigate({ to: '/driver/dashboard' })
     },
     onError: handleBookingError,
   })
