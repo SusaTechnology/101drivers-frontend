@@ -556,14 +556,14 @@ export default function LandingPage() {
           {/* Hero heading */}
           <div>
             <h2 className="text-4xl sm:text-5xl lg:text-[44px] font-black leading-tight text-slate-900 dark:text-white">
-              <span className="text-slate-900 dark:text-white">We </span><span className="text-[#a9ce42]">Move Your Car</span>
+              Car Pickup & Delivery <span className="text-[#a9ce42]">Across SoCal</span>
             </h2>
             <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest mt-2">
               <Bolt className="h-4 w-4" />
               Instant Quote
             </div>
             <p className="text-sm lg:text-base text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
-              Pickup from our Westside zone. Drop-off anywhere in Southern California.
+              Pickup from our service zone. Drop-off anywhere in Southern California.
             </p>
           </div>
 
@@ -648,7 +648,7 @@ export default function LandingPage() {
                       ? "Calculating..."
                       : quoteResult
                         ? "Recalculate"
-                        : "Get Estimate"}
+                        : "Instant Quote"}
                     {!isLoadingQuote && <ArrowRight className="h-4 w-4" />}
                   </a>
                 ) : (
@@ -721,7 +721,7 @@ export default function LandingPage() {
                   <div className="absolute inset-0 flex items-center justify-center z-[2] pointer-events-none px-4">
                     <div className="text-center mt-[-50px]">
                       <p className="text-white font-black text-xl sm:text-2xl lg:text-3xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]">
-                        Pickup Area Only
+                        Pickup Zone
                       </p>
                       <p className="text-white/80 text-[10px] sm:text-xs mt-1.5 max-w-xs mx-auto drop-shadow-[0_1px_6px_rgba(0,0,0,0.6)] leading-relaxed">
                         Westside LA: Santa Monica, Venice, Marina del Rey, Playa del Rey, Culver City, Westchester, West LA &amp; nearby
