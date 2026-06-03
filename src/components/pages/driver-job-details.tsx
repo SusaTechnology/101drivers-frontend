@@ -331,10 +331,17 @@ export default function DriverJobDetailsPage() {
       ["data", `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${user?.profileId}`],
     ],
     onSuccess: () => {
-      toast.success('Accepted!', {
-        description: 'Gig booked. Check your queue.',
-      })
-      navigate({ to: '/driver/dashboard' })
+      // if (hasActiveDelivery) {
+        toast.success('Accepted!', {
+          description: 'You can find it in your Booked for Later queue.',
+        })
+        navigate({ to: '/driver/booked-later' })
+      // } else {
+      //   toast.success('Accepted!', {
+      //     description: 'Complete the pickup checklist to start your trip.',
+      //   })
+      //   navigate({ to: '/driver/pickup-checklist', search: { jobId } as any })
+      // }
     },
     onError: handleBookingError,
   })
@@ -844,7 +851,7 @@ export default function DriverJobDetailsPage() {
             <AlertDialog open={showConfirmAccept} onOpenChange={setShowConfirmAccept}>
               <AlertDialogContent className="max-w-[440px] rounded-2xl">
                 <AlertDialogHeader>
-                  <AlertDialogTitle className="text-xl font-black">Confirm Accept</AlertDialogTitle>
+                  <AlertDialogTitle className="text-xl font-black">Confirm</AlertDialogTitle>
                   <AlertDialogDescription className="sr-only">
                     Review and confirm this delivery acceptance.
                   </AlertDialogDescription>
@@ -883,8 +890,7 @@ export default function DriverJobDetailsPage() {
                 <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-3.5">
                   <TriangleAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                   <p className="text-xs font-bold text-amber-900 dark:text-amber-200 leading-relaxed">
-                    Once accepted, this delivery <span className="underline">cannot be cancelled</span> from the Driver app. Report any issues through Support.
-                  </p>
+                  Once confirmed, this delivery is <span className="underline">locked </span> in and cannot be cancelled from the app. <span className="underline">Contact Support</span> if you cannot complete it.                  </p>
                 </div>
 
                 <AlertDialogFooter className="flex-row gap-3 mt-2">
