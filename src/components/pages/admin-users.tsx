@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod/v4';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   Card,
@@ -107,6 +107,7 @@ import {
   Lock,
   UserPlus,
   Send,
+  Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -150,8 +151,13 @@ const ROLE_OPTIONS: { value: string; label: string }[] = [
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'All Status' },
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
+  { value: 'INVITED', label: 'Invited' },
+  // { value: 'PENDING', label: 'Pending Dealers' },
+  { value: 'PENDING_APPROVAL', label: 'Pending' },
+  { value: 'WAITLISTED', label: 'Waitlist' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'SUSPENDED', label: 'Suspended' },
 ];
 
 const CUSTOMER_TYPE_OPTIONS: { value: string; label: string }[] = [
@@ -170,12 +176,13 @@ const CUSTOMER_STATUS_OPTIONS: { value: string; label: string }[] = [
 
 const DRIVER_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'All Status' },
-  { value: 'WAITLISTED', label: 'Waitlisted' },
   { value: 'INVITED', label: 'Invited' },
+  { value: 'PENDING', label: 'Pending' },
   { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
+  { value: 'WAITLISTED', label: 'Waitlist' },
   { value: 'APPROVED', label: 'Approved' },
-  { value: 'SUSPENDED', label: 'Suspended' },
   { value: 'REJECTED', label: 'Rejected' },
+  { value: 'SUSPENDED', label: 'Suspended' },
 ];
 
 const SORT_BY_OPTIONS: { value: string; label: string }[] = [
@@ -332,13 +339,12 @@ export default function AdminUsersPage() {
 
   const queryParams = useMemo((): Parameters<typeof useAdminUsers>[0] => ({
     q: searchQuery || undefined,
-    roles: roleFilter !== 'all' ? roleFilter as UserRole : undefined,
-    isActive: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
+    roles: roleFilter !== 'all' ? roleFilter as UserRole : (statusFilter !== 'all' && ['INVITED','WAITLISTED','PENDING_APPROVAL'].includes(statusFilter) ? 'DRIVER' as UserRole : undefined),
+    customerApprovalStatus: statusFilter !== 'all' && ['PENDING','APPROVED','REJECTED','SUSPENDED'].includes(statusFilter) ? statusFilter as CustomerApprovalStatus : (customerStatusFilter !== 'all' ? customerStatusFilter as CustomerApprovalStatus : undefined),
+    driverStatus: statusFilter !== 'all' && ['INVITED','WAITLISTED','PENDING_APPROVAL'].includes(statusFilter) ? statusFilter as DriverStatus : (driverStatusFilter !== 'all' ? driverStatusFilter as DriverStatus : undefined),
     hasCustomer: hasCustomerFilter === 'yes' ? true : hasCustomerFilter === 'no' ? false : undefined,
     hasDriver: hasDriverFilter === 'yes' ? true : hasDriverFilter === 'no' ? false : undefined,
     customerType: customerTypeFilter !== 'all' ? customerTypeFilter as CustomerType : undefined,
-    customerApprovalStatus: customerStatusFilter !== 'all' ? customerStatusFilter as CustomerApprovalStatus : undefined,
-    driverStatus: driverStatusFilter !== 'all' ? driverStatusFilter as DriverStatus : undefined,
     createdFrom: createdFrom || undefined,
     createdTo: createdTo || undefined,
     sortBy: sortBy as AdminUsersQueryParams['sortBy'],
@@ -959,6 +965,12 @@ export default function AdminUsersPage() {
               </div>
             ) : (
               <>
+              {statusFilter !== 'all' && ['INVITED','WAITLISTED','PENDING_APPROVAL'].includes(statusFilter) && (
+                <div className="px-4 py-3 bg-sky-50 dark:bg-sky-950/20 border-b border-sky-200 dark:border-sky-900/40 flex items-center gap-2">
+                  <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                  <span className="text-sm text-sky-700 dark:text-sky-300">Showing drivers only — this status does not apply to business customers.</span>
+                </div>
+              )}
               <div className="overflow-x-auto">
               <Table>
                   <TableHeader>
@@ -1080,16 +1092,11 @@ export default function AdminUsersPage() {
                                 <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
                               </Button>
                             )}
-                            {/* Driver waitlisted - show Invite / Reject */}
+                            {/* Driver waitlisted - show Invite */}
                             {!user.disabledAt && user.driver?.status === 'WAITLISTED' && (
-                              <>
-                                <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('invite-driver', user)}>
-                                  <Send className="w-3.5 h-3.5 mr-1" /> Invite
-                                </Button>
-                                <Button size="sm" variant="destructive" className="rounded-lg" onClick={() => openDialog('reject-driver', user)}>
-                                  <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
-                                </Button>
-                              </>
+                              <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('invite-driver', user)}>
+                                <Send className="w-3.5 h-3.5 mr-1" /> Invite
+                              </Button>
                             )}
                             {/* Driver pending approval - show Approve/Reject */}
                             {!user.disabledAt && user.driver?.status === 'PENDING_APPROVAL' && (
