@@ -108,14 +108,6 @@ const serviceTypeMap: Record<string, { icon: React.ReactNode; label: string }> =
   default: { icon: <Car className="h-4 w-4" />, label: 'Car Transfer' },
 }
 
-// Tip payload type
-interface TipPayload {
-  amount: number
-  delivery: { id: string }
-  provider: 'STRIPE' | 'MANUAL' | 'OTHER'
-  providerRef: string
-  status: 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED'
-}
 
 interface DealerDeliveryDetailsProps {
   deliveryId?: string
@@ -260,8 +252,10 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const [showTipPaymentModal, setShowTipPaymentModal] = useState(false)
   const [pendingTipAmount, setPendingTipAmount] = useState<number>(0)
 
-  // Tip mutation — records tip in DB after successful Stripe payment
-  const tipMutation = useCreate<TipPayload, TipPayload>(`${import.meta.env.VITE_API_URL}/api/tips`, {
+  // Tip mutation — updates tip status in DB after successful Stripe payment
+  const tipUpdateMutation = useDataMutation({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/tips/${id}`,
+    method: 'PATCH',
     onSuccessInvalidate: false,
     successMessage: '',
     onSuccess: () => {
@@ -271,7 +265,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       setShowTipPaymentModal(false)
       refetchTips()
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error('Failed to record tip', { description: error.message })
     }
   })
@@ -438,16 +432,11 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     setShowTipPaymentModal(true)
   }
 
-  // Called after Stripe tip payment succeeds — records the tip in DB
+  // Called after Stripe tip payment succeeds — updates tip status to CAPTURED
   const handleTipPaymentSuccess = (paymentIntentId: string) => {
-    const payload: TipPayload = {
-      amount: pendingTipAmount,
-      delivery: { id: deliveryData.id },
-      provider: 'STRIPE',
-      providerRef: paymentIntentId,
+    tipUpdateMutation.mutate({
       status: 'CAPTURED',
-    }
-    tipMutation.mutate(payload)
+    })
   }
 
   const handleTipPaymentError = (message: string) => {
@@ -1930,12 +1919,12 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                           disabled={
                             deliveryData.status !== 'COMPLETED' ||
                             !driver ||
-                            tipMutation.isPending ||
+                            showTipPaymentModal ||
                             (tipAmount === '' && !customTipInput)
                           }
                           onClick={handleTipSubmit}
                         >
-                          {tipMutation.isPending ? 'Processing...' : 'Send Tip'}
+                          {showTipPaymentModal ? 'Processing...' : 'Send Tip'}
                           <DollarSign className="h-4 w-4" />
                         </Button>
 
