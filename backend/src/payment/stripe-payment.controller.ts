@@ -84,6 +84,7 @@ export class StripePaymentController {
         await this.prisma.payment.create({
           data: {
             deliveryId,
+            amount: delivery.quote?.estimatedPrice || 0,
             provider: "STRIPE",
             providerPaymentIntentId: result.paymentIntentId,
             paymentType: "PREPAID",
