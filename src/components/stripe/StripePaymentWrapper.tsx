@@ -40,10 +40,14 @@ export default function StripePaymentWrapper({
     onSuccessInvalidate: false,
     successMessage: "",
     onSuccess: (data) => {
-      if (data?.clientSecret) {
-        setClientSecret(data.clientSecret);
+      console.log('[StripePaymentWrapper] PaymentIntent response:', data);
+      // Handle both direct and nested response formats
+      const secret = data?.clientSecret || data?.data?.clientSecret;
+      if (secret) {
+        setClientSecret(secret);
         setFetchError(null);
       } else {
+        console.error('[StripePaymentWrapper] No clientSecret in response:', data);
         setFetchError("Failed to initialize payment — no client secret returned.");
       }
     },
@@ -112,6 +116,15 @@ export default function StripePaymentWrapper({
     return (
       <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
         <p className="text-sm font-bold text-amber-600">Payment system not configured</p>
+      </div>
+    );
+  }
+
+  // Don't render Elements until we have a valid clientSecret
+  if (!clientSecret) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-600" />
       </div>
     );
   }
