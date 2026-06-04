@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { RefreshCw } from "lucide-react";
 import { getStripe } from "@/lib/stripe";
-import { useDataQuery } from "@/lib/tanstack/dataQuery";
+import { useDataQuery, useDataMutation } from "@/lib/tanstack/dataQuery";
 import StripePaymentForm from "./StripePaymentForm";
 
 interface StripePaymentWrapperProps {
@@ -30,36 +30,34 @@ export default function StripePaymentWrapper({
 
   const publishableKey = configData?.publishableKey || "";
 
-  // ── Fetch / create PaymentIntent (uses app's auth wrapper → auto token refresh) ──
-  const {
-    data: intentData,
-    isLoading: intentLoading,
-    isError: intentIsError,
-    error: intentError,
-    refetch: refetchIntent,
-  } = useDataQuery<any>({
+  // ── Create PaymentIntent (POST — backend expects POST, not GET) ──
+  const intentMutation = useDataMutation<
+    { clientSecret: string; paymentIntentId: string; status: string; amount: number },
+    void
+  >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/payment-intent/${deliveryId}`,
-    noFilter: true,
-    enabled: !!deliveryId,
+    method: "POST",
+    onSuccessInvalidate: false,
+    successMessage: "",
+    onSuccess: (data) => {
+      if (data?.clientSecret) {
+        setClientSecret(data.clientSecret);
+        setFetchError(null);
+      } else {
+        setFetchError("Failed to initialize payment — no client secret returned.");
+      }
+    },
+    onError: (error) => {
+      setFetchError(error.message || "Failed to initialize payment");
+    },
   });
 
-  // Sync intent response into local state
+  // Auto-trigger PaymentIntent creation when deliveryId is available
   useEffect(() => {
-    if (intentData) {
-      if (intentData.error) {
-        setFetchError(intentData.error);
-      } else if (intentData.clientSecret) {
-        setClientSecret(intentData.clientSecret);
-        setFetchError(null);
-      }
+    if (deliveryId && publishableKey && !clientSecret && !fetchError) {
+      intentMutation.mutate();
     }
-  }, [intentData]);
-
-  useEffect(() => {
-    if (intentIsError) {
-      setFetchError(intentError?.message || "Failed to initialize payment");
-    }
-  }, [intentIsError, intentError]);
+  }, [deliveryId, publishableKey]);
 
   // ── Handle Stripe redirect return (e.g. after 3DS) ──
   useEffect(() => {
@@ -83,7 +81,7 @@ export default function StripePaymentWrapper({
 
   // ── Render states ──
 
-  if (intentLoading) {
+  if (intentMutation.isPending) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-600" />
@@ -99,7 +97,7 @@ export default function StripePaymentWrapper({
         <button
           onClick={() => {
             setFetchError(null);
-            refetchIntent();
+            intentMutation.mutate();
           }}
           className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-red-700 transition"
         >
