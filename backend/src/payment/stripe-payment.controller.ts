@@ -38,12 +38,20 @@ export class StripePaymentController {
 
     if (payment?.providerPaymentIntentId) {
       const pi = await this.stripeService.getPaymentIntent(payment.providerPaymentIntentId);
-      return {
-        paymentIntentId: pi.id,
-        clientSecret: pi.client_secret,
-        status: pi.status,
-        amount: pi.amount / 100,
-      };
+
+      // Terminal statuses that cannot be reused for Elements
+      const terminalStatuses = ['succeeded', 'canceled', 'cancelled'];
+      if (!terminalStatuses.includes(pi.status)) {
+        return {
+          paymentIntentId: pi.id,
+          clientSecret: pi.client_secret,
+          status: pi.status,
+          amount: pi.amount / 100,
+        };
+      }
+
+      // PaymentIntent is terminal — fall through to create a new one
+      this.logger.log(`Existing PaymentIntent ${pi.id} is in terminal state (${pi.status}), creating a new one`);
     }
 
     // Create a new PaymentIntent
@@ -62,13 +70,24 @@ export class StripePaymentController {
         deliveryId,
       });
 
-      // Update the payment record
+      // Update the payment record with the new PaymentIntent
       if (payment) {
         await this.prisma.payment.update({
           where: { id: payment.id },
           data: {
             provider: "STRIPE",
             providerPaymentIntentId: result.paymentIntentId,
+          },
+        });
+      } else {
+        // No payment record yet — create one
+        await this.prisma.payment.create({
+          data: {
+            deliveryId,
+            provider: "STRIPE",
+            providerPaymentIntentId: result.paymentIntentId,
+            paymentType: "PREPAID",
+            status: "PENDING",
           },
         });
       }
