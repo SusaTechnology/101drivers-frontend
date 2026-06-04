@@ -1163,12 +1163,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                           </div>
                         </div>
                       </div>
-                      {showPaymentSuccess ? (
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30">
-                          <CheckCircle className="h-4 w-4 text-emerald-500" />
-                          <span className="text-sm font-extrabold text-emerald-600">Paid</span>
-                        </div>
-                      ) : showPayButton ? (
+                      {showPayButton ? (
                         <Button
                           onClick={() => setShowPaymentModal(true)}
                           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-lime-500 text-slate-950 hover:bg-lime-600 font-extrabold transition text-sm"
