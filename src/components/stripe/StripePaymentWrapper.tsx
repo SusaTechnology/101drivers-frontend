@@ -1,81 +1,79 @@
 import React, { useEffect, useState } from "react";
 import { Elements } from "@stripe/react-stripe-js";
+import { RefreshCw } from "lucide-react";
 import { getStripe } from "@/lib/stripe";
 import { useDataQuery } from "@/lib/tanstack/dataQuery";
 import StripePaymentForm from "./StripePaymentForm";
 
 interface StripePaymentWrapperProps {
   deliveryId: string;
+  /** Dollar amount to display above the card form */
+  amount?: number;
   onSuccess?: (paymentIntentId: string) => void;
   onError?: (message: string) => void;
 }
 
 export default function StripePaymentWrapper({
   deliveryId,
+  amount,
   onSuccess,
   onError,
 }: StripePaymentWrapperProps) {
-  const [publishableKey, setPublishableKey] = useState<string>("");
   const [clientSecret, setClientSecret] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Fetch Stripe config (publishable key)
+  // ── Fetch Stripe publishable key ──
   const { data: configData } = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/config`,
     noFilter: true,
   });
 
+  const publishableKey = configData?.publishableKey || "";
+
+  // ── Fetch / create PaymentIntent (uses app's auth wrapper → auto token refresh) ──
+  const {
+    data: intentData,
+    isLoading: intentLoading,
+    isError: intentIsError,
+    error: intentError,
+    refetch: refetchIntent,
+  } = useDataQuery<any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/payment-intent/${deliveryId}`,
+    noFilter: true,
+    enabled: !!deliveryId,
+  });
+
+  // Sync intent response into local state
   useEffect(() => {
-    if (configData?.publishableKey) {
-      setPublishableKey(configData.publishableKey);
+    if (intentData) {
+      if (intentData.error) {
+        setFetchError(intentData.error);
+      } else if (intentData.clientSecret) {
+        setClientSecret(intentData.clientSecret);
+        setFetchError(null);
+      }
     }
-  }, [configData]);
+  }, [intentData]);
 
-  // Create or get PaymentIntent
   useEffect(() => {
-    if (!deliveryId) return;
+    if (intentIsError) {
+      setFetchError(intentError?.message || "Failed to initialize payment");
+    }
+  }, [intentIsError, intentError]);
 
-    const token = localStorage.getItem("accessToken");
-    fetch(
-      `${import.meta.env.VITE_API_URL}/api/payments/stripe/payment-intent/${deliveryId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      },
-    )
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          setError(data.error);
-        } else if (data.clientSecret) {
-          setClientSecret(data.clientSecret);
-        }
-        setLoading(false);
-      })
-      .catch(() => {
-        setError("Failed to initialize payment");
-        setLoading(false);
-      });
-  }, [deliveryId]);
-
-  // Handle Stripe redirect return (e.g., after 3DS authentication)
+  // ── Handle Stripe redirect return (e.g. after 3DS) ──
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const redirectStatus = params.get("redirect_status");
     const paymentIntentId = params.get("payment_intent");
 
     if (redirectStatus === "succeeded" && paymentIntentId) {
-      // Clean up URL
       window.history.replaceState({}, "", window.location.pathname);
-      setClientSecret(""); // Clear to show success state
+      setClientSecret("");
       onSuccess?.(paymentIntentId);
     } else if (redirectStatus && redirectStatus !== "succeeded") {
-      // Payment failed or was cancelled after redirect
       window.history.replaceState({}, "", window.location.pathname);
-      setError(
+      setFetchError(
         redirectStatus === "cancelled"
           ? "Payment was cancelled"
           : "Payment failed. Please try again.",
@@ -83,7 +81,9 @@ export default function StripePaymentWrapper({
     }
   }, [onSuccess]);
 
-  if (loading) {
+  // ── Render states ──
+
+  if (intentLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-600" />
@@ -91,11 +91,21 @@ export default function StripePaymentWrapper({
     );
   }
 
-  if (error) {
+  if (fetchError) {
     return (
       <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
-        <p className="text-sm font-bold text-red-600 dark:text-red-400">{error}</p>
+        <p className="text-sm font-bold text-red-600 dark:text-red-400">{fetchError}</p>
         <p className="text-xs text-red-500 mt-1">Payment is not available at this time.</p>
+        <button
+          onClick={() => {
+            setFetchError(null);
+            refetchIntent();
+          }}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-red-600 hover:text-red-700 transition"
+        >
+          <RefreshCw className="h-3 w-3" />
+          Retry
+        </button>
       </div>
     );
   }
@@ -111,12 +121,23 @@ export default function StripePaymentWrapper({
   const stripePromise = getStripe(publishableKey);
 
   return (
-    <Elements stripe={stripePromise} options={{ clientSecret }}>
-      <StripePaymentForm
-        clientSecret={clientSecret}
-        onSuccess={onSuccess}
-        onError={onError}
-      />
-    </Elements>
+    <div>
+      {/* Amount display */}
+      {amount != null && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 mb-4">
+          <span className="text-xs font-black uppercase tracking-widest text-slate-500">Amount</span>
+          <span className="text-lg font-black text-slate-900 dark:text-white">
+            ${amount.toFixed(2)}
+          </span>
+        </div>
+      )}
+      <Elements stripe={stripePromise} options={{ clientSecret }}>
+        <StripePaymentForm
+          clientSecret={clientSecret}
+          onSuccess={onSuccess}
+          onError={onError}
+        />
+      </Elements>
+    </div>
   );
 }

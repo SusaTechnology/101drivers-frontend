@@ -27,6 +27,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import StripePaymentWrapper from '@/components/stripe/StripePaymentWrapper'
+import StripeTipPaymentWrapper from '@/components/stripe/StripeTipPaymentWrapper'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useJsApiLoader } from '@react-google-maps/api'
 import RouteMap from '@/components/map/RouteMap'
@@ -257,17 +258,23 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     })
   }
 
-  // Tip mutation
+  // Tip payment modal state
+  const [showTipPaymentModal, setShowTipPaymentModal] = useState(false)
+  const [pendingTipAmount, setPendingTipAmount] = useState<number>(0)
+
+  // Tip mutation — records tip in DB after successful Stripe payment
   const tipMutation = useCreate<TipPayload, TipPayload>(`${import.meta.env.VITE_API_URL}/api/tips`, {
+    onSuccessInvalidate: false,
+    successMessage: '',
     onSuccess: () => {
-      toast.success('Tip sent', { description: 'Thank you for your generosity!' })
-      // Reset form
+      toast.success('Tip sent!', { description: 'Thank you for your generosity!' })
       setTipAmount('')
       setCustomTipInput('')
+      setShowTipPaymentModal(false)
       refetchTips()
     },
     onError: (error) => {
-      toast.error('Failed to send tip', { description: error.message })
+      toast.error('Failed to record tip', { description: error.message })
     }
   })
 
@@ -411,7 +418,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     ratingMutation.mutate(payload)
   }
 
-  // Submit tip
+  // Submit tip — opens Stripe payment modal instead of direct DB record
   const handleTipSubmit = () => {
     if (!driver) {
       toast.error('No driver assigned yet')
@@ -429,14 +436,24 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       toast.error('Please enter a valid tip amount')
       return
     }
+    setPendingTipAmount(amount)
+    setShowTipPaymentModal(true)
+  }
+
+  // Called after Stripe tip payment succeeds — records the tip in DB
+  const handleTipPaymentSuccess = (paymentIntentId: string) => {
     const payload: TipPayload = {
-      amount,
+      amount: pendingTipAmount,
       delivery: { id: deliveryData.id },
-      provider: 'STRIPE', // Default to Stripe for production
-      providerRef: '', // Will be populated by payment processor
-      status: 'CAPTURED', // Will be set by payment processor
+      provider: 'STRIPE',
+      providerRef: paymentIntentId,
+      status: 'CAPTURED',
     }
     tipMutation.mutate(payload)
+  }
+
+  const handleTipPaymentError = (message: string) => {
+    toast.error('Tip payment failed', { description: message })
   }
 
   // Preset tip handler
@@ -2023,8 +2040,33 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
           {id && (
             <StripePaymentWrapper
               deliveryId={id}
+              amount={paymentAmount || undefined}
               onSuccess={handlePaymentSuccess}
               onError={handlePaymentError}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Tip Payment Modal — Stripe checkout before recording tip */}
+      <Dialog open={showTipPaymentModal} onOpenChange={setShowTipPaymentModal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-lime-500" />
+              Tip Your Driver
+            </DialogTitle>
+            <DialogDescription>
+              Send a tip of <span className="font-extrabold text-slate-900 dark:text-white">${pendingTipAmount.toFixed(2)}</span> to {driver?.name || 'your driver'}.
+            </DialogDescription>
+          </DialogHeader>
+          {id && pendingTipAmount > 0 && (
+            <StripeTipPaymentWrapper
+              deliveryId={id}
+              tipAmount={pendingTipAmount}
+              driverName={driver?.name || 'your driver'}
+              onSuccess={handleTipPaymentSuccess}
+              onError={handleTipPaymentError}
             />
           )}
         </DialogContent>
