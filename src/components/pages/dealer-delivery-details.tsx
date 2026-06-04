@@ -214,9 +214,8 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const paymentProvider = deliveryData?.payment?.provider
   const paymentAmount = deliveryData?.payment?.amount
 
-  // TODO: Revert both lines below after testing — temporarily showing Pay Now on completed deliveries
-  const showPayButton = paymentType === 'PREPAID' && !paymentCompleted && (paymentProvider === 'STRIPE' || paymentProvider === 'MANUAL') && (paymentStatus === 'AUTHORIZED' || paymentStatus === 'CAPTURED' || paymentStatus === 'PAID')
-  const showPaymentSuccess = false // temporarily disabled for testing
+  // TODO: Revert after testing — temporarily showing Pay Now on ALL deliveries
+  const showPayButton = !paymentCompleted
 
   const handlePaymentSuccess = () => {
     setShowPaymentModal(false)
