@@ -4,7 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
 import * as nestAccessControl from "nest-access-control";
 
-@Controller("api/payments")
+@Controller("payments")
 export class StripePaymentController {
   private readonly logger = new Logger(StripePaymentController.name);
 
