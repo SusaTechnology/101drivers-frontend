@@ -87,7 +87,7 @@ export class StripePaymentController {
             provider: "STRIPE",
             providerPaymentIntentId: result.paymentIntentId,
             paymentType: "PREPAID",
-            status: "PENDING",
+            status: "AUTHORIZED",
           },
         });
       }
