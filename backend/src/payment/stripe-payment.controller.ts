@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Logger, UseGuards } from "@nestjs/common";
+import { Controller, Get, Post, Param, Body, Logger, UseGuards } from "@nestjs/common";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PrismaService } from "../prisma/prisma.service";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
@@ -102,6 +102,100 @@ export class StripePaymentController {
     } catch (err: any) {
       this.logger.error(`PaymentIntent creation failed: ${err.message}`);
       return { error: "Failed to create payment intent", details: err.message };
+    }
+  }
+
+  /**
+   * Create a PaymentIntent for a tip on a completed delivery.
+   * The tip amount comes from the frontend body.
+   */
+  @Post("stripe/tip-intent")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async createTipPaymentIntent(
+    @Body() body: { deliveryId: string; amount: number },
+  ) {
+    const { deliveryId, amount } = body;
+
+    if (!deliveryId || !amount || amount <= 0) {
+      return { error: "Invalid delivery ID or tip amount" };
+    }
+
+    // Verify delivery exists and is completed
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: { id: true, status: true },
+    });
+
+    if (!delivery) {
+      return { error: "Delivery not found" };
+    }
+
+    if (delivery.status !== "COMPLETED") {
+      return { error: "Tips can only be added to completed deliveries" };
+    }
+
+    // Check if a tip already exists for this delivery
+    const existingTip = await this.prisma.tip.findUnique({
+      where: { deliveryId },
+    });
+
+    if (existingTip?.providerRef) {
+      // Check if the existing tip PaymentIntent is terminal
+      try {
+        const pi = await this.stripeService.getPaymentIntent(existingTip.providerRef);
+        const terminalStatuses = ['succeeded', 'canceled', 'cancelled'];
+        if (!terminalStatuses.includes(pi.status)) {
+          return {
+            paymentIntentId: pi.id,
+            clientSecret: pi.client_secret,
+            status: pi.status,
+            amount: pi.amount / 100,
+          };
+        }
+      } catch {
+        // PaymentIntent not found or API error — fall through and create new one
+      }
+    }
+
+    try {
+      const result = await this.stripeService.createPaymentIntent({
+        amount,
+        deliveryId,
+        metadata: { type: "tip" },
+      });
+
+      // Upsert tip record
+      if (existingTip) {
+        await this.prisma.tip.update({
+          where: { deliveryId },
+          data: {
+            amount,
+            provider: "STRIPE",
+            providerRef: result.paymentIntentId,
+            status: "AUTHORIZED",
+          },
+        });
+      } else {
+        await this.prisma.tip.create({
+          data: {
+            amount,
+            deliveryId,
+            provider: "STRIPE",
+            providerRef: result.paymentIntentId,
+            status: "AUTHORIZED",
+          },
+        });
+      }
+
+      return {
+        paymentIntentId: result.paymentIntentId,
+        clientSecret: result.clientSecret,
+        status: "requires_payment_method",
+        amount,
+      };
+    } catch (err: any) {
+      this.logger.error(`Tip PaymentIntent creation failed: ${err.message}`);
+      return { error: "Failed to create tip payment intent", details: err.message };
     }
   }
 }

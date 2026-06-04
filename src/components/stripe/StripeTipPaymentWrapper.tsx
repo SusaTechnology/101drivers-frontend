@@ -146,10 +146,13 @@ export default function StripeTipPaymentWrapper({
     method: "POST",
     onSuccessInvalidate: false,
     onSuccess: (data) => {
-      if (data.clientSecret) {
-        setClientSecret(data.clientSecret);
+      console.log('[StripeTipPaymentWrapper] Tip intent response:', data);
+      const secret = data?.clientSecret || data?.data?.clientSecret;
+      if (secret) {
+        setClientSecret(secret);
         setFetchError(null);
       } else {
+        console.error('[StripeTipPaymentWrapper] No clientSecret in response:', data);
         setFetchError("Failed to create tip payment. Please try again.");
       }
     },
@@ -195,6 +198,15 @@ export default function StripeTipPaymentWrapper({
           <RefreshCw className="h-3 w-3" />
           Retry
         </button>
+      </div>
+    );
+  }
+
+  // Don't render Elements until we have a valid clientSecret
+  if (!clientSecret) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-600" />
       </div>
     );
   }
