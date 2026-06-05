@@ -68,6 +68,7 @@ export class StripePaymentController {
       const result = await this.stripeService.createPaymentIntent({
         amount: delivery.quote?.estimatedPrice || 0,
         deliveryId,
+        captureMethod: 'manual', // Hold funds, capture on delivery completion
       });
 
       // Update the payment record with the new PaymentIntent
@@ -162,6 +163,7 @@ export class StripePaymentController {
         amount,
         deliveryId,
         metadata: { type: "tip" },
+        captureMethod: 'automatic', // Tips charge immediately (post-completion)
       });
 
       // Upsert tip record
