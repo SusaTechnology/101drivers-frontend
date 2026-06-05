@@ -180,3 +180,30 @@ Stage Summary:
 - Admin can process full or partial refunds from the delivery details page
 - Stripe PI cancelled immediately on delivery cancellation (no 7-day auth hold wait)
 - All changes pushed to main + master branches
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Option B UX fixes — email receipts, payment labels, banner, gate
+
+Work Log:
+- Analyzed existing codebase: email infrastructure fully built (MailService + NotificationEventEngine + 12+ templates) but zero payment-specific notification methods
+- Added `notifyPaymentAuthorized()` to NotificationEventEngine — sends "Payment Confirmed" email with amount, delivery ref, route details when card is confirmed and funds held
+- Added `notifyPaymentCaptured()` to NotificationEventEngine — sends "Payment Receipt" email with receipt-style format (dashed separator, amount charged, date, status) when payment is captured at delivery completion
+- Injected NotificationEventEngine (Optional) into StripeWebhookController — fire-and-forget pattern so webhook never fails on email errors
+- Registered NotificationEventEngine + MailService as providers in AppModule for DI
+- Added `payment_intent.amount_capturable_updated` webhook handler — only acts on non-tip, requires_capture status; updates payment to AUTHORIZED; sends confirmation email
+- Updated `payment_intent.succeeded` webhook handler — sends receipt email after capture (non-tip payments only)
+- Fixed review page: "Prepaid" label changed to "Card Payment", description text now accurately says "After a driver is assigned, you will be prompted to enter your card. Funds are held securely until delivery is complete."
+- Verified Payment Required banner already exists in dealer-delivery-details.tsx (amber banner with Pay Now button)
+- Verified payment gate already exists in delivery-lifecycle.service.ts startTrip() (blocks BOOKED→ACTIVE if PREPAID payment not AUTHORIZED/CAPTURED/PAID/INVOICED)
+- Both backend and frontend compile clean (only pre-existing tsconfig baseUrl deprecation warning)
+- Pushed to both main and master branches
+
+Stage Summary:
+- Two new notification methods: notifyPaymentAuthorized (card confirmed) + notifyPaymentCaptured (receipt)
+- Customer now receives "Payment Confirmed" email when they enter their card (funds held)
+- Customer now receives "Payment Receipt" email when delivery completes and card is charged
+- Review page label changed from misleading "Prepaid" to accurate "Card Payment" with clear description
+- Payment Required banner and payment gate were already implemented — no changes needed
+- All 5 Option B UX problems addressed: misleading text fixed, payment visibility fixed, payment gate exists, receipt emails added, label fixed
