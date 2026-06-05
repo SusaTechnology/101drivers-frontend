@@ -1,5 +1,5 @@
 import * as swagger from "@nestjs/swagger";
-import { IsOptional, IsString } from "class-validator";
+import { IsOptional, IsString, IsNumber, Min, Max } from "class-validator";
 import { Transform } from "class-transformer";
 
 const toBoolean = ({ value }: { value: any }) =>
@@ -109,6 +109,30 @@ export class PaymentMarkInvoicedBody {
     required: false,
     nullable: true,
   })
+  @IsOptional()
+  @IsString()
+  note?: string | null;
+}
+
+export class PaymentRefundBody {
+  @swagger.ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+
+  @swagger.ApiProperty({ required: false, nullable: true, description: "Refund amount in dollars. Omit for full refund." })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  @Max(100000)
+  amount?: number | null;
+
+  @swagger.ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string | null;
+
+  @swagger.ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @IsString()
   note?: string | null;

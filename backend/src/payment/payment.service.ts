@@ -1,6 +1,6 @@
 // src/payment/payment.service.ts
 
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger, Inject, Optional, BadRequestException } from "@nestjs/common";
 import {
   DeliveryRequest as PrismaDeliveryRequest,
   Payment as PrismaPayment,
@@ -13,18 +13,24 @@ import { PaymentServiceBase } from "./base/payment.service.base";
 import { PaymentDomain } from "../domain/payment/payment.domain";
 import { PaymentPolicyService } from "../domain/payment/paymentPolicy.service";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
+import { StripeService } from "../providers/stripe/stripe.service";
 import { NotFoundException } from "@nestjs/common";
-import { EnumPaymentStatus, Prisma as PrismaClientNS } from "@prisma/client";
+import { EnumPaymentStatus, EnumPaymentEventType, Prisma as PrismaClientNS } from "@prisma/client";
 @Injectable()
 export class PaymentService extends PaymentServiceBase {
+  private readonly logger = new Logger(PaymentService.name);
+
 constructor(
   protected readonly prisma: PrismaService,
   private readonly domain: PaymentDomain,
   private readonly policy: PaymentPolicyService,
-  private readonly paymentPayoutEngine: PaymentPayoutEngine
+  private readonly paymentPayoutEngine: PaymentPayoutEngine,
+  @Optional() @Inject(StripeService)
+  private readonly stripeService?: StripeService,
 ) {
   super(prisma);
 }
+
   async count(args: Omit<Prisma.PaymentCountArgs, "select"> = {}): Promise<number> {
     return this.prisma.payment.count(args);
   }
@@ -361,6 +367,84 @@ async adminMarkPaymentInvoiced(input: {
     actorUserId: input.actorUserId ?? null,
     invoiceId: this.trimOptionalString(input.invoiceId) ?? null,
     note: this.trimOptionalString(input.note) ?? null,
+  });
+
+  return this.domain.findUnique({ id: input.paymentId });
+}
+
+async adminRefundPayment(input: {
+  paymentId: string;
+  amount?: number | null;
+  actorUserId?: string | null;
+  reason?: string | null;
+  note?: string | null;
+}): Promise<any> {
+  const payment = await this.prisma.payment.findUnique({
+    where: { id: input.paymentId },
+  });
+
+  if (!payment) {
+    throw new NotFoundException("Payment not found");
+  }
+
+  // Can only refund CAPTURED or PAID payments
+  if (
+    payment.status !== EnumPaymentStatus.CAPTURED &&
+    payment.status !== EnumPaymentStatus.PAID
+  ) {
+    throw new BadRequestException(
+      `Cannot refund payment in status ${payment.status}. Only CAPTURED or PAID payments can be refunded.`,
+    );
+  }
+
+  // Process Stripe refund if provider is STRIPE and charge exists
+  if (payment.provider === "STRIPE" && payment.providerChargeId && this.stripeService) {
+    try {
+      await this.stripeService.createRefund({
+        chargeId: payment.providerChargeId,
+        amount: input.amount ?? undefined, // omit = full refund
+        reason: input.reason || "requested_by_admin",
+      });
+      this.logger.log(
+        `Stripe refund processed for payment ${payment.id}` +
+          (input.amount ? ` ($${input.amount})` : " (full)"),
+      );
+    } catch (err: any) {
+      this.logger.error(`Stripe refund failed for payment ${payment.id}: ${err.message}`);
+      throw new BadRequestException(`Stripe refund failed: ${err.message}`);
+    }
+  } else if (!payment.providerChargeId && payment.provider === "STRIPE") {
+    throw new BadRequestException(
+      "No Stripe charge found on this payment. Cannot process refund via Stripe.",
+    );
+  }
+  // Non-STRIPE providers: just update the DB status (manual/offline refund)
+
+  const isFullRefund = !input.amount || input.amount >= payment.amount;
+
+  await this.prisma.$transaction(async (tx) => {
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: isFullRefund ? EnumPaymentStatus.REFUNDED : EnumPaymentStatus.CAPTURED,
+        refundedAt: new Date(),
+      },
+    });
+
+    await tx.paymentEvent.create({
+      data: {
+        paymentId: payment.id,
+        type: EnumPaymentEventType.REFUND,
+        status: EnumPaymentStatus.REFUNDED,
+        amount: input.amount ?? payment.amount,
+        message: input.note || (isFullRefund ? "Full refund processed by admin" : `Partial refund ($${input.amount}) processed by admin`),
+        raw: {
+          source: "admin-refund",
+          actorUserId: input.actorUserId ?? null,
+          reason: input.reason ?? null,
+        },
+      },
+    });
   });
 
   return this.domain.findUnique({ id: input.paymentId });

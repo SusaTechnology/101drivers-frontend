@@ -88,10 +88,11 @@ import {
   ExternalLink,
   Loader2,
   Users,
+  Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { getUser } from '@/lib/tanstack/dataQuery';
+import { getUser, useDataMutation } from '@/lib/tanstack/dataQuery';
 
 export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: string }) {
   const { actionItems, signOut } = useAdminActions();
@@ -104,6 +105,21 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   
   // Action mutations
   const deliveryActions = useDeliveryActions(deliveryId);
+  
+  // Refund mutation
+  const refundMutation = useDataMutation({
+    method: 'POST',
+    onSuccess: () => {
+      setShowRefundDialog(false);
+      toast.success('Refund processed', { description: 'The payment has been refunded successfully.' });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast.error('Refund failed', { description: error?.message || 'Unknown error' });
+    },
+  });
+
+  const [showRefundDialog, setShowRefundDialog] = useState(false);
   
   // Dialog states
   const [assignDriverOpen, setAssignDriverOpen] = useState(false);
@@ -927,6 +943,25 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                     {delivery.financialSummary?.payoutStatus || 'Pending'}
                   </Badge>
                 </div>
+
+                {/* Refund button — only for CAPTURED or PAID payments with a charge */}
+                {delivery.financialSummary?.paymentId &&
+                  ['CAPTURED', 'PAID'].includes(delivery.financialSummary?.paymentStatus || '') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowRefundDialog(true)}
+                      className="w-full rounded-xl border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950/30 mt-1"
+                      disabled={refundMutation.isPending}
+                    >
+                      {refundMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Undo2 className="w-4 h-4 mr-2" />
+                      )}
+                      Process Refund
+                    </Button>
+                  )}
               </CardContent>
             </Card>
 
@@ -1450,6 +1485,47 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Refund Confirmation Dialog */}
+      <AlertDialog open={showRefundDialog} onOpenChange={setShowRefundDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
+              <Undo2 className="w-5 h-5" />
+              Process Refund
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will issue a full refund via Stripe. The funds will be returned to the customer's card within 5-10 business days.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {delivery && (
+            <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800">
+              <p className="text-xs text-orange-600 dark:text-orange-400">Payment Details</p>
+              <p className="text-sm text-orange-700 dark:text-orange-300">
+                Amount: {formatCurrency(delivery.financialSummary?.grossAmount)} · Status: {delivery.financialSummary?.paymentStatus}
+              </p>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl" disabled={refundMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (delivery?.financialSummary?.paymentId) {
+                  refundMutation.mutate({
+                    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/${delivery.financialSummary.paymentId}/refund`,
+                    data: { note: 'Full refund processed by admin' },
+                  });
+                }
+              }}
+              disabled={refundMutation.isPending}
+              className="bg-orange-600 text-white hover:bg-orange-700 rounded-xl"
+            >
+              {refundMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Confirm Full Refund
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
