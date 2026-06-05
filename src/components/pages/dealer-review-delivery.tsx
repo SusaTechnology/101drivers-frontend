@@ -1090,12 +1090,12 @@ export default function ReviewDeliveryPage() {
                 <CreditCard className="h-5 w-5 text-slate-400" />
                 <div>
                   <p className="font-bold">
-                    {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID" ? "Postpaid (Credit)" : "Prepaid"}
+                    {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID" ? "Postpaid (Credit)" : "Card Payment"}
                   </p>
                   <p className="text-xs text-slate-500">
                     {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID"
                       ? "Billed to your account after delivery completion"
-                      : "Pay with card after driver is assigned. Funds held until delivery is complete."}
+                      : "After a driver is assigned, you will be prompted to enter your card. Funds are held securely until delivery is complete."}
                   </p>
                 </div>
               </div>

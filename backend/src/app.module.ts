@@ -59,6 +59,8 @@ import { SupportRequestModule } from "./supportRequest/supportRequest.module";
 import { SupportRequestNoteModule } from "./supportRequestNote/supportRequestNote.module";
 import { StripeModule } from "./providers/stripe/stripe.module";
 import { StripeWebhookController } from "./payment/stripe-webhook.controller";
+import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
+import { MailService } from "./common/mail/mail.service";
 @Module({
   controllers: [StripeWebhookController],
   imports: [
@@ -134,6 +136,6 @@ import { StripeWebhookController } from "./payment/stripe-webhook.controller";
     }),
     EmailVerificationModule
   ],
-  providers: [],
+  providers: [NotificationEventEngine, MailService],
 })
 export class AppModule {}

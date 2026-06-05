@@ -1161,6 +1161,185 @@ async notifyTripCompleted(input: {
     });
   }
 
+  /**
+   * Notify customer that their card has been authorized (funds held).
+   * Triggered when Stripe confirms the payment method on a manual-capture PaymentIntent.
+   */
+  async notifyPaymentAuthorized(input: {
+    deliveryId: string;
+    amount: number;
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        customer: {
+          select: {
+            id: true,
+            contactEmail: true,
+            contactName: true,
+            businessName: true,
+            user: {
+              select: {
+                email: true,
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyPaymentAuthorized: delivery ${input.deliveryId} not found, skipping`
+      );
+      return null;
+    }
+
+    const toEmail =
+      delivery.customer?.user?.email ??
+      delivery.customer?.contactEmail ??
+      null;
+
+    if (!toEmail) {
+      return null;
+    }
+
+    const displayName =
+      delivery.customer?.user?.fullName ??
+      delivery.customer?.contactName ??
+      delivery.customer?.businessName ??
+      "Customer";
+
+    const amountStr = `$${Number(input.amount).toFixed(2)}`;
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+
+    return this.queueAndSend({
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.PaymentAuthorized,
+      templateCode: "payment-authorized",
+      toEmail,
+      subject: `Payment Confirmed — ${amountStr} held for delivery #${deliveryRef}`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `Your card has been successfully authorized for ${amountStr}.`,
+        "Funds will be held until your delivery is completed, at which point they will be charged.",
+        "",
+        "No further action is needed from you. The driver can now begin the delivery.",
+        "",
+        `Delivery: #${deliveryRef}`,
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Amount: ${amountStr}`,
+        `Status: ${delivery.status}`,
+      ].join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        amount: input.amount,
+        status: delivery.status,
+      },
+    });
+  }
+
+  /**
+   * Notify customer that their payment has been captured (card charged).
+   * Acts as the payment receipt. Triggered when delivery completes and funds are captured.
+   */
+  async notifyPaymentCaptured(input: {
+    deliveryId: string;
+    amount: number;
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        customer: {
+          select: {
+            id: true,
+            contactEmail: true,
+            contactName: true,
+            businessName: true,
+            user: {
+              select: {
+                email: true,
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyPaymentCaptured: delivery ${input.deliveryId} not found, skipping`
+      );
+      return null;
+    }
+
+    const toEmail =
+      delivery.customer?.user?.email ??
+      delivery.customer?.contactEmail ??
+      null;
+
+    if (!toEmail) {
+      return null;
+    }
+
+    const displayName =
+      delivery.customer?.user?.fullName ??
+      delivery.customer?.contactName ??
+      delivery.customer?.businessName ??
+      "Customer";
+
+    const amountStr = `$${Number(input.amount).toFixed(2)}`;
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+
+    return this.queueAndSend({
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.PaymentCaptured,
+      templateCode: "payment-receipt",
+      toEmail,
+      subject: `Payment Receipt — ${amountStr} charged for delivery #${deliveryRef}`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `Your delivery is complete and your card has been charged ${amountStr}.`,
+        "",
+        "---",
+        "Payment Receipt",
+        `Delivery: #${deliveryRef}`,
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Amount Charged: ${amountStr}`,
+        `Date: ${new Date().toISOString()}`,
+        "Status: Completed",
+        "---",
+        "",
+        "Thank you for choosing 101 Drivers! If you have any questions about this charge, please contact support.",
+      ].join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        amount: input.amount,
+        status: delivery.status,
+      },
+    });
+  }
+
   private async notifyStatusChangeInternal(input: {
     deliveryId: string;
     actorUserId?: string | null;

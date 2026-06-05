@@ -6,10 +6,14 @@ import {
   Headers,
   Logger,
   HttpCode,
+  Injectable,
+  Optional,
+  Inject,
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 
 @Controller("stripe")
 export class StripeWebhookController {
@@ -18,6 +22,8 @@ export class StripeWebhookController {
   constructor(
     private readonly stripeService: StripeService,
     private readonly prisma: PrismaService,
+    @Optional() @Inject(NotificationEventEngine)
+    private readonly notificationEngine?: NotificationEventEngine,
   ) {}
 
   @Post("webhook")
@@ -41,6 +47,10 @@ export class StripeWebhookController {
 
     try {
       switch (event.type) {
+        case "payment_intent.amount_capturable_updated":
+          await this.handlePaymentIntentAmountCapturableUpdated(event.data.object);
+          break;
+
         case "payment_intent.succeeded":
           await this.handlePaymentIntentSucceeded(event.data.object);
           break;
@@ -90,6 +100,56 @@ export class StripeWebhookController {
 
   // ── Event Handlers ───────────────────────────────────────────────
 
+  /**
+   * Fires when a manual-capture PaymentIntent becomes capturable (card confirmed, funds held).
+   * This is the "card authorized" moment — send confirmation email to customer.
+   */
+  private async handlePaymentIntentAmountCapturableUpdated(pi: any) {
+    const deliveryId = pi.metadata?.deliveryId;
+    if (!deliveryId) {
+      this.logger.warn(`payment_intent.amount_capturable_updated missing deliveryId: ${pi.id}`);
+      return;
+    }
+
+    // Only act on non-tip payments
+    if (pi.metadata?.type === "tip") {
+      return;
+    }
+
+    // Only send once — only when PI transitions to requires_capture
+    if (pi.status !== "requires_capture") {
+      return;
+    }
+
+    const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
+    if (!payment) {
+      this.logger.warn(`payment_intent.amount_capturable_updated: no payment found for delivery ${deliveryId}`);
+      return;
+    }
+
+    // Update payment status to AUTHORIZED if not already
+    if (payment.status !== "AUTHORIZED") {
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: "AUTHORIZED" },
+      });
+    }
+
+    // Send "Payment Confirmed" email (fire-and-forget, non-blocking)
+    if (this.notificationEngine) {
+      try {
+        await this.notificationEngine.notifyPaymentAuthorized({
+          deliveryId,
+          amount: pi.amount / 100,
+        });
+      } catch (err: any) {
+        this.logger.error(`Failed to send payment authorized email for delivery ${deliveryId}: ${err.message}`);
+      }
+    }
+
+    this.logger.log(`Payment authorized for delivery ${deliveryId} (PI: ${pi.id})`);
+  }
+
   private async handlePaymentIntentSucceeded(pi: any) {
     const deliveryId = pi.metadata?.deliveryId;
     if (!deliveryId) {
@@ -138,6 +198,18 @@ export class StripeWebhookController {
         raw: pi as any,
       },
     });
+
+    // Send "Payment Receipt" email (fire-and-forget, non-blocking)
+    if (this.notificationEngine) {
+      try {
+        await this.notificationEngine.notifyPaymentCaptured({
+          deliveryId,
+          amount: pi.amount / 100,
+        });
+      } catch (err: any) {
+        this.logger.error(`Failed to send payment receipt email for delivery ${deliveryId}: ${err.message}`);
+      }
+    }
 
     this.logger.log(`Payment captured for delivery ${deliveryId} (PI: ${pi.id})`);
   }
