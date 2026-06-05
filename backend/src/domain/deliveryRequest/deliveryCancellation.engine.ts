@@ -23,6 +23,7 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
 import { TrackingGateway } from "../../gateways/tracking.gateway";
+import { StripeService } from "../../providers/stripe/stripe.service";
 
 type Tx = Prisma.TransactionClient | PrismaService;
 
@@ -34,7 +35,9 @@ export class DeliveryCancellationEngine {
     private readonly prisma: PrismaService,
     private readonly notificationEventEngine: NotificationEventEngine,
     @Optional() @Inject(forwardRef(() => TrackingGateway))
-    private readonly trackingGateway?: TrackingGateway
+    private readonly trackingGateway?: TrackingGateway,
+    @Optional() @Inject(StripeService)
+    private readonly stripeService?: StripeService,
   ) {}
 
   /**
@@ -88,6 +91,7 @@ export class DeliveryCancellationEngine {
             select: {
               id: true,
               status: true,
+              providerPaymentIntentId: true,
             },
           },
           payout: {
@@ -181,6 +185,22 @@ export class DeliveryCancellationEngine {
               message: "Payment voided because delivery was cancelled",
             },
           });
+
+          // Cancel the Stripe PaymentIntent to release the auth hold immediately
+          if (delivery.payment.providerPaymentIntentId && this.stripeService) {
+            try {
+              await this.stripeService.cancelPaymentIntent(delivery.payment.providerPaymentIntentId);
+              this.logger.log(
+                `Cancelled Stripe PaymentIntent ${delivery.payment.providerPaymentIntentId} for delivery ${delivery.id}`,
+              );
+            } catch (err: any) {
+              // Log but don't fail — DB is already updated to VOIDED.
+              // The PI may already be cancelled, succeeded, or expired on Stripe's side.
+              this.logger.warn(
+                `Failed to cancel Stripe PI ${delivery.payment.providerPaymentIntentId}: ${err.message}`,
+              );
+            }
+          }
         }
       }
 
