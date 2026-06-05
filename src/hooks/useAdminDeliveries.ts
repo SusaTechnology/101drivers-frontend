@@ -128,9 +128,15 @@ export function useUserLookup(options?: {
 /**
  * Format date for display
  */
-export function formatDeliveryDate(dateString: string | null | undefined): string {
+export function formatDeliveryDate(dateString: string | null | undefined, timeOnly = false): string {
   if (!dateString) return '—';
   const date = new Date(dateString);
+  if (timeOnly) {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
