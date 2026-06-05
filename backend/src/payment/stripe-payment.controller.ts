@@ -118,11 +118,11 @@ export class StripePaymentController {
     const { deliveryId, amount } = body;
 
     if (!deliveryId || !amount || amount <= 0) {
-      return { error: "Invalid delivery ID or tip amount" };
+      throw new BadRequestException("Invalid delivery ID or tip amount");
     }
 
     if (amount > 500) {
-      return { error: "Tip amount cannot exceed $500" };
+      throw new BadRequestException("Tip amount cannot exceed $500");
     }
 
     // Verify delivery exists and is completed
@@ -132,11 +132,11 @@ export class StripePaymentController {
     });
 
     if (!delivery) {
-      return { error: "Delivery not found" };
+      throw new NotFoundException("Delivery not found");
     }
 
     if (delivery.status !== "COMPLETED") {
-      return { error: "Tips can only be added to completed deliveries" };
+      throw new BadRequestException("Tips can only be added to completed deliveries");
     }
 
     // Check if a tip already exists for this delivery

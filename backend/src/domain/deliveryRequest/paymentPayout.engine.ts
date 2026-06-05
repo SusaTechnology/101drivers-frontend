@@ -183,17 +183,16 @@ export class PaymentPayoutEngine {
       if (payment.status === EnumPaymentStatus.AUTHORIZED) {
         // Capture the Stripe PaymentIntent to actually charge the held funds
         if (payment.providerPaymentIntentId && payment.provider === "STRIPE" && this.stripeService) {
-          try {
-            await this.stripeService.capturePaymentIntent(payment.providerPaymentIntentId);
-            this.logger.log(`Captured Stripe PI ${payment.providerPaymentIntentId} for delivery ${input.deliveryId}`);
-          } catch (err: any) {
-            this.logger.error(
-              `Stripe capture failed for PI ${payment.providerPaymentIntentId}: ${err.message}`,
-            );
-            throw new BadRequestException(
-              `Payment capture failed: ${err.message}`,
+          // Amount reconciliation: verify PI amount matches final price
+          const finalPrice = delivery.quote?.estimatedPrice ?? payment.amount;
+          const discrepancy = Math.abs(payment.amount - finalPrice);
+          if (discrepancy > 0.01) {
+            this.logger.warn(
+              `Amount mismatch for delivery ${input.deliveryId}: PI amount=$${payment.amount}, final price=$${finalPrice}. ` +
+              `Proceeding with PI amount (customer was already authorized for this amount).`,
             );
           }
+          await this.captureWithRetry(payment.providerPaymentIntentId, input.deliveryId);
         }
 
         await tx.payment.update({
@@ -592,5 +591,54 @@ export class PaymentPayoutEngine {
   private toNumber(value: unknown): number | null {
     const n = Number(value);
     return Number.isFinite(n) ? n : null;
+  }
+
+  /**
+   * Capture a Stripe PaymentIntent with exponential backoff retry.
+   * Retries up to 3 times with 1s, 2s, 4s delays.
+   * Throws if all attempts fail — the orchestrator will roll back the transaction.
+   */
+  private async captureWithRetry(
+    paymentIntentId: string,
+    deliveryId: string,
+    maxRetries = 3,
+  ): Promise<void> {
+    const baseDelay = 1000; // 1 second
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.stripeService!.capturePaymentIntent(paymentIntentId, {
+          idempotencyKey: `capture-${paymentIntentId}-${Date.now()}`,
+        });
+        this.logger.log(
+          `Captured Stripe PI ${paymentIntentId} for delivery ${deliveryId}` +
+            (attempt > 1 ? ` (attempt ${attempt})` : ""),
+        );
+        return;
+      } catch (err: any) {
+        const isRetryable =
+          err.code === "connection_error" ||
+          err.code === "rate_limit" ||
+          err.statusCode === 500 ||
+          err.statusCode === 502 ||
+          err.statusCode === 503 ||
+          err.statusCode === 504;
+
+        if (attempt === maxRetries || !isRetryable) {
+          this.logger.error(
+            `Stripe capture failed for PI ${paymentIntentId} after ${attempt} attempt(s): ${err.message}`,
+          );
+          throw new BadRequestException(
+            `Payment capture failed after ${attempt} attempt(s): ${err.message}`,
+          );
+        }
+
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        this.logger.warn(
+          `Stripe capture attempt ${attempt}/${maxRetries} failed for PI ${paymentIntentId}: ${err.message}. Retrying in ${delay}ms...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
   }
 }
