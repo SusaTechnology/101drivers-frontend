@@ -1095,7 +1095,7 @@ export default function ReviewDeliveryPage() {
                   <p className="text-xs text-slate-500">
                     {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID"
                       ? "Billed to your account after delivery completion"
-                      : "Card authorized at booking, charged on completion"}
+                      : "Pay with card after driver is assigned. Funds held until delivery is complete."}
                   </p>
                 </div>
               </div>

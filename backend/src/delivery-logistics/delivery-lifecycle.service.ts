@@ -304,6 +304,22 @@ async startTrip(input: {
       throw new ConflictException("Only BOOKED deliveries can be started");
     }
 
+    // Payment gate: for PREPAID deliveries, payment must be AUTHORIZED or CAPTURED
+    // before the driver can start the trip.
+    const payment = await tx.payment.findUnique({
+      where: { deliveryId: input.deliveryId },
+      select: { paymentType: true, status: true },
+    });
+
+    if (payment && payment.paymentType === "PREPAID") {
+      if (!["AUTHORIZED", "CAPTURED", "PAID", "INVOICED"].includes(payment.status)) {
+        throw new ConflictException(
+          "Payment must be authorized before the driver can start. " +
+          "The customer needs to complete payment on the delivery details page.",
+        );
+      }
+    }
+
     await this.assertDriverAssignedToDeliveryTx(tx, input.deliveryId, input.driverId);
 
     // TODO(TEMPORARY): First-pickup-of-day time lock — commented out for testing.

@@ -422,6 +422,15 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       completed: !!assignment,
       icon: Hourglass,
     },
+ ...(isPrepaid && !isPostpaid ? [{
+      status: 'Payment',
+      time: paymentDone ? formatDateTime(deliveryData?.payment?.capturedAt || deliveryData?.payment?.createdAt || '')
+        : paymentVoided ? 'Voided' : paymentFailed ? 'Failed — tap to retry' : (deliveryData?.status === 'BOOKED' || deliveryData?.status === 'ACTIVE' ? 'Waiting for payment' : '—'),
+      completed: paymentDone,
+      pending: !paymentDone && !paymentVoided && ['BOOKED', 'ACTIVE'].includes(deliveryData?.status || ''),
+      failed: paymentFailed && ['BOOKED', 'ACTIVE'].includes(deliveryData?.status || ''),
+      icon: CreditCard,
+    }] : []),
     {
       status: 'Active',
       time: deliveryData?.trackingSession?.startedAt ? formatDateTime(deliveryData.trackingSession.startedAt) : (deliveryData?.status === 'ACTIVE' || deliveryData?.status === 'COMPLETED' ? 'In progress' : '—'),
@@ -1021,6 +1030,57 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       <Header />
       
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+
+        {/* Payment Required Banner — prominent, dismissible reminder */}
+        {showPayButton && (
+          <div
+            className="mb-6 flex items-center justify-between gap-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border-2 border-amber-300 dark:border-amber-700 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition"
+            onClick={() => setShowPaymentModal(true)}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center animate-pulse">
+                <CreditCard className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-amber-800 dark:text-amber-300">
+                  Payment Required — {paymentAmount ? `$${Number(paymentAmount).toFixed(2)}` : ''}
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Tap to enter your card details and authorize payment before the driver starts the delivery.
+                </p>
+              </div>
+            </div>
+            <Button className="shrink-0 rounded-full bg-amber-500 text-slate-950 hover:bg-amber-600 font-extrabold px-5">
+              Pay Now
+            </Button>
+          </div>
+        )}
+
+        {/* Payment Failed Banner */}
+        {showRetryButton && (
+          <div
+            className="mb-6 flex items-center justify-between gap-4 p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/20 border-2 border-rose-300 dark:border-rose-700 cursor-pointer hover:bg-rose-100 dark:hover:bg-rose-950/30 transition"
+            onClick={() => setShowPaymentModal(true)}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-500/20 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-rose-800 dark:text-rose-300">
+                  Payment Failed
+                </p>
+                <p className="text-xs text-rose-600 dark:text-rose-400">
+                  Your last payment attempt failed. Tap to retry with your card details.
+                </p>
+              </div>
+            </div>
+            <Button className="shrink-0 rounded-full bg-rose-500 text-white hover:bg-rose-600 font-extrabold px-5">
+              Retry Payment
+            </Button>
+          </div>
+        )}
+
         {/* Page header */}
         <section className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           <div className="flex items-start gap-4">
@@ -1285,35 +1345,71 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                   </CardHeader>
                   <CardContent>
                     <div className="mt-6 space-y-4">
-                      {timelineItems.map((item, index) => {
+                      {timelineItems.map((item: any, index: number) => {
                         const Icon = item.icon
+                        const isClickable = (item.pending || item.failed) && item.status === 'Payment'
                         return (
                           <div key={index}>
                             {index > 0 && <Separator className="my-4" />}
-                            <div className="flex items-start gap-4">
+                            <div
+                              className={cn(
+                                "flex items-start gap-4",
+                                isClickable && "cursor-pointer rounded-xl p-1 -m-1 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition"
+                              )}
+                              onClick={isClickable ? () => setShowPaymentModal(true) : undefined}
+                            >
                               <div className={cn(
                                 "w-10 h-10 rounded-2xl flex items-center justify-center",
-                                item.completed 
-                                  ? "bg-lime-500/15" 
-                                  : "bg-slate-100 dark:bg-slate-800/60"
+                                item.completed
+                                  ? "bg-lime-500/15"
+                                  : item.pending
+                                    ? "bg-amber-500/15 animate-pulse"
+                                    : item.failed
+                                      ? "bg-rose-500/15"
+                                      : "bg-slate-100 dark:bg-slate-800/60"
                               )}>
                                 <Icon className={cn(
                                   "h-5 w-5",
-                                  item.completed 
-                                    ? "text-lime-500" 
-                                    : "text-slate-500 dark:text-slate-300"
+                                  item.completed
+                                    ? "text-lime-500"
+                                    : item.pending
+                                      ? "text-amber-500"
+                                      : item.failed
+                                        ? "text-rose-500"
+                                        : "text-slate-500 dark:text-slate-300"
                                 )} />
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="font-black text-slate-900 dark:text-white">{item.status}</div>
-                                  <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.time}</div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-black text-slate-900 dark:text-white">{item.status}</span>
+                                    {item.pending && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold animate-pulse">
+                                        Action needed
+                                      </span>
+                                    )}
+                                    {item.failed && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 text-[10px] font-bold">
+                                        Retry
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className={cn(
+                                    "text-[11px] font-bold",
+                                    item.pending ? "text-amber-600 dark:text-amber-400" :
+                                    item.failed ? "text-rose-600 dark:text-rose-400" :
+                                    "text-slate-500 dark:text-slate-400"
+                                  )}>{item.time}</div>
                                 </div>
                                 <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                                  {index === 0 && 'Confirmation email sent to you.'}
-                                  {index === 1 && 'Driver has accepted your delivery. You can now see the driver\'s name, photo, and profile.'}
-                                  {index === 2 && 'Driver has picked up the vehicle and is heading to the drop-off location. Real-time tracking is now available.'}
-                                  {index === 3 && 'Delivery is complete. Final odometer reading and six vehicle pictures with geolocation are now available.'}
+                                  {item.status === 'Request submitted' && 'Confirmation email sent to you.'}
+                                  {item.status === 'Booked' && 'Driver has accepted your delivery. You can now see the driver\'s name, photo, and profile.'}
+                                  {item.status === 'Payment' && item.completed && 'Card authorized successfully. Funds will be captured when the delivery is complete.'}
+                                  {item.status === 'Payment' && item.pending && 'Tap here to enter your card details and authorize payment.'}
+                                  {item.status === 'Payment' && item.failed && 'Payment failed. Tap here to try again with a different card.'}
+                                  {item.status === 'Payment' && item.time === 'Voided' && 'Payment was cancelled and the authorization hold was released.'}
+                                  {item.status === 'Active' && 'Driver has picked up the vehicle and is heading to the drop-off location. Real-time tracking is now available.'}
+                                  {item.status === 'Completed' && 'Delivery is complete. Final odometer reading and six vehicle pictures with geolocation are now available.'}
                                 </div>
                               </div>
                             </div>
