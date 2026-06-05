@@ -156,3 +156,27 @@ Stage Summary:
 - Retry Payment button appears for failed payments so dealer can re-attempt
 - Price header dynamically shows "Final Price" vs "Estimated Price"
 - All state derived from server data — no more stale React state on page refresh
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix Stripe capture method, tip flow, admin refund, backend payment gaps
+
+Work Log:
+- Added `captureMethod` param to StripeService.createPaymentIntent() — delivery payments use 'manual' (auth hold), tips use 'automatic' (charge immediately)
+- PaymentPayoutEngine now calls stripeService.capturePaymentIntent() on delivery completion to actually charge the held funds
+- Fixed 4 tip payment bugs: webhook tip isolation (succeeded/failed/canceled now check metadata.type), frontend PATCH using deliveryId instead of tipId, missing PaymentEvent for canceled PI, max tip amount ($500) validation
+- Created admin refund endpoint: POST /payments/:id/refund with full/partial support, Stripe integration, PaymentEvent audit trail
+- Added "Process Refund" button in admin delivery details Financial Summary card with confirmation dialog
+- Delivery cancellation engine now cancels Stripe PI on void (releases auth hold immediately)
+- Webhook handlers use findUnique instead of updateMany + orphan event prevention
+- ACTIVE delivery cancellation: confirmed intentional design (dealers use dispute, admin uses force-cancel)
+- POSTPAID initial status: deferred (requires Prisma schema migration)
+
+Stage Summary:
+- True auth-and-capture flow: funds held on Pay Now, charged on delivery completion
+- Tips charge immediately (post-completion, no need for manual capture)
+- Tip webhook handlers properly isolated from main payment events
+- Admin can process full or partial refunds from the delivery details page
+- Stripe PI cancelled immediately on delivery cancellation (no 7-day auth hold wait)
+- All changes pushed to main + master branches
