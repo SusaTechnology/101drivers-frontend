@@ -100,6 +100,58 @@ const formatDateTime = (dateString: string) => {
   return `${formatDate(dateString)} ${formatTime(dateString)}`
 }
 
+// Payment status badge with friendly labels and color coding
+const PaymentStatusBadge = ({ status }: { status: string | undefined }) => {
+  if (!status) {
+    return (
+      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-extrabold">
+        <CreditCard className="h-4 w-4" />
+        N/A
+      </div>
+    )
+  }
+
+  const config: Record<string, { label: string; className: string }> = {
+    AUTHORIZED: {
+      label: 'Authorized',
+      className: 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400',
+    },
+    CAPTURED: {
+      label: 'Paid',
+      className: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400',
+    },
+    PAID: {
+      label: 'Paid',
+      className: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400',
+    },
+    INVOICED: {
+      label: 'Invoiced',
+      className: 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400',
+    },
+    FAILED: {
+      label: 'Failed',
+      className: 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400',
+    },
+    VOIDED: {
+      label: 'Voided',
+      className: 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400',
+    },
+    REFUNDED: {
+      label: 'Refunded',
+      className: 'bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400',
+    },
+  }
+
+  const c = config[status] || { label: status, className: 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500' }
+
+  return (
+    <div className={cn('inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-extrabold', c.className)}>
+      <CreditCard className="h-4 w-4" />
+      {c.label}
+    </div>
+  )
+}
+
 // Map service type to icon and label
 const serviceTypeMap: Record<string, { icon: React.ReactNode; label: string }> = {
   BETWEEN_LOCATIONS: { icon: <Car className="h-4 w-4" />, label: 'Car Transfer' },
@@ -198,20 +250,35 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [paymentCompleted, setPaymentCompleted] = useState(false)
 
   // Payment status from delivery data
   const paymentStatus = deliveryData?.payment?.status
   const paymentType = deliveryData?.payment?.paymentType
   const paymentProvider = deliveryData?.payment?.provider
   const paymentAmount = deliveryData?.payment?.amount
+  const deliveryStatus = deliveryData?.status
 
-  // TODO: Revert after testing — temporarily showing Pay Now on ALL deliveries
-  const showPayButton = !paymentCompleted
+  // Derived payment state from server data (persists across refreshes)
+  const paymentDone = ['CAPTURED', 'PAID', 'INVOICED'].includes(paymentStatus as string)
+  const paymentFailed = paymentStatus === 'FAILED'
+  const paymentVoided = ['VOIDED', 'REFUNDED'].includes(paymentStatus as string)
+  const isPrepaid = paymentType === 'PREPAID'
+  const isPostpaid = paymentType === 'POSTPAID'
+
+  // Show Pay Now button:
+  // - Only for PREPAID deliveries (postpaid customers pay via invoice)
+  // - Only in BOOKED or ACTIVE status (driver assigned, delivery in progress)
+  // - Only when payment is NOT already done, voided, or refunded
+  // - Also show when payment FAILED so dealer can retry
+  const showPayButton = isPrepaid &&
+    ['BOOKED', 'ACTIVE'].includes(deliveryStatus as string) &&
+    !paymentDone && !paymentVoided
+
+  // Show Retry button when payment failed and delivery is still active/booked
+  const showRetryButton = isPrepaid && paymentFailed && ['BOOKED', 'ACTIVE'].includes(deliveryStatus as string)
 
   const handlePaymentSuccess = () => {
     setShowPaymentModal(false)
-    setPaymentCompleted(true)
     toast.success('Payment confirmed!', { description: 'Your payment has been processed successfully.' })
     refetch()
   }
@@ -1139,7 +1206,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-6">
                         <div>
-                          <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Estimated Price</div>
+                          <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">{priceType === 'Final' ? 'Final Price' : 'Estimated Price'}</div>
                           <div className="text-3xl font-black text-lime-500 mt-1">
                             {price ? `$${price.toFixed(2)}` : '—'}
                           </div>
@@ -1160,11 +1227,16 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                           <CreditCard className="h-4 w-4" />
                           Pay Now
                         </Button>
+                      ) : showRetryButton ? (
+                        <Button
+                          onClick={() => setShowPaymentModal(true)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500 text-slate-950 hover:bg-amber-600 font-extrabold transition text-sm"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Retry Payment
+                        </Button>
                       ) : (
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 text-sm font-extrabold">
-                          <CreditCard className="h-4 w-4" />
-                          {paymentStatus === 'FAILED' ? 'Failed' : paymentStatus === 'INVOICED' ? 'Invoiced' : paymentStatus || 'N/A'}
-                        </div>
+                        <PaymentStatusBadge status={paymentStatus} />
                       )}
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">

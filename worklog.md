@@ -134,3 +134,25 @@ Stage Summary:
 - Customer cancel (via DeliveryCancellationEngine) → emits CANCELLED to dealer + driver feed
 - useSocket.ts hook already has polling fix from previous session — no changes needed
 - Total coverage: 100% of status transitions now have socket emits
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix dealer payment UI — proper prepaid/postpaid flow, status badges, retry button
+
+Work Log:
+- Removed `paymentCompleted` React state (resets on refresh, unreliable)
+- Derived all payment state from server data: `paymentDone`, `paymentFailed`, `paymentVoided`, `isPrepaid`, `isPostpaid`
+- Fixed `showPayButton` logic: only shows for PREPAID deliveries in BOOKED/ACTIVE status when payment not already done/voided/refunded
+- Added `showRetryButton` for FAILED prepaid payments in BOOKED/ACTIVE status
+- Created `PaymentStatusBadge` component with friendly labels and color coding for all 7 payment statuses
+- Updated "Estimated Price" label to dynamically show "Final Price" when payment record exists
+- Removed `setPaymentCompleted(true)` from `handlePaymentSuccess` (no longer needed, refetch() handles state)
+
+Stage Summary:
+- Dealer payment UI now properly gates Pay Now button: PREPAID + BOOKED/ACTIVE + not done/voided
+- POSTPAID customers never see Pay Now (they pay via invoice)
+- Payment status badge shows color-coded friendly labels: Authorized (amber), Paid (green), Invoiced (blue), Failed (red), Voided (gray), Refunded (orange)
+- Retry Payment button appears for failed payments so dealer can re-attempt
+- Price header dynamically shows "Final Price" vs "Estimated Price"
+- All state derived from server data — no more stale React state on page refresh
