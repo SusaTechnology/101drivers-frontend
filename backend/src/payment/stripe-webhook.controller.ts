@@ -6,7 +6,6 @@ import {
   Headers,
   Logger,
   HttpCode,
-  RawBodyRequest,
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { StripeService } from "../providers/stripe/stripe.service";
@@ -23,7 +22,6 @@ export class StripeWebhookController {
 
   @Post("webhook")
   @HttpCode(200)
-  @RawBodyRequest()
   async handleWebhook(
     @Req() req: Request,
     @Res() res: Response,
@@ -32,7 +30,8 @@ export class StripeWebhookController {
     let event: any;
 
     try {
-      // req.body is a raw Buffer thanks to bodyParser.raw() + @RawBodyRequest()
+      // req.body is a raw Buffer here because bodyParser.raw() is registered
+      // for this route in main.ts, bypassing NestJS's default JSON parser.
       const rawBody = (req.body as Buffer).toString("utf8");
       event = this.stripeService.verifyWebhookEvent(rawBody, signature);
     } catch (err: any) {
