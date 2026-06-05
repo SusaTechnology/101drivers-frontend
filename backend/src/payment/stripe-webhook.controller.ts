@@ -93,8 +93,14 @@ export class StripeWebhookController {
       return;
     }
 
-    await this.prisma.payment.updateMany({
-      where: { deliveryId },
+    const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
+    if (!payment) {
+      this.logger.warn(`payment_intent.succeeded: no payment found for delivery ${deliveryId}`);
+      return;
+    }
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
       data: {
         status: "CAPTURED",
         capturedAt: new Date(),
@@ -104,7 +110,7 @@ export class StripeWebhookController {
 
     await this.prisma.paymentEvent.create({
       data: {
-        paymentId: (await this.prisma.payment.findFirst({ where: { deliveryId } }))?.id || "",
+        paymentId: payment.id,
         type: "CAPTURE",
         status: "CAPTURED",
         amount: pi.amount / 100,
@@ -121,8 +127,14 @@ export class StripeWebhookController {
     const deliveryId = pi.metadata?.deliveryId;
     if (!deliveryId) return;
 
-    await this.prisma.payment.updateMany({
-      where: { deliveryId },
+    const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
+    if (!payment) {
+      this.logger.warn(`payment_intent.failed: no payment found for delivery ${deliveryId}`);
+      return;
+    }
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
       data: {
         status: "FAILED",
         failedAt: new Date(),
@@ -133,7 +145,7 @@ export class StripeWebhookController {
 
     await this.prisma.paymentEvent.create({
       data: {
-        paymentId: (await this.prisma.payment.findFirst({ where: { deliveryId } }))?.id || "",
+        paymentId: payment.id,
         type: "FAIL",
         status: "FAILED",
         amount: pi.amount / 100,
@@ -150,9 +162,26 @@ export class StripeWebhookController {
     const deliveryId = pi.metadata?.deliveryId;
     if (!deliveryId) return;
 
-    await this.prisma.payment.updateMany({
-      where: { deliveryId },
+    const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
+    if (!payment) {
+      this.logger.warn(`payment_intent.canceled: no payment found for delivery ${deliveryId}`);
+      return;
+    }
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
       data: { status: "VOIDED", voidedAt: new Date() },
+    });
+
+    await this.prisma.paymentEvent.create({
+      data: {
+        paymentId: payment.id,
+        type: "VOID",
+        status: "VOIDED",
+        message: "PaymentIntent cancelled via Stripe webhook",
+        providerRef: pi.id,
+        raw: pi as any,
+      },
     });
 
     this.logger.log(`Payment voided for delivery ${deliveryId} (PI: ${pi.id})`);
