@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Logger, UseGuards } from "@nestjs/common";
+import { Controller, Get, Post, Param, Body, Logger, UseGuards, NotFoundException, BadRequestException } from "@nestjs/common";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PrismaService } from "../prisma/prisma.service";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
@@ -202,6 +202,99 @@ export class StripePaymentController {
     } catch (err: any) {
       this.logger.error(`Tip PaymentIntent creation failed: ${err.message}`);
       return { error: "Failed to create tip payment intent", details: err.message };
+    }
+  }
+
+  /**
+   * Issue a full refund for a captured/paid payment via Stripe.
+   * Admin-only action.
+   */
+  @Post("stripe/refund/:paymentId")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async refundPayment(
+    @Param("paymentId") paymentId: string,
+    @Body() body?: { note?: string },
+  ) {
+    // 1. Fetch the payment record
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+
+    if (!payment) {
+      throw new NotFoundException(`Payment ${paymentId} not found`);
+    }
+
+    // 2. Validate status — only CAPTURED or PAID can be refunded
+    if (!['CAPTURED', 'PAID'].includes(payment.status)) {
+      throw new BadRequestException(
+        `Cannot refund payment in ${payment.status} status. Only CAPTURED or PAID payments can be refunded.`,
+      );
+    }
+
+    if (!payment.providerPaymentIntentId) {
+      throw new BadRequestException('Payment has no Stripe PaymentIntent reference.');
+    }
+
+    try {
+      // 3. Retrieve the PaymentIntent to get the latest charge
+      const pi = await this.stripeService.getPaymentIntent(payment.providerPaymentIntentId);
+
+      // PaymentIntent must have a charge to refund
+      const charge = pi.latest_charge;
+      if (!charge) {
+        throw new BadRequestException(
+          'No charge found on this PaymentIntent. Nothing to refund.',
+        );
+      }
+
+      // 4. Issue full refund via Stripe
+      const refund = await this.stripeService.createRefund({
+        chargeId: typeof charge === 'string' ? charge : (charge as any).id,
+        reason: 'requested_by_customer',
+        metadata: {
+          paymentId,
+          deliveryId: payment.deliveryId,
+          adminNote: body?.note || 'Full refund processed by admin',
+        },
+      });
+
+      this.logger.log(
+        `Refund created: ${refund.id} for charge ${charge} on payment ${paymentId}`,
+      );
+
+      // 5. Update payment status to REFUNDED
+      await this.prisma.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'REFUNDED',
+          refundedAt: new Date(),
+        },
+      });
+
+      // 6. Create PaymentEvent audit record
+      await this.prisma.paymentEvent.create({
+        data: {
+          paymentId,
+          type: 'REFUND',
+          status: 'REFUNDED',
+          amount: payment.amount,
+          message: body?.note || 'Full refund processed by admin',
+          providerRef: refund.id,
+          raw: refund as any,
+        },
+      });
+
+      return {
+        refundId: refund.id,
+        status: refund.status,
+        amount: refund.amount ? refund.amount / 100 : payment.amount,
+        paymentStatus: 'REFUNDED',
+      };
+    } catch (err: any) {
+      this.logger.error(`Refund failed for payment ${paymentId}: ${err.message}`);
+      throw new BadRequestException(
+        `Refund failed: ${err.message}`,
+      );
     }
   }
 }

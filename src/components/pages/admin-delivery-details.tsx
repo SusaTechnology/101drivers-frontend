@@ -108,6 +108,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   
   // Refund mutation
   const refundMutation = useDataMutation({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/refund/:paymentId`,
     method: 'POST',
     onSuccess: () => {
       setShowRefundDialog(false);
@@ -1512,8 +1513,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               onClick={() => {
                 if (delivery?.financialSummary?.paymentId) {
                   refundMutation.mutate({
-                    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/${delivery.financialSummary.paymentId}/refund`,
-                    data: { note: 'Full refund processed by admin' },
+                    pathParams: { paymentId: delivery.financialSummary.paymentId },
+                    note: 'Full refund processed by admin',
                   });
                 }
               }}
