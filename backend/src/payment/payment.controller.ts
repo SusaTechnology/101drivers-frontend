@@ -24,6 +24,7 @@ import {
   PaymentMarkInvoicedBody,
   PaymentMarkPaidBody,
   PaymentMarkPayoutPaidBody,
+  PaymentRefundBody,
 } from "./dto/paymentAdmin.dto";
 @swagger.ApiTags("payments")
 @common.Controller("payments")
@@ -120,7 +121,28 @@ async adminMarkPaymentInvoiced(
     invoiceId: body.invoiceId ?? null,
     note: body.note ?? null,
   });
-}   
+}
+
+@common.Post(":id/refund")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "Payment",
+  action: "update",
+  possession: "any",
+})
+async adminRefundPayment(
+  @common.Param("id") id: string,
+  @common.Body() body: PaymentRefundBody
+): Promise<any> {
+  return this.service.adminRefundPayment({
+    paymentId: id,
+    amount: body.amount ?? null,
+    actorUserId: body.actorUserId ?? null,
+    reason: body.reason ?? null,
+    note: body.note ?? null,
+  });
+}
+   
  @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Post()
   @swagger.ApiCreatedResponse({ type: Payment })
