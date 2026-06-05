@@ -93,6 +93,21 @@ export class StripeWebhookController {
       return;
     }
 
+    // Tip PaymentIntents have metadata.type = "tip" — update Tip record, not Payment
+    if (pi.metadata?.type === "tip") {
+      const tip = await this.prisma.tip.findUnique({ where: { deliveryId } });
+      if (!tip) {
+        this.logger.warn(`payment_intent.succeeded: no tip found for delivery ${deliveryId}`);
+        return;
+      }
+      await this.prisma.tip.update({
+        where: { id: tip.id },
+        data: { status: "CAPTURED" },
+      });
+      this.logger.log(`Tip captured for delivery ${deliveryId} (PI: ${pi.id})`);
+      return;
+    }
+
     const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
     if (!payment) {
       this.logger.warn(`payment_intent.succeeded: no payment found for delivery ${deliveryId}`);
@@ -126,6 +141,19 @@ export class StripeWebhookController {
   private async handlePaymentIntentFailed(pi: any) {
     const deliveryId = pi.metadata?.deliveryId;
     if (!deliveryId) return;
+
+    // Tip PaymentIntents — update Tip record
+    if (pi.metadata?.type === "tip") {
+      const tip = await this.prisma.tip.findUnique({ where: { deliveryId } });
+      if (tip) {
+        await this.prisma.tip.update({
+          where: { id: tip.id },
+          data: { status: "FAILED" },
+        });
+      }
+      this.logger.warn(`Tip payment failed for delivery ${deliveryId}`);
+      return;
+    }
 
     const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
     if (!payment) {
@@ -161,6 +189,19 @@ export class StripeWebhookController {
   private async handlePaymentIntentCanceled(pi: any) {
     const deliveryId = pi.metadata?.deliveryId;
     if (!deliveryId) return;
+
+    // Tip PaymentIntents — update Tip record
+    if (pi.metadata?.type === "tip") {
+      const tip = await this.prisma.tip.findUnique({ where: { deliveryId } });
+      if (tip) {
+        await this.prisma.tip.update({
+          where: { id: tip.id },
+          data: { status: "FAILED" },
+        });
+      }
+      this.logger.log(`Tip payment cancelled for delivery ${deliveryId}`);
+      return;
+    }
 
     const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
     if (!payment) {

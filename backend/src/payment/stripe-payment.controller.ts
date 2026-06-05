@@ -121,6 +121,10 @@ export class StripePaymentController {
       return { error: "Invalid delivery ID or tip amount" };
     }
 
+    if (amount > 500) {
+      return { error: "Tip amount cannot exceed $500" };
+    }
+
     // Verify delivery exists and is completed
     const delivery = await this.prisma.deliveryRequest.findUnique({
       where: { id: deliveryId },

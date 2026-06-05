@@ -320,9 +320,11 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const [pendingTipAmount, setPendingTipAmount] = useState<number>(0)
 
   // Tip mutation — updates tip status in DB after successful Stripe payment
+  // Uses existingTip.id (the Tip's own ID), NOT the delivery ID
   const tipUpdateMutation = useDataMutation({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/tips/${id}`,
+    apiEndPoint: existingTip ? `${import.meta.env.VITE_API_URL}/api/tips/${existingTip.id}` : '',
     method: 'PATCH',
+    enabled: !!existingTip,
     onSuccessInvalidate: false,
     successMessage: '',
     onSuccess: () => {
