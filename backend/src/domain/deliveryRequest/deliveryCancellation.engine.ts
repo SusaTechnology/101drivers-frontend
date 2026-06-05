@@ -90,6 +90,7 @@ export class DeliveryCancellationEngine {
           payment: {
             select: {
               id: true,
+              amount: true,
               status: true,
               providerPaymentIntentId: true,
             },
@@ -194,13 +195,60 @@ export class DeliveryCancellationEngine {
                 `Cancelled Stripe PaymentIntent ${delivery.payment.providerPaymentIntentId} for delivery ${delivery.id}`,
               );
             } catch (err: any) {
-              // Log but don't fail — DB is already updated to VOIDED.
-              // The PI may already be cancelled, succeeded, or expired on Stripe's side.
               this.logger.warn(
                 `Failed to cancel Stripe PI ${delivery.payment.providerPaymentIntentId}: ${err.message}`,
               );
             }
           }
+        } else if (
+          delivery.payment.status === EnumPaymentStatus.CAPTURED ||
+          delivery.payment.status === EnumPaymentStatus.PAID
+        ) {
+          // Payment was already captured — issue a Stripe refund
+          if (delivery.payment.providerPaymentIntentId && this.stripeService) {
+            try {
+              const pi = await this.stripeService.getPaymentIntent(delivery.payment.providerPaymentIntentId);
+              const charge = pi.latest_charge;
+              if (charge) {
+                const chargeId = typeof charge === 'string' ? charge : (charge as any).id;
+                await this.stripeService.createRefund({
+                  chargeId,
+                  reason: 'requested_by_customer',
+                  metadata: {
+                    paymentId: delivery.payment.id,
+                    deliveryId: delivery.id,
+                    reason: 'auto-refund-on-cancellation',
+                  },
+                });
+                this.logger.log(
+                  `Refunded charge ${chargeId} for captured payment on delivery ${delivery.id}`,
+                );
+              }
+            } catch (err: any) {
+              // Log but don't fail cancellation — Stripe refund can be retried manually
+              this.logger.warn(
+                `Failed to refund captured payment ${delivery.payment.id} on delivery ${delivery.id}: ${err.message}. Admin manual refund may be needed.`,
+              );
+            }
+          }
+
+          await tx.payment.update({
+            where: { id: delivery.payment.id },
+            data: {
+              status: EnumPaymentStatus.REFUNDED,
+              refundedAt: now,
+            },
+          });
+
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: delivery.payment.id,
+              type: EnumPaymentEventType.REFUND,
+              status: EnumPaymentStatus.REFUNDED,
+              amount: delivery.payment.amount,
+              message: "Auto-refund issued because delivery was cancelled after payment capture",
+            },
+          });
         }
       }
 

@@ -6,6 +6,7 @@ import {
   Headers,
   Logger,
   HttpCode,
+  RawBodyRequest,
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { StripeService } from "../providers/stripe/stripe.service";
@@ -22,6 +23,7 @@ export class StripeWebhookController {
 
   @Post("webhook")
   @HttpCode(200)
+  @RawBodyRequest()
   async handleWebhook(
     @Req() req: Request,
     @Res() res: Response,
@@ -30,10 +32,9 @@ export class StripeWebhookController {
     let event: any;
 
     try {
-      event = this.stripeService.verifyWebhookEvent(
-        req.body,
-        signature,
-      );
+      // req.body is a raw Buffer thanks to bodyParser.raw() + @RawBodyRequest()
+      const rawBody = (req.body as Buffer).toString("utf8");
+      event = this.stripeService.verifyWebhookEvent(rawBody, signature);
     } catch (err: any) {
       this.logger.warn(`Webhook signature verification failed: ${err.message}`);
       return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -71,6 +72,10 @@ export class StripeWebhookController {
 
         case "account.updated":
           await this.handleAccountUpdated(event.data.object);
+          break;
+
+        case "charge.dispute.created":
+          await this.handleChargeDisputeCreated(event.data.object);
           break;
 
         default:
@@ -309,5 +314,51 @@ export class StripeWebhookController {
     } else if (detailsSubmitted) {
       this.logger.log(`Driver ${driverId} Stripe account pending: ${account.id}`);
     }
+  }
+
+  private async handleChargeDisputeCreated(dispute: any) {
+    const chargeId = dispute.charge;
+    if (!chargeId) {
+      this.logger.warn("charge.dispute.created missing charge ID");
+      return;
+    }
+
+    // Find payment by charge ID
+    const payment = await this.prisma.payment.findFirst({
+      where: { providerChargeId: chargeId },
+    });
+
+    if (!payment) {
+      this.logger.warn(`charge.dispute.created: no payment found for charge ${chargeId}`);
+      return;
+    }
+
+    // Update payment to REFUNDED — Stripe reverses the funds when a dispute is opened
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: "REFUNDED",
+        refundedAt: new Date(),
+        failureCode: "DISPUTE",
+        failureMessage: `Stripe dispute ${dispute.id}: ${dispute.reason || "Customer dispute"}`,
+      },
+    });
+
+    // Create audit event
+    await this.prisma.paymentEvent.create({
+      data: {
+        paymentId: payment.id,
+        type: "REFUND",
+        status: "REFUNDED",
+        amount: dispute.amount / 100,
+        message: `Chargeback opened: ${dispute.reason || "dispute"}. Evidence deadline: ${dispute.evidence_details?.due_by || "unknown"}`,
+        providerRef: dispute.id,
+        raw: dispute as any,
+      },
+    });
+
+    this.logger.warn(
+      `Stripe dispute ${dispute.id} opened for payment ${payment.id} (delivery ${payment.deliveryId}). Reason: ${dispute.reason}`,
+    );
   }
 }

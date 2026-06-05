@@ -1,9 +1,10 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Stripe from "stripe";
 
 @Injectable()
 export class StripeService {
+  private readonly logger = new Logger(StripeService.name);
   public readonly stripe: ReturnType<typeof Stripe>;
   public readonly publishableKey: string;
 
@@ -11,8 +12,10 @@ export class StripeService {
     const secretKey = this.configService.get<string>("STRIPE_SECRET_KEY");
     const apiVersion = Stripe.API_VERSION as any;
     if (!secretKey) {
-      // In development without keys, create a no-op instance
-      // so the app doesn't crash. Real calls will fail gracefully.
+      this.logger.error(
+        "STRIPE_SECRET_KEY is not configured. Stripe API calls will fail. " +
+        "Set STRIPE_SECRET_KEY in your environment to enable payments.",
+      );
       this.stripe = new Stripe("sk_test_placeholder", {
         apiVersion,
         typescript: true,
@@ -48,6 +51,8 @@ export class StripeService {
     // Stripe expects amount in cents
     const amountCents = Math.round(params.amount * 100);
 
+    const idempotencyKey = `pi-${params.deliveryId}-${params.captureMethod || 'auto'}-${Math.floor(Date.now() / 60000)}`;
+
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: amountCents,
       currency: "usd",
@@ -61,6 +66,7 @@ export class StripeService {
         : {}),
       // Use automatic payment methods (card, etc.)
       automatic_payment_methods: { enabled: true },
+      idempotencyKey,
     });
 
     return {
@@ -73,8 +79,15 @@ export class StripeService {
    * Capture a previously created PaymentIntent.
    * Called when delivery is completed.
    */
-  async capturePaymentIntent(paymentIntentId: string) {
-    return this.stripe.paymentIntents.capture(paymentIntentId);
+  async capturePaymentIntent(
+    paymentIntentId: string,
+    options?: { idempotencyKey?: string },
+  ) {
+    return this.stripe.paymentIntents.capture(paymentIntentId, {
+      ...(options?.idempotencyKey
+        ? { idempotencyKey: options.idempotencyKey }
+        : {}),
+    });
   }
 
   /**
@@ -102,11 +115,13 @@ export class StripeService {
     reason?: string;
     metadata?: Record<string, string>;
   }) {
+    const idempotencyKey = `refund-${params.chargeId}-${Date.now()}`;
     return this.stripe.refunds.create({
       charge: params.chargeId,
       ...(params.amount ? { amount: Math.round(params.amount * 100) } : {}),
       ...(params.reason ? { reason: params.reason as any } : {}),
       metadata: params.metadata,
+      idempotencyKey,
     });
   }
 
@@ -122,12 +137,14 @@ export class StripeService {
     transferGroup?: string; // e.g., delivery ID for reconciliation
     metadata?: Record<string, string>;
   }) {
+    const idempotencyKey = `transfer-${params.destinationAccountId}-${params.transferGroup || 'none'}-${Date.now()}`;
     return this.stripe.transfers.create({
       amount: Math.round(params.amount * 100), // cents
       currency: "usd",
       destination: params.destinationAccountId,
       ...(params.transferGroup ? { transfer_group: params.transferGroup } : {}),
       metadata: params.metadata,
+      idempotencyKey,
     });
   }
 

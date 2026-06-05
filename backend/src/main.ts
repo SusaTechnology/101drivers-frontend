@@ -11,12 +11,18 @@ import {
 } from "./swagger";
 import { configureCors } from "./common/cors-cookie.util";
 import { IoAdapter } from "@nestjs/platform-socket.io";
+import * as bodyParser from "body-parser";
 
 const { PORT = 6000 } = process.env;
 
 async function main() {
   const app = await NestFactory.create(AppModule);
   app.useWebSocketAdapter(new IoAdapter(app));
+
+  // Stripe webhook requires RAW body for signature verification.
+  // Must be registered BEFORE the global JSON body parser.
+  app.use("/api/stripe/webhook", bodyParser.raw({ type: "application/json" }));
+
   configureCors(app);
 
   app.setGlobalPrefix("api");
