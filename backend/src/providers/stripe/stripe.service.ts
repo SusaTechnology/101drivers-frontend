@@ -53,21 +53,22 @@ export class StripeService {
 
     const idempotencyKey = `pi-${params.deliveryId}-${params.captureMethod || 'auto'}-${Math.floor(Date.now() / 60000)}`;
 
-    const paymentIntent = await this.stripe.paymentIntents.create({
-      amount: amountCents,
-      currency: "usd",
-      capture_method: params.captureMethod || "automatic",
-      metadata: {
-        deliveryId: params.deliveryId,
-        ...params.metadata,
+    const paymentIntent = await this.stripe.paymentIntents.create(
+      {
+        amount: amountCents,
+        currency: "usd",
+        capture_method: params.captureMethod || "automatic",
+        metadata: {
+          deliveryId: params.deliveryId,
+          ...params.metadata,
+        },
+        ...(params.customerEmail
+          ? { receipt_email: params.customerEmail }
+          : {}),
+        automatic_payment_methods: { enabled: true },
       },
-      ...(params.customerEmail
-        ? { receipt_email: params.customerEmail }
-        : {}),
-      // Use automatic payment methods (card, etc.)
-      automatic_payment_methods: { enabled: true },
-      idempotencyKey,
-    });
+      { idempotencyKey },
+    );
 
     return {
       paymentIntentId: paymentIntent.id,
@@ -83,11 +84,10 @@ export class StripeService {
     paymentIntentId: string,
     options?: { idempotencyKey?: string },
   ) {
-    return this.stripe.paymentIntents.capture(paymentIntentId, {
-      ...(options?.idempotencyKey
-        ? { idempotencyKey: options.idempotencyKey }
-        : {}),
-    });
+    const requestOptions = options?.idempotencyKey
+      ? { idempotencyKey: options.idempotencyKey }
+      : {};
+    return this.stripe.paymentIntents.capture(paymentIntentId, {}, requestOptions);
   }
 
   /**
@@ -116,13 +116,15 @@ export class StripeService {
     metadata?: Record<string, string>;
   }) {
     const idempotencyKey = `refund-${params.chargeId}-${Date.now()}`;
-    return this.stripe.refunds.create({
-      charge: params.chargeId,
-      ...(params.amount ? { amount: Math.round(params.amount * 100) } : {}),
-      ...(params.reason ? { reason: params.reason as any } : {}),
-      metadata: params.metadata,
-      idempotencyKey,
-    });
+    return this.stripe.refunds.create(
+      {
+        charge: params.chargeId,
+        ...(params.amount ? { amount: Math.round(params.amount * 100) } : {}),
+        ...(params.reason ? { reason: params.reason as any } : {}),
+        metadata: params.metadata,
+      },
+      { idempotencyKey },
+    );
   }
 
   // ── Transfers (Connect) ──────────────────────────────────────────
@@ -138,14 +140,16 @@ export class StripeService {
     metadata?: Record<string, string>;
   }) {
     const idempotencyKey = `transfer-${params.destinationAccountId}-${params.transferGroup || 'none'}-${Date.now()}`;
-    return this.stripe.transfers.create({
-      amount: Math.round(params.amount * 100), // cents
-      currency: "usd",
-      destination: params.destinationAccountId,
-      ...(params.transferGroup ? { transfer_group: params.transferGroup } : {}),
-      metadata: params.metadata,
-      idempotencyKey,
-    });
+    return this.stripe.transfers.create(
+      {
+        amount: Math.round(params.amount * 100), // cents
+        currency: "usd",
+        destination: params.destinationAccountId,
+        ...(params.transferGroup ? { transfer_group: params.transferGroup } : {}),
+        metadata: params.metadata,
+      },
+      { idempotencyKey },
+    );
   }
 
   // ── Connect Onboarding ───────────────────────────────────────────
