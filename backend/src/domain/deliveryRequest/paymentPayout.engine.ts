@@ -1,7 +1,10 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import {
   EnumAdminAuditLogAction,
@@ -14,12 +17,19 @@ import {
   Prisma,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { StripeService } from "../../providers/stripe/stripe.service";
 
 type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class PaymentPayoutEngine {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(PaymentPayoutEngine.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(StripeService)
+    private readonly stripeService?: StripeService,
+  ) {}
 
   async getDeliveryFinancialSummary(deliveryId: string) {
     const delivery = await this.prisma.deliveryRequest.findUnique({
@@ -120,6 +130,7 @@ export class PaymentPayoutEngine {
             paymentType: true,
             provider: true,
             status: true,
+            providerPaymentIntentId: true,
             invoiceId: true,
           },
         },
@@ -170,6 +181,21 @@ export class PaymentPayoutEngine {
 
     if (payment.paymentType === EnumPaymentPaymentType.PREPAID) {
       if (payment.status === EnumPaymentStatus.AUTHORIZED) {
+        // Capture the Stripe PaymentIntent to actually charge the held funds
+        if (payment.providerPaymentIntentId && payment.provider === "STRIPE" && this.stripeService) {
+          try {
+            await this.stripeService.capturePaymentIntent(payment.providerPaymentIntentId);
+            this.logger.log(`Captured Stripe PI ${payment.providerPaymentIntentId} for delivery ${input.deliveryId}`);
+          } catch (err: any) {
+            this.logger.error(
+              `Stripe capture failed for PI ${payment.providerPaymentIntentId}: ${err.message}`,
+            );
+            throw new BadRequestException(
+              `Payment capture failed: ${err.message}`,
+            );
+          }
+        }
+
         await tx.payment.update({
           where: { id: payment.id },
           data: {

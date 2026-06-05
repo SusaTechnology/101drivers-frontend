@@ -38,6 +38,12 @@ export class StripeService {
     deliveryId: string;
     customerEmail?: string;
     metadata?: Record<string, string>;
+    /**
+     * capture_method:
+     *  - 'manual' — funds held (authorized) but not charged until you call capturePaymentIntent()
+     *  - 'automatic' (default) — funds charged immediately when customer confirms
+     */
+    captureMethod?: 'manual' | 'automatic';
   }): Promise<{ paymentIntentId: string; clientSecret: string }> {
     // Stripe expects amount in cents
     const amountCents = Math.round(params.amount * 100);
@@ -45,6 +51,7 @@ export class StripeService {
     const paymentIntent = await this.stripe.paymentIntents.create({
       amount: amountCents,
       currency: "usd",
+      capture_method: params.captureMethod || "automatic",
       metadata: {
         deliveryId: params.deliveryId,
         ...params.metadata,
