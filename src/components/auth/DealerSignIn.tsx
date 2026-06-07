@@ -224,10 +224,10 @@ export function DealerSignIn({
         } else if (userType === "driver") {
           // Use login data to decide where to redirect — no extra API call needed
           if (data.onboardingCompleted) {
-            navigate({ to: "/driver-dashboard" });
+            navigate({ to: "/driver/dashboard" });
           } else if (data.onboardingToken) {
             navigate({
-              to: "/driver-onboarding-complete",
+              to: "/driver/onboarding-complete",
               search: { token: data.onboardingToken },
             });
           } else if (data.driverStatus === 'WAITLISTED' || data.driverStatus === 'INVITED') {
@@ -322,7 +322,7 @@ export function DealerSignIn({
                 to="/landing"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
               >
-                Landing
+                Home
               </Link>
               <Link
                 to="/about"
@@ -382,7 +382,7 @@ export function DealerSignIn({
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Landing
+                Home
               </Link>
               <Link
                 to="/about"
@@ -687,7 +687,7 @@ export function DealerSignIn({
                     className="w-full py-3.5 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-12 text-base font-black"
                     asChild
                   >
-                    <Link to="/driver-onboarding">
+                    <Link to="/driver/onboarding">
                       Apply to Drive
                       <ArrowRight className="w-5 h-5" />
                     </Link>
@@ -834,7 +834,7 @@ export function DealerSignIn({
                             asChild
                             type="button"
                           >
-                            <Link to="/driver-onboarding">Sign up</Link>
+                            <Link to="/driver/onboarding">Sign up</Link>
                           </Button>
                         </>
                       )}

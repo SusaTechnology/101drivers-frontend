@@ -540,7 +540,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     // Authenticated APPROVED driver with no onboarding token — redirect to dashboard
     if (user?.roles?.includes("DRIVER") && user?.driverStatus === 'APPROVED') {
       if (user?.onboardingCompleted) {
-        window.location.href = "/driver-dashboard";
+        window.location.href = "/driver/dashboard";
         return null;
       }
     }
