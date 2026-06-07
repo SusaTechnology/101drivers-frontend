@@ -258,6 +258,14 @@ function parseWindowTimes(windowStr: string): { start: string; end: string } {
 }
 import { BUSINESS_TZ } from '@/lib/timezone'
 
+/** Format a Date's calendar year/month/day to "YYYY-MM-DD" without timezone conversion. */
+const toDateString = (d: Date) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 const formatTimeRange = (startIso?: string, endIso?: string) => {
   if (!startIso || !endIso) return null;
   const start = new Date(startIso);
@@ -1478,7 +1486,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           // This happens when all of today's slots have passed — backend returns tomorrow's.
           // Both dates must be compared in business timezone (America/Los_Angeles).
           if (data.actualSlotDate && selectedDateRef.current) {
-            const selectedStr = selectedDateRef.current.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }); // yyyy-MM-dd in LA tz
+            const selectedStr = toDateString(selectedDateRef.current);
             if (data.actualSlotDate !== selectedStr) {
               // Parse actualSlotDate as a local Date for the Calendar component
               const [y, m, d] = data.actualSlotDate.split('-').map(Number);
@@ -1531,7 +1539,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose: choice,
-      ...(selectedDate && { preferredDate: selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }) }),
+      ...(selectedDate && { preferredDate: toDateString(selectedDate) }),
     };
 
     console.log('Discovery Mode Request:', request);
@@ -1556,7 +1564,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
-      ...(selectedDate && { preferredDate: selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }) }),
+      ...(selectedDate && { preferredDate: toDateString(selectedDate) }),
     };
 
     if (customerChose === "PICKUP_WINDOW") {
@@ -1592,7 +1600,7 @@ const handleDateSelect = (date: Date | undefined) => {
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
-      preferredDate: date.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }),
+      preferredDate: toDateString(date),
     };
     getSchedulePreview.mutate(request);
   }
