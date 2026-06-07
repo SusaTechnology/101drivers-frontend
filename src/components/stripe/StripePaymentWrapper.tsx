@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Elements } from "@stripe/react-stripe-js";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, CheckCircle } from "lucide-react";
 import { getStripe } from "@/lib/stripe";
 import { useDataQuery, useDataMutation } from "@/lib/tanstack/dataQuery";
 import StripePaymentForm from "./StripePaymentForm";
@@ -21,6 +21,7 @@ export default function StripePaymentWrapper({
 }: StripePaymentWrapperProps) {
   const [clientSecret, setClientSecret] = useState<string>("");
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [alreadyAuthorized, setAlreadyAuthorized] = useState(false);
 
   // ── Fetch Stripe publishable key ──
   const { data: configData } = useDataQuery<any>({
@@ -41,6 +42,17 @@ export default function StripePaymentWrapper({
     successMessage: "",
     onSuccess: (data) => {
       console.log('[StripePaymentWrapper] PaymentIntent response:', data);
+      const piStatus = data?.status || data?.data?.status;
+
+      // If the PI is already in requires_capture, payment was previously authorized.
+      // Don't render the card form — call onSuccess immediately.
+      if (piStatus === 'requires_capture') {
+        setAlreadyAuthorized(true);
+        const piId = data?.paymentIntentId || data?.data?.paymentIntentId;
+        if (piId) onSuccess?.(piId);
+        return;
+      }
+
       // Handle both direct and nested response formats
       const secret = data?.clientSecret || data?.data?.clientSecret;
       if (secret) {
@@ -84,6 +96,22 @@ export default function StripePaymentWrapper({
   }, [onSuccess]);
 
   // ── Render states ──
+
+  if (alreadyAuthorized) {
+    return (
+      <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40">
+        <div className="flex items-center gap-3">
+          <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Payment already authorized</p>
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+              Your card was already verified for this delivery. Funds will be captured after completion.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (intentMutation.isPending) {
     return (
