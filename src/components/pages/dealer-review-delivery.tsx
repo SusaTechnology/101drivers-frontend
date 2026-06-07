@@ -1190,8 +1190,9 @@ export default function ReviewDeliveryPage() {
       onPaymentSuccess={(paymentIntentId) => {
         setShowPaymentModal(false);
         setPendingPaymentDeliveryId(null);
-        toast.success('Payment confirmed!', {
-          description: 'Your payment has been processed successfully.',
+        toast.success('Card authorized!', {
+          description: 'Your card is verified and funds are reserved. The actual charge happens only after the driver completes the delivery. If cancelled, the hold is released immediately.',
+          duration: 8000,
         });
         navigate({ to: '/dealer-deliveries', search: { id: pendingPaymentDeliveryId } });
       }}

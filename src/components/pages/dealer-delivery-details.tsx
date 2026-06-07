@@ -266,6 +266,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const paymentVoided = ['VOIDED', 'REFUNDED'].includes(paymentStatus as string)
   const isPrepaid = paymentType === 'PREPAID'
   const isPostpaid = paymentType === 'POSTPAID'
+  const isAuthorized = paymentStatus === 'AUTHORIZED' && isPrepaid
 
   // Show Pay Now button:
   // - Only for PREPAID deliveries (postpaid customers pay via invoice)
@@ -1080,6 +1081,25 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
             <Button className="shrink-0 rounded-full bg-rose-500 text-white hover:bg-rose-600 font-extrabold px-5">
               Retry Payment
             </Button>
+          </div>
+        )}
+
+        {/* Payment Authorized — Info banner */}
+        {isAuthorized && (
+          <div className="mb-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <Shield className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-emerald-800 dark:text-emerald-300">
+                  Payment Secured — {paymentAmount ? `$${Number(paymentAmount).toFixed(2)}` : ''}
+                </p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1 leading-relaxed">
+                  Your card is verified and the funds are reserved. The actual charge happens only after the driver completes the delivery. If the delivery is cancelled before completion, the hold is released immediately and you will not be charged.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
