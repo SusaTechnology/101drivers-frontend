@@ -45,11 +45,10 @@ export default function StripePaymentWrapper({
       const piStatus = data?.status || data?.data?.status;
 
       // If the PI is already in requires_capture, payment was previously authorized.
-      // Don't render the card form — call onSuccess immediately.
+      // Show the "already authorized" message but DON'T close the dialog — let the
+      // user dismiss it via the Skip/Close button.
       if (piStatus === 'requires_capture') {
         setAlreadyAuthorized(true);
-        const piId = data?.paymentIntentId || data?.data?.paymentIntentId;
-        if (piId) onSuccess?.(piId);
         return;
       }
 

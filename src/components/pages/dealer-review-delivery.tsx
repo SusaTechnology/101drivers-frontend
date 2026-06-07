@@ -427,8 +427,11 @@ export default function ReviewDeliveryPage() {
 
       const newDeliveryId = data?.id || data?.deliveryRequest?.id;
 
-      // If prepaid, show payment dialog so dealer can pay immediately
-      if (newDeliveryId && reviewData?.paymentType !== 'POSTPAID') {
+      // Check if payment already has a Stripe PaymentIntent (previously authorized)
+      const hasStripePI = data?.payment?.providerPaymentIntentId;
+
+      // If prepaid and NOT already paid via Stripe, show payment dialog
+      if (newDeliveryId && reviewData?.paymentType !== 'POSTPAID' && !hasStripePI) {
         toast.success('Delivery submitted!', {
           description: 'Authorize your payment below, or skip and pay later from the delivery details page.',
         });
@@ -436,9 +439,11 @@ export default function ReviewDeliveryPage() {
         setShowPaymentModal(true);
       } else {
         toast.success('Delivery submitted!', {
-          description: 'Your delivery is now visible to drivers. You will be notified when a driver books it.',
+          description: hasStripePI
+            ? 'Payment is already secured for this delivery.'
+            : 'Your delivery is now visible to drivers. You will be notified when a driver books it.',
         });
-        navigate({ to: '/dealer-dashboard' });
+        navigate({ to: newDeliveryId ? '/dealer-deliveries' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
       }
     },
     onError: (error: any) => {
