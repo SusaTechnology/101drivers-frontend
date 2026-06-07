@@ -46,6 +46,7 @@ import {
 import { getUser, authFetch } from "@/lib/tanstack/dataQuery";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import StripePaymentDialog from '@/components/stripe/StripePaymentDialog';
 
 // Types for review data
 interface ReviewDeliveryData {
@@ -163,6 +164,10 @@ export default function ReviewDeliveryPage() {
   // Schedule edit state
   const [availableSlots, setAvailableSlots] = useState<{ label: string; start: string; end: string }[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+
+  // Payment dialog state (shown after successful delivery creation for prepaid)
+  const [pendingPaymentDeliveryId, setPendingPaymentDeliveryId] = useState<string | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
@@ -416,15 +421,25 @@ export default function ReviewDeliveryPage() {
 
       return delivery;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       // Clear session storage
       sessionStorage.removeItem("reviewDeliveryData");
-      
-      toast.success("Delivery submitted!", {
-        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
-      });
-      
-      navigate({ to: "/dealer-dashboard" });
+
+      const newDeliveryId = data?.id || data?.deliveryRequest?.id;
+
+      // If prepaid, show payment dialog so dealer can pay immediately
+      if (newDeliveryId && reviewData?.paymentType !== 'POSTPAID') {
+        toast.success('Delivery submitted!', {
+          description: 'Authorize your payment below, or skip and pay later from the delivery details page.',
+        });
+        setPendingPaymentDeliveryId(newDeliveryId);
+        setShowPaymentModal(true);
+      } else {
+        toast.success('Delivery submitted!', {
+          description: 'Your delivery is now visible to drivers. You will be notified when a driver books it.',
+        });
+        navigate({ to: '/dealer-dashboard' });
+      }
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to create delivery";
@@ -1167,6 +1182,25 @@ export default function ReviewDeliveryPage() {
           </Card>
         </div>
       </main>
+    {/* Stripe Payment Dialog — shown after successful delivery creation for prepaid */}
+    <StripePaymentDialog
+      open={showPaymentModal}
+      deliveryId={pendingPaymentDeliveryId || ''}
+      amount={reviewData?.total}
+      onPaymentSuccess={(paymentIntentId) => {
+        setShowPaymentModal(false);
+        setPendingPaymentDeliveryId(null);
+        toast.success('Payment confirmed!', {
+          description: 'Your payment has been processed successfully.',
+        });
+        navigate({ to: '/dealer-deliveries', search: { id: pendingPaymentDeliveryId } });
+      }}
+      onDismiss={() => {
+        setShowPaymentModal(false);
+        setPendingPaymentDeliveryId(null);
+        navigate({ to: '/dealer-dashboard' });
+      }}
+    />
     </div>
   );
 }

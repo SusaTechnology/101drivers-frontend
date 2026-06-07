@@ -267,15 +267,15 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
   // Show Pay Now button:
   // - Only for PREPAID deliveries (postpaid customers pay via invoice)
-  // - Only in BOOKED or ACTIVE status (driver assigned, delivery in progress)
+  // - In LISTED, BOOKED, or ACTIVE status
   // - Only when payment is NOT already done, voided, or refunded
   // - Also show when payment FAILED so dealer can retry
   const showPayButton = isPrepaid &&
-    ['BOOKED', 'ACTIVE'].includes(deliveryStatus as string) &&
+    ['LISTED', 'BOOKED', 'ACTIVE'].includes(deliveryStatus as string) &&
     !paymentDone && !paymentVoided
 
   // Show Retry button when payment failed and delivery is still active/booked
-  const showRetryButton = isPrepaid && paymentFailed && ['BOOKED', 'ACTIVE'].includes(deliveryStatus as string)
+  const showRetryButton = isPrepaid && paymentFailed && ['LISTED', 'BOOKED', 'ACTIVE'].includes(deliveryStatus as string)
 
   const handlePaymentSuccess = () => {
     setShowPaymentModal(false)
@@ -425,10 +425,10 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
  ...(isPrepaid && !isPostpaid ? [{
       status: 'Payment',
       time: paymentDone ? formatDateTime(deliveryData?.payment?.capturedAt || deliveryData?.payment?.createdAt || '')
-        : paymentVoided ? 'Voided' : paymentFailed ? 'Failed — tap to retry' : (deliveryData?.status === 'BOOKED' || deliveryData?.status === 'ACTIVE' ? 'Waiting for payment' : '—'),
+        : paymentVoided ? 'Voided' : paymentFailed ? 'Failed — tap to retry' : (['LISTED', 'BOOKED', 'ACTIVE'].includes(deliveryData?.status || '') ? 'Waiting for payment' : '—'),
       completed: paymentDone,
-      pending: !paymentDone && !paymentVoided && ['BOOKED', 'ACTIVE'].includes(deliveryData?.status || ''),
-      failed: paymentFailed && ['BOOKED', 'ACTIVE'].includes(deliveryData?.status || ''),
+      pending: !paymentDone && !paymentVoided && ['LISTED', 'BOOKED', 'ACTIVE'].includes(deliveryData?.status || ''),
+      failed: paymentFailed && ['LISTED', 'BOOKED', 'ACTIVE'].includes(deliveryData?.status || ''),
       icon: CreditCard,
     }] : []),
     {
