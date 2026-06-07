@@ -113,8 +113,8 @@ const PaymentStatusBadge = ({ status }: { status: string | undefined }) => {
 
   const config: Record<string, { label: string; className: string }> = {
     AUTHORIZED: {
-      label: 'Authorized',
-      className: 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400',
+      label: 'Paid',
+      className: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400',
     },
     CAPTURED: {
       label: 'Paid',
@@ -259,7 +259,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const deliveryStatus = deliveryData?.status
 
   // Derived payment state from server data (persists across refreshes)
-  const paymentDone = ['CAPTURED', 'PAID', 'INVOICED'].includes(paymentStatus as string)
+  // AUTHORIZED counts as "done" from the dealer's perspective — they've entered their card,
+  // funds are held, and no further action is needed from them.
+  const paymentDone = ['AUTHORIZED', 'CAPTURED', 'PAID', 'INVOICED'].includes(paymentStatus as string)
   const paymentFailed = paymentStatus === 'FAILED'
   const paymentVoided = ['VOIDED', 'REFUNDED'].includes(paymentStatus as string)
   const isPrepaid = paymentType === 'PREPAID'
