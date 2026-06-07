@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { fileURLToPath, URL } from 'node:url'
+import path from 'node:path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -21,8 +22,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Force all imports to use a single React instance
+      'react': path.resolve('./node_modules/react'),
+      'react-dom': path.resolve('./node_modules/react-dom'),
+      'react-dom/client': path.resolve('./node_modules/react-dom/client'),
+      'react/jsx-runtime': path.resolve('./node_modules/react/jsx-runtime'),
+      'react/jsx-dev-runtime': path.resolve('./node_modules/react/jsx-dev-runtime'),
     },
-    dedupe: ['react', 'react-dom', 'react-is', '@tanstack/router-core'],
+    dedupe: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-is', '@tanstack/router-core'],
   },
   optimizeDeps: {
     // Force Vite to always re-bundle deps from scratch on server start.
@@ -41,6 +48,8 @@ export default defineConfig({
       '@tanstack/react-devtools',
       '@tanstack/react-query',
       '@tanstack/router-core',
+      '@react-google-maps/api',
+      '@stripe/react-stripe-js',
     ],
   },
 })
