@@ -63,7 +63,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
+import { format, parseISO, isBefore, startOfDay } from "date-fns";
 
 // California bounds for address restriction (fallback when zones aren't loaded yet)
 const CA_BOUNDS: google.maps.LatLngBoundsLiteral = {
@@ -214,6 +214,8 @@ interface SchedulePreviewResponse {
     pickup: SlotItem[];
     dropoff: SlotItem[];
   };
+  /** Actual date of returned slots (YYYY-MM-DD). May differ from selected date when today's slots have all passed. */
+  actualSlotDate?: string | null;
 }
 
 // Types for saved data
@@ -1471,6 +1473,18 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
             pickup: data.suggestedSlots.pickup || [],
             dropoff: data.suggestedSlots.dropoff || [],
           });
+
+          // Sync calendar if backend returned slots for a different day than selected.
+          // This happens when all of today's slots have passed — backend returns tomorrow's.
+          // Both dates must be compared in business timezone (America/Los_Angeles).
+          if (data.actualSlotDate && selectedDateRef.current) {
+            const selectedStr = selectedDateRef.current.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }); // yyyy-MM-dd in LA tz
+            if (data.actualSlotDate !== selectedStr) {
+              // Parse actualSlotDate as a local Date for the Calendar component
+              const [y, m, d] = data.actualSlotDate.split('-').map(Number);
+              setSelectedDate(new Date(y, m - 1, d));
+            }
+          }
         }
 
         // Only set validated windows if we actually have both window times from the API
@@ -1517,7 +1531,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose: choice,
-      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
+      ...(selectedDate && { preferredDate: selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }) }),
     };
 
     console.log('Discovery Mode Request:', request);
@@ -1542,7 +1556,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
-      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
+      ...(selectedDate && { preferredDate: selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }) }),
     };
 
     if (customerChose === "PICKUP_WINDOW") {
@@ -1578,7 +1592,7 @@ const handleDateSelect = (date: Date | undefined) => {
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
-      preferredDate: format(date, "yyyy-MM-dd"),
+      preferredDate: date.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }),
     };
     getSchedulePreview.mutate(request);
   }
@@ -2415,7 +2429,9 @@ const handleQuotePreview = () => {
                       disabled={(date) => {
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
-                        return date < today;
+                        const maxDate = new Date(today);
+                        maxDate.setDate(maxDate.getDate() + 7);
+                        return date < today || date > maxDate;
                       }}
                     />
                   </PopoverContent>
