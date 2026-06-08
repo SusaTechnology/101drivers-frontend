@@ -19,6 +19,8 @@ import {
   X,
   Calendar,
   Clock,
+  LocateFixed,
+  Loader2,
   DollarSign,
   TrendingUp,
   TrendingDown,
@@ -558,6 +560,42 @@ export default function DriverGigBoardPage() {
     sortBy: 'ANY',
   })
 
+  // Location toggle state
+  const [useMyLocation, setUseMyLocation] = useState(() =>
+    localStorage.getItem('driverUseMyLocation') === 'true'
+  )
+  const [driverLat, setDriverLat] = useState<number | null>(null)
+  const [driverLng, setDriverLng] = useState<number | null>(null)
+  const [locating, setLocating] = useState(false)
+
+  // Geolocate when toggle is ON
+  useEffect(() => {
+    if (!useMyLocation) {
+      setDriverLat(null)
+      setDriverLng(null)
+      return
+    }
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported by your browser')
+      setUseMyLocation(false)
+      return
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setDriverLat(pos.coords.latitude)
+        setDriverLng(pos.coords.longitude)
+        setLocating(false)
+      },
+      () => {
+        toast.error('Could not get your location. Check your permissions.')
+        setUseMyLocation(false)
+        setLocating(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }, [useMyLocation])
+
   // Build query params from filter state
   const buildQueryParams = () => {
     const params = new URLSearchParams()
@@ -574,6 +612,10 @@ export default function DriverGigBoardPage() {
     }
     if (filters.sortBy && filters.sortBy !== 'ANY') {
       params.append('sortBy', filters.sortBy)
+    }
+    if (useMyLocation && driverLat && driverLng) {
+      params.append('lat', String(driverLat))
+      params.append('lng', String(driverLng))
     }
 
     return params.toString()
@@ -701,6 +743,13 @@ export default function DriverGigBoardPage() {
       sortBy: 'ANY',
     })
     toast.success('Filters reset to defaults')
+  }
+
+  // Toggle location
+  const toggleMyLocation = () => {
+    const next = !useMyLocation
+    setUseMyLocation(next)
+    localStorage.setItem('driverUseMyLocation', String(next))
   }
 
   const handleRefresh = () => {
@@ -885,7 +934,27 @@ export default function DriverGigBoardPage() {
                 </Select>
               </div>
 
-              <div className="flex-1" />
+              <div className="flex items-center gap-2 self-center">
+                <button
+                  type="button"
+                  onClick={toggleMyLocation}
+                  disabled={locating}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition',
+                    useMyLocation
+                      ? 'border-primary bg-primary/10 text-slate-900 dark:text-white'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary/50 hover:text-slate-700 dark:hover:text-slate-300'
+                  )}
+                >
+                  {locating ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <LocateFixed className="w-3.5 h-3.5" />
+                  )}
+                  {locating ? 'Locating...' : 'My Location'}
+                </button>
+              </div>
+
               <Button
                 type="button"
                 variant="ghost"

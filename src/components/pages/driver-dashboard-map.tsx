@@ -68,6 +68,7 @@ import {
   Briefcase,
   Funnel,
   LocateFixed,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -233,6 +234,32 @@ export default function DriverMapPage() {
   const driverId = user?.profileId
   const displayName = user?.fullName?.split(' ')[0] || user?.username || 'Driver'
   const navigate = useNavigate()
+
+  // Auto-geolocate on mount for map centering
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 33.94, lng: -118.40 })
+  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [locating, setLocating] = useState(true)
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocating(false)
+      return
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        setMapCenter({ lat: latitude, lng: longitude })
+        setDriverLocation({ lat: latitude, lng: longitude })
+        setLocating(false)
+      },
+      () => {
+        // Fallback to default LA center
+        setLocating(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }, [])
 
   // Fetch deliveries with default (no) filters for the map
   const {
@@ -484,14 +511,14 @@ export default function DriverMapPage() {
         {isLoaded ? (
           <GoogleMap
             mapContainerStyle={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            center={{ lat: 33.94, lng: -118.40 }}
+            center={mapCenter}
             zoom={11}
             options={mapOptions}
             onLoad={(map) => { mapRef.current = map }}
           >
-            {/* Driver location */}
+            {/* Driver location — real GPS or fallback */}
             <Marker
-              position={{ lat: 33.94, lng: -118.40 }}
+              position={driverLocation || mapCenter}
               icon={driverDotIcon}
             />
 
@@ -517,6 +544,14 @@ export default function DriverMapPage() {
               />
             ))}
           </GoogleMap>
+
+          {/* Locating indicator overlay */}
+          {locating && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-2 rounded-full bg-white/90 dark:bg-slate-900/90 backdrop-blur shadow-lg border border-slate-200 dark:border-slate-700">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Finding your location...</span>
+            </div>
+          )}
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
