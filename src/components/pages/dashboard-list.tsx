@@ -615,6 +615,21 @@ export default function DriverGigBoardPage() {
     return () => socketLeaveDriverFeed()
   }, [driverId])
 
+  // ── Unlock browser audio on first interaction so notification sound is never blocked ──
+  useEffect(() => {
+    const unlock = () => {
+      const a = new Audio('/assets/notification.mp3')
+      a.volume = 0
+      a.play().catch(() => {})
+    }
+    document.addEventListener('click', unlock, { once: true })
+    document.addEventListener('touchstart', unlock, { once: true })
+    return () => {
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('touchstart', unlock)
+    }
+  }, [])
+
   // ── SOCKET.IO: Listen for feed updates (new bookings, unbookings) ──
   const handleFeedUpdate = useCallback((data: any) => {
     if (!data?.deliveryId) return
