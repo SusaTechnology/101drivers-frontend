@@ -59,6 +59,18 @@
     
     <!-- Preload critical assets -->
     <link rel="preload" href="/assets/101drivers-logo.jpg" as="image" />
+
+    <!-- Inline theme script: apply dark class before React renders to prevent flash -->
+    <script>
+      (function() {
+        var t = localStorage.getItem('theme');
+        if (t === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
