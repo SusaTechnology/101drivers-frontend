@@ -60,14 +60,18 @@
     <!-- Preload critical assets -->
     <link rel="preload" href="/assets/101drivers-logo.jpg" as="image" />
 
-    <!-- Inline theme script: apply dark class before React renders to prevent flash -->
+    <!-- Inline theme script: apply dark class + background before React renders to prevent flash -->
     <script>
       (function() {
         var t = localStorage.getItem('theme');
         if (t === 'dark') {
           document.documentElement.classList.add('dark');
+          document.documentElement.style.backgroundColor = '#0f172a';
+          document.documentElement.style.color = '#f8fafc';
         } else {
           document.documentElement.classList.remove('dark');
+          document.documentElement.style.backgroundColor = '#ffffff';
+          document.documentElement.style.color = '#020617';
         }
       })();
     </script>
