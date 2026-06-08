@@ -622,7 +622,10 @@ export default function DriverGigBoardPage() {
       queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
     } else if (data.status === 'LISTED') {
       queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
-      try { new Audio('/assets/notification.mp3').play() } catch { /* autoplay blocked */ }
+      const soundEnabled = localStorage.getItem('driverSoundEnabled') !== 'false'
+      if (soundEnabled) {
+        try { new Audio('/assets/notification.mp3').play() } catch { /* autoplay blocked */ }
+      }
     }
   }, [driverId, queryClient])
   useSocketEvent('delivery:feed-update', handleFeedUpdate)

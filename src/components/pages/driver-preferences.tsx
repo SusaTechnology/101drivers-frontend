@@ -76,6 +76,7 @@ const preferencesSchema = z.object({
   alertEnabled: z.boolean().default(true),
   emailEnabled: z.boolean().default(true),
   smsEnabled: z.boolean().default(false),
+  soundEnabled: z.boolean().default(true),
 
   // District Preferences – stored as array of district IDs
   serviceDistrictIds: z.array(z.string()).default([]),
@@ -214,6 +215,7 @@ export default function DriverPreferencesPage() {
       alertEnabled: true,
       emailEnabled: true,
       smsEnabled: false,
+      soundEnabled: true,
       serviceDistrictIds: [],
       zipCode: '95112',
       maxTripDistance: '100',
@@ -239,6 +241,7 @@ export default function DriverPreferencesPage() {
         alertEnabled: driverProfile.alerts?.enabled ?? true,
         emailEnabled: driverProfile.alerts?.emailEnabled ?? true,
         smsEnabled: driverProfile.alerts?.smsEnabled ?? false,
+        soundEnabled: driverProfile.alerts?.soundEnabled ?? true,
         serviceDistrictIds: driverProfile.districts?.map((d: any) => d.district.id) || [],
         // UI‑only fields (keep defaults)
         zipCode: '95112',
@@ -256,6 +259,9 @@ export default function DriverPreferencesPage() {
           lng: driverProfile.location.homeBaseLng,
         });
       }
+
+      // Sync soundEnabled to localStorage for dashboard-list to read
+      localStorage.setItem('driverSoundEnabled', String(driverProfile.alerts?.soundEnabled ?? true))
     }
   }, [driverProfile, form]);
 
@@ -448,6 +454,7 @@ export default function DriverPreferencesPage() {
         enabled: data.alertEnabled,
         emailEnabled: data.emailEnabled,
         smsEnabled: data.smsEnabled,
+        soundEnabled: data.soundEnabled,
       },
       location: {
         homeBaseLat: data.homeBaseLat,
@@ -459,6 +466,9 @@ export default function DriverPreferencesPage() {
     }
 
     updateProfile.mutate(payload)
+
+    // Save soundEnabled to localStorage for instant access in dashboard-list
+    localStorage.setItem('driverSoundEnabled', String(data.soundEnabled))
   }
 
   return (
@@ -846,6 +856,19 @@ export default function DriverPreferencesPage() {
                     onCheckedChange={(checked) => form.setValue('smsEnabled', checked as boolean)}
                   />
                 </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white">Sound Alerts</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400">Play a chime when a new job appears in your feed</p>
+                </div>
+                <Checkbox
+                  checked={form.watch('soundEnabled')}
+                  onCheckedChange={(checked) => form.setValue('soundEnabled', checked as boolean)}
+                />
               </div>
             </div>
           </CardContent>
