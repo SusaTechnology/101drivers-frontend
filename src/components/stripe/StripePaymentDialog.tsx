@@ -4,7 +4,7 @@
  * Wraps StripePaymentWrapper inside a shadcn Dialog with:
  * - Auto-open via `open` prop (controlled)
  * - "Skip for now" dismiss button
- * - Success screen after payment with auto-close (3s)
+ * - Success screen after payment with manual dismiss (Done button)
  * - Configurable title, description, and amount
  * - onPaymentSuccess / onDismiss callbacks
  *
@@ -79,11 +79,6 @@ export default function StripePaymentDialog({
   const handlePaymentSuccess = (paymentIntentId: string) => {
     setPaymentSucceeded(true)
     onPaymentSuccess?.(paymentIntentId)
-
-    // Auto-close after 3 seconds and navigate via onDismiss
-    autoCloseTimer.current = setTimeout(() => {
-      onDismiss?.()
-    }, 3000)
   }
 
   // If payment succeeded, show success screen instead of card form
@@ -106,6 +101,12 @@ export default function StripePaymentDialog({
                 If the delivery is cancelled before completion, the hold is released immediately and you will not be charged.
               </p>
             </div>
+            <Button
+              onClick={() => onDismiss?.()}
+              className="mt-6 w-full py-3 rounded-2xl font-extrabold text-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              Done
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
