@@ -238,8 +238,11 @@ export default function DriverMapPage() {
   const displayName = user?.fullName?.split(' ')[0] || user?.username || 'Driver'
   const navigate = useNavigate()
 
-  // Auto-geolocate on mount — watchPosition for live tracking + socket emit
+  // Respect the "Use My Location" toggle from dashboard-list
   const DEFAULT_CENTER = { lat: 33.94, lng: -118.40 }
+  const [useMyLocation, setUseMyLocation] = useState(() =>
+    localStorage.getItem('driverUseMyLocation') === 'true'
+  )
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>(DEFAULT_CENTER)
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locating, setLocating] = useState(false)
@@ -259,7 +262,13 @@ export default function DriverMapPage() {
     return R * c
   }, [])
 
+  // watchPosition + socket emit only when toggle is ON
   useEffect(() => {
+    if (!useMyLocation) {
+      setMapCenter(DEFAULT_CENTER)
+      setDriverLocation(null)
+      return
+    }
     if (!navigator.geolocation) { toast.error('Geolocation is not supported'); return }
     setLocating(true)
     let watchId: number
@@ -283,8 +292,17 @@ export default function DriverMapPage() {
           setTimeout(() => { refetchRef.current() }, 2000)
         }
       },
-      () => { toast.error('Could not get your location.'); setLocating(false) },
-      { enableHighAccuracy: true, timeout: 10000 }
+      (err) => {
+        if (err.code === 1) {
+          toast.error('Location permission denied.')
+          setUseMyLocation(false)
+          localStorage.setItem('driverUseMyLocation', 'false')
+        } else {
+          toast.error('Could not get your location right now. Retrying...', { duration: 3000 })
+        }
+        setLocating(false)
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 30000 }
     )
 
     return () => {
@@ -294,7 +312,17 @@ export default function DriverMapPage() {
         socket.emit('driver:location', { lat: 0, lng: 0, recordedAt: new Date().toISOString(), useLiveLocation: false }, () => {})
       }
     }
-  }, [haversineMiles])
+  }, [useMyLocation, haversineMiles])
+
+  // When toggle turns OFF, reset useLiveLocation in backend
+  useEffect(() => {
+    if (!useMyLocation) {
+      const socket = getSocket()
+      if (socket?.connected) {
+        socket.emit('driver:location', { lat: 0, lng: 0, recordedAt: new Date().toISOString(), useLiveLocation: false }, () => {})
+      }
+    }
+  }, [useMyLocation])
 
   // Fetch deliveries
   const {
