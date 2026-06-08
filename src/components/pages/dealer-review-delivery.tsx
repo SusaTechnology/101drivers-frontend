@@ -432,6 +432,9 @@ export default function ReviewDeliveryPage() {
 
       // If prepaid and NOT already paid via Stripe, show payment dialog
       if (newDeliveryId && reviewData?.paymentType !== 'POSTPAID' && !hasStripePI) {
+        toast.success('Delivery submitted!', {
+          description: 'Your delivery is now listed for drivers.',
+        });
         setPendingPaymentDeliveryId(newDeliveryId);
         setShowPaymentModal(true);
       } else {

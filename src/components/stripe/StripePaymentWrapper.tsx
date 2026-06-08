@@ -80,9 +80,10 @@ export default function StripePaymentWrapper({
     const redirectStatus = params.get("redirect_status");
     const paymentIntentId = params.get("payment_intent");
 
-    if (redirectStatus === "succeeded" && paymentIntentId) {
+    if ((redirectStatus === "succeeded") && paymentIntentId) {
       window.history.replaceState({}, "", window.location.pathname);
       setClientSecret("");
+      // Both succeeded and requires_capture are valid outcomes for manual capture
       onSuccess?.(paymentIntentId);
     } else if (redirectStatus && redirectStatus !== "succeeded") {
       window.history.replaceState({}, "", window.location.pathname);

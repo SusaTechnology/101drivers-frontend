@@ -47,8 +47,8 @@ export default function StripePaymentForm({
       setMessage(error.message || "Payment failed");
       onError?.(error.message || "Payment failed");
       setLoading(false);
-    } else if (paymentIntent && paymentIntent.status === "succeeded") {
-      setMessage("Payment successful!");
+    } else if (paymentIntent && (paymentIntent.status === "succeeded" || paymentIntent.status === "requires_capture")) {
+      setMessage(paymentIntent.status === "requires_capture" ? "Card authorized!" : "Payment successful!");
       setSucceeded(true);
       setLoading(false);
       onSuccess?.(paymentIntent.id);
