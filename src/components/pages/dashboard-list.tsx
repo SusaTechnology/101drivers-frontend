@@ -632,12 +632,18 @@ export default function DriverGigBoardPage() {
           refetchRef.current()
         }
       },
-      () => {
-        toast.error('Could not get your location. Check your permissions.')
-        setUseMyLocation(false)
+      (err) => {
+        // error.code: 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT
+        if (err.code === 1) {
+          toast.error('Location permission denied. Please allow access in your browser settings.')
+          setUseMyLocation(false)
+        } else {
+          // Timeout or unavailable — don't turn off toggle, just stop locating
+          toast.error('Could not get your location right now. Retrying...', { duration: 3000 })
+        }
         setLocating(false)
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 30000 }
     )
 
     return () => {
