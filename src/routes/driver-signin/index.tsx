@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { DealerSignIn } from '@/components/auth/DealerSignIn'
-import { ThemeProvider } from 'next-themes'
+import { ThemeProvider } from '@/lib/theme'
 
 export const Route = createFileRoute("/driver-signin/")({
   component: DriverSignInPage,

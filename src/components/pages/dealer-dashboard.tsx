@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useTheme } from 'next-themes'
+import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'

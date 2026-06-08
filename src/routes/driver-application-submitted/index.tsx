@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ThemeProvider } from 'next-themes'
+import { ThemeProvider } from '@/lib/theme'
 import { DriverApplicationSubmitted } from '@/components/pages/driverApplicationSubmitted'
 
 export const Route = createFileRoute("/driver-application-submitted/")({

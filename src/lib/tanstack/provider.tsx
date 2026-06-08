@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider } from 'next-themes'
+import { ThemeProvider } from '@/lib/theme'
 import { Toaster } from 'sonner'
 import type { ReactNode } from 'react'
 // Create a client

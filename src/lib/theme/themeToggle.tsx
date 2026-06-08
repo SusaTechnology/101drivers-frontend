@@ -1,4 +1,4 @@
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/lib/theme';
 import { Button } from '@/components/ui/button';
 import { Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';

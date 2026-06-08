@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ThemeProvider } from 'next-themes'
+import { ThemeProvider } from '@/lib/theme'
 import { DriverOnboardingComplete } from '@/components/pages/driverOnboardingComplete'
 
 export const Route = createFileRoute('/driver/onboarding-complete')({

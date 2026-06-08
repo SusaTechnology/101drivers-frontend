@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
 import { useDataQuery, useDataMutation } from "@/lib/tanstack/dataQuery";
 import {

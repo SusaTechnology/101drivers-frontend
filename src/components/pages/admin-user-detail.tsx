@@ -79,7 +79,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/lib/theme';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   useAdminUserDetail,

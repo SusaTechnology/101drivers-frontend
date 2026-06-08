@@ -8,7 +8,6 @@ import { routeTree } from "./routeTree.gen";
 
 import "./styles.css";
 import reportWebVitals from "./reportWebVitals.ts";
-import { ThemeProvider } from "next-themes";
 import { Providers } from "./lib/tanstack/provider.tsx";
 // import { GoogleMapsProvider } from "./lib/map/GoogleMapsProvider.tsx";
 // Create a new router instance
@@ -34,13 +33,9 @@ if (rootElement && !rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <StrictMode>
-      <ThemeProvider attribute="class" defaultTheme="light">
-        {/* <GoogleMapsProvider> */}
-        <Providers>
-          <RouterProvider router={router} />
-        </Providers>
-        {/* </GoogleMapsProvider> */}
-      </ThemeProvider>
+      <Providers>
+        <RouterProvider router={router} />
+      </Providers>
     </StrictMode>,
   );
 }

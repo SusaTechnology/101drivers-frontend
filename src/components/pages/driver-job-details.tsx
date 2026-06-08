@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
-import { useTheme } from 'next-themes'
+import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import {
   ArrowLeft,

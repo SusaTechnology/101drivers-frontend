@@ -1,7 +1,7 @@
 // Driver Support Detail Page - View individual support request
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from '@tanstack/react-router'
-import { useTheme } from 'next-themes'
+import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'

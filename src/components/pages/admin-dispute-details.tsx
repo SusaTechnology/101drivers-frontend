@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/lib/theme";
 import { toast } from "sonner";
 import {
   ArrowLeft,
