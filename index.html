@@ -60,18 +60,31 @@
     <!-- Preload critical assets -->
     <link rel="preload" href="/assets/101drivers-logo.jpg" as="image" />
 
-    <!-- Inline theme script: apply dark class + background before React renders to prevent flash -->
+    <!-- Render-blocking CSS: sets background/color before first paint.
+         color-scheme tells the browser to render native elements (scrollbars,
+         inputs, selection) in the correct theme immediately. -->
+    <style>
+      :root {
+        color-scheme: light;
+        background-color: #ffffff;
+        color: #020617;
+      }
+      .dark {
+        color-scheme: dark;
+        background-color: #0f172a;
+        color: #f8fafc;
+      }
+    </style>
+
+    <!-- Inline script: reads localStorage and sets the 'dark' class
+         on <html> before React loads. The <style> above handles the rest. -->
     <script>
       (function() {
         var t = localStorage.getItem('theme');
         if (t === 'dark') {
           document.documentElement.classList.add('dark');
-          document.documentElement.style.backgroundColor = '#0f172a';
-          document.documentElement.style.color = '#f8fafc';
         } else {
           document.documentElement.classList.remove('dark');
-          document.documentElement.style.backgroundColor = '#ffffff';
-          document.documentElement.style.color = '#020617';
         }
       })();
     </script>
