@@ -69,7 +69,6 @@ import {
   List,
   Briefcase,
   Funnel,
-  LocateFixed,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -104,7 +103,7 @@ import { Switch } from '@/components/ui/switch'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
-import { socketJoinDriverFeed, socketLeaveDriverFeed } from '@/lib/socket'
+import { socketJoinDriverFeed, socketLeaveDriverFeed, getSocket } from '@/lib/socket'
 import { useQueryClient } from '@tanstack/react-query'
 import MiniRouteMap from '@/components/map/MiniRouteMap'
 import type { NotificationInboxResponse } from '@/types/notification'
@@ -565,15 +564,25 @@ export default function DriverGigBoardPage() {
   const [useMyLocation, setUseMyLocation] = useState(() =>
     localStorage.getItem('driverUseMyLocation') === 'true'
   )
-  const [driverLat, setDriverLat] = useState<number | null>(null)
-  const [driverLng, setDriverLng] = useState<number | null>(null)
   const [locating, setLocating] = useState(false)
 
-  // Geolocate when toggle is ON
+  // Haversine distance between two lat/lng points (returns miles)
+  const haversineMiles = useCallback((lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 3959
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLng = ((lng2 - lng1) * Math.PI) / 180
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }, [])
+
+  // watchPosition + socket emit when toggle is ON
   useEffect(() => {
     if (!useMyLocation) {
-      setDriverLat(null)
-      setDriverLng(null)
+      setLocating(false)
       return
     }
     if (!navigator.geolocation) {
@@ -581,12 +590,47 @@ export default function DriverGigBoardPage() {
       setUseMyLocation(false)
       return
     }
+
     setLocating(true)
-    navigator.geolocation.getCurrentPosition(
+    let watchId: number
+    let lastFetchLat: number | null = null
+    let lastFetchLng: number | null = null
+
+    watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        setDriverLat(pos.coords.latitude)
-        setDriverLng(pos.coords.longitude)
+        const { latitude: lat, longitude: lng } = pos.coords
         setLocating(false)
+
+        // Emit GPS to backend via socket — stores in DriverLocation + sets useLiveLocation
+        const socket = getSocket()
+        if (socket?.connected) {
+          socket.emit('driver:location', {
+            lat,
+            lng,
+            recordedAt: new Date().toISOString(),
+            useLiveLocation: true,
+          }, (ack: any) => {
+            if (ack?.ok === false) {
+              // Socket rejected — silently continue, feed will use stored location
+            }
+          })
+        }
+
+        // Refetch feed only if driver moved ≥ 1 mile from last fetch position
+        const threshold = 1 // mile
+        if (lastFetchLat != null && lastFetchLng != null) {
+          const dist = haversineMiles(lastFetchLat, lastFetchLng, lat, lng)
+          if (dist >= threshold) {
+            lastFetchLat = lat
+            lastFetchLng = lng
+            refetchRef.current()
+          }
+        } else {
+          // First position — always refetch
+          lastFetchLat = lat
+          lastFetchLng = lng
+          refetchRef.current()
+        }
       },
       () => {
         toast.error('Could not get your location. Check your permissions.')
@@ -595,6 +639,25 @@ export default function DriverGigBoardPage() {
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
+
+    return () => {
+      if (watchId !== undefined) navigator.geolocation.clearWatch(watchId)
+    }
+  }, [useMyLocation, haversineMiles])
+
+  // When toggle turns OFF, reset useLiveLocation in backend
+  useEffect(() => {
+    if (!useMyLocation) {
+      const socket = getSocket()
+      if (socket?.connected) {
+        socket.emit('driver:location', {
+          lat: 0,
+          lng: 0,
+          recordedAt: new Date().toISOString(),
+          useLiveLocation: false,
+        }, () => {})
+      }
+    }
   }, [useMyLocation])
 
   // Build query params from filter state
@@ -614,16 +677,13 @@ export default function DriverGigBoardPage() {
     if (filters.sortBy && filters.sortBy !== 'ANY') {
       params.append('sortBy', filters.sortBy)
     }
-    if (useMyLocation && driverLat && driverLng) {
-      params.append('lat', String(driverLat))
-      params.append('lng', String(driverLng))
-    }
 
     return params.toString()
   }
 
   const queryParams = buildQueryParams()
   const socketConnected = useSocketConnected()
+  const refetchRef = useRef<() => void>(() => {})
 
   // Data fetch with filters
   const {
@@ -635,12 +695,15 @@ export default function DriverGigBoardPage() {
     refetch
   } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${driverId}?${queryParams}`,
-    queryKey: ['driverFeed', driverId],
+    queryKey: ['driverFeed', driverId, queryParams],
     noFilter: true,
     enabled: Boolean(driverId),
     staleTime: 0, // always refetch on mount so booked deliveries disappear immediately
     refetchInterval: socketConnected ? false : 60 * 1000, // only poll when socket is down
   })
+
+  // Keep refetch accessible in geolocation effect without circular dependency
+  useEffect(() => { refetchRef.current = refetch }, [refetch])
 
   // ── Error-recovery polling: if socket connected but API is failing, keep retrying ──
   useEffect(() => {

@@ -857,6 +857,7 @@ async ingestDriverLocation(input: {
   lat: number;
   lng: number;
   recordedAt?: Date;
+  useLiveLocation?: boolean;
 }): Promise<any> {
   // Prefer socket-enabled version; fall back to original if gateway not available
   if (this.lifecycleService.ingestDriverLocationWithSocket) {
@@ -865,6 +866,7 @@ async ingestDriverLocation(input: {
       lat: input.lat,
       lng: input.lng,
       recordedAt: input.recordedAt ?? new Date(),
+      useLiveLocation: input.useLiveLocation,
     });
   }
   return this.lifecycleService.ingestDriverLocation({
@@ -872,6 +874,7 @@ async ingestDriverLocation(input: {
     lat: input.lat,
     lng: input.lng,
     recordedAt: input.recordedAt ?? new Date(),
+    useLiveLocation: input.useLiveLocation,
   });
 }
 

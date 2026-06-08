@@ -127,9 +127,10 @@ model DriverLocation {
   driver   Driver @relation(fields: [driverId], references: [id])
   driverId String @unique
 
-  currentLat Float?
-  currentLng Float?
-  currentAt  DateTime?
+  currentLat    Float?
+  currentLng    Float?
+  currentAt     DateTime?
+  useLiveLocation Boolean @default(false)
 
   homeBaseLat   Float?
   homeBaseLng   Float?

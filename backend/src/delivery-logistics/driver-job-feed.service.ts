@@ -142,6 +142,7 @@ async getDriverJobFeed(input: {
           currentLat: true,
           currentLng: true,
           currentAt: true,
+          useLiveLocation: true,
           homeBaseLat: true,
           homeBaseLng: true,
           homeBaseCity: true,
@@ -168,6 +169,9 @@ async getDriverJobFeed(input: {
 
   const preferredCity = driver.preferences?.city?.trim().toLowerCase() ?? null;
   const preferredRadiusMiles = driver.preferences?.radiusMiles ?? null;
+
+  // When driver is using live GPS location, skip district/city preference scoring
+  const isUsingLiveLocation = driver.location?.useLiveLocation === true;
   // When radiusMiles is null from the controller, it means "Any distance" was selected
   // on the frontend — respect that and show all gigs. Only apply preference radius
   // when a specific numeric radius was explicitly chosen.
@@ -319,36 +323,39 @@ async getDriverJobFeed(input: {
       const pickup = delivery.pickupAddress.toLowerCase();
       const dropoff = delivery.dropoffAddress.toLowerCase();
 
-      let districtMatched = false;
+      // District & city preference scoring — skip when driver is using live GPS location
+      if (!isUsingLiveLocation) {
+        let districtMatched = false;
 
-      for (const name of districtNames) {
-        if (pickup.includes(name) || dropoff.includes(name)) {
-          districtMatched = true;
-          break;
-        }
-      }
-
-      if (!districtMatched) {
-        for (const code of districtCodes) {
-          if (pickup.includes(code) || dropoff.includes(code)) {
+        for (const name of districtNames) {
+          if (pickup.includes(name) || dropoff.includes(name)) {
             districtMatched = true;
             break;
           }
         }
-      }
 
-      if (districtMatched) {
-        score += 20;
-        reasons.push("district-match");
-      }
+        if (!districtMatched) {
+          for (const code of districtCodes) {
+            if (pickup.includes(code) || dropoff.includes(code)) {
+              districtMatched = true;
+              break;
+            }
+          }
+        }
 
-      if (preferredCity) {
-        const cityMatched =
-          pickup.includes(preferredCity) || dropoff.includes(preferredCity);
+        if (districtMatched) {
+          score += 20;
+          reasons.push("district-match");
+        }
 
-        if (cityMatched) {
-          score += 15;
-          reasons.push("city-match");
+        if (preferredCity) {
+          const cityMatched =
+            pickup.includes(preferredCity) || dropoff.includes(preferredCity);
+
+          if (cityMatched) {
+            score += 15;
+            reasons.push("city-match");
+          }
         }
       }
 

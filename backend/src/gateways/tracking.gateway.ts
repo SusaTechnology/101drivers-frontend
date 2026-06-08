@@ -156,7 +156,7 @@ export class TrackingGateway
   @SubscribeMessage("driver:location")
   async handleDriverLocation(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { lat: number; lng: number; recordedAt?: string },
+    @MessageBody() data: { lat: number; lng: number; recordedAt?: string; useLiveLocation?: boolean },
   ) {
     const user = (client as AuthenticatedSocket).user;
 
@@ -171,6 +171,7 @@ export class TrackingGateway
         lat: Number(data.lat),
         lng: Number(data.lng),
         recordedAt: data.recordedAt ? new Date(data.recordedAt) : undefined,
+        useLiveLocation: data.useLiveLocation === true,
       });
 
       // Broadcast to tracking rooms (dealer + public link)

@@ -685,6 +685,7 @@ async completeTrip(input: {
     lat: number;
     lng: number;
     recordedAt?: Date;
+    useLiveLocation?: boolean;
   }) {
     this.assertValidCoordinates(input.lat, input.lng);
 
@@ -711,11 +712,13 @@ async completeTrip(input: {
           currentLat: input.lat,
           currentLng: input.lng,
           currentAt: recordedAt,
+          useLiveLocation: input.useLiveLocation === true,
         },
         update: {
           currentLat: input.lat,
           currentLng: input.lng,
           currentAt: recordedAt,
+          useLiveLocation: input.useLiveLocation === true,
         },
       });
 
@@ -830,6 +833,7 @@ async completeTrip(input: {
     lat: number;
     lng: number;
     recordedAt?: Date;
+    useLiveLocation?: boolean;
   }) {
     this.assertValidCoordinates(input.lat, input.lng);
 
@@ -844,8 +848,8 @@ async completeTrip(input: {
 
       await tx.driverLocation.upsert({
         where: { driverId: driver.id },
-        create: { driverId: driver.id, currentLat: input.lat, currentLng: input.lng, currentAt: recordedAt },
-        update: { currentLat: input.lat, currentLng: input.lng, currentAt: recordedAt },
+        create: { driverId: driver.id, currentLat: input.lat, currentLng: input.lng, currentAt: recordedAt, useLiveLocation: input.useLiveLocation === true },
+        update: { currentLat: input.lat, currentLng: input.lng, currentAt: recordedAt, useLiveLocation: input.useLiveLocation === true },
       });
 
       const activeAssignment = await tx.deliveryAssignment.findFirst({
