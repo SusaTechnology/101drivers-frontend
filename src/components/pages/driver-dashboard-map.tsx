@@ -68,6 +68,7 @@ import {
   Briefcase,
   Funnel,
   LocateFixed,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -91,6 +92,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
+import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
+import { socketJoinDriverFeed, socketLeaveDriverFeed, getSocket } from '@/lib/socket'
+import { useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import { BUSINESS_TZ } from '@/lib/timezone'
@@ -234,21 +238,81 @@ export default function DriverMapPage() {
   const displayName = user?.fullName?.split(' ')[0] || user?.username || 'Driver'
   const navigate = useNavigate()
 
-  // Fetch deliveries with default (no) filters for the map
+  // Auto-geolocate on mount — watchPosition for live tracking + socket emit
+  const DEFAULT_CENTER = { lat: 33.94, lng: -118.40 }
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>(DEFAULT_CENTER)
+  const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [locating, setLocating] = useState(false)
+  const queryClient = useQueryClient()
+  const socketConnected = useSocketConnected()
+  const refetchRef = useRef<() => void>(() => {})
+
+  const haversineMiles = useCallback((lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 3959
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLng = ((lng2 - lng1) * Math.PI) / 180
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }, [])
+
+  useEffect(() => {
+    if (!navigator.geolocation) { toast.error('Geolocation is not supported'); return }
+    setLocating(true)
+    let watchId: number
+    let lastFetchLat: number | null = null
+    let lastFetchLng: number | null = null
+
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords
+        setMapCenter({ lat, lng }); setDriverLocation({ lat, lng }); setLocating(false)
+        const socket = getSocket()
+        if (socket?.connected) {
+          socket.emit('driver:location', { lat, lng, recordedAt: new Date().toISOString(), useLiveLocation: true }, () => {})
+        }
+        if (lastFetchLat != null && lastFetchLng != null) {
+          if (haversineMiles(lastFetchLat, lastFetchLng, lat, lng) >= 1) {
+            lastFetchLat = lat; lastFetchLng = lng; refetchRef.current()
+          }
+        } else {
+          lastFetchLat = lat; lastFetchLng = lng
+          setTimeout(() => { refetchRef.current() }, 2000)
+        }
+      },
+      () => { toast.error('Could not get your location.'); setLocating(false) },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+
+    return () => {
+      if (watchId !== undefined) navigator.geolocation.clearWatch(watchId)
+      const socket = getSocket()
+      if (socket?.connected) {
+        socket.emit('driver:location', { lat: 0, lng: 0, recordedAt: new Date().toISOString(), useLiveLocation: false }, () => {})
+      }
+    }
+  }, [haversineMiles])
+
+  // Fetch deliveries
   const {
-    data: deliveriesData,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-    refetch
+    data: deliveriesData, isLoading, isFetching, isError, error, refetch
   } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${driverId}?limit=20`,
-    noFilter: true,
-    enabled: Boolean(driverId),
-    staleTime: 0, // always refetch on mount so booked deliveries disappear immediately
-    refetchInterval: 30 * 1000, // auto-refresh every 30 seconds
+    noFilter: true, enabled: Boolean(driverId), staleTime: 0,
+    refetchInterval: socketConnected ? false : 60 * 1000,
   })
+
+  useEffect(() => { refetchRef.current = refetch }, [refetch])
+
+  // ── SOCKET.IO ──
+  useEffect(() => { if (driverId) socketJoinDriverFeed(); return () => socketLeaveDriverFeed() }, [driverId])
+  const handleFeedUpdate = useCallback((data: any) => {
+    if (data?.deliveryId && ['BOOKED', 'CANCELLED', 'EXPIRED', 'LISTED'].includes(data.status)) refetch()
+  }, [refetch])
+  useSocketEvent('delivery:feed-update', handleFeedUpdate)
 
   // Notification count
   const { data: inboxData } = useDataQuery<NotificationInboxResponse>({
@@ -482,41 +546,42 @@ export default function DriverMapPage() {
       {/* Map Content */}
       <div className="flex-1 min-h-0 relative">
         {isLoaded ? (
-          <GoogleMap
-            mapContainerStyle={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            center={{ lat: 33.94, lng: -118.40 }}
-            zoom={11}
-            options={mapOptions}
-            onLoad={(map) => { mapRef.current = map }}
-          >
-            {/* Driver location */}
-            <Marker
-              position={{ lat: 33.94, lng: -118.40 }}
-              icon={driverDotIcon}
-            />
+          <>
+            <GoogleMap
+              mapContainerStyle={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+              center={mapCenter}
+              zoom={11}
+              options={mapOptions}
+              onLoad={(map) => { mapRef.current = map }}
+            >
+              {driverLocation && (
+                <Marker position={driverLocation} icon={driverDotIcon} />
+              )}
+              {!driverLocation && jobs.length > 8 && (
+                <Marker
+                  position={{ lat: 34.0, lng: -118.3 }}
+                  icon={clusterIcon}
+                  onClick={() => toast.info(`${jobs.length} gigs in this area`)}
+                />
+              )}
+              {pickupZones.length > 0 && <PickupZoneOverlay zones={pickupZones} />}
+              {jobs.filter((job) => !job.stackingBlocked).map((job) => (
+                <Marker
+                  key={job.id}
+                  position={{ lat: job.lat, lng: job.lng }}
+                  icon={createPayBubbleIcon(formatCurrency(job.payout))}
+                  onClick={() => handleSelectJob(job)}
+                />
+              ))}
+            </GoogleMap>
 
-            {/* Cluster marker */}
-            {jobs.length > 8 && (
-              <Marker
-                position={{ lat: 34.0, lng: -118.3 }}
-                icon={clusterIcon}
-                onClick={() => toast.info(`${jobs.length} gigs in this area`)}
-              />
+            {locating && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-2 rounded-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-lg border border-slate-200 dark:border-slate-700">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Finding your location...</span>
+              </div>
             )}
-
-            {/* Service district overlay */}
-            {pickupZones.length > 0 && <PickupZoneOverlay zones={pickupZones} />}
-
-            {/* Job pay bubbles — hide unavailable (stacking-blocked) */}
-            {jobs.filter((job) => !job.stackingBlocked).map((job) => (
-              <Marker
-                key={job.id}
-                position={{ lat: job.lat, lng: job.lng }}
-                icon={createPayBubbleIcon(formatCurrency(job.payout))}
-                onClick={() => handleSelectJob(job)}
-              />
-            ))}
-          </GoogleMap>
+          </>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
