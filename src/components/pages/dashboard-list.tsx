@@ -100,6 +100,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
@@ -879,9 +880,37 @@ export default function DriverGigBoardPage() {
           />
         </div>
 
-        {/* Filters Row */}
+        {/* Filters */}
         <Card className="border-slate-200 dark:border-slate-700/60 shadow-sm mb-4">
-          <CardContent className="p-3">
+          <CardContent className="p-3 space-y-3">
+            {/* Row 1: Use My Current Location toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {locating ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                ) : useMyLocation ? (
+                  <LocateFixed className="w-4 h-4 text-primary" />
+                ) : (
+                  <LocateFixed className="w-4 h-4 text-slate-400" />
+                )}
+                <Label
+                  htmlFor="use-my-location"
+                  className="text-sm font-bold text-slate-900 dark:text-white cursor-pointer select-none"
+                >
+                  Use my current location
+                </Label>
+              </div>
+              <Switch
+                id="use-my-location"
+                checked={useMyLocation}
+                onCheckedChange={toggleMyLocation}
+                disabled={locating}
+              />
+            </div>
+
+            <Separator className="bg-slate-200 dark:bg-slate-700/60" />
+
+            {/* Row 2: Existing filters */}
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Distance</span>
@@ -932,27 +961,6 @@ export default function DriverGigBoardPage() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex items-center gap-2 self-center">
-                <button
-                  type="button"
-                  onClick={toggleMyLocation}
-                  disabled={locating}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition',
-                    useMyLocation
-                      ? 'border-primary bg-primary/10 text-slate-900 dark:text-white'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary/50 hover:text-slate-700 dark:hover:text-slate-300'
-                  )}
-                >
-                  {locating ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <LocateFixed className="w-3.5 h-3.5" />
-                  )}
-                  {locating ? 'Locating...' : 'My Location'}
-                </button>
               </div>
 
               <Button
