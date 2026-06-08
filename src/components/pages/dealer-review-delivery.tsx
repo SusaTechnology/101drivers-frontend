@@ -432,9 +432,6 @@ export default function ReviewDeliveryPage() {
 
       // If prepaid and NOT already paid via Stripe, show payment dialog
       if (newDeliveryId && reviewData?.paymentType !== 'POSTPAID' && !hasStripePI) {
-        toast.success('Delivery submitted!', {
-          description: 'Authorize your payment below, or skip and pay later from the delivery details page.',
-        });
         setPendingPaymentDeliveryId(newDeliveryId);
         setShowPaymentModal(true);
       } else {
@@ -1193,13 +1190,9 @@ export default function ReviewDeliveryPage() {
       deliveryId={pendingPaymentDeliveryId || ''}
       amount={reviewData?.total}
       onPaymentSuccess={(paymentIntentId) => {
-        setShowPaymentModal(false);
         setPendingPaymentDeliveryId(null);
-        toast.success('Card authorized!', {
-          description: 'Your card is verified and funds are reserved. The actual charge happens only after the driver completes the delivery. If cancelled, the hold is released immediately.',
-          duration: 8000,
-        });
-        navigate({ to: '/dealer-deliveries', search: { id: pendingPaymentDeliveryId } });
+        // Dialog shows success screen and auto-closes via its own timeout.
+        // onDismiss fires after 3s, which navigates to detail page.
       }}
       onDismiss={() => {
         setShowPaymentModal(false);
