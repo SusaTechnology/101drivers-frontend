@@ -102,8 +102,9 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
-import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
+import { useSocketConnected } from '@/hooks/useSocket'
 import { socketJoinDriverFeed, socketLeaveDriverFeed, getSocket } from '@/lib/socket'
+import { trackSeenDeliveries, registerRefetch } from '@/lib/driver-feed-tracker'
 import { useQueryClient } from '@tanstack/react-query'
 import MiniRouteMap from '@/components/map/MiniRouteMap'
 import type { NotificationInboxResponse } from '@/types/notification'
@@ -727,18 +728,22 @@ export default function DriverGigBoardPage() {
     return () => socketLeaveDriverFeed()
   }, [driverId])
 
-  // ── Track "already seen" delivery IDs so sound only fires for truly NEW orders ──
-  // When the feed first loads, every visible order is marked as "seen".
-  // Any LISTED event that arrives after that moment plays the sound ONCE.
-  // Switching pages (unmount/remount) resets the seen set automatically.
-  const seenDeliveryIds = useRef<Set<string>>(new Set())
+  // ── Feed notification tracking (shared singleton) ──
+  // Mark all visible deliveries as "seen" when feed data loads.
+  // Register refetch callback so the shared socket listener can refresh this page.
   useEffect(() => {
     if (deliveriesData?.items) {
-      for (const item of deliveriesData.items) {
-        if (item.deliveryId) seenDeliveryIds.current.add(item.deliveryId)
-      }
+      trackSeenDeliveries(deliveriesData.items.map((item: any) => item.deliveryId).filter(Boolean))
     }
   }, [deliveriesData])
+
+  useEffect(() => {
+    return registerRefetch((data: any) => {
+      if (data?.deliveryId && ['BOOKED', 'CANCELLED', 'EXPIRED', 'LISTED'].includes(data.status)) {
+        queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
+      }
+    })
+  }, [driverId, queryClient])
 
   // ── Unlock browser audio on first interaction so notification sound is never blocked ──
   useEffect(() => {
@@ -754,27 +759,6 @@ export default function DriverGigBoardPage() {
       document.removeEventListener('touchstart', unlock)
     }
   }, [])
-
-  // ── SOCKET.IO: Listen for feed updates (new bookings, unbookings) ──
-  const handleFeedUpdate = useCallback((data: any) => {
-    if (!data?.deliveryId) return
-    if (['BOOKED', 'CANCELLED', 'EXPIRED'].includes(data.status)) {
-      queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
-    } else if (data.status === 'LISTED') {
-      queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
-      // Only play sound if this delivery was NOT in the initial feed load.
-      // If it was already visible when the page loaded, it's not "new" to the driver.
-      const isNew = !seenDeliveryIds.current.has(data.deliveryId)
-      if (isNew) {
-        seenDeliveryIds.current.add(data.deliveryId) // mark as seen so it won't trigger again
-        const soundEnabled = localStorage.getItem('driverSoundEnabled') !== 'false'
-        if (soundEnabled) {
-          try { new Audio('/assets/notification.mp3').play() } catch { /* autoplay blocked */ }
-        }
-      }
-    }
-  }, [driverId, queryClient])
-  useSocketEvent('delivery:feed-update', handleFeedUpdate)
 
   // Notification count
   const { data: inboxData } = useDataQuery<NotificationInboxResponse>({

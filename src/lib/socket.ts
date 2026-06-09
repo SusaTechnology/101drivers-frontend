@@ -5,6 +5,7 @@
  * calls from dataQuery.ts, restore original refetchInterval values in tracking pages.
  */
 import { io, Socket } from 'socket.io-client';
+import { handleFeedEvent } from './driver-feed-tracker';
 
 const WS_URL = import.meta.env.VITE_WS_URL || import.meta.env.VITE_API_URL || '';
 const TRACKING_NS = '/tracking';
@@ -75,6 +76,13 @@ export function socketConnect(token?: string | null): Socket | null {
     reconnectionDelay: 2000,
     reconnectionDelayMax: 30000,
     timeout: 10000,
+  });
+
+  // ── Shared driver-feed listener (single listener, persists for socket lifetime) ──
+  // Handles: seen-ID tracking, unread-count increment, notification sound,
+  // and forwarding the event to whichever dashboard page has registered a refetch callback.
+  socket.on('delivery:feed-update', (data) => {
+    handleFeedEvent(data);
   });
 
   socket.on('connect', () => {

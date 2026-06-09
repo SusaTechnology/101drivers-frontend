@@ -92,8 +92,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
-import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
+import { useSocketConnected } from '@/hooks/useSocket'
 import { socketJoinDriverFeed, socketLeaveDriverFeed, getSocket } from '@/lib/socket'
+import { trackSeenDeliveries, registerRefetch } from '@/lib/driver-feed-tracker'
 import { useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
@@ -338,15 +339,22 @@ export default function DriverMapPage() {
   // ── SOCKET.IO ──
   useEffect(() => { if (driverId) socketJoinDriverFeed(); return () => socketLeaveDriverFeed() }, [driverId])
 
-  // ── Track "already seen" delivery IDs so sound only fires for truly NEW orders ──
-  const seenDeliveryIds = useRef<Set<string>>(new Set())
+  // ── Feed notification tracking (shared singleton) ──
+  // Mark all visible deliveries as "seen" when feed data loads.
+  // Register refetch callback so the shared socket listener can refresh this page.
   useEffect(() => {
     if (deliveriesData?.items) {
-      for (const item of deliveriesData.items) {
-        if (item.deliveryId) seenDeliveryIds.current.add(item.deliveryId)
-      }
+      trackSeenDeliveries(deliveriesData.items.map((item: any) => item.deliveryId).filter(Boolean))
     }
   }, [deliveriesData])
+
+  useEffect(() => {
+    return registerRefetch((data: any) => {
+      if (data?.deliveryId && ['BOOKED', 'CANCELLED', 'EXPIRED', 'LISTED'].includes(data.status)) {
+        refetchRef.current()
+      }
+    })
+  }, [])
 
   // ── Unlock browser audio on first interaction so notification sound is never blocked ──
   useEffect(() => {
@@ -362,24 +370,6 @@ export default function DriverMapPage() {
       document.removeEventListener('touchstart', unlock)
     }
   }, [])
-
-  const handleFeedUpdate = useCallback((data: any) => {
-    if (!data?.deliveryId) return
-    if (['BOOKED', 'CANCELLED', 'EXPIRED'].includes(data.status)) {
-      refetch()
-    } else if (data.status === 'LISTED') {
-      refetch()
-      const isNew = !seenDeliveryIds.current.has(data.deliveryId)
-      if (isNew) {
-        seenDeliveryIds.current.add(data.deliveryId)
-        const soundEnabled = localStorage.getItem('driverSoundEnabled') !== 'false'
-        if (soundEnabled) {
-          try { new Audio('/assets/notification.mp3').play() } catch { /* autoplay blocked */ }
-        }
-      }
-    }
-  }, [refetch])
-  useSocketEvent('delivery:feed-update', handleFeedUpdate)
 
   // Notification count
   const { data: inboxData } = useDataQuery<NotificationInboxResponse>({
