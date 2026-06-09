@@ -33,16 +33,16 @@ export const NavBar = () => {
               How it works
             </Link>
             <Link
-              to="/landing#standard"
+              to="/landing#dealers"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
-              Compliance
+              Business
             </Link>
             <Link
               to="/landing#dealers"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
-              Dealers
+              Individuals
             </Link>
             <Link
               to="/landing#drivers"
@@ -75,18 +75,18 @@ export const NavBar = () => {
               How it works
             </Link>
             <Link
-              to="/landing#standard"
+              to="/landing#dealers"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Compliance
+              Business
             </Link>
             <Link
               to="/landing#dealers"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Dealers
+              Individuals
             </Link>
             <Link
               to="/landing#drivers"
@@ -104,20 +104,6 @@ export const NavBar = () => {
             </Link>
 
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
-              <Link
-                to="/auth/dealer-signin"
-                className="text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Dealer Sign In
-              </Link>
-              <a
-                href="/driver-signin"
-                className="text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Driver Sign In
-              </a>
               <Link
                 to="/landing#quote"
                 className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-black bg-lime-500 text-slate-950 hover:opacity-95 transition"

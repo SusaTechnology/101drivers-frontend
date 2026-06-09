@@ -304,6 +304,36 @@
   }
 }
 
+/* Payment modal animations */
+@keyframes modal-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-modal-appear {
+  animation: modal-appear 300ms ease-out forwards;
+}
+
+/* Payment modal scrollbar */
+.payment-modal-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.payment-modal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.payment-modal-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+.dark .payment-modal-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 /* Component-specific styles */
 .material-symbols-outlined {
   font-variation-settings:

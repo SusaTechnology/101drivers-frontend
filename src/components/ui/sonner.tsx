@@ -11,7 +11,7 @@ import { useTheme } from "@/lib/theme"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "light" } = useTheme()
+  const { theme = "system" } = useTheme()
 
   return (
     <Sonner

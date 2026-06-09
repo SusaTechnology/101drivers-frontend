@@ -1,4 +1,4 @@
-import DriverDashboardPage from '@/components/pages/driver-dashboard'
+import DriverDashboardPage from '@/components/pages/driver-dashboard-map'
 import { createFileRoute } from '@tanstack/react-router'
 import { DriverRouteGuard } from '@/components/auth/DriverRouteGuard'
 

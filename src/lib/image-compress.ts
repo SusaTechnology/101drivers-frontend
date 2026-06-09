@@ -98,7 +98,7 @@ export async function compressPhoto(
 
 /**
  * Compress multiple image files in parallel.
- * Useful for batch uploads (e.g., 6 vehicle photos).
+ * Useful for batch uploads (e.g., 6 walk-around photos).
  *
  * @param files - Array of raw image Files
  * @param options - Override default compression settings

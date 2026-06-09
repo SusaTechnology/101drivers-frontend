@@ -115,7 +115,7 @@ export default function AdminInsuranceReportingPage() {
   const [minDrivenHours, setMinDrivenHours] = useState('');
   const [maxDrivenHours, setMaxDrivenHours] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(25);
+  const [pageSize] = useState(10);
 
   // Search state for dropdowns
   const [customerSearch, setCustomerSearch] = useState('');

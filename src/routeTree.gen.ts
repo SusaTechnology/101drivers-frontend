@@ -36,7 +36,6 @@ import { Route as DriverMenuIndexRouteImport } from './routes/driver-menu/index'
 import { Route as DriverJobDetailsIndexRouteImport } from './routes/driver-job-details/index'
 import { Route as DriverIssueReportIndexRouteImport } from './routes/driver-issue-report/index'
 import { Route as DriverInboxIndexRouteImport } from './routes/driver-inbox/index'
-import { Route as DriverDashboardIndexRouteImport } from './routes/driver-dashboard/index'
 import { Route as DriverCompletedIndexRouteImport } from './routes/driver-completed/index'
 import { Route as DriverBookedLaterIndexRouteImport } from './routes/driver-booked-later/index'
 import { Route as DriverApplicationSubmittedIndexRouteImport } from './routes/driver-application-submitted/index'
@@ -251,11 +250,6 @@ const DriverIssueReportIndexRoute = DriverIssueReportIndexRouteImport.update({
 const DriverInboxIndexRoute = DriverInboxIndexRouteImport.update({
   id: '/driver-inbox/',
   path: '/driver-inbox/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DriverDashboardIndexRoute = DriverDashboardIndexRouteImport.update({
-  id: '/driver-dashboard/',
-  path: '/driver-dashboard/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DriverCompletedIndexRoute = DriverCompletedIndexRouteImport.update({
@@ -730,7 +724,6 @@ export interface FileRoutesByFullPath {
   '/driver-application-submitted/': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
   '/driver-completed/': typeof DriverCompletedIndexRoute
-  '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-inbox/': typeof DriverInboxIndexRoute
   '/driver-issue-report/': typeof DriverIssueReportIndexRoute
   '/driver-job-details/': typeof DriverJobDetailsIndexRoute
@@ -834,7 +827,6 @@ export interface FileRoutesByTo {
   '/driver-application-submitted': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later': typeof DriverBookedLaterIndexRoute
   '/driver-completed': typeof DriverCompletedIndexRoute
-  '/driver-dashboard': typeof DriverDashboardIndexRoute
   '/driver-inbox': typeof DriverInboxIndexRoute
   '/driver-issue-report': typeof DriverIssueReportIndexRoute
   '/driver-job-details': typeof DriverJobDetailsIndexRoute
@@ -940,7 +932,6 @@ export interface FileRoutesById {
   '/driver-application-submitted/': typeof DriverApplicationSubmittedIndexRoute
   '/driver-booked-later/': typeof DriverBookedLaterIndexRoute
   '/driver-completed/': typeof DriverCompletedIndexRoute
-  '/driver-dashboard/': typeof DriverDashboardIndexRoute
   '/driver-inbox/': typeof DriverInboxIndexRoute
   '/driver-issue-report/': typeof DriverIssueReportIndexRoute
   '/driver-job-details/': typeof DriverJobDetailsIndexRoute
@@ -1047,7 +1038,6 @@ export interface FileRouteTypes {
     | '/driver-application-submitted/'
     | '/driver-booked-later/'
     | '/driver-completed/'
-    | '/driver-dashboard/'
     | '/driver-inbox/'
     | '/driver-issue-report/'
     | '/driver-job-details/'
@@ -1151,7 +1141,6 @@ export interface FileRouteTypes {
     | '/driver-application-submitted'
     | '/driver-booked-later'
     | '/driver-completed'
-    | '/driver-dashboard'
     | '/driver-inbox'
     | '/driver-issue-report'
     | '/driver-job-details'
@@ -1256,7 +1245,6 @@ export interface FileRouteTypes {
     | '/driver-application-submitted/'
     | '/driver-booked-later/'
     | '/driver-completed/'
-    | '/driver-dashboard/'
     | '/driver-inbox/'
     | '/driver-issue-report/'
     | '/driver-job-details/'
@@ -1341,7 +1329,6 @@ export interface RootRouteChildren {
   DriverApplicationSubmittedIndexRoute: typeof DriverApplicationSubmittedIndexRoute
   DriverBookedLaterIndexRoute: typeof DriverBookedLaterIndexRoute
   DriverCompletedIndexRoute: typeof DriverCompletedIndexRoute
-  DriverDashboardIndexRoute: typeof DriverDashboardIndexRoute
   DriverInboxIndexRoute: typeof DriverInboxIndexRoute
   DriverIssueReportIndexRoute: typeof DriverIssueReportIndexRoute
   DriverJobDetailsIndexRoute: typeof DriverJobDetailsIndexRoute
@@ -1560,13 +1547,6 @@ declare module '@tanstack/react-router' {
       path: '/driver-inbox'
       fullPath: '/driver-inbox/'
       preLoaderRoute: typeof DriverInboxIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/driver-dashboard/': {
-      id: '/driver-dashboard/'
-      path: '/driver-dashboard'
-      fullPath: '/driver-dashboard/'
-      preLoaderRoute: typeof DriverDashboardIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/driver-completed/': {
@@ -2204,7 +2184,6 @@ const rootRouteChildren: RootRouteChildren = {
   DriverApplicationSubmittedIndexRoute: DriverApplicationSubmittedIndexRoute,
   DriverBookedLaterIndexRoute: DriverBookedLaterIndexRoute,
   DriverCompletedIndexRoute: DriverCompletedIndexRoute,
-  DriverDashboardIndexRoute: DriverDashboardIndexRoute,
   DriverInboxIndexRoute: DriverInboxIndexRoute,
   DriverIssueReportIndexRoute: DriverIssueReportIndexRoute,
   DriverJobDetailsIndexRoute: DriverJobDetailsIndexRoute,

@@ -80,7 +80,7 @@ export function DealerSignIn() {
                 to="/landing"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
               >
-                Landing
+                Home
               </Link>
               <Link
                 to="/about"
@@ -136,7 +136,7 @@ export function DealerSignIn() {
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Landing
+                Home
               </Link>
               <Link
                 to="/about"
@@ -348,7 +348,7 @@ export function DealerSignIn() {
                 asChild
               >
                 <Link to="/landing">
-                  Go to Landing
+                  Go to Home
                   <ArrowRight className="w-5 h-5" />
                 </Link>
               </Button>

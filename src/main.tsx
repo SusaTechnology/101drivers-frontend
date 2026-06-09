@@ -8,12 +8,13 @@ import { routeTree } from "./routeTree.gen";
 
 import "./styles.css";
 import reportWebVitals from "./reportWebVitals.ts";
-import { Providers } from "./lib/tanstack/provider.tsx";
+// import { ThemeProvider } from '@/lib/theme';
+import { Providers, queryClient } from "./lib/tanstack/provider.tsx";
 // import { GoogleMapsProvider } from "./lib/map/GoogleMapsProvider.tsx";
 // Create a new router instance
 const router = createRouter({
   routeTree,
-  context: {},
+  context: {queryClient},
   defaultPreload: "intent",
   scrollRestoration: true,
   defaultStructuralSharing: true,
@@ -32,11 +33,17 @@ const rootElement = document.getElementById("app");
 if (rootElement && !rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
-    <StrictMode>
-      <Providers>
-        <RouterProvider router={router} />
-      </Providers>
-    </StrictMode>,
+    <>
+   {/* <StrictMode>
+       <ThemeProvider attribute="class" defaultTheme="light"> */}
+        {/* <GoogleMapsProvider> */}
+        <Providers>
+          <RouterProvider router={router} />
+        </Providers>
+        {/* </GoogleMapsProvider> */}
+      {/* </ThemeProvider> 
+    </StrictMode>,*/}
+    </>
   );
 }
 

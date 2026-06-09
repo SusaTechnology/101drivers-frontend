@@ -54,7 +54,7 @@ const configCards = [
   {
     href: "/admin-landing-page-settings",
     icon: Settings,
-    title: "Landing Page Settings",
+    title: "Home Page Settings",
     description: "Configure visibility toggles, CTA text, and manage investor pitch deck for the public landing page.",
     chips: [
       { icon: Flag, label: "Toggles" },

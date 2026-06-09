@@ -322,7 +322,7 @@ function AboutPage() {
                     to="/landing"
                     className="hover:text-primary transition-colors"
                   >
-                    Landing
+                    Home
                   </Link>
                 </li>
                 <li>

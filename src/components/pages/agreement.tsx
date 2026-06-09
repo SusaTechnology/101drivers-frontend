@@ -36,7 +36,7 @@ export default function IndependentDriverAgreement() {
               to="/"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
             >
-              Landing
+              Home
             </Link>
             <Link
               to="/about"
@@ -92,7 +92,7 @@ export default function IndependentDriverAgreement() {
         <div className="md:hidden border-t border-slate-200 dark:border-slate-800">
           <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
             <Link to="/" className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors">
-              Landing
+              Home
             </Link>
             <Link to="/about" className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors">
               About

@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { cn } from '@/lib/utils'
-import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -186,7 +185,6 @@ const MOCK_DEALER = {
 export default function AdminDealerDetailsPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
 //   const params = useParams({ from: '/admin/dealer/$dealerId' })
 
@@ -232,10 +230,8 @@ export default function AdminDealerDetailsPage() {
     }
   }, [mobileMenuOpen])
 
-  const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark')
-    toast.success(`${theme === 'dark' ? 'Light' : 'Dark'} mode activated`)
-  }
+ 
+  
 
   const handleSignOut = () => {
     toast.success('Signed out successfully')

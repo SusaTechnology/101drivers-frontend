@@ -169,7 +169,7 @@ const MENU_SECTIONS = [
 
 // Bottom navigation items
 // const bottomNavItems = [
-//   { href: '/driver-dashboard', label: 'Home', icon: Home },
+//   { href: '/driver/dashboard', label: 'Home', icon: Home },
 //   { href: '/driver-active', label: 'Active', icon: Car },
 //   { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
 //   { href: '/driver-menu', label: 'Menu', icon: MenuIcon, active: true },

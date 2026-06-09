@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useUserLocation } from '@/hooks/useUserLocation';
 
 interface LocationAutocompleteProps {
   value: string;
@@ -96,6 +97,7 @@ export default function LocationAutocomplete({
   const [showDropdown, setShowDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const userLocation = useUserLocation();
   
   // Use refs for callbacks
   const onChangeRef = useRef(onChange);
@@ -157,6 +159,14 @@ export default function LocationAutocomplete({
       request.strictBounds = strictBounds;
     }
 
+    // Bias results toward the user's current GPS position (50 km radius).
+    // Uses location + radius (soft bias) instead of locationBias because
+    // the AutocompletionRequest.locationBias type does not support circles.
+    if (userLocation) {
+      request.location = { lat: userLocation.lat, lng: userLocation.lng };
+      request.radius = 50000;
+    }
+
     autocompleteServiceRef.current.getPlacePredictions(request,
       (results, status) => {
         setIsLoading(false);
@@ -175,7 +185,7 @@ export default function LocationAutocomplete({
         setShowDropdown(filtered.length > 0);
       }
     );
-  }, [types, strictBounds, bounds]);
+  }, [types, strictBounds, bounds, userLocation]);
 
   // Handle input change with debounce
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

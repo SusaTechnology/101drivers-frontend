@@ -134,7 +134,7 @@ export default function DriverCompletedPage() {
         <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              to="/driver-dashboard"
+              to="/driver/dashboard"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Back to dashboard"
             >
@@ -210,7 +210,7 @@ export default function DriverCompletedPage() {
             <p className="text-sm text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
               Once you finish a delivery, it will appear here.
             </p>
-            <Link to="/driver-dashboard">
+            <Link to="/driver/dashboard">
               <Button className="mt-6 rounded-2xl bg-primary hover:bg-primary/90 text-slate-950 font-extrabold">
                 Browse Gigs
               </Button>

@@ -528,7 +528,7 @@ export default function DriverJobDetailsPage() {
         <div className="max-w-[980px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              to="/driver-dashboard"
+              to="/driver/dashboard"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
               aria-label="Back"
             >
@@ -905,7 +905,7 @@ export default function DriverJobDetailsPage() {
                     disabled={bookMutation.isPending}
                     className="flex-1 rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-black font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {bookMutation.isPending ? 'Accepting\u2026' : 'Confirm'}
+                    {bookMutation.isPending ? 'confirming\u2026' : 'Confirm'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
