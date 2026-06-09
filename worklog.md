@@ -207,3 +207,29 @@ Stage Summary:
 - Review page label changed from misleading "Prepaid" to accurate "Card Payment" with clear description
 - Payment Required banner and payment gate were already implemented — no changes needed
 - All 5 Option B UX problems addressed: misleading text fixed, payment visibility fixed, payment gate exists, receipt emails added, label fixed
+---
+Task ID: 1
+Agent: Main
+Task: Add SSN and all driver-entered data to admin user detail page
+
+Work Log:
+- Analyzed admin user detail page (admin-user-detail.tsx) to find missing driver fields
+- Found that AdminUserDriverDetail type was missing: dateOfBirth, ssnLastFour, licenseNumber, licenseState, licenseFrontUrl, licenseBackUrl, residentialAddressLine1/2, residentialCity, residentialState, residentialZip
+- Found backend getAdminUserDetail service was not selecting these fields in the driver select
+- Found that Prisma Driver model has all these fields
+- Found that full SSN is stored in `ssnLastFour` column (naming bug in driver.service.ts — stores full 9 digits instead of last 4)
+- Added 11 missing fields to backend user.service.ts driver select in getAdminUserDetail
+- Added 11 missing fields to frontend AdminUserDriverDetail type in users.ts
+- Added SSN display with show/hide eye icon toggle on admin detail page (masked by default as •••-••-XXXX)
+- Added driver's license number and state display
+- Added license front/back photo display with placeholders
+- Added residential address display
+- Added date of birth display
+- Build verified (vite build succeeds, no TS errors in src/)
+- Pushed to both main and master branches
+
+Stage Summary:
+- 3 files changed: backend/src/user/user.service.ts, src/types/users.ts, src/components/pages/admin-user-detail.tsx
+- SSN shown with mask/unmask toggle (eye icon) on admin detail page
+- All driver-entered data now visible for admin approval/background check
+- Commit: c07ad5b on main, 6ae9e4f on master
