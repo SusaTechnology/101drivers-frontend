@@ -229,6 +229,17 @@ export interface AdminUserDriverDetail {
   userId: string;
   createdAt: string;
   updatedAt: string;
+  dateOfBirth: string | null;
+  ssnLastFour: string | null;
+  licenseNumber: string | null;
+  licenseState: string | null;
+  licenseFrontUrl: string | null;
+  licenseBackUrl: string | null;
+  residentialAddressLine1: string | null;
+  residentialAddressLine2: string | null;
+  residentialCity: string | null;
+  residentialState: string | null;
+  residentialZip: string | null;
   location: DriverLocationDetail | null;
   preferences: DriverPreferencesDetail | null;
   alerts: DriverAlertsDetail | null;

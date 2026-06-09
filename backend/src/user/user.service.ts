@@ -673,6 +673,17 @@ async getAdminUserDetail(id: string): Promise<any> {
           userId: true,
           createdAt: true,
           updatedAt: true,
+          dateOfBirth: true,
+          ssnLastFour: true,
+          licenseNumber: true,
+          licenseState: true,
+          licenseFrontUrl: true,
+          licenseBackUrl: true,
+          residentialAddressLine1: true,
+          residentialAddressLine2: true,
+          residentialCity: true,
+          residentialState: true,
+          residentialZip: true,
           location: {
             select: {
               id: true,

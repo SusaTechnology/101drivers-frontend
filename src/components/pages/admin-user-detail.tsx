@@ -31,6 +31,7 @@ import {
   CheckCircle,
   XCircle,
   Eye,
+  EyeOff,
   FileText,
   Activity,
   Map,
@@ -45,6 +46,10 @@ import {
   XIcon,
   Send,
   Camera,
+  ShieldCheck,
+  CalendarDays,
+  Home,
+  CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -308,6 +313,9 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   // Edit mode state
   const [editMode, setEditMode] = useState<'none' | 'user' | 'customer' | 'driver'>('none');
   const [postpaidEnabled, setPostpaidEnabled] = useState(false);
+
+  // SSN visibility state
+  const [ssnVisible, setSsnVisible] = useState(false);
 
   // ==================== QUERIES ====================
 
@@ -1582,6 +1590,116 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                 {user.driver.alerts.smsEnabled && (
                                   <Badge variant="outline" className="text-xs">SMS</Badge>
                                 )}
+                              </div>
+                            </div>
+                          )}
+                          {/* Date of Birth */}
+                          {user.driver.dateOfBirth && (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Date of Birth</Label>
+                              <div className="text-sm flex items-center gap-2 mt-1">
+                                <CalendarDays className="w-4 h-4 text-slate-400" />
+                                {formatDate(user.driver.dateOfBirth)}
+                              </div>
+                            </div>
+                          )}
+                          {/* SSN with show/hide toggle */}
+                          {user.driver.ssnLastFour && (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">SSN</Label>
+                              <div className="text-sm flex items-center gap-2 mt-1">
+                                <ShieldCheck className="w-4 h-4 text-slate-400" />
+                                <span className="font-mono tracking-wider">
+                                  {ssnVisible
+                                    ? user.driver.ssnLastFour
+                                    : '•••-••-' + user.driver.ssnLastFour.slice(-4)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSsnVisible(!ssnVisible)}
+                                  className="ml-1 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                  title={ssnVisible ? 'Hide SSN' : 'Show SSN'}
+                                >
+                                  {ssnVisible ? (
+                                    <EyeOff className="w-4 h-4 text-slate-400" />
+                                  ) : (
+                                    <Eye className="w-4 h-4 text-slate-400" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {/* License Info */}
+                          {(user.driver.licenseNumber || user.driver.licenseState) && (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Driver's License</Label>
+                              <div className="text-sm space-y-1 mt-1">
+                                {user.driver.licenseNumber && (
+                                  <div className="flex items-center gap-2">
+                                    <CreditCard className="w-4 h-4 text-slate-400" />
+                                    <span>Number: <span className="font-mono">{user.driver.licenseNumber}</span></span>
+                                  </div>
+                                )}
+                                {user.driver.licenseState && (
+                                  <div className="flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 text-slate-400" />
+                                    <span>State: {user.driver.licenseState}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {/* License Photos */}
+                          {(user.driver.licenseFrontUrl || user.driver.licenseBackUrl) && (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">License Photos</Label>
+                              <div className="flex gap-4 mt-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1.5">Front</span>
+                                  {user.driver.licenseFrontUrl ? (
+                                    <img
+                                      src={user.driver.licenseFrontUrl}
+                                      alt="License front"
+                                      className="w-32 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                                    />
+                                  ) : (
+                                    <div className="w-32 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-slate-400">
+                                      <Camera className="w-5 h-5 mb-0.5" />
+                                      <span className="text-[10px]">No image</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block mb-1.5">Back</span>
+                                  {user.driver.licenseBackUrl ? (
+                                    <img
+                                      src={user.driver.licenseBackUrl}
+                                      alt="License back"
+                                      className="w-32 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                                    />
+                                  ) : (
+                                    <div className="w-32 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-slate-400">
+                                      <Camera className="w-5 h-5 mb-0.5" />
+                                      <span className="text-[10px]">No image</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* Residential Address */}
+                          {(user.driver.residentialAddressLine1 || user.driver.residentialCity) && (
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Residential Address</Label>
+                              <div className="text-sm flex items-start gap-2 mt-1">
+                                <Home className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                <span>
+                                  {user.driver.residentialAddressLine1}
+                                  {user.driver.residentialAddressLine2 && `, ${user.driver.residentialAddressLine2}`}
+                                  {user.driver.residentialCity && (
+                                    <><br />{user.driver.residentialCity}{user.driver.residentialState ? `, ${user.driver.residentialState}` : ''}{user.driver.residentialZip ? ` ${user.driver.residentialZip}` : ''}</>
+                                  )}
+                                </span>
                               </div>
                             </div>
                           )}
