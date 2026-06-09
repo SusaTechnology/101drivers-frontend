@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router'
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 import type { DriverTabId } from '@/components/layout/DriverBottomNav'
@@ -22,6 +23,23 @@ function getActiveTab(pathname: string): DriverTabId {
 
 function DriverLayout() {
   const location = useLocation()
+
+  // ── Unlock browser audio on first interaction (covers ALL driver pages) ──
+  // After this fires once, Audio.play() is permanently unlocked for this tab.
+  useEffect(() => {
+    const unlock = () => {
+      const a = new Audio('/assets/notification.mp3')
+      a.volume = 0
+      a.play().catch(() => {})
+    }
+    document.addEventListener('click', unlock, { once: true })
+    document.addEventListener('touchstart', unlock, { once: true })
+    return () => {
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('touchstart', unlock)
+    }
+  }, [])
+
   const pathname = location.pathname
   const hideNav = HIDE_NAV_ROUTES.some((route) => pathname.startsWith(route))
 

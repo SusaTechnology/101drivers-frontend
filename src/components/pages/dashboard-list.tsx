@@ -745,21 +745,6 @@ export default function DriverGigBoardPage() {
     })
   }, [driverId, queryClient])
 
-  // ── Unlock browser audio on first interaction so notification sound is never blocked ──
-  useEffect(() => {
-    const unlock = () => {
-      const a = new Audio('/assets/notification.mp3')
-      a.volume = 0
-      a.play().catch(() => {})
-    }
-    document.addEventListener('click', unlock, { once: true })
-    document.addEventListener('touchstart', unlock, { once: true })
-    return () => {
-      document.removeEventListener('click', unlock)
-      document.removeEventListener('touchstart', unlock)
-    }
-  }, [])
-
   // Notification count
   const { data: inboxData } = useDataQuery<NotificationInboxResponse>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/notificationEvents/my/inbox?take=1`,
