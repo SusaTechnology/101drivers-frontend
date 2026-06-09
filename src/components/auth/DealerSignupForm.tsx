@@ -18,6 +18,7 @@ import {
   Lock,
   Clock,
   Home,
+  LogIn as LoginIcon,
   X,
   Info,
   Settings,

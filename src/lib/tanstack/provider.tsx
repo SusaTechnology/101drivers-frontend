@@ -3,7 +3,7 @@ import { ThemeProvider } from '@/lib/theme'
 import { Toaster } from 'sonner'
 import type { ReactNode } from 'react'
 // Create a client
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes
@@ -28,11 +28,14 @@ export function Providers({ children }: AppProvidersProps) {
     >
       <QueryClientProvider client={queryClient}>
         {children}
-        <Toaster 
-          richColors 
-          position="top-right" 
+        <Toaster
+          richColors
+          position="top-center"
           toastOptions={{
             className: 'font-sans',
+            style: {
+              paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
+            },
           }}
         />
       </QueryClientProvider>

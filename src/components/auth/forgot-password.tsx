@@ -235,7 +235,7 @@ export function ResetPassword() {
                 to="/landing"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
               >
-                Landing
+                Home
               </Link>
               <Link
                 to="/about"
@@ -295,7 +295,7 @@ export function ResetPassword() {
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Landing
+                Home
               </Link>
               <Link
                 to="/about"

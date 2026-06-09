@@ -78,7 +78,7 @@ const statusColors: Record<SupportRequestStatus, string> = {
 
 // Bottom navigation items
 // const bottomNavItems = [
-//   { href: '/driver-dashboard', label: 'Home', icon: Home },
+//   { href: '/driver/dashboard', label: 'Home', icon: Home },
 //   { href: '/driver-active', label: 'Active', icon: Car },
 //   { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
 //   { href: '/driver-menu', label: 'Menu', icon: Menu },
@@ -189,7 +189,7 @@ export default function DriverSupportListPage() {
           <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
             <div className="max-w-[900px] mx-auto px-5 py-4 flex flex-col gap-2">
               <Link
-                to="/driver-dashboard"
+                to="/driver/dashboard"
                 className="px-4 py-3 rounded-2xl text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                 onClick={() => setMobileMenuOpen(false)}
               >

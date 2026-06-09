@@ -765,7 +765,7 @@ const handleUploadOdometerPhoto = async () => {
   // Check if all steps are complete (used for disabling button after submission)
   const allStepsComplete = greeted && photosSaved && odometerSaved && vinPhotoSaved && vinVerified && pinVerified
   // Check if all inputs are filled (ready to submit — turns button green)
-  const readyToSubmit = greeted && photosSaved && odometerSaved && vinPhotoSaved && /^\d{4}$/.test(vinValue) && !!odometerValue && !isNaN(Number(odometerValue)) && pinVerified
+  const readyToSubmit = greeted && photosSaved && odometerSaved && vinPhotoSaved && /^\d{4}$/.test(vinValue) && !!odometerValue && !isNaN(Number(odometerValue))
 
   // PIN verification handler
   const verifyPinLock = useRef(false)

@@ -719,10 +719,10 @@ const confirmDelete = () => {
             </Link>
             <div className="hidden md:flex flex-col leading-tight">
               <span className="text-[11px] font-black uppercase tracking-[0.25em] text-slate-400">
-                {isPrivateCustomer ? 'Customer Portal' : 'Dealer Portal'}
+                Customer Portal
               </span>
               <span className="text-base font-extrabold text-slate-900 dark:text-white">
-                {isPrivateCustomer ? 'Account Settings' : 'Dealer Settings'}
+                Customer Settings
               </span>
             </div>
             <div className="hidden lg:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-lime-500/10 text-slate-900 border border-lime-500/25 ml-2">
@@ -775,7 +775,7 @@ const confirmDelete = () => {
                 Create Delivery
               </Link>
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                {isPrivateCustomer ? 'Account Settings' : 'Dealer Settings'}
+                Customer Settings
               </span>
               <Button
                 onClick={() => {
@@ -825,7 +825,7 @@ const confirmDelete = () => {
             </div>
             <div>
               <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white">
-                {isPrivateCustomer ? 'Account settings' : 'Dealer settings'}
+                Customer Settings
               </h1>
               <p className="text-sm lg:text-base text-slate-600 dark:text-slate-400 max-w-3xl mt-2">
                 {isPrivateCustomer 
@@ -856,9 +856,9 @@ const confirmDelete = () => {
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow">
               <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl font-black">Business profile</CardTitle>
+                  <CardTitle className="text-2xl font-black">Profile</CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Review and update business identity details used across dealer workflows.
+                    Review and update your business information.
                   </p>
                 </div>
                 <Button
@@ -875,17 +875,17 @@ const confirmDelete = () => {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold">Business name</Label>
+                    <Label className="text-xs font-bold">Company name</Label>
                     <Input
                       ref={businessNameInputRef}
                       value={businessProfile.name}
                       onChange={(e) => setBusinessProfile(prev => ({ ...prev, name: e.target.value }))}
                       className="h-14 rounded-2xl"
-                      placeholder="Start typing business name..."
+                      placeholder="Enter company name..."
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold">Business website</Label>
+                    <Label className="text-xs font-bold">Website</Label>
                     <Input
                       value={businessProfile.website}
                       onChange={(e) => setBusinessProfile(prev => ({ ...prev, website: e.target.value }))}
@@ -893,7 +893,7 @@ const confirmDelete = () => {
                     />
                   </div>
                   <div className="md:col-span-2 space-y-2">
-                    <Label className="text-xs font-bold">Business address</Label>
+                    <Label className="text-xs font-bold">Address</Label>
                     <LocationAutocomplete
                       value={businessProfile.address}
                       onChange={(value) => setBusinessProfile(prev => ({ ...prev, address: value }))}
@@ -904,21 +904,14 @@ const confirmDelete = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold">Business phone</Label>
+                    <Label className="text-xs font-bold">Phone</Label>
                     <Input
                       value={businessProfile.phone}
                       onChange={(e) => setBusinessProfile(prev => ({ ...prev, phone: e.target.value }))}
                       className="h-14 rounded-2xl"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold">Directory place ID</Label>
-                    <Input
-                      value={businessProfile.placeId}
-                      readOnly
-                      className="h-14 rounded-2xl bg-slate-50 dark:bg-slate-800/20"
-                    />
-                  </div>
+
                 </div>
               </CardContent>
             </Card>
@@ -980,9 +973,9 @@ const confirmDelete = () => {
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow">
               <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl font-black">Saved pickup addresses</CardTitle>
+                  <CardTitle className="text-2xl font-black">Your Pickup Addresses</CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Create, edit, delete, and set the default pickup/origin address used in delivery creation.
+                    Add, edit, or delete your pickup locations and set your default pickup address for deliveries.
                   </p>
                 </div>
                 <Button
@@ -1193,9 +1186,9 @@ const confirmDelete = () => {
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 hover:shadow-xl transition-shadow">
               <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
-                  <CardTitle className="text-2xl font-black">Saved vehicles</CardTitle>
+                  <CardTitle className="text-2xl font-black">Your Vehicles</CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    Keep reusable vehicle profiles for faster delivery creation and repeat requests.
+                    Save and manage your vehicle profiles for faster delivery creation and repeat requests.
                   </p>
                 </div>
                 <Button
@@ -1255,7 +1248,7 @@ const confirmDelete = () => {
                 >
                   <div className="mb-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
                     <Info className="h-3 w-3" />
-                    Select from dropdowns. Choose "Other" to enter a custom value.
+                    Select your vehicle make, model, and color from the dropdowns. Choose "Other" if your vehicle is not listed.
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Make */}
@@ -1354,7 +1347,7 @@ const confirmDelete = () => {
                       disabled={createVehicle.isPending || updateVehicle.isPending}
                     >
                       <Save className="h-4 w-4" />
-                      {editingVehicleId ? 'Update Vehicle' : 'Create Vehicle'}
+                      Save Vehicle
                     </Button>
                     <Button
                       variant="outline"
@@ -1498,7 +1491,7 @@ const confirmDelete = () => {
                 <img src="/assets/101drivers-logo.jpg" alt="101 Drivers logo" className="w-full h-full object-cover" />
               </div>
               <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-                {isPrivateCustomer ? 'Account Settings' : 'Dealer Settings'} • {isPrivateCustomer ? (user?.username || 'Your Account') : (customer?.businessName || 'Your Account')}
+                Customer Settings • {isPrivateCustomer ? (user?.username || 'Your Account') : (customer?.businessName || 'Your Account')}
               </p>
             </div>
             <p className="text-xs text-slate-500 font-medium">© {new Date().getFullYear()} 101 Drivers Inc. All rights reserved.</p>

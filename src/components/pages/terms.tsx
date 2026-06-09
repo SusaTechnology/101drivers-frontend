@@ -47,7 +47,7 @@ export default function TermsOfService() {
               to="/"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
             >
-              Landing
+              Home
             </Link>
             <Link
               to="/about"
@@ -100,7 +100,7 @@ export default function TermsOfService() {
               to="/"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors"
             >
-              Landing
+              Home
             </Link>
             <Link
               to="/about"
@@ -250,7 +250,7 @@ export default function TermsOfService() {
                   to="/"
                   className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 transition font-extrabold"
                 >
-                  Go to Landing
+                  Go to Home
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>

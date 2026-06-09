@@ -13,7 +13,7 @@ import {
   Package,
   CheckCircle,
   Calendar,
-  DollarSign,
+  MessageSquare,
   AlertCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -537,9 +537,18 @@ export default function DriverCompletedDetailsPage() {
               <p className="text-[14px] font-semibold text-slate-800 dark:text-slate-200">{gig.recipientName}</p>
             )}
             {gig.recipientPhone && (
-              <a href={`tel:${gig.recipientPhone}`} className="block text-[13px] text-green-600 dark:text-green-400 hover:underline">
-                {gig.recipientPhone}
-              </a>
+              <div className="flex items-center gap-3">
+                <a href={`tel:${gig.recipientPhone}`} className="text-[13px] text-green-600 dark:text-green-400 hover:underline">
+                  {gig.recipientPhone}
+                </a>
+                <a
+                  href={`sms:${gig.recipientPhone}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-600 text-white text-[11px] font-extrabold hover:bg-blue-700 transition"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Text
+                </a>
+              </div>
             )}
             {gig.recipientEmail && (
               <a href={`mailto:${gig.recipientEmail}`} className="block text-[13px] text-green-600 dark:text-green-400 hover:underline">
@@ -556,7 +565,7 @@ export default function DriverCompletedDetailsPage() {
           Earnings
         </h2>
         <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30">
-          <DollarSign className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+
           <div>
             <p className="text-[24px] font-black text-emerald-600 dark:text-emerald-400 leading-none">
               {gig.payout?.netAmount != null

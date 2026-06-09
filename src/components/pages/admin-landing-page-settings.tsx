@@ -1,4 +1,4 @@
-// Admin Landing Page Settings
+// Admin Home Page Settings
 import React, { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -88,7 +88,7 @@ interface UploadResponse {
   size: number
 }
 
-export default function AdminLandingPageSettings() {
+export default function AdminHomePageSettings() {
   const { actionItems, signOut } = useAdminActions()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -315,7 +315,7 @@ export default function AdminLandingPageSettings() {
                 <div className="flex items-start gap-3">
                   <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                   <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                    Landing page settings control what visitors see on the public homepage. Changes are applied immediately after saving.
+                    Home page settings control what visitors see on the public homepage. Changes are applied immediately after saving.
                   </p>
                 </div>
               </div>
@@ -337,10 +337,10 @@ export default function AdminLandingPageSettings() {
                     </div>
 
                     <CardTitle className="text-3xl sm:text-4xl font-black mt-5">
-                      Landing Page Settings
+                      Home Page Settings
                     </CardTitle>
                     <CardDescription className="text-slate-600 dark:text-slate-400 mt-3 text-sm sm:text-base leading-relaxed">
-                      Configure visibility toggles, CTA text, and manage the investor pitch deck for the public landing page.
+                      Configure visibility toggles, CTA text, and manage the investor pitch deck for the public home page.
                     </CardDescription>
                   </div>
 
@@ -360,7 +360,7 @@ export default function AdminLandingPageSettings() {
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardHeader>
                 <CardTitle className="text-xl font-black">Visibility Controls</CardTitle>
-                <CardDescription>Toggle which sections appear on the public landing page.</CardDescription>
+                <CardDescription>Toggle which sections appear on the public home page.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Dealer Lead Toggle */}
@@ -372,7 +372,7 @@ export default function AdminLandingPageSettings() {
                     <div>
                       <div className="font-extrabold text-slate-900 dark:text-white">Dealer Lead Section</div>
                       <div className="text-sm text-slate-600 dark:text-slate-400">
-                        Show dealership onboarding form and CTA on landing page
+                        Show dealership onboarding form and CTA on home page
                       </div>
                     </div>
                   </div>
@@ -528,7 +528,7 @@ export default function AdminLandingPageSettings() {
                   <div className="flex items-start gap-3">
                     <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
-                      After uploading, click "Save Changes" to persist the new deck URL. The deck will be available for download on the landing page.
+                      After uploading, click "Save Changes" to persist the new deck URL. The deck will be available for download on the home page.
                     </p>
                   </div>
                 </div>
@@ -606,7 +606,7 @@ export default function AdminLandingPageSettings() {
             <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
               <CardHeader>
                 <CardTitle className="text-xl font-black">Preview Summary</CardTitle>
-                <CardDescription>Quick overview of current landing page configuration.</CardDescription>
+                <CardDescription>Quick overview of current home page configuration.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -647,7 +647,7 @@ export default function AdminLandingPageSettings() {
                     className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 font-extrabold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    Preview Landing Page
+                    Preview Home Page
                   </Link>
                   <Button
                     onClick={handleSave}
@@ -671,7 +671,7 @@ export default function AdminLandingPageSettings() {
                       Dealer Leads
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      Dealership onboarding requests submitted via the landing page.
+                      Dealership onboarding requests submitted via the home page.
                     </CardDescription>
                   </div>
                   <Button
@@ -742,7 +742,7 @@ export default function AdminLandingPageSettings() {
                   <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/50 rounded-2xl">
                     <Building className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
                     <p className="mt-3 text-sm text-slate-500">No dealer leads yet</p>
-                    <p className="text-xs text-slate-400 mt-1">Leads will appear here when submitted via the landing page</p>
+                    <p className="text-xs text-slate-400 mt-1">Leads will appear here when submitted via the home page</p>
                   </div>
                 )}
               </CardContent>
@@ -821,7 +821,7 @@ export default function AdminLandingPageSettings() {
                   <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/50 rounded-2xl">
                     <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
                     <p className="mt-3 text-sm text-slate-500">No investor leads yet</p>
-                    <p className="text-xs text-slate-400 mt-1">Leads will appear here when submitted via the landing page</p>
+                    <p className="text-xs text-slate-400 mt-1">Leads will appear here when submitted via the home page</p>
                   </div>
                 )}
               </CardContent>
@@ -843,7 +843,7 @@ export default function AdminLandingPageSettings() {
                 />
               </div>
               <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-                Admin • Landing Page Settings
+                Admin • Home Page Settings
               </p>
             </div>
             <p className="text-xs text-slate-500 font-medium">

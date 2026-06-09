@@ -1502,11 +1502,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
           {delivery && (
             <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800">
               <p className="text-xs text-orange-600 dark:text-orange-400">Payment Details</p>
-              <p className="text-sm font-bold text-orange-700 dark:text-orange-300">
-                {formatCurrency(delivery.financialSummary?.grossAmount)}
-              </p>
-              <p className="text-[10px] text-orange-500 dark:text-orange-400 mt-1">
-                Status: {delivery.financialSummary?.paymentStatus} · Payment ID: {delivery.financialSummary?.paymentId?.slice(-8).toUpperCase()}
+              <p className="text-sm text-orange-700 dark:text-orange-300">
+                Amount: {formatCurrency(delivery.financialSummary?.grossAmount)} · Status: {delivery.financialSummary?.paymentStatus}
               </p>
             </div>
           )}

@@ -65,7 +65,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { BUSINESS_TZ } from '@/lib/timezone';
 
@@ -209,6 +209,8 @@ interface SchedulePreviewResponse {
     pickup: SlotItem[];
     dropoff: SlotItem[];
   };
+  /** Actual date of returned slots (YYYY-MM-DD). May differ from selected date when today's slots have all passed. */
+  actualSlotDate?: string | null;
 }
 
 // Types for saved data
@@ -324,6 +326,7 @@ export default function EditDeliveryPage() {
     dropoffWindowEnd?: string;
   } | null>(null);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
@@ -446,14 +449,21 @@ export default function EditDeliveryPage() {
   const canEdit = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED' || deliveryData?.status === 'EXPIRED';
   const canEditSchedule = deliveryData?.status === 'LISTED' || deliveryData?.status === 'DRAFT' || deliveryData?.status === 'QUOTED' || deliveryData?.status === 'BOOKED' || deliveryData?.status === 'EXPIRED';
   const isExpired = deliveryData?.status === 'EXPIRED';
+  const queryClient = useQueryClient();
 
-  // Update mutation
+  // Update mutation — navigation is handled in onSubmit's onSuccess to avoid
+  // racing with the reactivation transition for expired deliveries.
   const updateDelivery = usePatch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}`, {
     onSuccess: () => {
-      toast.success("Delivery updated successfully", {
-        description: "Your changes have been saved.",
-      });
-      navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } });
+      // For non-expired deliveries, navigate immediately.
+      if (!isExpired) {
+        toast.success("Delivery updated successfully", {
+          description: "Your changes have been saved.",
+        });
+        navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } });
+      }
+      // For expired deliveries, navigation happens in onSubmit's onSuccess
+      // after the reactivation transition completes.
     },
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to update delivery";
@@ -853,6 +863,16 @@ export default function EditDeliveryPage() {
 
         if (data.suggestedSlots) {
           setSuggestedSlots(data.suggestedSlots);
+
+          // Sync calendar if backend returned slots for a different day than selected
+          // Both dates compared in business timezone (America/Los_Angeles)
+          if (data.actualSlotDate && selectedDate) {
+            const selectedStr = selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }); // yyyy-MM-dd in LA tz
+            if (data.actualSlotDate !== selectedStr) {
+              const [y, m, d] = data.actualSlotDate.split('-').map(Number);
+              setSelectedDate(new Date(y, m - 1, d));
+            }
+          }
         }
 
         if (data.pickupWindowStart && data.dropoffWindowStart) {
@@ -908,7 +928,7 @@ export default function EditDeliveryPage() {
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose: choice,
-      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
+      ...(selectedDate && { preferredDate: selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }) }),
     };
 
     console.log('Discovery Mode Request:', request);
@@ -932,7 +952,7 @@ export default function EditDeliveryPage() {
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
-      ...(selectedDate && { preferredDate: format(selectedDate, "yyyy-MM-dd") }),
+      ...(selectedDate && { preferredDate: selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }) }),
     };
 
     if (customerChose === "PICKUP_WINDOW") {
@@ -952,6 +972,7 @@ export default function EditDeliveryPage() {
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return;
     setSelectedDate(date);
+    setIsCalendarOpen(false); // close the popover immediately
 
     // Reset slot state
     setSelectedSlot(null);
@@ -967,7 +988,7 @@ export default function EditDeliveryPage() {
         customerType: customerDataQuery.data?.customerType || 'BUSINESS',
         customerId: customer?.profileId,
         customerChose,
-        preferredDate: format(date, "yyyy-MM-dd"),
+        preferredDate: date.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }),
       };
       getSchedulePreview.mutate(request);
     }
@@ -1167,6 +1188,20 @@ export default function EditDeliveryPage() {
       return;
     }
 
+    // If the delivery is expired, the pickup date must not be in the past (yesterday or before).
+    // Today and forward are allowed — backend already filters out past time slots.
+    if (isExpired && validatedWindows.pickupWindowStart) {
+      const pickupDate = new Date(validatedWindows.pickupWindowStart);
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      if (pickupDate < todayStart) {
+        toast.error("Change the date first", {
+          description: "This delivery expired because the pickup date has passed. Please select a new date and time slot before updating.",
+        });
+        return;
+      }
+    }
+
     const payload = buildPayload(data);
     updateDelivery.mutate(payload, {
       onSuccess: async () => {
@@ -1174,26 +1209,27 @@ export default function EditDeliveryPage() {
         if (isExpired) {
           try {
             const apiUrl = import.meta.env.VITE_API_URL;
-            const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-            const response = await fetch(`${apiUrl}/api/deliveryRequests/${deliveryId}/transition-status`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            await authFetch(
+              `${apiUrl}/api/deliveryRequests/${deliveryId}/transition-status`,
+              {
+                method: 'POST',
+                body: JSON.stringify({
+                  toStatus: 'QUOTED',
+                  note: 'Delivery revived by dealer after adjusting schedule',
+                }),
               },
-              body: JSON.stringify({
-                toStatus: 'QUOTED',
-                note: 'Delivery revived by dealer after adjusting schedule',
-              }),
+            );
+            toast.success('Delivery reactivated', {
+              description: 'The delivery has been reactivated successfully. You can now list it.',
             });
-            if (!response.ok) {
-              console.error('Failed to revive expired delivery:', await response.text());
-              toast.error('Revive failed', {
-                description: 'Delivery updated but could not be reactivated. Please contact support.',
-              });
-            }
-          } catch (error) {
+            // Invalidate cached delivery data so the details page fetches fresh status
+            queryClient.invalidateQueries({ queryKey: [`${apiUrl}/api/deliveryRequests/${deliveryId}`] });
+            queryClient.invalidateQueries({ queryKey: [`${apiUrl}/api/deliveryRequests`] });
+            navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } });
+          } catch (error: any) {
+            const description = error?.message || 'Delivery updated but could not be reactivated. Please contact support.';
             console.error('Failed to revive expired delivery:', error);
+            toast.error('Revive failed', { description });
           }
         }
       },
@@ -1599,9 +1635,9 @@ export default function EditDeliveryPage() {
                                   (estimated)
                                 </span>
                               </CardTitle>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                              {/* <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                                 Itemized breakdown updates if addresses or service type change.
-                              </p>
+                              </p> */}
                             </div>
                             <Button
                               type="button"
@@ -1619,7 +1655,7 @@ export default function EditDeliveryPage() {
                             </Button>
                           </div>
                         </CardHeader>
-                        <CardContent>
+                        {/* <CardContent>
                           {hasCalculated ? (
                             <div className="space-y-3 text-sm">
                               <div className="flex justify-between">
@@ -1651,7 +1687,7 @@ export default function EditDeliveryPage() {
                               Real-time quote from backend – updates automatically when addresses or service type change.
                             </p>
                           </div>
-                        </CardContent>
+                        </CardContent> */}
                       </Card>
                     </div>
                   </CardContent>
@@ -1713,7 +1749,7 @@ export default function EditDeliveryPage() {
                     <Label className="text-xs font-black uppercase tracking-widest">
                       Choose a date
                     </Label>
-                    <Popover>
+                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
