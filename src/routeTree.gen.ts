@@ -18,6 +18,7 @@ import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
 import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as LandingIndexRouteImport } from './routes/landing/index'
+import { Route as HomeIndexRouteImport } from './routes/home/index'
 import { Route as HelpDriverIndexRouteImport } from './routes/help-driver/index'
 import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/index'
 import { Route as DriverIndexRouteImport } from './routes/driver/index'
@@ -74,6 +75,7 @@ import { Route as AdminPaymentsIndexRouteImport } from './routes/admin-payments/
 import { Route as AdminNotificationPolicyIndexRouteImport } from './routes/admin-notification-policy/index'
 import { Route as AdminLandingPageSettingsIndexRouteImport } from './routes/admin-landing-page-settings/index'
 import { Route as AdminInsuranceReportingIndexRouteImport } from './routes/admin-insurance-reporting/index'
+import { Route as AdminHomePageSettingsIndexRouteImport } from './routes/admin-home-page-settings/index'
 import { Route as AdminDisputesIndexRouteImport } from './routes/admin-disputes/index'
 import { Route as AdminDisputeDetailsIndexRouteImport } from './routes/admin-dispute-details/index'
 import { Route as AdminDeliveryDetailIndexRouteImport } from './routes/admin-delivery-detail/index'
@@ -156,6 +158,11 @@ const LiveTrackIndexRoute = LiveTrackIndexRouteImport.update({
 const LandingIndexRoute = LandingIndexRouteImport.update({
   id: '/landing/',
   path: '/landing/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeIndexRoute = HomeIndexRouteImport.update({
+  id: '/home/',
+  path: '/home/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpDriverIndexRoute = HelpDriverIndexRouteImport.update({
@@ -459,6 +466,12 @@ const AdminInsuranceReportingIndexRoute =
     path: '/admin-insurance-reporting/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminHomePageSettingsIndexRoute =
+  AdminHomePageSettingsIndexRouteImport.update({
+    id: '/admin-home-page-settings/',
+    path: '/admin-home-page-settings/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminDisputesIndexRoute = AdminDisputesIndexRouteImport.update({
   id: '/admin-disputes/',
   path: '/admin-disputes/',
@@ -693,6 +706,7 @@ export interface FileRoutesByFullPath {
   '/admin-delivery-detail/': typeof AdminDeliveryDetailIndexRoute
   '/admin-dispute-details/': typeof AdminDisputeDetailsIndexRoute
   '/admin-disputes/': typeof AdminDisputesIndexRoute
+  '/admin-home-page-settings/': typeof AdminHomePageSettingsIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
@@ -749,6 +763,7 @@ export interface FileRoutesByFullPath {
   '/driver/': typeof DriverIndexRoute
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
+  '/home/': typeof HomeIndexRoute
   '/landing/': typeof LandingIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -797,6 +812,7 @@ export interface FileRoutesByTo {
   '/admin-delivery-detail': typeof AdminDeliveryDetailIndexRoute
   '/admin-dispute-details': typeof AdminDisputeDetailsIndexRoute
   '/admin-disputes': typeof AdminDisputesIndexRoute
+  '/admin-home-page-settings': typeof AdminHomePageSettingsIndexRoute
   '/admin-insurance-reporting': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings': typeof AdminLandingPageSettingsIndexRoute
   '/admin-notification-policy': typeof AdminNotificationPolicyIndexRoute
@@ -853,6 +869,7 @@ export interface FileRoutesByTo {
   '/driver': typeof DriverIndexRoute
   '/help-customer': typeof HelpCustomerIndexRoute
   '/help-driver': typeof HelpDriverIndexRoute
+  '/home': typeof HomeIndexRoute
   '/landing': typeof LandingIndexRoute
   '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
@@ -903,6 +920,7 @@ export interface FileRoutesById {
   '/admin-delivery-detail/': typeof AdminDeliveryDetailIndexRoute
   '/admin-dispute-details/': typeof AdminDisputeDetailsIndexRoute
   '/admin-disputes/': typeof AdminDisputesIndexRoute
+  '/admin-home-page-settings/': typeof AdminHomePageSettingsIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
@@ -959,6 +977,7 @@ export interface FileRoutesById {
   '/driver/': typeof DriverIndexRoute
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
+  '/home/': typeof HomeIndexRoute
   '/landing/': typeof LandingIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -1010,6 +1029,7 @@ export interface FileRouteTypes {
     | '/admin-delivery-detail/'
     | '/admin-dispute-details/'
     | '/admin-disputes/'
+    | '/admin-home-page-settings/'
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
     | '/admin-notification-policy/'
@@ -1066,6 +1086,7 @@ export interface FileRouteTypes {
     | '/driver/'
     | '/help-customer/'
     | '/help-driver/'
+    | '/home/'
     | '/landing/'
     | '/live-track/'
     | '/map-test/'
@@ -1114,6 +1135,7 @@ export interface FileRouteTypes {
     | '/admin-delivery-detail'
     | '/admin-dispute-details'
     | '/admin-disputes'
+    | '/admin-home-page-settings'
     | '/admin-insurance-reporting'
     | '/admin-landing-page-settings'
     | '/admin-notification-policy'
@@ -1170,6 +1192,7 @@ export interface FileRouteTypes {
     | '/driver'
     | '/help-customer'
     | '/help-driver'
+    | '/home'
     | '/landing'
     | '/live-track'
     | '/map-test'
@@ -1219,6 +1242,7 @@ export interface FileRouteTypes {
     | '/admin-delivery-detail/'
     | '/admin-dispute-details/'
     | '/admin-disputes/'
+    | '/admin-home-page-settings/'
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
     | '/admin-notification-policy/'
@@ -1275,6 +1299,7 @@ export interface FileRouteTypes {
     | '/driver/'
     | '/help-customer/'
     | '/help-driver/'
+    | '/home/'
     | '/landing/'
     | '/live-track/'
     | '/map-test/'
@@ -1304,6 +1329,7 @@ export interface RootRouteChildren {
   AdminDeliveryDetailIndexRoute: typeof AdminDeliveryDetailIndexRoute
   AdminDisputeDetailsIndexRoute: typeof AdminDisputeDetailsIndexRoute
   AdminDisputesIndexRoute: typeof AdminDisputesIndexRoute
+  AdminHomePageSettingsIndexRoute: typeof AdminHomePageSettingsIndexRoute
   AdminInsuranceReportingIndexRoute: typeof AdminInsuranceReportingIndexRoute
   AdminLandingPageSettingsIndexRoute: typeof AdminLandingPageSettingsIndexRoute
   AdminNotificationPolicyIndexRoute: typeof AdminNotificationPolicyIndexRoute
@@ -1359,6 +1385,7 @@ export interface RootRouteChildren {
   DriverWalletIndexRoute: typeof DriverWalletIndexRoute
   HelpCustomerIndexRoute: typeof HelpCustomerIndexRoute
   HelpDriverIndexRoute: typeof HelpDriverIndexRoute
+  HomeIndexRoute: typeof HomeIndexRoute
   LandingIndexRoute: typeof LandingIndexRoute
   LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
@@ -1434,6 +1461,13 @@ declare module '@tanstack/react-router' {
       path: '/landing'
       fullPath: '/landing/'
       preLoaderRoute: typeof LandingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home/': {
+      id: '/home/'
+      path: '/home'
+      fullPath: '/home/'
+      preLoaderRoute: typeof HomeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help-driver/': {
@@ -1828,6 +1862,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminInsuranceReportingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-home-page-settings/': {
+      id: '/admin-home-page-settings/'
+      path: '/admin-home-page-settings'
+      fullPath: '/admin-home-page-settings/'
+      preLoaderRoute: typeof AdminHomePageSettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-disputes/': {
       id: '/admin-disputes/'
       path: '/admin-disputes'
@@ -2167,6 +2208,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDeliveryDetailIndexRoute: AdminDeliveryDetailIndexRoute,
   AdminDisputeDetailsIndexRoute: AdminDisputeDetailsIndexRoute,
   AdminDisputesIndexRoute: AdminDisputesIndexRoute,
+  AdminHomePageSettingsIndexRoute: AdminHomePageSettingsIndexRoute,
   AdminInsuranceReportingIndexRoute: AdminInsuranceReportingIndexRoute,
   AdminLandingPageSettingsIndexRoute: AdminLandingPageSettingsIndexRoute,
   AdminNotificationPolicyIndexRoute: AdminNotificationPolicyIndexRoute,
@@ -2222,6 +2264,7 @@ const rootRouteChildren: RootRouteChildren = {
   DriverWalletIndexRoute: DriverWalletIndexRoute,
   HelpCustomerIndexRoute: HelpCustomerIndexRoute,
   HelpDriverIndexRoute: HelpDriverIndexRoute,
+  HomeIndexRoute: HomeIndexRoute,
   LandingIndexRoute: LandingIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,
