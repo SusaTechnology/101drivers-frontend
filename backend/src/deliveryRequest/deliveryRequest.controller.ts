@@ -513,6 +513,14 @@ async getDriverJobFeed(
   @common.Query("sortBy")
   sortBy?: "BEST_MATCH" | "SOONEST" | "NEAREST" | "NEWEST" | "HIGHEST_PAY"
 ): Promise<any> {
+  // Translate radiusMiles/datePreset sort values into sortBy for the service
+  // Frontend sends sortBy directly; radiusMiles and datePreset are only numeric/date-window filters
+  let effectiveSortBy = sortBy ?? "BEST_MATCH";
+  let effectiveRadiusMiles =
+    radiusMiles !== undefined && radiusMiles !== null && radiusMiles !== "" && radiusMiles !== "NEAREST"
+      ? Number(radiusMiles)
+      : null;
+
   return this.service.getDriverJobFeed({
     driverId,
     limit: limit ? Number(limit) : undefined,
@@ -520,12 +528,11 @@ async getDriverJobFeed(
     urgentOnly: urgentOnly === "true",
     serviceType: serviceType ?? null,
     search: search ?? null,
-    radiusMiles:
-      radiusMiles !== undefined && radiusMiles !== null && radiusMiles !== ""
-        ? Number(radiusMiles)
-        : null,
-    datePreset: datePreset ?? "ALL",
-    sortBy: sortBy ?? "BEST_MATCH",
+    radiusMiles: effectiveRadiusMiles,
+    datePreset: datePreset === "ALL" || datePreset === "TODAY" || datePreset === "TOMORROW" || datePreset === "THIS_WEEK"
+      ? datePreset
+      : "ALL",
+    sortBy: effectiveSortBy,
   });
 }
 

@@ -117,20 +117,16 @@ import { BUSINESS_TZ } from '@/lib/timezone'
 const FILTER_OPTIONS = {
   radiusOptions: [
     { value: 'ANY', label: 'Any' },
+    { value: 'NEAREST', label: 'Nearest' },
     { value: '10', label: 'Within 10 miles' },
     { value: '25', label: 'Within 25 miles' },
   ],
   datePresetOptions: [
     { value: 'ALL', label: 'Any' },
+    { value: 'SOONEST', label: 'Earliest' },
     { value: 'TODAY', label: 'Today' },
     { value: 'TOMORROW', label: 'Tomorrow' },
     { value: 'THIS_WEEK', label: 'This Week' },
-  ],
-  sortOptions: [
-    { value: 'ANY', label: 'Any' },
-    { value: 'SOONEST', label: 'Earliest' },
-    { value: 'NEAREST', label: 'Nearest' },
-    { value: 'HIGHEST_PAY', label: 'Highest Pay' },
   ],
 }
 
@@ -558,7 +554,6 @@ export default function DriverGigBoardPage() {
     search: '',
     radiusMiles: 'ANY',
     datePreset: 'ALL',
-    sortBy: 'ANY',
   })
 
   // Location toggle state
@@ -675,14 +670,26 @@ export default function DriverGigBoardPage() {
     if (filters.search.trim()) {
       params.append('search', filters.search.trim())
     }
-    if (filters.radiusMiles && filters.radiusMiles !== 'ANY') {
+
+    // Pickup Within: send as sortBy when NEAREST, or as radiusMiles when numeric
+    if (filters.radiusMiles === 'NEAREST') {
+      params.append('sortBy', 'NEAREST')
+    } else if (filters.radiusMiles && filters.radiusMiles !== 'ANY') {
       params.append('radiusMiles', filters.radiusMiles)
     }
-    if (filters.datePreset && filters.datePreset !== 'ALL') {
+
+    // Date: send as sortBy when SOONEST, or as datePreset when a date window
+    if (filters.datePreset === 'SOONEST') {
+      params.append('sortBy', 'SOONEST')
+    } else if (filters.datePreset && filters.datePreset !== 'ALL') {
       params.append('datePreset', filters.datePreset)
     }
-    if (filters.sortBy && filters.sortBy !== 'ANY') {
-      params.append('sortBy', filters.sortBy)
+
+    // When both NEAREST + SOONEST selected, backend BEST_MATCH handles combined sort
+    if (filters.radiusMiles === 'NEAREST' && filters.datePreset === 'SOONEST') {
+      // Remove individual sortBy entries and use BEST_MATCH
+      params.delete('sortBy')
+      params.append('sortBy', 'BEST_MATCH')
     }
 
     return params.toString()
@@ -798,7 +805,6 @@ export default function DriverGigBoardPage() {
       search: '',
       radiusMiles: 'ANY',
       datePreset: 'ALL',
-      sortBy: 'ANY',
     })
     toast.success('Filters reset to defaults')
   }
@@ -967,10 +973,10 @@ export default function DriverGigBoardPage() {
 
             <Separator className="bg-slate-200 dark:bg-slate-700/60" />
 
-            {/* Row 2: Existing filters */}
+            {/* Row 2: Filters */}
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Distance</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Pickup Within</span>
                 <Select
                   value={filters.radiusMiles}
                   onValueChange={(value) => updateFilter('radiusMiles', value)}
@@ -1002,32 +1008,6 @@ export default function DriverGigBoardPage() {
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Order</span>
-                <Select
-                  value={filters.sortBy}
-                  onValueChange={(value) => updateFilter('sortBy', value)}
-                >
-                  <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[120px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FILTER_OPTIONS.sortOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={clearFilters}
-                className="inline-flex items-center justify-center px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-px"
-              >
-                Clear
-              </Button>
             </div>
           </CardContent>
         </Card>
