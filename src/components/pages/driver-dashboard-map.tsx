@@ -337,8 +337,47 @@ export default function DriverMapPage() {
 
   // ── SOCKET.IO ──
   useEffect(() => { if (driverId) socketJoinDriverFeed(); return () => socketLeaveDriverFeed() }, [driverId])
+
+  // ── Track "already seen" delivery IDs so sound only fires for truly NEW orders ──
+  const seenDeliveryIds = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (deliveriesData?.items) {
+      for (const item of deliveriesData.items) {
+        if (item.deliveryId) seenDeliveryIds.current.add(item.deliveryId)
+      }
+    }
+  }, [deliveriesData])
+
+  // ── Unlock browser audio on first interaction so notification sound is never blocked ──
+  useEffect(() => {
+    const unlock = () => {
+      const a = new Audio('/assets/notification.mp3')
+      a.volume = 0
+      a.play().catch(() => {})
+    }
+    document.addEventListener('click', unlock, { once: true })
+    document.addEventListener('touchstart', unlock, { once: true })
+    return () => {
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('touchstart', unlock)
+    }
+  }, [])
+
   const handleFeedUpdate = useCallback((data: any) => {
-    if (data?.deliveryId && ['BOOKED', 'CANCELLED', 'EXPIRED', 'LISTED'].includes(data.status)) refetch()
+    if (!data?.deliveryId) return
+    if (['BOOKED', 'CANCELLED', 'EXPIRED'].includes(data.status)) {
+      refetch()
+    } else if (data.status === 'LISTED') {
+      refetch()
+      const isNew = !seenDeliveryIds.current.has(data.deliveryId)
+      if (isNew) {
+        seenDeliveryIds.current.add(data.deliveryId)
+        const soundEnabled = localStorage.getItem('driverSoundEnabled') !== 'false'
+        if (soundEnabled) {
+          try { new Audio('/assets/notification.mp3').play() } catch { /* autoplay blocked */ }
+        }
+      }
+    }
   }, [refetch])
   useSocketEvent('delivery:feed-update', handleFeedUpdate)
 

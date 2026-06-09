@@ -727,6 +727,19 @@ export default function DriverGigBoardPage() {
     return () => socketLeaveDriverFeed()
   }, [driverId])
 
+  // ── Track "already seen" delivery IDs so sound only fires for truly NEW orders ──
+  // When the feed first loads, every visible order is marked as "seen".
+  // Any LISTED event that arrives after that moment plays the sound ONCE.
+  // Switching pages (unmount/remount) resets the seen set automatically.
+  const seenDeliveryIds = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (deliveriesData?.items) {
+      for (const item of deliveriesData.items) {
+        if (item.deliveryId) seenDeliveryIds.current.add(item.deliveryId)
+      }
+    }
+  }, [deliveriesData])
+
   // ── Unlock browser audio on first interaction so notification sound is never blocked ──
   useEffect(() => {
     const unlock = () => {
@@ -749,9 +762,15 @@ export default function DriverGigBoardPage() {
       queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
     } else if (data.status === 'LISTED') {
       queryClient.invalidateQueries({ queryKey: ['driverFeed', driverId] })
-      const soundEnabled = localStorage.getItem('driverSoundEnabled') !== 'false'
-      if (soundEnabled) {
-        try { new Audio('/assets/notification.mp3').play() } catch { /* autoplay blocked */ }
+      // Only play sound if this delivery was NOT in the initial feed load.
+      // If it was already visible when the page loaded, it's not "new" to the driver.
+      const isNew = !seenDeliveryIds.current.has(data.deliveryId)
+      if (isNew) {
+        seenDeliveryIds.current.add(data.deliveryId) // mark as seen so it won't trigger again
+        const soundEnabled = localStorage.getItem('driverSoundEnabled') !== 'false'
+        if (soundEnabled) {
+          try { new Audio('/assets/notification.mp3').play() } catch { /* autoplay blocked */ }
+        }
       }
     }
   }, [driverId, queryClient])
