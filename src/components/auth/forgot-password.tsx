@@ -12,8 +12,6 @@ import {
   Key,
   CheckCircle2,
   Check,
-  Eye,
-  EyeOff,
   Info,
   Menu,
   X,
@@ -79,8 +77,7 @@ interface ResetPasswordPayload {
 
 export function ResetPassword() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const navigate = useNavigate();
   
   // Get email and user-type from URL params (passed from sign-in page)
@@ -437,24 +434,12 @@ export function ResetPassword() {
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input
                   id="newPassword"
-                  type={showNewPassword ? "text" : "password"}
+                  type="password"
                   autoComplete="new-password"
-                  className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                  className="h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                   disabled={resetPasswordMutation.isPending}
                   {...register("newPassword")}
                 />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  disabled={resetPasswordMutation.isPending}
-                >
-                  {showNewPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
               </div>
               {errors.newPassword && (
                 <p className="text-sm text-red-500 mt-1">
@@ -475,24 +460,12 @@ export function ResetPassword() {
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input
                   id="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
+                  type="password"
                   autoComplete="new-password"
-                  className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                  className="h-14 pl-12 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                   disabled={resetPasswordMutation.isPending}
                   {...register("confirmPassword")}
                 />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={resetPasswordMutation.isPending}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
               </div>
               {errors.confirmPassword && (
                 <p className="text-sm text-red-500 mt-1">
