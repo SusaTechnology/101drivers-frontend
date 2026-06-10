@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -81,6 +81,35 @@ export function ResetPassword() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Refs for dual-input focus management
+  const newPasswordPwRef = useRef<HTMLInputElement>(null);
+  const newPasswordTextRef = useRef<HTMLInputElement>(null);
+  const confirmPasswordPwRef = useRef<HTMLInputElement>(null);
+  const confirmPasswordTextRef = useRef<HTMLInputElement>(null);
+
+  // Toggle functions that swap visible input and move focus
+  const toggleNewPassword = useCallback(() => {
+    setShowNewPassword(prev => {
+      if (!prev) {
+        setTimeout(() => newPasswordTextRef.current?.focus(), 0);
+      } else {
+        setTimeout(() => newPasswordPwRef.current?.focus(), 0);
+      }
+      return !prev;
+    });
+  }, []);
+
+  const toggleConfirmPassword = useCallback(() => {
+    setShowConfirmPassword(prev => {
+      if (!prev) {
+        setTimeout(() => confirmPasswordTextRef.current?.focus(), 0);
+      } else {
+        setTimeout(() => confirmPasswordPwRef.current?.focus(), 0);
+      }
+      return !prev;
+    });
+  }, []);
   const navigate = useNavigate();
   
   // Get email and user-type from URL params (passed from sign-in page)
@@ -433,20 +462,42 @@ export function ResetPassword() {
               >
                 New Password
               </Label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  id="newPassword"
-                  type={showNewPassword ? "text" : "password"}
+              <div className="relative h-14">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-20" />
+
+                {/* Password input - always type="password" for browser autofill/suggestions */}
+                <input
+                  ref={newPasswordPwRef}
+                  type="password"
+                  name="newPassword"
                   autoComplete="new-password"
-                  className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                  id="newPassword"
+                  value={watchNewPassword || ""}
+                  onChange={(e) => setValue("newPassword", e.target.value, { shouldValidate: true })}
                   disabled={resetPasswordMutation.isPending}
-                  {...register("newPassword")}
+                  className={cn(
+                    "absolute inset-0 w-full h-14 pl-12 pr-12 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm outline-none focus:ring-4 focus:ring-primary/15 focus:border-primary transition-all",
+                    showNewPassword ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"
+                  )}
                 />
+
+                {/* Text input - shown when user toggles "show password" */}
+                <input
+                  ref={newPasswordTextRef}
+                  type="text"
+                  value={watchNewPassword || ""}
+                  onChange={(e) => setValue("newPassword", e.target.value, { shouldValidate: true })}
+                  disabled={resetPasswordMutation.isPending}
+                  className={cn(
+                    "absolute inset-0 w-full h-14 pl-12 pr-12 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm outline-none focus:ring-4 focus:ring-primary/15 focus:border-primary transition-all",
+                    !showNewPassword ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"
+                  )}
+                />
+
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition z-20"
+                  onClick={toggleNewPassword}
                   disabled={resetPasswordMutation.isPending}
                 >
                   {showNewPassword ? (
@@ -471,20 +522,42 @@ export function ResetPassword() {
               >
                 Confirm Password
               </Label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  id="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
+              <div className="relative h-14">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-20" />
+
+                {/* Password input - always type="password" for browser autofill/suggestions */}
+                <input
+                  ref={confirmPasswordPwRef}
+                  type="password"
+                  name="confirmPassword"
                   autoComplete="new-password"
-                  className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                  id="confirmPassword"
+                  value={watchConfirmPassword || ""}
+                  onChange={(e) => setValue("confirmPassword", e.target.value, { shouldValidate: true })}
                   disabled={resetPasswordMutation.isPending}
-                  {...register("confirmPassword")}
+                  className={cn(
+                    "absolute inset-0 w-full h-14 pl-12 pr-12 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm outline-none focus:ring-4 focus:ring-primary/15 focus:border-primary transition-all",
+                    showConfirmPassword ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"
+                  )}
                 />
+
+                {/* Text input - shown when user toggles "show password" */}
+                <input
+                  ref={confirmPasswordTextRef}
+                  type="text"
+                  value={watchConfirmPassword || ""}
+                  onChange={(e) => setValue("confirmPassword", e.target.value, { shouldValidate: true })}
+                  disabled={resetPasswordMutation.isPending}
+                  className={cn(
+                    "absolute inset-0 w-full h-14 pl-12 pr-12 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm outline-none focus:ring-4 focus:ring-primary/15 focus:border-primary transition-all",
+                    !showConfirmPassword ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"
+                  )}
+                />
+
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition z-20"
+                  onClick={toggleConfirmPassword}
                   disabled={resetPasswordMutation.isPending}
                 >
                   {showConfirmPassword ? (
