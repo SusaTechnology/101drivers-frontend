@@ -74,7 +74,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Dialog,
   DialogContent,
@@ -1371,12 +1371,27 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                 placeholder="Contact phone"
                               />
                             </div>
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs font-bold text-slate-500">Postpaid Enabled</Label>
-                              <Switch
-                                checked={postpaidEnabled}
-                                onCheckedChange={setPostpaidEnabled}
-                              />
+                            <div className="space-y-2">
+                              <Label className="text-xs font-bold text-slate-500">Payment Type</Label>
+                              <RadioGroup
+                                value={postpaidEnabled ? "POSTPAID" : "PREPAID"}
+                                onValueChange={(val) => setPostpaidEnabled(val === "POSTPAID")}
+                                className="flex gap-3"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <RadioGroupItem value="PREPAID" id="edit-prepaid" />
+                                  <Label htmlFor="edit-prepaid" className="text-sm font-semibold cursor-pointer">Prepaid</Label>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <RadioGroupItem value="POSTPAID" id="edit-postpaid" />
+                                  <Label htmlFor="edit-postpaid" className="text-sm font-semibold cursor-pointer">Postpaid</Label>
+                                </div>
+                              </RadioGroup>
+                              {postpaidEnabled && (
+                                <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                                  Postpaid should only be enabled if terms have been negotiated with this dealership.
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="flex justify-end gap-2 pt-4">
@@ -1443,12 +1458,12 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                           )}
                           <div className="flex items-center gap-4">
                             <div>
-                              <Label className="text-xs font-bold text-slate-500">Postpaid</Label>
+                              <Label className="text-xs font-bold text-slate-500">Payment Type</Label>
                               <div className="text-sm">
                                 {user.customer.postpaidEnabled ? (
-                                  <Badge className="bg-primary/10 text-primary">Enabled</Badge>
+                                  <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Postpaid</Badge>
                                 ) : (
-                                  <span className="text-slate-500">No</span>
+                                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Prepaid</Badge>
                                 )}
                               </div>
                             </div>

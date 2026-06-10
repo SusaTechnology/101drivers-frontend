@@ -1106,19 +1106,33 @@ export default function ReviewDeliveryPage() {
               <CardTitle className="text-lg font-black">Payment</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-3">
-                <CreditCard className="h-5 w-5 text-slate-400" />
-                <div>
-                  <p className="font-bold">
-                    {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID" ? "Postpaid (Credit)" : "Card Payment"}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID"
-                      ? "Billed to your account after delivery completion"
-                      : "After a driver is assigned, you will be prompted to enter your card. Funds are held securely until delivery is complete."}
-                  </p>
+              {reviewData.postpaidEnabled && reviewData.paymentType === "POSTPAID" ? (
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-blue-500" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold">Postpaid (Credit)</p>
+                      <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] px-1.5 py-0">POSTPAID</Badge>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Billed to your account after delivery completion. No upfront card payment required.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <CreditCard className="h-5 w-5 text-slate-400" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold">Card Payment</p>
+                      <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-[10px] px-1.5 py-0">PREPAID</Badge>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      After a driver is assigned, you will be prompted to enter your card. Funds are held securely until delivery is complete.
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
