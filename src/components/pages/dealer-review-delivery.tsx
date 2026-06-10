@@ -430,20 +430,27 @@ export default function ReviewDeliveryPage() {
       // Check if payment already has a Stripe PaymentIntent (previously authorized)
       const hasStripePI = data?.payment?.providerPaymentIntentId;
 
-      // If prepaid and NOT already paid via Stripe, show payment dialog
-      if (newDeliveryId && reviewData?.paymentType !== 'POSTPAID' && !hasStripePI) {
+      // POSTPAID: delivery created, no payment required — navigate away
+      if (reviewData?.paymentType === 'POSTPAID') {
         toast.success('Delivery submitted!', {
-          description: 'Your delivery is now listed for drivers.',
+          description: 'Your delivery is now visible to drivers. You will be invoiced after delivery completion.',
+        });
+        navigate({ to: newDeliveryId ? '/dealer-deliveries' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
+      }
+      // PREPAID with existing Stripe PI: payment already secured
+      else if (hasStripePI) {
+        toast.success('Delivery submitted!', {
+          description: 'Payment is already secured for this delivery.',
+        });
+        navigate({ to: newDeliveryId ? '/dealer-deliveries' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
+      }
+      // PREPAID without payment: MUST pay now — show Stripe dialog
+      else if (newDeliveryId) {
+        toast.success('Delivery submitted!', {
+          description: 'Please complete your payment to list the delivery for drivers.',
         });
         setPendingPaymentDeliveryId(newDeliveryId);
         setShowPaymentModal(true);
-      } else {
-        toast.success('Delivery submitted!', {
-          description: hasStripePI
-            ? 'Payment is already secured for this delivery.'
-            : 'Your delivery is now visible to drivers. You will be notified when a driver books it.',
-        });
-        navigate({ to: newDeliveryId ? '/dealer-deliveries' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
       }
     },
     onError: (error: any) => {
@@ -1128,7 +1135,7 @@ export default function ReviewDeliveryPage() {
                       <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-[10px] px-1.5 py-0">PREPAID</Badge>
                     </div>
                     <p className="text-xs text-slate-500">
-                      After a driver is assigned, you will be prompted to enter your card. Funds are held securely until delivery is complete.
+                      Payment is required before your delivery is listed. You will be prompted to enter your card after submission.
                     </p>
                   </div>
                 </div>
@@ -1201,22 +1208,29 @@ export default function ReviewDeliveryPage() {
           </Card>
         </div>
       </main>
-    {/* Stripe Payment Dialog — shown after successful delivery creation for prepaid */}
-    <StripePaymentDialog
-      open={showPaymentModal}
-      deliveryId={pendingPaymentDeliveryId || ''}
-      amount={reviewData?.total}
-      onPaymentSuccess={(paymentIntentId) => {
-        setPendingPaymentDeliveryId(null);
-        // Dialog shows success screen and auto-closes via its own timeout.
-        // onDismiss fires after 3s, which navigates to detail page.
-      }}
-      onDismiss={() => {
-        setShowPaymentModal(false);
-        setPendingPaymentDeliveryId(null);
-        navigate({ to: '/dealer-dashboard' });
-      }}
-    />
+    {/* Stripe Payment Dialog — only shown for PREPAID deliveries */}
+    {reviewData?.paymentType !== 'POSTPAID' && (
+      <StripePaymentDialog
+        open={showPaymentModal}
+        deliveryId={pendingPaymentDeliveryId || ''}
+        amount={reviewData?.total}
+        onPaymentSuccess={(paymentIntentId) => {
+          setPendingPaymentDeliveryId(null);
+          // Dialog shows success screen and auto-closes via its own timeout.
+          // onDismiss fires after 3s, which navigates to detail page.
+        }}
+        onDismiss={() => {
+          // Payment is required for prepaid — warn the user
+          toast.error('Payment required', {
+            description: 'Your delivery has been created but requires payment to be listed for drivers. Please complete your payment.',
+            duration: 8000,
+          });
+          setShowPaymentModal(false);
+          setPendingPaymentDeliveryId(null);
+          navigate({ to: '/dealer-dashboard' });
+        }}
+      />
+    )}
     </div>
   );
 }
