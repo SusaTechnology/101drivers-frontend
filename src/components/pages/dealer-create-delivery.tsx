@@ -407,15 +407,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const isBusinessCustomer = customerDataQuery.data?.customerType === 'BUSINESS';
   const postpaidEnabled = isBusinessCustomer && (customerDataQuery.data?.postpaidEnabled ?? false);
 
-  // Auto-set paymentType to POSTPAID when dealership is postpaid-enabled
-  useEffect(() => {
-    if (postpaidEnabled) {
-      setValue('paymentType', 'POSTPAID');
-    } else {
-      setValue('paymentType', 'PREPAID');
-    }
-  }, [postpaidEnabled, setValue]);
-
   // Saved addresses state
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState<SavedAddress | null>(null);
@@ -1154,6 +1145,15 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       status: "DRAFT",
     },
   });
+
+  // Auto-set paymentType to POSTPAID when dealership is postpaid-enabled
+  useEffect(() => {
+    if (postpaidEnabled) {
+      setValue('paymentType', 'POSTPAID');
+    } else {
+      setValue('paymentType', 'PREPAID');
+    }
+  }, [postpaidEnabled, setValue]);
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
