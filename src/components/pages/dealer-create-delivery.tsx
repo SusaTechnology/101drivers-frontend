@@ -392,11 +392,11 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   // Compute autocomplete bounds from service district zones (tighter than CA_BOUNDS)
   const pickupBounds = useMemo(() => computeZonesBounds(pickupZones) || CA_BOUNDS, [pickupZones]);
 
-  // Fetch customer data to check postpaidEnabled status
+  // Fetch customer data to check postpaidEnabled status (always fresh to get latest postpaid setting)
   const customerDataQuery = useDataQuery<CustomerData>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${customer?.profileId}`,
     enabled: !!customer?.profileId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     queryKey: ['customerData', customer?.profileId],
     noFilter: true,
   });
@@ -991,8 +991,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       insurance: quoteData.insurance,
       transaction: quoteData.transaction,
 
-      // Payment
-      paymentType: data.paymentType || "PREPAID",
+      // Payment — derive from actual customer postpaidEnabled status, not form field
+      paymentType: postpaidEnabled ? "POSTPAID" : "PREPAID",
       postpaidEnabled: postpaidEnabled,
 
       // Saved address/vehicle state

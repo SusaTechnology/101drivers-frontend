@@ -376,11 +376,11 @@ export default function EditDeliveryPage() {
     enabled: !!deliveryId,
   });
 
-  // Fetch customer data to check postpaidEnabled status
+  // Fetch customer data to check postpaidEnabled status (always fresh to get latest postpaid setting)
   const customerDataQuery = useDataQuery<CustomerData>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${customer?.profileId}`,
     enabled: !!customer?.profileId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     queryKey: ['customerData', customer?.profileId],
     noFilter: true,
   });
