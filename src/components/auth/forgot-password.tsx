@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -82,6 +82,10 @@ export function ResetPassword() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Refs to read actual DOM value (Chrome autofill doesn't always trigger React events)
+  const newPasswordRef = useRef<HTMLInputElement>(null);
+  const confirmPasswordRef = useRef<HTMLInputElement>(null);
+
   const navigate = useNavigate();
   
   // Get email and user-type from URL params (passed from sign-in page)
@@ -163,10 +167,13 @@ export function ResetPassword() {
   });
 
   const onSubmit = (data: ResetPasswordFormData) => {
+    // If Chrome autofilled but React didn't capture it, read from DOM directly
+    const pwDomValue = newPasswordRef.current?.value;
+
     const payload: ResetPasswordPayload = {
       email: data.email,
       verificationToken: data.verificationToken,
-      newPassword: data.newPassword,
+      newPassword: pwDomValue || data.newPassword,
     };
     resetPasswordMutation.mutate(payload);
   };
@@ -442,7 +449,17 @@ export function ResetPassword() {
                   autoComplete="new-password"
                   className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                   disabled={resetPasswordMutation.isPending}
-                  {...register("newPassword")}
+                  ref={(e) => {
+                    newPasswordRef.current = e;
+                    register("newPassword").ref(e);
+                  }}
+                  onChange={(e) => {
+                    register("newPassword").onChange(e);
+                  }}
+                  onBlur={(e) => {
+                    register("newPassword").onBlur(e);
+                  }}
+                  name="newPassword"
                 />
                 <button
                   type="button"
@@ -480,7 +497,17 @@ export function ResetPassword() {
                   autoComplete="new-password"
                   className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                   disabled={resetPasswordMutation.isPending}
-                  {...register("confirmPassword")}
+                  ref={(e) => {
+                    confirmPasswordRef.current = e;
+                    register("confirmPassword").ref(e);
+                  }}
+                  onChange={(e) => {
+                    register("confirmPassword").onChange(e);
+                  }}
+                  onBlur={(e) => {
+                    register("confirmPassword").onBlur(e);
+                  }}
+                  name="confirmPassword"
                 />
                 <button
                   type="button"
