@@ -437,10 +437,8 @@ export function ResetPassword() {
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input
                   id="newPassword"
-                  type="text"
+                  type={showNewPassword ? "text" : "password"}
                   autoComplete="new-password"
-                  placeholder="••••••••"
-                  style={{ WebkitTextSecurity: showNewPassword ? 'none' : 'disc' }}
                   className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                   disabled={resetPasswordMutation.isPending}
                   {...register("newPassword")}
@@ -477,10 +475,8 @@ export function ResetPassword() {
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <Input
                   id="confirmPassword"
-                  type="text"
+                  type={showConfirmPassword ? "text" : "password"}
                   autoComplete="new-password"
-                  placeholder="••••••••"
-                  style={{ WebkitTextSecurity: showConfirmPassword ? 'none' : 'disc' }}
                   className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                   disabled={resetPasswordMutation.isPending}
                   {...register("confirmPassword")}
