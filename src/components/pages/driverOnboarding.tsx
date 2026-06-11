@@ -4,9 +4,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useJsApiLoader } from "@react-google-maps/api";
-import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
-import LocationAutocomplete from "@/components/map/LocationAutocomplete"; // adjust path as needed
 import {
   Card,
   CardContent,
@@ -210,13 +207,6 @@ export default function DriverOnboardingPage() {
   }
   };
 
-  // Load Google Maps API for autocomplete
-  const { isLoaded } = useJsApiLoader({
-    id: GOOGLE_MAPS_SCRIPT_ID,
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: GOOGLE_MAPS_LIBRARIES,
-  });
-
   // Mutation for sending OTP (first step)
   const sendOtpMutation = useDataMutation<
     { message: string },
@@ -373,13 +363,6 @@ export default function DriverOnboardingPage() {
       }
     }
   }, [navigate, reset]);
-
-  // Handler for when a place is selected from autocomplete
-  const handleHomeAreaSelect = useCallback((place: google.maps.places.PlaceResult) => {
-    if (place.formatted_address) {
-      setValue("homeArea", place.formatted_address);
-    }
-  }, []);
 
   const onSubmit = async (data: OnboardingFormData) => {
     if (!data.acceptTerms) {
@@ -1135,21 +1118,40 @@ export default function DriverOnboardingPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  {/* Home Area with Google Places Autocomplete (unchanged) */}
-                  <div className="space-y-2">
+                  {/* Home city or ZIP code */}
+                  <div className={cn(
+                    "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+                    errors.homeArea
+                      ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                      : "border-transparent"
+                  )}>
                     <Label htmlFor="homeArea" className="text-xs font-bold">
                       Home city or ZIP code {!homeAreaValue?.trim() && <span className="text-red-500"> *</span>}
                     </Label>
-                    <LocationAutocomplete
-                      value={homeAreaValue || ""}
-                      onChange={(val) => setValue("homeArea", val)}
-                      onPlaceSelect={handleHomeAreaSelect}
-                      isLoaded={isLoaded}
-                      placeholder="Los Angeles, CA or 90012"
-                      icon={<MapPin className="h-4 w-4 text-slate-400" />}
-                    />
+                    <div className="relative">
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input
+                        id="homeArea"
+                        {...register("homeArea")}
+                        className={cn(
+                          "h-14 pl-12 rounded-2xl transition-colors",
+                          errors.homeArea
+                            ? "border-red-400 dark:border-red-500"
+                            : homeAreaValue?.trim()
+                              ? "border-green-300 dark:border-green-700"
+                              : ""
+                        )}
+                        placeholder="Los Angeles, CA or 90012"
+                        disabled={isPending || !isAgeVerified}
+                      />
+                      {homeAreaValue?.trim() && !errors.homeArea && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                        </div>
+                      )}
+                    </div>
                     {errors.homeArea && (
-                      <p className="text-xs text-red-500">
+                      <p className="text-xs text-red-500 font-medium">
                         {errors.homeArea.message}
                       </p>
                     )}
