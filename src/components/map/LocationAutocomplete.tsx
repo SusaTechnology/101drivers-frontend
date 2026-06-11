@@ -174,26 +174,36 @@ export default function LocationAutocomplete({
       request.radius = 50000;
     }
 
-    autocompleteServiceRef.current.getPlacePredictions(request,
-      (results, status) => {
-        console.log('[LocationAutocomplete] API response:', status, 'results:', results?.length, results);
-        setIsLoading(false);
-        
-        if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
-          setPredictions([]);
-          setShowDropdown(false);
-          return;
+    try {
+      // Create a fresh service instance for each request to avoid stale state
+      const service = new google.maps.places.AutocompleteService();
+      console.log('[LocationAutocomplete] calling getPlacePredictions with request:', JSON.stringify(request));
+      service.getPlacePredictions(request,
+        (results, status) => {
+          console.log('[LocationAutocomplete] API response:', status, 'results:', results?.length, results);
+          setIsLoading(false);
+          
+          if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
+            setPredictions([]);
+            setShowDropdown(false);
+            return;
+          }
+
+          // Client-side filter: Google's API doesn't reliably enforce strictBounds
+          // on getPlacePredictions, so we double-check each prediction's state term.
+          const filtered = strictBounds ? filterToCA(results) : results;
+
+          setPredictions(filtered);
+          setShowDropdown(filtered.length > 0);
+          console.log('[LocationAutocomplete] showing dropdown:', filtered.length > 0, 'predictions:', filtered.length);
         }
-
-        // Client-side filter: Google's API doesn't reliably enforce strictBounds
-        // on getPlacePredictions, so we double-check each prediction's state term.
-        const filtered = strictBounds ? filterToCA(results) : results;
-
-        setPredictions(filtered);
-        setShowDropdown(filtered.length > 0);
-        console.log('[LocationAutocomplete] showing dropdown:', filtered.length > 0, 'predictions:', filtered.length);
-      }
-    );
+      );
+    } catch (err) {
+      console.error('[LocationAutocomplete] getPlacePredictions error:', err);
+      setIsLoading(false);
+      setPredictions([]);
+      setShowDropdown(false);
+    }
   }, [strictBounds, bounds, userLocation]);
 
   // Handle input change with debounce
