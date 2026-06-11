@@ -152,6 +152,7 @@ export default function LocationAutocomplete({
     }
 
     setIsLoading(true);
+    setShowDropdown(true);
 
     const request: google.maps.places.AutocompletionRequest = {
         input,
@@ -175,6 +176,7 @@ export default function LocationAutocomplete({
 
     autocompleteServiceRef.current.getPlacePredictions(request,
       (results, status) => {
+        console.log('[LocationAutocomplete] API response:', status, 'results:', results?.length, results);
         setIsLoading(false);
         
         if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
@@ -189,6 +191,7 @@ export default function LocationAutocomplete({
 
         setPredictions(filtered);
         setShowDropdown(filtered.length > 0);
+        console.log('[LocationAutocomplete] showing dropdown:', filtered.length > 0, 'predictions:', filtered.length);
       }
     );
   }, [strictBounds, bounds, userLocation]);
