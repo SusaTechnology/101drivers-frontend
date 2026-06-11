@@ -174,133 +174,51 @@ export class PaymentPayoutEngine {
       return;
     }
 
+    // ── PAYMENT CAPTURE: DISABLED FOR NOW ──────────────────────────────────
+    // TODO: Re-enable Stripe payment capture when ready for production.
+    // For now, skip all payment capture logic so deliveries can complete
+    // without any Stripe dependency.
+    // ─────────────────────────────────────────────────────────────────────
+    //
+    // const payment = delivery.payment;
+    // if (!payment) { return; }
+    //
+    // if (payment.paymentType === EnumPaymentPaymentType.PREPAID) {
+    //   if (payment.status === EnumPaymentStatus.AUTHORIZED) {
+    //     if (payment.providerPaymentIntentId && payment.provider === "STRIPE" && this.stripeService) {
+    //       try {
+    //         await this.captureWithRetry(payment.providerPaymentIntentId, input.deliveryId);
+    //         await tx.payment.update({
+    //           where: { id: payment.id },
+    //           data: { status: EnumPaymentStatus.CAPTURED, capturedAt: new Date() },
+    //         });
+    //         await tx.paymentEvent.create({
+    //           data: {
+    //             paymentId: payment.id,
+    //             type: EnumPaymentEventType.CAPTURE,
+    //             status: EnumPaymentEventStatus.CAPTURED,
+    //             amount: payment.amount,
+    //             message: "Prepaid payment captured at delivery completion",
+    //             raw: { source: "delivery-complete", deliveryId: input.deliveryId },
+    //           },
+    //         });
+    //       } catch (captureErr: any) {
+    //         const errMsg = captureErr?.message || "Unknown capture error";
+    //         this.logger.error(`Stripe capture failed for delivery ${input.deliveryId}: ${errMsg}`);
+    //         await tx.payment.update({
+    //           where: { id: payment.id },
+    //           data: { status: EnumPaymentStatus.FAILED },
+    //         });
+    //       }
+    //     }
+    //   }
+    // }
+
+    // Use existing payment data directly (no capture) for payout calculation
     const payment = delivery.payment;
+
     if (!payment) {
       return;
-    }
-
-    if (payment.paymentType === EnumPaymentPaymentType.PREPAID) {
-      if (payment.status === EnumPaymentStatus.AUTHORIZED) {
-        // Attempt to capture the Stripe PaymentIntent to actually charge the held funds.
-        // If capture fails, we do NOT block delivery completion — the delivery still completes
-        // and the payment is marked FAILED so it can be retried/audited later.
-        if (payment.providerPaymentIntentId && payment.provider === "STRIPE" && this.stripeService) {
-          try {
-            // Amount reconciliation: verify PI amount matches final price
-            const finalPrice = delivery.quote?.estimatedPrice ?? payment.amount;
-            const discrepancy = Math.abs(payment.amount - finalPrice);
-            if (discrepancy > 0.01) {
-              this.logger.warn(
-                `Amount mismatch for delivery ${input.deliveryId}: PI amount=$${payment.amount}, final price=$${finalPrice}. ` +
-                `Proceeding with PI amount (customer was already authorized for this amount).`,
-              );
-            }
-            await this.captureWithRetry(payment.providerPaymentIntentId, input.deliveryId);
-
-            // Capture succeeded — update payment to CAPTURED
-            await tx.payment.update({
-              where: { id: payment.id },
-              data: {
-                status: EnumPaymentStatus.CAPTURED,
-                capturedAt: new Date(),
-              },
-            });
-
-            await tx.paymentEvent.create({
-              data: {
-                paymentId: payment.id,
-                type: EnumPaymentEventType.CAPTURE,
-                status: EnumPaymentEventStatus.CAPTURED,
-                amount: payment.amount,
-                message: "Prepaid payment captured at delivery completion",
-                raw: {
-                  source: "delivery-complete",
-                  deliveryId: input.deliveryId,
-                  actorUserId: input.actorUserId ?? null,
-                },
-              },
-            });
-          } catch (captureErr: any) {
-            // Capture failed — do NOT block delivery completion.
-            // Mark payment as FAILED so admin can see it and retry manually.
-            const errMsg = captureErr?.message || "Unknown capture error";
-            this.logger.error(
-              `Stripe capture failed for delivery ${input.deliveryId}, PI ${payment.providerPaymentIntentId}: ${errMsg}. ` +
-              `Delivery will still complete. Payment marked as FAILED for manual retry.`,
-            );
-
-            await tx.payment.update({
-              where: { id: payment.id },
-              data: {
-                status: EnumPaymentStatus.FAILED,
-              },
-            });
-
-            await tx.paymentEvent.create({
-              data: {
-                paymentId: payment.id,
-                type: EnumPaymentEventType.CAPTURE,
-                status: EnumPaymentEventStatus.FAILED,
-                amount: payment.amount,
-                message: `Payment capture failed at delivery completion: ${errMsg}`,
-                raw: {
-                  source: "delivery-complete-capture-failed",
-                  deliveryId: input.deliveryId,
-                  actorUserId: input.actorUserId ?? null,
-                  stripeError: errMsg,
-                  providerPaymentIntentId: payment.providerPaymentIntentId,
-                },
-              },
-            });
-          }
-        } else {
-          // No Stripe PI or no Stripe service — just mark as CAPTURED optimistically
-          await tx.payment.update({
-            where: { id: payment.id },
-            data: {
-              status: EnumPaymentStatus.CAPTURED,
-              capturedAt: new Date(),
-            },
-          });
-
-          await tx.paymentEvent.create({
-            data: {
-              paymentId: payment.id,
-              type: EnumPaymentEventType.CAPTURE,
-              status: EnumPaymentEventStatus.CAPTURED,
-              amount: payment.amount,
-              message: "Prepaid payment marked captured at delivery completion (no Stripe PI)",
-              raw: {
-                source: "delivery-complete",
-                deliveryId: input.deliveryId,
-                actorUserId: input.actorUserId ?? null,
-              },
-            },
-          });
-        }
-      } else if (
-        payment.status !== EnumPaymentStatus.CAPTURED &&
-        payment.status !== EnumPaymentStatus.PAID
-      ) {
-        this.logger.warn(
-          `Prepaid payment for delivery ${input.deliveryId} is in status "${payment.status}" ` +
-          `(not AUTHORIZED/CAPTURED/PAID). Skipping capture — delivery will still complete.`,
-        );
-      }
-    }
-
-    const freshPayment = await tx.payment.findUnique({
-      where: { id: payment.id },
-      select: {
-        id: true,
-        amount: true,
-        paymentType: true,
-        status: true,
-      },
-    });
-
-    if (!freshPayment) {
-      throw new NotFoundException("Payment not found after update");
     }
 
     const tipAmount =
@@ -311,7 +229,7 @@ export class PaymentPayoutEngine {
 
     const breakdown = this.computeBreakdown({
       amount:
-        freshPayment.amount ??
+        payment.amount ??
         delivery.quote?.estimatedPrice ??
         0,
       pricingSnapshot: delivery.quote?.pricingSnapshot ?? null,
@@ -320,9 +238,9 @@ export class PaymentPayoutEngine {
     });
 
     const payoutStatus =
-      freshPayment.paymentType === EnumPaymentPaymentType.POSTPAID &&
-      freshPayment.status !== EnumPaymentStatus.INVOICED &&
-      freshPayment.status !== EnumPaymentStatus.PAID
+      payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
+      payment.status !== EnumPaymentStatus.INVOICED &&
+      payment.status !== EnumPaymentStatus.PAID
         ? EnumDriverPayoutStatus.PENDING
         : EnumDriverPayoutStatus.ELIGIBLE;
 
