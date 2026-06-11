@@ -149,7 +149,7 @@ export default function LocationAutocomplete({
 
     const request: google.maps.places.AutocompletionRequest = {
         input,
-        types: ['geocode', 'establishment'],
+        types,
         componentRestrictions: { country: 'us' },
       };
 
