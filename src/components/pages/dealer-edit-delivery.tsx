@@ -69,6 +69,14 @@ import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { BUSINESS_TZ } from '@/lib/timezone';
 
+/** Format a Date's calendar year/month/day to "YYYY-MM-DD" without timezone conversion. */
+const toDateString = (d: Date) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 // California bounds for address restriction (fallback)
 const CA_BOUNDS: google.maps.LatLngBoundsLiteral = {
   north: 42.009,
@@ -265,12 +273,6 @@ const formatDuration = (minutes: number) => {
 };
 
 // Helper functions for data conversion
-function isoToDateString(iso: string | undefined): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  return date.toISOString().split('T')[0];
-}
-
 function isoToTimeWindow(startIso: string | undefined, endIso: string | undefined): string {
   if (!startIso || !endIso) return "";
   const start = new Date(startIso);
@@ -867,7 +869,7 @@ export default function EditDeliveryPage() {
           // Sync calendar if backend returned slots for a different day than selected
           // Both dates compared in business timezone (America/Los_Angeles)
           if (data.actualSlotDate && selectedDate) {
-            const selectedStr = selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }); // yyyy-MM-dd in LA tz
+            const selectedStr = toDateString(selectedDate);
             if (data.actualSlotDate !== selectedStr) {
               const [y, m, d] = data.actualSlotDate.split('-').map(Number);
               setSelectedDate(new Date(y, m - 1, d));
@@ -928,7 +930,7 @@ export default function EditDeliveryPage() {
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose: choice,
-      ...(selectedDate && { preferredDate: selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }) }),
+      ...(selectedDate && { preferredDate: toDateString(selectedDate) }),
     };
 
     console.log('Discovery Mode Request:', request);
@@ -952,7 +954,7 @@ export default function EditDeliveryPage() {
       customerType: customerDataQuery.data?.customerType || 'BUSINESS',
       customerId: customer?.profileId,
       customerChose,
-      ...(selectedDate && { preferredDate: selectedDate.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }) }),
+      ...(selectedDate && { preferredDate: toDateString(selectedDate) }),
     };
 
     if (customerChose === "PICKUP_WINDOW") {
@@ -988,7 +990,7 @@ export default function EditDeliveryPage() {
         customerType: customerDataQuery.data?.customerType || 'BUSINESS',
         customerId: customer?.profileId,
         customerChose,
-        preferredDate: date.toLocaleDateString('sv-SE', { timeZone: BUSINESS_TZ }),
+        preferredDate: toDateString(date),
       };
       getSchedulePreview.mutate(request);
     }
