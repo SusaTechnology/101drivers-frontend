@@ -1576,6 +1576,12 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                     {user.driver.location.homeBaseCity}, {user.driver.location.homeBaseState}
                                   </div>
                                 )}
+                                {user.driver.location.homeBaseZip && (
+                                  <div className="flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 text-slate-400" />
+                                    <span>ZIP Code: {user.driver.location.homeBaseZip}</span>
+                                  </div>
+                                )}
                                 <div className="text-xs text-slate-400">
                                   Last updated: {formatDateTime(user.driver.location.currentAt)}
                                 </div>
