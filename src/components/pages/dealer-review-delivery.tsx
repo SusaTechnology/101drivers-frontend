@@ -435,14 +435,14 @@ export default function ReviewDeliveryPage() {
         toast.success('Delivery submitted!', {
           description: 'Your delivery is now visible to drivers. You will be invoiced after delivery completion.',
         });
-        navigate({ to: newDeliveryId ? '/dealer-deliveries' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
+        navigate({ to: newDeliveryId ? '/dealer-delivery-details' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
       }
       // PREPAID with existing Stripe PI: payment already secured
       else if (hasStripePI) {
         toast.success('Delivery submitted!', {
           description: 'Payment is already secured for this delivery.',
         });
-        navigate({ to: newDeliveryId ? '/dealer-deliveries' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
+        navigate({ to: newDeliveryId ? '/dealer-delivery-details' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
       }
       // PREPAID without payment: MUST pay now — show Stripe dialog
       else if (newDeliveryId) {
