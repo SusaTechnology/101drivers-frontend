@@ -88,6 +88,9 @@ export default function LocationAutocomplete({
   strictBounds = false,
   bounds,
 }: LocationAutocompleteProps) {
+  // Stabilize types reference to prevent unnecessary callback recreation
+  const stableTypes = useRef(types);
+  useEffect(() => { stableTypes.current = types; }, [types]);
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -149,7 +152,7 @@ export default function LocationAutocomplete({
 
     const request: google.maps.places.AutocompletionRequest = {
         input,
-        types,
+        types: stableTypes.current,
         componentRestrictions: { country: 'us' },
       };
 
@@ -185,7 +188,7 @@ export default function LocationAutocomplete({
         setShowDropdown(filtered.length > 0);
       }
     );
-  }, [types, strictBounds, bounds, userLocation]);
+  }, [strictBounds, bounds, userLocation]);
 
   // Handle input change with debounce
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

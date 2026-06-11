@@ -1145,7 +1145,7 @@ export default function DriverOnboardingPage() {
                       isLoaded={isLoaded}
                       placeholder="Los Angeles, CA or 90012"
                       icon={<MapPin className="h-4 w-4 text-slate-400" />}
-                      types={['geocode']} // Allow cities, ZIP codes, and addresses
+                      types={['geocode', 'regions']} // Allow cities, ZIP codes, and addresses
                     />
                     {errors.homeArea && (
                       <p className="text-xs text-red-500">
