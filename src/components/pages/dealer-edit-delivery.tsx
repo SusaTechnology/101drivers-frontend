@@ -332,6 +332,8 @@ export default function EditDeliveryPage() {
   
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const selectedDateRef = useRef<Date | undefined>(undefined);
+  useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
 
   // Saved addresses state
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -864,12 +866,15 @@ export default function EditDeliveryPage() {
         setIsLoadingSlots(false);
 
         if (data.suggestedSlots) {
-          setSuggestedSlots(data.suggestedSlots);
+          setSuggestedSlots({
+            pickup: data.suggestedSlots.pickup || [],
+            dropoff: data.suggestedSlots.dropoff || [],
+          });
 
           // Sync calendar if backend returned slots for a different day than selected
           // Both dates compared in business timezone (America/Los_Angeles)
-          if (data.actualSlotDate && selectedDate) {
-            const selectedStr = toDateString(selectedDate);
+          if (data.actualSlotDate && selectedDateRef.current) {
+            const selectedStr = toDateString(selectedDateRef.current);
             if (data.actualSlotDate !== selectedStr) {
               const [y, m, d] = data.actualSlotDate.split('-').map(Number);
               setSelectedDate(new Date(y, m - 1, d));
