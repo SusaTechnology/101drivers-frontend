@@ -94,7 +94,7 @@ const onboardingSchema = z
         "Password must contain at least one special character",
       ),
     confirmPassword: z.string().min(1, "Please confirm your password"),
-    homeArea: z.string().min(1, "Home city or ZIP is required"),
+    homeArea: z.string().regex(/^\d{5}$/, "Enter a valid 5-digit ZIP code"),
     radius: z.string().optional(),
     districts: z.array(z.string()).optional(),
     alerts: z.boolean().optional(),
@@ -446,13 +446,13 @@ export default function DriverOnboardingPage() {
   };
   passwordChecks.allValid = passwordChecks.minLength && passwordChecks.hasUppercase && passwordChecks.hasLowercase && passwordChecks.hasNumber && passwordChecks.hasSpecial && passwordChecks.hasMatch;
 
-  // Check if all required fields are filled (homeArea and radius are optional)
+  // Check if all required fields are filled (radius is optional)
   const allRequiredFieldsFilled = (
     (watchFullName?.trim().length || 0) >= 2 &&
     watchEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchEmail) &&
     passwordChecks.allValid &&
     (watchPhone?.replace(/\D/g, '').length || 0) >= 10 &&
-    (homeAreaValue?.trim().length || 0) >= 1  
+    /^\d{5}$/.test(homeAreaValue?.trim() || '')  
   );
 
   // Form is ready to submit only when all fields are filled AND terms accepted
@@ -1130,7 +1130,7 @@ export default function DriverOnboardingPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  {/* Home city or ZIP code */}
+                  {/* Home ZIP Code */}
                   <div className={cn(
                     "space-y-2 p-4 rounded-2xl border transition-all duration-300",
                     errors.homeArea
@@ -1138,7 +1138,7 @@ export default function DriverOnboardingPage() {
                       : "border-transparent"
                   )}>
                     <Label htmlFor="homeArea" className="text-xs font-bold">
-                      Home city or ZIP code {!homeAreaValue?.trim() && <span className="text-red-500"> *</span>}
+                      Home ZIP Code {!homeAreaValue?.trim() && <span className="text-red-500"> *</span>}
                     </Label>
                     <div className="relative">
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1153,7 +1153,7 @@ export default function DriverOnboardingPage() {
                               ? "border-green-300 dark:border-green-700"
                               : ""
                         )}
-                        placeholder="Los Angeles, CA or 90012"
+                        placeholder="90012"
                         disabled={isPending || !isAgeVerified}
                       />
                       {homeAreaValue?.trim() && !errors.homeArea && (
@@ -1168,7 +1168,7 @@ export default function DriverOnboardingPage() {
                       </p>
                     )}
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Enter your California city or ZIP code. We only operate in California.
+                      Enter your 5-digit California ZIP code. We only operate in California.
                     </p>
                   </div>
 
