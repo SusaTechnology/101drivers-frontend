@@ -1770,9 +1770,7 @@ export default function EditDeliveryPage() {
                           disabled={(date) => {
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);
-                            const maxDate = new Date(today);
-                            maxDate.setDate(maxDate.getDate() + 7);
-                            return date < today || date > maxDate;
+                            return date < today;
                           }}
                         />
                       </PopoverContent>
