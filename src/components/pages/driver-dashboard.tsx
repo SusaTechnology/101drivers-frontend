@@ -1,0 +1,1212 @@
+// app/pages/driver/dashboard.tsx
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { cn } from '@/lib/utils'
+import { useTheme } from '@/lib/theme'
+import { toast } from 'sonner'
+import {
+  Home,
+  LogOut,
+  Sun,
+  Moon,
+  Search,
+  Filter,
+  RefreshCw,
+  MapPin,
+  Bell,
+  Inbox,
+  Menu,
+  X,
+  Calendar,
+  Clock,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  User,
+  Settings,
+  Sliders,
+  SlidersHorizontal as Tune,
+  Route,
+  Map,
+  Navigation,
+  Compass,
+  Car,
+  Fuel,
+  Gauge,
+  Bolt,
+  Bolt as BoltIcon,
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  CheckCircle,
+  XCircle,
+  TriangleAlert as Warning,
+  Verified,
+  Shield,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldX,
+  Phone,
+  Mail,
+  MessageSquare,
+  CalendarDays,
+  Timer,
+  Award,
+  Star,
+  CreditCard,
+  DollarSign as DollarSignIcon,
+  Receipt,
+  ArrowRight,
+  ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  MoreHorizontal,
+  MoreVertical,
+  List,
+  Briefcase,
+  Funnel,
+  LocateFixed,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Label } from '@/components/ui/label'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
+import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
+import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
+import MiniRouteMap from '@/components/map/MiniRouteMap'
+import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
+import { usePickupZones } from '@/hooks/usePickupZones'
+import type { NotificationInboxResponse } from '@/types/notification'
+import { BUSINESS_TZ } from '@/lib/timezone'
+import DriverBottomNav from '../layout/DriverBottomNav'
+
+// Filter options matching backend API
+const FILTER_OPTIONS = {
+  radiusOptions: [
+    { value: 'ANY', label: 'Any' },
+    { value: '10', label: 'Within 10 miles' },
+    { value: '25', label: 'Within 25 miles' },
+  ],
+  datePresetOptions: [
+    { value: 'ALL', label: 'Any' },
+    { value: 'TODAY', label: 'Today' },
+    { value: 'TOMORROW', label: 'Tomorrow' },
+    { value: 'THIS_WEEK', label: 'This Week' },
+  ],
+  sortOptions: [
+    { value: 'ANY', label: 'Any' },
+    { value: 'SOONEST', label: 'Earliest' },
+    { value: 'NEAREST', label: 'Nearest' },
+    { value: 'HIGHEST_PAY', label: 'Highest Pay' },
+  ],
+}
+
+// Helper functions for formatting
+const formatDate = (isoString?: string): string => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  const today = new Date()
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  if (date.toDateString() === today.toDateString()) return 'Today'
+  if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow'
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })
+}
+
+// Full weekday date format: "Monday, April 20"
+const formatFullWeekdayDate = (isoString?: string): string => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: BUSINESS_TZ,
+  })
+}
+
+// Time range: "8:00 AM – 11:00 AM"
+const formatTimeRange = (startIso?: string, endIso?: string): string => {
+  if (!startIso || !endIso) return ''
+  const start = new Date(startIso)
+  const end = new Date(endIso)
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })
+  return `${startStr} - ${endStr}`
+}
+
+const formatDuration = (minutes?: number): string => {
+  if (!minutes) return ''
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+}
+
+const formatCurrency = (amount?: number | null): string => {
+  if (amount == null) return ''
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+// Extract short human-readable label from a full address.
+// Picks the first segment that looks like a city/neighborhood (not a state, ZIP, or street number).
+//   "1402 Santa Monica Blvd, Santa Monica, CA 90404" → "Santa Monica"
+//   "18700 Studebaker Rd, Cerritos, CA 90703"        → "Cerritos"
+//   "123 Main St"                                      → "Main St"
+const extractRouteLabel = (fullAddress: string): string => {
+  if (!fullAddress) return ''
+  const trimmed = fullAddress.trim()
+
+  if (trimmed.includes(',')) {
+    const parts = trimmed.split(',').map((s) => s.trim()).filter(Boolean)
+
+    // Walk segments starting from index 1 (skip the street address line).
+    // Pick the first one that looks like a city — not a state code, not a ZIP, not a country.
+    for (let i = 1; i < parts.length; i++) {
+      const seg = parts[i]
+      // Skip: purely digits (ZIP), 2-letter uppercase (state code), known countries
+      if (/^\d+$/.test(seg)) continue
+      if (/^[A-Z]{2}$/.test(seg)) continue
+      if (/^(USA|United States)$/i.test(seg)) continue
+      // Skip if it starts with a digit (still a street continuation)
+      if (/^\d/.test(seg)) continue
+      // Strip trailing ZIP like "CA 90404" → "CA" (but CA would be caught above)
+      const clean = seg.replace(/\s+\d{5}(-\d{4})?$/, '').trim()
+      if (clean.length >= 3) return clean
+    }
+
+    // Fallback: extract street name from first segment
+    const street = parts[0].replace(/^\d+\s+/, '').replace(/\s+(Blvd|Ave|Avenue|Street|St|Drive|Dr|Road|Rd|Lane|Ln|Way|Ct|Court|Pl|Place|Pkwy|Parkway)$/i, '').trim()
+    if (street.length >= 3) return street
+  }
+
+  // No commas: drop the building number, return street name
+  const match = trimmed.match(/^\d+\s+(.+)$/)
+  return match ? match[1].trim() : trimmed
+}
+
+// Service type to display name mapping
+const serviceTypeLabels: Record<string, string> = {
+  HOME_DELIVERY: 'Car Transfer',
+  BETWEEN_LOCATIONS: 'Car Transfer',
+  SERVICE_PICKUP_RETURN: 'Car Transfer',
+}
+
+// Mock pickup locations for jobs without coordinates
+const mockPickupLocations = [
+  { lat: 33.94, lng: -118.40 }, // Santa Monica
+  { lat: 34.05, lng: -118.25 }, // Downtown LA
+  { lat: 34.15, lng: -118.15 }, // Pasadena
+  { lat: 33.87, lng: -118.36 }, // Hawthorne/LAX
+  { lat: 34.02, lng: -118.45 }, // Culver City
+  { lat: 33.98, lng: -118.22 }, // Montebello
+  { lat: 34.06, lng: -118.30 }, // Echo Park
+  { lat: 33.92, lng: -118.20 }, // Downey
+  { lat: 34.08, lng: -118.38 }, // West Hollywood
+  { lat: 33.96, lng: -118.48 }, // El Segundo
+  { lat: 34.18, lng: -118.30 }, // Altadena
+  { lat: 33.83, lng: -118.30 }, // Torrance
+]
+
+// Type for job data used in the component
+interface JobItem {
+  id: string
+  urgent: boolean
+  type: string
+  date: string
+  timeWindow: string
+  pickup: string
+  dropoff: string
+  service: string
+  miles: number | null
+  duration: string
+  payout: number | null
+  bonus: number | null
+  requirements?: { icon: any; label: string }[]
+  // Full data for bottom sheet
+  pickupAddressFull?: string
+  dropoffAddressFull?: string
+  pickupWindowStartFull?: string
+  pickupWindowEndFull?: string
+  etaMinutes?: number
+  isUrgent?: boolean
+  // Coordinates for map
+  lat: number
+  lng: number
+  dropoffLat: number | null
+  dropoffLng: number | null
+  // Stacking: null = bookable, string = reason it can't be booked right now
+  stackingBlocked: string | null
+  stackingDetails: {
+    checkType: 'backward' | 'forward' | 'radius' | null;
+    isCrossDay: boolean;
+    conflictingDelivery: {
+      id: string;
+      pickupAddress: string;
+      dropoffAddress: string;
+      pickupWindowStart: string | null;
+      estimatedFinishTime: string | null;
+      etaMinutes: number | null;
+    } | null;
+    transit: {
+      driveMinutes: number;
+      driveMiles: number;
+      bufferMinutes: number;
+      totalNeededMinutes: number;
+      availableMinutes: number;
+    } | null;
+    effectiveMaxRadiusMiles?: number;
+  } | null;
+}
+
+// ── Reusable Route Thumbnail SVG ────────────────────────────────
+function RouteThumbnail() {
+  return (
+    <svg width="100" height="100" viewBox="0 0 100 100" fill="none" className="shrink-0 rounded-2xl bg-slate-50 dark:bg-slate-800/60">
+      {/* Subtle grid lines */}
+      <line x1="20" y1="0" x2="20" y2="100" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="40" y1="0" x2="40" y2="100" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="60" y1="0" x2="60" y2="100" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="80" y1="0" x2="80" y2="100" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="20" x2="100" y2="20" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="40" x2="100" y2="40" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="60" x2="100" y2="60" stroke="#e2e8f0" strokeWidth="0.5" />
+      <line x1="0" y1="80" x2="100" y2="80" stroke="#e2e8f0" strokeWidth="0.5" />
+      {/* Road path */}
+      <path d="M20 80 C20 80, 30 55, 48 43 C65 30, 78 20, 80 20" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" fill="none" />
+      {/* Pickup dot */}
+      <circle cx="20" cy="80" r="5" fill="#22c55e" />
+      <circle cx="20" cy="80" r="2.5" fill="white" />
+      {/* Dropoff dot */}
+      <circle cx="80" cy="20" r="5" fill="#22c55e" />
+      <circle cx="80" cy="20" r="2.5" fill="white" />
+    </svg>
+  )
+}
+
+// ── Reusable Gig Card Component ──────────────────────────────────
+function GigCard({ job, onClick, isMapsLoaded }: { job: JobItem; onClick: () => void; isMapsLoaded: boolean }) {
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false)
+  const hasDropoffCoords = job.dropoffLat != null && job.dropoffLng != null
+  const isBlocked = Boolean(job.stackingBlocked)
+
+  const handleClick = () => {
+    if (isBlocked) {
+      setShowBlockedDialog(true)
+    } else {
+      onClick()
+    }
+  }
+
+  return (
+    <>
+      <Card
+        className={cn(
+          "border-slate-200/70 dark:border-slate-700/50 shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-150 cursor-pointer bg-white dark:bg-slate-900/90 rounded-2xl overflow-hidden",
+          isBlocked && "opacity-70 hover:opacity-90"
+        )}
+        onClick={handleClick}
+      >
+        {/* ── Main content ── */}
+        <CardContent className="px-4 py-3">
+          <div className="flex gap-3">
+            {/* Left: text block — route dominant, distance secondary */}
+            <div className="flex-1 min-w-0 flex flex-col">
+              {/* Date + time (small, secondary) */}
+              <div className="flex items-center gap-1.5">
+                <div className="text-[12px] font-medium text-slate-400 dark:text-slate-500 leading-tight">
+                  {formatFullWeekdayDate(job.pickupWindowStartFull) || job.date}
+                  {job.timeWindow && (
+                    <>
+                      <span className="mx-1 text-slate-300 dark:text-slate-600">&middot;</span>
+                      <span>{job.timeWindow}</span>
+                    </>
+                  )}
+                </div>
+                {isBlocked && (
+                  <Badge variant="outline" className="inline-flex items-center gap-1 px-1.5 py-0 rounded-full bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-bold shrink-0">
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    Can't book
+                  </Badge>
+                )}
+              </div>
+
+              {/* Route — PRIMARY, dominant text */}
+              <div className="text-[17px] font-extrabold text-slate-900 dark:text-white mt-1.5 leading-snug tracking-tight">
+                {job.pickup} <span className="text-slate-400 dark:text-slate-500 mx-0.5">&rarr;</span> {job.dropoff}
+              </div>
+
+              {/* Distance + ETA — medium, supporting */}
+              <div className="text-[13px] text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-tight">
+                {[job.miles ? `${job.miles} mi` : null, job.etaMinutes ? `Est. ${formatDuration(job.etaMinutes)}` : null].filter(Boolean).join(' \u2013 ')}
+              </div>
+            </div>
+
+            {/* Right: vertical stack — map + payout */}
+            <div className="flex flex-col items-end justify-between shrink-0">
+              {/* Live mini map on top */}
+              {hasDropoffCoords ? (
+                <MiniRouteMap
+                  pickup={{ lat: job.lat, lng: job.lng }}
+                  dropoff={{ lat: job.dropoffLat!, lng: job.dropoffLng! }}
+                  isLoaded={isMapsLoaded}
+                />
+              ) : (
+                <RouteThumbnail />
+              )}
+
+              {/* Payout — strong green accent, spaced below map */}
+              {job.payout != null && (
+                <span className="text-[22px] font-black text-green-600 dark:text-green-400 leading-none tracking-tight mt-2.5">
+                  {formatCurrency(job.payout)}
+                </span>
+              )}
+            </div>
+          </div>
+        </CardContent>
+
+        {/* ── Bottom CTA bar — fixed height, attached action strip ── */}
+        <div className={cn(
+          "h-11 border-t flex items-center justify-center",
+          isBlocked
+            ? "border-amber-200/80 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-900/20"
+            : "border-slate-200/80 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/40"
+        )}>
+          {isBlocked ? (
+            <Info className="w-6 h-6 text-amber-500 dark:text-amber-400" strokeWidth={2} />
+          ) : (
+            <ArrowRight className="w-7 h-7 text-green-600 dark:text-green-400" strokeWidth={3} />
+          )}
+        </div>
+      </Card>
+
+      {/* Stacking blocked info dialog */}
+      <AlertDialog open={showBlockedDialog} onOpenChange={setShowBlockedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              Can't Book This Gig
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2 whitespace-pre-line">
+              {job.stackingDetails?.transit
+                ? (() => {
+                    const d = job.stackingDetails!
+                    if (d.checkType === 'backward') {
+                      const c = d.conflictingDelivery
+                      const est = c?.estimatedFinishTime ? new Date(c.estimatedFinishTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : 'unknown'
+                      return `You have a delivery that conflicts with this one:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your previous delivery'}\nEstimated finish time: ${est}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to this pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
+                    }
+                    if (d.checkType === 'forward') {
+                      const c = d.conflictingDelivery
+                      const pt = c?.pickupWindowStart ? new Date(c.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : 'unknown'
+                      return `This would make you late for another booked gig:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your next delivery'}\nThat pickup time: ${pt}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to that pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
+                    }
+                    if (d.checkType === 'radius') {
+                      return `Pickup is too far from your last drop-off (${d.transit.driveMiles} mi). Maximum allowed: ${d.effectiveMaxRadiusMiles ?? 25} miles.`
+                    }
+                    return job.stackingBlocked || 'This gig conflicts with your schedule.'
+                  })()
+                : (job.stackingBlocked || 'This gig conflicts with your schedule.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+            <p className="font-semibold text-slate-700 dark:text-slate-300">{job.pickup} &rarr; {job.dropoff}</p>
+            <p>{job.timeWindow} &middot; {job.miles ? `${job.miles} mi` : 'Unknown distance'}</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogAction>Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
+
+export default function DriverDashboardPage() {
+  const [activeView, setActiveView] = useState<'map' | 'list'>('map')
+  const [selectedJob, setSelectedJob] = useState<JobItem | null>(null)
+  const [showSheet, setShowSheet] = useState(false)
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false)
+  const [blockedReason, setBlockedReason] = useState<string | null>(null)
+  const [mounted, setMounted] = useState(false)
+  const { theme, setTheme } = useTheme()
+  const user = getUser()
+  const driverId = user?.profileId
+  const displayName = user?.fullName?.split(' ')[0] || user?.username || 'Driver'
+  const navigate = useNavigate()
+
+  // Filter state - maps directly to backend API params
+  const [filters, setFilters] = useState({
+    search: '',
+    radiusMiles: 'ANY',
+    datePreset: 'ALL',
+    sortBy: 'ANY',
+  })
+
+  // Build query params from filter state
+  const buildQueryParams = () => {
+    const params = new URLSearchParams()
+    params.append('limit', '20')
+
+    if (filters.search.trim()) {
+      params.append('search', filters.search.trim())
+    }
+    if (filters.radiusMiles && filters.radiusMiles !== 'ANY') {
+      params.append('radiusMiles', filters.radiusMiles)
+    }
+    if (filters.datePreset && filters.datePreset !== 'ALL') {
+      params.append('datePreset', filters.datePreset)
+    }
+    if (filters.sortBy && filters.sortBy !== 'ANY') {
+      params.append('sortBy', filters.sortBy)
+    }
+
+    return params.toString()
+  }
+
+  const queryParams = buildQueryParams()
+
+  // Real data fetch with query params
+  const {
+    data: deliveriesData,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    refetch
+  } = useDataQuery({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${driverId}?${queryParams}`,
+    noFilter: true,
+    enabled: Boolean(driverId)
+  })
+
+  // Fetch notification count
+  const { data: inboxData } = useDataQuery<NotificationInboxResponse>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/notificationEvents/my/inbox?take=1`,
+    noFilter: true,
+    enabled: Boolean(driverId),
+  })
+  const unreadCount = inboxData?.unreadCount || 0
+
+  // Fetch service district zones for map overlay
+  const { zones: pickupZones } = usePickupZones()
+  const mapRef = useRef<google.maps.Map | null>(null)
+
+  // Fit map to service district bounds once zones load
+  useEffect(() => {
+    if (!mapRef.current || pickupZones.length === 0) return
+    const bounds = new google.maps.LatLngBounds()
+    pickupZones.forEach((zone: any) => {
+      const ring = zone.geoJson?.geometry?.coordinates?.[0]
+      if (!ring) return
+      ring.forEach((coord: number[]) => bounds.extend({ lat: coord[1], lng: coord[0] }))
+    })
+    if (!bounds.isEmpty()) {
+      mapRef.current.fitBounds(bounds, { top: 60, right: 30, bottom: 60, left: 30 })
+    }
+  }, [pickupZones])
+
+  // Load Google Maps API
+  const { isLoaded } = useJsApiLoader({
+    id: GOOGLE_MAPS_SCRIPT_ID,
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  })
+
+  // Proof cam onboarding guard: redirect first-time drivers
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem('hasSeenProofCam')
+      if (seen !== 'true') {
+        navigate({ to: '/driver/proof-cam' })
+      }
+    } catch {
+      // localStorage may not be available (SSR, private browsing, etc.)
+    }
+  }, [navigate])
+
+  // Theme handling
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+    toast.success(`${theme === 'dark' ? 'Light' : 'Dark'} mode activated`)
+  }
+
+  const handleSignOut = () => {
+    clearAuth()
+    stopSessionKeepAlive()
+    toast.success('Signed out successfully')
+    navigate({ to: '/landing' })
+  }
+
+  // Update a single filter value
+  const updateFilter = (key: keyof typeof filters, value: string | boolean) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
+  // Clear all filters to defaults
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      radiusMiles: 'ANY',
+      datePreset: 'ALL',
+      sortBy: 'ANY',
+    })
+    toast.success('Filters reset to defaults')
+  }
+
+  const handleRefresh = () => {
+    refetch()
+    toast.success('Refreshed', {
+      description: 'Job feed updated.',
+    })
+  }
+
+  // Navigate to full Gig Details page (only for bookable gigs)
+  const handleViewJob = (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId)
+    if (job?.stackingBlocked) {
+      setBlockedReason(job.stackingBlocked)
+      setSelectedJob(job)
+      setShowBlockedDialog(true)
+      return
+    }
+    navigate({ to: `/driver/job-details`, search: { jobId } })
+  }
+
+  // Open bottom sheet for a specific job (from map bubble tap)
+  const handleSelectJob = useCallback((job: JobItem) => {
+    setSelectedJob(job)
+    setShowSheet(true)
+  }, [])
+
+  // Transform API data to UI-friendly array
+  const jobs: JobItem[] = useMemo(() => {
+    return deliveriesData?.items?.map((item: any, index: number) => ({
+      id: item.deliveryId,
+      urgent: item.isUrgent || false,
+      type: serviceTypeLabels[item.serviceType] || item.serviceType,
+      date: formatDate(item.pickupWindowStart),
+      timeWindow: formatTimeRange(item.pickupWindowStart, item.pickupWindowEnd),
+      pickup: extractRouteLabel(item.pickupAddress || ''),
+      dropoff: extractRouteLabel(item.dropoffAddress || ''),
+      service: serviceTypeLabels[item.serviceType] || item.serviceType,
+      miles: item.deliveryDistanceMiles || null,
+      duration: formatDuration(item.etaMinutes),
+      payout: item.payoutPreviewAmount,
+      bonus: item.urgentBonusAmount,
+      requirements: [],
+      pickupAddressFull: item.pickupAddress || '',
+      dropoffAddressFull: item.dropoffAddress || '',
+      pickupWindowStartFull: item.pickupWindowStart || '',
+      pickupWindowEndFull: item.pickupWindowEnd || '',
+      etaMinutes: item.etaMinutes || null,
+      isUrgent: item.isUrgent || false,
+      lat: item.pickupLat && item.pickupLng ? item.pickupLat : mockPickupLocations[index % mockPickupLocations.length].lat,
+      lng: item.pickupLat && item.pickupLng ? item.pickupLng : mockPickupLocations[index % mockPickupLocations.length].lng,
+      dropoffLat: item.dropoffLat || null,
+      dropoffLng: item.dropoffLng || null,
+      stackingBlocked: item.stackingBlocked || null,
+      stackingDetails: item.stackingDetails || null,
+    })) || []
+  }, [deliveriesData])
+
+  // Map marker icons (only create when Google Maps API is loaded)
+  const driverDotIcon = useMemo(() => {
+    if (!isLoaded || typeof google === 'undefined') return null
+    return {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32"><circle cx="20" cy="20" r="14" fill="white" stroke="#4285F4" stroke-width="3"/><circle cx="20" cy="20" r="7" fill="#4285F4"/></svg>`),
+      scaledSize: new google.maps.Size(32, 32),
+      anchor: new google.maps.Point(16, 16),
+    }
+  }, [isLoaded])
+
+  const createPayBubbleIcon = useCallback((amount: string) => {
+    if (!isLoaded || typeof google === 'undefined') return null
+    return {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40" width="80" height="40"><rect x="2" y="2" width="76" height="36" rx="18" fill="#16a34a" stroke="white" stroke-width="2"/><text x="40" y="26" text-anchor="middle" fill="white" font-family="Arial,sans-serif" font-size="14" font-weight="bold">${amount}</text></svg>`),
+      scaledSize: new google.maps.Size(80, 40),
+      anchor: new google.maps.Point(40, 20),
+      labelOrigin: new google.maps.Point(40, 26),
+    }
+  }, [isLoaded])
+
+  const clusterIcon = useMemo(() => {
+    if (!isLoaded || typeof google === 'undefined') return null
+    return {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="50" height="50"><circle cx="25" cy="25" r="22" fill="#15803d" stroke="white" stroke-width="3"/><text x="25" y="31" text-anchor="middle" fill="white" font-family="Arial,sans-serif" font-size="16" font-weight="bold">${jobs.length}</text></svg>`),
+      scaledSize: new google.maps.Size(50, 50),
+      anchor: new google.maps.Point(25, 25),
+    }
+  }, [isLoaded, jobs.length])
+
+  // Map options
+  const mapOptions = useMemo(() => ({
+    fullscreenControl: false,
+    streetViewControl: false,
+    mapTypeControl: false,
+    zoomControl: true,
+    gestureHandling: 'auto' as const,
+    disableDefaultUI: false,
+    styles: [
+      { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'on' }] },
+      { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'on' }] },
+    ],
+  }), [])
+
+  // Format full date string for the bottom sheet
+  const formatFullDate = (isoString?: string): string => {
+    if (!isoString) return ''
+    return new Date(isoString).toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: BUSINESS_TZ,
+    })
+  }
+
+  return (
+    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col">
+      {/* ═══════════════════════════════════════ */}
+      {/* TOP APP BAR                           */}
+      {/* ═══════════════════════════════════════ */}
+      <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800">
+        <div className="max-w-[480px] mx-auto px-4 h-14 flex items-center justify-between">
+          {/* Left: Logo + Title */}
+          <div className="flex items-center gap-2.5">
+            <Link to="/" className="flex items-center" aria-label="101 Drivers">
+              <div className="w-9 h-9 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200">
+                <img
+                  src="/assets/101drivers-logo.jpg"
+                  alt="101 Drivers"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </Link>
+            <div className="leading-tight">
+              <div className="text-[13px] font-black text-slate-900 dark:text-white">
+                {activeView === 'map' ? 'Map View' : 'Gig Board (List)'}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Action icons — Filter, Notifications, Settings only */}
+          <div className="flex items-center gap-1.5">
+            {/* Driver identity pill (desktop) */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                {displayName}
+              </span>
+            </div>
+
+            {/* Filter */}
+            <Link
+              to="/driver/dashboard"
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              aria-label="Filter"
+            >
+              <Map className="w-4 h-4" />
+            </Link>
+
+            {/* Notifications — with unread count badge */}
+            <Link
+              to="/driver/inbox"
+              className="relative w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              aria-label="Notifications"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-slate-950 text-[11px] font-black flex items-center justify-center border border-white dark:border-slate-900">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Settings */}
+            <Link
+              to="/driver/preferences"
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              aria-label="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* ═══════════════════════════════════════ */}
+      {/* MAIN CONTENT                          */}
+      {/* ═══════════════════════════════════════ */}
+      {activeView === 'map' ? (
+        /* ─── MAP VIEW ─── */
+        <div className="flex-1">
+          {isLoaded ? (
+            <GoogleMap
+              mapContainerClassName="w-full"
+              mapContainerStyle={{ width: '100%', height: 'calc(100vh - 56px - 56px)' }}
+              center={{ lat: 33.94, lng: -118.40 }}
+              zoom={11}
+              options={mapOptions}
+              onLoad={(map) => { mapRef.current = map }}
+            >
+              {/* Driver location dot (blue with white ring) */}
+              <Marker
+                position={{ lat: 33.94, lng: -118.40 }}
+                icon={driverDotIcon}
+              />
+
+              {/* Cluster marker if many jobs */}
+              {jobs.length > 8 && (
+                <Marker
+                  position={{ lat: 34.0, lng: -118.3 }}
+                  icon={clusterIcon}
+                  onClick={() => {
+                    toast.info(`${jobs.length} gigs in this area`)
+                  }}
+                />
+              )}
+
+              {/* Service district / pickup area polygons */}
+              {pickupZones.length > 0 && <PickupZoneOverlay zones={pickupZones} />}
+
+              {/* Job pay bubble markers */}
+              {jobs.map((job) => (
+                <Marker
+                  key={job.id}
+                  position={{ lat: job.lat, lng: job.lng }}
+                  icon={createPayBubbleIcon(formatCurrency(job.payout))}
+                  onClick={() => handleSelectJob(job)}
+                />
+              ))}
+            </GoogleMap>
+          ) : (
+            <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 56px - 56px)' }}>
+              <div className="flex flex-col items-center gap-4">
+                <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+                <p className="text-sm text-slate-600 dark:text-slate-400">Loading map...</p>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ─── GIG BOARD (LIST VIEW) ─── */
+        <main className="flex-1 w-full max-w-[480px] mx-auto px-4 sm:px-6 py-4">
+          {/* Page Header */}
+          <div className="mb-4">
+            <h1 className="text-xl font-black text-slate-900 dark:text-white">
+              Gig Board
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Available deliveries near you. Tap to see details and book.
+            </p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative mb-3">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              value={filters.search}
+              onChange={(e) => updateFilter('search', e.target.value)}
+              className="h-11 w-full pl-11 pr-4 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+              placeholder="Search pickup location by city or ZIP"
+            />
+          </div>
+
+          {/* Filters Row */}
+          <Card className="border-slate-200 dark:border-slate-700/60 shadow-sm mb-4">
+            <CardContent className="p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                {/* Distance */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Distance</span>
+                  <Select
+                    value={filters.radiusMiles}
+                    onValueChange={(value) => updateFilter('radiusMiles', value)}
+                  >
+                    <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[130px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FILTER_OPTIONS.radiusOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Date */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Date</span>
+                  <Select
+                    value={filters.datePreset}
+                    onValueChange={(value) => updateFilter('datePreset', value)}
+                  >
+                    <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[110px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FILTER_OPTIONS.datePresetOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Order */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Order</span>
+                  <Select
+                    value={filters.sortBy}
+                    onValueChange={(value) => updateFilter('sortBy', value)}
+                  >
+                    <SelectTrigger className="h-9 rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-xs min-w-[120px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FILTER_OPTIONS.sortOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex-1" />
+
+                {/* Clear filters */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={clearFilters}
+                  className="inline-flex items-center justify-center px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-px"
+                >
+                  Clear
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section header with count */}
+          <div className="flex items-end justify-between gap-4 mb-3">
+            <h2 className="text-sm font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Gigs Nearby ({jobs.length})
+            </h2>
+          </div>
+
+          {/* Loading state */}
+          {isLoading && (
+            <Card className="border-slate-200 dark:border-slate-700/60 shadow-sm p-8 text-center rounded-2xl">
+              <div className="flex flex-col items-center gap-4">
+                <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+                <p className="text-sm text-slate-600 dark:text-slate-400">Loading available gigs...</p>
+              </div>
+            </Card>
+          )}
+
+          {/* Error state */}
+          {isError && (
+            <Card className="border-red-200 dark:border-red-900 shadow-sm p-8 rounded-2xl">
+              <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+                <AlertCircle className="w-5 h-5" />
+                <p className="text-sm font-semibold">Failed to load gigs. Please try again.</p>
+              </div>
+            </Card>
+          )}
+
+          {/* Empty state */}
+          {!isLoading && !isError && jobs.length === 0 && (
+            <Card className="border-slate-200 dark:border-slate-700/60 shadow-sm p-8 text-center rounded-2xl">
+              <div className="flex flex-col items-center gap-2">
+                <Inbox className="w-8 h-8 text-slate-400" />
+                <p className="text-sm text-slate-600 dark:text-slate-400">No gigs available at the moment.</p>
+              </div>
+            </Card>
+          )}
+
+          {/* Gig Cards */}
+          {jobs.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {jobs.map((job) => (
+                <GigCard
+                  key={job.id}
+                  job={job}
+                  onClick={() => handleViewJob(job.id)}
+                  isMapsLoaded={isLoaded}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+      )}
+
+      {/* ═══════════════════════════════════════ */}
+      {/* DETAILS BOTTOM SHEET                  */}
+      {/* ═══════════════════════════════════════ */}
+      <Sheet
+        open={showSheet}
+        onOpenChange={(open) => {
+          setShowSheet(open)
+          if (!open) setSelectedJob(null)
+        }}
+      >
+        <SheetContent
+          side="bottom"
+          className="rounded-t-3xl max-h-[70vh] overflow-y-auto p-0"
+          showCloseButton={true}
+        >
+          {selectedJob && (
+            <div className="px-6 pt-6 pb-4">
+              {/* Drag handle */}
+              <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600 mx-auto mb-5" />
+
+              <SheetHeader className="px-0 mb-4">
+                <SheetTitle className="text-lg font-black text-slate-900 dark:text-white text-left">
+                  {selectedJob.urgent ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Badge variant="outline" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 text-[11px] font-extrabold">
+                        <BoltIcon className="w-3.5 h-3.5 text-amber-500" />
+                        Urgent
+                      </Badge>
+                      <span>{selectedJob.type}</span>
+                    </span>
+                  ) : (
+                    <Badge variant="outline" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
+                      <Car className="w-3.5 h-3.5 text-primary" />
+                      {selectedJob.type}
+                    </Badge>
+                  )}
+                </SheetTitle>
+              </SheetHeader>
+
+              {/* Job Details */}
+              <div className="space-y-3">
+                {/* Date */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-0.5">
+                      Date
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">
+                      {formatFullDate(selectedJob.pickupWindowStartFull)}
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-0.5">
+                      Pickup Time
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">
+                      {selectedJob.timeWindow}
+                    </div>
+                  </div>
+                </div>
+
+                <Separator className="bg-slate-100 dark:bg-slate-800" />
+
+                {/* Pickup Location */}
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">
+                    Pickup
+                  </div>
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    {selectedJob.pickupAddressFull || selectedJob.pickup}
+                  </div>
+                </div>
+
+                {/* Drop-off Location */}
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-1">
+                    Drop-off
+                  </div>
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white flex items-start gap-2">
+                    <Navigation className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    {selectedJob.dropoffAddressFull || selectedJob.dropoff}
+                  </div>
+                </div>
+
+                <Separator className="bg-slate-100 dark:bg-slate-800" />
+
+                {/* Distance */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-0.5">
+                      Distance
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">
+                      {selectedJob.miles ? `${selectedJob.miles} mi` : '\u2014'}
+                    </div>
+                  </div>
+                </div>
+
+                <Separator className="bg-slate-100 dark:bg-slate-800" />
+
+                {/* Pay */}
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                    Pay
+                  </div>
+                  <div className="text-2xl font-black text-green-600 dark:text-green-400">
+                    {formatCurrency(selectedJob.payout)}
+                  </div>
+                </div>
+                {selectedJob.bonus && selectedJob.bonus > 0 && (
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <Bolt className="w-3.5 h-3.5 text-amber-500" />
+                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                      + {formatCurrency(selectedJob.bonus)} urgent bonus
+                    </span>
+                  </div>
+                )}
+
+                {/* Requirements badges removed — compliance steps happen after acceptance */}
+                {selectedJob.requirements && selectedJob.requirements.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedJob.requirements.map((req, idx) => (
+                      <Badge key={idx} variant="outline" className="chip bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">
+                        <req.icon className="w-3 h-3 text-primary mr-1" />
+                        {req.label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Buttons: Decline + Accept */}
+              <div className="flex gap-3 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSheet(false)
+                    setSelectedJob(null)
+                  }}
+                  className="flex-1 h-12 rounded-2xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm font-bold text-slate-600 dark:text-slate-300"
+                >
+                  Decline
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (selectedJob?.stackingBlocked) {
+                      setShowSheet(false)
+                      setBlockedReason(selectedJob.stackingBlocked)
+                      setShowBlockedDialog(true)
+                    } else {
+                      setShowSheet(false)
+                      handleViewJob(selectedJob.id)
+                    }
+                  }}
+                  className={cn(
+                    "flex-1 h-12 rounded-2xl transition text-sm font-bold",
+                    selectedJob?.stackingBlocked
+                      ? "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700 text-white"
+                  )}
+                >
+                  {selectedJob?.stackingBlocked ? 'Unavailable' : 'Accept'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Stacking blocked info dialog (from bottom sheet or direct navigation) */}
+      <AlertDialog open={showBlockedDialog} onOpenChange={setShowBlockedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              Can't Book This Gig
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2 whitespace-pre-line">
+              {selectedJob?.stackingDetails?.transit
+                ? (() => {
+                    const d = selectedJob!.stackingDetails!
+                    if (d.checkType === 'backward') {
+                      const c = d.conflictingDelivery
+                      const est = c?.estimatedFinishTime ? new Date(c.estimatedFinishTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : 'unknown'
+                      return `You have a delivery that conflicts with this one:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your previous delivery'}\nEstimated finish time: ${est}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to this pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
+                    }
+                    if (d.checkType === 'forward') {
+                      const c = d.conflictingDelivery
+                      const pt = c?.pickupWindowStart ? new Date(c.pickupWindowStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ }) : 'unknown'
+                      return `This would make you late for another booked gig:\n${c ? extractRouteLabel(c.pickupAddress) + ' \u2192 ' + extractRouteLabel(c.dropoffAddress) : 'Your next delivery'}\nThat pickup time: ${pt}${c?.etaMinutes ? `\nDrive time of that delivery: ${formatDuration(c.etaMinutes)}` : ''}\nDrive time to that pickup: ~${d.transit.driveMinutes} min (${d.transit.driveMiles} mi)${d.transit.bufferMinutes > 0 ? `\nBuffer time: ${d.transit.bufferMinutes} min` : ''}\nTotal time needed: ${d.transit.totalNeededMinutes} min\nAvailable: ${d.transit.availableMinutes} min`
+                    }
+                    if (d.checkType === 'radius') {
+                      return `Pickup is too far from your last drop-off (${d.transit.driveMiles} mi). Maximum allowed: ${d.effectiveMaxRadiusMiles ?? 25} miles.`
+                    }
+                    return blockedReason || 'This gig conflicts with your current schedule.'
+                  })()
+                : (blockedReason || 'This gig conflicts with your current schedule.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {selectedJob && (
+            <div className="py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400 space-y-1">
+              <p className="font-semibold text-slate-700 dark:text-slate-300">{selectedJob.pickup} &rarr; {selectedJob.dropoff}</p>
+              <p>{selectedJob.timeWindow} &middot; {selectedJob.miles ? `${selectedJob.miles} mi` : 'Unknown distance'}</p>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogAction>Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ═══════════════════════════════════════ */}
+      {/* BOTTOM TAB BAR — Map | List | Active   */}
+      {/* ═══════════════════════════════════════ */}
+      <DriverBottomNav/>
+    </div>
+  )
+}
