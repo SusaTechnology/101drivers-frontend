@@ -604,16 +604,16 @@ export function DealerSignIn({
           /* ========== DRIVER / ADMIN: Two-column layout ========== */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             {/* Left: Intro Section */}
-            <div className="lg:col-span-6 order-1 lg:order-1">
+            <div className="lg:col-span-6 order-2 lg:order-1">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0 hidden md:block">
                   {isAdmin ? (
                     <Lock className="text-primary w-6 h-6 font-bold" />
                   ) : (
                     <Car className="text-primary w-6 h-6 font-bold" />
                   )}
                 </div>
-                <div>
+                <div className="hidden md:block">
                   <h1 className="text-4xl font-black text-slate-900 dark:text-white">
                     {isAdmin ? "Admin Sign In" : "Welcome back, Driver"}
                   </h1>
@@ -687,14 +687,14 @@ export function DealerSignIn({
                     className="w-full py-3.5 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-12 text-base font-black"
                     asChild
                   >
-                    <Link to="/driver/onboarding">
+                    <Link to="/driver-onboarding">
                       Apply to Drive
                       <ArrowRight className="w-5 h-5" />
                     </Link>
                   </Button>
-                  <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 text-center leading-relaxed">
+                  {/* <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 text-center leading-relaxed">
                     All applicants must be 25 or older and pass a background check and DMV review.
-                  </p>
+                  </p> */}
                 </div>
               </CustomCard>
               )}
@@ -834,7 +834,7 @@ export function DealerSignIn({
                             asChild
                             type="button"
                           >
-                            <Link to="/driver/onboarding">Sign up</Link>
+                            <Link to="/driver-onboarding">Sign up</Link>
                           </Button>
                         </>
                       )}
