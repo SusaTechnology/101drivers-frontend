@@ -123,9 +123,11 @@ export default function LocationAutocomplete({
     console.log('Places services initialized');
   }, [isLoaded]);
 
-  // Sync external value changes
+  // Sync external value changes — only update if actually different to prevent cursor reset
   useEffect(() => {
-    setInputValue(value);
+    if (value !== inputValue) {
+      setInputValue(value);
+    }
   }, [value]);
 
   // Close dropdown when clicking outside
@@ -142,6 +144,7 @@ export default function LocationAutocomplete({
 
   // Fetch predictions (US addresses only, no state restriction)
   const fetchPredictions = useCallback((input: string) => {
+    console.log('[LocationAutocomplete] fetchPredictions called:', input, 'service:', !!autocompleteServiceRef.current);
     if (!autocompleteServiceRef.current || !input.trim()) {
       setPredictions([]);
       setShowDropdown(false);
@@ -193,6 +196,7 @@ export default function LocationAutocomplete({
   // Handle input change with debounce
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
+    console.log('[LocationAutocomplete] input changed:', newValue);
     setInputValue(newValue);
     onChangeRef.current(newValue);
 

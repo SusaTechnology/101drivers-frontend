@@ -275,6 +275,8 @@ export default function DriverOnboardingPage() {
   } = useForm<OnboardingFormData>({
     resolver: zodResolver(onboardingSchema),
     defaultValues: {
+      homeArea: '',
+      radius: '',
       alerts: true,
       acceptTerms: false,
       districts: [],
