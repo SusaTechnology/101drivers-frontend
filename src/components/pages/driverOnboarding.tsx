@@ -55,6 +55,9 @@ import {
   Clock,
   LogIn,
   Info,
+  UserCheck,
+  Users,
+  Database,
   AlertCircle,
   Menu,
   X,
@@ -1495,11 +1498,89 @@ export default function DriverOnboardingPage() {
             )}
 
             {openSheet === 'terms' && (
-              <p>For the full Terms of Service, please visit the <Link to="/terms" target="_blank" className="text-lime-600 dark:text-lime-400 font-bold underline">Terms of Service page</Link>.</p>
+              <>
+                <p>These Terms will govern your use of the 101 Drivers platform, including quote requests, delivery coordination, and compliance evidence handling. The terms are aligned with applicable laws for California operations.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Shield className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">Key Concepts</h3></div>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>Quote-first flow: you can view an estimate before providing additional details.</li>
+                  <li>Compliance evidence: deliveries may require photos, odometer readings, and VIN last-4 verification.</li>
+                  <li>Notifications: email-first updates (SMS optional if enabled by Admin policy).</li>
+                  <li>Platform rules: cancellation, rescheduling, and dispute handling will follow published policies.</li>
+                </ul>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><UserCheck className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">Accounts & Eligibility</h3></div>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>Dealers/individual customers may create delivery requests after authentication (when enabled).</li>
+                  <li>Drivers may require onboarding and approval before booking jobs.</li>
+                  <li>Admin oversight may be required for certain operations and compliance.</li>
+                </ul>
+
+                <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 flex gap-3">
+                  <Info className="h-5 w-5 shrink-0" />
+                  <p className="text-[11px] leading-normal font-medium">This page contains general information. For specific legal questions, please consult with legal counsel.</p>
+                </div>
+              </>
             )}
 
             {openSheet === 'privacy' && (
-              <p>For the full Privacy Policy, please visit the <Link to="/privacy" target="_blank" className="text-lime-600 dark:text-lime-400 font-bold underline">Privacy Policy page</Link>.</p>
+              <>
+                <p>101 Drivers Privacy Policy outlines how we collect, use, and share your personal information as a user of the 101 Drivers Platform. Our goal is to simplify your life by providing a reliable vehicle delivery platform, and to do so, we need to collect some of your personal information.</p>
+                <p>This policy applies to all users of the 101 Drivers Platform, including Customers and Drivers (including Driver applicants), and all 101 Drivers services.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Database className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">The Information We Collect</h3></div>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li><strong>Device Information:</strong> Hardware model, operating system, unique device identifiers, and mobile network information.</li>
+                  <li><strong>Log Information:</strong> Browser type, access times, pages viewed, IP address, and referring page.</li>
+                  <li><strong>Location Information:</strong> GPS signal or information about nearby Wi-Fi access points and cell towers.</li>
+                </ul>
+
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-5 mb-2">Location, Usage, and Device Data</h4>
+                <p>For Customers, we collect your device's precise location from the time you request a vehicle delivery until it ends. For Drivers, we collect your device's precise location when you use the app. We also collect delivery information like date, time, destination, distance, route, and payment.</p>
+
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-5 mb-2">Communications Data</h4>
+                <p>We facilitate phone calls and text messages between Customers and Drivers without sharing either party's actual phone number. However, we collect information about these communications, including phone numbers, date/time, and contents of SMS and chat messages.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Clock className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">How We Use Your Information</h3></div>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>Provide an intuitive, useful, efficient experience on our platform</li>
+                  <li>Verify your identity, maintain your account, settings, and preferences</li>
+                  <li>Connect you to your vehicle deliveries and provide various offerings</li>
+                  <li>Calculate prices and process payments</li>
+                  <li>Allow Customers and Drivers to connect and share their location</li>
+                  <li>Communicate with you about your use of the platform</li>
+                  <li>Maintain the security and safety of the platform and its users</li>
+                  <li>Authenticate users, investigate and resolve incidents, prevent fraud</li>
+                  <li>Provide customer support and improve the platform through research</li>
+                </ul>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Users className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">How We Share Your Information</h3></div>
+                <p>We do not sell your personal information to third parties for money, and we do not act as a data broker.</p>
+                <ul className="list-disc pl-5 space-y-2 mt-2">
+                  <li>The Customer's vehicle pickup and destination location, name, and vehicle info</li>
+                  <li>The Driver's name and profile photo</li>
+                  <li>We do not share actual phone numbers or contact information</li>
+                </ul>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Lock className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">Data Retention and Security</h3></div>
+                <p>We retain your information for as long as necessary to provide you and our other users the 101 Drivers Platform. We take reasonable measures to protect your personal information, but we cannot guarantee security against unauthorized intrusions.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><UserCheck className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">Your Rights and Choices</h3></div>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>Unsubscribe from commercial/promotional emails by clicking unsubscribe</li>
+                  <li>Opt out of promotional text messages and push notifications through device settings</li>
+                  <li>Review and edit account information through your account settings</li>
+                  <li>Prevent location sharing through your device's system settings</li>
+                  <li>Modify cookie settings on your browser</li>
+                  <li>Delete your 101 Drivers account by contacting us</li>
+                </ul>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Mail className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">Contact Us</h3></div>
+                <p>For any questions or concerns about your privacy, contact us at:</p>
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 mt-2">
+                  <a href="mailto:driver@101drivers.com" className="text-lime-500 font-bold hover:underline">driver@101drivers.com</a>
+                </div>
+              </>
             )}
 
             <button
