@@ -1,6 +1,14 @@
 // @ts-nocheck
 import React, { useCallback, useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { Handshake, AlertTriangle, ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -184,6 +192,7 @@ export default function DriverOnboardingPage() {
   // Password visibility states
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [openSheet, setOpenSheet] = useState<'agreement' | 'terms' | 'privacy' | null>(null);
 
   const navigate = useNavigate();
 
@@ -1254,29 +1263,29 @@ export default function DriverOnboardingPage() {
                       )}
                     >
                       By checking this box, I acknowledge that I have read, understood, and agree to be bound by the{" "}
-                      <Link
-                        to="/agreement"
+                      <button
+                        type="button"
                         className="font-extrabold hover:text-lime-500 underline"
-                        target="_blank"
+                        onClick={() => setOpenSheet('agreement')}
                       >
                         Independent Driver Agreement
-                      </Link>
+                      </button>
                       , the{" "}
-                      <Link
-                        to="/terms"
+                      <button
+                        type="button"
                         className="font-extrabold hover:text-lime-500 underline"
-                        target="_blank"
+                        onClick={() => setOpenSheet('terms')}
                       >
                         Terms of Service
-                      </Link>
+                      </button>
                       , and the{" "}
-                      <a
-                        href="/privacy#privacy-top"
+                      <button
+                        type="button"
                         className="font-extrabold hover:text-lime-500 underline"
-                        target="_blank"
+                        onClick={() => setOpenSheet('privacy')}
                       >
                         Privacy Policy
-                      </a>
+                      </button>
                       .
                     </Label>
                   </div>
@@ -1426,6 +1435,83 @@ export default function DriverOnboardingPage() {
       </main>
 
       <Footer />
+
+      {/* In-app sheet for agreement / terms / privacy — no navigation, one tap to go back */}
+      <Sheet open={!!openSheet} onOpenChange={(open) => !open && setOpenSheet(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader className="pt-8 px-6">
+            <SheetTitle className="text-2xl font-black text-slate-900 dark:text-white">
+              {openSheet === 'agreement' && 'Independent Driver Agreement'}
+              {openSheet === 'terms' && 'Terms of Service'}
+              {openSheet === 'privacy' && 'Privacy Policy'}
+            </SheetTitle>
+            <SheetDescription className="text-sm text-slate-500 dark:text-slate-400">
+              {openSheet === 'agreement' && 'Effective: April 1, 2026'}
+              {openSheet === 'terms' && 'Effective date: March 2024'}
+              {openSheet === 'privacy' && 'Last updated: March 2024'}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="px-6 pb-10 space-y-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            {openSheet === 'agreement' && (
+              <>
+                <p>This Independent Driver Agreement ("Agreement") is entered into by and between the driver ("Driver") and 101 Drivers, Inc. ("Company"). By checking the agreement box during signup, the Driver acknowledges and agrees to the following terms and conditions.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Shield className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">1. Independent Contractor Status</h3></div>
+                <p>The Driver acknowledges and agrees that they are an independent contractor and not an employee of the Company. The Driver shall be solely responsible for determining the manner and means by which services are performed. The Company does not control the Driver's work schedule, methods, or procedures, except as may be reasonably necessary to ensure the quality of services provided. Nothing in this Agreement shall be construed to create an employment relationship, partnership, joint venture, or agency relationship between the Driver and the Company.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Handshake className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">2. Services</h3></div>
+                <p>The Driver agrees to perform vehicle delivery services as requested through the Company's platform. The Driver shall use their own vehicle, equipment, and tools to perform the services. The Driver represents that they possess a valid driver's license, appropriate insurance coverage, and any other licenses or permits required by law to perform the services.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Handshake className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">3. Compensation</h3></div>
+                <p>The Driver shall be compensated for completed delivery services as outlined on the Company's platform. Compensation rates may be adjusted by the Company from time to time with reasonable notice. The Driver acknowledges that they are responsible for all taxes, including self-employment taxes, related to the compensation received under this Agreement.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Shield className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">4. Insurance and Liability</h3></div>
+                <p>The Driver shall maintain, at their own expense, appropriate automobile liability insurance that meets or exceeds the minimum requirements of the state(s) in which they operate. The Driver agrees to indemnify and hold harmless the Company from any claims, damages, or liabilities arising from the Driver's negligent acts or omissions in the performance of services under this Agreement.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Shield className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">5. Background Check</h3></div>
+                <p>The Driver consents to a background check and driving record review as a condition of providing services through the Company's platform. The Company reserves the right to suspend or terminate this Agreement if the results of such checks do not meet the Company's standards.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Shield className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">6. Confidentiality</h3></div>
+                <p>The Driver agrees to maintain the confidentiality of any proprietary or sensitive information received from the Company or its customers, including but not limited to customer contact information, delivery addresses, and business practices. This obligation survives the termination of this Agreement.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Shield className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">7. Termination</h3></div>
+                <p>Either party may terminate this Agreement at any time, with or without cause, by providing written notice to the other party. Upon termination, the Driver shall return any Company property and cease representing themselves as affiliated with the Company.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Shield className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">8. Governing Law</h3></div>
+                <p>This Agreement shall be governed by and construed in accordance with the laws of the State of Georgia, without regard to its conflict of laws provisions. Any disputes arising under this Agreement shall be resolved in the courts located in the State of Georgia.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Shield className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">9. Entire Agreement</h3></div>
+                <p>This Agreement constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior or contemporaneous agreements, representations, and understandings, whether written or oral.</p>
+
+                <div className="flex items-center gap-2 mt-6 mb-2"><Info className="h-4 w-4 text-lime-500" /><h3 className="text-base font-black text-slate-900 dark:text-white">10. Acknowledgment</h3></div>
+                <p>BY CHECKING THE AGREEMENT BOX DURING DRIVER SIGNUP, THE DRIVER ACKNOWLEDGES THAT THEY HAVE READ, UNDERSTAND, AND AGREE TO BE BOUND BY THE TERMS AND CONDITIONS OF THIS AGREEMENT. THE DRIVER FURTHER ACKNOWLEDGES THAT THEY HAVE HAD THE OPPORTUNITY TO REVIEW THIS AGREEMENT AND TO ASK QUESTIONS ABOUT ITS PROVISIONS.</p>
+
+                <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 flex gap-3">
+                  <AlertTriangle className="h-5 w-5 shrink-0" />
+                  <p className="text-[11px] leading-normal font-medium">This Agreement contains provisions that dictate how claims between you and 101 Drivers can be brought. By agreeing during signup, you acknowledge that you understand and accept all of the terms outlined in this Agreement.</p>
+                </div>
+              </>
+            )}
+
+            {openSheet === 'terms' && (
+              <p>For the full Terms of Service, please visit the <Link to="/terms" target="_blank" className="text-lime-600 dark:text-lime-400 font-bold underline">Terms of Service page</Link>.</p>
+            )}
+
+            {openSheet === 'privacy' && (
+              <p>For the full Privacy Policy, please visit the <Link to="/privacy" target="_blank" className="text-lime-600 dark:text-lime-400 font-bold underline">Privacy Policy page</Link>.</p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setOpenSheet(null)}
+              className="mt-6 w-full h-12 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 font-extrabold transition-colors"
+            >
+              Go Back to Sign Up
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
