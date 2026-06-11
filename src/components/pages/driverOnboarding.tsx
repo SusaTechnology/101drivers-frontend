@@ -1138,25 +1138,28 @@ export default function DriverOnboardingPage() {
                       : "border-transparent"
                   )}>
                     <Label htmlFor="homeArea" className="text-xs font-bold">
-                      Home ZIP Code {!homeAreaValue?.trim() && <span className="text-red-500"> *</span>}
+                      Home ZIP Code {!/^\d{5}$/.test(homeAreaValue?.trim() || '') && <span className="text-red-500"> *</span>}
                     </Label>
                     <div className="relative">
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <Input
                         id="homeArea"
-                        {...register("homeArea")}
+                        {...register("homeArea", {
+                          validate: (v) => v?.trim() ? /^\d{5}$/.test(v.trim()) || "Enter a valid 5-digit ZIP code" : true,
+                          onChange: () => { if (homeAreaValue?.trim()) trigger("homeArea"); }
+                        })}
                         className={cn(
                           "h-14 pl-12 rounded-2xl transition-colors",
                           errors.homeArea
                             ? "border-red-400 dark:border-red-500"
-                            : homeAreaValue?.trim()
+                            : /^\d{5}$/.test(homeAreaValue?.trim() || '')
                               ? "border-green-300 dark:border-green-700"
                               : ""
                         )}
                         placeholder="90012"
                         disabled={isPending || !isAgeVerified}
                       />
-                      {homeAreaValue?.trim() && !errors.homeArea && (
+                      {/^\d{5}$/.test(homeAreaValue?.trim() || '') && !errors.homeArea && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
                           <CheckCircle className="w-5 h-5 text-green-500" />
                         </div>
