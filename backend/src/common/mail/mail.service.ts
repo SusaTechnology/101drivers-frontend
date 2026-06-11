@@ -224,7 +224,7 @@ export class MailService {
         return `${this.appDomain}/auth/reset-password?${params.toString()}`;
       case "DRIVER":
       default:
-        return `${this.appDomain}/driver-onboarding?otp=${encodeURIComponent(token)}`;
+        return `${this.appDomain}/driver-verify-email?otp=${encodeURIComponent(token)}`;
     }
   }
 

@@ -132,10 +132,6 @@ interface DriverSignupPayload {
   agreementAcceptedAt?: string;
 }
 
-interface DriverSignupPayloadWithOtp extends DriverSignupPayload {
-  verificationToken: string;
-}
-
 // Format phone number to US format: (XXX) XXX-XXXX
 const formatPhoneNumber = (value: string): string => {
   // Remove all non-digit characters
@@ -178,11 +174,10 @@ const formatDateToStr = (date: Date): string => {
 };
 
 export default function DriverOnboardingPage() {
+  const DRIVER_PENDING_PAYLOAD_KEY = 'driverPendingPayload';
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedDistricts, setSelectedDistricts] = useState<string[]>([]);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpValue, setOtpValue] = useState("");
-  const [pendingSignupData, setPendingSignupData] = useState<DriverSignupPayload | null>(null);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [phoneDisplay, setPhoneDisplay] = useState("");
@@ -232,8 +227,10 @@ export default function DriverOnboardingPage() {
       toast.success("Code sent to your email", {
         description: `${data.message}`,
       });
-      setOtpSent(true);
-      setPendingSignupData(variables); // Store data for second step
+      // Store payload for the verify page
+      sessionStorage.setItem(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(variables));
+      // Navigate to the dedicated OTP verification page
+      navigate({ to: '/driver-verify-email' });
     },
     onError: (error) => {
       const errorMessage = error.message || "Please try again later.";
@@ -264,53 +261,7 @@ export default function DriverOnboardingPage() {
     fetchWithoutRefresh: true,
   });
 
-  // Mutation for resending code
-  const resendCodeMutation = useDataMutation<
-    { message: string },
-    DriverSignupPayload
-  >({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/driver/`, // Same endpoint as send
-    onSuccess: (data) => {
-      toast.success("Code resent successfully", {
-        description: "Check your email for the new verification code.",
-      });
-    },
-    onError: (error) => {
-      toast.error("Failed to resend code", {
-        description: error.message || "Please try again later.",
-      });
-    },
-    successMessage: "Code resent successfully",
-    errorMessage: "Failed to resend code",
-    fetchWithoutRefresh: true,
-  });
 
-  // Mutation for verifying OTP and final registration (second step)
-  const verifyOtpMutation = useDataMutation<
-    { message: string },
-    DriverSignupPayloadWithOtp
-  >({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/driver`, // Adjust endpoint as needed
-    onSuccess: (data, variables) => {
-      toast.success("Registration successful!", {
-        description: "You've been added to the waitlist. We'll notify you when you're invited to complete your application.",
-      });
-      // Clear draft from localStorage
-      localStorage.removeItem(DRIVER_SIGNUP_DRAFT_KEY);
-      // Store driver info in localStorage (excluding password for security, but you can store as needed)
-      const { password, ...safeData } = variables;
-      localStorage.setItem("driverSignupData", JSON.stringify(safeData));
-      setRegistrationComplete(true);
-    },
-    onError: (error) => {
-      toast.error("Verification failed", {
-        description: error.message || "Invalid code or server error.",
-      });
-    },
-    successMessage: "Driver signup submitted successfully",
-    errorMessage: "Failed to submit driver signup",
-    fetchWithoutRefresh: true,
-  });
 
   const {
     register,
@@ -379,7 +330,7 @@ export default function DriverOnboardingPage() {
     }
   };
 
-  // Check for OTP in URL and restore draft from localStorage
+  // Check for OTP in URL (email link resume) and redirect to verify page
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlOtp = urlParams.get('otp');
@@ -390,35 +341,36 @@ export default function DriverOnboardingPage() {
         try {
           const draft = JSON.parse(draftStr);
           if (draft.formData) {
-            // Restore form data
-            reset(draft.formData, { keepDefaultValues: false });
-            // Restore selected districts
-            if (draft.formData.districts) {
-              setSelectedDistricts(draft.formData.districts);
-            }
-            // Restore DOB display
-            if (draft.formData.dateOfBirth) {
-              setDobDisplay(draft.formData.dateOfBirth);
-            }
-            // Set OTP and show verification step
-            setOtpValue(urlOtp);
-            setOtpSent(true);
-            setDraftLoaded(true);
-            // Agreement was already accepted when the draft was saved
-            // acceptTerms is restored via reset() above
-            console.log("Draft restored from localStorage for OTP verification");
+            // Reconstruct the payload from draft form data
+            const payload: DriverSignupPayload = {
+              email: draft.formData.email,
+              password: draft.formData.password,
+              fullName: draft.formData.fullName,
+              dateOfBirth: draft.formData.dateOfBirth,
+              phone: draft.formData.phone,
+              homeArea: draft.formData.homeArea,
+              preferredRadius: draft.formData.radius,
+              districts: draft.formData.districts,
+              emailAlerts: draft.formData.alerts,
+              agreementAcceptedAt: new Date().toISOString(),
+            };
+            // Store payload and redirect to verify page (with OTP in URL)
+            sessionStorage.setItem(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(payload));
+            navigate({ to: '/driver-verify-email', search: { otp: urlOtp } });
           }
         } catch (e) {
-          console.error("Failed to parse draft", e);
+          console.error('Failed to parse draft', e);
+          toast.error('Session expired', {
+            description: 'Please start a new registration.',
+          });
         }
       } else {
-        // No draft found - user might have cleared storage or link expired
-        toast.error("Session expired", {
-          description: "Please start a new registration.",
+        toast.error('Session expired', {
+          description: 'Please start a new registration.',
         });
       }
     }
-  }, [reset]);
+  }, [navigate, reset]);
 
   // Handler for when a place is selected from autocomplete
   const handleHomeAreaSelect = useCallback((place: google.maps.places.PlaceResult) => {
@@ -447,26 +399,14 @@ export default function DriverOnboardingPage() {
       agreementAcceptedAt: new Date().toISOString(),
     };
 
-    if (!otpSent) {
-      // Step 1: Send OTP
-      // Save draft to localStorage so user can resume via email link
-      const draft = {
-        formData: data,
-      };
-      localStorage.setItem(DRIVER_SIGNUP_DRAFT_KEY, JSON.stringify(draft));
-      sendOtpMutation.mutate(basePayload);
-    } else {
-      // Step 2: Verify OTP and complete registration
-      if (!otpValue.trim()) {
-        toast.error("Please enter the verification code");
-        return;
-      }
-      const payloadWithOtp: DriverSignupPayloadWithOtp = {
-        ...basePayload,
-        verificationToken: otpValue,
-      };
-      verifyOtpMutation.mutate(payloadWithOtp);
-    }
+    // Save draft to localStorage so user can resume via email link
+    const draft = {
+      formData: data,
+    };
+    localStorage.setItem(DRIVER_SIGNUP_DRAFT_KEY, JSON.stringify(draft));
+
+    // Send OTP
+    sendOtpMutation.mutate(basePayload);
   };
 
   // Watch all form fields for validation feedback
@@ -522,7 +462,7 @@ export default function DriverOnboardingPage() {
   const isFormReady = allRequiredFieldsFilled && acceptTerms;
 
   // Determine if any mutation is pending
-  const isPending = sendOtpMutation.isPending || verifyOtpMutation.isPending || resendCodeMutation.isPending;
+  const isPending = sendOtpMutation.isPending;
 
   // Header component (unchanged)
   const Header = () => (
@@ -1273,49 +1213,7 @@ export default function DriverOnboardingPage() {
                     </div>
                   </div> */}
 
-                  {/* Code Input Field - appears only after code sent */}
-                  {otpSent && (
-                    <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="otp" className="text-xs font-bold">
-                          Enter Verification Code
-                        </Label>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (pendingSignupData) {
-                              resendCodeMutation.mutate(pendingSignupData);
-                            }
-                          }}
-                          disabled={resendCodeMutation.isPending}
-                          className="text-xs h-8 px-3 text-lime-600 hover:text-lime-700 dark:text-lime-400 dark:hover:text-lime-300 font-semibold"
-                        >
-                          {resendCodeMutation.isPending ? (
-                            <>
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-lime-600 mr-2"></div>
-                              Sending...
-                            </>
-                          ) : (
-                            "Resend Code"
-                          )}
-                        </Button>
-                      </div>
-                      <Input
-                        id="otp"
-                        value={otpValue}
-                        onChange={(e) => setOtpValue(e.target.value)}
-                        className="h-14 rounded-2xl text-center text-lg tracking-widest font-mono"
-                        placeholder="123456"
-                        maxLength={6}
-                        disabled={isPending || !isAgeVerified}
-                      />
-                      <p className="text-[11px] text-slate-500">
-                        Enter the 6-digit code sent to your email.
-                      </p>
-                    </div>
-                  )}
+
                 </CardContent>
               </Card>
 
@@ -1386,7 +1284,7 @@ export default function DriverOnboardingPage() {
                   <Button
                     type="submit"
                     onClick={handleSubmit(onSubmit)}
-                    disabled={isPending || !isAgeVerified || !isFormReady || (otpSent && !otpValue.trim())}
+                    disabled={isPending || !isAgeVerified || !isFormReady}
                     className={cn(
                       "w-full py-6 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
                       (!isAgeVerified || !isFormReady)
@@ -1408,9 +1306,7 @@ export default function DriverOnboardingPage() {
                   </Button>
 
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center mt-3">
-                    {otpSent
-                      ? "After verification, your application will be submitted for admin approval."
-                      : "After submission, you'll receive a verification code via email."}
+                    After clicking Continue, you'll receive a verification code via email.
                   </p>
                 </div>
               </div>
