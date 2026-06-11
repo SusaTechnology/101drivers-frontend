@@ -119,8 +119,6 @@ export default function LocationAutocomplete({
     autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
     const dummyDiv = document.createElement('div');
     placesServiceRef.current = new google.maps.places.PlacesService(dummyDiv);
-    
-    console.log('Places services initialized');
   }, [isLoaded]);
 
   // Sync external value changes — only update if actually different to prevent cursor reset
@@ -144,7 +142,6 @@ export default function LocationAutocomplete({
 
   // Fetch predictions (US addresses only, no state restriction)
   const fetchPredictions = useCallback((input: string) => {
-    console.log('[LocationAutocomplete] fetchPredictions called:', input, 'service:', !!autocompleteServiceRef.current);
     if (!autocompleteServiceRef.current || !input.trim()) {
       setPredictions([]);
       setShowDropdown(false);
@@ -177,10 +174,8 @@ export default function LocationAutocomplete({
     try {
       // Create a fresh service instance for each request to avoid stale state
       const service = new google.maps.places.AutocompleteService();
-      console.log('[LocationAutocomplete] calling getPlacePredictions with request:', JSON.stringify(request));
       service.getPlacePredictions(request,
         (results, status) => {
-          console.log('[LocationAutocomplete] API response:', status, 'results:', results?.length, results);
           setIsLoading(false);
           
           if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
@@ -195,11 +190,9 @@ export default function LocationAutocomplete({
 
           setPredictions(filtered);
           setShowDropdown(filtered.length > 0);
-          console.log('[LocationAutocomplete] showing dropdown:', filtered.length > 0, 'predictions:', filtered.length);
         }
       );
     } catch (err) {
-      console.error('[LocationAutocomplete] getPlacePredictions error:', err);
       setIsLoading(false);
       setPredictions([]);
       setShowDropdown(false);
@@ -209,7 +202,6 @@ export default function LocationAutocomplete({
   // Handle input change with debounce
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
-    console.log('[LocationAutocomplete] input changed:', newValue);
     setInputValue(newValue);
     onChangeRef.current(newValue);
 

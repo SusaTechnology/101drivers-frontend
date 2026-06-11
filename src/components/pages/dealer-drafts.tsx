@@ -187,7 +187,7 @@ export default function DealerDrafts() {
                 Draft Deliveries
               </h1>
               <p className="text-sm lg:text-base text-slate-600 dark:text-slate-400 max-w-2xl">
-                Manage your saved drafts. Continue editing to complete and submit for a quote.
+                Manage your saved drafts. Continue editing to complete and request a quote.
               </p>
             </div>
           </div>
@@ -384,7 +384,7 @@ export default function DealerDrafts() {
                 <div>
                   <h3 className="text-sm font-black text-lime-700 dark:text-lime-300">About Drafts</h3>
                   <p className="text-sm text-lime-600 dark:text-lime-400 mt-1">
-                    Drafts are saved delivery requests that are not yet submitted for a quote. You can edit them anytime and submit when ready.
+                    Drafts are saved delivery requests that are not yet requested for a quote. You can edit them anytime and request when ready.
                   </p>
                 </div>
               </div>

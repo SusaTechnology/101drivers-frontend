@@ -1839,14 +1839,14 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                     <User className="h-12 w-12 mx-auto mb-3 text-slate-400" />
                     <p className="text-sm font-medium">
                       {deliveryData.status === 'LISTED' ? 'Waiting for driver to book' :
-                       deliveryData.status === 'DRAFT' ? 'Draft - not yet submitted' :
+                       deliveryData.status === 'DRAFT' ? 'Draft - not yet requested' :
                        deliveryData.status === 'EXPIRED' ? 'Delivery expired' :
                        deliveryData.status === 'CANCELLED' ? 'Delivery cancelled' :
                        'Driver not yet assigned'}
                     </p>
                     <p className="text-xs mt-1">
                       {deliveryData.status === 'LISTED' ? 'Driver details will appear once a driver accepts this delivery.' :
-                       deliveryData.status === 'DRAFT' ? 'Submit this delivery to make it available for drivers.' :
+                       deliveryData.status === 'DRAFT' ? 'Request this delivery to make it available for drivers.' :
                        deliveryData.status === 'EXPIRED' ? 'This delivery expired but you can reactivate it by adjusting the schedule.' :
                        deliveryData.status === 'CANCELLED' ? 'This delivery was cancelled.' :
                        'Driver details appear after the delivery is booked.'}

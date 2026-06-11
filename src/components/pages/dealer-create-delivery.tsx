@@ -434,7 +434,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           console.error('Failed to delete draft after submission:', e);
         }
       }
-      toast.success("Delivery submitted!", {
+      toast.success("Delivery requested!", {
         description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
       });
       navigate({ to: "/dealer-dashboard" });
@@ -3247,13 +3247,13 @@ const handleQuotePreview = () => {
                     {draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED') 
                       ? 'Update Delivery' 
                       : draftId 
-                        ? 'Review & Submit Draft' 
-                        : 'Review & Submit'}
+                        ? 'Review & Request Draft' 
+                        : 'Review & Request'}
                   </CardTitle>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                     {draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED')
                       ? 'Your changes will update the existing delivery while keeping its current status.'
-                      : 'Review all details before submitting. You\'ll see a complete summary of your delivery request.'}
+                      : 'Review all details before requesting. You\'ll see a complete summary of your delivery request.'}
                   </p>
                 </div>
               </CardHeader>

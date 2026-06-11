@@ -320,7 +320,7 @@ export default function EditDraftPage() {
       return response.json();
     },
     onSuccess: () => {
-      toast.success("Delivery submitted successfully!");
+      toast.success("Delivery requested successfully!");
       // Optionally delete the draft after successful submission
       if (draftId) {
         fetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`, {
@@ -689,7 +689,7 @@ export default function EditDraftPage() {
                   onClick={handleSubmitForQuote}
                   disabled={submitForQuoteMutation.isPending}
                 >
-                  {submitForQuoteMutation.isPending ? "Submitting..." : "Submit for Quote"}
+                  {submitForQuoteMutation.isPending ? "Requesting..." : "Request Quote"}
                   <ChevronRight className="ml-2 h-5 w-5" />
                 </Button>
                 <Button
@@ -711,7 +711,7 @@ export default function EditDraftPage() {
                   )}
                 </Button>
                 <p className="text-[11px] text-slate-500 text-center">
-                  "Update Draft" saves your changes. "Submit for Quote" finalizes the delivery request.
+                  "Update Draft" saves your changes. "Request Quote" finalizes the delivery request.
                 </p>
               </CardContent>
             </Card>
@@ -749,7 +749,7 @@ export default function EditDraftPage() {
                     <Info className="h-5 w-5 text-lime-600 flex-shrink-0 mt-0.5" />
                     <div className="text-sm text-lime-700 dark:text-lime-300">
                       <p className="font-bold">Draft Mode</p>
-                      <p className="text-xs mt-1">This delivery is saved as a draft. Complete the required fields and submit for a quote when ready.</p>
+                      <p className="text-xs mt-1">This delivery is saved as a draft. Complete the required fields and request a quote when ready.</p>
                     </div>
                   </div>
                 </CardContent>

@@ -432,21 +432,21 @@ export default function ReviewDeliveryPage() {
 
       // POSTPAID: delivery created, no payment required — navigate away
       if (reviewData?.paymentType === 'POSTPAID') {
-        toast.success('Delivery submitted!', {
+        toast.success('Delivery requested!', {
           description: 'Your delivery is now visible to drivers. You will be invoiced after delivery completion.',
         });
         navigate({ to: newDeliveryId ? '/dealer-delivery-details' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
       }
       // PREPAID with existing Stripe PI: payment already secured
       else if (hasStripePI) {
-        toast.success('Delivery submitted!', {
+        toast.success('Delivery requested!', {
           description: 'Payment is already secured for this delivery.',
         });
         navigate({ to: newDeliveryId ? '/dealer-delivery-details' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
       }
       // PREPAID without payment: MUST pay now — show Stripe dialog
       else if (newDeliveryId) {
-        toast.success('Delivery submitted!', {
+        toast.success('Delivery requested!', {
           description: 'Please complete your payment to list the delivery for drivers.',
         });
         setPendingPaymentDeliveryId(newDeliveryId);
@@ -456,7 +456,7 @@ export default function ReviewDeliveryPage() {
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to create delivery";
       const errorDetails = error?.response?.data?.details || error?.details;
-      toast.error("Failed to submit delivery", {
+      toast.error("Failed to request delivery", {
         description: errorDetails || errorMessage,
       });
       console.error("Delivery creation failed:", error);
@@ -631,7 +631,7 @@ export default function ReviewDeliveryPage() {
           </div>
           <Badge variant="outline" className="bg-lime-50 dark:bg-lime-900/20 border-lime-200 dark:border-lime-900/30 text-lime-700 dark:text-lime-400">
             <CheckCircle className="h-3 w-3 mr-1" />
-            Ready to submit
+            Ready to request
           </Badge>
         </div>
       </header>
@@ -650,7 +650,7 @@ export default function ReviewDeliveryPage() {
                     Review Your Delivery Request
                   </h1>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Please review all details below. Click "Edit" on any section to make changes, then submit when ready.
+                    Please review all details below. Click "Edit" on any section to make changes, then request when ready.
                   </p>
                 </div>
               </div>
@@ -1165,11 +1165,11 @@ export default function ReviewDeliveryPage() {
                     {submitDelivery.isPending ? (
                       <>
                         <span className="animate-spin mr-2">⏳</span>
-                        Submitting...
+                        Requesting...
                       </>
                     ) : (
                       <>
-                        Submit Delivery
+                        Request Delivery
                         <ChevronRight className="ml-2 h-5 w-5" />
                       </>
                     )}
@@ -1202,7 +1202,7 @@ export default function ReviewDeliveryPage() {
                 </p>
               </div>
               <p className="text-xs text-slate-500 text-center mt-4">
-                By submitting, you agree to the terms of service. Your delivery will be listed for drivers to book.
+                By requesting, you agree to the terms of service. Your delivery will be listed for drivers to book.
               </p>
             </CardContent>
           </Card>

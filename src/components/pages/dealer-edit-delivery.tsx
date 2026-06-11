@@ -2232,7 +2232,7 @@ export default function EditDeliveryPage() {
               )}
             </div>
 
-            {/* RIGHT COLUMN - Recipient, Payment, Submit */}
+            {/* RIGHT COLUMN - Recipient, Payment, Request */}
             <div className="xl:col-span-5 space-y-8">
               {/* Recipient Tracking */}
               <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
@@ -2397,12 +2397,12 @@ export default function EditDeliveryPage() {
                 </Card>
               )}
 
-              {/* Submit */}
+              {/* Request */}
               <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-xl transition-shadow">
                 <CardHeader>
                   <div>
                     <CardDescription className="text-[11px] font-black uppercase tracking-widest">
-                      Submit
+                      Request
                     </CardDescription>
                     <CardTitle className="text-2xl font-black mt-2">
                       Delivery Details
