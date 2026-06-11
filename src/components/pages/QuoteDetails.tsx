@@ -632,7 +632,7 @@ export function QuoteDetails() {
               </div>
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold">
                 <NumberIcon number={3} className="text-primary" />
-                Submit request
+                Request delivery
               </div>
             </div>
 
@@ -1175,7 +1175,7 @@ export function QuoteDetails() {
                       {isSubmitting ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground"></div>
-                          Submitting...
+                          Requesting...
                         </>
                       ) : verificationRequired ? (
                         otp.length === 6 ? (
@@ -1188,14 +1188,14 @@ export function QuoteDetails() {
                         )
                       ) : (
                         <>
-                          Review & Submit Request
+                          Review & Request Delivery
                           <ArrowLeft className="w-4 h-4 font-bold rotate-180" />
                         </>
                       )}
                     </Button>
 
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed text-center">
-                      After submitting, we'll send updates by{" "}
+                      After requesting, we'll send updates by{" "}
                       <span className="font-bold">email</span> (SMS optional if enabled).
                     </p>
                   </div>

@@ -1201,7 +1201,7 @@ export default function LandingPage() {
                         className="w-full bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold gap-2 h-11 rounded-2xl text-sm"
                       >
                         {submitDealerLead.isPending ? (
-                          <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
+                          <><Loader2 className="h-4 w-4 animate-spin" /> Requesting...</>
                         ) : (
                           <><Send className="h-4 w-4" /> Get Started</>
                         )}
@@ -1332,9 +1332,9 @@ export default function LandingPage() {
                           className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-extrabold gap-2"
                         >
                           {submitInvestorLead.isPending ? (
-                            <><Loader2 className="h-4 w-4 animate-spin" /> Submitting...</>
+                            <><Loader2 className="h-4 w-4 animate-spin" /> Requesting...</>
                           ) : (
-                            <><Send className="h-4 w-4" /> Submit Request</>
+                            <><Send className="h-4 w-4" /> Request</>
                           )}
                         </Button>
                       </form>

@@ -198,7 +198,7 @@ export default function QuoteConfirmation() {
                   </div>
                   <div>
                     <p className="text-lime-950/70 text-xs font-black uppercase tracking-widest">
-                      Delivery Request Submitted
+                      Delivery Requested
                     </p>
                     <h1 className="text-2xl sm:text-3xl font-black text-white">
                       Request Confirmed!
@@ -256,7 +256,7 @@ export default function QuoteConfirmation() {
                 </Card>
 
                 <p className="text-base text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Your delivery request has been submitted successfully. Our team will review the details 
+                  Your delivery has been requested successfully. Our team will review the details 
                   and match you with an available driver. You'll receive status updates 
                   <span className="font-bold"> by email</span> at each step.
                 </p>
