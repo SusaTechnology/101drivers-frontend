@@ -26,6 +26,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import { PhotoDialog } from '@/components/ui/photo-dialog'
 import StripePaymentWrapper from '@/components/stripe/StripePaymentWrapper'
 import StripeTipPaymentWrapper from '@/components/stripe/StripeTipPaymentWrapper'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -180,6 +181,10 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   // Tip state
   const [tipAmount, setTipAmount] = useState<number | ''>('')
   const [customTipInput, setCustomTipInput] = useState('')
+  // Photo dialog state
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
+  const [photoDialogSrc, setPhotoDialogSrc] = useState('')
+  const [photoDialogTitle, setPhotoDialogTitle] = useState('')
 
   const user = getUser()
   const dealerId = user?.profileId
@@ -409,6 +414,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     deliveries: assignment.driver.deliveryCount || '—',
     verified: assignment.driver.status === 'APPROVED',
     phone: assignment.driver.phone || '—',
+    avatar: assignment.driver.selfiePhotoUrl || assignment.driver.profilePhotoUrl || '',
   } : null
 
   // Timeline based on real timestamps
@@ -1792,8 +1798,15 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                 {driver && !['LISTED', 'DRAFT', 'EXPIRED', 'CANCELLED'].includes(deliveryData.status) ? (
                   <>
                     <div className="mt-6 flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-3xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden flex items-center justify-center">
-                        <User className="h-8 w-8 text-slate-600 dark:text-slate-300" />
+                      <div
+                        className="w-16 h-16 rounded-3xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden flex items-center justify-center"
+                        onClick={() => { if (driver.avatar) { setPhotoDialogSrc(driver.avatar); setPhotoDialogTitle(driver.name); setPhotoDialogOpen(true); }}}
+                      >
+                        {driver.avatar ? (
+                          <img src={driver.avatar} alt={driver.name} className="w-full h-full object-cover cursor-pointer" />
+                        ) : (
+                          <User className="h-8 w-8 text-slate-600 dark:text-slate-300" />
+                        )}
                       </div>
 
                       <div className="flex-1">
@@ -2245,6 +2258,14 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Photo Dialog for driver avatar */}
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        src={photoDialogSrc}
+        title={photoDialogTitle}
+      />
     </div>
   )
 }

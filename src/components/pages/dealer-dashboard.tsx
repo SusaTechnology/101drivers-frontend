@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { PhotoDialog } from '@/components/ui/photo-dialog'
 import {
   Dialog,
   DialogContent,
@@ -141,6 +142,10 @@ export default function DealerDashboard() {
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [pullDistance, setPullDistance] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Photo dialog state for driver avatar
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false)
+  const [photoDialogSrc, setPhotoDialogSrc] = useState('')
+  const [photoDialogTitle, setPhotoDialogTitle] = useState('')
   
   // New state for features
   const [showMapView, setShowMapView] = useState(false)
@@ -632,7 +637,7 @@ export default function DealerDashboard() {
                     {delivery.driver && (
                       <div className="mt-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10 border-2 border-lime-500"><AvatarImage src={delivery.driver.avatar} alt={delivery.driver.name} /><AvatarFallback className="bg-lime-100 text-lime-700 font-bold">{delivery.driver.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback></Avatar>
+                          <Avatar className="h-10 w-10 border-2 border-lime-500 cursor-pointer" onClick={() => { if (delivery.driver.avatar) { setPhotoDialogSrc(delivery.driver.avatar); setPhotoDialogTitle(delivery.driver.name); setPhotoDialogOpen(true); }}}><AvatarImage src={delivery.driver.avatar} alt={delivery.driver.name} /><AvatarFallback className="bg-lime-100 text-lime-700 font-bold">{delivery.driver.name.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback></Avatar>
                           <div><div className="font-bold text-slate-900 dark:text-white">{delivery.driver.name}</div><div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">{delivery.driver.rating && <><Sparkles className="h-3 w-3 text-amber-500" /><span>{delivery.driver.rating.toFixed(1)}</span></>}{delivery.driver.verified && <Badge variant="outline" className="ml-1 text-[10px] px-1.5 py-0 h-4 border-lime-500 text-lime-600">Verified</Badge>}</div></div>
                         </div>
                         <div className="flex items-center gap-2"><a href={`sms:${delivery.driver.phone}`} className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 hover:bg-blue-200 transition"><MessageSquare className="h-5 w-5" /></a><a href={`tel:${delivery.driver.phone}`} className="w-10 h-10 rounded-xl bg-lime-500 flex items-center justify-center text-slate-950 hover:bg-lime-600 transition"><Phone className="h-5 w-5" /></a></div>
@@ -728,6 +733,14 @@ export default function DealerDashboard() {
 
       {/* Floating Action Button */}
       <Link to="/dealer-create-delivery" className="fixed right-4 bottom-20 w-14 h-14 rounded-2xl bg-lime-500 text-slate-950 flex items-center justify-center shadow-lg shadow-lime-500/30 hover:bg-lime-600 hover:scale-105 transition-all z-40 sm:hidden"><Plus className="h-7 w-7" /></Link>
+
+      {/* Photo Dialog for driver avatar */}
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        src={photoDialogSrc}
+        title={photoDialogTitle}
+      />
     </div>
   )
 }

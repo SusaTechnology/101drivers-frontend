@@ -50,7 +50,6 @@ import {
   CalendarDays,
   Home,
   CreditCard,
-  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -86,7 +85,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/lib/theme';
-import { useFileUpload } from '@/lib/tanstack/dataQuery';
+import { PhotoDialog, usePhotoUpload, downloadImageAsFile } from '@/components/ui/photo-dialog';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   useAdminUserDetail,
@@ -330,53 +329,15 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const [photoDialogSrc, setPhotoDialogSrc] = useState('');
   const [photoDialogTitle, setPhotoDialogTitle] = useState('');
   const [photoDialogCanUpdate, setPhotoDialogCanUpdate] = useState(false);
-  const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(null);
-  const photoInputRef = React.useRef<HTMLInputElement>(null);
   const UPLOAD_URL = import.meta.env.VITE_API_URL || '';
-  const uploadDriverPhoto = useFileUpload<{ ok: boolean; url: string }>(
-    `${UPLOAD_URL}/api/uploads/driver-profile-photo`,
-    {
-      onSuccess: (data) => {
-        if (data.url) {
-          setPendingPhotoUrl(data.url);
-          toast.success('Photo uploaded successfully');
-        }
-      },
-      onError: () => toast.error('Failed to upload photo'),
-    }
-  );
-
-  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    uploadDriverPhoto.mutate(formData);
-    e.target.value = '';
-  };
+  const photoUpload = usePhotoUpload(`${UPLOAD_URL}/api/uploads/driver-profile-photo`);
+  const pendingPhotoUrl = photoUpload.pendingUrl;
 
   const openPhotoDialog = (src: string, title: string, canUpdate: boolean) => {
     setPhotoDialogSrc(src);
     setPhotoDialogTitle(title);
     setPhotoDialogCanUpdate(canUpdate);
     setPhotoDialogOpen(true);
-  };
-
-  const downloadPhoto = async (url: string, filename: string) => {
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename + '.jpg';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      toast.error('Download failed', { description: 'Could not download the image. Try right-clicking and saving.' });
-    }
   };
 
   // ==================== QUERIES ====================
@@ -711,7 +672,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           preferredRadius: user.driver.preferences?.radiusMiles ? String(user.driver.preferences.radiusMiles) : '',
         });
       }
-      setPendingPhotoUrl(null);
+      photoUpload.clearPending();
     }
   };
 
@@ -788,7 +749,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         onSuccess: () => {
           toast.success('Driver profile updated successfully');
           setEditMode('none');
-          setPendingPhotoUrl(null);
+          photoUpload.clearPending();
           refetch();
         },
         onError: () => toast.error('Failed to update driver profile'),
@@ -1627,8 +1588,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                 )}
                                 <div className="flex-1">
                                   <p className="text-xs text-slate-500">Click photo to view, download, or update</p>
-                                  {uploadDriverPhoto.isPending && <p className="text-xs text-sky-500 mt-0.5">Uploading new photo...</p>}
-                                  {pendingPhotoUrl && !uploadDriverPhoto.isPending && <p className="text-xs text-green-500 mt-0.5">New photo ready to save</p>}
+                                  {photoUpload.isPending && <p className="text-xs text-sky-500 mt-0.5">Uploading new photo...</p>}
+                                  {pendingPhotoUrl && !photoUpload.isPending && <p className="text-xs text-green-500 mt-0.5">New photo ready to save</p>}
                                 </div>
                               </div>
                             </div>
@@ -1863,8 +1824,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                   <span className="text-[10px]">No photo</span>
                                 </div>
                               )}
-                              {uploadDriverPhoto.isPending && <p className="text-xs text-sky-500 mt-1">Uploading...</p>}
-                              {pendingPhotoUrl && !uploadDriverPhoto.isPending && <p className="text-xs text-green-500 mt-1">New photo ready to save</p>}
+                              {photoUpload.isPending && <p className="text-xs text-sky-500 mt-1">Uploading...</p>}
+                              {pendingPhotoUrl && !photoUpload.isPending && <p className="text-xs text-green-500 mt-1">New photo ready to save</p>}
                             </div>
                           </div>
                           {user.driver.approvedAt && (
@@ -2234,54 +2195,21 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
       </Dialog>
 
       {/* Photo Viewer Dialog */}
-      <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
-        <DialogContent className="rounded-2xl max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">{photoDialogTitle}</DialogTitle>
-            <DialogDescription>
-              {photoDialogCanUpdate ? 'View, download, or update this photo.' : 'View or download this photo.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4">
-            <img
-              src={photoDialogSrc}
-              alt={photoDialogTitle}
-              className="max-w-full max-h-[60vh] object-contain rounded-xl"
-            />
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => downloadPhoto(photoDialogSrc, photoDialogTitle.toLowerCase().replace(/\s+/g, '-'))}
-              >
-                <Download className="w-4 h-4 mr-1.5" />
-                Download
-              </Button>
-              {photoDialogCanUpdate && (
-                <Button
-                  onClick={() => {
-                    setPhotoDialogOpen(false);
-                    setTimeout(() => photoInputRef.current?.click(), 100);
-                  }}
-                  disabled={uploadDriverPhoto.isPending}
-                  className="rounded-xl"
-                >
-                  <Camera className="w-4 h-4 mr-1.5" />
-                  {uploadDriverPhoto.isPending ? 'Uploading...' : 'Update Photo'}
-                </Button>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Hidden file input for photo upload */}
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handlePhotoFileChange}
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        src={photoDialogSrc}
+        title={photoDialogTitle}
+        showDownload={true}
+        showUpdate={photoDialogCanUpdate}
+        uploading={photoUpload.uploading}
+        onDownload={(src, title) => downloadImageAsFile(src, title.toLowerCase().replace(/\s+/g, '-'))}
+        onUpdate={() => {
+          setPhotoDialogOpen(false);
+          setTimeout(() => photoUpload.inputRef.current?.click(), 100);
+        }}
       />
+      {photoUpload.HiddenFileInput}
 
       <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">
         <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
