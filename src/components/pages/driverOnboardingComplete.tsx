@@ -146,7 +146,7 @@ const onboardingCompleteSchema = z.object({
   residentialZip: z
     .string()
     .min(1, "ZIP code is required")
-    .regex(/^\d{5}$/, "ZIP code must be exactly 5 digits"),
+    .regex(/^\d{5}$/, "ZIP code must be exactly 5 digits (numbers only)"),
   selfiePhotoUrl: z.string().min(1, "Selfie photo is required"),
 });
 
