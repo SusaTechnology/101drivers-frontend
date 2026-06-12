@@ -34,7 +34,6 @@ import {
   ArrowRight,
   User,
   Shield,
-  LogIn,
   Home,
   Info,
   Menu,
@@ -1366,14 +1365,6 @@ function Header({
         </div>
 
         <div className="flex items-center gap-4">
-          <Link
-            to="/driver-signin"
-            className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-          >
-            <LogIn className="h-4 w-4" />
-            Driver Sign In
-          </Link>
-
           <Button
             variant="outline"
             size="icon"
@@ -1413,12 +1404,6 @@ function Header({
               About
             </Link>
             <Separator className="my-2" />
-            <Link
-              to="/driver-signin"
-              className="text-sm font-bold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors"
-            >
-              Driver Sign In
-            </Link>
           </div>
         </div>
       )}

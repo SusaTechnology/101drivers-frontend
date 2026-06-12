@@ -132,10 +132,10 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
             once an administrator approves your application.
           </p>
           <button
-            onClick={() => navigate({ to: "/driver-signin" })}
+            onClick={() => window.history.back()}
             className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
-            Back to Sign In
+            Go Back
           </button>
         </div>
       </div>
@@ -159,10 +159,10 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
             when a spot opens up.
           </p>
           <button
-            onClick={() => navigate({ to: "/driver-signin" })}
+            onClick={() => window.history.back()}
             className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
-            Back to Sign In
+            Go Back
           </button>
         </div>
       </div>
@@ -182,13 +182,13 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
           </h2>
           <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
             Congratulations! An administrator has invited you to complete your
-            driver application. Please sign in to continue.
+            driver application. You will be redirected to continue the process.
           </p>
           <button
-            onClick={() => navigate({ to: "/driver-signin" })}
-            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold bg-sky-500 hover:bg-sky-600 text-white transition"
+            onClick={() => window.history.back()}
+            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
-            Sign In to Continue
+            Go Back
           </button>
         </div>
       </div>
@@ -211,10 +211,10 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
             more information.
           </p>
           <button
-            onClick={() => navigate({ to: "/" })}
+            onClick={() => window.history.back()}
             className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
-            Go Home
+            Go Back
           </button>
         </div>
       </div>
