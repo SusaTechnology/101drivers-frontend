@@ -889,6 +889,13 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                           <Loader2 className="w-6 h-6 text-white animate-spin" />
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => licenseFrontInputRef.current?.click()}
+                        className="absolute bottom-2 right-2 px-3 py-1 rounded-lg bg-black/60 text-white text-[10px] font-bold hover:bg-black/80 transition-colors"
+                      >
+                        Retake
+                      </button>
                     </div>
                   ) : (
                     <button
@@ -936,6 +943,13 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                           <Loader2 className="w-6 h-6 text-white animate-spin" />
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => licenseBackInputRef.current?.click()}
+                        className="absolute bottom-2 right-2 px-3 py-1 rounded-lg bg-black/60 text-white text-[10px] font-bold hover:bg-black/80 transition-colors"
+                      >
+                        Retake
+                      </button>
                     </div>
                   ) : (
                     <button
