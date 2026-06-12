@@ -362,12 +362,22 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
     setPhotoDialogOpen(true);
   };
 
-  const downloadPhoto = (url: string, filename: string) => {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.target = '_blank';
-    a.click();
+  const downloadPhoto = async (url: string, filename: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename + '.jpg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      // Fallback: open in new tab if fetch fails (e.g. CORS)
+      window.open(url, '_blank');
+    }
   };
 
   // ==================== QUERIES ====================
@@ -2243,7 +2253,6 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
               <Button
                 variant="outline"
                 onClick={() => downloadPhoto(photoDialogSrc, photoDialogTitle.toLowerCase().replace(/\s+/g, '-'))}
-                className="rounded-xl"
               >
                 <Download className="w-4 h-4 mr-1.5" />
                 Download
