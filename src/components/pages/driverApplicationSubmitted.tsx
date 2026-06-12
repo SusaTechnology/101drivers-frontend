@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowRight } from "lucide-react";
+import { CheckCircle, ArrowRight, Clock } from "lucide-react";
 
 export function DriverApplicationSubmitted() {
   return (
@@ -22,6 +22,12 @@ export function DriverApplicationSubmitted() {
                 when we need more drivers in your area. Thank you for your
                 interest.
               </p>
+              <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <Clock className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                  Waitlisted
+                </span>
+              </div>
             </div>
           </div>
           <div className="p-6 sm:p-10">
