@@ -50,6 +50,7 @@ import {
   CalendarDays,
   Home,
   CreditCard,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -85,6 +86,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/lib/theme';
+import { useFileUpload } from '@/lib/tanstack/dataQuery';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   useAdminUserDetail,
@@ -322,6 +324,51 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
   // SSN visibility state
   const [ssnVisible, setSsnVisible] = useState(false);
+
+  // Photo dialog state
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [photoDialogSrc, setPhotoDialogSrc] = useState('');
+  const [photoDialogTitle, setPhotoDialogTitle] = useState('');
+  const [photoDialogCanUpdate, setPhotoDialogCanUpdate] = useState(false);
+  const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(null);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
+  const UPLOAD_URL = import.meta.env.VITE_API_URL || '';
+  const uploadDriverPhoto = useFileUpload<{ ok: boolean; url: string }>(
+    `${UPLOAD_URL}/api/uploads/driver-profile-photo`,
+    {
+      onSuccess: (data) => {
+        if (data.url) {
+          setPendingPhotoUrl(data.url);
+          toast.success('Photo uploaded successfully');
+        }
+      },
+      onError: () => toast.error('Failed to upload photo'),
+    }
+  );
+
+  const handlePhotoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    uploadDriverPhoto.mutate(formData);
+    e.target.value = '';
+  };
+
+  const openPhotoDialog = (src: string, title: string, canUpdate: boolean) => {
+    setPhotoDialogSrc(src);
+    setPhotoDialogTitle(title);
+    setPhotoDialogCanUpdate(canUpdate);
+    setPhotoDialogOpen(true);
+  };
+
+  const downloadPhoto = (url: string, filename: string) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.target = '_blank';
+    a.click();
+  };
 
   // ==================== QUERIES ====================
 
@@ -655,6 +702,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           preferredRadius: user.driver.preferences?.radiusMiles ? String(user.driver.preferences.radiusMiles) : '',
         });
       }
+      setPendingPhotoUrl(null);
     }
   };
 
@@ -715,8 +763,10 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
     const updateData: AdminUpdateUserRequest = {
       driver: {
         phone: data.phone || undefined,
-        profilePhotoUrl: data.profilePhotoUrl || undefined,
-        selfiePhotoUrl: data.selfiePhotoUrl || undefined,
+        ...(pendingPhotoUrl ? {
+          profilePhotoUrl: pendingPhotoUrl,
+          selfiePhotoUrl: pendingPhotoUrl,
+        } : {}),
         residentialZip: data.residentialZip || undefined,
       },
     };
@@ -729,6 +779,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         onSuccess: () => {
           toast.success('Driver profile updated successfully');
           setEditMode('none');
+          setPendingPhotoUrl(null);
           refetch();
         },
         onError: () => toast.error('Failed to update driver profile'),
@@ -1547,26 +1598,30 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               />
                             </div>
                             <div>
-                              <Label className="text-xs font-bold text-slate-500">Profile Photo URL</Label>
-                              <Input
-                                {...editDriverForm.register('profilePhotoUrl')}
-                                className="rounded-xl mt-1"
-                                placeholder="https://..."
-                              />
-                              {editDriverForm.formState.errors.profilePhotoUrl && (
-                                <p className="text-xs text-rose-500 mt-1">{editDriverForm.formState.errors.profilePhotoUrl.message}</p>
-                              )}
-                            </div>
-                            <div>
-                              <Label className="text-xs font-bold text-slate-500">Selfie Photo URL</Label>
-                              <Input
-                                {...editDriverForm.register('selfiePhotoUrl')}
-                                className="rounded-xl mt-1"
-                                placeholder="https://..."
-                              />
-                              {editDriverForm.formState.errors.selfiePhotoUrl && (
-                                <p className="text-xs text-rose-500 mt-1">{editDriverForm.formState.errors.selfiePhotoUrl.message}</p>
-                              )}
+                              <Label className="text-xs font-bold text-slate-500">Driver Photo</Label>
+                              <div className="flex items-center gap-3 mt-1">
+                                {(pendingPhotoUrl || user.driver.selfiePhotoUrl || user.driver.profilePhotoUrl) ? (
+                                  <img
+                                    src={pendingPhotoUrl || user.driver.selfiePhotoUrl || user.driver.profilePhotoUrl}
+                                    alt="Driver photo"
+                                    className="w-16 h-16 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => openPhotoDialog(
+                                      pendingPhotoUrl || user.driver.selfiePhotoUrl || user.driver.profilePhotoUrl || '',
+                                      'Driver Photo',
+                                      true
+                                    )}
+                                  />
+                                ) : (
+                                  <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-400">
+                                    <Camera className="w-5 h-5" />
+                                  </div>
+                                )}
+                                <div className="flex-1">
+                                  <p className="text-xs text-slate-500">Click photo to view, download, or update</p>
+                                  {uploadDriverPhoto.isPending && <p className="text-xs text-sky-500 mt-0.5">Uploading new photo...</p>}
+                                  {pendingPhotoUrl && !uploadDriverPhoto.isPending && <p className="text-xs text-green-500 mt-0.5">New photo ready to save</p>}
+                                </div>
+                              </div>
                             </div>
                             <div>
                               <Label className="text-xs font-bold text-slate-500">
@@ -1733,7 +1788,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                     <img
                                       src={user.driver.licenseFrontUrl}
                                       alt="License front"
-                                      className="w-32 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                                      className="w-32 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                                      onClick={() => openPhotoDialog(user.driver.licenseFrontUrl!, 'License Front', false)}
                                     />
                                   ) : (
                                     <div className="w-32 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-slate-400">
@@ -1748,7 +1804,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                     <img
                                       src={user.driver.licenseBackUrl}
                                       alt="License back"
-                                      className="w-32 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                                      className="w-32 h-20 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                                      onClick={() => openPhotoDialog(user.driver.licenseBackUrl!, 'License Back', false)}
                                     />
                                   ) : (
                                     <div className="w-32 h-20 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-slate-400">
@@ -1776,22 +1833,29 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               </div>
                             </div>
                           )}
-                          {/* Driver Selfie Photo */}
+                          {/* Driver Photo */}
                           <div>
-                            <Label className="text-xs font-bold text-slate-500">Selfie Photo</Label>
+                            <Label className="text-xs font-bold text-slate-500">Driver Photo</Label>
                             <div className="mt-2">
-                              {user.driver.selfiePhotoUrl ? (
+                              {(user.driver.selfiePhotoUrl || user.driver.profilePhotoUrl) ? (
                                 <img
-                                  src={user.driver.selfiePhotoUrl}
-                                  alt="Driver selfie"
-                                  className="w-32 h-32 object-cover rounded-2xl border border-slate-200 dark:border-slate-700"
+                                  src={pendingPhotoUrl || user.driver.selfiePhotoUrl || user.driver.profilePhotoUrl}
+                                  alt="Driver photo"
+                                  className="w-32 h-32 object-cover rounded-2xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => openPhotoDialog(
+                                    pendingPhotoUrl || user.driver.selfiePhotoUrl || user.driver.profilePhotoUrl || '',
+                                    'Driver Photo',
+                                    true
+                                  )}
                                 />
                               ) : (
                                 <div className="w-32 h-32 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-slate-400">
                                   <Camera className="w-6 h-6 mb-1" />
-                                  <span className="text-[10px]">No selfie</span>
+                                  <span className="text-[10px]">No photo</span>
                                 </div>
                               )}
+                              {uploadDriverPhoto.isPending && <p className="text-xs text-sky-500 mt-1">Uploading...</p>}
+                              {pendingPhotoUrl && !uploadDriverPhoto.isPending && <p className="text-xs text-green-500 mt-1">New photo ready to save</p>}
                             </div>
                           </div>
                           {user.driver.approvedAt && (
@@ -2159,6 +2223,57 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Photo Viewer Dialog */}
+      <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">{photoDialogTitle}</DialogTitle>
+            <DialogDescription>
+              {photoDialogCanUpdate ? 'View, download, or update this photo.' : 'View or download this photo.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4">
+            <img
+              src={photoDialogSrc}
+              alt={photoDialogTitle}
+              className="max-w-full max-h-[60vh] object-contain rounded-xl"
+            />
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => downloadPhoto(photoDialogSrc, photoDialogTitle.toLowerCase().replace(/\s+/g, '-'))}
+                className="rounded-xl"
+              >
+                <Download className="w-4 h-4 mr-1.5" />
+                Download
+              </Button>
+              {photoDialogCanUpdate && (
+                <Button
+                  onClick={() => {
+                    setPhotoDialogOpen(false);
+                    setTimeout(() => photoInputRef.current?.click(), 100);
+                  }}
+                  disabled={uploadDriverPhoto.isPending}
+                  className="rounded-xl"
+                >
+                  <Camera className="w-4 h-4 mr-1.5" />
+                  {uploadDriverPhoto.isPending ? 'Uploading...' : 'Update Photo'}
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hidden file input for photo upload */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePhotoFileChange}
+      />
 
       <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">
         <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
