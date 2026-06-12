@@ -882,21 +882,18 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     className="hidden"
                   />
                   {licenseFrontPreview ? (
-                    <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                      <img src={licenseFrontPreview} alt="License front" className="w-full h-32 object-cover" />
-                      {licenseFrontUploading && (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <Loader2 className="w-6 h-6 text-white animate-spin" />
-                        </div>
-                      )}
-                      <button
-                        type="button"
+                    <>
+                      <img
+                        src={licenseFrontPreview}
+                        alt="License front"
+                        className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => licenseFrontInputRef.current?.click()}
-                        className="absolute bottom-2 right-2 px-3 py-1 rounded-lg bg-black/60 text-white text-[10px] font-bold hover:bg-black/80 transition-colors"
-                      >
-                        Retake
-                      </button>
-                    </div>
+                      />
+                      {licenseFrontUploading && (
+                        <p className="text-[10px] text-sky-500 mt-1">Uploading...</p>
+                      )}
+                      <p className="text-[10px] text-slate-400 mt-1">Tap the photo to retake or change</p>
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -936,21 +933,18 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     className="hidden"
                   />
                   {licenseBackPreview ? (
-                    <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                      <img src={licenseBackPreview} alt="License back" className="w-full h-32 object-cover" />
-                      {licenseBackUploading && (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <Loader2 className="w-6 h-6 text-white animate-spin" />
-                        </div>
-                      )}
-                      <button
-                        type="button"
+                    <>
+                      <img
+                        src={licenseBackPreview}
+                        alt="License back"
+                        className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => licenseBackInputRef.current?.click()}
-                        className="absolute bottom-2 right-2 px-3 py-1 rounded-lg bg-black/60 text-white text-[10px] font-bold hover:bg-black/80 transition-colors"
-                      >
-                        Retake
-                      </button>
-                    </div>
+                      />
+                      {licenseBackUploading && (
+                        <p className="text-[10px] text-sky-500 mt-1">Uploading...</p>
+                      )}
+                      <p className="text-[10px] text-slate-400 mt-1">Tap the photo to retake or change</p>
+                    </>
                   ) : (
                     <button
                       type="button"
