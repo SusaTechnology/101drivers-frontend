@@ -268,6 +268,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
     handleSubmit,
     setValue,
     watch,
+    trigger,
     formState: { errors },
   } = useForm<OnboardingCompleteFormData>({
     resolver: zodResolver(onboardingCompleteSchema),
