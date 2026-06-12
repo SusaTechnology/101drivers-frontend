@@ -375,8 +375,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch {
-      // Fallback: open in new tab if fetch fails (e.g. CORS)
-      window.open(url, '_blank');
+      toast.error('Download failed', { description: 'Could not download the image. Try right-clicking and saving.' });
     }
   };
 
