@@ -217,8 +217,11 @@ export class DriverApprovalEngine {
           "",
           "Great news! Your driver application has been approved.",
           "You now have access to the 101 Drivers platform.",
-          "Log in to your account to start viewing available deliveries.",
-          input.note ? `\nNote from our team: ${input.note}` : "",
+          "Log in to your account to start viewing available deliveries:",
+          "",
+          `https://${(process.env.APP_DOMAIN || "101drivers.techbee.et").replace(/^https?:\/\//, "")}/driver-signin`,
+          "",
+          input.note ? `Note from our team: ${input.note}` : "",
         ]
           .filter(Boolean)
           .join("\n"),
