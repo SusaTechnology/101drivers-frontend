@@ -497,7 +497,7 @@ export default function QuoteConfirmation() {
                 <p className="text-xs text-slate-500">California-only operations</p>
               </div>
             </div>
-            <p className="text-xs text-slate-400">© 2024 101 Drivers Inc. All rights reserved.</p>
+            <p className="text-xs text-slate-400">© 2026 101 Drivers Inc. All rights reserved.</p>
           </div>
         </div>
       </footer>

@@ -150,7 +150,7 @@ export default function TermsOfService() {
               California-only operations • Email-first notifications
             </p>
           </div>
-          <p className="text-xs text-slate-500 font-medium">© 2024 101 Drivers Inc. All rights reserved.</p>
+          <p className="text-xs text-slate-500 font-medium">© 2026 101 Drivers Inc. All rights reserved.</p>
         </div>
       </div>
     </footer>
@@ -175,7 +175,7 @@ export default function TermsOfService() {
                   This page contains our current terms of service for the 101 Drivers platform.
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-3">
-                  Effective date: <span className="font-bold">March 2024</span>
+                  Effective date: <span className="font-bold">March 2026</span>
                 </p>
               </div>
             </div>
