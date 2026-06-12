@@ -100,10 +100,6 @@ interface UsePhotoUploadReturn {
   clearPending: () => void;
 }
 
-/**
- * Hook that provides file upload logic for PhotoDialog.
- * Uploads to the given endpoint and returns the URL.
- */
 export function usePhotoUpload(uploadEndpoint: string): UsePhotoUploadReturn {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [pendingUrl, setPendingUrl] = React.useState<string | null>(null);

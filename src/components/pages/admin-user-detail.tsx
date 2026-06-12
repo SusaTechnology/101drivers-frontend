@@ -330,7 +330,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const [photoDialogTitle, setPhotoDialogTitle] = useState('');
   const [photoDialogCanUpdate, setPhotoDialogCanUpdate] = useState(false);
   const UPLOAD_URL = import.meta.env.VITE_API_URL || '';
-  const photoUpload = usePhotoUpload(`${UPLOAD_URL}/api/uploads/driver-profile-photo`);
+  const photoUpload = usePhotoUpload(`${UPLOAD_URL}/api/public/uploads/driver-selfie`);
   const pendingPhotoUrl = photoUpload.pendingUrl;
 
   const openPhotoDialog = (src: string, title: string, canUpdate: boolean) => {
