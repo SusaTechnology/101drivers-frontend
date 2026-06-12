@@ -1165,7 +1165,9 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   <div className="relative">
                     <Input
                       id="zipCode"
-                      {...register("residentialZip")}
+                      {...register("residentialZip", {
+                        onChange: () => { if (watchZipCode?.trim()) trigger("residentialZip"); }
+                      })}
                       className={cn(
                         "h-14 rounded-2xl pr-10 transition-colors",
                         errors.residentialZip
