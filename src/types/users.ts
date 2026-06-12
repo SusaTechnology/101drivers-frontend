@@ -391,6 +391,7 @@ export interface AdminUpdateUserRequest {
     phone?: string;
     profilePhotoUrl?: string;
     selfiePhotoUrl?: string;
+    residentialZip?: string;
   };
 }
 

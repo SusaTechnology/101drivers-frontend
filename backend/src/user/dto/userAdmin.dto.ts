@@ -8,6 +8,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
 } from "class-validator";
@@ -71,6 +72,12 @@ export class UserAdminUpdateDriverDto {
   @IsOptional()
   @IsString()
   selfiePhotoUrl?: string | null;
+
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{5}$/, { message: 'ZIP code must be exactly 5 digits' })
+  residentialZip?: string | null;
 }
 
 export class UserAdminUpdateBodyDto {

@@ -146,6 +146,12 @@ const editCustomerSchema = z.object({
 const editDriverSchema = z.object({
   phone: z.string().optional(),
   profilePhotoUrl: z.string().url('Invalid URL').optional().or(z.literal('')),
+  selfiePhotoUrl: z.string().url('Invalid URL').optional().or(z.literal('')),
+  residentialZip: z.string()
+    .regex(/^\d{5}$/, 'Enter a valid 5-digit ZIP code')
+    .optional()
+    .or(z.literal('')),
+  preferredRadius: z.string().optional(),
 });
 
 type SuspendFormData = z.infer<typeof suspendSchema>;
@@ -405,6 +411,9 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         editDriverForm.reset({
           phone: user.driver.phone || '',
           profilePhotoUrl: user.driver.profilePhotoUrl || '',
+          selfiePhotoUrl: user.driver.selfiePhotoUrl || '',
+          residentialZip: user.driver.residentialZip || '',
+          preferredRadius: user.driver.preferences?.radiusMiles ? String(user.driver.preferences.radiusMiles) : '',
         });
       }
     }
@@ -641,6 +650,9 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         editDriverForm.reset({
           phone: user.driver.phone || '',
           profilePhotoUrl: user.driver.profilePhotoUrl || '',
+          selfiePhotoUrl: user.driver.selfiePhotoUrl || '',
+          residentialZip: user.driver.residentialZip || '',
+          preferredRadius: user.driver.preferences?.radiusMiles ? String(user.driver.preferences.radiusMiles) : '',
         });
       }
     }
@@ -704,6 +716,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
       driver: {
         phone: data.phone || undefined,
         profilePhotoUrl: data.profilePhotoUrl || undefined,
+        selfiePhotoUrl: data.selfiePhotoUrl || undefined,
+        residentialZip: data.residentialZip || undefined,
       },
     };
     adminUpdateUserMutation.mutate(
@@ -1542,6 +1556,44 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               {editDriverForm.formState.errors.profilePhotoUrl && (
                                 <p className="text-xs text-rose-500 mt-1">{editDriverForm.formState.errors.profilePhotoUrl.message}</p>
                               )}
+                            </div>
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Selfie Photo URL</Label>
+                              <Input
+                                {...editDriverForm.register('selfiePhotoUrl')}
+                                className="rounded-xl mt-1"
+                                placeholder="https://..."
+                              />
+                              {editDriverForm.formState.errors.selfiePhotoUrl && (
+                                <p className="text-xs text-rose-500 mt-1">{editDriverForm.formState.errors.selfiePhotoUrl.message}</p>
+                              )}
+                            </div>
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">
+                                Home ZIP Code
+                                {editDriverForm.watch('residentialZip') && !/^\d{5}$/.test(editDriverForm.watch('residentialZip')?.trim() || '') && (
+                                  <span className="text-red-500 ml-1">*</span>
+                                )}
+                              </Label>
+                              <Input
+                                {...editDriverForm.register('residentialZip', {
+                                  onChange: () => { if (editDriverForm.getValues('residentialZip')?.trim()) editDriverForm.trigger('residentialZip'); }
+                                })}
+                                className="rounded-xl mt-1"
+                                placeholder="90012"
+                                maxLength={5}
+                              />
+                              {editDriverForm.formState.errors.residentialZip && (
+                                <p className="text-xs text-rose-500 mt-1">{editDriverForm.formState.errors.residentialZip.message}</p>
+                              )}
+                            </div>
+                            <div>
+                              <Label className="text-xs font-bold text-slate-500">Preferred Radius (miles)</Label>
+                              <Input
+                                {...editDriverForm.register('preferredRadius')}
+                                className="rounded-xl mt-1"
+                                placeholder="e.g. 25"
+                              />
                             </div>
                           </div>
                           <div className="flex justify-end gap-2 pt-4">
