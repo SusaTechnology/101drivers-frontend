@@ -1,7 +1,6 @@
 import React from "react";
-import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Clock, LogIn, Home } from "lucide-react";
+import { CheckCircle, ArrowRight } from "lucide-react";
 
 export function DriverApplicationSubmitted() {
   return (
@@ -16,39 +15,23 @@ export function DriverApplicationSubmitted() {
                 </div>
               </div>
               <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
-                Registration Complete!
+                Thank You!
               </h2>
               <p className="text-lg text-slate-600 dark:text-slate-400 mt-3 max-w-md">
-                Your account has been created and added to the waitlist. An
-                administrator will review your information and invite you to
-                complete your application.
+                We have received your basic information and we'll contact you
+                when we need more drivers in your area. Thank you for your
+                interest.
               </p>
-              <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                <Clock className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                  Waitlisted
-                </span>
-              </div>
             </div>
           </div>
           <div className="p-6 sm:p-10">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link to="/driver-signin" className="flex-1">
-                <Button className="w-full h-12 rounded-2xl font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-950">
-                  <LogIn className="w-5 h-5 mr-2" />
-                  Go to Sign In
-                </Button>
-              </Link>
-              <Link to="/" className="flex-1">
-                <Button
-                  variant="outline"
-                  className="w-full h-12 rounded-2xl font-bold"
-                >
-                  <Home className="w-5 h-5 mr-2" />
-                  Back to Home
-                </Button>
-              </Link>
-            </div>
+            <Button
+              onClick={() => window.history.back()}
+              className="w-full h-12 rounded-2xl font-bold bg-lime-500 hover:bg-lime-600 text-black transition-colors"
+            >
+              <ArrowRight className="w-4 h-4 mr-2 rotate-180" />
+              Go Back
+            </Button>
           </div>
         </div>
       </div>

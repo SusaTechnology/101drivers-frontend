@@ -102,8 +102,8 @@ export default function DriverVerifyEmailPage() {
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/driver`,
     onSuccess: (_data, variables) => {
-      toast.success('Registration successful!', {
-        description: "You've been added to the waitlist.",
+      toast.success('Application submitted!', {
+        description: "We'll contact you when we need more drivers in your area.",
       });
       // Clear session data
       sessionStorage.removeItem(DRIVER_PENDING_PAYLOAD_KEY);
