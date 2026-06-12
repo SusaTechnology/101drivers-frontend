@@ -576,7 +576,7 @@ export default function DriverOnboardingPage() {
             </p>
           </div>
           <p className="text-xs text-slate-500 font-medium">
-            © 2024 101 Drivers Inc. All rights reserved.
+            © 2026 101 Drivers Inc. All rights reserved.
           </p>
         </div>
       </div>
@@ -1453,8 +1453,8 @@ export default function DriverOnboardingPage() {
             </SheetTitle>
             <SheetDescription className="text-sm text-slate-500 dark:text-slate-400">
               {openSheet === 'agreement' && 'Effective: April 1, 2026'}
-              {openSheet === 'terms' && 'Effective date: March 2024'}
-              {openSheet === 'privacy' && 'Last updated: March 2024'}
+              {openSheet === 'terms' && 'Effective date: March 2026'}
+              {openSheet === 'privacy' && 'Last updated: March 2026'}
             </SheetDescription>
           </SheetHeader>
 

@@ -988,7 +988,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
               California-only operations • Email-first notifications
             </p>
           </div>
-          <p className="text-xs text-slate-500 font-medium">© 2024 101 Drivers Inc. All rights reserved.</p>
+          <p className="text-xs text-slate-500 font-medium">© 2026 101 Drivers Inc. All rights reserved.</p>
         </div>
       </div>
     </footer>

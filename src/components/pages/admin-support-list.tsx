@@ -413,7 +413,7 @@ export default function AdminSupportListPage() {
               </p>
             </div>
             <p className="text-xs text-slate-500 font-medium">
-              © 2024 101 Drivers Inc. All rights reserved.
+              © 2026 101 Drivers Inc. All rights reserved.
             </p>
           </div>
         </div>
