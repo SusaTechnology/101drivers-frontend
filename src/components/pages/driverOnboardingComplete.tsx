@@ -1179,6 +1179,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                       placeholder="90001"
                       autoComplete="postal-code"
                       inputMode="numeric"
+                      pattern="[0-9]*"
                       maxLength={5}
                       disabled={false}
                     />
