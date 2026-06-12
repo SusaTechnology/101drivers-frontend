@@ -125,7 +125,11 @@ const onboardingCompleteSchema = z.object({
     .string()
     .min(1, "Social Security Number is required")
     .regex(/^\d{9}$/, "SSN must be exactly 9 digits"),
-  licenseNumber: z.string().min(1, "License number is required"),
+  licenseNumber: z
+    .string()
+    .min(1, "License number is required")
+    .max(15, "License number is too long")
+    .regex(/^[A-Za-z]?\d{1,14}$/, "Enter a valid license number (e.g. D1234567)"),
   licenseState: z
     .string()
     .min(1, "License state is required")
@@ -319,6 +323,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       setValue("selfiePhotoUrl", "");
     } finally {
       setSelfieUploading(false);
+      e.target.value = "";
     }
   }, [setValue]);
 
@@ -448,6 +453,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       setValue("licenseFrontUrl", "");
     } finally {
       setLicenseFrontUploading(false);
+      e.target.value = "";
     }
   }, [setValue]);
 
@@ -488,6 +494,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       setValue("licenseBackUrl", "");
     } finally {
       setLicenseBackUploading(false);
+      e.target.value = "";
     }
   }, [setValue]);
 
@@ -776,12 +783,15 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                 )}
               >
                 <Label htmlFor="licenseNumber" className="text-xs font-bold">
-                  License Number{!watchLicenseNumber?.trim() && <span className="text-red-500">*</span>}
+                  License Number{(!watchLicenseNumber?.trim() || (watchLicenseNumber?.trim() && !/^[A-Za-z]?\d{1,14}$/.test(watchLicenseNumber.trim()))) && <span className="text-red-500">*</span>}
                 </Label>
                 <div className="relative">
                   <Input
                     id="licenseNumber"
-                    {...register("licenseNumber")}
+                    {...register("licenseNumber", {
+                    maxLength: 15,
+                    onChange: () => { if (watchLicenseNumber?.trim()) trigger("licenseNumber"); }
+                  })}
                     className={cn(
                       "h-14 rounded-2xl pr-10 transition-colors",
                       errors.licenseNumber
