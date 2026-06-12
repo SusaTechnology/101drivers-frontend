@@ -76,6 +76,13 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -1613,12 +1620,21 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                               )}
                             </div>
                             <div>
-                              <Label className="text-xs font-bold text-slate-500">Preferred Radius (miles)</Label>
-                              <Input
-                                {...editDriverForm.register('preferredRadius')}
-                                className="rounded-xl mt-1"
-                                placeholder="e.g. 25"
-                              />
+                              <Label className="text-xs font-bold text-slate-500">Preferred Radius</Label>
+                              <Select
+                                value={editDriverForm.watch('preferredRadius') || ''}
+                                onValueChange={(value) => editDriverForm.setValue('preferredRadius', value)}
+                              >
+                                <SelectTrigger className="rounded-xl mt-1">
+                                  <SelectValue placeholder="Select radius" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="25">25 miles</SelectItem>
+                                  <SelectItem value="50">50 miles</SelectItem>
+                                  <SelectItem value="75">75 miles</SelectItem>
+                                  <SelectItem value="100">100 miles</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                           <div className="flex justify-end gap-2 pt-4">
