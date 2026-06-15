@@ -48,7 +48,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { getUser, useCreate, useDataQuery, useFileUpload, useUpdate } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useFileUpload, usePatch } from '@/lib/tanstack/dataQuery'
 import { GoogleMap, Marker } from '@react-google-maps/api'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
@@ -176,10 +176,9 @@ export default function DriverPreferencesPage() {
   })
 
   // Single mutation for PATCH /drivers/{driverId}/profile
-  const updateProfile = useUpdate(
+  const updateProfile = usePatch(
     `${import.meta.env.VITE_API_URL}/api/drivers/${driver?.profileId}/profile`,
     {
-      // method: 'PATCH',
       onSuccess: () => {
         toast.success('Preferences saved successfully')
       },
@@ -347,7 +346,13 @@ export default function DriverPreferencesPage() {
       },
       () => {
         toast.error('Unable to get current location')
+        setUseCurrentLocation(false)
         setLocating(false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000,
       }
     )
   }
