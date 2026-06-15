@@ -628,13 +628,14 @@ const handleUploadOdometerPhoto = async () => {
     }
     // Auto-submit on 4th digit (same pattern as PIN auto-verify)
     if (digitsOnly.length === 4 && !vinVerified && !saveProgressMutation.isPending) {
-      setTimeout(() => handleSubmitAll(), 300)
+      setTimeout(() => handleSubmitAll(digitsOnly), 300)
     }
   }
 
-  // Step 5: Submit all (upload remaining + enter VIN)
-  const handleSubmitAll = () => {
-    // Validate
+  // Step 6: Submit all checklist data (called on 4th VIN digit)
+  const handleSubmitAll = (overrideVin?: string) => {
+    const vin = overrideVin ?? vinValue
+    // Validate prerequisite steps
     if (!greeted) {
       toast.error('Step 1 missing', { description: 'Please confirm you are at the vehicle.' })
       return
@@ -655,13 +656,9 @@ const handleUploadOdometerPhoto = async () => {
       toast.error('VIN photo not saved', { description: 'Please upload the VIN photo.' })
       return
     }
-    if (!vinValue) {
-      setVinError('Enter last 4 digits')
-      toast.error('VIN digits required', { description: 'Enter last 4 digits' })
-      return
-    }
-    if (!/^\d{4}$/.test(vinValue)) {
-      setVinError(vinValue.length < 4 ? 'Enter last 4 digits' : 'Numbers only')
+    // VIN is guaranteed 4 digits when called from auto-submit, but validate anyway
+    if (!/^\d{4}$/.test(vin)) {
+      setVinError(vin.length < 4 ? 'Enter last 4 digits' : 'Numbers only')
       toast.error('VIN digits required', { description: 'Enter the last 4 digits (numbers only).' })
       return
     }
@@ -669,7 +666,7 @@ const handleUploadOdometerPhoto = async () => {
     // Backend expects exactly 6 photos (slots 1-6) + odometerStart as number + vinVerificationCode
     const payload = {
       driverId,
-      vinVerificationCode: vinValue,
+      vinVerificationCode: vin,
       odometerStart: Math.floor(Number(odometerValue)),
       photos: uploadedPhotos.map(p => ({ slotIndex: p.slotIndex, imageUrl: p.imageUrl })),
     }
@@ -1845,7 +1842,10 @@ const handleUploadOdometerPhoto = async () => {
                       <>
                         <div className="mt-5 grid grid-cols-1 sm:grid-cols-1 gap-3">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-red-500">VIN last-4 digits</label>
+                            <label className={cn(
+                              "text-[10px] font-black uppercase tracking-[0.3em] transition",
+                              vinValue.length === 4 && !vinError ? "text-green-600 dark:text-green-400" : "text-red-500"
+                            )}>VIN last-4 digits</label>
                             <div className="relative">
                               <Input
                                 value={vinValue}
@@ -1854,12 +1854,19 @@ const handleUploadOdometerPhoto = async () => {
                                 pattern="[0-9]*"
                                 maxLength={4}
                                 className={cn(
-                                  "h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-lg font-black tracking-[0.3em] text-center pr-12",
-                                  vinError && "border-red-400 dark:border-red-500"
+                                  "h-14 rounded-2xl border dark:bg-slate-800/40 text-lg font-black tracking-[0.3em] text-center pr-12 transition",
+                                  vinError
+                                    ? "border-red-400 dark:border-red-500"
+                                    : vinValue.length === 4
+                                      ? "border-green-400 dark:border-green-500"
+                                      : "border-slate-200 dark:border-slate-700"
                                 )}
                                 placeholder="e.g. 1234"
                               />
-                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-red-500 tabular-nums">
+                              <span className={cn(
+                                "absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold tabular-nums transition",
+                                vinValue.length === 4 && !vinError ? "text-green-600 dark:text-green-400" : "text-red-500"
+                              )}>
                                 {vinValue.length}/4
                               </span>
                             </div>
@@ -1880,11 +1887,13 @@ const handleUploadOdometerPhoto = async () => {
                         {/* Pre-submit checklist summary */}
                         <div className="mt-5 space-y-2">
                           {[
+                            { label: 'PIN verified', done: pinVerified },
                             { label: 'Staff greeted', done: greeted },
                             { label: 'Vehicle photos uploaded', done: photosSaved },
                             { label: 'VIN photo uploaded', done: vinPhotoSaved },
                             { label: 'Odometer photo uploaded', done: odometerSaved },
                             { label: 'Last 4 digits of VIN entered', done: vinValue.length === 4 },
+                            { label: 'Compliance data saved', done: vinVerified },
                           ].map((item, i) => (
                             <div key={i} className="flex items-center gap-2">
                               {item.done ? (
