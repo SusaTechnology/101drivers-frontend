@@ -132,6 +132,7 @@ export default function DriverPreferencesPage() {
   const navigate = useNavigate()
   const driver = getUser()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const mapRef = useRef<google.maps.Map | null>(null)
 
   // Google Maps API loader
   const { isLoaded: googleMapsLoaded } = useJsApiLoader({
@@ -337,6 +338,13 @@ export default function DriverPreferencesPage() {
     reverseGeocode({ lat, lng })
   }
 
+  const panMapTo = (lat: number, lng: number) => {
+    if (mapRef.current) {
+      mapRef.current.panTo({ lat, lng })
+      mapRef.current.setZoom(12)
+    }
+  }
+
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported')
@@ -349,6 +357,7 @@ export default function DriverPreferencesPage() {
         form.setValue('homeBaseLat', latitude)
         form.setValue('homeBaseLng', longitude)
         setMapCenter({ lat: latitude, lng: longitude })
+        panMapTo(latitude, longitude)
         setLocationManuallySet(true)
         reverseGeocode({ lat: latitude, lng: longitude })
         toast.success('Location updated')
@@ -673,11 +682,10 @@ export default function DriverPreferencesPage() {
                     // Reset map to driver's saved location or default CA view
                     const savedLat = form.getValues('homeBaseLat')
                     const savedLng = form.getValues('homeBaseLng')
-                    if (savedLat && savedLng) {
-                      setMapCenter({ lat: savedLat, lng: savedLng })
-                    } else {
-                      setMapCenter(CA_DEFAULT_CENTER)
-                    }
+                    const targetLat = savedLat || CA_DEFAULT_CENTER.lat
+                    const targetLng = savedLng || CA_DEFAULT_CENTER.lng
+                    setMapCenter({ lat: targetLat, lng: targetLng })
+                    panMapTo(targetLat, targetLng)
                   }
                 }}
                 disabled={locating}
@@ -697,6 +705,7 @@ export default function DriverPreferencesPage() {
                     center={mapCenter}
                     zoom={12}
                     onClick={handleMapClick}
+                    onLoad={(map) => { mapRef.current = map }}
                   >
                     <PickupZoneOverlay zones={pickupZones} />
                     <Marker
