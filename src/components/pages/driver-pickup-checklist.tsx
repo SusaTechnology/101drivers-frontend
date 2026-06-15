@@ -449,9 +449,18 @@ export default function DriverPickupChecklistPage() {
         checkLocationPermission()
       },
       onError: (error: any) => {
-        toast.error('Failed to save checklist', {
-          description: error?.message || 'Unknown error',
-        })
+        const msg = error?.message || ''
+        if (msg.toLowerCase().includes('vin') || msg.toLowerCase().includes('verification code')) {
+          setVinError('VIN digits did not match. Please re-enter.')
+          toast.error('VIN verification failed', {
+            description: 'The last 4 digits you entered do not match. Please check and try again.',
+            duration: 6000,
+          })
+        } else {
+          toast.error('Failed to save checklist', {
+            description: msg || 'Please check your connection and try again.',
+          })
+        }
       },
     }
   )
@@ -1892,8 +1901,7 @@ const handleUploadOdometerPhoto = async () => {
                             { label: 'Vehicle photos uploaded', done: photosSaved },
                             { label: 'VIN photo uploaded', done: vinPhotoSaved },
                             { label: 'Odometer photo uploaded', done: odometerSaved },
-                            { label: 'Last 4 digits of VIN entered', done: vinValue.length === 4 },
-                            { label: 'Compliance data saved', done: vinVerified },
+                            { label: 'Last 4 digits of VIN entered', done: vinValue.length === 4 && vinVerified },
                           ].map((item, i) => (
                             <div key={i} className="flex items-center gap-2">
                               {item.done ? (
