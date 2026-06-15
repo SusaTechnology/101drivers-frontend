@@ -1901,7 +1901,7 @@ const handleUploadOdometerPhoto = async () => {
                             { label: 'Vehicle photos uploaded', done: photosSaved },
                             { label: 'VIN photo uploaded', done: vinPhotoSaved },
                             { label: 'Odometer photo uploaded', done: odometerSaved },
-                            { label: 'Last 4 digits of VIN entered', done: vinValue.length === 4 && vinVerified },
+                            { label: 'Last 4 digits of VIN entered', done: vinValue.length === 4 },
                           ].map((item, i) => (
                             <div key={i} className="flex items-center gap-2">
                               {item.done ? (
