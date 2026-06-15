@@ -1363,9 +1363,9 @@ export default function DriverActiveDeliveryPage() {
           <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover-lift">
             <CardHeader>
               <div>
-                <CardTitle className="text-lg font-black">Vehicle Drop-off Proof</CardTitle>
+                <CardTitle className="text-lg font-black">Drop-off Photos</CardTitle>
                 <CardDescription className="text-sm mt-1">
-                  {dropoffPhotosSaved ? 'Photos Uploaded' : 'Pending'}
+                  (6 Required)
                 </CardDescription>
               </div>
             </CardHeader>
@@ -1417,16 +1417,18 @@ export default function DriverActiveDeliveryPage() {
               <div className="mt-4 flex flex-col gap-3">
                 <Button
                   onClick={handleUploadDropoffPhotos}
-                  disabled={isUploading}
+                  disabled={isUploading || dropoffPhotoSlots.filter(s => s.file !== null).length < 6}
                   className={cn(
                     "w-full font-extrabold rounded-2xl py-3 flex items-center justify-center gap-2 transition",
                     isUploading
                       ? "bg-amber-500 text-white cursor-wait"
-                      : "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-300"
+                      : dropoffPhotoSlots.filter(s => s.file !== null).length >= 6
+                        ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
                   )}
                 >
                   <CloudUpload className="w-4 h-4" />
-                  {dropoffPhotosSaved ? `Photos Uploaded (${uploadedDropoffPhotos.length}/6)` : isUploading ? 'Uploading...' : `Upload photos (${uploadedDropoffPhotos.length}/6)`}
+                  {dropoffPhotosSaved ? 'Photos Uploaded' : isUploading ? 'Uploading...' : 'Upload All Photos'}
                 </Button>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
