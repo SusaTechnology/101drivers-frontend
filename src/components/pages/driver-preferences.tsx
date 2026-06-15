@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -153,8 +154,14 @@ export default function DriverPreferencesPage() {
   // Fetch pickup zones for map overlay
   const { zones: pickupZones } = usePickupZones()
 
-  // Locating state for button feedback
+  // Locating state for toggle feedback
   const [locating, setLocating] = useState(false)
+
+  // "Use My Current Location" toggle state
+  const [useCurrentLocation, setUseCurrentLocation] = useState(false)
+
+  // CA Only toggle state
+  const [caOnly, setCaOnly] = useState(false)
 
   // Fetch driver profile to prefill form
   const {
@@ -620,9 +627,63 @@ export default function DriverPreferencesPage() {
                 Service Area Preferences
               </h1>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                Define where you want to receive job listings.
+                Set where you want to receive vehicle delivery requests.
               </p>
             </div>
+
+            {/* Use My Current Location Toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <MapPin className="w-4 h-4 text-slate-500" />
+                <div>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white">Use My Current Location</p>
+                  <p className="text-[11px] text-slate-500">Use your GPS location as your service area center</p>
+                </div>
+              </div>
+              <Switch
+                checked={useCurrentLocation}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    handleUseCurrentLocation()
+                  }
+                  setUseCurrentLocation(checked)
+                }}
+                disabled={locating}
+              />
+            </div>
+
+            {/* Map with pickup zones */}
+            {!googleMapsLoaded ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                <div className="w-full h-[400px]">
+                  <GoogleMap
+                    mapContainerStyle={{ width: '100%', height: '100%' }}
+                    center={mapCenter}
+                    zoom={12}
+                    onClick={handleMapClick}
+                  >
+                    <PickupZoneOverlay zones={pickupZones} />
+                    <Marker
+                      position={{
+                        lat: form.watch('homeBaseLat') || mapCenter.lat,
+                        lng: form.watch('homeBaseLng') || mapCenter.lng,
+                      }}
+                    />
+                  </GoogleMap>
+                </div>
+                {/* Legend */}
+                <div className="absolute bottom-3 left-3 z-10">
+                  <Badge className="bg-white/95 dark:bg-slate-900/90 backdrop-blur shadow-lg text-[11px] font-bold">
+                    <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#39FF14] mr-1.5" />
+                    Green area = Pickup Zone
+                  </Badge>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -661,104 +722,20 @@ export default function DriverPreferencesPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="chip bg-primary/10 border-primary/25 text-slate-800 dark:text-slate-200">
-                <MapPin className="w-3.5 h-3.5 text-primary mr-1" />
-                CA Only
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Location (home base) with Map */}
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-          <CardContent className="p-6 sm:p-7 space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  Pickup Zone & Home Base
-                </h2>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                  Set your default starting point by using your current location.
-                </p>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleUseCurrentLocation}
-                disabled={locating}
-                className="rounded-2xl w-full sm:w-auto"
-              >
-                {locating ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <MapPin className="w-4 h-4 mr-2" />
-                )}
-                {locating ? 'Locating...' : 'Use Current Location'}
-              </Button>
-            </div>
-
-            {!googleMapsLoaded ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                  <div className="w-full h-[400px]">
-                    <GoogleMap
-                      mapContainerStyle={{ width: '100%', height: '100%' }}
-                      center={mapCenter}
-                      zoom={12}
-                      onClick={handleMapClick}
-                    >
-                      <PickupZoneOverlay zones={pickupZones} />
-                      <Marker
-                        position={{
-                          lat: form.watch('homeBaseLat') || mapCenter.lat,
-                          lng: form.watch('homeBaseLng') || mapCenter.lng,
-                        }}
-                      />
-                    </GoogleMap>
-                  </div>
-                  {/* Legend */}
-                  <div className="absolute bottom-3 left-3 z-10">
-                    <Badge className="bg-white/95 dark:bg-slate-900/90 backdrop-blur shadow-lg text-[11px] font-bold">
-                      <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#39FF14] mr-1.5" />
-                      Green area = Pickup Zone
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                      City
-                    </Label>
-                    <LocationAutocomplete
-                      value={form.watch('homeBaseCity') || ''}
-                      onChange={(value) => form.setValue('homeBaseCity', value, { shouldValidate: true })}
-                      onPlaceSelect={handleHomeBaseCityPlaceSelect}
-                      placeholder="Los Angeles"
-                      isLoaded={googleMapsLoaded}
-                      icon={<Home className="w-4 h-4 text-slate-400" />}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                      State
-                    </Label>
-                    <Input
-                      value={form.watch('homeBaseState') || ''}
-                      onChange={(e) => form.setValue('homeBaseState', e.target.value)}
-                      placeholder="CA"
-                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
-                    />
-                  </div>
+            {/* CA Only Toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <MapPin className="w-4 h-4 text-slate-500" />
+                <div>
+                  <p className="text-sm font-extrabold text-slate-900 dark:text-white">CA Only</p>
+                  <p className="text-[11px] text-slate-500">Restrict service area to California</p>
                 </div>
               </div>
-            )}
+              <Switch
+                checked={caOnly}
+                onCheckedChange={setCaOnly}
+              />
+            </div>
           </CardContent>
         </Card>
 
