@@ -52,7 +52,6 @@ import { getUser, useDataQuery, useFileUpload, usePatch } from '@/lib/tanstack/d
 import { GoogleMap, Marker } from '@react-google-maps/api'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
-import LocationAutocomplete from '@/components/map/LocationAutocomplete'
 import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
 import { usePickupZones } from '@/hooks/usePickupZones'
 // import DriverBottomNav from '../layout/DriverBottomNav'
@@ -64,7 +63,7 @@ const preferencesSchema = z.object({
   profilePhotoUrl: z.string().url().optional().or(z.literal('')),
 
   // Service Area (maps to preferences object)
-  primaryCity: z.string().optional(),
+  primaryZip: z.string().regex(/^\d{5}$/, 'Enter a valid 5-digit ZIP code').optional().or(z.literal('')),
   radius: z.string().optional(),
 
   // Location (home base)
@@ -221,7 +220,7 @@ export default function DriverPreferencesPage() {
     defaultValues: {
       phone: '',
       profilePhotoUrl: '',
-      primaryCity: 'San Jose',
+      primaryZip: '',
       radius: '25',
       homeBaseLat: undefined,
       homeBaseLng: undefined,
@@ -247,7 +246,7 @@ export default function DriverPreferencesPage() {
       form.reset({
         phone: driverProfile.phone || '',
         profilePhotoUrl: driverProfile.profilePhotoUrl || '',
-        primaryCity: driverProfile.preferences?.city || '',
+        primaryZip: driverProfile.preferences?.city || '',
         radius: driverProfile.preferences?.radiusMiles?.toString() || '25',
         homeBaseLat: driverProfile.location?.homeBaseLat ?? undefined,
         homeBaseLng: driverProfile.location?.homeBaseLng ?? undefined,
@@ -404,24 +403,6 @@ export default function DriverPreferencesPage() {
   }
 
   // Autocomplete handlers
-  const handlePrimaryCityPlaceSelect = (place: google.maps.places.PlaceResult) => {
-    if (!place.address_components) return
-    // Extract city (locality) from address components
-    let city = ''
-    for (const component of place.address_components) {
-      if (component.types.includes('locality')) {
-        city = component.long_name
-        break
-      }
-    }
-    if (city) {
-      form.setValue('primaryCity', city, { shouldValidate: true })
-    } else if (place.formatted_address) {
-      // Fallback to formatted address if no locality
-      form.setValue('primaryCity', place.formatted_address, { shouldValidate: true })
-    }
-  }
-
   const handleHomeBaseCityPlaceSelect = (place: google.maps.places.PlaceResult) => {
     if (!place.geometry || !place.geometry.location || !place.address_components) return
 
@@ -490,7 +471,7 @@ export default function DriverPreferencesPage() {
       phone: data.phone || undefined,
       profilePhotoUrl: data.profilePhotoUrl || undefined,
       preferences: {
-        city: data.primaryCity,
+        city: data.primaryZip || undefined,
         radiusMiles: data.radius ? parseFloat(data.radius) : null,
       },
       alerts: {
@@ -724,16 +705,18 @@ export default function DriverPreferencesPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  Primary City
+                <Label htmlFor="primaryZip" className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Primary ZIP Code
                 </Label>
-                <LocationAutocomplete
-                  value={form.watch('primaryCity') || ''}
-                  onChange={(value) => form.setValue('primaryCity', value, { shouldValidate: true })}
-                  onPlaceSelect={handlePrimaryCityPlaceSelect}
-                  placeholder="San Jose"
-                  isLoaded={googleMapsLoaded}
-                  icon={<MapPin className="w-4 h-4 text-slate-400" />}
+                <Input
+                  id="primaryZip"
+                  {...form.register('primaryZip')}
+                  placeholder="95112"
+                  autoComplete="postal-code"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={5}
+                  className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
                 />
               </div>
 
