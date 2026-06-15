@@ -37,6 +37,7 @@ export type QuoteCalculationResult = {
   pricingMode: EnumQuotePricingMode;
   mileageCategory: EnumQuoteMileageCategory | null;
   estimatedPrice: number;
+  estimatedDriverPayout: number;
   feesBreakdown: Record<string, unknown>;
   pricingSnapshot: Record<string, unknown>;
 };
@@ -177,11 +178,18 @@ export class PricingEngineService {
 
     const estimatedPrice = Number((subTotal + transactionFee).toFixed(2));
 
+    // Driver payout estimate = estimatedPrice × driverSharePct% - insuranceFee
+    // This is the driver's take-home before tips (tips are added at trip completion).
+    const driverSharePct = config.driverSharePct ?? 60;
+    const driverShareAmount = Number((estimatedPrice * (driverSharePct / 100)).toFixed(2));
+    const estimatedDriverPayout = Number(Math.max(driverShareAmount - insuranceFee, 0).toFixed(2));
+
     return {
       pricingConfigId: config.id,
       pricingMode: effectiveMode,
       mileageCategory,
       estimatedPrice,
+      estimatedDriverPayout,
       feesBreakdown: {
         pricingConfigId: config.id,
         mode: effectiveMode,
@@ -232,6 +240,7 @@ export class PricingEngineService {
         dropoffPlaceId: input.dropoffPlaceId ?? null,
         dropoffState: input.dropoffState ?? null,
         distanceMiles: Number(input.distanceMiles.toFixed(2)),
+        estimatedDriverPayout: calc.estimatedDriverPayout,
         estimatedPrice: calc.estimatedPrice,
         pricingMode: calc.pricingMode,
         mileageCategory: calc.mileageCategory,

@@ -116,10 +116,10 @@ const MOCK_DELIVERY = {
   distance: '342 mi',
   started: '10:18am',
   bonus: '$20',
-  payout: 248.00,
+  payout: 148.80,
   status: 'In Progress',
   eta: '3:45pm',
-  quote: { distanceMiles: 342, estimatedPrice: 248.00 },
+  quote: { distanceMiles: 342, estimatedPrice: 248.00, estimatedDriverPayout: 148.80 },
   compliance: {
     pickupCompletedAt: '2026-03-14T22:38:38.025Z',
     odometerEnd: null,
@@ -172,6 +172,7 @@ export default function DriverActiveDeliveryPage() {
   const [drivingMode, setDrivingMode] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [showCompletion, setShowCompletion] = useState(false)
+  const [completionPayout, setCompletionPayout] = useState<number | null>(null)
   const [isDesktop, setIsDesktop] = useState(false)
   const [odometerEnd, setOdometerEnd] = useState('')
   const [deliveryNotes, setDeliveryNotes] = useState('')
@@ -286,6 +287,19 @@ export default function DriverActiveDeliveryPage() {
   // Use real data when available, otherwise fallback to defaults (only during loading)
   const deliveryData = delivery || (deliveryLoading ? MOCK_DELIVERY : null)
   const deliveryId = delivery?.id;
+
+  // ── Driver payout: prefer stored estimatedDriverPayout, fallback to estimate ──
+  // For legacy quotes without estimatedDriverPayout, compute on-the-fly.
+  const driverPayoutEstimate = (() => {
+    if (deliveryData?.quote?.estimatedDriverPayout != null) {
+      return deliveryData.quote.estimatedDriverPayout
+    }
+    // Fallback for old quotes: estimatePrice × 60% (same logic as backend fallback)
+    if (deliveryData?.quote?.estimatedPrice != null) {
+      return deliveryData.quote.estimatedPrice * 0.60
+    }
+    return null
+  })()
 
   // ── Dropoff readiness: disable Complete Delivery button until required fields are filled ──
   const photosUploaded = uploadedDropoffPhotos.length >= 6
@@ -628,8 +642,11 @@ export default function DriverActiveDeliveryPage() {
   const completeTripMutation = useCreate<any, any>(
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/complete-trip`,
     {
-      onSuccess: () => {
+      onSuccess: (response) => {
         toast.success('Trip completed')
+        // Use the actual net payout from backend if available, otherwise fall back to the estimate
+        const netAmount = response?.payout?.netAmount
+        setCompletionPayout(netAmount != null ? netAmount : driverPayoutEstimate)
         setShowCompletion(true)
       },
       onError: (error) => {
@@ -918,7 +935,7 @@ export default function DriverActiveDeliveryPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-2xl font-black text-primary">
-                      ${deliveryData?.quote?.estimatedPrice ? deliveryData.quote.estimatedPrice.toFixed(2) : '—'}
+                      ${driverPayoutEstimate != null ? driverPayoutEstimate.toFixed(2) : '—'}
                     </p>
                     <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
                       Est. payout
@@ -1213,7 +1230,7 @@ export default function DriverActiveDeliveryPage() {
 
                   <div className="text-left sm:text-right">
                     <p className="text-3xl font-black text-primary">
-                      ${deliveryData?.quote?.estimatedPrice ? deliveryData.quote.estimatedPrice.toFixed(2) : '—'}
+                      ${driverPayoutEstimate != null ? driverPayoutEstimate.toFixed(2) : '—'}
                     </p>
                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
                       Est. payout
@@ -1557,7 +1574,7 @@ export default function DriverActiveDeliveryPage() {
       {/* Post-Trip Completion Overlay */}
       {showCompletion && (
         <PostTripCompletion
-          payout={deliveryData?.quote?.estimatedPrice ?? 0}
+          payout={completionPayout ?? driverPayoutEstimate ?? 0}
           tripStartTime={deliveryData?.trackingSession?.startedAt}
           onDismiss={handleDismissCompletion}
         />

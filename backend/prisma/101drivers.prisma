@@ -227,10 +227,11 @@ model Quote {
   dropoffLng      Float?
   dropoffPlaceId  String?
   dropoffState    String?
-  estimatedPrice  Float
-  feesBreakdown   Json?
-  id              String                    @id @default(cuid())
-  mileageCategory EnumQuoteMileageCategory?
+  estimatedDriverPayout Float?
+  estimatedPrice        Float
+  feesBreakdown         Json?
+  id                     String                    @id @default(cuid())
+  mileageCategory       EnumQuoteMileageCategory?
   pickupAddress   String
   pickupLat       Float?
   pickupLng       Float?

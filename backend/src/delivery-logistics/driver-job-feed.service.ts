@@ -276,6 +276,7 @@ async getDriverJobFeed(input: {
       quote: {
         select: {
           estimatedPrice: true,
+          estimatedDriverPayout: true,
           pricingSnapshot: true,
           feesBreakdown: true,
           distanceMiles: true,
@@ -785,7 +786,8 @@ async getDriverJobFeed(input: {
       const payoutPreviewAmount = this.extractPayoutPreviewAmount(
         delivery.quote?.estimatedPrice,
         delivery.quote?.pricingSnapshot,
-        delivery.quote?.feesBreakdown
+        delivery.quote?.feesBreakdown,
+        delivery.quote?.estimatedDriverPayout
       );
 
       const item: DriverFeedItem = {
@@ -918,6 +920,7 @@ async getDriverJobFeed(input: {
         quote: {
           select: {
             estimatedPrice: true,
+            estimatedDriverPayout: true,
             pricingSnapshot: true,
             feesBreakdown: true,
             distanceMiles: true,
@@ -932,6 +935,7 @@ async getDriverJobFeed(input: {
       delivery.quote?.estimatedPrice,
       delivery.quote?.pricingSnapshot,
       delivery.quote?.feesBreakdown,
+      delivery.quote?.estimatedDriverPayout
     );
 
     // Use quote distance if available, otherwise call Google Routes API
@@ -1071,6 +1075,7 @@ async getDriverJobFeed(input: {
                 id: true,
                 distanceMiles: true,
                 estimatedPrice: true,
+                estimatedDriverPayout: true,
                 pricingMode: true,
                 mileageCategory: true,
               },
@@ -1758,12 +1763,18 @@ async getDriverJobFeed(input: {
   private extractPayoutPreviewAmount(
     quoteEstimatedPrice: number | null | undefined,
     pricingSnapshot: unknown,
-    feesBreakdown: unknown
+    feesBreakdown: unknown,
+    storedEstimatedDriverPayout?: number | null
   ): number | null {
+    // ── Prefer the stored field (computed at quote creation, single source of truth) ──
+    if (storedEstimatedDriverPayout != null && Number.isFinite(storedEstimatedDriverPayout)) {
+      return Number(storedEstimatedDriverPayout);
+    }
+
+    // ── Fallback: compute on-the-fly for legacy quotes that lack the stored field ──
     const snapshot = (pricingSnapshot ?? {}) as Record<string, unknown>;
     const fees = (feesBreakdown ?? {}) as Record<string, unknown>;
 
-    // Total price: feesBreakdown.total (set by pricing engine) or quote.estimatedPrice
     const total =
       this.toNumber(fees.total) ??
       this.toNumber(snapshot.totalAmount) ??
@@ -1772,12 +1783,15 @@ async getDriverJobFeed(input: {
 
     if (total == null) return null;
 
-    // Driver share percentage from pricing snapshot (frozen at quote time)
     const driverSharePct = this.toNumber(snapshot.driverSharePct) ?? 60;
+    const insuranceFee =
+      this.toNumber(fees.insuranceFee) ??
+      this.toNumber(snapshot.insuranceFee) ??
+      0;
 
-    // Net payout = total × driverShare% (no tip at listing time — tips are post-completion)
-    const payout = total * (driverSharePct / 100);
-    return Number(payout.toFixed(2));
+    const driverShare = total * (driverSharePct / 100);
+    const payout = driverShare - insuranceFee;
+    return Number(Math.max(payout, 0).toFixed(2));
   }
 
   private toNumber(value: unknown): number | null {
