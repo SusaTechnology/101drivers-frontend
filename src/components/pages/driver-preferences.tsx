@@ -710,14 +710,28 @@ export default function DriverPreferencesPage() {
                 </Label>
                 <Input
                   id="primaryZip"
-                  {...form.register('primaryZip')}
+                  {...form.register('primaryZip', {
+                    onChange: (e) => {
+                      // Strip non-digits
+                      const cleaned = e.target.value.replace(/\D/g, '').slice(0, 5)
+                      e.target.value = cleaned
+                      form.setValue('primaryZip', cleaned)
+                    },
+                  })}
                   placeholder="95112"
                   autoComplete="postal-code"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   maxLength={5}
-                  className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                  className={cn(
+                    "h-12 rounded-2xl border dark:bg-slate-800/40 text-sm",
+                    form.formState.errors.primaryZip
+                      ? "border-red-500 focus-visible:ring-red-500"
+                      : "border-slate-200 dark:border-slate-700"
+                  )}
                 />
+                {form.formState.errors.primaryZip && (
+                  <p className="text-xs text-red-500">{form.formState.errors.primaryZip.message}</p>
+                )}
               </div>
 
               <div className="space-y-2">
