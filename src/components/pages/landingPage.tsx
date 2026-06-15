@@ -23,6 +23,7 @@ import {
   Phone,
   Store,
   User,
+  ShipWheel,
   LogIn,
   Home,
   Shield,
@@ -1020,7 +1021,7 @@ export default function LandingPage() {
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <CardContent className="p-6 sm:p-8">
                 <div className="w-12 h-12 rounded-xl bg-lime-500/15 flex items-center justify-center mb-4">
-                  <User className="h-6 w-6 text-lime-500" />
+                  <ShipWheel className="h-6 w-6 text-lime-500" />
                 </div>
 
                 {/* <h2 className="text-2xl font-black leading-tight text-slate-900 dark:text-white">
