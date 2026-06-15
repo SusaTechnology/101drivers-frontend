@@ -154,6 +154,12 @@ export default function DriverPreferencesPage() {
   // Fetch pickup zones for map overlay
   const { zones: pickupZones } = usePickupZones()
 
+  // Default map center for California (same as driver-dashboard-map.tsx)
+  const CA_DEFAULT_CENTER = { lat: 33.94, lng: -118.40 }
+
+  // Track whether the driver has manually set a location (via map click, geocode, or toggle)
+  const [locationManuallySet, setLocationManuallySet] = useState(false)
+
   // Locating state for toggle feedback
   const [locating, setLocating] = useState(false)
 
@@ -216,10 +222,10 @@ export default function DriverPreferencesPage() {
       profilePhotoUrl: '',
       primaryCity: 'San Jose',
       radius: '25',
-      homeBaseLat: 34.0522,
-      homeBaseLng: -118.2437,
-      homeBaseCity: 'Los Angeles',
-      homeBaseState: 'CA',
+      homeBaseLat: undefined,
+      homeBaseLng: undefined,
+      homeBaseCity: '',
+      homeBaseState: '',
       alertEnabled: true,
       emailEnabled: true,
       smsEnabled: false,
@@ -242,10 +248,10 @@ export default function DriverPreferencesPage() {
         profilePhotoUrl: driverProfile.profilePhotoUrl || '',
         primaryCity: driverProfile.preferences?.city || '',
         radius: driverProfile.preferences?.radiusMiles?.toString() || '25',
-        homeBaseLat: driverProfile.location?.homeBaseLat ?? 34.0522,
-        homeBaseLng: driverProfile.location?.homeBaseLng ?? -118.2437,
-        homeBaseCity: driverProfile.location?.homeBaseCity || 'Los Angeles',
-        homeBaseState: driverProfile.location?.homeBaseState || 'CA',
+        homeBaseLat: driverProfile.location?.homeBaseLat ?? undefined,
+        homeBaseLng: driverProfile.location?.homeBaseLng ?? undefined,
+        homeBaseCity: driverProfile.location?.homeBaseCity || '',
+        homeBaseState: driverProfile.location?.homeBaseState || '',
         alertEnabled: driverProfile.alerts?.enabled ?? true,
         emailEnabled: driverProfile.alerts?.emailEnabled ?? true,
         smsEnabled: driverProfile.alerts?.smsEnabled ?? false,
@@ -260,12 +266,15 @@ export default function DriverPreferencesPage() {
         endTime: '17:00',
       });
 
-      // Update map center if location data exists
+      // Update map center if location data exists from backend
       if (driverProfile.location?.homeBaseLat && driverProfile.location?.homeBaseLng) {
         setMapCenter({
           lat: driverProfile.location.homeBaseLat,
           lng: driverProfile.location.homeBaseLng,
         });
+        setLocationManuallySet(true);
+      } else {
+        setMapCenter(CA_DEFAULT_CENTER);
       }
 
       // Sync soundEnabled to localStorage for dashboard-list to read
@@ -293,10 +302,7 @@ export default function DriverPreferencesPage() {
   }
 
   // Map state and handlers
-  const [mapCenter, setMapCenter] = useState(() => ({
-    lat: form.getValues('homeBaseLat') || 34.0522,
-    lng: form.getValues('homeBaseLng') || -118.2437,
-  }))
+  const [mapCenter, setMapCenter] = useState(CA_DEFAULT_CENTER)
 
   const reverseGeocode = (latlng: { lat: number; lng: number }) => {
     if (!window.google) return
@@ -327,6 +333,7 @@ export default function DriverPreferencesPage() {
     form.setValue('homeBaseLat', lat)
     form.setValue('homeBaseLng', lng)
     setMapCenter({ lat, lng })
+    setLocationManuallySet(true)
     reverseGeocode({ lat, lng })
   }
 
@@ -342,6 +349,7 @@ export default function DriverPreferencesPage() {
         form.setValue('homeBaseLat', latitude)
         form.setValue('homeBaseLng', longitude)
         setMapCenter({ lat: latitude, lng: longitude })
+        setLocationManuallySet(true)
         reverseGeocode({ lat: latitude, lng: longitude })
         toast.success('Location updated')
         setLocating(false)
@@ -413,6 +421,7 @@ export default function DriverPreferencesPage() {
     form.setValue('homeBaseLat', lat)
     form.setValue('homeBaseLng', lng)
     setMapCenter({ lat, lng })
+    setLocationManuallySet(true)
 
     let city = ''
     let state = ''
@@ -458,6 +467,16 @@ export default function DriverPreferencesPage() {
       return
     }
 
+    // Only include location in payload if the driver manually set it
+    const locationPayload = locationManuallySet
+      ? {
+          homeBaseLat: data.homeBaseLat,
+          homeBaseLng: data.homeBaseLng,
+          homeBaseCity: data.homeBaseCity,
+          homeBaseState: data.homeBaseState,
+        }
+      : undefined
+
     const payload = {
       phone: data.phone || undefined,
       profilePhotoUrl: data.profilePhotoUrl || undefined,
@@ -471,12 +490,7 @@ export default function DriverPreferencesPage() {
         smsEnabled: data.smsEnabled,
         soundEnabled: data.soundEnabled,
       },
-      location: {
-        homeBaseLat: data.homeBaseLat,
-        homeBaseLng: data.homeBaseLng,
-        homeBaseCity: data.homeBaseCity,
-        homeBaseState: data.homeBaseState,
-      },
+      ...(locationPayload ? { location: locationPayload } : {}),
       serviceDistrictIds: data.serviceDistrictIds,
     }
 
@@ -655,6 +669,15 @@ export default function DriverPreferencesPage() {
                   localStorage.setItem('driverUseMyLocation', String(checked))
                   if (checked) {
                     handleUseCurrentLocation()
+                  } else {
+                    // Reset map to driver's saved location or default CA view
+                    const savedLat = form.getValues('homeBaseLat')
+                    const savedLng = form.getValues('homeBaseLng')
+                    if (savedLat && savedLng) {
+                      setMapCenter({ lat: savedLat, lng: savedLng })
+                    } else {
+                      setMapCenter(CA_DEFAULT_CENTER)
+                    }
                   }
                 }}
                 disabled={locating}
