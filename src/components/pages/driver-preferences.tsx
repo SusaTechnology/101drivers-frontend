@@ -157,8 +157,10 @@ export default function DriverPreferencesPage() {
   // Locating state for toggle feedback
   const [locating, setLocating] = useState(false)
 
-  // "Use My Current Location" toggle state
-  const [useCurrentLocation, setUseCurrentLocation] = useState(false)
+  // "Use My Current Location" toggle state — read from localStorage (same as dashboard-list.tsx)
+  const [useCurrentLocation, setUseCurrentLocation] = useState(() =>
+    localStorage.getItem('driverUseMyLocation') === 'true'
+  )
 
   // CA Only toggle state
   const [caOnly, setCaOnly] = useState(false)
@@ -347,6 +349,7 @@ export default function DriverPreferencesPage() {
       () => {
         toast.error('Unable to get current location')
         setUseCurrentLocation(false)
+        localStorage.setItem('driverUseMyLocation', 'false')
         setLocating(false)
       },
       {
@@ -648,10 +651,11 @@ export default function DriverPreferencesPage() {
               <Switch
                 checked={useCurrentLocation}
                 onCheckedChange={(checked) => {
+                  setUseCurrentLocation(checked)
+                  localStorage.setItem('driverUseMyLocation', String(checked))
                   if (checked) {
                     handleUseCurrentLocation()
                   }
-                  setUseCurrentLocation(checked)
                 }}
                 disabled={locating}
               />
