@@ -47,7 +47,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
+import { getUser, useCreate, useDataQuery, useFileUpload, useUpdate } from '@/lib/tanstack/dataQuery'
 import { GoogleMap, Marker } from '@react-google-maps/api'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
@@ -169,10 +169,10 @@ export default function DriverPreferencesPage() {
   })
 
   // Single mutation for PATCH /drivers/{driverId}/profile
-  const updateProfile = useCreate(
+  const updateProfile = useUpdate(
     `${import.meta.env.VITE_API_URL}/api/drivers/${driver?.profileId}/profile`,
     {
-      method: 'PATCH',
+      // method: 'PATCH',
       onSuccess: () => {
         toast.success('Preferences saved successfully')
       },
