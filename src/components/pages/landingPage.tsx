@@ -1021,6 +1021,9 @@ export default function LandingPage() {
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <CardContent className="p-6 sm:p-8">
                 <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-lime-500/15 flex items-center justify-center shrink-0">
+                    <ShipWheel className="h-7 w-7 text-lime-500" />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white">
                       Be Your Own Boss. Drive Different Cars. Know Your Pay Upfront.
@@ -1029,9 +1032,7 @@ export default function LandingPage() {
                       Choose when you work and plan your day with full visibility.
                     </h6>
                   </div>
-                  <div className="w-14 h-14 rounded-xl bg-lime-500/15 flex items-center justify-center shrink-0">
-                    <ShipWheel className="h-7 w-7 text-lime-500" />
-                  </div>
+                
                 </div>
                 <div className="mt-7 space-y-2">
                   <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mb-4">
