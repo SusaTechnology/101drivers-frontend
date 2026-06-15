@@ -452,6 +452,7 @@ export default function DriverPickupChecklistPage() {
         const msg = error?.message || ''
         if (msg.toLowerCase().includes('vin') || msg.toLowerCase().includes('verification code')) {
           setVinError('VIN digits did not match. Please re-enter.')
+          setVinValue('') // clear so driver can re-type → auto-retry on 4th digit
           toast.error('VIN verification failed', {
             description: 'The last 4 digits you entered do not match. Please check and try again.',
             duration: 6000,
