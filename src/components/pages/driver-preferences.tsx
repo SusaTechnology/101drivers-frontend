@@ -679,13 +679,9 @@ export default function DriverPreferencesPage() {
                   if (checked) {
                     handleUseCurrentLocation()
                   } else {
-                    // Reset map to driver's saved location or default CA view
-                    const savedLat = form.getValues('homeBaseLat')
-                    const savedLng = form.getValues('homeBaseLng')
-                    const targetLat = savedLat || CA_DEFAULT_CENTER.lat
-                    const targetLng = savedLng || CA_DEFAULT_CENTER.lng
-                    setMapCenter({ lat: targetLat, lng: targetLng })
-                    panMapTo(targetLat, targetLng)
+                    // Always reset to default California view
+                    setMapCenter(CA_DEFAULT_CENTER)
+                    panMapTo(CA_DEFAULT_CENTER.lat, CA_DEFAULT_CENTER.lng)
                   }
                 }}
                 disabled={locating}
