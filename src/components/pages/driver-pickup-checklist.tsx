@@ -1081,7 +1081,123 @@ const handleUploadOdometerPhoto = async () => {
           {/* Left: checklist steps */}
           <div className="lg:col-span-7 space-y-6">
 
-            {/* ── Step 1: Verify the vehicle ── */}
+            {/* ── Step 1: Driver Authorization (PIN) ── */}
+            <Card className={cn(
+              "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
+              pinVerified && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10"
+            )}>
+              <CardContent className="p-6 sm:p-7">
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
+                    pinVerified
+                      ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
+                      : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
+                  )}>
+                    {pinVerified ? <Check className="w-4 h-4" /> : 1}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-lg font-black text-slate-900 dark:text-white">Driver Authorization</h2>
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                          Please ask the customer for their their 4-digit PIN
+                        </p>
+                        {(() => {
+                          const isBusiness = delivery?.customer?.customerType === 'BUSINESS'
+                          const pinPhone = isBusiness
+                            ? delivery?.customer?.contactPhone
+                            : delivery?.recipientPhone
+                          const pinContactName = isBusiness
+                            ? (delivery?.customer?.contactName || delivery?.customer?.businessName || 'Staff')
+                            : (delivery?.recipientName || 'Customer')
+                          return pinPhone ? (
+                            <div className="mt-3 flex items-center gap-2">
+                              <a
+                                href={`tel:${pinPhone}`}
+                                className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition"
+                              >
+                                <Phone className="w-5 h-5" />
+                              </a>
+                              <a
+                                href={`sms:${pinPhone}?body=${encodeURIComponent(buildPinSmsBody(user?.fullName, delivery))}`}
+                                className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary hover:bg-primary/20 transition"
+                              >
+                                <MessageSquare className="w-5 h-5" />
+                              </a>
+                            </div>
+                          ) : null
+                        })()}
+                      </div>
+                      <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
+                        <Shield className="w-3.5 h-3.5 text-primary mr-1" />
+                        Step 1
+                      </Badge>
+                    </div>
+
+                    {!pinVerified ? (
+                      <>
+                        <div className="mt-5 space-y-2">
+                          <div className="relative">
+                            <Input
+                              value={pinValue}
+                              onChange={(e) => {
+                                const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
+                                setPinValue(digits)
+                                setPinError(null)
+                                // Auto-verify on 4th digit
+                                if (digits.length === 4) {
+                                  setTimeout(() => handleVerifyPin(digits), 150)
+                                }
+                              }}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              maxLength={4}
+                              placeholder="0000"
+                              className={cn(
+                                "h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-lg font-black tracking-[0.3em] text-center pr-12",
+                                pinError && "border-red-400 dark:border-red-500"
+                              )}
+                            />
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 tabular-nums">
+                              {pinValue.length}/4
+                            </span>
+                          </div>
+                          {pinError && (
+                            <p className="text-[11px] font-bold text-red-500 mt-1">{pinError}</p>
+                          )}
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            PIN is a 4-digit code.
+                          </p>
+                        </div>
+
+                        {pinVerifying && (
+                          <div className="mt-4 w-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-extrabold rounded-2xl py-3 flex items-center justify-center gap-2 cursor-wait">
+                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Verifying PIN...
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <p className="text-sm font-extrabold text-green-700 dark:text-green-300">PIN verified!</p>
+                        </div>
+                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">
+                          Customer authorization confirmed.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Step 2: Verify the vehicle ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               greeted && "border-primary/25 bg-primary/5"
@@ -1094,7 +1210,7 @@ const handleUploadOdometerPhoto = async () => {
                       ? "bg-primary/10 border-primary/25 text-slate-900"
                       : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
-                    {greeted ? <Check className="w-4 h-4 text-primary" /> : 1}
+                    {greeted ? <Check className="w-4 h-4 text-primary" /> : 2}
                   </div>
 
                   <div className="flex-1">
@@ -1133,7 +1249,7 @@ const handleUploadOdometerPhoto = async () => {
                         </div>
                         <Button
                           onClick={handleArrivedAtVehicle}
-                          className="mt-5 w-full bg-green-600 text-white font-extrabold rounded-2xl py-3.5 hover:bg-green-700 transition flex items-center justify-center gap-2 text-base"
+                          className="mt-5 w-full lime-btn font-extrabold rounded-2xl py-3.5 transition flex items-center justify-center gap-2 text-base"
                         >
                           <Check className="w-5 h-5" />
                           Confirm & continue
@@ -1150,7 +1266,7 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
 
-            {/* ── Step 2: 6 clockwise car photos ── */}
+            {/* ── Step 3: 6 clockwise car photos ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               photosSaved && !photoErrors.size && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
@@ -1191,7 +1307,7 @@ const handleUploadOdometerPhoto = async () => {
                   )}>
                     {photosSaved && !photoErrors.size ? <Check className="w-4 h-4" /> :
                      photoErrors.size > 0 ? <XCircle className="w-4 h-4" /> :
-                     photosUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 2}
+                     photosUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 3}
                   </div>
 
                   <div className="flex-1">
@@ -1289,22 +1405,40 @@ const handleUploadOdometerPhoto = async () => {
 
                                 {/* Bottom label strip — always visible */}
                                 <div className={cn(
-                                  "relative z-10 w-full px-1.5 py-2 flex items-center justify-center gap-1.5",
+                                  "relative z-10 w-full px-1.5 py-2 flex flex-col items-center justify-center gap-0.5",
                                   isCaptured
                                     ? "bg-gradient-to-t from-black/70 via-black/40 to-transparent"
                                     : "bg-gradient-to-t from-black/60 via-black/30 to-transparent"
                                 )}>
-                                  <span className={cn(
-                                    "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0",
-                                    isCaptured
-                                      ? "bg-green-500 text-white"
-                                      : "bg-white/90 text-slate-900"
-                                  )}>
-                                    {index + 1}
-                                  </span>
-                                  <span className="text-[9px] font-bold text-white leading-tight text-center">
-                                    {PHOTO_LABELS[index]}
-                                  </span>
+                                  {isCaptured ? (
+                                    <>
+                                      <span className={cn(
+                                        "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0",
+                                        "bg-green-500 text-white"
+                                      )}>
+                                        {index + 1}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-white leading-tight text-center">
+                                        {PHOTO_LABELS[index]}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className={cn(
+                                        "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0",
+                                        "bg-white/60 text-slate-900"
+                                      )}>
+                                        {index + 1}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-white/70 leading-tight text-center">
+                                        {PHOTO_LABELS[index]}
+                                      </span>
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <Camera className="w-3 h-3 text-white/70" />
+                                        <span className="text-[9px] font-bold text-white/70">Tap to capture</span>
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               </button>
                             )
@@ -1333,7 +1467,7 @@ const handleUploadOdometerPhoto = async () => {
                             <Button
                               onClick={handleUploadCarPhotos}
                               disabled={uploadCarPhotosMutation.isPending || photosUploading}
-                              className="flex-1 bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                              className="flex-1 lime-btn font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:bg-slate-200 disabled:dark:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                               {uploadCarPhotosMutation.isPending || photosUploading ? (
                                 <>
@@ -1363,7 +1497,7 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
 
-            {/* ── Step 3: VIN Photo ── */}
+            {/* ── Step 4: VIN Photo ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               vinPhotoSaved && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
@@ -1389,7 +1523,7 @@ const handleUploadOdometerPhoto = async () => {
                         : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
                     {vinPhotoSaved ? <Check className="w-4 h-4" /> :
-                     vinPhotoUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 3}
+                     vinPhotoUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 4}
                   </div>
 
                   <div className="flex-1">
@@ -1459,8 +1593,9 @@ const handleUploadOdometerPhoto = async () => {
                               </div>
                             ) : (
                               <>
-                                <QrCode className="w-6 h-6 text-slate-400" />
-                                <span className="text-sm text-slate-500">Tap to take VIN photo</span>
+                                <Camera className="w-8 h-8 text-primary/60" />
+                                <span className="text-sm font-bold text-primary/70">Tap to take photo</span>
+                                <p className="text-[10px] text-slate-400 -mt-1">Full VIN number must be visible</p>
                               </>
                             )}
                           </Button>
@@ -1474,8 +1609,8 @@ const handleUploadOdometerPhoto = async () => {
                             vinPhotoUploading && vinPhotoUploadError
                               ? "bg-amber-500 text-white cursor-wait"
                               : vinPhotoUploading
-                                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 cursor-wait"
-                                : "bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 disabled:opacity-50"
+                                ? "lime-btn cursor-wait"
+                                : "lime-btn hover:opacity-90 disabled:bg-slate-200 disabled:dark:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
                           )}
                         >
                           {vinPhotoUploading ? (
@@ -1503,7 +1638,7 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
 
-            {/* ── Step 4: Odometer photo ── */}
+            {/* ── Step 5: Odometer photo ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               odometerSaved && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
@@ -1529,7 +1664,7 @@ const handleUploadOdometerPhoto = async () => {
                         : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
                     {odometerSaved ? <Check className="w-4 h-4" /> :
-                     odometerUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 4}
+                     odometerUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 5}
                   </div>
 
                   <div className="flex-1">
@@ -1622,8 +1757,9 @@ const handleUploadOdometerPhoto = async () => {
                               </div>
                             ) : (
                               <>
-                                <Speed className="w-6 h-6 text-slate-400" />
-                                <span className="text-sm text-slate-500">Take Odometer Photo</span>
+                                <Camera className="w-8 h-8 text-primary/60" />
+                                <span className="text-sm font-bold text-primary/70">Tap to take photo</span>
+                                <p className="text-[10px] text-slate-400 -mt-1">Odometer reading must be visible</p>
                               </>
                             )}
                           </Button>
@@ -1637,8 +1773,8 @@ const handleUploadOdometerPhoto = async () => {
                             odometerUploading && odometerUploadError
                               ? "bg-amber-500 text-white cursor-wait"
                               : odometerUploading
-                                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950 cursor-wait"
-                                : "bg-slate-900 text-white dark:bg-white dark:text-slate-950 hover:opacity-90 disabled:opacity-50"
+                                ? "lime-btn cursor-wait"
+                                : "lime-btn hover:opacity-90 disabled:bg-slate-200 disabled:dark:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
                           )}
                         >
                           {odometerUploading ? (
@@ -1671,7 +1807,7 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
 
-            {/* ── Step 5: Confirm & Submit ── */}
+            {/* ── Step 6: Confirm & Start Delivery ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               vinVerified && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10"
@@ -1684,20 +1820,20 @@ const handleUploadOdometerPhoto = async () => {
                       ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
                       : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
-                    {vinVerified ? <Check className="w-4 h-4" /> : 5}
+                    {vinVerified ? <Check className="w-4 h-4" /> : 6}
                   </div>
 
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Confirm &amp; Submit</h2>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Confirm &amp; Start Delivery</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Enter the last 4 digits of the VIN to submit. Tracking will start automatically.
+                          Enter the last 4 digits of the VIN to start delivery. Tracking will begin automatically.
                         </p>
                       </div>
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
                         <Lock className="w-3.5 h-3.5 text-primary mr-1" />
-                        Required
+                        Step 6
                       </Badge>
                     </div>
 
@@ -1705,7 +1841,7 @@ const handleUploadOdometerPhoto = async () => {
                       <>
                         <div className="mt-5 grid grid-cols-1 sm:grid-cols-1 gap-3">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">VIN last-4 digits</label>
+                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-red-500">VIN last-4 digits</label>
                             <div className="relative">
                               <Input
                                 value={vinValue}
@@ -1719,7 +1855,7 @@ const handleUploadOdometerPhoto = async () => {
                                 )}
                                 placeholder="e.g. 1234"
                               />
-                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 tabular-nums">
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-red-500 tabular-nums">
                                 {vinValue.length}/4
                               </span>
                             </div>
@@ -1761,7 +1897,7 @@ const handleUploadOdometerPhoto = async () => {
                             "mt-5 w-full rounded-2xl py-4 font-extrabold flex items-center justify-center gap-2 transition",
                             readyToSubmit
                               ? "lime-btn hover:shadow-xl hover:shadow-primary/20"
-                              : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                              : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                           )}
                         >
                           {saveProgressMutation.isPending ? (
@@ -1771,8 +1907,7 @@ const handleUploadOdometerPhoto = async () => {
                             </>
                           ) : (
                             <>
-                              <Shield className="w-4 h-4" />
-                              Submit &amp; Enable Tracking
+                              Start
                             </>
                           )}
                         </Button>
@@ -1785,122 +1920,6 @@ const handleUploadOdometerPhoto = async () => {
                         </div>
                         <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">
                           Tracking and location services are now active. Drive slow and safe!
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* ── Step 6: Customer PIN (required) ── */}
-            <Card className={cn(
-              "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
-              pinVerified && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10"
-            )}>
-              <CardContent className="p-6 sm:p-7">
-                <div className="flex items-start gap-4">
-                  <div className={cn(
-                    "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
-                    pinVerified
-                      ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
-                      : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
-                  )}>
-                    {pinVerified ? <Check className="w-4 h-4" /> : 6}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-lg font-black text-slate-900 dark:text-white">Driver Authorization</h2>
-                        </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Please ask the customer for their their 4-digit PIN
-                        </p>
-                        {(() => {
-                          const isBusiness = delivery?.customer?.customerType === 'BUSINESS'
-                          const pinPhone = isBusiness
-                            ? delivery?.customer?.contactPhone
-                            : delivery?.recipientPhone
-                          const pinContactName = isBusiness
-                            ? (delivery?.customer?.contactName || delivery?.customer?.businessName || 'Staff')
-                            : (delivery?.recipientName || 'Customer')
-                          return pinPhone ? (
-                            <div className="mt-3 flex items-center gap-2">
-                              <a
-                                href={`tel:${pinPhone}`}
-                                className="w-10 h-10 rounded-xl bg-lime-500 flex items-center justify-center text-slate-950 hover:bg-lime-600 transition"
-                              >
-                                <Phone className="w-5 h-5" />
-                              </a>
-                              <a
-                                href={`sms:${pinPhone}?body=${encodeURIComponent(buildPinSmsBody(user?.fullName, delivery))}`}
-                                className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 hover:bg-blue-200 transition"
-                              >
-                                <MessageSquare className="w-5 h-5" />
-                              </a>
-                            </div>
-                          ) : null
-                        })()}
-                      </div>
-                      <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
-                        <Shield className="w-3.5 h-3.5 text-primary mr-1" />
-                        Step 6
-                      </Badge>
-                    </div>
-
-                    {!pinVerified ? (
-                      <>
-                        <div className="mt-5 space-y-2">
-                          <div className="relative">
-                            <Input
-                              value={pinValue}
-                              onChange={(e) => {
-                                const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
-                                setPinValue(digits)
-                                setPinError(null)
-                                // Auto-verify on 4th digit
-                                if (digits.length === 4) {
-                                  setTimeout(() => handleVerifyPin(digits), 150)
-                                }
-                              }}
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              maxLength={4}
-                              placeholder="0000"
-                              className={cn(
-                                "h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-lg font-black tracking-[0.3em] text-center pr-12",
-                                pinError && "border-red-400 dark:border-red-500"
-                              )}
-                            />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 tabular-nums">
-                              {pinValue.length}/4
-                            </span>
-                          </div>
-                          {pinError && (
-                            <p className="text-[11px] font-bold text-red-500 mt-1">{pinError}</p>
-                          )}
-                          <p className="text-[11px] text-slate-400 mt-1">
-                            PIN is a 4-digit code.
-                          </p>
-                        </div>
-
-                        {pinVerifying && (
-                          <div className="mt-4 w-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold rounded-2xl py-3 flex items-center justify-center gap-2 opacity-70">
-                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            Verifying PIN...
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                          <p className="text-sm font-extrabold text-green-700 dark:text-green-300">PIN verified!</p>
-                        </div>
-                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">
-                          Customer authorization confirmed.
                         </p>
                       </div>
                     )}
@@ -1990,7 +2009,7 @@ const handleUploadOdometerPhoto = async () => {
                       <TaskAlt className="w-5 h-5 text-primary shrink-0" />
                       <div>
                         <p className="text-sm font-extrabold text-slate-900 dark:text-white">Start the trip</p>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Tap Start Trip once you&apos;re ready to drive.</p>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Tap Start once you&apos;re ready to drive.</p>
                       </div>
                     </div>
                     <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">Manual</span>
@@ -2046,11 +2065,10 @@ const handleUploadOdometerPhoto = async () => {
                 "rounded-2xl py-4 font-extrabold flex items-center justify-center gap-2 transition",
                 allStepsComplete && !hasOtherActiveDelivery
                   ? "lime-btn hover:shadow-xl hover:shadow-primary/20"
-                  : "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                  : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
               )}
             >
-              <Distance className="w-4 h-4" />
-              {hasOtherActiveDelivery ? 'Complete Current First' : (startTripMutation.isPending ? 'Starting...' : 'Start Trip')}
+              {hasOtherActiveDelivery ? 'Complete Current First' : (startTripMutation.isPending ? 'Starting...' : 'Start')}
             </Button>
           </div>
         </div>
