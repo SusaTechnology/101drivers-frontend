@@ -626,6 +626,10 @@ const handleUploadOdometerPhoto = async () => {
     } else if (raw.replace(/\D/g, '').length > 0 && raw.replace(/\D/g, '').length < 4 && raw.length >= 4) {
       // User typed 4+ chars but fewer than 4 were digits — only show if they stopped typing non-digits
     }
+    // Auto-submit on 4th digit (same pattern as PIN auto-verify)
+    if (digitsOnly.length === 4 && !vinVerified && !saveProgressMutation.isPending) {
+      setTimeout(() => handleSubmitAll(), 300)
+    }
   }
 
   // Step 5: Submit all (upload remaining + enter VIN)
@@ -1865,6 +1869,14 @@ const handleUploadOdometerPhoto = async () => {
                           </div>
                         </div>
 
+                        {/* Auto-save indicator — shows while submitting after 4th digit */}
+                        {saveProgressMutation.isPending && vinValue.length === 4 && (
+                          <div className="mt-4 flex items-center justify-center gap-2 py-3">
+                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm font-bold text-primary">Saving checklist...</span>
+                          </div>
+                        )}
+
                         {/* Pre-submit checklist summary */}
                         <div className="mt-5 space-y-2">
                           {[
@@ -1889,37 +1901,15 @@ const handleUploadOdometerPhoto = async () => {
                             </div>
                           ))}
                         </div>
-
-                        <Button
-                          onClick={handleSubmitAll}
-                          disabled={saveProgressMutation.isPending}
-                          className={cn(
-                            "mt-5 w-full rounded-2xl py-4 font-extrabold flex items-center justify-center gap-2 transition",
-                            readyToSubmit
-                              ? "lime-btn hover:shadow-xl hover:shadow-primary/20"
-                              : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                          )}
-                        >
-                          {saveProgressMutation.isPending ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              Submitting checklist...
-                            </>
-                          ) : (
-                            <>
-                              Start
-                            </>
-                          )}
-                        </Button>
                       </>
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="w-5 h-5 text-green-600" />
-                          <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Pickup checklist complete!</p>
+                          <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Checklist complete!</p>
                         </div>
                         <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">
-                          Tracking and location services are now active. Drive slow and safe!
+                          Tap <strong>Start</strong> below to begin your delivery.
                         </p>
                       </div>
                     )}
