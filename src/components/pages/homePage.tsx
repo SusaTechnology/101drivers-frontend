@@ -1020,20 +1020,19 @@ export default function HomePage() {
           <div className="max-w-3xl mx-auto">
             <Card className="rounded-3xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <CardContent className="p-6 sm:p-8">
-                <div className="w-12 h-12 rounded-xl bg-lime-500/15 flex items-center justify-center mb-4">
-                  <ShipWheel className="h-6 w-6 text-lime-500" />
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white">
+                      Be Your Own Boss. Drive Different Cars. Know Your Pay Upfront.
+                    </h3>
+                    <h6 className="text-sm font-black leading-tight text-slate-600 dark:text-white mt-2">
+                      Choose when you work and plan your day with full visibility.
+                    </h6>
+                  </div>
+                  <div className="w-14 h-14 rounded-xl bg-lime-500/15 flex items-center justify-center shrink-0">
+                    <ShipWheel className="h-7 w-7 text-lime-500" />
+                  </div>
                 </div>
-
-                {/* <h2 className="text-2xl font-black leading-tight text-slate-900 dark:text-white">
-                  Drivers
-                </h2> */}
-                
-                <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mt-2">
-                  Be Your Own Boss. Drive Different Cars. Know Your Pay Upfront.
-                </h3>
-                <h6 className="text-sm font-black leading-tight text-slate-600 dark:text-white mt-2">
-                  Choose when you work and plan your day with full visibility.
-                </h6>     
                 <div className="mt-7 space-y-2">
                   <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mb-4">
                   How It Works
