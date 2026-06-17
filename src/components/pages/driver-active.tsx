@@ -179,6 +179,7 @@ export default function DriverActiveDeliveryPage() {
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null)
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null)
   const [driverPosition, setDriverPosition] = useState<google.maps.LatLngLiteral | null>(null)
+  const [driverHeading, setDriverHeading] = useState<number | null>(null)
   const [workflowStatus, setWorkflowStatus] = useState<any>(null)
 
   // Detect desktop (no touch screen + not small screen)
@@ -206,6 +207,7 @@ export default function DriverActiveDeliveryPage() {
   // 👇 NEW: ref to store latest position for interval
   const latestPositionRef = useRef<google.maps.LatLngLiteral | null>(null)
   const dropoffSectionRef = useRef<HTMLDivElement>(null)
+  const prevCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
 
   // ── Geofence: distance to dropoff ──
   const GEO_RADIUS_MILES = 0.1
@@ -365,6 +367,23 @@ export default function DriverActiveDeliveryPage() {
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setDriverPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        // Use native heading if available, otherwise compute from GPS delta
+        const nativeHeading = pos.coords.heading // null when stationary or unsupported
+        if (nativeHeading != null && !isNaN(nativeHeading)) {
+          setDriverHeading(nativeHeading)
+        } else {
+          const prev = prevCoordsRef.current
+          if (prev) {
+            const dLng = pos.coords.longitude - prev.lng
+            const dLat = pos.coords.latitude - prev.lat
+            // Only compute if moved enough (avoid jitter when stationary)
+            if (Math.abs(dLat) > 0.00001 || Math.abs(dLng) > 0.00001) {
+              const bearing = (Math.atan2(dLng, dLat) * 180) / Math.PI
+              setDriverHeading((bearing + 360) % 360)
+            }
+          }
+        }
+        prevCoordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }
         setLastLocationTime(new Date())
         consecutiveMissedRef.current = 0
         setLocationHealth('healthy')
@@ -889,6 +908,7 @@ export default function DriverActiveDeliveryPage() {
                 pickup={pickupCoords}
                 dropoff={dropoffCoords}
                 driverPosition={driverPosition}
+                driverHeading={driverHeading}
                 directionsResult={routes[0]}
                 selectedRouteIndex={selectedRouteIndex}
                 isLoaded={isLoaded}

@@ -297,4 +297,257 @@ export class StripePaymentController {
       );
     }
   }
+
+  // ── Saved Card Management (SetupIntents) ──────────────────────────
+
+  /**
+   * Create or retrieve a Stripe Customer + SetupIntent for saving a card.
+   * Frontend uses the clientSecret to render Stripe Elements for card collection.
+   */
+  @Post("stripe/save-card")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async createSetupIntentForCard(@Body() body: { customerId: string; email?: string; name?: string }) {
+    const { customerId, email, name } = body;
+    if (!customerId) {
+      throw new BadRequestException("customerId is required");
+    }
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true, stripeCustomerId: true, contactEmail: true, businessName: true },
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
+
+    try {
+      // 1. Create or retrieve Stripe Customer
+      const stripeCustomer = await this.stripeService.createOrGetCustomer({
+        email: email || customer.contactEmail || undefined,
+        name: name || customer.businessName || undefined,
+        metadata: { customerId: customer.id },
+      });
+
+      // 2. Save stripeCustomerId to our Customer record
+      if (!customer.stripeCustomerId || customer.stripeCustomerId !== stripeCustomer.id) {
+        await this.prisma.customer.update({
+          where: { id: customerId },
+          data: { stripeCustomerId: stripeCustomer.id },
+        });
+      }
+
+      // 3. Create SetupIntent
+      const result = await this.stripeService.createSetupIntent({
+        customerId: stripeCustomer.id,
+      });
+
+      return {
+        setupIntentId: result.setupIntentId,
+        clientSecret: result.clientSecret,
+        stripeCustomerId: stripeCustomer.id,
+      };
+    } catch (err: any) {
+      this.logger.error(`SetupIntent creation failed: ${err.message}`);
+      throw new BadRequestException(`Failed to create SetupIntent: ${err.message}`);
+    }
+  }
+
+  /**
+   * List saved payment methods for a customer.
+   */
+  @Get("stripe/saved-cards/:customerId")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async getSavedCards(@Param("customerId") customerId: string) {
+    if (!customerId) {
+      throw new BadRequestException("customerId is required");
+    }
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true, stripeCustomerId: true, stripeDefaultPaymentMethodId: true },
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
+
+    if (!customer.stripeCustomerId) {
+      return { cards: [], defaultPaymentMethodId: null };
+    }
+
+    try {
+      const methods = await this.stripeService.listPaymentMethods(customer.stripeCustomerId);
+
+      const cards = methods.map((m) => ({
+        id: m.id,
+        brand: (m.card as any)?.brand || "unknown",
+        last4: (m.card as any)?.last4 || "****",
+        expMonth: (m.card as any)?.exp_month,
+        expYear: (m.card as any)?.exp_year,
+        isDefault: m.id === customer.stripeDefaultPaymentMethodId,
+      }));
+
+      return {
+        cards,
+        defaultPaymentMethodId: customer.stripeDefaultPaymentMethodId,
+      };
+    } catch (err: any) {
+      this.logger.error(`Failed to list payment methods: ${err.message}`);
+      return { cards: [], defaultPaymentMethodId: null };
+    }
+  }
+
+  /**
+   * Remove a saved payment method.
+   */
+  @Post("stripe/remove-card")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async removeSavedCard(@Body() body: { customerId: string; paymentMethodId: string }) {
+    const { customerId, paymentMethodId } = body;
+    if (!customerId || !paymentMethodId) {
+      throw new BadRequestException("customerId and paymentMethodId are required");
+    }
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true, stripeDefaultPaymentMethodId: true },
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer ${customerId} not found`);
+    }
+
+    try {
+      await this.stripeService.detachPaymentMethod(paymentMethodId);
+
+      // Clear default if it was the removed card
+      if (customer.stripeDefaultPaymentMethodId === paymentMethodId) {
+        await this.prisma.customer.update({
+          where: { id: customerId },
+          data: { stripeDefaultPaymentMethodId: null },
+        });
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      this.logger.error(`Failed to remove payment method: ${err.message}`);
+      throw new BadRequestException(`Failed to remove card: ${err.message}`);
+    }
+  }
+
+  // ── Stripe Connect (Driver Payouts) ──────────────────────────
+
+  /**
+   * Create or retrieve a Stripe Connect account for a driver.
+   * Called from driver dashboard "Payout Setup" page.
+   */
+  @Post("stripe/connect/onboarding")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async startConnectOnboarding(@Body() body: { driverId: string }) {
+    const { driverId } = body;
+    if (!driverId) {
+      throw new BadRequestException("driverId is required");
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        id: true,
+        stripeConnectAccountId: true,
+        stripeConnectOnboardingComplete: true,
+        user: { select: { email: true } },
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException(`Driver ${driverId} not found`);
+    }
+
+    try {
+      let accountId = driver.stripeConnectAccountId;
+
+      // Create Connect account if driver doesn't have one
+      if (!accountId) {
+        const account = await this.stripeService.createConnectAccount({
+          email: driver.user?.email || '',
+          driverId: driver.id,
+          country: 'US',
+        });
+        accountId = account.id;
+
+        await this.prisma.driver.update({
+          where: { id: driverId },
+          data: { stripeConnectAccountId: accountId },
+        });
+      }
+
+      // Generate onboarding link
+      const baseUrl = process.env.FRONTEND_URL || 'https://101drivers.app';
+      const accountLink = await this.stripeService.createAccountLink({
+        accountId,
+        refreshUrl: `${baseUrl}/driver-setting?section=payouts`,
+        returnUrl: `${baseUrl}/driver-setting?section=payouts&complete=true`,
+      });
+
+      return {
+        url: accountLink.url,
+        accountId,
+        onboardingComplete: driver.stripeConnectOnboardingComplete,
+      };
+    } catch (err: any) {
+      this.logger.error(`Connect onboarding failed for driver ${driverId}: ${err.message}`);
+      throw new BadRequestException(`Failed to start payout setup: ${err.message}`);
+    }
+  }
+
+  /**
+   * Get the Stripe Connect account status for a driver.
+   */
+  @Get("stripe/connect/status/:driverId")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async getConnectStatus(@Param("driverId") driverId: string) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        id: true,
+        stripeConnectAccountId: true,
+        stripeConnectOnboardingComplete: true,
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException(`Driver ${driverId} not found`);
+    }
+
+    if (!driver.stripeConnectAccountId) {
+      return { setupComplete: false, needsOnboarding: true };
+    }
+
+    try {
+      const account = await this.stripeService.getConnectAccount(driver.stripeConnectAccountId);
+      const detailsSubmitted = (account as any).details_submitted === true;
+
+      // Sync onboarding complete status
+      if (detailsSubmitted && !driver.stripeConnectOnboardingComplete) {
+        await this.prisma.driver.update({
+          where: { id: driverId },
+          data: { stripeConnectOnboardingComplete: true },
+        });
+      }
+
+      return {
+        setupComplete: detailsSubmitted,
+        needsOnboarding: !detailsSubmitted,
+        accountId: driver.stripeConnectAccountId,
+      };
+    } catch (err: any) {
+      this.logger.error(`Failed to get Connect status for driver ${driverId}: ${err.message}`);
+      return {
+        setupComplete: false,
+        needsOnboarding: true,
+        accountId: driver.stripeConnectAccountId,
+      };
+    }
+  }
 }

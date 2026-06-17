@@ -184,6 +184,8 @@ type IndividualCustomerShape = {
   id: string;
   userId: string | null;
   customerType: EnumCustomerCustomerType;
+  stripeCustomerId: string | null;
+  stripeDefaultPaymentMethodId: string | null;
   user: {
     id: string;
     email: string | null;
@@ -251,6 +253,8 @@ export class DeliveryRequestOrchestratorService {
         id: true,
         userId: true,
         customerType: true,
+        stripeCustomerId: true,
+        stripeDefaultPaymentMethodId: true,
       },
     });
 
@@ -806,19 +810,35 @@ private async createIndividualDeliveryForResolvedCustomer(
   // Create Stripe PaymentIntent if Stripe is configured
   let paymentIntentId: string | null = null;
   let clientSecret: string | null = null;
+  let piStatus: string | null = null;
   if (this.stripeService) {
     try {
+      const hasSavedCard = !!customer.stripeCustomerId && !!customer.stripeDefaultPaymentMethodId;
+
       const result = await this.stripeService.createPaymentIntent({
         amount: quote.estimatedPrice,
         deliveryId: delivery.id,
         customerEmail: input.recipientEmail || customer.user?.email || undefined,
+        stripeCustomerId: customer.stripeCustomerId || undefined,
+        paymentMethodId: customer.stripeDefaultPaymentMethodId || undefined,
+        // Saved card: confirm immediately + manual capture (hold funds, charge on delivery completion)
+        // No saved card: don't confirm (frontend will show Stripe payment dialog)
+        captureMethod: hasSavedCard ? 'manual' : 'automatic',
+        confirm: hasSavedCard ? true : undefined,
       });
       paymentIntentId = result.paymentIntentId;
       clientSecret = result.clientSecret;
+      piStatus = result.status || null;
 
       await this.prisma.payment.update({
         where: { id: payment.id },
-        data: { providerPaymentIntentId: paymentIntentId },
+        data: {
+          providerPaymentIntentId: paymentIntentId,
+          // If saved card was confirmed and authorized, update status immediately
+          ...(piStatus === 'requires_capture'
+            ? { status: EnumPaymentStatus.AUTHORIZED, authorizedAt: businessNow().toJSDate() }
+            : {}),
+        },
       });
     } catch (err: any) {
       // Stripe not available — keep as MANUAL, log the error
@@ -923,6 +943,8 @@ private async resolveIndividualCustomerForCreate(
         approvalStatus: true,
         approvedAt: true,
         approvedByUserId: true,
+        stripeCustomerId: true,
+        stripeDefaultPaymentMethodId: true,
         user: {
           select: {
             id: true,
@@ -982,6 +1004,8 @@ private async resolveIndividualCustomerForCreate(
         approvalStatus: true,
         approvedAt: true,
         approvedByUserId: true,
+        stripeCustomerId: true,
+        stripeDefaultPaymentMethodId: true,
         user: {
           select: {
             id: true,
@@ -1086,6 +1110,8 @@ private async resolveIndividualCustomerForCreate(
         approvalStatus: true,
         approvedAt: true,
         approvedByUserId: true,
+        stripeCustomerId: true,
+        stripeDefaultPaymentMethodId: true,
         user: {
           select: {
             id: true,
@@ -1123,6 +1149,8 @@ private async resolveIndividualCustomerForCreate(
             approvalStatus: true,
             approvedAt: true,
             approvedByUserId: true,
+            stripeCustomerId: true,
+            stripeDefaultPaymentMethodId: true,
             user: {
               select: {
                 id: true,
@@ -1160,6 +1188,8 @@ private async resolveIndividualCustomerForCreate(
         approvalStatus: true,
         approvedAt: true,
         approvedByUserId: true,
+        stripeCustomerId: true,
+        stripeDefaultPaymentMethodId: true,
         user: {
           select: {
             id: true,
@@ -1250,6 +1280,8 @@ private async resolveIndividualCustomerForCreate(
       approvalStatus: true,
       approvedAt: true,
       approvedByUserId: true,
+      stripeCustomerId: true,
+      stripeDefaultPaymentMethodId: true,
       user: {
         select: {
           id: true,

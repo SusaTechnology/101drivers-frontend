@@ -63,7 +63,9 @@ model Customer {
   id                  String                           @id @default(cuid())
   notifications       NotificationEvent[]
   phone               String?
-  postpaidEnabled     Boolean                          @default(false)
+  postpaidEnabled              Boolean                          @default(false)
+  stripeCustomerId             String?
+  stripeDefaultPaymentMethodId String?
   pricingConfig       PricingConfig?                   @relation(fields: [pricingConfigId], references: [id])
   pricingConfigId     String?
   pricingModeOverride EnumCustomerPricingModeOverride?
