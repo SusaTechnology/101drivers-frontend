@@ -301,3 +301,23 @@ Stage Summary:
 - Automatic payout messaging replaces manual payout request
 - No backend changes required — all new data fetched via existing `useDataQuery` pattern
 - Dev server compiles cleanly with no errors
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix iPhone safe-area issue on driver-dashboard-map and driver-pickup-checklist pages
+
+Work Log:
+- Diagnosed why job-list works but dashboard-map and pickup-checklist don't on iPhone 12
+- Found root cause: routing hierarchy mismatch between layout routes and legacy routes
+- driver.tsx layout applies `paddingTop: env(safe-area-inset-top)` to all `/driver/*` children
+- pickup-checklist was being navigated to via `/driver-pickup-checklist` (legacy route, root parent, NO layout)
+- dashboard-map uses `fixed inset-0` which breaks out of layout flow, ignoring the safe-area padding
+- Fixed pickup-checklist: added `style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}` to header
+- Fixed dashboard-map: changed root from `fixed inset-0 z-0` to `h-full` (fills layout space instead of breaking out)
+- Removed redundant safe-area padding from dashboard-map header (layout now handles it)
+- Build verified: `vite build` succeeded in 8.31s
+
+Stage Summary:
+- Two files modified: driver-pickup-checklist.tsx (header safe-area), driver-dashboard-map.tsx (fixed→h-full)
+- All driver pages now properly handle iPhone safe-area through either the layout or self-contained padding
+- No TypeScript errors

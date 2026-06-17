@@ -520,9 +520,9 @@ export default function DriverMapPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col overflow-hidden z-0">
+    <div className="h-full bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex flex-col overflow-hidden">
       {/* Top App Bar for Map View */}
-      <header className="shrink-0 z-40 w-full bg-white/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <header className="shrink-0 z-40 w-full bg-white/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800">
         <div className="max-w-[480px] mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Link to="/" className="flex items-center" aria-label="101 Drivers">
