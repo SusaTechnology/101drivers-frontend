@@ -25,6 +25,8 @@ import {
   Loader2,
   Phone,
   Camera,
+  CreditCard,
+  ArrowRight as ArrowForward,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -882,6 +884,29 @@ export default function DriverPreferencesPage() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Wallet & Payouts */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardContent className="p-6 sm:p-7">
+            <Link
+              to="/driver/wallet"
+              className="flex items-center justify-between gap-4 group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/25 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white">Wallet & Payouts</h2>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    Earnings, payout method, bank account, and payout history.
+                  </p>
+                </div>
+              </div>
+              <ArrowForward className="w-5 h-5 text-slate-400 group-hover:text-primary transition" />
+            </Link>
           </CardContent>
         </Card>
 
