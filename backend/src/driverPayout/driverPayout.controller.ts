@@ -101,7 +101,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     const account = await this.prisma.driverBankAccount.findUnique({
       where: { driverId },
     });
-    res.json(account || null);
+    res.json(account || {});
   }
 
   @common.Post("my-bank-account")
