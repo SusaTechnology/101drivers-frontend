@@ -1,4 +1,3 @@
-// app/pages/driver/wallet.tsx
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
@@ -15,53 +14,20 @@ import {
   Info,
   AlertCircle,
   CheckCircle,
-  XCircle,
   Check,
-  X,
-  Save,
   ArrowRight as ArrowForward,
-  DollarSign,
-  CreditCard,
-  Banknote,
-  Landmark,
-  Wallet,
-  PiggyBank,
-  TrendingUp,
-  TrendingDown,
-  Receipt,
-  ReceiptText,
   Receipt as ReceiptLong,
-  History,
-  Clock,
-  Calendar,
-  CalendarDays,
-  Timer,
-  Hourglass,
-  Plus,
-  Minus,
-  Home,
   Car,
   Inbox,
-  Menu as MenuIcon,
-  Eye,
-  EyeOff,
-  Shield,
   ShieldCheck,
-  ShieldAlert,
-  Verified as VerifiedIcon,
-  AlertTriangle,
-  HelpCircle,
-  Phone,
-  Mail as MailIcon,
-  MessageSquare,
-  ChevronRight,
-  ChevronLeft,
-  ChevronDown,
-  ChevronUp,
-  MoreHorizontal,
-  MoreVertical,
   ExternalLink,
   Loader2,
+  Star,
+  User,
+  Copy,
+  Gift,
+  Users,
+  Share2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -77,7 +43,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -87,7 +52,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   Table,
@@ -98,62 +62,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-// Wallet data
-const MOCK_WALLET = {
-  availableBalance: 1245.50,
-  pending: 320.00,
-  thisWeek: 610.00,
-  ytd: 8420.00,
-
-  payoutMethods: [
-    { value: 'ach', label: 'Bank transfer (ACH)' },
-    { value: 'debit', label: 'Debit card (Instant)' },
-    { value: 'check', label: 'Check (Mail)' },
-  ],
-
-  earningsBreakdown: [
-    { label: 'Base delivery payout', amount: 180.00, highlight: false },
-    { label: 'Distance payout', amount: 64.00, highlight: false },
-    { label: 'Bonus (urgent / SLA)', amount: 25.00, highlight: true },
-    { total: true, label: 'Driver total', amount: 269.00 },
-  ],
-
-  payoutHistory: [
-    {
-      date: 'Jan 29, 2026',
-      amount: 420.00,
-      method: 'ACH',
-      status: { label: 'Paid', color: 'primary', icon: CheckCircle },
-    },
-    {
-      date: 'Jan 20, 2026',
-      amount: 310.50,
-      method: 'ACH',
-      status: { label: 'Processing', color: 'slate', icon: Schedule },
-    },
-    {
-      date: 'Jan 12, 2026',
-      amount: 198.00,
-      method: 'ACH',
-      status: { label: 'On hold', color: 'amber', icon: AlertCircle },
-    },
-  ],
-}
-
-// Payout type options
+// Simplified payout type options
 const payoutTypeOptions = [
   { value: 'ach', label: 'Bank transfer (ACH)' },
-  { value: 'debit', label: 'Debit card (Instant)' },
-  { value: 'check', label: 'Check (Mail)' },
+  { value: 'checking', label: 'Checking account' },
+  { value: 'savings', label: 'Savings account' },
 ]
-
-// Bottom navigation items
-// const bottomNavItems = [
-//   { href: '/driver/dashboard', label: 'Home', icon: Home },
-//   { href: '/driver-active', label: 'Active', icon: Car },
-//   { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
-//   { href: '/driver-menu', label: 'Menu', icon: MenuIcon },
-// ]
 
 export default function DriverWalletPage() {
   const [mounted, setMounted] = useState(false)
@@ -166,7 +80,34 @@ export default function DriverWalletPage() {
   const user = getUser()
   const API_URL = import.meta.env.VITE_API_URL
 
-  // Fetch real earnings data
+  // ── Driver Profile ─────────────────────────────────────────
+  const { data: driverProfile } = useDataQuery<any>({
+    apiEndPoint: `${API_URL}/api/referrals/driver-profile`,
+    noFilter: true,
+  })
+
+  // ── Referral Code & Stats ──────────────────────────────────
+  const { data: referralCodeData } = useDataQuery<any>({
+    apiEndPoint: `${API_URL}/api/referrals/my-referral-code`,
+    noFilter: true,
+  })
+
+  const { data: referralStats } = useDataQuery<any>({
+    apiEndPoint: `${API_URL}/api/referrals/my-stats`,
+    noFilter: true,
+  })
+
+  const referralCode = referralCodeData?.referralCode || ''
+
+  // ── Referral History ───────────────────────────────────────
+  const { data: referralHistory } = useDataQuery<any>({
+    apiEndPoint: `${API_URL}/api/referrals/my-referrals`,
+    noFilter: true,
+  })
+
+  const referrals = referralHistory?.referrals || []
+
+  // ── Fetch real earnings data ───────────────────────────────
   const { data: earningsData } = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-earnings`,
     noFilter: true,
@@ -207,7 +148,7 @@ export default function DriverWalletPage() {
         payouts: [],
       }
 
-  // Fetch saved bank account
+  // ── Fetch saved bank account ──────────────────────────────
   const { data: bankAccountData } = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-bank-account`,
     noFilter: true,
@@ -217,9 +158,10 @@ export default function DriverWalletPage() {
       setAccountHolder(bankAccountData?.accountHolderName || '')
       setRoutingNumber(bankAccountData?.routingNumber || '')
       setAccountNumber(bankAccountData?.accountNumber || '')
-      if (bankAccountData?.accountType) setPayoutType(bankAccountData?.accountType === 'debit' ? 'debit' : bankAccountData?.accountType === 'check' ? 'check' : 'ach')
+      if (bankAccountData?.accountType) setPayoutType(bankAccountData?.accountType === 'checking' ? 'checking' : bankAccountData?.accountType === 'savings' ? 'savings' : 'ach')
     }
   }, [bankAccountData])
+
   // Save bank account
   const saveBankAccountMutation = useDataMutation<any, any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-bank-account`,
@@ -258,7 +200,7 @@ export default function DriverWalletPage() {
     },
   })
 
-  // Theme handling
+  // ── Theme handling ─────────────────────────────────────────
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -267,7 +209,6 @@ export default function DriverWalletPage() {
   const search = useSearch({ strict: false }) as Record<string, string>
   useEffect(() => {
     if (search?.stripe === 'complete') {
-      // Refetch Connect status to reflect the updated onboarding state
       refetchConnectStatus()
       toast.success('Stripe account linked!', {
         description: 'Your payout setup is complete. Earnings will transfer automatically after deliveries.',
@@ -285,12 +226,6 @@ export default function DriverWalletPage() {
     navigate({ to: '/driver-signin' })
   }
 
-  const handleRequestPayout = () => {
-    toast.success('Payout requested', {
-      description: `$${wallet.availableBalance.toFixed(2)} will be sent to your account.`,
-    })
-  }
-
   const handleSavePayoutMethod = () => {
     if (!accountHolder || !routingNumber || !accountNumber) {
       toast.error('Please fill in all fields', {
@@ -306,27 +241,36 @@ export default function DriverWalletPage() {
     })
   }
 
-  const handleVerify = () => {
-    toast.info('Verification initiated', {
-      description: 'We\'ve sent test deposits to verify your account.',
-    })
+  // ── Referral share handler ────────────────────────────────
+  const handleShareReferral = async () => {
+    const shareUrl = `${window.location.origin}/driver-signin?ref=${referralCode}`
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join as a Driver',
+          text: `Sign up as a driver using my referral link and we both earn rewards!`,
+          url: shareUrl,
+        })
+      } catch {
+        // User cancelled share — do nothing
+      }
+    } else {
+      await navigator.clipboard.writeText(shareUrl)
+      toast.success('Referral link copied!', {
+        description: 'Share it with friends to earn $50 per referral.',
+      })
+    }
   }
 
-  const handleViewPayoutDetails = (index: number) => {
-    toast.info(`Viewing payout details`, {
-      description: `Payout from ${wallet.payouts[index]?.date || 'N/A'}`,
-    })
-  }
-
-  // Status badge component
-  const StatusBadge = ({ 
-    status, 
-    color = 'slate', 
+  // ── Status badge component ─────────────────────────────────
+  const StatusBadge = ({
+    status,
+    color = 'slate',
     icon: Icon,
-    className 
-  }: { 
-    status: string; 
-    color?: string; 
+    className,
+  }: {
+    status: string;
+    color?: string;
     icon?: any;
     className?: string;
   }) => {
@@ -335,23 +279,87 @@ export default function DriverWalletPage() {
       slate: 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300',
       amber: 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200',
       emerald: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200',
+      green: 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200',
     }
 
     const StatusIcon = Icon || CheckCircle
 
     return (
-      <Badge 
-        variant="outline" 
+      <Badge
+        variant="outline"
         className={cn(
-          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border",
+          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border',
           colors[color] || colors.slate,
-          className
+          className,
         )}
       >
         <StatusIcon className="w-3.5 h-3.5" />
         {status}
       </Badge>
     )
+  }
+
+  // ── Referral status helper ─────────────────────────────────
+  const getReferralStatusBadge = (ref: any) => {
+    switch (ref.status) {
+      case 'REGISTERED':
+        return (
+          <Badge
+            variant="outline"
+            className="bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
+          >
+            Signed up
+          </Badge>
+        )
+      case 'TRIPPING':
+        return (
+          <Badge
+            variant="outline"
+            className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
+          >
+            On trip {ref.tripsCompleted || 0} of {ref.tripsRequired || 5}
+          </Badge>
+        )
+      case 'COMPLETED':
+        return (
+          <Badge
+            variant="outline"
+            className="bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
+          >
+            <CheckCircle className="w-3.5 h-3.5" />
+            Completed
+          </Badge>
+        )
+      case 'REWARD_PAID':
+        return (
+          <Badge
+            variant="outline"
+            className="bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
+          >
+            <Gift className="w-3.5 h-3.5" />
+            ${ref.rewardAmount || 50} earned
+          </Badge>
+        )
+      default:
+        return (
+          <Badge
+            variant="outline"
+            className="bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
+          >
+            {ref.status}
+          </Badge>
+        )
+    }
+  }
+
+  // ── Initials from name ─────────────────────────────────────
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
   }
 
   return (
@@ -377,27 +385,271 @@ export default function DriverWalletPage() {
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            size="icon"
-            className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-          >
-            {mounted && theme === 'dark' ? (
-              <Sun className="w-4 h-4" />
-            ) : (
-              <Moon className="w-4 h-4" />
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              onClick={handleSignOut}
+              aria-label="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+            >
+              {mounted && theme === 'dark' ? (
+                <Sun className="w-4 h-4" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-[900px] mx-auto px-5 sm:px-6 py-6 pb-28 space-y-6">
-        {/* Balance */}
+        {/* ═══════════════════════════════════════════════════════
+            1. Driver Profile Header
+        ═══════════════════════════════════════════════════════ */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardContent className="p-6 sm:p-7">
+            <div className="flex flex-col items-center text-center gap-4">
+              {/* Avatar */}
+              {driverProfile?.profilePhotoUrl ? (
+                <img
+                  src={driverProfile.profilePhotoUrl}
+                  alt={driverProfile.fullName || 'Driver'}
+                  className="w-20 h-20 rounded-full object-cover border-4 border-primary/20 shadow-lg"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-primary/10 border-4 border-primary/20 flex items-center justify-center shadow-lg">
+                  {driverProfile?.fullName ? (
+                    <span className="text-2xl font-black text-primary">
+                      {getInitials(driverProfile.fullName)}
+                    </span>
+                  ) : (
+                    <User className="w-9 h-9 text-primary" />
+                  )}
+                </div>
+              )}
+
+              {/* Name */}
+              <div>
+                <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                  {driverProfile?.fullName || 'Driver'}
+                </h2>
+                {driverProfile?.email && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                    {driverProfile.email}
+                  </p>
+                )}
+              </div>
+
+              {/* Rating & Trips badges */}
+              <div className="flex items-center gap-3 flex-wrap justify-center">
+                {driverProfile?.avgRating != null && (
+                  <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30">
+                    <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    <span className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                      {Number(driverProfile.avgRating).toFixed(1)}
+                    </span>
+                    {driverProfile.totalRatings != null && (
+                      <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                        ({driverProfile.totalRatings})
+                      </span>
+                    )}
+                  </div>
+                )}
+                {driverProfile?.completedTrips != null && (
+                  <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                    <Car className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      {driverProfile.completedTrips} trips
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ═══════════════════════════════════════════════════════
+            2. Refer a Friend Section
+        ═══════════════════════════════════════════════════════ */}
+        <Card className="border-emerald-200 dark:border-emerald-800/40 shadow-lg relative overflow-hidden">
+          <div className="absolute -top-10 -right-10 w-44 h-44 bg-emerald-500/10 rounded-full blur-3xl"></div>
+          <CardHeader className="relative z-10">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-100 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+                  <Gift className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-black">Refer a Friend & Earn $50</CardTitle>
+                  <CardDescription className="text-sm mt-1">
+                    When your friend completes their first 5 trips
+                  </CardDescription>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="relative z-10 space-y-4">
+            {/* Referral code display */}
+            {referralCode && (
+              <div className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-950 border border-emerald-100 dark:border-emerald-900/30">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                    Your referral code
+                  </p>
+                  <p className="text-lg font-black text-slate-900 dark:text-white tracking-wider">
+                    {referralCode}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-10 px-4 rounded-2xl border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 font-extrabold transition inline-flex items-center gap-2"
+                  onClick={handleShareReferral}
+                >
+                  {navigator.share ? (
+                    <>
+                      <Share2 className="w-4 h-4" />
+                      Share
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* Stats row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                  Total earned
+                </p>
+                <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
+                  ${((referralStats?.totalEarned || 0) + (referralStats?.pendingReward || 0)).toFixed(2)}
+                </p>
+              </div>
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                  Active referrals
+                </p>
+                <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
+                  {referralStats?.activeReferrals || 0}
+                </p>
+              </div>
+            </div>
+
+            {/* Primary share button */}
+            <Button
+              onClick={handleShareReferral}
+              className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl hover:shadow-emerald-600/20 transition inline-flex items-center justify-center gap-2 font-extrabold"
+            >
+              <Gift className="w-4 h-4" />
+              Refer a Friend & Earn $50
+              <ArrowForward className="w-4 h-4" />
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* ═══════════════════════════════════════════════════════
+            3. Referral History
+        ═══════════════════════════════════════════════════════ */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
+          <CardHeader className="border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-black">Referral History</CardTitle>
+                  <CardDescription className="text-sm mt-1">
+                    Track who you&apos;ve referred and their progress
+                  </CardDescription>
+                </div>
+              </div>
+              {referrals.length > 0 && (
+                <Badge
+                  variant="outline"
+                  className="bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 chip"
+                >
+                  {referrals.length} referral{referrals.length !== 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {referrals.length === 0 ? (
+              <div className="py-12 px-6 text-center">
+                <Users className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  No referrals yet. Share your code to start earning!
+                </p>
+              </div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto custom-scrollbar">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-slate-200 dark:border-slate-800">
+                      <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                        Name
+                      </TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                        Status
+                      </TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 text-right">
+                        Date
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {referrals.map((ref: any) => (
+                      <TableRow key={ref.id} className="hover:bg-primary/5 transition">
+                        <TableCell className="py-4 pr-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                              <User className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                            </div>
+                            <span className="text-sm font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">
+                              {ref.referredDriver?.user?.fullName || ref.referredEmail || 'Unknown'}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-4 pr-4">
+                          {getReferralStatusBadge(ref)}
+                        </TableCell>
+                        <TableCell className="py-4 pr-0 text-right text-sm text-slate-500 dark:text-slate-400">
+                          {ref.createdAt
+                            ? new Date(ref.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ═══════════════════════════════════════════════════════
+            4. Earnings / Balance
+        ═══════════════════════════════════════════════════════ */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg relative overflow-hidden">
           <div className="absolute -top-10 -right-10 w-44 h-44 bg-primary/15 rounded-full blur-3xl"></div>
-          
           <CardContent className="relative z-10 p-6 sm:p-7">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
               <div>
@@ -453,13 +705,12 @@ export default function DriverWalletPage() {
             </div>
 
             <div className="relative z-10 mt-6 flex flex-col sm:flex-row gap-3">
-              <Button
-                onClick={handleRequestPayout}
-                className="flex-1 py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center justify-center gap-2"
-              >
-                Request payout
-                <ArrowForward className="w-4 h-4" />
-              </Button>
+              <div className="flex-1 py-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40 px-5 flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                  Payouts are automatic after each delivery
+                </p>
+              </div>
 
               <Link
                 to="#payouts"
@@ -483,7 +734,9 @@ export default function DriverWalletPage() {
           </CardContent>
         </Card>
 
-        {/* Payout method */}
+        {/* ═══════════════════════════════════════════════════════
+            5. Payout Method
+        ═══════════════════════════════════════════════════════ */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
@@ -494,10 +747,10 @@ export default function DriverWalletPage() {
                 </CardDescription>
               </div>
               <Badge variant="outline" className={cn(
-                "chip",
+                'chip',
                 bankAccountData
-                  ? "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200"
-                  : "bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200"
+                  ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200'
+                  : 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200',
               )}>
                 <Info className="w-3.5 h-3.5 mr-1" />
                 {bankAccountData ? 'Connected' : 'Not connected'}
@@ -518,7 +771,7 @@ export default function DriverWalletPage() {
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {payoutTypeOptions.map(option => (
+                    {payoutTypeOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
@@ -564,23 +817,13 @@ export default function DriverWalletPage() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                onClick={handleSavePayoutMethod}
-                className="flex-1 py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center justify-center gap-2"
-              >
-                Save payout method
-                <Check className="w-4 h-4" />
-              </Button>
-              <Button
-                onClick={handleVerify}
-                variant="outline"
-                className="flex-1 py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-950 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 hover:bg-primary/5 transition inline-flex items-center justify-center gap-2"
-              >
-                Verify
-                <ShieldCheck className="w-4 h-4 text-primary" />
-              </Button>
-            </div>
+            <Button
+              onClick={handleSavePayoutMethod}
+              className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center justify-center gap-2"
+            >
+              Save payout method
+              <Check className="w-4 h-4" />
+            </Button>
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
               For security, banking details are tokenized and verified before use.
@@ -588,7 +831,9 @@ export default function DriverWalletPage() {
           </CardContent>
         </Card>
 
-        {/* Stripe Connect — Fast payouts */}
+        {/* ═══════════════════════════════════════════════════════
+            6. Stripe Connect — Fast Payouts
+        ═══════════════════════════════════════════════════════ */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
@@ -632,7 +877,7 @@ export default function DriverWalletPage() {
                     </p>
                   </div>
                   <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
-                    You'll be redirected to Stripe to verify your identity and link your bank account. This only takes a few minutes.
+                    You&apos;ll be redirected to Stripe to verify your identity and link your bank account. This only takes a few minutes.
                   </p>
                 </div>
                 <Button
@@ -652,62 +897,9 @@ export default function DriverWalletPage() {
           </CardContent>
         </Card>
 
-        {/* Earnings breakdown */}
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg hover-lift">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <CardTitle className="text-lg font-black">Earnings breakdown</CardTitle>
-                <CardDescription className="text-sm mt-1">
-                  Summary of how earnings are computed (pricing + fees). Values are illustrative.
-                </CardDescription>
-              </div>
-              <Link
-                to="/driver/job-details/"
-                className="inline-flex items-center gap-2 text-sm font-extrabold bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-2xl hover:bg-primary/5 transition"
-              >
-                View job example
-                <ArrowForward className="w-4 h-4 text-primary" />
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                  Total earnings (net)
-                </span>
-                <span className="text-sm font-black text-slate-900 dark:text-white">
-                  ${wallet.totalEarnings.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                  Tips received
-                </span>
-                <span className="text-sm font-black text-primary">
-                  ${wallet.totalTips.toFixed(2)}
-                </span>
-              </div>
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-extrabold text-slate-900 dark:text-white">
-                    Total (earnings + tips)
-                  </span>
-                  <span className="text-lg font-black text-slate-900 dark:text-white">
-                    ${(wallet.totalEarnings + wallet.totalTips).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Notes: pricing rules and payout formulas are controlled by Admin (pricing + payment policy).
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Payout history */}
+        {/* ═══════════════════════════════════════════════════════
+            7. Payout History
+        ═══════════════════════════════════════════════════════ */}
         <Card id="payouts" className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
           <CardHeader className="border-b border-slate-100 dark:border-slate-800">
             <CardTitle className="text-lg font-black">Payout history</CardTitle>
@@ -733,55 +925,36 @@ export default function DriverWalletPage() {
                     <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
                       Status
                     </TableHead>
-                    <TableHead className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 text-right">
-                      Details
-                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {wallet.payouts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                      <TableCell colSpan={4} className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                         No payouts yet. Complete deliveries to start earning.
                       </TableCell>
                     </TableRow>
                   ) : (
                     wallet.payouts.map((item, index) => (
-                    <TableRow key={index} className="hover:bg-primary/5 transition">
-                      <TableCell className="py-4 pr-4 text-slate-600 dark:text-slate-400">
-                        {item.date}
-                      </TableCell>
-                      <TableCell className="py-4 pr-4 font-extrabold text-slate-900 dark:text-white">
-                        ${item.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="py-4 pr-4 text-slate-600 dark:text-slate-400">
-                        {item.method}
-                      </TableCell>
-                      <TableCell className="py-4 pr-4">
-                        <StatusBadge 
-                          status={item.status.label} 
-                          color={item.status.color}
-                          icon={item.status.icon}
-                        />
-                      </TableCell>
-                      <TableCell className="py-4 pr-0 text-right">
-                        <Button
-                          onClick={() => handleViewPayoutDetails(index)}
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-2xl font-extrabold transition",
-                            item.status.color === 'amber'
-                              ? "bg-amber-600 text-white hover:opacity-90"
-                              : "bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:bg-primary/5"
-                          )}
-                        >
-                          {item.status.color === 'amber' ? 'Review' : 'View'}
-                          <ArrowForward className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                      <TableRow key={index} className="hover:bg-primary/5 transition">
+                        <TableCell className="py-4 pr-4 text-slate-600 dark:text-slate-400">
+                          {item.date}
+                        </TableCell>
+                        <TableCell className="py-4 pr-4 font-extrabold text-slate-900 dark:text-white">
+                          ${item.amount.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="py-4 pr-4 text-slate-600 dark:text-slate-400">
+                          {item.method}
+                        </TableCell>
+                        <TableCell className="py-4 pr-0">
+                          <StatusBadge
+                            status={item.status.label}
+                            color={item.status.color}
+                            icon={item.status.icon}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
                   )}
                 </TableBody>
               </Table>
@@ -793,7 +966,9 @@ export default function DriverWalletPage() {
           </CardContent>
         </Card>
 
-        {/* Help / policy */}
+        {/* ═══════════════════════════════════════════════════════
+            8. Help / Policy
+        ═══════════════════════════════════════════════════════ */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <CardContent className="p-6 sm:p-7">
             <Alert className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30">
@@ -825,28 +1000,6 @@ export default function DriverWalletPage() {
           </CardContent>
         </Card>
       </main>
-
-      {/* Bottom Navigation */}
-      {/* <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 safe-bottom">
-        <div className="max-w-[900px] mx-auto px-5 sm:px-6 py-3">
-          <div className="grid grid-cols-4 gap-2 text-center">
-            {bottomNavItems.map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                className="py-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-900 transition"
-              >
-                <div className="w-10 h-10 mx-auto rounded-2xl flex items-center justify-center">
-                  <item.icon className="w-5 h-5 text-primary" />
-                </div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                  {item.label}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </nav> */}
     </div>
   )
 }

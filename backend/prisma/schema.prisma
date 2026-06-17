@@ -105,6 +105,8 @@ model Driver {
   preferences      DriverPreference?
   profilePhotoUrl  String?
   ratingsReceived  DeliveryRating[]
+  referralsMade    Referral[]          @relation("ReferrerReferrals")
+  referredBy       Referral?           @relation("ReferredByReferrals")
   routeCache       DriverRouteCache[]
   residentialAddressLine1  String?
   residentialAddressLine2  String?
@@ -583,6 +585,7 @@ model DriverPayout {
   paidAt             DateTime?
   platformFee        Float
   providerTransferId String?
+  referral           Referral?              @relation(fields: [payoutId], references: [id])
   status             EnumDriverPayoutStatus @default(PENDING)
   updatedAt          DateTime               @updatedAt
 
@@ -1284,4 +1287,37 @@ enum EnumInvoicePaymentTerms {
   NET_15
   NET_30
   DUE_ON_RECEIPT
+}
+
+enum EnumReferralStatus {
+  PENDING
+  REGISTERED
+  ONBOARDING_COMPLETE
+  TRIPPING
+  COMPLETED
+  REWARD_PAID
+}
+
+model Referral {
+  id              String             @id @default(cuid())
+  referralCode    String             @unique
+  referrerId      String
+  referrer        Driver             @relation("ReferrerReferrals", fields: [referrerId], references: [id])
+  referredEmail   String?
+  referredPhone   String?
+  referredDriverId String?            @unique
+  referredDriver  Driver?            @relation("ReferredByReferrals", fields: [referredDriverId], references: [id])
+  status          EnumReferralStatus @default(PENDING)
+  tripsCompleted  Int                @default(0)
+  tripsRequired   Int                @default(5)
+  rewardAmount     Float              @default(50.0)
+  rewardPaidAt    DateTime?
+  payoutId        String?            @unique
+  payout          DriverPayout?      @relation(fields: [payoutId], references: [id])
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([referrerId, status])
+  @@index([referredDriverId])
+  @@index([referralCode])
 }

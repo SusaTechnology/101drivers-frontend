@@ -58,6 +58,7 @@ import { EmailVerificationTokenModule } from "./emailVerificationToken/emailVeri
 import { SupportRequestModule } from "./supportRequest/supportRequest.module";
 import { SupportRequestNoteModule } from "./supportRequestNote/supportRequestNote.module";
 import { StripeModule } from "./providers/stripe/stripe.module";
+import { ReferralModule } from "./referral/referral.module";
 import { StripeWebhookController } from "./payment/stripe-webhook.controller";
 import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "./common/mail/mail.service";
@@ -108,6 +109,7 @@ import { MailService } from "./common/mail/mail.service";
     PrismaModule,
     SecretsManagerModule,
     StripeModule,
+    ReferralModule,
     AdminDashboardModule,
     ReportsModule,
     EmailVerificationModule,
