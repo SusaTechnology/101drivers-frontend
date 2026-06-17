@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import SavedPaymentMethods from '@/components/stripe/SavedPaymentMethods'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -1389,6 +1390,16 @@ const confirmDelete = () => {
                   <span className="text-slate-500 dark:text-slate-400">Postpaid enabled</span>
                   <span className="font-black text-sky-600">{customer?.postpaidEnabled ? 'Yes' : 'No'}</span>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Payment Method Card */}
+            <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-xl font-black">Payment method</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                <SavedPaymentMethods customerId={customerId} />
               </CardContent>
             </Card>
 

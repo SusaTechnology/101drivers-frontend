@@ -43,7 +43,7 @@ import {
   X,
   FileText,
 } from "lucide-react";
-import { getUser, authFetch } from "@/lib/tanstack/dataQuery";
+import { getUser, authFetch, useDataQuery } from "@/lib/tanstack/dataQuery";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import StripePaymentDialog from '@/components/stripe/StripePaymentDialog';
@@ -112,7 +112,8 @@ interface ReviewDeliveryData {
   draftId?: string;
 }
 
-import { BUSINESS_TZ } from '@/lib/timezone'
+const BUSINESS_TZ = 'America/New_York'
+const API_URL = import.meta.env.VITE_API_URL
 
 const formatTimeRange = (startIso?: string, endIso?: string) => {
   if (!startIso || !endIso) return "Not set";
@@ -160,6 +161,15 @@ export default function ReviewDeliveryPage() {
   const [editField, setEditField] = useState<string | null>(null);
   const [editedValues, setEditedValues] = useState<Partial<ReviewDeliveryData>>({});
   const customer = getUser();
+
+  // Check if dealer has a saved card (to show/hide "save card" nudge)
+  const { data: savedCardsData } = useDataQuery<{ cards: any[] }>({
+    apiEndPoint: `${API_URL}/api/payments/stripe/saved-cards/${customer?.profileId}`,
+    enabled: !!customer?.profileId,
+    noFilter: true,
+    staleTime: 5 * 60 * 1000,
+  });
+  const savedCardExists = (savedCardsData?.cards?.length ?? 0) > 0;
 
   // Schedule edit state
   const [availableSlots, setAvailableSlots] = useState<{ label: string; start: string; end: string }[]>([]);
@@ -1137,6 +1147,27 @@ export default function ReviewDeliveryPage() {
                     <p className="text-xs text-slate-500">
                       Payment is required before your delivery is listed. You will be prompted to enter your card after submission.
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Nudge: save card for faster future checkouts (prepaid, no saved card) */}
+              {reviewData.paymentType !== 'POSTPAID' && customer?.profileId && !savedCardExists && (
+                <div className="mt-3 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 p-3">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        Save a card for one-click checkout
+                      </p>
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                        You'll enter your card after submission. Save it in{' '}
+                        <a href="/dealer-setting" className="underline font-bold hover:text-amber-800 dark:hover:text-amber-200">
+                          Settings → Payment method
+                        </a>{' '}
+                        to skip this step on future deliveries.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}

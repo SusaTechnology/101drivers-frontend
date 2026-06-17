@@ -60,11 +60,14 @@ import {
   ChevronUp,
   MoreHorizontal,
   MoreVertical,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   useDataQuery,
   useDataMutation,
+  getUser,
 } from '@/lib/tanstack/dataQuery'
 import {
   Card,
@@ -160,6 +163,8 @@ export default function DriverWalletPage() {
   const [accountNumber, setAccountNumber] = useState('')
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
+  const user = getUser()
+  const API_URL = import.meta.env.VITE_API_URL
 
   // Fetch real earnings data
   const { data: earningsData } = useDataQuery<any>({
@@ -226,6 +231,30 @@ export default function DriverWalletPage() {
     },
     onError: (error) => {
       toast.error('Failed to save', { description: error?.message })
+    },
+  })
+
+  // ── Stripe Connect onboarding ──────────────────────────────
+  const { data: connectStatus, refetch: refetchConnectStatus } = useDataQuery<{
+    setupComplete: boolean;
+    needsOnboarding: boolean;
+  }>({
+    apiEndPoint: `${API_URL}/api/payments/stripe/connect/status/${user?.profileId}`,
+    enabled: !!user?.profileId,
+    noFilter: true,
+    staleTime: 30 * 1000,
+  })
+
+  const connectOnboardingMutation = useDataMutation<{ url: string }, { driverId: string }>({
+    apiEndPoint: `${API_URL}/api/payments/stripe/connect/onboarding`,
+    method: 'POST',
+    onSuccess: (data) => {
+      if (data?.url) {
+        window.open(data.url, '_blank')
+      }
+    },
+    onError: (error: any) => {
+      toast.error('Failed to start payout setup', { description: error?.message })
     },
   })
 
@@ -544,6 +573,70 @@ export default function DriverWalletPage() {
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
               For security, banking details are tokenized and verified before use.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Stripe Connect — Fast payouts */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg font-black">Fast payouts</CardTitle>
+                <CardDescription className="text-sm mt-1">
+                  Connect your Stripe account for instant payouts after each delivery.
+                </CardDescription>
+              </div>
+              {connectStatus?.setupComplete ? (
+                <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200 chip">
+                  <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                  Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 chip">
+                  <AlertCircle className="w-3.5 h-3.5 mr-1" />
+                  Not connected
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {connectStatus?.setupComplete ? (
+              <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 p-4">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                  <p className="font-bold text-emerald-700 dark:text-emerald-300">Payouts are active</p>
+                </div>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                  Your earnings are automatically transferred to your connected account after each delivery.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 p-4">
+                  <div className="flex items-center gap-2">
+                    <Info className="h-4 w-4 text-amber-500" />
+                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                      Set up Stripe Connect to receive payouts
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                    You'll be redirected to Stripe to verify your identity and link your bank account. This only takes a few minutes.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => user?.profileId && connectOnboardingMutation.mutate({ driverId: user.profileId })}
+                  disabled={connectOnboardingMutation.isPending || !user?.profileId}
+                  className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center justify-center gap-2"
+                >
+                  {connectOnboardingMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="w-4 h-4" />
+                  )}
+                  {connectOnboardingMutation.isPending ? 'Loading...' : 'Set up payouts with Stripe'}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 

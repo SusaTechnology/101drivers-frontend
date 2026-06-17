@@ -87,6 +87,10 @@ export class StripeWebhookController {
           await this.handleChargeDisputeCreated(event.data.object);
           break;
 
+        case "setup_intent.succeeded":
+          await this.handleSetupIntentSucceeded(event.data.object);
+          break;
+
         default:
           this.logger.log(`Unhandled event type: ${event.type}`);
       }
@@ -374,16 +378,27 @@ export class StripeWebhookController {
     const driverId = account.metadata?.driverId;
     if (!driverId) return;
 
-    // Map Stripe account status to our status
     const chargesEnabled = account.charges_enabled;
     const payoutsEnabled = account.payouts_enabled;
     const detailsSubmitted = account.details_submitted;
 
-    if (detailsSubmitted && chargesEnabled && payoutsEnabled) {
-      // Account is fully onboarded
-      this.logger.log(`Driver ${driverId} Stripe account activated: ${account.id}`);
-    } else if (detailsSubmitted) {
-      this.logger.log(`Driver ${driverId} Stripe account pending: ${account.id}`);
+    try {
+      // Update the Driver record with Connect account status
+      await this.prisma.driver.update({
+        where: { id: driverId },
+        data: {
+          stripeConnectAccountId: account.id,
+          stripeConnectOnboardingComplete: !!(detailsSubmitted && chargesEnabled && payoutsEnabled),
+        },
+      });
+
+      if (detailsSubmitted && chargesEnabled && payoutsEnabled) {
+        this.logger.log(`Driver ${driverId} Stripe account fully activated: ${account.id}`);
+      } else if (detailsSubmitted) {
+        this.logger.log(`Driver ${driverId} Stripe account partially onboarded: ${account.id}`);
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to update driver ${driverId} Connect status: ${err.message}`);
     }
   }
 
@@ -431,5 +446,49 @@ export class StripeWebhookController {
     this.logger.warn(
       `Stripe dispute ${dispute.id} opened for payment ${payment.id} (delivery ${payment.deliveryId}). Reason: ${dispute.reason}`,
     );
+  }
+
+  // ── Setup Intent Succeeded (card saved) ─────────────────────────
+
+  private async handleSetupIntentSucceeded(setupIntent: any): Promise<void> {
+    this.logger.log(
+      `SetupIntent ${setupIntent.id} succeeded — card saved`,
+    );
+
+    const customerId = setupIntent.metadata?.customer?.id || setupIntent.customer;
+    const paymentMethodId = setupIntent.payment_method;
+
+    if (!customerId || !paymentMethodId) {
+      this.logger.warn(
+        `SetupIntent ${setupIntent.id} succeeded but missing customer or payment_method — skipping`,
+      );
+      return;
+    }
+
+    try {
+      // Find our Customer record by stripeCustomerId
+      const customer = await this.prisma.customer.findFirst({
+        where: { stripeCustomerId: customerId },
+      });
+
+      if (customer) {
+        // Set as default payment method (or keep existing default if one exists)
+        await this.prisma.customer.update({
+          where: { id: customer.id },
+          data: { stripeDefaultPaymentMethodId: paymentMethodId },
+        });
+        this.logger.log(
+          `Set default payment method ${paymentMethodId} for customer ${customer.id}`,
+        );
+      } else {
+        this.logger.warn(
+          `No Customer record found for Stripe customer ${customerId}`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to process SetupIntent ${setupIntent.id}: ${err.message}`,
+      );
+    }
   }
 }

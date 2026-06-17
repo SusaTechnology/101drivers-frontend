@@ -207,7 +207,6 @@ export default function DriverActiveDeliveryPage() {
   // 👇 NEW: ref to store latest position for interval
   const latestPositionRef = useRef<google.maps.LatLngLiteral | null>(null)
   const dropoffSectionRef = useRef<HTMLDivElement>(null)
-  const prevCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
 
   // ── Geofence: distance to dropoff ──
   const GEO_RADIUS_MILES = 0.1
@@ -364,6 +363,7 @@ export default function DriverActiveDeliveryPage() {
   useEffect(() => {
     if (!pickupCoords || !dropoffCoords) return
     // Real-time geolocation tracking:
+    const prevCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setDriverPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude })

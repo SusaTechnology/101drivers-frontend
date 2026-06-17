@@ -40,6 +40,8 @@ export class StripeService {
     amount: number; // in dollars, e.g. 150.00
     deliveryId: string;
     customerEmail?: string;
+    stripeCustomerId?: string;
+    paymentMethodId?: string;
     metadata?: Record<string, string>;
     /**
      * capture_method:
@@ -47,7 +49,15 @@ export class StripeService {
      *  - 'automatic' (default) — funds charged immediately when customer confirms
      */
     captureMethod?: 'manual' | 'automatic';
-  }): Promise<{ paymentIntentId: string; clientSecret: string }> {
+    /**
+     * confirm:
+     *  - true — attempt to confirm the PaymentIntent immediately using the attached payment_method.
+     *           Use this when a saved card (paymentMethodId) is provided, so the charge happens
+     *           silently without user interaction. Only combine with capture_method: 'manual'.
+     *  - false (default) — creates the PI without confirming; frontend handles confirmation.
+     */
+    confirm?: boolean;
+  }): Promise<{ paymentIntentId: string; clientSecret: string; status?: string }> {
     // Stripe expects amount in cents
     const amountCents = Math.round(params.amount * 100);
 
@@ -62,8 +72,17 @@ export class StripeService {
           deliveryId: params.deliveryId,
           ...params.metadata,
         },
-        ...(params.customerEmail
+        ...(params.customerEmail && !params.stripeCustomerId
           ? { receipt_email: params.customerEmail }
+          : {}),
+        ...(params.stripeCustomerId
+          ? { customer: params.stripeCustomerId }
+          : {}),
+        ...(params.paymentMethodId
+          ? { payment_method: params.paymentMethodId }
+          : {}),
+        ...(params.confirm
+          ? { confirm: true }
           : {}),
         automatic_payment_methods: { enabled: true },
       },
@@ -73,6 +92,7 @@ export class StripeService {
     return {
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret!,
+      status: paymentIntent.status,
     };
   }
 
@@ -102,6 +122,77 @@ export class StripeService {
    */
   async getPaymentIntent(paymentIntentId: string) {
     return this.stripe.paymentIntents.retrieve(paymentIntentId);
+  }
+
+  // ── Customers ──────────────────────────────────────────────────
+
+  /**
+   * Create or retrieve a Stripe Customer by email.
+   */
+  async createOrGetCustomer(params: {
+    email?: string;
+    name?: string;
+    metadata?: Record<string, string>;
+  }) {
+    if (!params.email) {
+      throw new Error('email is required to create or retrieve a Stripe Customer');
+    }
+    const existing = await this.stripe.customers.list({
+      email: params.email,
+      limit: 1,
+    });
+    if (existing.data.length > 0) {
+      return existing.data[0];
+    }
+    return this.stripe.customers.create({
+      email: params.email,
+      name: params.name,
+      metadata: params.metadata,
+    });
+  }
+
+  /**
+   * Retrieve a Stripe Customer by ID.
+   */
+  async getCustomer(customerId: string) {
+    return this.stripe.customers.retrieve(customerId);
+  }
+
+  // ── Setup Intents (save card without charging) ──────────────────
+
+  /**
+   * Create a SetupIntent for saving a card to a Stripe Customer.
+   */
+  async createSetupIntent(params: {
+    customerId: string;
+  }): Promise<{ setupIntentId: string; clientSecret: string }> {
+    const setupIntent = await this.stripe.setupIntents.create({
+      customer: params.customerId,
+      payment_method_types: ['card'],
+      usage: 'off_session', // allows charging later without customer present
+    });
+    return {
+      setupIntentId: setupIntent.id,
+      clientSecret: setupIntent.client_secret!,
+    };
+  }
+
+  /**
+   * List saved payment methods for a Stripe Customer.
+   */
+  async listPaymentMethods(customerId: string) {
+    const methods = await this.stripe.paymentMethods.list({
+      customer: customerId,
+      type: 'card',
+    });
+    return methods.data;
+  }
+
+  /**
+   * Detach (remove) a payment method from a Stripe Customer.
+   */
+  async detachPaymentMethod(paymentMethodId: string): Promise<void> {
+    await this.stripe.paymentMethods.detach(paymentMethodId);
   }
 
   // ── Refunds ──────────────────────────────────────────────────────

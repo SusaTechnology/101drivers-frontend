@@ -22,6 +22,7 @@ interface RouteMapProps {
   pickup?: google.maps.LatLngLiteral | null;
   dropoff?: google.maps.LatLngLiteral | null;
   driverPosition?: google.maps.LatLngLiteral | null;
+  driverHeading?: number | null; // bearing in degrees (0-360, 0=North)
   directionsResult?: google.maps.DirectionsResult | null; // external directions (with alternatives)
   selectedRouteIndex?: number; // which route to highlight (default 0)
   isLoaded: boolean;
@@ -80,6 +81,7 @@ export default function RouteMap({
   pickup,
   dropoff,
   driverPosition,
+  driverHeading: heading,
   directionsResult: externalDirections,
   selectedRouteIndex = 0,
   isLoaded,
@@ -305,36 +307,15 @@ export default function RouteMap({
       {/* Dropoff marker */}
       {dropoff && <Marker position={dropoff} {...(showMarkerLabels ? { label: 'B' } : {})} />}
 
-      {/* Driver position marker - custom car icon */}
+      {/* Driver position marker - car.png, rotates with heading */}
       {driverPosition && (
         <Marker
           position={driverPosition}
           icon={{
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="48" height="48">
-                <!-- Car shadow -->
-                <ellipse cx="32" cy="56" rx="20" ry="6" fill="rgba(0,0,0,0.2)"/>
-                <!-- Car body -->
-                <rect x="8" y="28" width="48" height="22" rx="6" fill="#3b82f6"/>
-                <!-- Car roof/cabin -->
-                <path d="M16 28 Q16 14 32 14 Q48 14 48 28" fill="#1d4ed8"/>
-                <!-- Windows -->
-                <path d="M18 26 Q18 18 32 18 Q46 18 46 26 Z" fill="#93c5fd"/>
-                <!-- Wheels -->
-                <circle cx="18" cy="50" r="8" fill="#1f2937"/>
-                <circle cx="18" cy="50" r="4" fill="#6b7280"/>
-                <circle cx="46" cy="50" r="8" fill="#1f2937"/>
-                <circle cx="46" cy="50" r="4" fill="#6b7280"/>
-                <!-- Headlights -->
-                <rect x="50" y="34" width="4" height="6" rx="1" fill="#fbbf24"/>
-                <rect x="50" y="42" width="4" height="4" rx="1" fill="#ef4444"/>
-                <!-- Location pin pointer -->
-                <polygon points="32,62 26,54 38,54" fill="#3b82f6"/>
-              </svg>
-            `),
+            url: '/icons/car.png',
             scaledSize: new google.maps.Size(48, 48),
-            anchor: new google.maps.Point(24, 56),
-            labelOrigin: new google.maps.Point(24, 24),
+            anchor: new google.maps.Point(24, 24),
+            rotation: heading != null ? heading : undefined,
           }}
         />
       )}

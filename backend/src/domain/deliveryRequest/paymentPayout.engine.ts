@@ -160,6 +160,13 @@ export class PaymentPayoutEngine {
           select: {
             id: true,
             driverId: true,
+            driver: {
+              select: {
+                id: true,
+                stripeConnectAccountId: true,
+                stripeConnectOnboardingComplete: true,
+              },
+            },
           },
         },
       },
@@ -174,48 +181,43 @@ export class PaymentPayoutEngine {
       return;
     }
 
-    // ── PAYMENT CAPTURE: DISABLED FOR NOW ──────────────────────────────────
-    // TODO: Re-enable Stripe payment capture when ready for production.
-    // For now, skip all payment capture logic so deliveries can complete
-    // without any Stripe dependency.
-    // ─────────────────────────────────────────────────────────────────────
-    //
-    // const payment = delivery.payment;
-    // if (!payment) { return; }
-    //
-    // if (payment.paymentType === EnumPaymentPaymentType.PREPAID) {
-    //   if (payment.status === EnumPaymentStatus.AUTHORIZED) {
-    //     if (payment.providerPaymentIntentId && payment.provider === "STRIPE" && this.stripeService) {
-    //       try {
-    //         await this.captureWithRetry(payment.providerPaymentIntentId, input.deliveryId);
-    //         await tx.payment.update({
-    //           where: { id: payment.id },
-    //           data: { status: EnumPaymentStatus.CAPTURED, capturedAt: new Date() },
-    //         });
-    //         await tx.paymentEvent.create({
-    //           data: {
-    //             paymentId: payment.id,
-    //             type: EnumPaymentEventType.CAPTURE,
-    //             status: EnumPaymentEventStatus.CAPTURED,
-    //             amount: payment.amount,
-    //             message: "Prepaid payment captured at delivery completion",
-    //             raw: { source: "delivery-complete", deliveryId: input.deliveryId },
-    //           },
-    //         });
-    //       } catch (captureErr: any) {
-    //         const errMsg = captureErr?.message || "Unknown capture error";
-    //         this.logger.error(`Stripe capture failed for delivery ${input.deliveryId}: ${errMsg}`);
-    //         await tx.payment.update({
-    //           where: { id: payment.id },
-    //           data: { status: EnumPaymentStatus.FAILED },
-    //         });
-    //       }
-    //     }
-    //   }
-    // }
-
-    // Use existing payment data directly (no capture) for payout calculation
+    // ── PAYMENT CAPTURE ────────────────────────────────────────────────
+    // Capture authorized Stripe PaymentIntents for prepaid deliveries.
     const payment = delivery.payment;
+    if (payment) {
+      if (
+        payment.paymentType === EnumPaymentPaymentType.PREPAID &&
+        payment.status === EnumPaymentStatus.AUTHORIZED &&
+        payment.providerPaymentIntentId &&
+        payment.provider === "STRIPE" &&
+        this.stripeService
+      ) {
+        try {
+          await this.captureWithRetry(payment.providerPaymentIntentId, input.deliveryId);
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: { status: EnumPaymentStatus.CAPTURED, capturedAt: new Date() },
+          });
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: payment.id,
+              type: EnumPaymentEventType.CAPTURE,
+              status: EnumPaymentEventStatus.CAPTURED,
+              amount: payment.amount,
+              message: "Prepaid payment captured at delivery completion",
+              raw: { source: "delivery-complete", deliveryId: input.deliveryId },
+            },
+          });
+        } catch (captureErr: any) {
+          const errMsg = captureErr?.message || "Unknown capture error";
+          this.logger.error(`Stripe capture failed for delivery ${input.deliveryId}: ${errMsg}`);
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: { status: EnumPaymentStatus.FAILED },
+          });
+        }
+      }
+    }
 
     if (!payment) {
       return;
@@ -266,6 +268,67 @@ export class PaymentPayoutEngine {
         status: payoutStatus,
       },
     });
+
+    // ── AUTO-TRANSFER to driver via Stripe Connect ──────────────
+    // If payout is ELIGIBLE and driver has a completed Connect account,
+    // automatically initiate the transfer (non-blocking, fire-and-forget).
+    if (
+      payoutStatus === EnumDriverPayoutStatus.ELIGIBLE &&
+      this.stripeService &&
+      activeAssignment.driver.stripeConnectAccountId &&
+      activeAssignment.driver.stripeConnectOnboardingComplete
+    ) {
+      // Run transfer outside the transaction (fire-and-forget)
+      this.initiateDriverTransfer(input.deliveryId, activeAssignment.driverId, breakdown.netAmount)
+        .catch((err) => this.logger.error(`Auto-transfer failed for delivery ${input.deliveryId}: ${err.message}`));
+    }
+  }
+
+  /**
+   * Initiate a Stripe Connect transfer to a driver.
+   * Updates the DriverPayout record with the transfer ID.
+   */
+  private async initiateDriverTransfer(
+    deliveryId: string,
+    driverId: string,
+    amount: number,
+  ): Promise<void> {
+    const payout = await this.prisma.driverPayout.findUnique({
+      where: { deliveryId },
+    });
+    if (!payout) return;
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { stripeConnectAccountId: true },
+    });
+    if (!driver?.stripeConnectAccountId) return;
+
+    // Skip if transfer already initiated
+    if (payout.providerTransferId) return;
+
+    try {
+      const transfer = await this.stripeService.createTransfer({
+        amount,
+        destinationAccountId: driver.stripeConnectAccountId,
+        transferGroup: deliveryId,
+        metadata: { deliveryId, driverId, payoutId: payout.id },
+      });
+
+      await this.prisma.driverPayout.update({
+        where: { id: payout.id },
+        data: {
+          providerTransferId: transfer.id,
+          status: EnumDriverPayoutStatus.PAID,
+          paidAt: new Date(),
+        },
+      });
+
+      this.logger.log(`Transfer ${transfer.id} initiated for delivery ${deliveryId} → driver ${driverId} ($${amount})`);
+    } catch (err: any) {
+      this.logger.error(`Transfer initiation failed for delivery ${deliveryId}: ${err.message}`);
+      // Don't update status — webhook will handle it if transfer eventually succeeds/fails
+    }
   }
 
   async adminInvoicePostpaid(input: {
