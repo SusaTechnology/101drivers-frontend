@@ -18,6 +18,23 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     super(service, rolesBuilder);
   }
 
+  /**
+   * Resolve the driver record from the authenticated user's JWT payload.
+   * req.user only contains { id, username, roles } from the JWT — no profileId.
+   * We look up the Driver table by userId to get the driverId.
+   */
+  private async resolveDriverId(req: any): Promise<string> {
+    const userId = (req as any).user?.id;
+    if (!userId) throw new common.UnauthorizedException('Not authenticated');
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!driver) throw new common.NotFoundException('Driver profile not found');
+    return driver.id;
+  }
+
   @common.Get("admin/export-wise-csv")
   @swagger.ApiOkResponse({ description: "Wise BatchTransfer CSV file" })
   @nestAccessControl.UseRoles({
@@ -79,8 +96,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     possession: "own",
   })
   async getMyBankAccount(@common.Req() req: any): Promise<any> {
-    const driverId = (req as any).user?.profileId;
-    if (!driverId) throw new common.NotFoundException("Driver profile not found");
+    const driverId = await this.resolveDriverId(req);
 
     const account = await this.prisma.driverBankAccount.findUnique({
       where: { driverId },
@@ -98,8 +114,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     @common.Body() body: any,
     @common.Req() req: any,
   ): Promise<any> {
-    const driverId = (req as any).user?.profileId;
-    if (!driverId) throw new common.NotFoundException("Driver profile not found");
+    const driverId = await this.resolveDriverId(req);
 
     const { accountHolderName, routingNumber, accountNumber, accountType, bankName } = body;
 
@@ -134,8 +149,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     possession: "own",
   })
   async getMyEarnings(@common.Req() req: any): Promise<any> {
-    const driverId = (req as any).user?.profileId;
-    if (!driverId) throw new common.NotFoundException("Driver profile not found");
+    const driverId = await this.resolveDriverId(req);
 
     const payouts = await this.prisma.driverPayout.findMany({
       where: { driverId },
