@@ -95,13 +95,13 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     action: "read",
     possession: "own",
   })
-  async getMyBankAccount(@common.Req() req: any): Promise<any> {
+  async getMyBankAccount(@common.Req() req: any, @common.Res() res: Response): Promise<void> {
     const driverId = await this.resolveDriverId(req);
 
     const account = await this.prisma.driverBankAccount.findUnique({
       where: { driverId },
     });
-    return account;
+    res.json(account || null);
   }
 
   @common.Post("my-bank-account")
