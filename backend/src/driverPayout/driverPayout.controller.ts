@@ -79,7 +79,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     possession: "own",
   })
   async getMyBankAccount(@common.Req() req: any): Promise<any> {
-    const driverId = (req.user as any)?.driver?.id;
+    const driverId = (req as any).user?.profileId;
     if (!driverId) throw new common.NotFoundException("Driver profile not found");
 
     const account = await this.prisma.driverBankAccount.findUnique({
@@ -98,7 +98,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     @common.Body() body: any,
     @common.Req() req: any,
   ): Promise<any> {
-    const driverId = (req.user as any)?.driver?.id;
+    const driverId = (req as any).user?.profileId;
     if (!driverId) throw new common.NotFoundException("Driver profile not found");
 
     const { accountHolderName, routingNumber, accountNumber, accountType, bankName } = body;
@@ -134,7 +134,7 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     possession: "own",
   })
   async getMyEarnings(@common.Req() req: any): Promise<any> {
-    const driverId = (req.user as any)?.driver?.id;
+    const driverId = (req as any).user?.profileId;
     if (!driverId) throw new common.NotFoundException("Driver profile not found");
 
     const payouts = await this.prisma.driverPayout.findMany({
