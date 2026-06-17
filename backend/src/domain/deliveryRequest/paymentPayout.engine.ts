@@ -310,6 +310,10 @@ export class PaymentPayoutEngine {
     if (payout.providerTransferId) return;
 
     try {
+      if (!this.stripeService) {
+        this.logger.error('StripeService not available — cannot initiate transfer');
+        return;
+      }
       const transfer = await this.stripeService.createTransfer({
         amount,
         destinationAccountId: driver.stripeConnectAccountId,
@@ -413,7 +417,7 @@ export class PaymentPayoutEngine {
       });
 
       // Auto-generate Invoice record if not already linked
-      if (!delivery.payment.invoiceId && delivery.customerId) {
+      if (delivery.payment && !delivery.payment.invoiceId && delivery.customerId) {
         const terms = EnumInvoicePaymentTerms.NET_15;
         const issuedAt = new Date();
         const dueDate = new Date(issuedAt);
