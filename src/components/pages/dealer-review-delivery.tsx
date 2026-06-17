@@ -454,13 +454,12 @@ export default function ReviewDeliveryPage() {
         });
         navigate({ to: newDeliveryId ? '/dealer-delivery-details' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
       }
-      // PREPAID without payment: MUST pay now — show Stripe dialog
+      // PREPAID without payment: list delivery for drivers, payment can be completed later
       else if (newDeliveryId) {
         toast.success('Delivery requested!', {
-          description: 'Please complete your payment to list the delivery for drivers.',
+          description: 'Your delivery is now visible to drivers. You can complete payment later from the delivery details page.',
         });
-        setPendingPaymentDeliveryId(newDeliveryId);
-        setShowPaymentModal(true);
+        navigate({ to: newDeliveryId ? '/dealer-delivery-details' : '/dealer-dashboard', search: newDeliveryId ? { id: newDeliveryId } : undefined });
       }
     },
     onError: (error: any) => {
