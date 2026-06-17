@@ -64,6 +64,7 @@ model Customer {
   defaultPickupId     String?
   deliveries          DeliveryRequest[]
   id                  String                           @id @default(cuid())
+  invoices            Invoice[]
   notifications       NotificationEvent[]
   phone               String?
   postpaidEnabled              Boolean                          @default(false)
@@ -530,7 +531,8 @@ model Payment {
   failureCode             String?
   failureMessage          String?
   id                      String                 @id @default(cuid())
-  invoiceId               String?
+  invoice                 Invoice?
+  invoiceId               String?                @unique
   paidAt                  DateTime?
   paymentType             EnumPaymentPaymentType
   provider                EnumPaymentProvider    @default(STRIPE)
@@ -582,6 +584,30 @@ model DriverPayout {
   updatedAt          DateTime               @updatedAt
 
   @@index([driverId, status, createdAt])
+}
+
+model Invoice {
+  id              String                   @id @default(cuid())
+  invoiceNumber   String                   @unique
+  customerId      String
+  customer        Customer                 @relation(fields: [customerId], references: [id])
+  paymentId       String                   @unique
+  payment         Payment                  @relation(fields: [paymentId], references: [id])
+  deliveryId      String
+  amount          Float
+  // Payment terms: NET_15 = due 15 days after invoice date, NET_30 = due 30 days
+  paymentTerms    EnumInvoicePaymentTerms   @default(NET_15)
+  status          EnumInvoiceStatus         @default(PENDING)
+  issuedAt        DateTime                 @default(now())
+  dueDate         DateTime
+  paidAt          DateTime?
+  reminderSentAt  DateTime?
+  overdueReminderSentAt DateTime?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([customerId, status])
+  @@index([status, dueDate])
 }
 
 model DriverBankAccount {
@@ -1220,4 +1246,18 @@ enum EnumSupportStatus {
   IN_PROGRESS
   RESOLVED
   CLOSED
+}
+
+enum EnumInvoiceStatus {
+  PENDING
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum EnumInvoicePaymentTerms {
+  NET_15
+  NET_30
+  DUE_ON_RECEIPT
 }

@@ -10,6 +10,8 @@ import {
   EnumAdminAuditLogAction,
   EnumAdminAuditLogActorType,
   EnumDriverPayoutStatus,
+  EnumInvoicePaymentTerms,
+  EnumInvoiceStatus,
   EnumPaymentEventStatus,
   EnumPaymentEventType,
   EnumPaymentPaymentType,
@@ -342,6 +344,7 @@ export class PaymentPayoutEngine {
       select: {
         id: true,
         status: true,
+        customerId: true,
         payment: {
           select: {
             id: true,
@@ -408,6 +411,43 @@ export class PaymentPayoutEngine {
           },
         },
       });
+
+      // Auto-generate Invoice record if not already linked
+      if (!delivery.payment.invoiceId && delivery.customerId) {
+        const terms = EnumInvoicePaymentTerms.NET_15;
+        const issuedAt = new Date();
+        const dueDate = new Date(issuedAt);
+        dueDate.setDate(dueDate.getDate() + 15);
+
+        const dateStr = issuedAt.toISOString().slice(0, 10).replace(/-/g, '');
+        const todayInvoices = await tx.invoice.count({
+          where: { invoiceNumber: { startsWith: `INV-${dateStr}` } },
+        });
+        const invoiceNumber = `INV-${dateStr}-${String(todayInvoices + 1).padStart(4, '0')}`;
+
+        const invoice = await tx.invoice.create({
+          data: {
+            invoiceNumber,
+            customerId: delivery.customerId,
+            paymentId: delivery.payment!.id,
+            deliveryId: input.deliveryId,
+            amount: delivery.payment!.amount,
+            paymentTerms: terms,
+            status: EnumInvoiceStatus.PENDING,
+            issuedAt,
+            dueDate,
+          },
+        });
+
+        await tx.payment.update({
+          where: { id: delivery.payment!.id },
+          data: { invoiceId: invoice.id },
+        });
+
+        this.logger.log(
+          `Auto-generated Invoice ${invoice.invoiceNumber} for delivery ${input.deliveryId}`,
+        );
+      }
 
       if (delivery.payout?.id) {
         await tx.driverPayout.update({
@@ -587,6 +627,280 @@ export class PaymentPayoutEngine {
       });
     });
   }
+
+  // ── Invoice Methods ────────────────────────────────────────────
+
+  /**
+   * Generate an Invoice record for a postpaid delivery.
+   * Called during adminInvoicePostpaid() or automatically on postpaid delivery completion.
+   * Returns the created Invoice.
+   */
+  async generateInvoice(input: {
+    paymentId: string;
+    deliveryId: string;
+    customerId: string;
+    amount: number;
+    paymentTerms?: EnumInvoicePaymentTerms;
+    actorUserId?: string;
+  }) {
+    const terms = input.paymentTerms || EnumInvoicePaymentTerms.NET_15;
+    const issuedAt = new Date();
+    const dueDate = new Date(issuedAt);
+
+    if (terms === EnumInvoicePaymentTerms.NET_15) {
+      dueDate.setDate(dueDate.getDate() + 15);
+    } else if (terms === EnumInvoicePaymentTerms.NET_30) {
+      dueDate.setDate(dueDate.getDate() + 30);
+    }
+    // DUE_ON_RECEIPT: dueDate stays as issuedAt
+
+    // Generate invoice number: INV-YYYYMMDD-XXXX (sequential per day)
+    const dateStr = issuedAt.toISOString().slice(0, 10).replace(/-/g, '');
+    const todayInvoices = await this.prisma.invoice.count({
+      where: {
+        invoiceNumber: { startsWith: `INV-${dateStr}` },
+      },
+    });
+    const invoiceNumber = `INV-${dateStr}-${String(todayInvoices + 1).padStart(4, '0')}`;
+
+    const invoice = await this.prisma.invoice.create({
+      data: {
+        invoiceNumber,
+        customerId: input.customerId,
+        paymentId: input.paymentId,
+        deliveryId: input.deliveryId,
+        amount: input.amount,
+        paymentTerms: terms,
+        status: EnumInvoiceStatus.PENDING,
+        issuedAt,
+        dueDate,
+      },
+    });
+
+    // Link invoice to payment record
+    await this.prisma.payment.update({
+      where: { id: input.paymentId },
+      data: { invoiceId: invoice.id },
+    });
+
+    this.logger.log(
+      `Invoice ${invoice.invoiceNumber} created for payment ${input.paymentId} (delivery ${input.deliveryId}), due ${dueDate.toISOString()}`,
+    );
+
+    return invoice;
+  }
+
+  /**
+   * Get invoices for a specific customer (dealer view).
+   */
+  async getCustomerInvoices(customerId: string, params?: {
+    status?: EnumInvoiceStatus;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const page = params?.page || 1;
+    const pageSize = Math.min(params?.pageSize || 20, 100);
+
+    const where: Record<string, any> = { customerId };
+    if (params?.status) where.status = params.status;
+
+    const [items, count] = await this.prisma.$transaction([
+      this.prisma.invoice.findMany({
+        where,
+        include: {
+          payment: {
+            select: {
+              status: true,
+              paymentType: true,
+              provider: true,
+              delivery: {
+                select: {
+                  pickupAddress: true,
+                  dropoffAddress: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { issuedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
+
+    return { items, count, page, pageSize };
+  }
+
+  /**
+   * Get invoices for admin (all customers, with filters).
+   */
+  async getAdminInvoices(params?: {
+    status?: EnumInvoiceStatus;
+    customerId?: string;
+    overdueOnly?: boolean;
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const page = params?.page || 1;
+    const pageSize = Math.min(params?.pageSize || 20, 100);
+
+    const where: Record<string, any> = {};
+
+    if (params?.status) where.status = params.status;
+    if (params?.customerId) where.customerId = params.customerId;
+    if (params?.overdueOnly) {
+      where.status = EnumInvoiceStatus.PENDING;
+      where.dueDate = { lt: new Date() };
+    }
+    if (params?.from || params?.to) {
+      where.issuedAt = {};
+      if (params?.from) where.issuedAt.gte = new Date(params.from);
+      if (params?.to) where.issuedAt.lte = new Date(params.to);
+    }
+
+    const [items, count] = await this.prisma.$transaction([
+      this.prisma.invoice.findMany({
+        where,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              businessName: true,
+              contactEmail: true,
+              contactName: true,
+            },
+          },
+          payment: {
+            select: {
+              status: true,
+              paymentType: true,
+              provider: true,
+              delivery: {
+                select: {
+                  pickupAddress: true,
+                  dropoffAddress: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { issuedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
+
+    return { items, count, page, pageSize };
+  }
+
+  /**
+   * Mark an invoice as PAID.
+   */
+  async markInvoicePaid(input: {
+    invoiceId: string;
+    actorUserId?: string;
+    note?: string;
+  }) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: input.invoiceId },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException(`Invoice ${input.invoiceId} not found`);
+    }
+
+    if (invoice.status === EnumInvoiceStatus.PAID) {
+      throw new BadRequestException('Invoice is already paid');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invoice.update({
+        where: { id: input.invoiceId },
+        data: {
+          status: EnumInvoiceStatus.PAID,
+          paidAt: new Date(),
+        },
+      });
+
+      // Also mark the linked payment as PAID if it's a postpaid INVOICED payment
+      if (invoice.paymentId) {
+        const payment = await tx.payment.findUnique({
+          where: { id: invoice.paymentId },
+          select: { status: true, paymentType: true },
+        });
+
+        if (
+          payment &&
+          payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
+          payment.status === EnumPaymentStatus.INVOICED
+        ) {
+          await tx.payment.update({
+            where: { id: invoice.paymentId },
+            data: {
+              status: EnumPaymentStatus.PAID,
+              paidAt: new Date(),
+            },
+          });
+
+          // Create payment event
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: invoice.paymentId,
+              type: EnumPaymentEventType.MARK_PAID,
+              status: EnumPaymentEventStatus.PAID,
+              amount: invoice.amount,
+              message: `Invoice ${invoice.invoiceNumber} marked as paid. ${input.note || ''}`.trim(),
+            },
+          });
+        }
+      }
+
+      await tx.adminAuditLog.create({
+        data: {
+          action: EnumAdminAuditLogAction.PAYMENT_OVERRIDE,
+          actorUserId: input.actorUserId ?? null,
+          actorType: EnumAdminAuditLogActorType.USER,
+          deliveryId: invoice.deliveryId,
+          reason: `Invoice ${invoice.invoiceNumber} marked paid. ${input.note || ''}`.trim(),
+        },
+      });
+    });
+
+    this.logger.log(`Invoice ${invoice.invoiceNumber} marked as paid`);
+    return { success: true, invoiceNumber: invoice.invoiceNumber };
+  }
+
+  /**
+   * Check for overdue invoices and update their status.
+   * Should be called periodically (cron/scheduler).
+   */
+  async processOverdueInvoices(): Promise<number> {
+    const now = new Date();
+
+    const result = await this.prisma.invoice.updateMany({
+      where: {
+        status: EnumInvoiceStatus.PENDING,
+        dueDate: { lt: now },
+      },
+      data: {
+        status: EnumInvoiceStatus.OVERDUE,
+      },
+    });
+
+    const count = result.count;
+    if (count > 0) {
+      this.logger.log(`Marked ${count} invoice(s) as OVERDUE`);
+    }
+    return count;
+  }
+
+  // ── Private Helpers ──────────────────────────────────────────
 
   private computeBreakdown(input: {
     amount: number;

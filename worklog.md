@@ -233,3 +233,38 @@ Stage Summary:
 - SSN shown with mask/unmask toggle (eye icon) on admin detail page
 - All driver-entered data now visible for admin approval/background check
 - Commit: c07ad5b on main, 6ae9e4f on master
+---
+Task ID: 2
+Agent: Main Agent
+Task: Phase 2 — Stripe Connect driver payouts + postpaid invoicing
+
+Work Log:
+- Explored full codebase: Prisma schema, backend Stripe service, payment engine, admin dashboard, frontend routes
+- Discovered that 90% of Phase 2 was already built: Connect account creation, onboarding links, auto-transfer, webhook handlers, admin payment management, driver earnings
+- Identified 3 gaps: (1) Driver data not pre-filled into Connect account, (2) Connect return URLs pointing to non-existent page, (3) No Invoice model for postpaid billing
+
+Stripe Connect Pre-fill Implementation:
+- Added `updateConnectAccount()` method to StripeService (stripe.accounts.update wrapper with name, DOB, SSN, address, TOS acceptance params)
+- Updated `startConnectOnboarding()` endpoint to fetch driver's personal data (SSN, DOB, address, name, agreementAcceptedAt) and push to Connect account before generating onboarding link
+- Pre-fill is non-blocking: if it fails, onboarding still works (driver enters manually)
+- Fixed Connect return URLs from `/driver-setting?section=payouts` to `/driver/wallet` and `/driver/wallet?stripe=complete`
+- Added `useSearch` import to driver wallet page + Stripe return handler with toast notification and Connect status refetch
+
+Postpaid Invoicing Implementation:
+- Added `Invoice` model to Prisma schema with fields: id, invoiceNumber, customerId, paymentId, deliveryId, amount, paymentTerms, status, issuedAt, dueDate, paidAt, reminderSentAt, overdueReminderSentAt
+- Added enums: EnumInvoiceStatus (PENDING, SENT, PAID, OVERDUE, CANCELLED), EnumInvoicePaymentTerms (NET_15, NET_30, DUE_ON_RECEIPT)
+- Updated Payment model: added `invoice Invoice?` relation, made `invoiceId` unique
+- Updated Customer model: added `invoices Invoice[]` relation
+- Added invoice methods to PaymentPayoutEngine: generateInvoice(), getCustomerInvoices(), getAdminInvoices(), markInvoicePaid(), processOverdueInvoices()
+- Updated adminInvoicePostpaid() to auto-generate Invoice record when marking postpaid as invoiced
+- Added 3 invoice endpoints to StripePaymentController: GET /invoices/customer/:customerId, GET /invoices/admin, POST /invoices/:invoiceId/mark-paid
+- Invoice number format: INV-YYYYMMDD-XXXX (sequential per day)
+
+Stage Summary:
+- Files changed: stripe.service.ts, stripe-payment.controller.ts, driver-wallet.tsx, paymentPayout.engine.ts, schema.prisma
+- Stripe Connect now pre-fills driver SSN, name, address, DOB from onboarding data
+- Connect return URLs fixed to point to existing /driver/wallet page
+- Invoice model created with NET_15/30 payment terms, auto-generated on postpaid invoicing
+- Admin can list all invoices, filter by status/customer/overdue, mark as paid
+- Dealers can view their own invoices
+- Note: Prisma migration needs to be run on the actual database (npx prisma db push or migrate)
