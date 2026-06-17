@@ -288,6 +288,73 @@ export class StripeService {
     return this.stripe.accounts.retrieve(accountId);
   }
 
+  /**
+   * Update a Connect account with pre-filled personal data.
+   * Used to push driver's SSN, name, address, DOB from our DB into Stripe
+   * so the onboarding flow only asks for bank account + ID verification.
+   */
+  async updateConnectAccount(accountId: string, params: {
+    businessType?: 'individual';
+    firstName?: string;
+    lastName?: string;
+    dob?: { day: number; month: number; year: number };
+    ssnLast4?: string;
+    address?: {
+      line1?: string;
+      line2?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+    };
+    tosAccepted?: { date: number; ip: string };
+  }) {
+    const updateData: Record<string, any> = {};
+
+    if (params.businessType) {
+      updateData.business_type = params.businessType;
+      updateData.individual = {};
+    }
+
+    if (params.firstName || params.lastName) {
+      updateData.individual = updateData.individual || {};
+      if (params.firstName) updateData.individual.first_name = params.firstName;
+      if (params.lastName) updateData.individual.last_name = params.lastName;
+    }
+
+    if (params.dob) {
+      updateData.individual = updateData.individual || {};
+      updateData.individual.dob = {
+        day: params.dob.day,
+        month: params.dob.month,
+        year: params.dob.year,
+      };
+    }
+
+    if (params.ssnLast4) {
+      updateData.individual = updateData.individual || {};
+      updateData.individual.ssn_last_4 = params.ssnLast4;
+    }
+
+    if (params.address) {
+      updateData.individual = updateData.individual || {};
+      updateData.individual.address = {};
+      if (params.address.line1) updateData.individual.address.line1 = params.address.line1;
+      if (params.address.line2) updateData.individual.address.line2 = params.address.line2;
+      if (params.address.city) updateData.individual.address.city = params.address.city;
+      if (params.address.state) updateData.individual.address.state = params.address.state;
+      if (params.address.postalCode) updateData.individual.address.postal_code = params.address.postalCode;
+    }
+
+    if (params.tosAccepted) {
+      updateData.tos_acceptance = {
+        date: params.tosAccepted.date,
+        ip: params.tosAccepted.ip,
+      };
+    }
+
+    return this.stripe.accounts.update(accountId, updateData);
+  }
+
   // ── Webhooks ─────────────────────────────────────────────────────
 
   /**

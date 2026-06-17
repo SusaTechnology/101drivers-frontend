@@ -1,6 +1,6 @@
 // app/pages/driver/wallet.tsx
 import React, { useState, useEffect } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
@@ -262,6 +262,18 @@ export default function DriverWalletPage() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Handle return from Stripe Connect onboarding
+  const search = useSearch({ strict: false }) as Record<string, string>
+  useEffect(() => {
+    if (search?.stripe === 'complete') {
+      // Refetch Connect status to reflect the updated onboarding state
+      refetchConnectStatus()
+      toast.success('Stripe account linked!', {
+        description: 'Your payout setup is complete. Earnings will transfer automatically after deliveries.',
+      })
+    }
+  }, [search])
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark')

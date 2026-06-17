@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Logger, UseGuards, NotFoundException, BadRequestException } from "@nestjs/common";
+import { Controller, Get, Post, Param, Body, Req, Query, Logger, UseGuards, NotFoundException, BadRequestException } from "@nestjs/common";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PrismaService } from "../prisma/prisma.service";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
@@ -441,22 +441,36 @@ export class StripePaymentController {
   /**
    * Create or retrieve a Stripe Connect account for a driver.
    * Called from driver dashboard "Payout Setup" page.
+   * Pre-fills SSN, name, address, DOB from onboarding data so the Stripe
+   * onboarding page only asks for bank account + ID verification.
    */
   @Post("stripe/connect/onboarding")
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
-  async startConnectOnboarding(@Body() body: { driverId: string }) {
+  async startConnectOnboarding(
+    @Body() body: { driverId: string },
+    @Req() req: any,
+  ) {
     const { driverId } = body;
     if (!driverId) {
       throw new BadRequestException("driverId is required");
     }
 
+    // Fetch driver with personal data + user relation
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },
       select: {
         id: true,
         stripeConnectAccountId: true,
         stripeConnectOnboardingComplete: true,
-        user: { select: { email: true } },
+        ssnLastFour: true,
+        dateOfBirth: true,
+        residentialAddressLine1: true,
+        residentialAddressLine2: true,
+        residentialCity: true,
+        residentialState: true,
+        residentialZip: true,
+        agreementAcceptedAt: true,
+        user: { select: { email: true, fullName: true } },
       },
     });
 
@@ -482,12 +496,63 @@ export class StripePaymentController {
         });
       }
 
-      // Generate onboarding link
+      // ── Pre-fill driver data into Connect account ────────────────
+      // Parse fullName into first/last name (fullName may be null or single word)
+      const nameParts = (driver.user?.fullName || '').trim().split(/\s+/);
+      const firstName = nameParts[0] || undefined;
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
+
+      // Parse dateOfBirth into day/month/year
+      let dob: { day: number; month: number; year: number } | undefined;
+      if (driver.dateOfBirth) {
+        const dobDate = new Date(driver.dateOfBirth);
+        dob = {
+          day: dobDate.getUTCDate(),
+          month: dobDate.getUTCMonth() + 1,
+          year: dobDate.getUTCFullYear(),
+        };
+      }
+
+      // Get caller IP for TOS acceptance
+      const clientIp = req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim()
+        || req?.ip
+        || '127.0.0.1';
+
+      try {
+        await this.stripeService.updateConnectAccount(accountId, {
+          businessType: 'individual',
+          firstName,
+          lastName,
+          dob,
+          ssnLast4: driver.ssnLastFour || undefined,
+          address: {
+            line1: driver.residentialAddressLine1 || undefined,
+            line2: driver.residentialAddressLine2 || undefined,
+            city: driver.residentialCity || undefined,
+            state: driver.residentialState || undefined,
+            postalCode: driver.residentialZip || undefined,
+          },
+          // Auto-accept TOS if driver already accepted our agreement
+          ...(driver.agreementAcceptedAt ? {
+            tosAccepted: {
+              date: Math.floor(new Date(driver.agreementAcceptedAt).getTime() / 1000),
+              ip: clientIp,
+            },
+          } : {}),
+        });
+        this.logger.log(`Pre-filled Connect account ${accountId} for driver ${driverId} with SSN, name, address, DOB`);
+      } catch (prefillErr: any) {
+        // Non-blocking: if pre-fill fails, onboarding still works (driver enters manually)
+        this.logger.warn(`Connect pre-fill warning for driver ${driverId}: ${prefillErr.message}`);
+      }
+      // ── End pre-fill ────────────────────────────────────────────
+
+      // Generate onboarding link — point to existing /driver/wallet page
       const baseUrl = process.env.FRONTEND_URL || 'https://101drivers.app';
       const accountLink = await this.stripeService.createAccountLink({
         accountId,
-        refreshUrl: `${baseUrl}/driver-setting?section=payouts`,
-        returnUrl: `${baseUrl}/driver-setting?section=payouts&complete=true`,
+        refreshUrl: `${baseUrl}/driver/wallet`,
+        returnUrl: `${baseUrl}/driver/wallet?stripe=complete`,
       });
 
       return {
@@ -549,5 +614,174 @@ export class StripePaymentController {
         accountId: driver.stripeConnectAccountId,
       };
     }
+  }
+
+  // ── Invoice Endpoints ────────────────────────────────────────
+
+  /**
+   * Get invoices for the current dealer (customer).
+   */
+  @Get("invoices/customer/:customerId")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async getCustomerInvoices(
+    @Param("customerId") customerId: string,
+    @Query() query: any,
+  ) {
+    const page = Number(query.page) || 1;
+    const pageSize = Number(query.pageSize) || 20;
+
+    const results = await this.prisma.invoice.findMany({
+      where: { customerId },
+      include: {
+        payment: {
+          select: {
+            status: true,
+            paymentType: true,
+            provider: true,
+            delivery: {
+              select: {
+                pickupAddress: true,
+                dropoffAddress: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { issuedAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+
+    const count = await this.prisma.invoice.count({
+      where: { customerId },
+    });
+
+    return { items: results, count, page, pageSize };
+  }
+
+  /**
+   * Admin: Get all invoices with filters.
+   */
+  @Get("invoices/admin")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async getAdminInvoices(@Query() query: any) {
+    const page = Number(query.page) || 1;
+    const pageSize = Number(query.pageSize) || 20;
+
+    const where: Record<string, any> = {};
+    if (query.status) where.status = query.status;
+    if (query.customerId) where.customerId = query.customerId;
+    if (query.overdueOnly === 'true') {
+      where.status = 'PENDING';
+      where.dueDate = { lt: new Date() };
+    }
+    if (query.from || query.to) {
+      where.issuedAt = {};
+      if (query.from) where.issuedAt.gte = new Date(query.from);
+      if (query.to) where.issuedAt.lte = new Date(query.to);
+    }
+
+    const [items, count] = await this.prisma.$transaction([
+      this.prisma.invoice.findMany({
+        where,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              businessName: true,
+              contactEmail: true,
+              contactName: true,
+            },
+          },
+          payment: {
+            select: {
+              status: true,
+              paymentType: true,
+              provider: true,
+              delivery: {
+                select: {
+                  pickupAddress: true,
+                  dropoffAddress: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { issuedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
+
+    return { items, count, page, pageSize };
+  }
+
+  /**
+   * Admin: Mark an invoice as PAID.
+   */
+  @Post("invoices/:invoiceId/mark-paid")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  async markInvoicePaid(
+    @Param("invoiceId") invoiceId: string,
+    @Body() body?: { note?: string },
+  ) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException(`Invoice ${invoiceId} not found`);
+    }
+
+    if (invoice.status === 'PAID') {
+      throw new BadRequestException('Invoice is already paid');
+    }
+
+    await this.prisma.$transaction(async (tx: any) => {
+      await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { status: 'PAID', paidAt: new Date() },
+      });
+
+      // Also mark linked payment as PAID if postpaid + INVOICED
+      if (invoice.paymentId) {
+        const payment = await tx.payment.findUnique({
+          where: { id: invoice.paymentId },
+          select: { status: true, paymentType: true },
+        });
+
+        if (payment?.paymentType === 'POSTPAID' && payment?.status === 'INVOICED') {
+          await tx.payment.update({
+            where: { id: invoice.paymentId },
+            data: { status: 'PAID', paidAt: new Date() },
+          });
+
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: invoice.paymentId,
+              type: 'MARK_PAID',
+              status: 'PAID',
+              amount: invoice.amount,
+              message: `Invoice ${invoice.invoiceNumber} marked as paid${body?.note ? `. ${body.note}` : ''}`,
+            },
+          });
+        }
+      }
+
+      await tx.adminAuditLog.create({
+        data: {
+          action: 'PAYMENT_OVERRIDE',
+          actorType: 'USER',
+          deliveryId: invoice.deliveryId,
+          reason: `Invoice ${invoice.invoiceNumber} marked paid${body?.note ? `. ${body.note}` : ''}`,
+        },
+      });
+    });
+
+    this.logger.log(`Invoice ${invoice.invoiceNumber} marked as paid`);
+    return { success: true, invoiceNumber: invoice.invoiceNumber };
   }
 }
