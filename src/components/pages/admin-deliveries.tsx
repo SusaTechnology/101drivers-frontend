@@ -407,6 +407,12 @@ export default function AdminDeliveriesPage() {
                     STALE TRACKING
                   </Badge>
                 )}
+                {delivery.pickup?.pin && (
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40">
+                    <KeyRound className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 tracking-wider">PIN: {delivery.pickup.pin}</span>
+                  </div>
+                )}
               </div>
               
               {/* Route info */}
@@ -422,14 +428,6 @@ export default function AdminDeliveriesPage() {
                   </span>
                 </div>
               </div>
-              
-              {/* Pickup PIN */}
-              {delivery.pickup?.pin && (
-                <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40">
-                  <KeyRound className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 tracking-wider">PIN: {delivery.pickup.pin}</span>
-                </div>
-              )}
               
               {/* Customer & Driver info */}
               <div className="flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-400">
