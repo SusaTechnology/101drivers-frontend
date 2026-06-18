@@ -89,6 +89,7 @@ import {
   Loader2,
   Users,
   Undo2,
+  KeyRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -493,6 +494,12 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                         <Clock className="w-3 h-3" />
                         {formatDeliveryDate(delivery.pickupWindowStart)} - {delivery.pickupWindowEnd ? formatDeliveryDate(delivery.pickupWindowEnd, true) : ''}
                       </p>
+                    )}
+                    {delivery.pickupPin && (
+                      <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40">
+                        <KeyRound className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 tracking-wider">PIN: {delivery.pickupPin}</span>
+                      </div>
                     )}
                   </div>
                   
