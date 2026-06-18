@@ -100,6 +100,7 @@ model Driver {
   notifications    NotificationEvent[]
   onboardingCompletedAt  DateTime?
   onboardingToken  String?
+  payoutBatches    PayoutBatch[]
   payouts          DriverPayout[]
   phone            String?
   preferences      DriverPreference?
@@ -586,10 +587,46 @@ model DriverPayout {
   platformFee        Float
   providerTransferId String?
   referral           Referral?              @relation(fields: [payoutId], references: [id])
+  batchItems         PayoutBatchItem[]
   status             EnumDriverPayoutStatus @default(PENDING)
   updatedAt          DateTime               @updatedAt
 
   @@index([driverId, status, createdAt])
+}
+
+model PayoutBatch {
+  id                String                    @id @default(cuid())
+  driverId          String
+  driver            Driver                    @relation(fields: [driverId], references: [id])
+  type              EnumPayoutBatchType       @default(MANUAL_FREE)
+  status            EnumPayoutBatchStatus     @default(PENDING)
+  totalAmount       Float                     @default(0)
+  feeAmount         Float                     @default(0)
+  netPayoutAmount   Float                     @default(0)
+  stripeTransferId  String?
+  stripePayoutId    String?
+  failureMessage    String?
+  initiatedAt       DateTime                  @default(now())
+  completedAt       DateTime?
+  failedAt          DateTime?
+  payoutItems       PayoutBatchItem[]
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([driverId, status, initiatedAt])
+  @@index([type, status])
+}
+
+model PayoutBatchItem {
+  id                String       @id @default(cuid())
+  batchId           String
+  batch             PayoutBatch  @relation(fields: [batchId], references: [id])
+  driverPayoutId    String
+  driverPayout      DriverPayout @relation(fields: [driverPayoutId], references: [id])
+  amount            Float
+  createdAt         DateTime    @default(now())
+
+  @@unique([batchId, driverPayoutId])
+  @@index([batchId])
 }
 
 model Invoice {
@@ -1125,6 +1162,20 @@ enum EnumDriverPayoutStatus {
   PENDING
   ELIGIBLE
   PAID
+  FAILED
+  CANCELLED
+}
+
+enum EnumPayoutBatchType {
+  WEEKLY_AUTO
+  MANUAL_FREE
+  INSTANT
+}
+
+enum EnumPayoutBatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
   FAILED
   CANCELLED
 }

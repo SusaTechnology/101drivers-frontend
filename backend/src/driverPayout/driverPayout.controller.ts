@@ -5,6 +5,8 @@ import { Response } from "express";
 import { DriverPayoutService } from "./driverPayout.service";
 import { DriverPayoutControllerBase } from "./base/driverPayout.controller.base";
 import { PrismaService } from "../prisma/prisma.service";
+import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
+import { Inject, Optional } from "@nestjs/common";
 
 @swagger.ApiTags("driverPayouts")
 @common.Controller("driverPayouts")
@@ -13,7 +15,9 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     protected readonly service: DriverPayoutService,
     @nestAccessControl.InjectRolesBuilder()
     protected readonly rolesBuilder: nestAccessControl.RolesBuilder,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(PaymentPayoutEngine)
+    private readonly payoutEngine?: PaymentPayoutEngine,
   ) {
     super(service, rolesBuilder);
   }
@@ -217,5 +221,66 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
       payoutCount: payouts.length,
       payouts,
     };
+  }
+
+  // ── Withdrawal Endpoints ─────────────────────────────────────────
+
+  @common.Post("request-withdrawal")
+  @swagger.ApiOkResponse({ description: "Free withdrawal requested — 1-2 business days" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "update",
+    possession: "own",
+  })
+  async requestWithdrawal(@common.Req() req: any): Promise<any> {
+    if (!this.payoutEngine) {
+      throw new common.ServiceUnavailableException('Payout service not available');
+    }
+    const driverId = await this.resolveDriverId(req);
+    return this.payoutEngine.requestFreeWithdrawal(driverId);
+  }
+
+  @common.Post("request-instant-payout")
+  @swagger.ApiOkResponse({ description: "Instant payout — arrives in minutes, $1.50 fee" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "update",
+    possession: "own",
+  })
+  async requestInstantPayout(@common.Req() req: any): Promise<any> {
+    if (!this.payoutEngine) {
+      throw new common.ServiceUnavailableException('Payout service not available');
+    }
+    const driverId = await this.resolveDriverId(req);
+    return this.payoutEngine.requestInstantPayout(driverId);
+  }
+
+  @common.Get("withdrawal-history")
+  @swagger.ApiOkResponse({ description: "Driver withdrawal/batch history" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "read",
+    possession: "own",
+  })
+  async getWithdrawalHistory(@common.Req() req: any): Promise<any> {
+    if (!this.payoutEngine) {
+      throw new common.ServiceUnavailableException('Payout service not available');
+    }
+    const driverId = await this.resolveDriverId(req);
+    return this.payoutEngine.getDriverPayoutBatches(driverId);
+  }
+
+  @common.Post("admin/process-weekly-payouts")
+  @swagger.ApiOkResponse({ description: "Process weekly auto-payouts for all eligible drivers" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "update",
+    possession: "any",
+  })
+  async processWeeklyPayouts(): Promise<any> {
+    if (!this.payoutEngine) {
+      throw new common.ServiceUnavailableException('Payout service not available');
+    }
+    return this.payoutEngine.processWeeklyAutoPayouts();
   }
 }
