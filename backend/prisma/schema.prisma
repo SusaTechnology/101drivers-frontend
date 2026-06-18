@@ -586,7 +586,7 @@ model DriverPayout {
   paidAt             DateTime?
   platformFee        Float
   providerTransferId String?
-  referral           Referral?              @relation(fields: [payoutId], references: [id])
+  referral           Referral?              @relation()
   batchItems         PayoutBatchItem[]
   status             EnumDriverPayoutStatus @default(PENDING)
   updatedAt          DateTime               @updatedAt
