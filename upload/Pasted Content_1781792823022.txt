@@ -1,0 +1,2077 @@
+{
+    "items": [
+        {
+            "id": "cmnn5gbq2002agc3flfspu2n8",
+            "status": "EXPIRED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-04-06T12:11:25.658Z",
+            "updatedAt": "2026-05-02T20:00:00.091Z",
+            "customer": {
+                "id": "cmmhz2jg2000cp4adz2o1qtys",
+                "customerType": "BUSINESS",
+                "businessName": "Golden Gate Auto Group",
+                "contactName": "Maya Dealer",
+                "contactEmail": "dealer2@101drivers.techbee.et",
+                "contactPhone": "+1 510 555 0177",
+                "approvalStatus": "APPROVED",
+                "phone": "+1 510 555 0177",
+                "postpaidEnabled": true,
+                "pricingConfigId": "cmnn5gbi4001mgc3fao260np4",
+                "pricingModeOverride": null,
+                "userId": "cmmhz2jft000ap4adkqic2ov0",
+                "createdAt": "2026-03-08T16:34:11.570Z",
+                "updatedAt": "2026-05-02T10:16:14.747Z"
+            },
+            "pickup": {
+                "address": "2400 Broadway, Oakland, CA",
+                "windowStart": "2026-05-02T12:16:15.186Z",
+                "windowEnd": "2026-05-02T13:16:15.186Z"
+            },
+            "dropoff": {
+                "address": "1000 Marina Blvd, Brisbane, CA",
+                "windowStart": "2026-05-02T14:16:15.186Z",
+                "windowEnd": "2026-05-02T16:16:15.186Z"
+            },
+            "scheduling": {
+                "etaMinutes": 49,
+                "bufferMinutes": 30,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": true
+            },
+            "activeAssignment": null,
+            "compliance": null,
+            "dispute": null,
+            "payment": null,
+            "payout": null,
+            "tracking": {
+                "sessionId": null,
+                "status": null,
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 0,
+                "audits": 1,
+                "notifications": 2,
+                "assignments": 0,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 1
+            }
+        },
+        {
+            "id": "cmqj025w900hs41jb8kd37jiq",
+            "status": "LISTED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-18T04:28:29.146Z",
+            "updatedAt": "2026-06-18T04:28:29.146Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "12111 Hawthorne Way, Hawthorne, CA 90250, USA",
+                "windowStart": "2026-06-18T17:00:00.000Z",
+                "windowEnd": "2026-06-18T19:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "8400 Lincoln Blvd, Los Angeles, CA 90045, USA",
+                "windowStart": "2026-06-18T17:45:00.000Z",
+                "windowEnd": "2026-06-18T19:45:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 20,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": null,
+            "compliance": {
+                "id": "cmqj025wx00hw41jbb2xo7zi8",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-18T04:28:29.170Z",
+                "createdAt": "2026-06-18T04:28:29.170Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqj025xb00i041jboebzbdpn",
+                "amount": 75.42,
+                "paymentType": "PREPAID",
+                "provider": "MANUAL",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-18T04:28:29.182Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-18T04:28:29.183Z",
+                "updatedAt": "2026-06-18T04:28:29.183Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqj025x400hy41jbw47lkeok",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 1,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 1,
+                "assignments": 0,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqizra7200gq41jbcjc9nuyi",
+            "status": "BOOKED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-18T04:20:01.502Z",
+            "updatedAt": "2026-06-18T04:41:43.475Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "12020 Grevillea Ave, Hawthorne, CA 90250, USA",
+                "windowStart": "2026-06-20T17:00:00.000Z",
+                "windowEnd": "2026-06-20T19:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "2800 Wilshire Blvd, Santa Monica, CA 90403, USA",
+                "windowStart": "2026-06-20T17:45:00.000Z",
+                "windowEnd": "2026-06-20T19:45:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 20,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqizs83s00hh41jbz8tso8w6",
+                "assignedAt": "2026-06-18T04:20:45.449Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqizra8800gu41jbg4u2yub1",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-18T04:20:01.544Z",
+                "createdAt": "2026-06-18T04:20:01.544Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqizra9f00gy41jbomnstbay",
+                "amount": 89.5,
+                "paymentType": "PREPAID",
+                "provider": "MANUAL",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-18T04:20:01.585Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-18T04:20:01.587Z",
+                "updatedAt": "2026-06-18T04:20:01.587Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqizra8t00gw41jb1eguflnn",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 3,
+                "assignments": 2,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqip4wru00fa41jbcae8lev6",
+            "status": "EXPIRED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-17T23:22:41.515Z",
+            "updatedAt": "2026-06-18T00:45:00.096Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "4125 Chase Ave, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-18T00:00:00.000Z",
+                "windowEnd": "2026-06-18T00:30:00.000Z"
+            },
+            "dropoff": {
+                "address": "4207 Kenyon Ave, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-18T00:26:00.000Z",
+                "windowEnd": "2026-06-18T00:56:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 1,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqipaioq00g341jbahwkd65s",
+                "assignedAt": "2026-06-17T23:27:03.194Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqip4wsc00fe41jbim5sbj62",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-17T23:22:41.533Z",
+                "createdAt": "2026-06-17T23:22:41.533Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqip4wso00fi41jbfxs85hkc",
+                "amount": 63.03,
+                "paymentType": "PREPAID",
+                "provider": "MANUAL",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-17T23:22:41.543Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-17T23:22:41.544Z",
+                "updatedAt": "2026-06-17T23:22:41.544Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqip4wsi00fg41jbxihaxlqh",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 4,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqioxypn00ev41jboan66qko",
+            "status": "EXPIRED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-17T23:17:17.435Z",
+            "updatedAt": "2026-06-18T01:00:00.118Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "4125 Chase Ave, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-18T00:30:00.000Z",
+                "windowEnd": "2026-06-18T01:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "Kenyon Ave, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-18T00:57:00.000Z",
+                "windowEnd": "2026-06-18T01:27:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 1,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": null,
+            "compliance": {
+                "id": "cmqioxyq800ez41jbi2gw1l2b",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-17T23:17:17.456Z",
+                "createdAt": "2026-06-17T23:17:17.456Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqioxyql00f341jbai7yottx",
+                "amount": 62.97,
+                "paymentType": "PREPAID",
+                "provider": "MANUAL",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-17T23:17:17.467Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-17T23:17:17.469Z",
+                "updatedAt": "2026-06-17T23:17:17.469Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqioxyqe00f141jbgsibn1ve",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 2,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 2,
+                "assignments": 0,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqiejhqw00ah41jbr5w0l09o",
+            "status": "EXPIRED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-17T18:26:06.104Z",
+            "updatedAt": "2026-06-17T22:15:00.031Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "8400 Lincoln Blvd, Los Angeles, CA 90045, USA",
+                "windowStart": "2026-06-17T20:00:00.000Z",
+                "windowEnd": "2026-06-17T22:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "4105 Lyceum Ave, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-17T20:35:00.000Z",
+                "windowEnd": "2026-06-17T22:35:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 10,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqif0h8r00b841jbcwda4uc4",
+                "assignedAt": "2026-06-17T18:39:18.603Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqiejhrl00al41jb9murgh88",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-17T18:26:06.129Z",
+                "createdAt": "2026-06-17T18:26:06.129Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqiejhrz00ap41jbrl6s5zf4",
+                "amount": 68.4,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-17T18:26:06.142Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-17T18:26:06.143Z",
+                "updatedAt": "2026-06-17T18:26:20.361Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqiejhrs00an41jbpkw21k12",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 4,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqi6gh4e004d41jb7x6jb5qu",
+            "status": "LISTED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-17T14:39:48.398Z",
+            "updatedAt": "2026-06-17T14:39:48.398Z",
+            "customer": {
+                "id": "cmlamw93b000aw2yabcdjmgu8",
+                "customerType": "BUSINESS",
+                "businessName": "Bay Auto Sales LLC",
+                "contactName": "Jordan Sales",
+                "contactEmail": "business.customer@101drivers.techbee.et",
+                "contactPhone": "+1 650 555 0199",
+                "approvalStatus": "APPROVED",
+                "phone": "+1 650 555 0199",
+                "postpaidEnabled": false,
+                "pricingConfigId": "cmnn5gbi4001mgc3fao260np4",
+                "pricingModeOverride": null,
+                "userId": "cmlamw9330008w2yavytm43ym",
+                "createdAt": "2026-02-06T08:39:17.255Z",
+                "updatedAt": "2026-06-16T15:01:19.861Z"
+            },
+            "pickup": {
+                "address": "966 S Western Ave #203, Los Angeles, CA 90006, USA",
+                "windowStart": "2026-06-24T20:00:00.000Z",
+                "windowEnd": "2026-06-24T22:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "Building 2 South Clinic, 34800 Bob Wilson Dr, San Diego, CA 92134, USA",
+                "windowStart": "2026-06-24T23:15:00.000Z",
+                "windowEnd": "2026-06-25T01:15:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 170,
+                "bufferMinutes": 25,
+                "sameDayEligible": false,
+                "requiresOpsConfirmation": true,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": null,
+            "compliance": {
+                "id": "cmqi6gh4w004h41jbtw4kuegw",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-17T14:39:48.416Z",
+                "createdAt": "2026-06-17T14:39:48.416Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqi6gh57004l41jbrkrqlt46",
+                "amount": 300.85,
+                "paymentType": "PREPAID",
+                "provider": "MANUAL",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-17T14:39:48.426Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-17T14:39:48.427Z",
+                "updatedAt": "2026-06-17T14:39:48.427Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqi6gh52004j41jbnuhn9els",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 1,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 1,
+                "assignments": 0,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqi4py7j001v41jbtc1cf3yj",
+            "status": "LISTED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-17T13:51:11.215Z",
+            "updatedAt": "2026-06-17T13:51:11.215Z",
+            "customer": {
+                "id": "cmlamw93b000aw2yabcdjmgu8",
+                "customerType": "BUSINESS",
+                "businessName": "Bay Auto Sales LLC",
+                "contactName": "Jordan Sales",
+                "contactEmail": "business.customer@101drivers.techbee.et",
+                "contactPhone": "+1 650 555 0199",
+                "approvalStatus": "APPROVED",
+                "phone": "+1 650 555 0199",
+                "postpaidEnabled": false,
+                "pricingConfigId": "cmnn5gbi4001mgc3fao260np4",
+                "pricingModeOverride": null,
+                "userId": "cmlamw9330008w2yavytm43ym",
+                "createdAt": "2026-02-06T08:39:17.255Z",
+                "updatedAt": "2026-06-16T15:01:19.861Z"
+            },
+            "pickup": {
+                "address": "8440 Wilshire Blvd, Beverly Hills, CA 90211, USA",
+                "windowStart": "2026-06-18T20:00:00.000Z",
+                "windowEnd": "2026-06-18T22:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "291 Campus Drive, Stanford, CA 94305, USA",
+                "windowStart": "2026-06-19T02:09:00.000Z",
+                "windowEnd": "2026-06-19T04:09:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 344,
+                "bufferMinutes": 25,
+                "sameDayEligible": false,
+                "requiresOpsConfirmation": true,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": null,
+            "compliance": {
+                "id": "cmqi4py8c001z41jbuzshx4mu",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-17T13:51:11.244Z",
+                "createdAt": "2026-06-17T13:51:11.244Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqi4py92002341jbvjd33z6h",
+                "amount": 731.19,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-17T13:51:11.269Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-17T13:51:11.271Z",
+                "updatedAt": "2026-06-17T13:51:24.880Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqi4py8q002141jbpomv68xu",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 1,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 2,
+                "assignments": 0,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqh80wuh014810c2kag5mhwb",
+            "status": "COMPLETED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-16T22:35:55.337Z",
+            "updatedAt": "2026-06-17T18:48:32.726Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "200 Medical Plaza, Los Angeles, CA 90024, USA",
+                "windowStart": "2026-06-17T17:00:00.000Z",
+                "windowEnd": "2026-06-17T19:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "1000 W Carson St, Torrance, CA 90502, USA",
+                "windowStart": "2026-06-17T18:46:00.000Z",
+                "windowEnd": "2026-06-17T20:46:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 81,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqh84vbr014x10c2sd6gmhuu",
+                "assignedAt": "2026-06-16T22:38:59.992Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqh80ww3014c10c20rl01ywl",
+                "vinConfirmed": true,
+                "vinVerificationCode": "1234",
+                "odometerStart": 180,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-16T22:41:03.459Z",
+                "createdAt": "2026-06-16T22:35:55.395Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqh80wwn014g10c2gd7zioan",
+                "amount": 109.15,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-16T22:35:55.412Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-16T22:35:55.415Z",
+                "updatedAt": "2026-06-16T22:36:10.046Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqh80wwd014e10c2bc0cahia",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 3,
+                "evidence": 8,
+                "audits": 0,
+                "notifications": 2,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqgtaaw9009n10c2axiij7yb",
+            "status": "EXPIRED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-16T15:43:19.210Z",
+            "updatedAt": "2026-06-16T19:15:00.071Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "4264 Lincoln Blvd, Marina Del Rey, CA 90292, USA",
+                "windowStart": "2026-06-16T17:00:00.000Z",
+                "windowEnd": "2026-06-16T19:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "5570 Lincoln Blvd, Playa Vista, CA 90094, USA",
+                "windowStart": "2026-06-16T17:32:00.000Z",
+                "windowEnd": "2026-06-16T19:32:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 8,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqgtd1wm00bc10c2eynavw8a",
+                "assignedAt": "2026-06-16T15:45:27.526Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqgtaax7009r10c2r1job0ck",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-16T15:43:19.244Z",
+                "createdAt": "2026-06-16T15:43:19.244Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqgtaaxs009v10c2sqik7jns",
+                "amount": 65.93,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-16T15:43:19.263Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-16T15:43:19.264Z",
+                "updatedAt": "2026-06-16T15:43:23.220Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqgtaaxl009t10c226vek783",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 5,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqgsoorj004j10c2cjxny8ea",
+            "status": "COMPLETED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-16T15:26:30.751Z",
+            "updatedAt": "2026-06-16T15:41:50.583Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "4264 Lincoln Blvd, Marina Del Rey, CA 90292, USA",
+                "windowStart": "2026-06-16T17:00:00.000Z",
+                "windowEnd": "2026-06-16T19:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "5570 Lincoln Blvd, Playa Vista, CA 90094, USA",
+                "windowStart": "2026-06-16T17:32:00.000Z",
+                "windowEnd": "2026-06-16T19:32:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 7,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqgsqdir006910c2wx6kov8y",
+                "assignedAt": "2026-06-16T15:27:49.491Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqgsoosw004n10c2n080tbf3",
+                "vinConfirmed": true,
+                "vinVerificationCode": "1234",
+                "odometerStart": 100,
+                "odometerEnd": null,
+                "pickupCompletedAt": "2026-06-16T15:29:21.580Z",
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-16T15:29:21.582Z",
+                "createdAt": "2026-06-16T15:26:30.800Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqgsoov1004r10c22efjaxbm",
+                "amount": 65.93,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-16T15:26:30.873Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-16T15:26:30.877Z",
+                "updatedAt": "2026-06-16T15:26:33.525Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqgsootu004p10c2kmdbf01e",
+                "status": "STARTED",
+                "startedAt": "2026-06-16T15:29:21.603Z",
+                "stoppedAt": null,
+                "drivenMiles": 0,
+                "latestPoint": {
+                    "id": "cmqgt4ivd009f10c2gas582sb",
+                    "lat": 33.9859271292638,
+                    "lng": -118.4431523824374,
+                    "recordedAt": "2026-06-16T15:38:49.435Z"
+                },
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 8,
+                "audits": 0,
+                "notifications": 5,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqgsbbdx001910c2m5iggv8e",
+            "status": "COMPLETED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-16T15:16:06.885Z",
+            "updatedAt": "2026-06-16T15:24:57.165Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "4264 Lincoln Blvd, Marina Del Rey, CA 90292, USA",
+                "windowStart": "2026-06-16T17:00:00.000Z",
+                "windowEnd": "2026-06-16T19:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "5570 Lincoln Blvd, Playa Vista, CA 90094, USA",
+                "windowStart": "2026-06-16T17:33:00.000Z",
+                "windowEnd": "2026-06-16T19:33:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 8,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqgsg4vt001q10c2liiipjqd",
+                "assignedAt": "2026-06-16T15:19:51.737Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqgsbbew001d10c2xdxryye1",
+                "vinConfirmed": true,
+                "vinVerificationCode": "1234",
+                "odometerStart": 100,
+                "odometerEnd": null,
+                "pickupCompletedAt": "2026-06-16T15:21:31.376Z",
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-16T15:21:31.378Z",
+                "createdAt": "2026-06-16T15:16:06.920Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqgsbbfi001h10c206ycjfl8",
+                "amount": 65.93,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-16T15:16:06.940Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-16T15:16:06.942Z",
+                "updatedAt": "2026-06-16T15:16:09.820Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqgsbbf7001f10c28wxca0pw",
+                "status": "STARTED",
+                "startedAt": "2026-06-16T15:21:31.396Z",
+                "stoppedAt": null,
+                "drivenMiles": 0,
+                "latestPoint": {
+                    "id": "cmqgskwyw002o10c2lna9hyhl",
+                    "lat": 33.98591305607358,
+                    "lng": -118.4431371619719,
+                    "recordedAt": "2026-06-16T15:23:34.553Z"
+                },
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 8,
+                "audits": 0,
+                "notifications": 6,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqgd0ynr0002g57l04e9etif",
+            "status": "COMPLETED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-16T08:08:09.591Z",
+            "updatedAt": "2026-06-16T08:41:51.091Z",
+            "customer": {
+                "id": "cmol0xhw8000dtiraw9aedjaa",
+                "customerType": "BUSINESS",
+                "businessName": "Techbee Solutions",
+                "contactName": "Daniel Kasse",
+                "contactEmail": "danielyetwale01@gmail.com",
+                "contactPhone": "0923467881",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmol0xhv8000ctirapdjhf0s6",
+                "createdAt": "2026-04-30T05:08:58.712Z",
+                "updatedAt": "2026-04-30T05:11:27.554Z"
+            },
+            "pickup": {
+                "address": "Marina Del Rey, CA 90292, USA",
+                "windowStart": "2026-06-16T17:00:00.000Z",
+                "windowEnd": "2026-06-16T19:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "San Diego, CA, USA",
+                "windowStart": "2026-06-16T19:26:00.000Z",
+                "windowEnd": "2026-06-16T21:26:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 121,
+                "bufferMinutes": 25,
+                "sameDayEligible": false,
+                "requiresOpsConfirmation": true,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqgd72pj0011g57l69aoxv7w",
+                "assignedAt": "2026-06-16T08:12:54.775Z",
+                "driverId": "cmnu66pci0002d5oh25yte18j",
+                "driver": {
+                    "id": "cmnu66pci0002d5oh25yte18j",
+                    "phone": "0923467881",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmnu66pbh0001d5ohzd1mrdr7",
+                        "fullName": "Daniel Yetwale",
+                        "email": "danielyetwale03@gmail.com",
+                        "phone": "0923467881"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqgd0yr20006g57lnl8apu3b",
+                "vinConfirmed": true,
+                "vinVerificationCode": "0000",
+                "odometerStart": 10000,
+                "odometerEnd": 12000,
+                "pickupCompletedAt": "2026-06-16T08:34:11.259Z",
+                "dropoffCompletedAt": "2026-06-16T08:41:51.066Z",
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-16T08:41:51.069Z",
+                "createdAt": "2026-06-16T08:08:09.710Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqgd0yru000ag57l06so72q0",
+                "amount": 317.77,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-16T08:08:09.737Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-16T08:08:09.738Z",
+                "updatedAt": "2026-06-16T08:08:12.497Z"
+            },
+            "payout": {
+                "id": "cmqge8ah8003bg57lifvs9j6z",
+                "driverId": "cmnu66pci0002d5oh25yte18j",
+                "grossAmount": 317.77,
+                "insuranceFee": 8,
+                "platformFee": 127.11,
+                "netAmount": 182.66,
+                "driverSharePct": 60,
+                "status": "ELIGIBLE",
+                "paidAt": null,
+                "createdAt": "2026-06-16T08:41:51.116Z",
+                "updatedAt": "2026-06-16T08:41:51.116Z"
+            },
+            "tracking": {
+                "sessionId": "cmqgd0yri0008g57l4t6qpku2",
+                "status": "STOPPED",
+                "startedAt": "2026-06-16T08:34:11.284Z",
+                "stoppedAt": "2026-06-16T08:41:51.083Z",
+                "drivenMiles": 130.23,
+                "latestPoint": {
+                    "id": "cmqge8a1y0036g57l5odnws4w",
+                    "lat": 8.9964896,
+                    "lng": 38.7398372,
+                    "recordedAt": "2026-06-16T08:41:49.610Z"
+                },
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 15,
+                "audits": 0,
+                "notifications": 8,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqfsbw5z015zt8r2yvap1zsh",
+            "status": "COMPLETED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-15T22:28:47.639Z",
+            "updatedAt": "2026-06-16T20:07:04.886Z",
+            "customer": {
+                "id": "cmpitu62a00zgnxyukn5z5xac",
+                "customerType": "BUSINESS",
+                "businessName": "Buddha Spa",
+                "contactName": "Lawrence Dealer2",
+                "contactEmail": "larrydealer@101drivers.com",
+                "contactPhone": "9143698753",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmpitu61600zfnxyu1wccso95",
+                "createdAt": "2026-05-23T20:54:36.082Z",
+                "updatedAt": "2026-05-23T20:56:02.760Z"
+            },
+            "pickup": {
+                "address": "6753 Hinds Ave, North Hollywood, CA 91606, USA",
+                "windowStart": "2026-06-16T20:00:00.000Z",
+                "windowEnd": "2026-06-16T22:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "5165 Whittier Blvd, East Los Angeles, CA 90022, USA",
+                "windowStart": "2026-06-16T21:21:00.000Z",
+                "windowEnd": "2026-06-16T23:21:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 66,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqfsqvbf016pt8r2cp29t5i0",
+                "assignedAt": "2026-06-15T22:40:26.380Z",
+                "driverId": "cmpf0nj6a001wftpy8d8fnud6",
+                "driver": {
+                    "id": "cmpf0nj6a001wftpy8d8fnud6",
+                    "phone": "5619541574",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmpf0nj55001vftpy1q2wnfqo",
+                        "fullName": "Lawrence Driver3",
+                        "email": "larrydriver2@101drivers.com",
+                        "phone": "5619541574"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": "Ops manually assigned nearest approved driver"
+            },
+            "compliance": {
+                "id": "cmqfsbw8i0163t8r2ty3fa8wp",
+                "vinConfirmed": true,
+                "vinVerificationCode": "2345",
+                "odometerStart": 45,
+                "odometerEnd": 71,
+                "pickupCompletedAt": "2026-06-16T20:00:15.518Z",
+                "dropoffCompletedAt": "2026-06-16T20:07:04.830Z",
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-16T20:07:04.832Z",
+                "createdAt": "2026-06-15T22:28:47.730Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqfsbw9i0167t8r2nvdtqn40",
+                "amount": 109.05,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "FAILED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-15T22:28:47.765Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-15T22:28:47.766Z",
+                "updatedAt": "2026-06-16T20:07:05.423Z"
+            },
+            "payout": {
+                "id": "cmqh2pihn013h10c29j70r7mn",
+                "driverId": "cmpf0nj6a001wftpy8d8fnud6",
+                "grossAmount": 109.05,
+                "insuranceFee": 8,
+                "platformFee": 43.62,
+                "netAmount": 57.43,
+                "driverSharePct": 60,
+                "status": "ELIGIBLE",
+                "paidAt": null,
+                "createdAt": "2026-06-16T20:07:05.435Z",
+                "updatedAt": "2026-06-16T20:07:05.435Z"
+            },
+            "tracking": {
+                "sessionId": "cmqfsbw8z0165t8r20u8ucq0x",
+                "status": "STOPPED",
+                "startedAt": "2026-06-16T20:00:15.533Z",
+                "stoppedAt": "2026-06-16T20:07:04.868Z",
+                "drivenMiles": 22.53,
+                "latestPoint": {
+                    "id": "cmqh2phkq013c10c21sntefrb",
+                    "lat": 26.36645488517924,
+                    "lng": -80.0827810029516,
+                    "recordedAt": "2026-06-16T20:07:04.244Z"
+                },
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 15,
+                "audits": 1,
+                "notifications": 8,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqfs3neu015it8r2tbthfb66",
+            "status": "EXPIRED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-15T22:22:23.045Z",
+            "updatedAt": "2026-06-16T22:00:00.219Z",
+            "customer": {
+                "id": "cmpitu62a00zgnxyukn5z5xac",
+                "customerType": "BUSINESS",
+                "businessName": "Buddha Spa",
+                "contactName": "Lawrence Dealer2",
+                "contactEmail": "larrydealer@101drivers.com",
+                "contactPhone": "9143698753",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmpitu61600zfnxyu1wccso95",
+                "createdAt": "2026-05-23T20:54:36.082Z",
+                "updatedAt": "2026-05-23T20:56:02.760Z"
+            },
+            "pickup": {
+                "address": "2605 S La Cienega Blvd, Los Angeles, CA 90034, USA",
+                "windowStart": "2026-06-16T20:00:00.000Z",
+                "windowEnd": "2026-06-16T22:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "5647 Wilbur Ave, Tarzana, CA 91356, USA",
+                "windowStart": "2026-06-16T21:19:00.000Z",
+                "windowEnd": "2026-06-16T23:19:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 55,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": null,
+            "compliance": {
+                "id": "cmqfs3nil015mt8r2aonlwk66",
+                "vinConfirmed": false,
+                "vinVerificationCode": "2345",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-15T22:22:23.181Z",
+                "createdAt": "2026-06-15T22:22:23.181Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqfs3njh015qt8r2ehj7zn6r",
+                "amount": 99.23,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-15T22:22:23.208Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-15T22:22:23.213Z",
+                "updatedAt": "2026-06-15T22:22:37.412Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqfs3niu015ot8r2y77qzc1s",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 2,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 3,
+                "assignments": 0,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqfj807v014kt8r20xm65slh",
+            "status": "EXPIRED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-15T18:13:49.723Z",
+            "updatedAt": "2026-06-15T22:00:00.759Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "12712 Washington Blvd Ste 101, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-15T20:00:00.000Z",
+                "windowEnd": "2026-06-15T22:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "4105 Lyceum Ave, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-15T20:28:00.000Z",
+                "windowEnd": "2026-06-15T22:28:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 3,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": null,
+            "compliance": {
+                "id": "cmqfj80af014ot8r26m40sysg",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-15T18:13:49.815Z",
+                "createdAt": "2026-06-15T18:13:49.815Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqfj80ef014st8r2s4my23ky",
+                "amount": 63.73,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-15T18:13:49.953Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-15T18:13:49.960Z",
+                "updatedAt": "2026-06-15T18:13:52.838Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqfj80c9014qt8r2t7d5srgt",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 2,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 2,
+                "assignments": 0,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqe3crmi00ogt8r26jgobakb",
+            "status": "EXPIRED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-14T18:01:51.834Z",
+            "updatedAt": "2026-06-14T22:15:00.309Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "12712 Washington Blvd Ste 101, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-14T20:00:00.000Z",
+                "windowEnd": "2026-06-14T22:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "12701 Washington Pl, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-14T20:27:00.000Z",
+                "windowEnd": "2026-06-14T22:27:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 2,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqe52y9s00uut8r2zrz03dz1",
+                "assignedAt": "2026-06-14T18:50:13.120Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqe3croi00okt8r2qjzcb2dx",
+                "vinConfirmed": false,
+                "vinVerificationCode": "1234",
+                "odometerStart": null,
+                "odometerEnd": null,
+                "pickupCompletedAt": null,
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-14T18:01:51.906Z",
+                "createdAt": "2026-06-14T18:01:51.906Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqe3crp000oot8r28nrp3rox",
+                "amount": 63.05,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-14T18:01:51.920Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-14T18:01:51.924Z",
+                "updatedAt": "2026-06-14T18:01:54.602Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqe3crop00omt8r2nb1fzmsn",
+                "status": "NOT_STARTED",
+                "startedAt": null,
+                "stoppedAt": null,
+                "drivenMiles": null,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 0,
+                "audits": 0,
+                "notifications": 5,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqe38fgs00o0t8r2vscpoyk9",
+            "status": "COMPLETED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-14T17:58:29.451Z",
+            "updatedAt": "2026-06-15T18:33:18.981Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "12712 Washington Blvd Ste 101, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-14T20:00:00.000Z",
+                "windowEnd": "2026-06-14T22:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "12701 Washington Pl, Los Angeles, CA 90066, USA",
+                "windowStart": "2026-06-14T20:27:00.000Z",
+                "windowEnd": "2026-06-14T22:27:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 2,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqe3gndb00oxt8r21m6nrllo",
+                "assignedAt": "2026-06-14T18:04:52.944Z",
+                "driverId": "cmq9u3t2o002a1rykjsgfqbt7",
+                "driver": {
+                    "id": "cmq9u3t2o002a1rykjsgfqbt7",
+                    "phone": "3109628402",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq9u3t2200291rykdi6ea77o",
+                        "fullName": "Jake Test Driver",
+                        "email": "6@101drivers.com",
+                        "phone": "3109628402"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqe38fny00o4t8r26hmszx6j",
+                "vinConfirmed": true,
+                "vinVerificationCode": "1234",
+                "odometerStart": 100,
+                "odometerEnd": null,
+                "pickupCompletedAt": "2026-06-14T18:53:50.248Z",
+                "dropoffCompletedAt": null,
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-14T18:53:50.250Z",
+                "createdAt": "2026-06-14T17:58:29.711Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqe38fqt00o8t8r29h4ldxng",
+                "amount": 63.05,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-14T17:58:29.811Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-14T17:58:29.813Z",
+                "updatedAt": "2026-06-14T17:59:40.437Z"
+            },
+            "payout": null,
+            "tracking": {
+                "sessionId": "cmqe38fpi00o6t8r2cly0d9n2",
+                "status": "STARTED",
+                "startedAt": "2026-06-14T18:53:50.289Z",
+                "stoppedAt": null,
+                "drivenMiles": 0,
+                "latestPoint": null,
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 8,
+                "audits": 0,
+                "notifications": 5,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqblios600h3t8r267ptynvk",
+            "status": "COMPLETED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-13T00:07:02.646Z",
+            "updatedAt": "2026-06-13T00:50:32.203Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "702 Montana Ave, Santa Monica, CA 90403, USA",
+                "windowStart": "2026-06-13T00:30:00.000Z",
+                "windowEnd": "2026-06-13T01:00:00.000Z"
+            },
+            "dropoff": {
+                "address": "903 7th St, Santa Monica, CA 90403, USA",
+                "windowStart": "2026-06-13T00:56:00.000Z",
+                "windowEnd": "2026-06-13T01:26:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 1,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqblnkz400j8t8r2rvncouul",
+                "assignedAt": "2026-06-13T00:10:50.992Z",
+                "driverId": "cmq187ew500b41133wl12o4ku",
+                "driver": {
+                    "id": "cmq187ew500b41133wl12o4ku",
+                    "phone": "3235336674",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq187euc00b31133nxyye80s",
+                        "fullName": "Carol Jones",
+                        "email": "driverlady@101drivers.com",
+                        "phone": "3235336674"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqbliots00h7t8r2wchi7oy5",
+                "vinConfirmed": true,
+                "vinVerificationCode": "1234",
+                "odometerStart": 100,
+                "odometerEnd": 120,
+                "pickupCompletedAt": "2026-06-13T00:20:32.118Z",
+                "dropoffCompletedAt": "2026-06-13T00:50:32.175Z",
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-13T00:50:32.176Z",
+                "createdAt": "2026-06-13T00:07:02.704Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqbliouq00hbt8r2dfyx6wm9",
+                "amount": 62.97,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-13T00:07:02.736Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-13T00:07:02.738Z",
+                "updatedAt": "2026-06-13T00:07:07.981Z"
+            },
+            "payout": {
+                "id": "cmqbn2mcv00kgt8r2vsgbttm7",
+                "driverId": "cmq187ew500b41133wl12o4ku",
+                "grossAmount": 62.97,
+                "insuranceFee": 8,
+                "platformFee": 25.19,
+                "netAmount": 29.78,
+                "driverSharePct": 60,
+                "status": "ELIGIBLE",
+                "paidAt": null,
+                "createdAt": "2026-06-13T00:50:32.239Z",
+                "updatedAt": "2026-06-13T00:50:32.239Z"
+            },
+            "tracking": {
+                "sessionId": "cmqblioub00h9t8r2x0h9lgr5",
+                "status": "STOPPED",
+                "startedAt": "2026-06-13T00:20:32.130Z",
+                "stoppedAt": "2026-06-13T00:50:32.194Z",
+                "drivenMiles": 0.14,
+                "latestPoint": {
+                    "id": "cmqbn2lyu00kbt8r2f538pz75",
+                    "lat": 34.02561237949949,
+                    "lng": -118.4999958187974,
+                    "recordedAt": "2026-06-13T00:50:31.528Z"
+                },
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 15,
+                "audits": 0,
+                "notifications": 7,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        },
+        {
+            "id": "cmqbiq27h001at8r2hlp160hm",
+            "status": "COMPLETED",
+            "serviceType": "HOME_DELIVERY",
+            "createdAt": "2026-06-12T22:48:47.788Z",
+            "updatedAt": "2026-06-12T23:28:22.947Z",
+            "customer": {
+                "id": "cmoraa3wc0134ep2a15hkf1n5",
+                "customerType": "BUSINESS",
+                "businessName": "The boy",
+                "contactName": "Jake",
+                "contactEmail": "jakedealer@101drivers.com",
+                "contactPhone": "3109628402",
+                "approvalStatus": "APPROVED",
+                "phone": null,
+                "postpaidEnabled": false,
+                "pricingConfigId": null,
+                "pricingModeOverride": null,
+                "userId": "cmoraa3uq0133ep2a7z29aii1",
+                "createdAt": "2026-05-04T14:17:20.700Z",
+                "updatedAt": "2026-06-16T00:58:36.381Z"
+            },
+            "pickup": {
+                "address": "903 7th St, Santa Monica, CA 90403, USA",
+                "windowStart": "2026-06-13T00:00:00.000Z",
+                "windowEnd": "2026-06-13T00:30:00.000Z"
+            },
+            "dropoff": {
+                "address": "820 Montana Ave, Santa Monica, CA 90403, USA",
+                "windowStart": "2026-06-13T00:27:00.000Z",
+                "windowEnd": "2026-06-13T00:57:00.000Z"
+            },
+            "scheduling": {
+                "etaMinutes": 2,
+                "bufferMinutes": 25,
+                "sameDayEligible": true,
+                "requiresOpsConfirmation": false,
+                "afterHours": false,
+                "isUrgent": false
+            },
+            "activeAssignment": {
+                "id": "cmqbiuqzp003kt8r26n8j6wim",
+                "assignedAt": "2026-06-12T22:52:26.533Z",
+                "driverId": "cmq187ew500b41133wl12o4ku",
+                "driver": {
+                    "id": "cmq187ew500b41133wl12o4ku",
+                    "phone": "3235336674",
+                    "status": "APPROVED",
+                    "user": {
+                        "id": "cmq187euc00b31133nxyye80s",
+                        "fullName": "Carol Jones",
+                        "email": "driverlady@101drivers.com",
+                        "phone": "3235336674"
+                    },
+                    "profilePhotoUrl": null
+                },
+                "reason": null
+            },
+            "compliance": {
+                "id": "cmqbiq28d001et8r2rafg77yh",
+                "vinConfirmed": true,
+                "vinVerificationCode": "1234",
+                "odometerStart": 100,
+                "odometerEnd": 120,
+                "pickupCompletedAt": "2026-06-12T23:08:33.160Z",
+                "dropoffCompletedAt": "2026-06-12T23:28:22.900Z",
+                "verifiedByUserId": null,
+                "verifiedByAdminAt": null,
+                "updatedAt": "2026-06-12T23:28:22.904Z",
+                "createdAt": "2026-06-12T22:48:47.822Z"
+            },
+            "dispute": null,
+            "payment": {
+                "id": "cmqbiq2a1001it8r2wmx93yoh",
+                "amount": 63.09,
+                "paymentType": "PREPAID",
+                "provider": "STRIPE",
+                "status": "AUTHORIZED",
+                "invoiceId": null,
+                "authorizedAt": "2026-06-12T22:48:47.879Z",
+                "capturedAt": null,
+                "paidAt": null,
+                "createdAt": "2026-06-12T22:48:47.881Z",
+                "updatedAt": "2026-06-12T22:48:50.536Z"
+            },
+            "payout": {
+                "id": "cmqbk4yxa004rt8r29tu0ib9v",
+                "driverId": "cmq187ew500b41133wl12o4ku",
+                "grossAmount": 63.09,
+                "insuranceFee": 8,
+                "platformFee": 25.24,
+                "netAmount": 29.85,
+                "driverSharePct": 60,
+                "status": "ELIGIBLE",
+                "paidAt": null,
+                "createdAt": "2026-06-12T23:28:22.990Z",
+                "updatedAt": "2026-06-12T23:28:22.990Z"
+            },
+            "tracking": {
+                "sessionId": "cmqbiq297001gt8r2t1ysyvat",
+                "status": "STOPPED",
+                "startedAt": "2026-06-12T23:08:33.206Z",
+                "stoppedAt": "2026-06-12T23:28:22.939Z",
+                "drivenMiles": 0.2,
+                "latestPoint": {
+                    "id": "cmqbk4yjx004lt8r2usumzqzg",
+                    "lat": 34.02747163049774,
+                    "lng": -118.4998038203577,
+                    "recordedAt": "2026-06-12T23:28:22.143Z"
+                },
+                "stale": false
+            },
+            "counts": {
+                "statusHistory": 4,
+                "evidence": 15,
+                "audits": 0,
+                "notifications": 7,
+                "assignments": 1,
+                "evidenceExports": 0,
+                "resubmissions": 0,
+                "scheduleChanges": 0
+            }
+        }
+    ],
+    "count": 337,
+    "page": 1,
+    "pageSize": 20,
+    "filtersApplied": {
+        "status": null,
+        "from": null,
+        "to": null,
+        "customerId": null,
+        "customerType": null,
+        "serviceType": null,
+        "urgentOnly": false,
+        "disputedOnly": false,
+        "requiresOpsConfirmation": false,
+        "withoutAssignment": false,
+        "complianceMissing": false,
+        "activeWithoutTracking": false,
+        "staleTracking": false
+    }
+}

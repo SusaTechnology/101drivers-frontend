@@ -1169,6 +1169,7 @@ async getAdminDeliveries(input: {
         customer: row.customer,
         pickup: {
           address: row.pickupAddress,
+          pin: row.pickupPin,
           windowStart: row.pickupWindowStart,
           windowEnd: row.pickupWindowEnd,
         },
