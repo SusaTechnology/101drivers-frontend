@@ -60,6 +60,7 @@ export interface Driver {
 // Location types
 export interface PickupLocation {
   address: string;
+  pin?: string | null;
   windowStart?: string | null;
   windowEnd?: string | null;
 }
@@ -193,7 +194,6 @@ export interface DeliveryListItem {
   payout: Payout | null;
   tracking: TrackingSession;
   counts: DeliveryCounts;
-  pickupPin?: string | null;
 }
 
 // Filters applied
