@@ -1016,6 +1016,7 @@ async getAdminDeliveries(input: {
 
         pickupAddress: true,
         dropoffAddress: true,
+        pickupPin: true,
         pickupWindowStart: true,
         pickupWindowEnd: true,
         dropoffWindowStart: true,
@@ -1249,6 +1250,7 @@ async getAdminDeliveryDetail(input: {
       pickupLng: true,
       pickupPlaceId: true,
       pickupState: true,
+      pickupPin: true,
       pickupWindowStart: true,
       pickupWindowEnd: true,
 
