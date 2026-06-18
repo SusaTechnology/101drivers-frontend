@@ -193,6 +193,7 @@ export interface DeliveryListItem {
   payout: Payout | null;
   tracking: TrackingSession;
   counts: DeliveryCounts;
+  pickupPin?: string | null;
 }
 
 // Filters applied
