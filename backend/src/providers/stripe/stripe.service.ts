@@ -222,7 +222,8 @@ export class StripeService {
 
   /**
    * Transfer money to a Stripe Connected Account (driver payout).
-   * Used when a driver's Stripe Connect account is set up.
+   * Used for standard (free) payouts — transfers to connected account balance,
+   * then the driver can pull funds to their bank via the connected account.
    */
   async createTransfer(params: {
     amount: number; // in dollars
@@ -241,6 +242,45 @@ export class StripeService {
       },
       { idempotencyKey },
     );
+  }
+
+  /**
+   * Create an instant payout to a connected account's bank.
+   * Used when driver wants money immediately — arrives in minutes.
+   * Stripe charges a fee (varies by country, ~$1.50 in US).
+   */
+  async createInstantPayout(params: {
+    amount: number; // in dollars
+    destinationAccountId: string;
+    method?: 'instant' | 'standard'; // 'instant' = minutes, 'standard' = 1-2 days
+    metadata?: Record<string, string>;
+  }) {
+    const idempotencyKey = `payout-${params.destinationAccountId}-${Date.now()}`;
+    const payoutMethod = params.method || 'instant';
+    return this.stripe.payouts.create(
+      {
+        amount: Math.round(params.amount * 100), // cents
+        currency: "usd",
+        destination: params.destinationAccountId,
+        method: payoutMethod,
+        metadata: params.metadata,
+      },
+      { idempotencyKey },
+    );
+  }
+
+  /**
+   * Retrieve a payout status by ID.
+   */
+  async getPayout(payoutId: string) {
+    return this.stripe.payouts.retrieve(payoutId);
+  }
+
+  /**
+   * Retrieve a transfer status by ID.
+   */
+  async getTransfer(transferId: string) {
+    return this.stripe.transfers.retrieve(transferId);
   }
 
   // ── Connect Onboarding ───────────────────────────────────────────

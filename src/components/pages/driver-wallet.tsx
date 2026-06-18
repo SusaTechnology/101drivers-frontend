@@ -28,6 +28,8 @@ import {
   Gift,
   Users,
   Share2,
+  Zap,
+  Banknote,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -108,7 +110,7 @@ export default function DriverWalletPage() {
   const referrals = referralHistory?.referrals || []
 
   // ── Fetch real earnings data ───────────────────────────────
-  const { data: earningsData } = useDataQuery<any>({
+  const { data: earningsData, refetch: refetchEarnings } = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-earnings`,
     noFilter: true,
   })
@@ -200,6 +202,34 @@ export default function DriverWalletPage() {
     },
   })
 
+  const freeWithdrawalMutation = useDataMutation<any, void>({
+    apiEndPoint: `${API_URL}/api/driverPayouts/request-withdrawal`,
+    method: 'POST',
+    onSuccess: () => {
+      toast.success('Withdrawal requested!', {
+        description: 'Your funds will arrive in 1-2 business days.',
+      })
+      refetchEarnings()
+    },
+    onError: (error: any) => {
+      toast.error('Withdrawal failed', { description: error?.message })
+    },
+  })
+
+  const instantPayoutMutation = useDataMutation<any, void>({
+    apiEndPoint: `${API_URL}/api/driverPayouts/request-instant-payout`,
+    method: 'POST',
+    onSuccess: () => {
+      toast.success('Instant payout sent!', {
+        description: 'Your funds will arrive in minutes. $1.50 fee deducted.',
+      })
+      refetchEarnings()
+    },
+    onError: (error: any) => {
+      toast.error('Instant payout failed', { description: error?.message })
+    },
+  })
+
   // ── Theme handling ─────────────────────────────────────────
   useEffect(() => {
     setMounted(true)
@@ -224,6 +254,31 @@ export default function DriverWalletPage() {
   const handleSignOut = () => {
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
+  }
+
+  const handleFreeWithdrawal = () => {
+    if (wallet.availableBalance < 50) {
+      toast.error('Insufficient balance', {
+        description: `You need at least $50.00 to withdraw. Current balance: $${wallet.availableBalance.toFixed(2)}`,
+      })
+      return
+    }
+    freeWithdrawalMutation.mutate()
+  }
+
+  const handleInstantPayout = () => {
+    if (wallet.availableBalance < 5) {
+      toast.error('Insufficient balance', {
+        description: `You need at least $5.00 for an instant payout. Current balance: $${wallet.availableBalance.toFixed(2)}`,
+      })
+      return
+    }
+    const fee = 1.5
+    const net = wallet.availableBalance - fee
+    toast.info(`Instant payout: $${wallet.availableBalance.toFixed(2)} - $${fee.toFixed(2)} fee = $${net.toFixed(2)} to your bank`, {
+      duration: 4000,
+    })
+    instantPayoutMutation.mutate()
   }
 
   const handleSavePayoutMethod = () => {
@@ -705,16 +760,48 @@ export default function DriverWalletPage() {
             </div>
 
             <div className="relative z-10 mt-6 flex flex-col sm:flex-row gap-3">
-              <div className="flex-1 py-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40 px-5 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                  Payouts are automatic after each delivery
+              <Button
+                onClick={handleFreeWithdrawal}
+                disabled={wallet.availableBalance < 50 || freeWithdrawalMutation.isPending}
+                className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {freeWithdrawalMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Banknote className="w-4 h-4 mr-2" />
+                )}
+                Withdraw Free
+                <span className="ml-2 text-[10px] font-medium opacity-75">1-2 business days</span>
+              </Button>
+
+              <Button
+                onClick={handleInstantPayout}
+                disabled={wallet.availableBalance < 5 || instantPayoutMutation.isPending}
+                className="flex-1 h-12 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {instantPayoutMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Zap className="w-4 h-4 mr-2" />
+                )}
+                Cash Out Instantly
+                <span className="ml-2 text-[10px] font-medium opacity-75">$1.50 fee</span>
+              </Button>
+            </div>
+
+            {wallet.availableBalance > 0 && wallet.availableBalance < 50 && (
+              <div className="relative z-10 mt-3 flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Free withdrawal requires a minimum balance of $50.00. You can use <span className="font-bold">Cash Out Instantly</span> for any amount over $5.00.
                 </p>
               </div>
+            )}
 
+            <div className="relative z-10 mt-4 flex items-center gap-2">
               <Link
                 to="#payouts"
-                className="flex-1 py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-950 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 hover:bg-primary/5 transition inline-flex items-center justify-center gap-2"
+                className="py-3 px-5 rounded-2xl font-extrabold bg-white dark:bg-slate-950 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 hover:bg-primary/5 transition inline-flex items-center gap-2 text-sm"
               >
                 View payout history
                 <ReceiptLong className="w-4 h-4 text-primary" />

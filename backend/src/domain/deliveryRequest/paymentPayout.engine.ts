@@ -632,6 +632,322 @@ export class PaymentPayoutEngine {
     });
   }
 
+  // ── Driver Withdrawal Methods ────────────────────────────────────
+
+  // Configuration constants
+  private readonly MIN_FREE_WITHDRAWAL = 50; // $50 minimum for free/manual payout
+  private readonly MIN_INSTANT_PAYOUT = 5;   // $5 minimum for instant payout
+  private readonly INSTANT_FEE = 1.5;         // $1.50 fee for instant payout
+
+  /**
+   * Get a driver's available balance (sum of ELIGIBLE DriverPayouts).
+   */
+  async getDriverAvailableBalance(driverId: string): Promise<number> {
+    const result = await this.prisma.driverPayout.aggregate({
+      where: { driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
+      _sum: { netAmount: true },
+    });
+    return Math.round((result._sum.netAmount || 0) * 100) / 100;
+  }
+
+  /**
+   * Request a manual free withdrawal.
+   * Collects all ELIGIBLE payouts for this driver into a PayoutBatch.
+   * Minimum balance: $50. Arrives in 1-2 business days.
+   */
+  async requestFreeWithdrawal(driverId: string): Promise<any> {
+    const availableBalance = await this.getDriverAvailableBalance(driverId);
+
+    if (availableBalance < this.MIN_FREE_WITHDRAWAL) {
+      throw new BadRequestException(
+        `Minimum withdrawal amount is $${this.MIN_FREE_WITHDRAWAL}. Current balance: $${availableBalance.toFixed(2)}`,
+      );
+    }
+
+    const existingPending = await this.prisma.payoutBatch.findFirst({
+      where: { driverId, status: 'PENDING' },
+    });
+    if (existingPending) {
+      throw new BadRequestException(
+        'You already have a pending withdrawal. Please wait for it to complete.',
+      );
+    }
+
+    const eligiblePayouts = await this.prisma.driverPayout.findMany({
+      where: { driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
+      select: { id: true, netAmount: true },
+    });
+
+    if (eligiblePayouts.length === 0) {
+      throw new BadRequestException('No eligible payouts to withdraw.');
+    }
+
+    const totalAmount = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+
+    const batch = await this.prisma.$transaction(async (tx) => {
+      const newBatch = await tx.payoutBatch.create({
+        data: {
+          driverId,
+          type: 'MANUAL_FREE',
+          status: 'PENDING',
+          totalAmount: Math.round(totalAmount * 100) / 100,
+          feeAmount: 0,
+          netPayoutAmount: Math.round(totalAmount * 100) / 100,
+        },
+      });
+
+      for (const payout of eligiblePayouts) {
+        await tx.payoutBatchItem.create({
+          data: { batchId: newBatch.id, driverPayoutId: payout.id, amount: payout.netAmount },
+        });
+        await tx.driverPayout.update({
+          where: { id: payout.id },
+          data: { status: EnumDriverPayoutStatus.PAID, paidAt: new Date() },
+        });
+      }
+
+      return newBatch;
+    });
+
+    this.logger.log(`Free withdrawal batch ${batch.id} for driver ${driverId}: $${totalAmount.toFixed(2)}`);
+    await this.processBatchTransfer(batch);
+    return batch;
+  }
+
+  /**
+   * Request an instant payout.
+   * Collects all ELIGIBLE payouts, deducts $1.50 fee, pays immediately via Stripe.
+   * Any amount >= $5. Arrives in minutes.
+   */
+  async requestInstantPayout(driverId: string): Promise<any> {
+    const availableBalance = await this.getDriverAvailableBalance(driverId);
+
+    if (availableBalance < this.MIN_INSTANT_PAYOUT) {
+      throw new BadRequestException(
+        `Minimum instant payout is $${this.MIN_INSTANT_PAYOUT}. Current balance: $${availableBalance.toFixed(2)}`,
+      );
+    }
+
+    const existingPending = await this.prisma.payoutBatch.findFirst({
+      where: { driverId, status: 'PENDING' },
+    });
+    if (existingPending) {
+      throw new BadRequestException(
+        'You already have a pending withdrawal. Please wait for it to complete.',
+      );
+    }
+
+    const eligiblePayouts = await this.prisma.driverPayout.findMany({
+      where: { driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
+      select: { id: true, netAmount: true },
+    });
+
+    if (eligiblePayouts.length === 0) {
+      throw new BadRequestException('No eligible payouts to withdraw.');
+    }
+
+    const totalAmount = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+    const feeAmount = this.INSTANT_FEE;
+    const netPayoutAmount = Math.max(0, totalAmount - feeAmount);
+
+    const batch = await this.prisma.$transaction(async (tx) => {
+      const newBatch = await tx.payoutBatch.create({
+        data: {
+          driverId,
+          type: 'INSTANT',
+          status: 'PENDING',
+          totalAmount: Math.round(totalAmount * 100) / 100,
+          feeAmount,
+          netPayoutAmount: Math.round(netPayoutAmount * 100) / 100,
+        },
+      });
+
+      for (const payout of eligiblePayouts) {
+        await tx.payoutBatchItem.create({
+          data: { batchId: newBatch.id, driverPayoutId: payout.id, amount: payout.netAmount },
+        });
+        await tx.driverPayout.update({
+          where: { id: payout.id },
+          data: { status: EnumDriverPayoutStatus.PAID, paidAt: new Date() },
+        });
+      }
+
+      return newBatch;
+    });
+
+    this.logger.log(
+      `Instant payout batch ${batch.id} for driver ${driverId}: $${totalAmount.toFixed(2)} (fee: $${feeAmount.toFixed(2)}, net: $${netPayoutAmount.toFixed(2)})`,
+    );
+    await this.processBatchInstantPayout(batch);
+    return batch;
+  }
+
+  /**
+   * Process weekly auto-payouts. Call via cron every Sunday.
+   * Only processes drivers with $50+ available balance.
+   */
+  async processWeeklyAutoPayouts(): Promise<{ processed: number; skipped: number }> {
+    const driversWithBalance = await this.prisma.driverPayout.groupBy({
+      by: ['driverId'],
+      where: { status: EnumDriverPayoutStatus.ELIGIBLE },
+      _sum: { netAmount: true },
+      having: { netAmount: { _sum: { gte: this.MIN_FREE_WITHDRAWAL } } },
+    });
+
+    let processed = 0;
+    let skipped = 0;
+
+    for (const driver of driversWithBalance) {
+      const existingPending = await this.prisma.payoutBatch.findFirst({
+        where: { driverId: driver.driverId, status: 'PENDING' },
+      });
+      if (existingPending) { skipped++; continue; }
+
+      try {
+        const eligiblePayouts = await this.prisma.driverPayout.findMany({
+          where: { driverId: driver.driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
+          select: { id: true, netAmount: true },
+        });
+
+        const totalAmount = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+
+        const batch = await this.prisma.$transaction(async (tx) => {
+          const newBatch = await tx.payoutBatch.create({
+            data: {
+              driverId: driver.driverId, type: 'WEEKLY_AUTO', status: 'PENDING',
+              totalAmount: Math.round(totalAmount * 100) / 100, feeAmount: 0,
+              netPayoutAmount: Math.round(totalAmount * 100) / 100,
+            },
+          });
+
+          for (const payout of eligiblePayouts) {
+            await tx.payoutBatchItem.create({
+              data: { batchId: newBatch.id, driverPayoutId: payout.id, amount: payout.netAmount },
+            });
+            await tx.driverPayout.update({
+              where: { id: payout.id },
+              data: { status: EnumDriverPayoutStatus.PAID, paidAt: new Date() },
+            });
+          }
+          return newBatch;
+        });
+
+        await this.processBatchTransfer(batch);
+        processed++;
+      } catch (err: any) {
+        this.logger.error(`Weekly auto-payout failed for driver ${driver.driverId}: ${err.message}`);
+        skipped++;
+      }
+    }
+
+    this.logger.log(`Weekly auto-payouts: ${processed} processed, ${skipped} skipped`);
+    return { processed, skipped };
+  }
+
+  /**
+   * Process a standard (free) transfer via Stripe Connect.
+   */
+  private async processBatchTransfer(batch: any): Promise<void> {
+    if (!this.stripeService) {
+      this.logger.warn('StripeService not available — batch remains PENDING');
+      return;
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: batch.driverId },
+      select: { stripeConnectAccountId: true, stripeConnectOnboardingComplete: true },
+    });
+
+    if (!driver?.stripeConnectAccountId || !driver.stripeConnectOnboardingComplete) {
+      this.logger.warn(`Driver ${batch.driverId} has no Stripe Connect — batch ${batch.id} remains PENDING`);
+      return;
+    }
+
+    try {
+      await this.prisma.payoutBatch.update({ where: { id: batch.id }, data: { status: 'PROCESSING' } });
+
+      const transfer = await this.stripeService.createTransfer({
+        amount: batch.netPayoutAmount,
+        destinationAccountId: driver.stripeConnectAccountId,
+        transferGroup: batch.id,
+        metadata: { batchId: batch.id, driverId: batch.driverId, type: batch.type },
+      });
+
+      await this.prisma.payoutBatch.update({
+        where: { id: batch.id },
+        data: { status: 'COMPLETED', stripeTransferId: transfer.id, completedAt: new Date() },
+      });
+    } catch (err: any) {
+      await this.prisma.payoutBatch.update({
+        where: { id: batch.id },
+        data: { status: 'FAILED', failureMessage: err.message || 'Unknown error', failedAt: new Date() },
+      });
+    }
+  }
+
+  /**
+   * Process an instant payout via Stripe Connect.
+   */
+  private async processBatchInstantPayout(batch: any): Promise<void> {
+    if (!this.stripeService) {
+      this.logger.warn('StripeService not available — batch remains PENDING');
+      return;
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: batch.driverId },
+      select: { stripeConnectAccountId: true, stripeConnectOnboardingComplete: true },
+    });
+
+    if (!driver?.stripeConnectAccountId || !driver.stripeConnectOnboardingComplete) {
+      this.logger.warn(`Driver ${batch.driverId} has no Stripe Connect — batch ${batch.id} remains PENDING`);
+      return;
+    }
+
+    try {
+      await this.prisma.payoutBatch.update({ where: { id: batch.id }, data: { status: 'PROCESSING' } });
+
+      const payout = await this.stripeService.createInstantPayout({
+        amount: batch.netPayoutAmount,
+        destinationAccountId: driver.stripeConnectAccountId,
+        method: 'instant',
+        metadata: { batchId: batch.id, driverId: batch.driverId, type: 'INSTANT', fee: String(batch.feeAmount) },
+      });
+
+      await this.prisma.payoutBatch.update({
+        where: { id: batch.id },
+        data: { status: 'COMPLETED', stripePayoutId: payout.id, completedAt: new Date() },
+      });
+    } catch (err: any) {
+      await this.prisma.payoutBatch.update({
+        where: { id: batch.id },
+        data: { status: 'FAILED', failureMessage: err.message || 'Unknown error', failedAt: new Date() },
+      });
+    }
+  }
+
+  /**
+   * Get a driver's withdrawal/batch history.
+   */
+  async getDriverPayoutBatches(driverId: string) {
+    return this.prisma.payoutBatch.findMany({
+      where: { driverId },
+      orderBy: { initiatedAt: 'desc' },
+      include: {
+        payoutItems: {
+          include: {
+            driverPayout: {
+              select: {
+                id: true, netAmount: true,
+                delivery: { select: { id: true, serviceType: true, pickupAddress: true, dropoffAddress: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   // ── Invoice Methods ────────────────────────────────────────────
 
   /**
