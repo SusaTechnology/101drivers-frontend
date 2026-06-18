@@ -112,15 +112,8 @@ interface ReviewDeliveryData {
   draftId?: string;
 }
 
-const BUSINESS_TZ = 'America/New_York'
+import { BUSINESS_TZ, formatTimeRange } from '@/lib/timezone'
 const API_URL = import.meta.env.VITE_API_URL
-
-const formatTimeRange = (startIso?: string, endIso?: string) => {
-  if (!startIso || !endIso) return "Not set";
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })}`;
-};
 
 const formatDuration = (minutes: number) => {
   const hours = Math.floor(minutes / 60);
