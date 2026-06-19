@@ -408,3 +408,41 @@
     display: none;
   }
 }
+
+/* Confetti burst animation for referral dialog */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(30vh) rotate(180deg) scale(0.8);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translateY(55vh) rotate(360deg) scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(110vh) rotate(720deg) scale(0.2);
+  }
+}
+
+.animate-confetti {
+  animation: confetti-fall var(--tw-confetti-duration, 2s) ease-out forwards;
+  animation-delay: var(--tw-confetti-delay, 0s);
+}
+
+/* Pulse glow for referral profile ring */
+@keyframes ring-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.15;
+  }
+}

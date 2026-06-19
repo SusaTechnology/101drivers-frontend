@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/theme'
@@ -27,9 +27,10 @@ import {
   Copy,
   Gift,
   Users,
-  Share2,
   Zap,
   Banknote,
+  PartyPopper,
+  CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -45,6 +46,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -77,6 +86,9 @@ export default function DriverWalletPage() {
   const [accountHolder, setAccountHolder] = useState('')
   const [routingNumber, setRoutingNumber] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
+  const [referralDialogOpen, setReferralDialogOpen] = useState(false)
+  const [countdown, setCountdown] = useState(20)
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
   const user = getUser()
@@ -297,25 +309,87 @@ export default function DriverWalletPage() {
     })
   }
 
-  // ── Referral share handler ────────────────────────────────
-  const handleShareReferral = async () => {
-    const shareUrl = `${window.location.origin}/driver-onboarding?ref=${referralCode}`
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Join as a Driver',
-          text: `Sign up as a driver using my referral link and we both earn rewards!`,
-          url: shareUrl,
-        })
-      } catch {
-        // User cancelled share — do nothing
-      }
-    } else {
+  // ── Referral dialog handler ────────────────────────────────
+  const shareUrl = `${window.location.origin}/driver-onboarding?ref=${referralCode}`
+
+  const openReferralDialog = useCallback(async () => {
+    // Copy link to clipboard immediately
+    try {
       await navigator.clipboard.writeText(shareUrl)
-      toast.success('Referral link copied!', {
-        description: 'Share it with friends to earn $50 per referral.',
-      })
+    } catch {
+      // Clipboard may fail in some contexts — that's OK
     }
+    setCountdown(20)
+    setReferralDialogOpen(true)
+  }, [shareUrl])
+
+  const closeReferralDialog = useCallback(() => {
+    setReferralDialogOpen(false)
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current)
+      countdownTimerRef.current = null
+    }
+    setCountdown(20)
+  }, [])
+
+  // Auto-dismiss countdown
+  useEffect(() => {
+    if (referralDialogOpen && countdown > 0) {
+      countdownTimerRef.current = setInterval(() => {
+        setCountdown((prev) => prev - 1)
+      }, 1000)
+    } else if (countdown <= 0) {
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current)
+        countdownTimerRef.current = null
+      }
+      setReferralDialogOpen(false)
+      setCountdown(20)
+    }
+    return () => {
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current)
+        countdownTimerRef.current = null
+      }
+    }
+  }, [referralDialogOpen, countdown])
+
+  // ── Confetti particle component ─────────────────────────────
+  const ConfettiBurst = () => {
+    const colors = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+    const particles = Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      color: colors[i % colors.length],
+      x: Math.random() * 100,
+      delay: Math.random() * 0.6,
+      duration: 1.2 + Math.random() * 0.8,
+      size: 4 + Math.random() * 6,
+      type: Math.random() > 0.5 ? 'circle' : 'rect',
+      rotation: Math.random() * 360,
+    }))
+
+    return (
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+        {particles.map((p) => (
+          <div
+            key={p.id}
+            className="absolute animate-confetti"
+            style={{
+              left: `${p.x}%`,
+              top: '-5%',
+              width: `${p.size}px`,
+              height: `${p.type === 'rect' ? `${p.size * 0.6}px` : `${p.size}px`}`,
+              backgroundColor: p.color,
+              borderRadius: p.type === 'circle' ? '50%' : '2px',
+              animationDelay: `${p.delay}s`,
+              animationDuration: `${p.duration}s`,
+              transform: `rotate(${p.rotation}deg)`,
+              opacity: 0,
+            }}
+          />
+        ))}
+      </div>
+    )
   }
 
   // ── Status badge component ─────────────────────────────────
@@ -545,10 +619,10 @@ export default function DriverWalletPage() {
                 <div className="w-11 h-11 rounded-2xl bg-emerald-100 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
                   <Gift className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 </div>
-                <div>
+                <div className="space-y-1.5">
                   <CardTitle className="text-lg font-black">Refer a Friend & Earn $50</CardTitle>
-                  <CardDescription className="text-sm mt-1">
-                    When your friend completes their first 5 trips
+                  <CardDescription className="text-sm leading-relaxed">
+                    Share your unique referral link with friends who want to become drivers. When they sign up using your link and complete their first 5 trips, you both earn $50. There is no limit to how many friends you can refer — the more you share, the more you earn!
                   </CardDescription>
                 </div>
               </div>
@@ -570,19 +644,10 @@ export default function DriverWalletPage() {
                   variant="outline"
                   size="sm"
                   className="h-10 px-4 rounded-2xl border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 font-extrabold transition inline-flex items-center gap-2"
-                  onClick={handleShareReferral}
+                  onClick={openReferralDialog}
                 >
-                  {navigator.share ? (
-                    <>
-                      <Share2 className="w-4 h-4" />
-                      Share
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      Copy
-                    </>
-                  )}
+                  <Copy className="w-4 h-4" />
+                  Copy
                 </Button>
               </div>
             )}
@@ -607,9 +672,9 @@ export default function DriverWalletPage() {
               </div>
             </div>
 
-            {/* Primary share button */}
+            {/* Primary share button — opens the referral dialog */}
             <Button
-              onClick={handleShareReferral}
+              onClick={openReferralDialog}
               className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl hover:shadow-emerald-600/20 transition inline-flex items-center justify-center gap-2 font-extrabold"
             >
               <Gift className="w-4 h-4" />
@@ -1088,6 +1153,89 @@ export default function DriverWalletPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* ═══════════════════════════════════════════════════════
+          Referral Share Dialog with Celebration Effect
+      ═══════════════════════════════════════════════════════ */}
+      <Dialog open={referralDialogOpen} onOpenChange={(open) => { if (!open) closeReferralDialog() }}>
+        <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-emerald-200 dark:border-emerald-800/40">
+          <ConfettiBurst />
+
+          <div className="relative z-20 bg-white dark:bg-slate-950 p-6 sm:p-8 flex flex-col items-center text-center space-y-5">
+            {/* Profile photo in circle */}
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full border-4 border-emerald-400 shadow-lg shadow-emerald-500/30 overflow-hidden bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/40 dark:to-emerald-800/40 flex items-center justify-center">
+                {driverProfile?.profilePhotoUrl ? (
+                  <img
+                    src={driverProfile.profilePhotoUrl}
+                    alt={driverProfile.fullName || 'Driver'}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
+                    {driverProfile?.fullName ? getInitials(driverProfile.fullName) : '?'}
+                  </span>
+                )}
+              </div>
+              {/* Animated badge ring */}
+              <div className="absolute -inset-1 rounded-full border-2 border-emerald-300 dark:border-emerald-600 animate-ping opacity-40"></div>
+            </div>
+
+            {/* Party popper icon */}
+            <div className="flex items-center gap-1">
+              <PartyPopper className="w-6 h-6 text-amber-500" />
+              <PartyPopper className="w-5 h-5 text-emerald-500 -rotate-12" />
+              <PartyPopper className="w-6 h-6 text-blue-500 rotate-12" />
+            </div>
+
+            {/* $50 reward */}
+            <div>
+              <div className="text-4xl font-black bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent">
+                $50
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Reward for each successful referral
+              </p>
+            </div>
+
+            {/* Divider */}
+            <div className="w-full h-px bg-gradient-to-r from-transparent via-emerald-200 dark:via-emerald-800 to-transparent"></div>
+
+            {/* Referral link */}
+            <div className="w-full space-y-2">
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 inline mr-1.5 -mt-0.5" />
+                  Link copied to clipboard!
+                </DialogTitle>
+                <DialogDescription className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Share this link with friends. When they sign up as a driver and complete their first 5 trips, you both earn $50!
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 break-all">
+                <p className="text-xs font-mono font-semibold text-slate-700 dark:text-slate-300 select-all">
+                  {shareUrl}
+                </p>
+              </div>
+            </div>
+
+            {/* Dismiss button */}
+            <DialogFooter className="w-full sm:justify-center">
+              <Button
+                onClick={closeReferralDialog}
+                className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold transition inline-flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Got it!
+                <span className="text-xs font-semibold opacity-70 ml-1">
+                  (auto-closes in {countdown}s)
+                </span>
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
