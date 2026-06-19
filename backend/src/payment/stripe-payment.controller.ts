@@ -525,6 +525,7 @@ export class StripePaymentController {
           lastName,
           dob,
           ssnLast4: driver.ssnLastFour || undefined,
+          businessUrl: process.env.FRONTEND_URL || 'https://101drivers.techbee.et',
           address: {
             line1: driver.residentialAddressLine1 || undefined,
             line2: driver.residentialAddressLine2 || undefined,

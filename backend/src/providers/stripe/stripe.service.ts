@@ -339,6 +339,7 @@ export class StripeService {
     lastName?: string;
     dob?: { day: number; month: number; year: number };
     ssnLast4?: string;
+    businessUrl?: string;
     address?: {
       line1?: string;
       line2?: string;
@@ -383,6 +384,11 @@ export class StripeService {
       if (params.address.city) updateData.individual.address.city = params.address.city;
       if (params.address.state) updateData.individual.address.state = params.address.state;
       if (params.address.postalCode) updateData.individual.address.postal_code = params.address.postalCode;
+    }
+
+    if (params.businessUrl) {
+      updateData.business_profile = updateData.business_profile || {};
+      updateData.business_profile.url = params.businessUrl;
     }
 
     if (params.tosAccepted) {
