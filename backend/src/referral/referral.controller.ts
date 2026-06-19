@@ -2,9 +2,11 @@ import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
 import { Response } from "express";
 import { ReferralService } from "./referral.service";
+import * as defaultAuthGuard from "../auth/defaultAuth.guard";
 
 @swagger.ApiTags("referrals")
 @common.Controller("referrals")
+@common.UseGuards(defaultAuthGuard.DefaultAuthGuard)
 export class ReferralController {
   constructor(private readonly referralService: ReferralService) {}
 
