@@ -321,3 +321,29 @@ Stage Summary:
 - Two files modified: driver-pickup-checklist.tsx (header safe-area), driver-dashboard-map.tsx (fixed→h-full)
 - All driver pages now properly handle iPhone safe-area through either the layout or self-contained padding
 - No TypeScript errors
+---
+Task ID: 3-4
+Agent: Main Agent
+Task: Build referral dialog with celebration effect + improve description text
+
+Work Log:
+- Added Dialog imports from shadcn/ui (Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter)
+- Added PartyPopper, CheckCircle2 icons from lucide-react
+- Added referralDialogOpen, countdown, countdownTimerRef state variables
+- Created openReferralDialog callback that copies link to clipboard and opens dialog
+- Created closeReferralDialog callback that cleans up timer
+- Added useEffect for 20-second auto-dismiss countdown
+- Built ConfettiBurst component with 30 colorful particles and confetti-fall animation
+- Built referral Dialog with: profile photo circle with animated ring, party popper icons, $50 gradient text, copied link display, countdown dismiss button
+- Improved referral section description to clearly explain how the program works
+- Changed both referral buttons (copy + primary) to open dialog instead of native share
+- Added confetti-fall keyframe animation and .animate-confetti class to styles.css
+- Confirmed referral link already points to /driver-onboarding?ref=CODE (from previous session)
+- Pushed to both main and master branches
+
+Stage Summary:
+- Referral dialog with celebration confetti effect implemented
+- Profile circle, $50 reward, copied link, and auto-dismiss timer all working
+- Description text improved to explain referral program clearly
+- Code pushed to both main and master branches on GitHub
+
