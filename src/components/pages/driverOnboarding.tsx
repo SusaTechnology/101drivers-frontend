@@ -138,6 +138,7 @@ interface DriverSignupPayload {
   districts?: string[];
   emailAlerts?: boolean;
   agreementAcceptedAt?: string;
+  referralCode?: string;
 }
 
 // Format phone number to US format: (XXX) XXX-XXXX
@@ -357,6 +358,7 @@ export default function DriverOnboardingPage() {
               districts: draft.formData.districts,
               emailAlerts: draft.formData.alerts,
               agreementAcceptedAt: new Date().toISOString(),
+              referralCode: urlParams.get('ref') || undefined,
             };
             // Store payload and redirect to verify page (with OTP in URL)
             sessionStorage.setItem(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(payload));
@@ -382,6 +384,10 @@ export default function DriverOnboardingPage() {
       return;
     }
 
+    // Capture referral code from URL if present
+    const urlParams = new URLSearchParams(window.location.search);
+    const referralCode = urlParams.get('ref') || undefined;
+
     // Prepare base payload
     const basePayload: DriverSignupPayload = {
       email: data.email,
@@ -394,6 +400,7 @@ export default function DriverOnboardingPage() {
       districts: data.districts,
       emailAlerts: data.alerts,
       agreementAcceptedAt: new Date().toISOString(),
+      ...(referralCode ? { referralCode } : {}),
     };
 
     // Save draft to localStorage so user can resume via email link

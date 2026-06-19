@@ -436,6 +436,24 @@ export class AuthService {
       select: { id: true },
     } as any);
 
+    // ── Apply referral code if provided ──────────────────────
+    if (dto.referralCode) {
+      try {
+        await this.prisma.referral.create({
+          data: {
+            referralCode: dto.referralCode,
+            referredDriverId: driver.id,
+            referredEmail: normalizedEmail,
+            status: "REGISTERED",
+          },
+        });
+        this.logger.log(`Referral ${dto.referralCode} applied for new driver ${driver.id}`);
+      } catch (refErr: any) {
+        // Non-blocking: invalid/expired/self-referral just gets skipped
+        this.logger.warn(`Referral application failed for driver ${driver.id}: ${refErr.message}`);
+      }
+    }
+
     // Send confirmation email to driver after successful sign-up
     try {
       await this.mailService.sendMail({

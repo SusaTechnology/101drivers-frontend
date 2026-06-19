@@ -1351,7 +1351,7 @@ enum EnumReferralStatus {
 
 model Referral {
   id              String             @id @default(cuid())
-  referralCode    String             @unique
+  referralCode    String
   referrerId      String
   referrer        Driver             @relation("ReferrerReferrals", fields: [referrerId], references: [id])
   referredEmail   String?
