@@ -888,9 +888,9 @@ export default function DriverWalletPage() {
         </Card>
 
         {/* ═══════════════════════════════════════════════════════
-            5. Payout Method
+            5. Payout Method (Legacy — commented out, using Stripe Connect instead)
         ═══════════════════════════════════════════════════════ */}
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+        {/* <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -982,7 +982,7 @@ export default function DriverWalletPage() {
               For security, banking details are tokenized and verified before use.
             </p>
           </CardContent>
-        </Card>
+        </Card>*/}
 
         {/* ═══════════════════════════════════════════════════════
             6. Stripe Connect — Fast Payouts
