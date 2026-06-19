@@ -419,7 +419,7 @@ export class AuthService {
     const [dobMonth, dobDay, dobYear] = dto.dateOfBirth.split("/");
     const parsedDob = new Date(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay));
 
-    await this.driverService.createDriver({
+    const newDriver = await this.driverService.createDriver({
       data: {
         status: EnumDriverStatus.WAITLISTED,
         phone: dto.phone ?? null,
@@ -437,20 +437,29 @@ export class AuthService {
     } as any);
 
     // ── Apply referral code if provided ──────────────────────
-    if (dto.referralCode) {
+    if (dto.referralCode && newDriver?.id) {
       try {
-        await this.prisma.referral.create({
-          data: {
-            referralCode: dto.referralCode,
-            referredDriverId: driver.id,
-            referredEmail: normalizedEmail,
-            status: "REGISTERED",
-          },
+        const existingRef = await this.prisma.referral.findFirst({
+          where: { referralCode: dto.referralCode, status: "PENDING" },
+          select: { referrerId: true },
         });
-        this.logger.log(`Referral ${dto.referralCode} applied for new driver ${driver.id}`);
+        if (existingRef) {
+          await this.prisma.referral.create({
+            data: {
+              referralCode: dto.referralCode,
+              referrer: { connect: { id: existingRef.referrerId } },
+              referredDriver: { connect: { id: newDriver.id } },
+              referredEmail: normalizedEmail,
+              status: "REGISTERED",
+            },
+          });
+          this.logger.log(`Referral ${dto.referralCode} applied for new driver ${newDriver.id}`);
+        } else {
+          this.logger.warn(`Referral code ${dto.referralCode} not found or expired, skipping for driver ${newDriver.id}`);
+        }
       } catch (refErr: any) {
         // Non-blocking: invalid/expired/self-referral just gets skipped
-        this.logger.warn(`Referral application failed for driver ${driver.id}: ${refErr.message}`);
+        this.logger.warn(`Referral application failed for driver ${newDriver.id}: ${refErr.message}`);
       }
     }
 
