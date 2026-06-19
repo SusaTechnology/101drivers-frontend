@@ -1,6 +1,5 @@
 import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
-import * as nestAccessControl from "nest-access-control";
 import { Response } from "express";
 import { ReferralService } from "./referral.service";
 
@@ -15,11 +14,6 @@ export class ReferralController {
    */
   @common.Get("my-referral-code")
   @swagger.ApiOkResponse({ description: "Driver's referral code" })
-  @nestAccessControl.UseRoles({
-    resource: "DriverPayout",
-    action: "read",
-    possession: "own",
-  })
   async getMyReferralCode(
     @common.Req() req: any,
     @common.Res() res: Response,
@@ -35,11 +29,6 @@ export class ReferralController {
    */
   @common.Get("my-referrals")
   @swagger.ApiOkResponse({ description: "List of referrals" })
-  @nestAccessControl.UseRoles({
-    resource: "DriverPayout",
-    action: "read",
-    possession: "own",
-  })
   async getMyReferrals(
     @common.Req() req: any,
     @common.Res() res: Response,
@@ -55,11 +44,6 @@ export class ReferralController {
    */
   @common.Get("my-stats")
   @swagger.ApiOkResponse({ description: "Referral stats" })
-  @nestAccessControl.UseRoles({
-    resource: "DriverPayout",
-    action: "read",
-    possession: "own",
-  })
   async getMyReferralStats(
     @common.Req() req: any,
     @common.Res() res: Response,
@@ -75,11 +59,6 @@ export class ReferralController {
    */
   @common.Post("apply")
   @swagger.ApiOkResponse({ description: "Referral applied" })
-  @nestAccessControl.UseRoles({
-    resource: "DriverPayout",
-    action: "create",
-    possession: "own",
-  })
   async applyReferral(
     @common.Body() body: { referralCode: string },
     @common.Req() req: any,
@@ -94,11 +73,6 @@ export class ReferralController {
    */
   @common.Get("driver-profile")
   @swagger.ApiOkResponse({ description: "Driver profile summary" })
-  @nestAccessControl.UseRoles({
-    resource: "DriverPayout",
-    action: "read",
-    possession: "own",
-  })
   async getDriverProfile(
     @common.Req() req: any,
     @common.Res() res: Response,
