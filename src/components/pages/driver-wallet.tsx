@@ -1134,7 +1134,7 @@ export default function DriverWalletPage() {
               </AlertDescription>
             </Alert>
 
-            <div className="mt-5 flex flex-col sm:flex-row gap-3">
+            {/* <div className="mt-5 flex flex-col sm:flex-row gap-3">
               <Link
                 to="/driver-inbox"
                 className="flex-1 py-4 rounded-2xl font-extrabold bg-white dark:bg-slate-950 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 hover:bg-primary/5 transition inline-flex items-center justify-center gap-2"
@@ -1149,7 +1149,7 @@ export default function DriverWalletPage() {
                 Back to menu
                 <ArrowForward className="w-4 h-4" />
               </Link>
-            </div>
+            </div> */}
           </CardContent>
         </Card>
       </main>
