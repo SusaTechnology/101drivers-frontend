@@ -6,9 +6,10 @@ import { DriverPayoutController } from "./driverPayout.controller";
 import { DriverPayoutResolver } from "./driverPayout.resolver";
 import { DriverPayoutDomain } from "src/domain/driverPayout/driverPayout.domain";
 import { DriverPayoutPolicyService } from "src/domain/driverPayout/driverPayoutPolicy.service";
+import { DeliveryLogisticsModule } from "src/delivery-logistics/delivery-logistics.module";
 
 @Module({
-  imports: [DriverPayoutModuleBase, forwardRef(() => AuthModule)],
+  imports: [DriverPayoutModuleBase, forwardRef(() => AuthModule), DeliveryLogisticsModule],
   controllers: [DriverPayoutController],
   providers: [DriverPayoutService, DriverPayoutResolver, DriverPayoutDomain, DriverPayoutPolicyService],
   exports: [DriverPayoutService],

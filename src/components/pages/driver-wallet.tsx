@@ -202,12 +202,13 @@ export default function DriverWalletPage() {
     },
   })
 
+  // ── Withdrawal / Instant Payout mutations ──────────────────
   const freeWithdrawalMutation = useDataMutation<any, void>({
     apiEndPoint: `${API_URL}/api/driverPayouts/request-withdrawal`,
     method: 'POST',
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success('Withdrawal requested!', {
-        description: 'Your funds will arrive in 1-2 business days.',
+        description: data?.message || 'Your funds will arrive in 1-2 business days.',
       })
       refetchEarnings()
     },
@@ -219,9 +220,9 @@ export default function DriverWalletPage() {
   const instantPayoutMutation = useDataMutation<any, void>({
     apiEndPoint: `${API_URL}/api/driverPayouts/request-instant-payout`,
     method: 'POST',
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success('Instant payout sent!', {
-        description: 'Your funds will arrive in minutes. $1.50 fee deducted.',
+        description: data?.message || 'Your funds are on the way.',
       })
       refetchEarnings()
     },

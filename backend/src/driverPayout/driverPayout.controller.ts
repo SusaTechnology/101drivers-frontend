@@ -93,6 +93,50 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     res!.send(csv);
   }
 
+  @common.Post("request-withdrawal")
+  @swagger.ApiOkResponse({ description: "Request free withdrawal ($50 min, 1-2 business days)" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "update",
+    possession: "own",
+  })
+  async requestWithdrawal(@common.Req() req: any): Promise<any> {
+    if (!this.payoutEngine) {
+      throw new common.ServiceUnavailableException('Payout service not available');
+    }
+    const driverId = await this.resolveDriverId(req);
+    return this.payoutEngine.requestFreeWithdrawal(driverId);
+  }
+
+  @common.Post("request-instant-payout")
+  @swagger.ApiOkResponse({ description: "Request instant payout (~$1.50 fee, minutes)" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "update",
+    possession: "own",
+  })
+  async requestInstantPayout(@common.Req() req: any): Promise<any> {
+    if (!this.payoutEngine) {
+      throw new common.ServiceUnavailableException('Payout service not available');
+    }
+    const driverId = await this.resolveDriverId(req);
+    return this.payoutEngine.requestInstantPayout(driverId);
+  }
+
+  @common.Post("admin/weekly-auto-payout")
+  @swagger.ApiOkResponse({ description: "Trigger weekly auto-payout (normally runs Sunday cron)" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "update",
+    possession: "any",
+  })
+  async triggerWeeklyAutoPayout(): Promise<any> {
+    if (!this.payoutEngine) {
+      throw new common.ServiceUnavailableException('Payout service not available');
+    }
+    return this.payoutEngine.processWeeklyAutoPayout();
+  }
+
   @common.Get("my-bank-account")
   @nestAccessControl.UseRoles({
     resource: "DriverPayout",
