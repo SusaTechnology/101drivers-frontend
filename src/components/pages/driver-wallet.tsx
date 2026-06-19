@@ -299,7 +299,7 @@ export default function DriverWalletPage() {
 
   // ── Referral share handler ────────────────────────────────
   const handleShareReferral = async () => {
-    const shareUrl = `${window.location.origin}/driver-signin?ref=${referralCode}`
+    const shareUrl = `${window.location.origin}/driver-onboarding?ref=${referralCode}`
     if (navigator.share) {
       try {
         await navigator.share({

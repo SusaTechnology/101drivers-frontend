@@ -137,4 +137,15 @@ export class SignupDriverDto {
   @IsOptional()
   @IsString()
   agreementAcceptedAt?: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "Referral code used during signup. Applied to create a Referral link.",
+    example: "ABCD1234",
+  })
+  @IsOptional()
+  @IsString()
+  referralCode?: string | null;
 }

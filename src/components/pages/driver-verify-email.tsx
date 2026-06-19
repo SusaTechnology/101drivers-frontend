@@ -20,6 +20,7 @@ interface DriverSignupPayload {
   districts?: string[];
   emailAlerts?: boolean;
   agreementAcceptedAt?: string;
+  referralCode?: string;
 }
 
 interface DriverSignupPayloadWithOtp extends DriverSignupPayload {

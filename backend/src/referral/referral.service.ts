@@ -231,7 +231,7 @@ export class ReferralService {
       for (let i = 0; i < 8; i++) {
         code += chars.charAt(Math.floor(Math.random() * chars.length));
       }
-      const found = await this.prisma.referral.findUnique({
+      const found = await this.prisma.referral.findFirst({
         where: { referralCode: code },
       });
       exists = !!found;
