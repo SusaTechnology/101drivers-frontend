@@ -549,7 +549,7 @@ export class StripePaymentController {
       // ── End pre-fill ────────────────────────────────────────────
 
       // Generate onboarding link — point to existing /driver/wallet page
-      const baseUrl = process.env.FRONTEND_URL || 'https://101drivers.app';
+      const baseUrl = process.env.FRONTEND_URL || 'https://101drivers.techbee.et';
       const accountLink = await this.stripeService.createAccountLink({
         accountId,
         refreshUrl: `${baseUrl}/driver/wallet`,
