@@ -55,6 +55,7 @@ export class ReferralService {
       where: { referrerId: driverId },
       select: {
         id: true,
+        referredDriverId: true,
         referredEmail: true,
         referredDriver: {
           select: {
@@ -89,6 +90,7 @@ export class ReferralService {
         tripsCompleted: true,
         tripsRequired: true,
         referredDriverId: true,
+        referredEmail: true,
       },
     });
 
