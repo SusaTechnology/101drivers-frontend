@@ -256,7 +256,7 @@ function parseWindowTimes(windowStr: string): { start: string; end: string } {
   const parts = windowStr.split(" – ");
   return { start: parts[0], end: parts[1] };
 }
-import { BUSINESS_TZ } from '@/lib/timezone'
+import { BUSINESS_TZ, formatTimeRange as sharedFormatTimeRange, formatShortDayMonth } from '@/lib/timezone'
 
 /** Format a Date's calendar year/month/day to "YYYY-MM-DD" without timezone conversion. */
 const toDateString = (d: Date) => {
@@ -266,11 +266,9 @@ const toDateString = (d: Date) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const formatTimeRange = (startIso?: string, endIso?: string) => {
-  if (!startIso || !endIso) return null;
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })} – ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: BUSINESS_TZ })}`;
+// Use sharedFormatTimeRange from @/lib/timezone instead of a local version
+const formatTimeRange = (startIso?: string | null, endIso?: string | null): string | null => {
+  return sharedFormatTimeRange(startIso, endIso) || null;
 };
 
 const formatDuration = (minutes: number) => {
@@ -298,19 +296,10 @@ function combineDateAndTimeToISO(dateStr: string, timeStr: string): string {
   // The backend likely stores DateTime in UTC. So sending UTC ISO string is fine.
 }
 
-// Helper functions for draft data conversion
-function isoToDateString(iso: string | undefined): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  return date.toISOString().split('T')[0];
-}
-
+// Helper functions for draft data conversion (removed dead isoToDateString — had UTC bug)
 function isoToTimeWindow(startIso: string | undefined, endIso: string | undefined): string {
   if (!startIso || !endIso) return "";
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: BUSINESS_TZ });
-  return `${formatTime(start)} – ${formatTime(end)}`;
+  return sharedFormatTimeRange(startIso, endIso);
 }
 
 // Format phone number to US format: (XXX) XXX-XXXX
@@ -1117,12 +1106,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     successMessage: undefined,
   });
 
-  // Get tomorrow's date as default pickup date
-  const getTomorrowDate = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  };
+  // Note: getTomorrowDate removed — was dead code with UTC bug (toISOString uses UTC)
+  // Use toBusinessDate() helper if a tomorrow-date-in-BUSINESS_TZ is needed.
 
   const {
     register,
@@ -2626,7 +2611,7 @@ const handleQuotePreview = () => {
                       </div>
                       {validatedWindows.pickupWindowStart && (
                         <div className="text-xs text-slate-500 mt-1">
-                          {new Date(validatedWindows.pickupWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })}
+                          {formatShortDayMonth(validatedWindows.pickupWindowStart)}
                         </div>
                       )}
                       <div className="text-[11px] text-slate-400 mt-1">
@@ -2649,7 +2634,7 @@ const handleQuotePreview = () => {
                       </div>
                       {validatedWindows.dropoffWindowStart && (
                         <div className="text-xs text-slate-500 mt-1">
-                          {new Date(validatedWindows.dropoffWindowStart).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BUSINESS_TZ })}
+                          {formatShortDayMonth(validatedWindows.dropoffWindowStart)}
                         </div>
                       )}
                       <div className="text-[11px] text-slate-400 mt-1">

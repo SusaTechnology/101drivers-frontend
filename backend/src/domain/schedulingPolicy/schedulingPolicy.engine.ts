@@ -306,6 +306,11 @@ export class SchedulingPolicyEngine {
       7
     );
 
+    // YYYY-MM-DD string in business TZ for frontend calendar sync
+    const actualSlotDateStr = actualSlotDate
+      ? this.toBusinessDateTime(actualSlotDate).toFormat('yyyy-MM-dd')
+      : null;
+
     // Same UTC-shift bug avoidance: parse ISO date string in business timezone directly
     const preferredDay = input.preferredDate
       ? DateTime.fromISO(input.preferredDate, { zone: this.businessTimeZone })
@@ -352,6 +357,7 @@ export class SchedulingPolicyEngine {
         bufferMinutes,
         reasons,
         warnings,
+        actualSlotDateStr,
         requested: {
           customerChose: chosenDirection,
           pickupWindowStart: input.pickupWindowStart ?? null,
@@ -469,6 +475,7 @@ export class SchedulingPolicyEngine {
       bufferMinutes,
       reasons,
       warnings,
+      actualSlotDateStr,
       requested: {
         customerChose: chosenDirection,
         pickupWindowStart: input.pickupWindowStart ?? null,
@@ -873,6 +880,8 @@ export class SchedulingPolicyEngine {
       pickupWindowEnd: preview.resolved?.pickupWindowEnd ?? null,
       dropoffWindowStart: preview.resolved?.dropoffWindowStart ?? null,
       dropoffWindowEnd: preview.resolved?.dropoffWindowEnd ?? null,
+
+      actualSlotDate: preview.actualSlotDateStr ?? null,
 
       etaMinutes,
       bufferMinutes: preview.bufferMinutes ?? 0,

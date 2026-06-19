@@ -112,7 +112,7 @@ interface ReviewDeliveryData {
   draftId?: string;
 }
 
-import { BUSINESS_TZ, formatTimeRange } from '@/lib/timezone'
+import { BUSINESS_TZ, formatTimeRange, formatShortDayMonth } from '@/lib/timezone'
 const API_URL = import.meta.env.VITE_API_URL
 
 const formatDuration = (minutes: number) => {
@@ -769,7 +769,7 @@ export default function ReviewDeliveryPage() {
                       <p className="text-sm font-bold">{formatTimeRange(reviewData.pickupWindowStart, reviewData.pickupWindowEnd)}</p>
                       {reviewData.pickupWindowStart && (
                         <p className="text-xs text-slate-500 mt-1">
-                          {new Date(reviewData.pickupWindowStart).toLocaleDateString('en-US', { timeZone: BUSINESS_TZ })}
+                          {formatShortDayMonth(reviewData.pickupWindowStart)}
                         </p>
                       )}
                     </div>
@@ -778,7 +778,7 @@ export default function ReviewDeliveryPage() {
                       <p className="text-sm font-bold">{formatTimeRange(reviewData.dropoffWindowStart, reviewData.dropoffWindowEnd)}</p>
                       {reviewData.dropoffWindowStart && (
                         <p className="text-xs text-slate-500 mt-1">
-                          {new Date(reviewData.dropoffWindowStart).toLocaleDateString('en-US', { timeZone: BUSINESS_TZ })}
+                          {formatShortDayMonth(reviewData.dropoffWindowStart)}
                         </p>
                       )}
                     </div>
