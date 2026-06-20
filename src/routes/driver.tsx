@@ -5,6 +5,7 @@ import type { DriverTabId } from '@/components/layout/DriverBottomNav'
 import { DriverRouteGuard } from '@/components/auth/DriverRouteGuard'
 import { socketJoinDriverFeed, socketLeaveDriverFeed } from '@/lib/socket'
 import { trackSeenDeliveries } from '@/lib/driver-feed-tracker'
+import { unlockAudio } from '@/lib/sound'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // Routes that should NOT show the bottom nav
@@ -30,19 +31,9 @@ function DriverLayout() {
   const driverId = user?.profileId
 
   // ── Unlock browser audio on first interaction (covers ALL driver pages) ──
-  // After this fires once, Audio.play() is permanently unlocked for this tab.
+  // Delegates to sound.ts which preloads audio + preps AudioContext fallback.
   useEffect(() => {
-    const unlock = () => {
-      const a = new Audio('/assets/notification.mp3')
-      a.volume = 0
-      a.play().catch(() => {})
-    }
-    document.addEventListener('click', unlock, { once: true })
-    document.addEventListener('touchstart', unlock, { once: true })
-    return () => {
-      document.removeEventListener('click', unlock)
-      document.removeEventListener('touchstart', unlock)
-    }
+    unlockAudio()
   }, [])
 
   // ── Join driver-feed socket room (persists across ALL driver pages) ──

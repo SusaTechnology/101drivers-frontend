@@ -8,7 +8,8 @@
  * Responsibilities:
  *   1. Track which delivery IDs the driver has already "seen" on the feed.
  *   2. Maintain an unread-new-delivery count (for the bottom-nav badge).
- *   3. Play the notification sound only for genuinely new LISTED deliveries.
+ *   3. Play the notification sound only for genuinely new LISTED deliveries
+ *      (delegates to sound.ts for preloaded audio + AudioContext fallback).
  *   4. Notify subscribers whenever the unread count changes.
  *
  * Used by:
@@ -17,6 +18,8 @@
  *   - dashboard-list.tsx       → registers refetch callback + marks deliveries as seen
  *   - DriverBottomNav.tsx      → subscribes to count for badge
  */
+
+import { playNotificationSound } from './sound'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Subscriber = (count: number) => void
@@ -53,7 +56,7 @@ export function trackSeenDeliveries(ids: string[]): void {
  * • If status is LISTED and the delivery has NOT been seen before:
  *     – add to seen set (prevent double-trigger)
  *     – increment unread count
- *     – play notification sound
+ *     – play notification sound (via sound.ts)
  * • If status is BOOKED / CANCELLED / EXPIRED:
  *     – no sound (those are removals, not new gigs)
  * • ALWAYS forwards the event to every registered refetch callback so the
@@ -119,15 +122,4 @@ export function getNewCount(): number {
 function setCount(n: number): void {
   unreadNewCount = n
   subscribers.forEach((cb) => cb(n))
-}
-
-function playNotificationSound(): void {
-  try {
-    const enabled = localStorage.getItem('driverSoundEnabled') !== 'false'
-    if (enabled) {
-      new Audio('/assets/notification.mp3').play()
-    }
-  } catch {
-    /* autoplay blocked — the per-page audio-unlock useEffect handles this */
-  }
 }
