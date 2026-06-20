@@ -3,6 +3,9 @@ import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router'
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 import type { DriverTabId } from '@/components/layout/DriverBottomNav'
 import { DriverRouteGuard } from '@/components/auth/DriverRouteGuard'
+import { socketJoinDriverFeed, socketLeaveDriverFeed } from '@/lib/socket'
+import { trackSeenDeliveries } from '@/lib/driver-feed-tracker'
+import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 
 // Routes that should NOT show the bottom nav
 const HIDE_NAV_ROUTES = [
@@ -23,6 +26,8 @@ function getActiveTab(pathname: string): DriverTabId {
 
 function DriverLayout() {
   const location = useLocation()
+  const user = getUser()
+  const driverId = user?.profileId
 
   // ── Unlock browser audio on first interaction (covers ALL driver pages) ──
   // After this fires once, Audio.play() is permanently unlocked for this tab.
@@ -39,6 +44,33 @@ function DriverLayout() {
       document.removeEventListener('touchstart', unlock)
     }
   }, [])
+
+  // ── Join driver-feed socket room (persists across ALL driver pages) ──
+  // Previously this was done per-dashboard-page, which meant leaving wallet/
+  // preferences/active-delivery would drop the room and miss new-gig alerts.
+  useEffect(() => {
+    if (driverId) socketJoinDriverFeed()
+    return () => socketLeaveDriverFeed()
+  }, [driverId])
+
+  // ── Seed the feed tracker so new-gig alerts work even if the driver
+  //    never visits the dashboard (e.g., refreshes on wallet page). ──
+  // Fetch just the delivery IDs from the feed so the race gate opens and
+  // existing deliveries are marked "seen" — only genuinely new LISTED
+  // deliveries will trigger the notification sound.
+  const { data: seedData } = useDataQuery<any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/driver/feed/${driverId}?page=1&limit=100&status=LISTED`,
+    queryKey: ['driverFeedSeed', driverId],
+    noFilter: true,
+    enabled: Boolean(driverId),
+    staleTime: Infinity, // only fetch once — we just need the IDs to seed
+  })
+
+  useEffect(() => {
+    if (seedData?.items?.length) {
+      trackSeenDeliveries(seedData.items.map((item: any) => item.deliveryId).filter(Boolean))
+    }
+  }, [seedData])
 
   const pathname = location.pathname
   const hideNav = HIDE_NAV_ROUTES.some((route) => pathname.startsWith(route))

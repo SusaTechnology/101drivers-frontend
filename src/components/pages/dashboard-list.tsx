@@ -103,7 +103,7 @@ import { Switch } from '@/components/ui/switch'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import { useSocketConnected } from '@/hooks/useSocket'
-import { socketJoinDriverFeed, socketLeaveDriverFeed, getSocket } from '@/lib/socket'
+import { getSocket } from '@/lib/socket'
 import { trackSeenDeliveries, registerRefetch } from '@/lib/driver-feed-tracker'
 import { useQueryClient } from '@tanstack/react-query'
 import MiniRouteMap from '@/components/map/MiniRouteMap'
@@ -728,12 +728,6 @@ export default function DriverGigBoardPage() {
   }, [isError, socketConnected, refetch])
 
   const queryClient = useQueryClient()
-
-  // ── SOCKET.IO: Join driver feed room ──
-  useEffect(() => {
-    if (driverId) socketJoinDriverFeed()
-    return () => socketLeaveDriverFeed()
-  }, [driverId])
 
   // ── Feed notification tracking (shared singleton) ──
   // Mark all visible deliveries as "seen" when feed data loads.

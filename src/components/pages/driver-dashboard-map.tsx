@@ -93,7 +93,7 @@ import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import { useSocketConnected } from '@/hooks/useSocket'
-import { socketJoinDriverFeed, socketLeaveDriverFeed, getSocket } from '@/lib/socket'
+import { getSocket } from '@/lib/socket'
 import { trackSeenDeliveries, registerRefetch } from '@/lib/driver-feed-tracker'
 import { useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader, GoogleMap, Marker } from '@react-google-maps/api'
@@ -335,9 +335,6 @@ export default function DriverMapPage() {
   })
 
   useEffect(() => { refetchRef.current = refetch }, [refetch])
-
-  // ── SOCKET.IO ──
-  useEffect(() => { if (driverId) socketJoinDriverFeed(); return () => socketLeaveDriverFeed() }, [driverId])
 
   // ── Feed notification tracking (shared singleton) ──
   // Mark all visible deliveries as "seen" when feed data loads.
