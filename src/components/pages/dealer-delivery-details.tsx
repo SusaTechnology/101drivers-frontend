@@ -77,6 +77,7 @@ import {
   ChevronRight,
   DollarSign,
   RefreshCw,
+  KeyRound,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, useDataMutation } from '@/lib/tanstack/dataQuery'
@@ -1128,6 +1129,13 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                   <MapPin className="h-3 w-3" />
                   CA Only
                 </Badge>
+
+                {deliveryData.pickupPin && (
+                  <Badge variant="secondary" className="gap-1 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400">
+                    <KeyRound className="h-3 w-3" />
+                    PIN: {deliveryData.pickupPin}
+                  </Badge>
+                )}
               </div>
 
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
