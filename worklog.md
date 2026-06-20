@@ -347,3 +347,24 @@ Stage Summary:
 - Description text improved to explain referral program clearly
 - Code pushed to both main and master branches on GitHub
 
+---
+Task ID: 9
+Agent: Main Agent
+Task: Move driver feed socket join to DriverLayout for global new-gig alert sounds
+
+Work Log:
+- Investigated new gig alert sound system: socket.ts → driver-feed-tracker.ts → Audio.play()
+- Found that `socketJoinDriverFeed()` was only called on dashboard pages (dashboard-list.tsx, driver-dashboard-map.tsx)
+- When driver navigated to wallet/preferences/active-delivery, the feed room was left → no feed events → no sound
+- Moved `socketJoinDriverFeed()` to `DriverLayout` (src/routes/driver.tsx) — wraps ALL driver pages
+- Added tracker seeding via `useDataQuery` in DriverLayout (fetches feed IDs once, calls `trackSeenDeliveries()` to open race gate)
+- Removed `socketJoinDriverFeed`/`socketLeaveDriverFeed` from both dashboard pages (kept `trackSeenDeliveries` + `registerRefetch`)
+- Verified no TypeScript errors in changed files (2 pre-existing jobId errors in dashboard files, unrelated)
+- Pushed to both main and master branches
+
+Stage Summary:
+- 3 files changed: driver.tsx (+32 lines), dashboard-list.tsx (-8 lines), driver-dashboard-map.tsx (-5 lines)
+- New gig notification sound now works on ALL driver pages, not just dashboard
+- Tracker seeding ensures sounds work even if driver refreshes on non-dashboard page
+- `staleTime: Infinity` on seed query prevents duplicate fetches with dashboard feed query
+
