@@ -339,6 +339,7 @@ export interface AdminDeliveryDetail extends DeliveryListItem {
   pickupLat?: number | null;
   pickupLng?: number | null;
   pickupPlaceId?: string | null;
+  pickupPin?: string | null;
   pickupState?: string | null;
   pickupWindowStart?: string | null;
   pickupWindowEnd?: string | null;
