@@ -906,11 +906,13 @@ export default function DriverOnboardingPage() {
                           <Input
                             id="password"
                             {...register("password")}
+                            value={watchPassword || ''}
                             className="h-14 pl-12 pr-12 rounded-2xl"
                             placeholder="Create password"
                             type={showPassword ? "text" : "password"}
-                            autoComplete="off"
+                            autoComplete="new-password"
                             disabled={isPending || !isAgeVerified}
+                            onInput={() => { const v = (document.getElementById('password') as HTMLInputElement)?.value; if (v !== undefined) setValue('password', v, { shouldValidate: true }); }}
                           />
                           <button
                             type="button"
@@ -943,11 +945,13 @@ export default function DriverOnboardingPage() {
                           <Input
                             id="confirmPassword"
                             {...register("confirmPassword")}
+                            value={watchConfirmPassword || ''}
                             className="h-14 pl-12 pr-12 rounded-2xl"
                             placeholder="Repeat password"
                             type={showConfirmPassword ? "text" : "password"}
-                            autoComplete="off"
+                            autoComplete="new-password"
                             disabled={isPending || !isAgeVerified}
+                            onInput={() => { const v = (document.getElementById('confirmPassword') as HTMLInputElement)?.value; if (v !== undefined) setValue('confirmPassword', v, { shouldValidate: true }); }}
                           />
                           <button
                             type="button"
