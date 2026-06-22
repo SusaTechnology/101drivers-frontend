@@ -81,6 +81,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, useDataMutation } from '@/lib/tanstack/dataQuery'
+import { socketJoinPublic, socketLeavePublic } from '@/lib/socket'
+import { useSocketEvent } from '@/hooks/useSocket'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 
@@ -174,6 +176,8 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const [activeTab, setActiveTab] = useState('details')
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null)
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null)
+  const [driverPosition, setDriverPosition] = useState<google.maps.LatLngLiteral | null>(null)
+  const [routePoints, setRoutePoints] = useState<google.maps.LatLngLiteral[]>([])
 
   // Rating state
   const [ratingStars, setRatingStars] = useState(0)
@@ -237,6 +241,48 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
   // Get the existing tip if any
   const existingTip = existingTips?.[0]
+
+  // ── LIVE TRACKING: Fetch driver position for BOOKED/ACTIVE deliveries ──
+  const isTrackable = ['BOOKED', 'ACTIVE'].includes(deliveryData?.status || '')
+
+  // 1. Fetch tracking link token
+  const { data: trackingLink } = useDataQuery({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${id}/tracking-link`,
+    enabled: !!dealerId && !!id && isTrackable,
+    noFilter: true,
+  })
+  const trackingToken = trackingLink?.token
+
+  // 2. Fetch public tracking data (latest point + route points)
+  const { data: trackingData } = useDataQuery({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/public/tracking/${trackingToken}`,
+    enabled: !!trackingToken,
+    noFilter: true,
+    refetchInterval: 60000, // 60s polling fallback
+  })
+
+  // 3. Set driver position and route from tracking data
+  useEffect(() => {
+    if (trackingData?.trackingSession?.latestPoint) {
+      const p = trackingData.trackingSession.latestPoint
+      setDriverPosition({ lat: p.lat, lng: p.lng })
+    }
+    if (trackingData?.trackingSession?.points && Array.isArray(trackingData.trackingSession.points)) {
+      setRoutePoints(trackingData.trackingSession.points.map((p: any) => ({ lat: p.lat, lng: p.lng })))
+    }
+  }, [trackingData])
+
+  // 4. Socket.IO: Join public tracking room for real-time updates
+  useEffect(() => {
+    if (trackingToken) socketJoinPublic(trackingToken)
+    return () => { if (trackingToken) socketLeavePublic(trackingToken) }
+  }, [trackingToken])
+
+  // 5. Socket.IO: Listen for real-time location updates
+  useSocketEvent('delivery:location-update', (data: any) => {
+    setDriverPosition({ lat: data.lat, lng: data.lng })
+    setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
+  })
 
   // Rating mutation
   const ratingMutation = useCreate<any, any>(`${import.meta.env.VITE_API_URL}/api/deliveryRatings`, {
@@ -1248,6 +1294,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                     <RouteMap
                       pickup={pickupCoords}
                       dropoff={dropoffCoords}
+                      driverPosition={driverPosition}
+                      points={routePoints}
+                      focusOnDriver={!!driverPosition}
                       isLoaded={isLoaded}
                     />
                   ) : (
