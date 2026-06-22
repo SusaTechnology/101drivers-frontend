@@ -260,7 +260,8 @@ export default function DealerLiveTrack() {
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/public/tracking/${token}`,
     enabled: !!token,
     noFilter: true,
-    refetchInterval: 60000, // SOCKET.IO: slowed from 5s to 60s as fallback
+    staleTime: 0,
+    refetchInterval: 15000, // 15s polling — socket is primary, this is fallback
   })
 
   // Update coordinates and route points when tracking data arrives

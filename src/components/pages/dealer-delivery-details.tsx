@@ -258,7 +258,8 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/public/tracking/${trackingToken}`,
     enabled: !!trackingToken,
     noFilter: true,
-    refetchInterval: 60000, // 60s polling fallback
+    staleTime: 0,
+    refetchInterval: 15000, // 15s polling — socket is primary, this is fallback
   })
 
   // 3. Set driver position and route from tracking data
