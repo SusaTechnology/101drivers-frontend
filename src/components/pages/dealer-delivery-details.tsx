@@ -81,7 +81,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, useDataMutation } from '@/lib/tanstack/dataQuery'
-import { socketJoinPublic, socketLeavePublic } from '@/lib/socket'
+import { socketJoinPublic, socketLeavePublic, socketJoinDelivery, socketLeaveDelivery } from '@/lib/socket'
 import { useSocketEvent } from '@/hooks/useSocket'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
@@ -272,11 +272,16 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     }
   }, [trackingData])
 
-  // 4. Socket.IO: Join public tracking room for real-time updates
+  // 4. Socket.IO: Join BOTH public room and authenticated delivery room for real-time updates
   useEffect(() => {
     if (trackingToken) socketJoinPublic(trackingToken)
     return () => { if (trackingToken) socketLeavePublic(trackingToken) }
   }, [trackingToken])
+
+  useEffect(() => {
+    if (id && isTrackable) socketJoinDelivery(id)
+    return () => { if (id) socketLeaveDelivery(id) }
+  }, [id, isTrackable])
 
   // 5. Socket.IO: Listen for real-time location updates
   useSocketEvent('delivery:location-update', (data: any) => {
