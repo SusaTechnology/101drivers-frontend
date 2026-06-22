@@ -2573,6 +2573,8 @@ const handleQuotePreview = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                    ) : !isLoadingSlots && schedulePreviewData ? (
+                      <p className="text-sm text-amber-600 dark:text-amber-400 py-2">No available time slots for the selected date. All slots have passed or the business is closed.</p>
                     ) : null}
                   </div>
                 )}
