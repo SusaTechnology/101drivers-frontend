@@ -312,7 +312,7 @@ export default function RouteMap({
         <Marker
           position={driverPosition}
           icon={{
-            url: '/icons/car.png',
+            url: '/icons/car.png?v=2',
             scaledSize: new google.maps.Size(48, 48),
             anchor: new google.maps.Point(24, 24),
             rotation: heading != null ? heading : undefined,
