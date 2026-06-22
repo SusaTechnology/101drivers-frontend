@@ -894,7 +894,7 @@ export default function DriverJobDetailsPage() {
                   Once confirmed, this delivery is <span className="underline">locked </span> in and cannot be cancelled from the app. <span className="underline">Contact Support</span> if you cannot complete it.                  </p>
                 </div>
 
-                <AlertDialogFooter className="flex-row gap-3 mt-2">
+                <div className="flex flex-row gap-3 mt-2">
                   <AlertDialogCancel
                     className="flex-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
                     onClick={() => setShowConfirmAccept(false)}
@@ -909,7 +909,7 @@ export default function DriverJobDetailsPage() {
                     {bookMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
                     {bookMutation.isPending ? 'Confirming…' : 'Confirm'}
                   </Button>
-                </AlertDialogFooter>
+                </div>
               </AlertDialogContent>
             </AlertDialog>
 
