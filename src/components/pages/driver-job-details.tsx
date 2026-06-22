@@ -19,6 +19,7 @@ import {
   MessageSquare,
   CalendarPlus,
   TriangleAlert,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AddressLink } from '@/components/shared/AddressLink'
@@ -848,7 +849,7 @@ export default function DriverJobDetailsPage() {
             </AlertDialog>
 
             {/* ── Confirm Accept Dialog ── */}
-            <AlertDialog open={showConfirmAccept} onOpenChange={setShowConfirmAccept}>
+            <AlertDialog open={showConfirmAccept} onOpenChange={(open) => { if (!bookMutation.isPending) setShowConfirmAccept(open) }}>
               <AlertDialogContent className="max-w-[440px] rounded-2xl">
                 <AlertDialogHeader>
                   <AlertDialogTitle className="text-xl font-black">Confirm</AlertDialogTitle>
@@ -900,13 +901,14 @@ export default function DriverJobDetailsPage() {
                   >
                     Go Back
                   </AlertDialogCancel>
-                  <AlertDialogAction
+                  <Button
                     onClick={handleBook}
                     disabled={bookMutation.isPending}
                     className="flex-1 rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-black font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {bookMutation.isPending ? 'confirming\u2026' : 'Confirm'}
-                  </AlertDialogAction>
+                    {bookMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+                    {bookMutation.isPending ? 'Confirming…' : 'Confirm'}
+                  </Button>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
