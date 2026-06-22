@@ -768,9 +768,11 @@ async completeTrip(input: {
       // Ensure tracking session exists and is STARTED for this active delivery.
       // If missing (e.g. admin set status directly, or race condition), auto-create it.
       if (activeAssignment?.deliveryId) {
-        let session = activeAssignment.delivery?.trackingSession;
-        if (!session) {
-          session = await tx.trackingSession.create({
+        const existingSession = activeAssignment.delivery?.trackingSession;
+        let sessionId: string;
+
+        if (!existingSession) {
+          const created = await tx.trackingSession.create({
             data: {
               deliveryId: activeAssignment.deliveryId,
               status: EnumTrackingSessionStatus.STARTED,
@@ -778,36 +780,36 @@ async completeTrip(input: {
               drivenMiles: 0,
             },
           });
-          this.logger.log(
-            `Auto-created TrackingSession ${session.id} for delivery ${activeAssignment.deliveryId}`
-          );
-        } else if (session.status !== EnumTrackingSessionStatus.STARTED) {
-          session = await tx.trackingSession.update({
-            where: { id: session.id },
+          sessionId = created.id;
+          this.logger.log(`Auto-created TrackingSession ${sessionId} for delivery ${activeAssignment.deliveryId}`);
+        } else if (existingSession.status !== EnumTrackingSessionStatus.STARTED) {
+          await tx.trackingSession.update({
+            where: { id: existingSession.id },
             data: {
               status: EnumTrackingSessionStatus.STARTED,
-              startedAt: session.startedAt ?? recordedAt,
+              startedAt: existingSession.startedAt ?? recordedAt,
               stoppedAt: null,
               drivenMiles: 0,
             },
           });
-          this.logger.log(
-            `Re-started TrackingSession ${session.id} for delivery ${activeAssignment.deliveryId}`
-          );
+          sessionId = existingSession.id;
+          this.logger.log(`Re-started TrackingSession ${sessionId} for delivery ${activeAssignment.deliveryId}`);
+        } else {
+          sessionId = existingSession.id;
         }
 
-        const previousPoint = session.points?.[0] ?? null;
+        const previousPoint = existingSession?.points?.[0] ?? null;
 
         await tx.trackingPoint.create({
           data: {
-            sessionId: session.id,
+            sessionId,
             lat: input.lat,
             lng: input.lng,
             recordedAt,
           },
         });
 
-        let totalMiles = Number(session.drivenMiles ?? 0);
+        let totalMiles = Number(existingSession?.drivenMiles ?? 0);
 
         if (previousPoint) {
           const segmentMiles = this.haversineMiles(
@@ -823,14 +825,14 @@ async completeTrip(input: {
         }
 
         await tx.trackingSession.update({
-          where: { id: session.id },
+          where: { id: sessionId },
           data: {
             drivenMiles: totalMiles,
           },
         });
 
         trackingPointCreated = true;
-        trackingSessionId = session.id;
+        trackingSessionId = sessionId;
         drivenMiles = totalMiles;
       }
 
@@ -899,9 +901,11 @@ async completeTrip(input: {
 
       // Ensure tracking session exists and is STARTED for this active delivery.
       if (activeAssignment?.deliveryId) {
-        let session = activeAssignment.delivery?.trackingSession;
-        if (!session) {
-          session = await tx.trackingSession.create({
+        const existingSession = activeAssignment.delivery?.trackingSession;
+        let sessionId: string;
+
+        if (!existingSession) {
+          const created = await tx.trackingSession.create({
             data: {
               deliveryId: activeAssignment.deliveryId,
               status: EnumTrackingSessionStatus.STARTED,
@@ -909,34 +913,38 @@ async completeTrip(input: {
               drivenMiles: 0,
             },
           });
-        } else if (session.status !== EnumTrackingSessionStatus.STARTED) {
-          session = await tx.trackingSession.update({
-            where: { id: session.id },
+          sessionId = created.id;
+        } else if (existingSession.status !== EnumTrackingSessionStatus.STARTED) {
+          await tx.trackingSession.update({
+            where: { id: existingSession.id },
             data: {
               status: EnumTrackingSessionStatus.STARTED,
-              startedAt: session.startedAt ?? recordedAt,
+              startedAt: existingSession.startedAt ?? recordedAt,
               stoppedAt: null,
               drivenMiles: 0,
             },
           });
+          sessionId = existingSession.id;
+        } else {
+          sessionId = existingSession.id;
         }
 
-        const previousPoint = session.points?.[0] ?? null;
+        const previousPoint = existingSession?.points?.[0] ?? null;
 
         await tx.trackingPoint.create({
-          data: { sessionId: session.id, lat: input.lat, lng: input.lng, recordedAt },
+          data: { sessionId, lat: input.lat, lng: input.lng, recordedAt },
         });
 
-        let totalMiles = Number(session.drivenMiles ?? 0);
+        let totalMiles = Number(existingSession?.drivenMiles ?? 0);
         if (previousPoint) {
           const segmentMiles = this.haversineMiles(previousPoint.lat, previousPoint.lng, input.lat, input.lng);
           if (segmentMiles >= 0.01 && segmentMiles <= 50) totalMiles += segmentMiles;
         }
 
-        await tx.trackingSession.update({ where: { id: session.id }, data: { drivenMiles: totalMiles } });
+        await tx.trackingSession.update({ where: { id: sessionId }, data: { drivenMiles: totalMiles } });
 
         trackingPointCreated = true;
-        trackingSessionId = session.id;
+        trackingSessionId = sessionId;
         drivenMiles = totalMiles;
       }
 
