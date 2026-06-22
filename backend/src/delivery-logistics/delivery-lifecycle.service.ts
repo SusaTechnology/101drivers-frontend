@@ -787,7 +787,7 @@ async completeTrip(input: {
             where: { id: existingSession.id },
             data: {
               status: EnumTrackingSessionStatus.STARTED,
-              startedAt: existingSession.startedAt ?? recordedAt,
+              startedAt: recordedAt,
               stoppedAt: null,
               drivenMiles: 0,
             },
@@ -919,7 +919,7 @@ async completeTrip(input: {
             where: { id: existingSession.id },
             data: {
               status: EnumTrackingSessionStatus.STARTED,
-              startedAt: existingSession.startedAt ?? recordedAt,
+              startedAt: recordedAt,
               stoppedAt: null,
               drivenMiles: 0,
             },
