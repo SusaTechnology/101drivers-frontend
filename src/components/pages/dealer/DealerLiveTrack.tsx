@@ -33,7 +33,7 @@ import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 import { useSocketEvent } from '@/hooks/useSocket'
-import { socketJoinPublic, socketLeavePublic } from '@/lib/socket'
+import { socketJoinPublic, socketLeavePublic, socketJoinDelivery, socketLeaveDelivery } from '@/lib/socket'
 
 // Helper to format time
 const formatTime = (dateString?: string) => {
@@ -288,11 +288,16 @@ export default function DealerLiveTrack() {
     }
   }, [trackingData])
 
-  // ── SOCKET.IO: Join public tracking room ──
+  // ── SOCKET.IO: Join public room AND authenticated delivery room ──
   useEffect(() => {
     if (token) socketJoinPublic(token)
     return () => { if (token) socketLeavePublic(token) }
   }, [token])
+
+  useEffect(() => {
+    if (deliveryId) socketJoinDelivery(deliveryId)
+    return () => { if (deliveryId) socketLeaveDelivery(deliveryId) }
+  }, [deliveryId])
 
   // ── SOCKET.IO: Listen for real-time location updates ──
   useSocketEvent('delivery:location-update', (data: any) => {
