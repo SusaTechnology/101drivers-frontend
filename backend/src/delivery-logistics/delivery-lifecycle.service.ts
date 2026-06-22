@@ -765,12 +765,37 @@ async completeTrip(input: {
       let trackingSessionId: string | null = null;
       let drivenMiles: number | null = null;
 
-      if (
-        activeAssignment?.delivery?.trackingSession &&
-        activeAssignment.delivery.trackingSession.status ===
-          EnumTrackingSessionStatus.STARTED
-      ) {
-        const session = activeAssignment.delivery.trackingSession;
+      // Ensure tracking session exists and is STARTED for this active delivery.
+      // If missing (e.g. admin set status directly, or race condition), auto-create it.
+      if (activeAssignment?.deliveryId) {
+        let session = activeAssignment.delivery?.trackingSession;
+        if (!session) {
+          session = await tx.trackingSession.create({
+            data: {
+              deliveryId: activeAssignment.deliveryId,
+              status: EnumTrackingSessionStatus.STARTED,
+              startedAt: recordedAt,
+              drivenMiles: 0,
+            },
+          });
+          this.logger.log(
+            `Auto-created TrackingSession ${session.id} for delivery ${activeAssignment.deliveryId}`
+          );
+        } else if (session.status !== EnumTrackingSessionStatus.STARTED) {
+          session = await tx.trackingSession.update({
+            where: { id: session.id },
+            data: {
+              status: EnumTrackingSessionStatus.STARTED,
+              startedAt: session.startedAt ?? recordedAt,
+              stoppedAt: null,
+              drivenMiles: 0,
+            },
+          });
+          this.logger.log(
+            `Re-started TrackingSession ${session.id} for delivery ${activeAssignment.deliveryId}`
+          );
+        }
+
         const previousPoint = session.points?.[0] ?? null;
 
         await tx.trackingPoint.create({
@@ -872,8 +897,30 @@ async completeTrip(input: {
       let trackingSessionId: string | null = null;
       let drivenMiles: number | null = null;
 
-      if (activeAssignment?.delivery?.trackingSession?.status === EnumTrackingSessionStatus.STARTED) {
-        const session = activeAssignment.delivery.trackingSession;
+      // Ensure tracking session exists and is STARTED for this active delivery.
+      if (activeAssignment?.deliveryId) {
+        let session = activeAssignment.delivery?.trackingSession;
+        if (!session) {
+          session = await tx.trackingSession.create({
+            data: {
+              deliveryId: activeAssignment.deliveryId,
+              status: EnumTrackingSessionStatus.STARTED,
+              startedAt: recordedAt,
+              drivenMiles: 0,
+            },
+          });
+        } else if (session.status !== EnumTrackingSessionStatus.STARTED) {
+          session = await tx.trackingSession.update({
+            where: { id: session.id },
+            data: {
+              status: EnumTrackingSessionStatus.STARTED,
+              startedAt: session.startedAt ?? recordedAt,
+              stoppedAt: null,
+              drivenMiles: 0,
+            },
+          });
+        }
+
         const previousPoint = session.points?.[0] ?? null;
 
         await tx.trackingPoint.create({
@@ -904,9 +951,9 @@ async completeTrip(input: {
     });
 
     // ── SOCKET.IO EMIT (after successful DB write) ──
-    // This is the only new logic — everything above is a copy of the original transaction.
-    // If trackingGateway is not available (e.g., not injected), this is silently skipped.
-    if (this.trackingGateway && result.tracking.activeDeliveryId && result.tracking.trackingPointCreated) {
+    // Broadcast whenever driver has an active delivery — do NOT gate on trackingPointCreated
+    // so that real-time updates work even if TrackingSession is missing or not STARTED.
+    if (this.trackingGateway && result.tracking.activeDeliveryId) {
       try {
         this.trackingGateway.emitLocationUpdate({
           deliveryId: result.tracking.activeDeliveryId,

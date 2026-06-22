@@ -175,7 +175,9 @@ export class TrackingGateway
       });
 
       // Broadcast to tracking rooms (dealer + public link)
-      if (result.tracking.activeDeliveryId && result.tracking.trackingPointCreated) {
+      // Emit whenever driver has an active delivery — do NOT gate on trackingPointCreated
+      // so that real-time updates work even if TrackingSession is missing or not STARTED.
+      if (result.tracking.activeDeliveryId) {
         this.emitLocationUpdate({
           deliveryId: result.tracking.activeDeliveryId,
           lat: Number(data.lat),
