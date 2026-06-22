@@ -262,14 +262,13 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     refetchInterval: 15000, // 15s polling — socket is primary, this is fallback
   })
 
-  // 3. Set driver position and route from tracking data
+  // 3. Set driver position from tracking data
+  // NOTE: do NOT set routePoints from DB — historical points may contain bad GPS
+  // readings that draw lines across the map. Trail built from live socket events.
   useEffect(() => {
     if (trackingData?.trackingSession?.latestPoint) {
       const p = trackingData.trackingSession.latestPoint
       setDriverPosition({ lat: p.lat, lng: p.lng })
-    }
-    if (trackingData?.trackingSession?.points && Array.isArray(trackingData.trackingSession.points)) {
-      setRoutePoints(trackingData.trackingSession.points.map((p: any) => ({ lat: p.lat, lng: p.lng })))
     }
   }, [trackingData])
 
@@ -285,9 +284,19 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   }, [id, isTrackable])
 
   // 5. Socket.IO: Listen for real-time location updates
+  // Build trail only from live socket points; skip duplicates/jitter (< 10m).
   useSocketEvent('delivery:location-update', (data: any) => {
     setDriverPosition({ lat: data.lat, lng: data.lng })
-    setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
+    setRoutePoints(prev => {
+      const last = prev[prev.length - 1]
+      if (last) {
+        const dLat = data.lat - last.lat
+        const dLng = data.lng - last.lng
+        const distM = Math.sqrt(dLat * dLat + dLng * dLng) * 111000
+        if (distM < 10) return prev
+      }
+      return [...prev, { lat: data.lat, lng: data.lng }]
+    })
   })
 
   // Rating mutation

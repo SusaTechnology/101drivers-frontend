@@ -103,14 +103,8 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
     } else {
       setDriverPosition(null)
     }
-    if (trackingData?.trackingSession?.points && Array.isArray(trackingData.trackingSession.points)) {
-      setRoutePoints(trackingData.trackingSession.points.map((p: any) => ({
-        lat: p.lat,
-        lng: p.lng,
-      })))
-    } else {
-      setRoutePoints([])
-    }
+    // NOTE: do NOT load routePoints from DB — may contain bad GPS points.
+    // Trail is built purely from live socket events below.
   }, [trackingData])
 
   // ── SOCKET.IO: Connect (unauthenticated) and join public tracking room ──
@@ -128,7 +122,16 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
   // ── SOCKET.IO: Listen for real-time location updates ──
   const handleLocationUpdate = useCallback((data: any) => {
     setDriverPosition({ lat: data.lat, lng: data.lng })
-    setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
+    setRoutePoints(prev => {
+      const last = prev[prev.length - 1]
+      if (last) {
+        const dLat = data.lat - last.lat
+        const dLng = data.lng - last.lng
+        const distM = Math.sqrt(dLat * dLat + dLng * dLng) * 111000
+        if (distM < 10) return prev
+      }
+      return [...prev, { lat: data.lat, lng: data.lng }]
+    })
   }, [])
   useSocketEvent('delivery:location-update', handleLocationUpdate)
 

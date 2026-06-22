@@ -278,15 +278,9 @@ export default function DealerLiveTrack() {
     } else {
       setDriverPosition(null)
     }
-    // 👇 set route points from the points array (if present)
-    if (trackingData?.trackingSession?.points && Array.isArray(trackingData.trackingSession.points)) {
-      setRoutePoints(trackingData.trackingSession.points.map((p: any) => ({
-        lat: p.lat,
-        lng: p.lng,
-      })))
-    } else {
-      setRoutePoints([])
-    }
+    // NOTE: do NOT set routePoints from DB historical points.
+    // Old points may contain bad GPS readings (initial lock before settling)
+    // that draw lines across the map. Trail is built purely from live socket events.
   }, [trackingData])
 
   // ── SOCKET.IO: Join public room AND authenticated delivery room ──
@@ -301,9 +295,20 @@ export default function DealerLiveTrack() {
   }, [deliveryId])
 
   // ── SOCKET.IO: Listen for real-time location updates ──
+  // Build the orange trail only from live socket points (accurate, current GPS).
+  // Skip duplicates/jitter: only add if moved > ~10m from last point.
   useSocketEvent('delivery:location-update', (data: any) => {
     setDriverPosition({ lat: data.lat, lng: data.lng })
-    setRoutePoints(prev => [...prev, { lat: data.lat, lng: data.lng }])
+    setRoutePoints(prev => {
+      const last = prev[prev.length - 1]
+      if (last) {
+        const dLat = data.lat - last.lat
+        const dLng = data.lng - last.lng
+        const distM = Math.sqrt(dLat * dLat + dLng * dLng) * 111000
+        if (distM < 10) return prev // skip jitter/duplicate
+      }
+      return [...prev, { lat: data.lat, lng: data.lng }]
+    })
   })
 
   // Handle token expiration
