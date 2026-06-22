@@ -219,7 +219,7 @@ export default function DealerDashboard() {
     noFilter: true,
     enabled: Boolean(dealerId),
     staleTime: 0,
-    refetchInterval: socketConnected ? false : 30 * 1000,
+    refetchInterval: 30 * 1000,
   })
 
   // ── Error-recovery polling: if socket connected but API is failing, keep retrying ──
