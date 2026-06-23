@@ -1225,6 +1225,12 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
         Live track the driver
       </Button>
     )}
+    {deliveryData.status === 'COMPLETED' && (
+      <div className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-200 dark:border-emerald-800">
+        <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+        <span className="text-sm font-black text-emerald-700 dark:text-emerald-300">Delivery Completed</span>
+      </div>
+    )}
     {deliveryData.status === 'ACTIVE' && (
       <Button
         onClick={() => setShowActionDialog(true)}
@@ -1310,15 +1316,34 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                     <RouteMap
                       pickup={pickupCoords}
                       dropoff={dropoffCoords}
-                      driverPosition={driverPosition}
-                      points={routePoints}
-                      focusOnDriver={!!driverPosition}
-                      followDriver={true}
+                      driverPosition={deliveryData.status === 'COMPLETED' ? null : driverPosition}
+                      points={deliveryData.status === 'COMPLETED' ? [] : routePoints}
+                      focusOnDriver={!!driverPosition && deliveryData.status !== 'COMPLETED'}
+                      followDriver={deliveryData.status !== 'COMPLETED'}
                       isLoaded={isLoaded}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
                       <p className="text-sm text-slate-500">Map loading or addresses not geocoded</p>
+                    </div>
+                  )}
+
+                  {/* Completed delivery overlay */}
+                  {deliveryData.status === 'COMPLETED' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] z-[5]">
+                      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl px-6 py-4 shadow-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                          <CheckSquare className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-black text-emerald-700 dark:text-emerald-300">Delivery Completed</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {deliveryData.compliance?.dropoffCompletedAt
+                              ? `Completed at ${formatTime(deliveryData.compliance.dropoffCompletedAt)}`
+                              : 'Successfully delivered'}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
