@@ -155,7 +155,7 @@ export default function RouteMap({
       // Cancel any running animation
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
 
-      const duration = 2500; // ms — completes before next 5s GPS ping
+      const duration = 2800; // ms — completes before next ~3s GPS ping (with throttle)
       const startTime = performance.now();
 
       const step = (now: number) => {
