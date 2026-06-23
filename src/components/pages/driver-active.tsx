@@ -361,39 +361,56 @@ export default function DriverActiveDeliveryPage() {
     }
   }, [delivery])
 
-  // 👇 UPDATED: geolocation with health tracking
+  // Throttle: only emit to server every 3 seconds (GPS may fire every 1-2s)
+  const lastEmitTimeRef = useRef(0)
+  const EMIT_THROTTLE_MS = 3000
+
+  // Geolocation: GPS fires → update UI immediately → emit to server via socket (throttled)
   useEffect(() => {
     if (!pickupCoords || !dropoffCoords) return
-    // Real-time geolocation tracking:
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        setDriverPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        // Use native heading if available, otherwise compute from GPS delta
-        const nativeHeading = pos.coords.heading // null when stationary or unsupported
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+
+        // 1. Update driver UI immediately (map marker, heading, etc.)
+        setDriverPosition(coords)
+        latestPositionRef.current = coords
+
+        // Compute heading
+        const nativeHeading = pos.coords.heading
         if (nativeHeading != null && !isNaN(nativeHeading)) {
           setDriverHeading(nativeHeading)
         } else {
           const prev = prevCoordsRef.current
-          if (prev) {
-            const dLng = pos.coords.longitude - prev.lng
-            const dLat = pos.coords.latitude - prev.lat
-            // Only compute if moved enough (avoid jitter when stationary)
-            if (Math.abs(dLat) > 0.00001 || Math.abs(dLng) > 0.00001) {
-              const bearing = (Math.atan2(dLng, dLat) * 180) / Math.PI
-              setDriverHeading((bearing + 360) % 360)
-            }
+          if (prev && (Math.abs(pos.coords.latitude - prev.lat) > 0.00001 || Math.abs(pos.coords.longitude - prev.lng) > 0.00001)) {
+            setDriverHeading((Math.atan2(pos.coords.longitude - prev.lng, pos.coords.latitude - prev.lat) * 180 / Math.PI + 360) % 360)
           }
         }
-        prevCoordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        prevCoordsRef.current = coords
         setLastLocationTime(new Date())
         consecutiveMissedRef.current = 0
         setLocationHealth('healthy')
+
+        // 2. Emit to server via socket, throttled to every 3s
+        const now = Date.now()
+        if (now - lastEmitTimeRef.current >= EMIT_THROTTLE_MS) {
+          lastEmitTimeRef.current = now
+          if (deliveryIdRef.current) {
+            const socket = getSocket()
+            const payload = { lat: coords.lat, lng: coords.lng, recordedAt: new Date().toISOString() }
+            if (socket?.connected) {
+              socket.emit('driver:location', payload)
+            } else {
+              // Socket not connected — HTTP fallback
+              locationPingMutation.mutate(payload)
+            }
+          }
+        }
       },
       (err) => {
         console.error(err)
         consecutiveMissedRef.current += 1
         if (err.code === 1) {
-          // PERMISSION_DENIED
           setLocationHealth('lost')
         } else if (consecutiveMissedRef.current >= 3) {
           setLocationHealth('warning')
@@ -401,7 +418,6 @@ export default function DriverActiveDeliveryPage() {
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
-    console.log("setDriverPosition",watchId, driverPosition)
     return () => navigator.geolocation.clearWatch(watchId);
   }, [pickupCoords, dropoffCoords])
 
@@ -419,22 +435,10 @@ export default function DriverActiveDeliveryPage() {
     return () => clearInterval(interval)
   }, [lastLocationTime, locationHealth])
 
-  // 👇 Keep refs in sync with state (avoids stale closures in intervals)
-  useEffect(() => {
-    latestPositionRef.current = driverPosition
-  }, [driverPosition])
+  // Keep deliveryId ref in sync (used by watchPosition callback above)
   useEffect(() => {
     deliveryIdRef.current = deliveryId
   }, [deliveryId])
-
-  // Send an immediate ping the moment GPS position is first acquired
-  const hasPingedRef = useRef(false)
-  useEffect(() => {
-    if (driverPosition && !hasPingedRef.current && deliveryIdRef.current) {
-      hasPingedRef.current = true
-      sendLocationPing(driverPosition)
-    }
-  }, [driverPosition, deliveryId])
 
   // Fetch multiple routes using Directions API
   useEffect(() => {
@@ -498,16 +502,8 @@ export default function DriverActiveDeliveryPage() {
     })
   }
 
-  // 👇 UPDATED: stable interval that reads from ref (fire-and-forget is fine here)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (latestPositionRef.current) {
-        sendLocationPing(latestPositionRef.current)
-      }
-    }, 5000) // every 5 seconds — socket is lightweight enough for this frequency
-
-    return () => clearInterval(interval)
-  }, []) // empty dependency array – runs once
+  // Location sending is now handled directly inside watchPosition callback (GPS → socket).
+  // No polling interval needed — every GPS reading is pushed immediately (throttled 3s).
 
   // Theme handling
   useEffect(() => {
