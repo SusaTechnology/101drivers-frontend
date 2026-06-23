@@ -680,6 +680,50 @@ async completeTrip(input: {
     return R * c;
   }
 
+  /**
+   * Lightweight read-only lookup: which delivery is this driver currently active on?
+   * Used by the WebSocket gateway to emit location updates BEFORE the DB write.
+   * No writes, no transaction — just 2 fast queries.
+   */
+  async getActiveDeliveryForDriver(userId: string): Promise<{
+    deliveryId: string | null;
+    shareToken: string | null;
+    sessionStarted: boolean;
+  }> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!driver) return { deliveryId: null, shareToken: null, sessionStarted: false };
+
+    const assignment = await this.prisma.deliveryAssignment.findFirst({
+      where: {
+        driverId: driver.id,
+        unassignedAt: null,
+        delivery: { status: EnumDeliveryRequestStatus.ACTIVE },
+      },
+      orderBy: { assignedAt: "desc" },
+      select: {
+        deliveryId: true,
+        delivery: {
+          select: {
+            trackingShareToken: true,
+            trackingSession: {
+              select: { status: true },
+            },
+          },
+        },
+      },
+    });
+
+    const session = assignment?.delivery?.trackingSession;
+    return {
+      deliveryId: assignment?.deliveryId ?? null,
+      shareToken: assignment?.delivery?.trackingShareToken ?? null,
+      sessionStarted: session?.status === EnumTrackingSessionStatus.STARTED,
+    };
+  }
+
   async ingestDriverLocation(input: {
     userId: string;
     lat: number;

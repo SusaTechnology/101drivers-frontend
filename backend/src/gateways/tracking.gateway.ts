@@ -165,34 +165,45 @@ export class TrackingGateway
       return { ok: false, reason: "service_unavailable" };
     }
 
+    // ── 1. Fast read-only lookup to get room info ──
+    let deliveryId: string | null = null;
+    let shareToken: string | undefined;
+    let sessionStarted = false;
     try {
-      const result = await this.lifecycleService.ingestDriverLocation({
-        userId: user!.sub,
+      const lookup = await this.lifecycleService.getActiveDeliveryForDriver(user!.sub);
+      deliveryId = lookup.deliveryId;
+      shareToken = lookup.shareToken ?? undefined;
+      sessionStarted = lookup.sessionStarted;
+    } catch (err: any) {
+      this.logger.warn(`Quick delivery lookup failed: ${err.message}`);
+    }
+
+    // ── 2. Emit socket event IMMEDIATELY (before DB write) ──
+    if (deliveryId && sessionStarted) {
+      this.emitLocationUpdate({
+        deliveryId,
         lat: Number(data.lat),
         lng: Number(data.lng),
-        recordedAt: data.recordedAt ? new Date(data.recordedAt) : undefined,
-        useLiveLocation: data.useLiveLocation === true,
+        recordedAt: data.recordedAt || new Date().toISOString(),
+        drivenMiles: null, // DB write will update this for the 15s poll fallback
+        shareToken,
       });
-
-      // Broadcast to tracking rooms (dealer + public link)
-      // Emit whenever driver has an active delivery — do NOT gate on trackingPointCreated
-      // so that real-time updates work even if TrackingSession is missing or not STARTED.
-      if (result.tracking.activeDeliveryId) {
-        this.emitLocationUpdate({
-          deliveryId: result.tracking.activeDeliveryId,
-          lat: Number(data.lat),
-          lng: Number(data.lng),
-          recordedAt: result.recordedAt.toISOString(),
-          drivenMiles: result.tracking.drivenMiles,
-          shareToken: result.tracking.shareToken ?? undefined,
-        });
-      }
-
-      return { ok: true, drivenMiles: result.tracking.drivenMiles };
-    } catch (err: any) {
-      this.logger.warn(`Socket location ingest failed: ${err.message}`);
-      return { ok: false, reason: err.message };
     }
+
+    // ── 3. DB write in background (fire-and-forget) ──
+    // Writes the tracking point, updates driven miles, upserts driver location.
+    // If it fails, the socket event was already sent — dealer still sees the update.
+    this.lifecycleService.ingestDriverLocation({
+      userId: user!.sub,
+      lat: Number(data.lat),
+      lng: Number(data.lng),
+      recordedAt: data.recordedAt ? new Date(data.recordedAt) : undefined,
+      useLiveLocation: data.useLiveLocation === true,
+    }).catch((err: any) => {
+      this.logger.warn(`Background DB write for location failed: ${err.message}`);
+    });
+
+    return { ok: true };
   }
 
   // ── Server-side emit helpers (called from services) ──
