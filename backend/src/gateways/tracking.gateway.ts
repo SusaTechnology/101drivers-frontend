@@ -165,38 +165,51 @@ export class TrackingGateway
       return { ok: false, reason: "service_unavailable" };
     }
 
+    // ── 0. Server-side GPS sanity checks ──
+    const lat = Number(data.lat);
+    const lng = Number(data.lng);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return { ok: false, reason: "invalid_coordinates" };
+    }
+
+    // Null-island rejection: GPS chips return (0,0) area on cold start
+    if (Math.abs(lat) < 1 && Math.abs(lng) < 1) {
+      return { ok: false, reason: "null_island_rejected" };
+    }
+
     // ── 1. Fast read-only lookup to get room info ──
     let deliveryId: string | null = null;
     let shareToken: string | undefined;
-    let sessionStarted = false;
     try {
       const lookup = await this.lifecycleService.getActiveDeliveryForDriver(user!.sub);
       deliveryId = lookup.deliveryId;
       shareToken = lookup.shareToken ?? undefined;
-      sessionStarted = lookup.sessionStarted;
     } catch (err: any) {
       this.logger.warn(`Quick delivery lookup failed: ${err.message}`);
     }
 
     // ── 2. Emit socket event IMMEDIATELY (before DB write) ──
-    if (deliveryId && sessionStarted) {
+    // Emit whenever there's an active delivery — don't gate on sessionStarted.
+    // The tracking session is created lazily by ingestDriverLocation on the first ping.
+    // If we waited for sessionStarted, the dealer would see a 3-6s black hole
+    // after the delivery goes ACTIVE (first GPS reading silently dropped).
+    if (deliveryId) {
       this.emitLocationUpdate({
         deliveryId,
-        lat: Number(data.lat),
-        lng: Number(data.lng),
+        lat,
+        lng,
         recordedAt: data.recordedAt || new Date().toISOString(),
-        drivenMiles: null, // DB write will update this for the 15s poll fallback
+        drivenMiles: null,
         shareToken,
       });
     }
 
     // ── 3. DB write in background (fire-and-forget) ──
-    // Writes the tracking point, updates driven miles, upserts driver location.
-    // If it fails, the socket event was already sent — dealer still sees the update.
     this.lifecycleService.ingestDriverLocation({
       userId: user!.sub,
-      lat: Number(data.lat),
-      lng: Number(data.lng),
+      lat,
+      lng,
       recordedAt: data.recordedAt ? new Date(data.recordedAt) : undefined,
       useLiveLocation: data.useLiveLocation === true,
     }).catch((err: any) => {

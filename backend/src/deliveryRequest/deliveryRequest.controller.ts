@@ -617,10 +617,21 @@ async getDriverJobDetail(
   ): Promise<any> {
     const user = req.user as any;
 
+    const lat = Number(body.lat);
+    const lng = Number(body.lng);
+
+    // Server-side GPS sanity checks (same as socket gateway)
+    if (Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new common.BadRequestException("Invalid GPS coordinates");
+    }
+    if (Math.abs(lat) < 1 && Math.abs(lng) < 1) {
+      throw new common.BadRequestException("GPS cold-start position rejected");
+    }
+
     return this.service.ingestDriverLocation({
       userId: user?.id,
-      lat: Number(body.lat),
-      lng: Number(body.lng),
+      lat,
+      lng,
       recordedAt: body.recordedAt ? new Date(body.recordedAt) : undefined,
     });
   }

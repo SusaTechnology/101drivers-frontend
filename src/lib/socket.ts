@@ -136,10 +136,18 @@ export function socketJoinDelivery(deliveryId: string): void {
   if (!socket) return;
   trackRoom(`delivery:${deliveryId}`, 'join:delivery', { deliveryId });
   if (socket.connected) {
-    socket.emit('join:delivery', { deliveryId });
+    socket.emit('join:delivery', { deliveryId }, (ack: any) => {
+      if (socket?.connected && !ack?.joined) {
+        console.warn(`[Socket] Failed to join delivery:${deliveryId} — auth may be expired`);
+      }
+    });
   } else {
     socket.once('connect', () => {
-      socket!.emit('join:delivery', { deliveryId });
+      socket!.emit('join:delivery', { deliveryId }, (ack: any) => {
+        if (socket?.connected && !ack?.joined) {
+          console.warn(`[Socket] Failed to join delivery:${deliveryId} — auth may be expired`);
+        }
+      });
     });
   }
 }
@@ -162,11 +170,19 @@ export function socketJoinPublic(token: string): void {
   if (!socket) return;
   trackRoom(`public:${token}`, 'join:public', { token });
   if (socket.connected) {
-    socket.emit('join:public', { token });
+    socket.emit('join:public', { token }, (ack: any) => {
+      if (socket?.connected && !ack?.joined) {
+        console.warn(`[Socket] Failed to join public room for token — link may be invalid`);
+      }
+    });
   } else {
     // Socket still connecting — wait for 'connect' then join
     socket.once('connect', () => {
-      socket!.emit('join:public', { token });
+      socket!.emit('join:public', { token }, (ack: any) => {
+        if (socket?.connected && !ack?.joined) {
+          console.warn(`[Socket] Failed to join public room for token — link may be invalid`);
+        }
+      });
     });
   }
 }
@@ -188,10 +204,18 @@ export function socketJoinDealer(dealerId: string): void {
   if (!socket) return;
   trackRoom(`dealer:${dealerId}`, 'join:dealer', { dealerId });
   if (socket.connected) {
-    socket.emit('join:dealer', { dealerId });
+    socket.emit('join:dealer', { dealerId }, (ack: any) => {
+      if (socket?.connected && !ack?.joined) {
+        console.warn(`[Socket] Failed to join dealer:${dealerId} — auth may be expired`);
+      }
+    });
   } else {
     socket.once('connect', () => {
-      socket!.emit('join:dealer', { dealerId });
+      socket!.emit('join:dealer', { dealerId }, (ack: any) => {
+        if (socket?.connected && !ack?.joined) {
+          console.warn(`[Socket] Failed to join dealer:${dealerId} — auth may be expired`);
+        }
+      });
     });
   }
 }
