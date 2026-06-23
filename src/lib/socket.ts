@@ -36,12 +36,22 @@ function rejoinAllRooms(): void {
   if (!socket) return;
   const rooms = (socket as any).__rooms || {};
   for (const [roomKey, entry] of Object.entries<RoomEntry>(rooms)) {
-    if (entry.payload) {
-      socket.emit(entry.event, entry.payload);
-    } else {
-      socket.emit(entry.event);
-    }
-    console.log(`[Socket] Re-joined room: ${roomKey}`);
+    const doEmit = () => {
+      if (entry.payload) {
+        socket!.emit(entry.event, entry.payload, (ack: any) => {
+          if (socket?.connected && !ack?.joined) {
+            console.warn(`[Socket] Re-join failed for ${roomKey} — auth may be expired`);
+          }
+        });
+      } else {
+        socket!.emit(entry.event, (ack: any) => {
+          if (socket?.connected && !ack?.joined) {
+            console.warn(`[Socket] Re-join failed for ${roomKey}`);
+          }
+        });
+      }
+    };
+    doEmit();
   }
 }
 
