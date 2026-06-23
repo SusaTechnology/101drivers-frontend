@@ -37,7 +37,7 @@ interface RouteMapProps {
    */
   points?: google.maps.LatLngLiteral[];
   /**
-   * Map type to display. Options: 'roadmap' (default, shows place names), 
+   * Map type to display. Options: 'roadmap' (default, shows place names),
    * 'satellite' (no labels), 'hybrid' (satellite + labels), 'terrain'
    */
   mapType?: 'roadmap' | 'satellite' | 'hybrid' | 'terrain';
@@ -72,9 +72,11 @@ interface RouteMapProps {
    */
   focusOnDriver?: boolean;
   /**
-   * When true, the map continuously pans to follow the driver.
-   * If the user manually drags the map, following pauses and a re-center
-   * button appears. Tapping it resumes following.
+   * When true, the map continuously pans to follow the driver and rotates
+   * to match the heading (like Uber/Google Maps navigation).
+   * If the user manually drags the map, following pauses (heading resets to
+   * north-up) and a re-center button appears. Tapping it resumes following
+   * and heading rotation.
    */
   followDriver?: boolean;
   /**
@@ -111,8 +113,8 @@ export default function RouteMap({
   const [trackPolyline, setTrackPolyline] = useState<google.maps.Polyline | null>(null);
   const initialDriverFocusDone = useRef(false);
 
-  // ── Follow-driver: continuous panning with user-override detection ──
-  const followingRef = useRef(true); // start following
+  // ── Follow-driver state (refs, not state — avoids re-renders on every GPS tick) ──
+  const followingRef = useRef(true);
   const userDraggedRef = useRef(false);
 
   // ── Imperative driver marker with smooth position animation ──
@@ -120,89 +122,8 @@ export default function RouteMap({
   const animPosRef = useRef<google.maps.LatLngLiteral | null>(null);
   const animFrameRef = useRef<number>(0);
 
-  useEffect(() => {
-    if (!map || !isLoaded) return;
-
-    // Create marker on first driver position
-    if (!driverMarkerRef.current && driverPosition) {
-      driverMarkerRef.current = new google.maps.Marker({
-        map,
-        position: driverPosition,
-        icon: {
-          url: '/icons/car.png?v=2',
-          scaledSize: new google.maps.Size(48, 48),
-          anchor: new google.maps.Point(24, 24),
-          rotation: heading != null ? heading : undefined,
-        },
-      });
-      animPosRef.current = driverPosition;
-      return;
-    }
-
-    // Remove marker if position cleared
-    if (!driverPosition && driverMarkerRef.current) {
-      driverMarkerRef.current.setMap(null);
-      driverMarkerRef.current = null;
-      animPosRef.current = null;
-      return;
-    }
-
-    // Move marker to new position
-    if (driverPosition && driverMarkerRef.current) {
-      // Update heading immediately
-      if (heading != null) {
-        driverMarkerRef.current.setIcon({
-          url: '/icons/car.png?v=2',
-          scaledSize: new google.maps.Size(48, 48),
-          anchor: new google.maps.Point(24, 24),
-          rotation: heading,
-        });
-      }
-
-      const from = animPosRef.current || driverPosition;
-      const to = driverPosition;
-      if (from.lat === to.lat && from.lng === to.lng) return;
-
-      // Cancel any running animation
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-
-      // ── UBER PATTERN: When following, snap marker instantly ──
-      // The map panTo handles all visual smoothness. Animating the marker
-      // AND panning the map creates a "double animation" where the map
-      // arrives before the marker catches up — looks laggy.
-      // Uber keeps the car fixed in center; only the map moves.
-      if (followDriver && followingRef.current) {
-        driverMarkerRef.current.setPosition(to);
-        animPosRef.current = to;
-        return;
-      }
-
-      // ── NOT following: animate marker smoothly (e.g., user dragged away) ──
-      const duration = 2800; // ms — completes before next ~3s GPS ping (with throttle)
-      const startTime = performance.now();
-
-      const step = (now: number) => {
-        const t = Math.min((now - startTime) / duration, 1);
-        const eased = 1 - (1 - t) * (1 - t); // ease-out quadratic
-        const lat = from.lat + (to.lat - from.lat) * eased;
-        const lng = from.lng + (to.lng - from.lng) * eased;
-        const pos = { lat, lng };
-        animPosRef.current = pos;
-        driverMarkerRef.current?.setPosition(pos);
-        if (t < 1) animFrameRef.current = requestAnimationFrame(step);
-      };
-
-      animFrameRef.current = requestAnimationFrame(step);
-    }
-  }, [map, isLoaded, driverPosition, heading, followDriver]);
-
-  // Cleanup marker on unmount
-  useEffect(() => {
-    return () => {
-      if (driverMarkerRef.current) { driverMarkerRef.current.setMap(null); driverMarkerRef.current = null; }
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, []);
+  // ── Re-center button visibility (state because it controls JSX) ──
+  const [showRecenter, setShowRecenter] = useState(false);
 
   // Use external directions if provided, otherwise use internal
   const directions = externalDirections ?? internalDirections;
@@ -253,33 +174,136 @@ export default function RouteMap({
     );
   }, [isLoaded, pickup, dropoff, showAlternatives, externalDirections]);
 
+  // ── Imperative driver marker: create, remove, and animate ──
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+
+    // Create marker on first driver position
+    if (!driverMarkerRef.current && driverPosition) {
+      driverMarkerRef.current = new google.maps.Marker({
+        map,
+        position: driverPosition,
+        icon: {
+          url: '/icons/car.png?v=2',
+          scaledSize: new google.maps.Size(48, 48),
+          anchor: new google.maps.Point(24, 24),
+          rotation: heading != null ? heading : undefined,
+        },
+      });
+      animPosRef.current = driverPosition;
+      return;
+    }
+
+    // Remove marker if position cleared
+    if (!driverPosition && driverMarkerRef.current) {
+      driverMarkerRef.current.setMap(null);
+      driverMarkerRef.current = null;
+      animPosRef.current = null;
+      return;
+    }
+
+    // Move marker to new position
+    if (driverPosition && driverMarkerRef.current) {
+      // Update heading immediately
+      if (heading != null) {
+        driverMarkerRef.current.setIcon({
+          url: '/icons/car.png?v=2',
+          scaledSize: new google.maps.Size(48, 48),
+          anchor: new google.maps.Point(24, 24),
+          rotation: heading,
+        });
+      }
+
+      const from = animPosRef.current || driverPosition;
+      const to = driverPosition;
+      if (from.lat === to.lat && from.lng === to.lng) return;
+
+      // Cancel any running animation
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+
+      // ── UBER PATTERN: When following, snap marker instantly ──
+      // The map moveCamera handles all visual smoothness. Animating the marker
+      // AND moving the camera creates a "double animation" where the map
+      // arrives before the marker catches up — looks laggy.
+      // Uber keeps the car fixed in center; only the map moves.
+      if (followDriver && followingRef.current) {
+        driverMarkerRef.current.setPosition(to);
+        animPosRef.current = to;
+        return;
+      }
+
+      // ── NOT following: animate marker smoothly (e.g., user dragged away) ──
+      const duration = 2800; // ms — completes before next ~3s GPS ping
+      const startTime = performance.now();
+
+      const step = (now: number) => {
+        const t = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - (1 - t) * (1 - t); // ease-out quadratic
+        const lat = from.lat + (to.lat - from.lat) * eased;
+        const lng = from.lng + (to.lng - from.lng) * eased;
+        const pos = { lat, lng };
+        animPosRef.current = pos;
+        driverMarkerRef.current?.setPosition(pos);
+        if (t < 1) animFrameRef.current = requestAnimationFrame(step);
+      };
+
+      animFrameRef.current = requestAnimationFrame(step);
+    }
+  }, [map, isLoaded, driverPosition, heading, followDriver]);
+
+  // Cleanup marker on unmount
+  useEffect(() => {
+    return () => {
+      if (driverMarkerRef.current) { driverMarkerRef.current.setMap(null); driverMarkerRef.current = null; }
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, []);
+
   // Center on driver position once when it first becomes available
   useEffect(() => {
     if (!map || !focusOnDriver || !driverPosition || initialDriverFocusDone.current) return;
 
     map.setCenter(driverPosition);
-    map.setZoom(14);
+    map.setZoom(16); // slightly tighter zoom for navigation feel
     initialDriverFocusDone.current = true;
   }, [map, focusOnDriver, driverPosition]);
 
   // ── Detect user drag to pause following ──
+  // When user drags: stop following AND reset heading to north-up (0).
+  // This is what Uber/Google Maps do — dragging exits navigation mode
+  // and returns the map to a standard north-up orientation.
   useEffect(() => {
     if (!map || !followDriver) return;
 
-    const onDragStart = () => { userDraggedRef.current = true; followingRef.current = false; };
-    map.addListener('dragstart', onDragStart);
-    return () => { google.maps.event.clearListeners(map, 'dragstart', onDragStart); };
+    const onDragStart = () => {
+      userDraggedRef.current = true;
+      followingRef.current = false;
+      // Reset map heading to north-up when user takes control
+      map.setHeading(0);
+    };
+    const listener = map.addListener('dragstart', onDragStart);
+    return () => { google.maps.event.removeListener(listener); };
   }, [map, followDriver]);
 
-  // ── Continuous follow: pan to driver on every position update ──
-  // Uses driverPosition in deps — each new position object triggers re-eval.
+  // ── Continuous follow: moveCamera with heading rotation ──
+  // Uses moveCamera (not panTo) so center + heading + tilt update atomically
+  // in a single animation frame — no flicker, no double-animation.
+  // This is the Uber/Google Maps navigation pattern.
   useEffect(() => {
     if (!map || !followDriver || !driverPosition || !followingRef.current) return;
-    map.panTo(driverPosition);
-  }, [map, followDriver, driverPosition]);
 
-  // Show re-center button when user has paused following
-  const [showRecenter, setShowRecenter] = useState(false);
+    const cameraOpts: google.maps.CameraOptions = {
+      center: driverPosition,
+      // Rotate map to match heading when available.
+      // GPS heading is null when stationary — in that case, keep the last
+      // heading (Google Maps does the same). Only set heading when we have it.
+      ...(heading != null && { heading }),
+    };
+
+    map.moveCamera(cameraOpts);
+  }, [map, followDriver, driverPosition, heading]);
+
+  // ── Show/hide re-center button based on follow state ──
   useEffect(() => {
     if (!followDriver) { setShowRecenter(false); return; }
     setShowRecenter(!followingRef.current);
@@ -290,7 +314,12 @@ export default function RouteMap({
     if (!map || !driverPosition) return;
     followingRef.current = true;
     userDraggedRef.current = false;
-    map.panTo(driverPosition);
+    // Atomic re-center with heading — single smooth animation
+    const cameraOpts: google.maps.CameraOptions = {
+      center: driverPosition,
+      ...(heading != null && { heading }),
+    };
+    map.moveCamera(cameraOpts);
     setShowRecenter(false);
   };
 
@@ -447,7 +476,7 @@ export default function RouteMap({
           directions={directions}
           options={{
             suppressMarkers: true, // we already have our own markers
-            preserveViewport: focusOnDriver ? true : false, // don't auto-zoom when focusing on driver
+            preserveViewport: focusOnDriver || followDriver ? true : false,
             routeIndex: selectedRouteIndex,
           }}
         />
