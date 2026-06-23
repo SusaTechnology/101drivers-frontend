@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -187,7 +187,11 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
   }
 
   // ── Error state ──
-  if (isError) {
+  // Uber pattern: only show error if we NEVER had data.
+  // If socket is feeding live positions, a failed poll is irrelevant.
+  const hasEverHadData = useRef(false)
+  if (trackingData) hasEverHadData.current = true
+  if (isError && !hasEverHadData.current) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-6">
         <Card className="max-w-md w-full p-6 text-center">

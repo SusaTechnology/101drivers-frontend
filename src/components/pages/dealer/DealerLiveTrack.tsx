@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useSearch, useNavigate } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -261,6 +261,7 @@ export default function DealerLiveTrack() {
     enabled: !!token,
     noFilter: true,
     staleTime: 0,
+    publicEndpoint: true,
     refetchInterval: 15000, // 15s polling — socket is primary, this is fallback
   })
 
@@ -393,7 +394,11 @@ export default function DealerLiveTrack() {
   }
 
   // Error: public tracking data failed
-  if (trackingError) {
+  // Uber pattern: only show error screen if we NEVER had data.
+  // If socket is feeding live positions, a failed poll is irrelevant.
+  const hasEverHadData = useRef(false)
+  if (trackingData) hasEverHadData.current = true
+  if (trackingError && !hasEverHadData.current) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <Header />

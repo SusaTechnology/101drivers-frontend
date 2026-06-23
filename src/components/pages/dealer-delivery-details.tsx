@@ -259,6 +259,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     enabled: !!trackingToken,
     noFilter: true,
     staleTime: 0,
+    publicEndpoint: true,
     refetchInterval: 15000, // 15s polling — socket is primary, this is fallback
   })
 
