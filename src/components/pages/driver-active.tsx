@@ -369,6 +369,7 @@ export default function DriverActiveDeliveryPage() {
   const EMIT_THROTTLE_MS = 3000
 
   // ── GPS quality constants (Uber-style filtering) ──
+  const GPS_WARMUP_READINGS = 3     // skip first N readings after watchPosition starts (cold start = garbage coords)
   const MAX_GPS_ACCURACY = 50       // meters — reject readings worse than this
   const MAX_SPEED_MS = 80           // m/s (~180 mph) — reject impossible teleportation
   const MIN_MOVE_METERS = 5         // meters — if barely moved, keep previous position (no jitter)
@@ -386,6 +387,13 @@ export default function DriverActiveDeliveryPage() {
   // Geolocation: GPS fires → filter for quality → smooth → update UI → emit via socket (throttled)
   useEffect(() => {
     if (!pickupCoords || !dropoffCoords) return
+
+    // Reset smoothed/previous state when watchPosition restarts
+    smoothedPositionRef.current = null
+    prevCoordsRef.current = null
+    prevGpsTimeRef.current = 0
+    const warmupCount = { value: 0 } // counter for cold-start rejection
+
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const rawLat = pos.coords.latitude
@@ -393,11 +401,31 @@ export default function DriverActiveDeliveryPage() {
         const accuracy = pos.coords.accuracy // meters — lower is better
         const now = Date.now()
 
+        // ── FILTER 0: GPS cold start — skip first readings entirely ──
+        // When watchPosition starts (or phone wakes up), the GPS chip returns
+        // garbage coordinates — often near (0,0) = Pacific Ocean / Gulf of Guinea.
+        // The chip LIES about accuracy (reports 10-30m) so the accuracy filter
+        // can't catch it. The only fix: skip the first few readings and wait
+        // for the satellite lock to settle.
+        if (warmupCount.value < GPS_WARMUP_READINGS) {
+          warmupCount.value++
+          // But still count these as "received" for health tracking
+          setLastLocationTime(new Date())
+          consecutiveMissedRef.current = 0
+          return
+        }
+
+        // ── FILTER 0b: Null-island sanity check ──
+        // If coordinates are near (0, 0), it's a GPS default — not a real position.
+        // This catches cold-start readings that slip past the warmup.
+        if (Math.abs(rawLat) < 1 && Math.abs(rawLng) < 1) {
+          return
+        }
+
         // ── FILTER 1: Accuracy — reject low-confidence readings ──
         // GPS accuracy > 50m means the true position could be anywhere in a 50m radius.
         // These cause the jumping you see — especially in cities with building reflections.
         if (accuracy > MAX_GPS_ACCURACY) {
-          // Don't update anything — just wait for a better reading
           return
         }
 
