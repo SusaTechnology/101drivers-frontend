@@ -368,12 +368,20 @@ export default function DriverActiveDeliveryPage() {
   const lastEmitTimeRef = useRef(0)
   const EMIT_THROTTLE_MS = 3000
 
-  // ── GPS quality constants (Uber-style filtering) ──
-  const GPS_WARMUP_READINGS = 3     // skip first N readings after watchPosition starts (cold start = garbage coords)
-  const MAX_GPS_ACCURACY = 50       // meters — reject readings worse than this
-  const MAX_SPEED_MS = 80           // m/s (~180 mph) — reject impossible teleportation
-  const MIN_MOVE_METERS = 5         // meters — if barely moved, keep previous position (no jitter)
-  const SMOOTH_FACTOR = 0.35        // exponential smoothing (0 = never update, 1 = no smoothing)
+  // ── GPS quality constants (Kalman-lite filtering — same approach Uber uses) ──
+  // A simple EMA has two fatal flaws:
+  //   1. No velocity awareness → lags behind when driving (icon appears 10-20m behind car)
+  //   2. Jitter filter compares raw-to-raw → multipath jumps (20-40m) pass through
+  // A Kalman filter predicts position from velocity, then corrects with GPS.
+  // When stationary: prediction = current, GPS noise is tiny innovation → icon stays frozen ✅
+  // When driving: prediction moves forward with velocity, GPS corrects small errors ✅
+  // When multipath: prediction is far from bogus GPS → innovation is large → rejected ✅
+  const GPS_WARMUP_READINGS = 3     // skip first N readings (cold start = garbage coords)
+  const MAX_GPS_ACCURACY = 50       // meters — reject low-confidence readings
+  const MAX_INNOVATION_METERS = 50  // meters — reject if GPS too far from KF prediction
+  const KF_ALPHA = 0.3              // position correction weight (0=predict, 1=GPS)
+  const KF_BETA = 0.15              // velocity update weight (how fast velocity adapts)
+  const MAX_SPEED_DEG_PER_SEC = 50 / 111000 // ~112 mph velocity clamp (prevents divergence)
 
   // Haversine distance in meters between two points
   function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -384,102 +392,97 @@ export default function DriverActiveDeliveryPage() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   }
 
-  // Geolocation: GPS fires → filter for quality → smooth → update UI → emit via socket (throttled)
+  // Geolocation: GPS fires → filter → Kalman predict+correct → update UI → emit via socket (throttled)
   useEffect(() => {
     if (!pickupCoords || !dropoffCoords) return
 
-    // Reset smoothed/previous state when watchPosition restarts
+    // Reset all tracking state when watchPosition restarts
     smoothedPositionRef.current = null
     prevCoordsRef.current = null
     prevGpsTimeRef.current = 0
-    const warmupCount = { value: 0 } // counter for cold-start rejection
+    const warmupCount = { value: 0 }
+
+    // ── Kalman-lite filter state (local to this watchPosition lifecycle) ──
+    // Recreated each time the useEffect re-runs, so no stale state leaks.
+    const kf = { lat: 0, lng: 0, vLat: 0, vLng: 0, init: false }
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const rawLat = pos.coords.latitude
         const rawLng = pos.coords.longitude
-        const accuracy = pos.coords.accuracy // meters — lower is better
+        const accuracy = pos.coords.accuracy
         const now = Date.now()
 
         // ── FILTER 0: GPS cold start — skip first readings entirely ──
-        // When watchPosition starts (or phone wakes up), the GPS chip returns
-        // garbage coordinates — often near (0,0) = Pacific Ocean / Gulf of Guinea.
-        // The chip LIES about accuracy (reports 10-30m) so the accuracy filter
-        // can't catch it. The only fix: skip the first few readings and wait
-        // for the satellite lock to settle.
+        // GPS chip returns garbage (often near 0,0) and LIES about accuracy.
+        // The only fix: skip until satellite lock settles.
         if (warmupCount.value < GPS_WARMUP_READINGS) {
           warmupCount.value++
-          // But still count these as "received" for health tracking
           setLastLocationTime(new Date())
           consecutiveMissedRef.current = 0
           return
         }
 
         // ── FILTER 0b: Null-island sanity check ──
-        // If coordinates are near (0, 0), it's a GPS default — not a real position.
-        // This catches cold-start readings that slip past the warmup.
         if (Math.abs(rawLat) < 1 && Math.abs(rawLng) < 1) {
           return
         }
 
         // ── FILTER 1: Accuracy — reject low-confidence readings ──
-        // GPS accuracy > 50m means the true position could be anywhere in a 50m radius.
-        // These cause the jumping you see — especially in cities with building reflections.
         if (accuracy > MAX_GPS_ACCURACY) {
           return
         }
 
-        // ── FILTER 2: Speed plausibility — reject teleportation ──
-        // If the distance / time implies > 80 m/s (~180 mph), it's a GPS glitch.
-        // This prevents the "jump back to start" bug you described.
-        const prev = prevCoordsRef.current
-        const prevTime = prevGpsTimeRef.current
-        if (prev && prevTime > 0) {
-          const dtSec = (now - prevTime) / 1000
-          if (dtSec > 0.1) { // skip if too close in time (first reading)
-            const dist = haversineMeters(prev.lat, prev.lng, rawLat, rawLng)
-            const speed = dist / dtSec
-            if (speed > MAX_SPEED_MS) {
-              // Impossible speed — skip this reading entirely
-              return
-            }
+        // ── Compute time delta from last ACCEPTED reading ──
+        const dt = prevGpsTimeRef.current > 0 ? (now - prevGpsTimeRef.current) / 1000 : 0
+
+        // ── KALMAN PREDICT STEP ──
+        let predLat = rawLat
+        let predLng = rawLng
+        if (kf.init && dt > 0.1) {
+          predLat = kf.lat + kf.vLat * dt
+          predLng = kf.lng + kf.vLng * dt
+
+          // ── FILTER 2: Innovation outlier — reject if GPS too far from prediction ──
+          // This replaces both the old speed filter AND jitter filter.
+          // It's strictly better because it accounts for the car's current velocity.
+          //   Stationary + 30m multipath → innovation = 30m → rejected ✅
+          //   Driving 20m/s + correct GPS → innovation ≈ 2m → accepted ✅
+          //   Driving 20m/s + 80m multipath → innovation ≈ 65m → rejected ✅
+          const innovDist = haversineMeters(predLat, predLng, rawLat, rawLng)
+          if (innovDist > MAX_INNOVATION_METERS) {
+            return // outlier — don't update any state
           }
         }
 
-        // ── FILTER 3: Stationary jitter suppression ──
-        // When not moving, GPS still bounces around by 3-15m.
-        // If we moved less than 5m, keep the previous smoothed position.
-        let useLat = rawLat
-        let useLng = rawLng
-        if (prev) {
-          const dist = haversineMeters(prev.lat, prev.lng, rawLat, rawLng)
-          if (dist < MIN_MOVE_METERS) {
-            // Barely moved — use previous smoothed position, not the noisy new one
-            const smoothed = smoothedPositionRef.current
-            if (smoothed) {
-              useLat = smoothed.lat
-              useLng = smoothed.lng
-            } else {
-              useLat = prev.lat
-              useLng = prev.lng
-            }
-          }
+        // ── KALMAN CORRECT STEP ──
+        if (!kf.init || dt <= 0.1) {
+          // First valid reading — initialize filter
+          kf.lat = rawLat
+          kf.lng = rawLng
+          kf.vLat = 0
+          kf.vLng = 0
+          kf.init = true
+        } else {
+          // Innovation = how far GPS is from where we predicted
+          const innovLat = rawLat - predLat
+          const innovLng = rawLng - predLng
+
+          // Correct position: prediction + alpha * innovation
+          kf.lat = predLat + KF_ALPHA * innovLat
+          kf.lng = predLng + KF_ALPHA * innovLng
+
+          // Update velocity estimate from innovation
+          // If car accelerated, innovation is consistently positive → velocity adapts
+          kf.vLat = kf.vLat + KF_BETA * (innovLat / dt)
+          kf.vLng = kf.vLng + KF_BETA * (innovLng / dt)
+
+          // Clamp velocity to prevent filter divergence from bad readings
+          kf.vLat = Math.max(-MAX_SPEED_DEG_PER_SEC, Math.min(MAX_SPEED_DEG_PER_SEC, kf.vLat))
+          kf.vLng = Math.max(-MAX_SPEED_DEG_PER_SEC, Math.min(MAX_SPEED_DEG_PER_SEC, kf.vLng))
         }
 
-        // ── SMOOTH: Exponential moving average ──
-        // Blends new reading with previous to remove micro-jitter.
-        // Uber uses Kalman filters; this is the lightweight equivalent.
-        const smoothed = smoothedPositionRef.current
-        let finalLat = useLat
-        let finalLng = useLng
-        if (smoothed) {
-          // Weight: closer readings (low accuracy) get more weight from new value
-          // High accuracy (< 10m) = trust it more, low accuracy (10-50m) = smooth more
-          const alpha = accuracy < 10 ? 0.6 : SMOOTH_FACTOR
-          finalLat = smoothed.lat + (useLat - smoothed.lat) * alpha
-          finalLng = smoothed.lng + (useLng - smoothed.lng) * alpha
-        }
-        const finalCoords = { lat: finalLat, lng: finalLng }
+        const finalCoords = { lat: kf.lat, lng: kf.lng }
 
         // ── Accept this reading ──
         prevCoordsRef.current = { lat: rawLat, lng: rawLng }
@@ -490,13 +493,12 @@ export default function DriverActiveDeliveryPage() {
         // 1. Update driver UI (map marker, heading, etc.)
         setDriverPosition(finalCoords)
 
-        // Compute heading from SMOOTHED positions (not raw — prevents heading flicker)
+        // 2. Compute heading from raw coords (not smoothed — raw shows real direction)
         const nativeHeading = pos.coords.heading
         if (nativeHeading != null && !isNaN(nativeHeading) && nativeHeading !== 0) {
           setDriverHeading(nativeHeading)
         } else {
-          const prevSmoothed = smoothedPositionRef.current
-          // Use raw coords for heading calc to detect actual direction change
+          const prev = prevCoordsRef.current
           if (prev && (Math.abs(rawLat - prev.lat) > 0.00001 || Math.abs(rawLng - prev.lng) > 0.00001)) {
             setDriverHeading((Math.atan2(rawLng - prev.lng, rawLat - prev.lat) * 180 / Math.PI + 360) % 360)
           }
@@ -505,7 +507,7 @@ export default function DriverActiveDeliveryPage() {
         consecutiveMissedRef.current = 0
         setLocationHealth('healthy')
 
-        // 2. Emit to server via socket, throttled to every 3s
+        // 3. Emit to server via socket, throttled to every 3s
         if (now - lastEmitTimeRef.current >= EMIT_THROTTLE_MS) {
           lastEmitTimeRef.current = now
           if (deliveryIdRef.current) {
