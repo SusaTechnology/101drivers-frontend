@@ -90,6 +90,9 @@ export function DealerSignIn({
   const [forgotEmail, setForgotEmail] = useState("");
   const navigate = useNavigate();
 
+  // Detect if user was redirected here due to session expiry
+  const isSessionExpired = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('session') === 'expired';
+
   const isDealer = userType === "dealer";
   const isDriver = userType === "driver";
   const isAdmin = userType === "admin";
@@ -451,6 +454,18 @@ export function DealerSignIn({
                 </div>
               </div>
 
+              {isSessionExpired && (
+                <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-800 dark:text-amber-200">Your session expired</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Please sign in again to continue.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {loginError && (
                 <div className="mt-6 p-4 rounded-2xl bg-destructive/10 border border-destructive/20">
                   <div className="flex items-start gap-3">
@@ -726,6 +741,18 @@ export function DealerSignIn({
                     </span>
                   </div>
                 </div>
+
+                {isSessionExpired && (
+                  <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-amber-800 dark:text-amber-200">Your session expired</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Please sign in again to continue.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {loginError && (
                   <div className="mt-6 p-4 rounded-2xl bg-destructive/10 border border-destructive/20">
