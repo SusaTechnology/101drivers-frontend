@@ -1328,20 +1328,20 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                     </div>
                   )}
 
-                  {/* Completed delivery overlay */}
+                  {/* Completed delivery banner — sits at top, doesn't cover the map */}
                   {deliveryData.status === 'COMPLETED' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px] z-[5]">
-                      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl px-6 py-4 shadow-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-                          <CheckSquare className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+                      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-full px-5 py-2 shadow-lg border border-emerald-200 dark:border-emerald-800 flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                          <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                         </div>
-                        <div>
-                          <div className="text-sm font-black text-emerald-700 dark:text-emerald-300">Delivery Completed</div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">
-                            {deliveryData.compliance?.dropoffCompletedAt
-                              ? `Completed at ${formatTime(deliveryData.compliance.dropoffCompletedAt)}`
-                              : 'Successfully delivered'}
-                          </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">Delivery Completed</span>
+                          {deliveryData.compliance?.dropoffCompletedAt && (
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                              at {formatTime(deliveryData.compliance.dropoffCompletedAt)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
