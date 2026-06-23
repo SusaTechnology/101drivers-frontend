@@ -72,6 +72,12 @@ interface RouteMapProps {
    */
   focusOnDriver?: boolean;
   /**
+   * When true, the map continuously pans to follow the driver.
+   * If the user manually drags the map, following pauses and a re-center
+   * button appears. Tapping it resumes following.
+   */
+  followDriver?: boolean;
+  /**
    * When true, hide the "A"/"B" labels on pickup/dropoff markers.
    */
   showMarkerLabels?: boolean;
@@ -97,12 +103,17 @@ export default function RouteMap({
   lockViewport = false,
   fitZonesBounds = false,
   focusOnDriver = false,
+  followDriver = false,
   showMarkerLabels = true,
 }: RouteMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [internalDirections, setInternalDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [trackPolyline, setTrackPolyline] = useState<google.maps.Polyline | null>(null);
   const initialDriverFocusDone = useRef(false);
+
+  // ── Follow-driver: continuous panning with user-override detection ──
+  const followingRef = useRef(true); // start following
+  const userDraggedRef = useRef(false);
 
   // ── Imperative driver marker with smooth position animation ──
   const driverMarkerRef = useRef<google.maps.Marker | null>(null);
@@ -238,6 +249,38 @@ export default function RouteMap({
     map.setZoom(14);
     initialDriverFocusDone.current = true;
   }, [map, focusOnDriver, driverPosition]);
+
+  // ── Detect user drag to pause following ──
+  useEffect(() => {
+    if (!map || !followDriver) return;
+
+    const onDragStart = () => { userDraggedRef.current = true; followingRef.current = false; };
+    map.addListener('dragstart', onDragStart);
+    return () => { google.maps.event.clearListeners(map, 'dragstart', onDragStart); };
+  }, [map, followDriver]);
+
+  // ── Continuous follow: pan to driver on every position update ──
+  // Uses driverPosition in deps — each new position object triggers re-eval.
+  useEffect(() => {
+    if (!map || !followDriver || !driverPosition || !followingRef.current) return;
+    map.panTo(driverPosition);
+  }, [map, followDriver, driverPosition]);
+
+  // Show re-center button when user has paused following
+  const [showRecenter, setShowRecenter] = useState(false);
+  useEffect(() => {
+    if (!followDriver) { setShowRecenter(false); return; }
+    setShowRecenter(!followingRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followDriver, driverPosition]);
+
+  const handleRecenter = () => {
+    if (!map || !driverPosition) return;
+    followingRef.current = true;
+    userDraggedRef.current = false;
+    map.panTo(driverPosition);
+    setShowRecenter(false);
+  };
 
   // Adjust map view when directions or coordinates change
   useEffect(() => {
@@ -400,6 +443,20 @@ export default function RouteMap({
 
       {/* Pickup zone overlay polygons */}
       {zones && zones.length > 0 && <PickupZoneOverlay zones={zones} />}
+
+      {/* Re-center button (follow-driver mode) — appears when user drags away */}
+      {followDriver && showRecenter && (
+        <div
+          onClick={handleRecenter}
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 w-12 h-12 rounded-full bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer hover:shadow-xl transition-shadow active:scale-95"
+          title="Re-center on driver"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-700 dark:text-slate-300">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 2v4m0 12v4m10-10h-4M6 12H2m15.07-7.07l-2.83 2.83M9.76 14.24l-2.83 2.83m11.14 0l-2.83-2.83M9.76 9.76L6.93 6.93" />
+          </svg>
+        </div>
+      )}
     </GoogleMap>
   );
 }

@@ -1312,6 +1312,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                       driverPosition={driverPosition}
                       points={routePoints}
                       focusOnDriver={!!driverPosition}
+                      followDriver={true}
                       isLoaded={isLoaded}
                     />
                   ) : (

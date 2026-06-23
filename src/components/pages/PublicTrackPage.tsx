@@ -306,6 +306,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
                 points={routePoints}
                 isLoaded={isLoaded}
                 focusOnDriver={true}
+                followDriver={true}
                 showMarkerLabels={false}
               />
             ) : (

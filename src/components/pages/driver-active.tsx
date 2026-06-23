@@ -1026,6 +1026,7 @@ export default function DriverActiveDeliveryPage() {
                 selectedRouteIndex={selectedRouteIndex}
                 isLoaded={isLoaded}
                 focusOnDriver={true}
+                followDriver={true}
                 showMarkerLabels={false}
                 lockViewport={false}
               />
@@ -1404,6 +1405,7 @@ export default function DriverActiveDeliveryPage() {
                   selectedRouteIndex={selectedRouteIndex}
                   isLoaded={isLoaded}
                   focusOnDriver={true}
+                  followDriver={true}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
