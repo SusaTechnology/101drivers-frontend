@@ -1224,7 +1224,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
         className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-lime-500 text-slate-950 font-extrabold hover:bg-lime-600"
       >
         <Navigation className="h-4 w-4" />
-        Live track the driver
+        Start Live Tracking
       </Button>
     )}
     {deliveryData.status === 'COMPLETED' && (
@@ -1237,7 +1237,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       <Button
         onClick={() => setShowActionDialog(true)}
         disabled={transitionDeliveryMutation.isPending}
-        className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white font-extrabold hover:bg-emerald-700 disabled:opacity-50"
+        className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-red-600 text-white font-extrabold hover:bg-red-700 disabled:opacity-50"
       >
         <CheckSquare className="h-4 w-4" />
         {transitionDeliveryMutation.isPending ? 'Closing...' : 'Close Delivery'}
@@ -2306,7 +2306,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
             <Button
               onClick={() => handleTransitionDelivery('COMPLETED', 'Dealer manually closed delivery')}
               disabled={transitionDeliveryMutation.isPending}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-extrabold"
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-red-600 text-white hover:bg-red-700 font-extrabold"
             >
               <CheckSquare className="h-4 w-4" />
               {transitionDeliveryMutation.isPending ? 'Closing...' : 'Complete Delivery'}
