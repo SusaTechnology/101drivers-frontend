@@ -256,7 +256,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   // 2. Fetch public tracking data (latest point + route points)
   const { data: trackingData } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRequests/public/tracking/${trackingToken}`,
-    enabled: !!trackingToken,
+    enabled: !!trackingToken && isTrackable,
     noFilter: true,
     staleTime: 0,
     publicEndpoint: true,
