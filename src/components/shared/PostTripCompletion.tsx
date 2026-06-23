@@ -38,7 +38,7 @@ export default function PostTripCompletion({
         dismissedRef.current = true
         onDismissRef.current()
       }
-    }, 3000)
+    }, 8000)
     return () => {
       cancelAnimationFrame(raf)
       clearTimeout(timer)
