@@ -1145,18 +1145,14 @@ async getTrackingLink(input: {
       throw new NotFoundException("Tracking link not found");
     }
 
-    // Tracking should only stop when the driver completes or cancels the delivery.
-    // For active/in-progress deliveries, never enforce token expiry — the link
-    // stays live until the delivery reaches a terminal state.
-    const isTerminal = [
-      EnumDeliveryRequestStatus.COMPLETED,
-      EnumDeliveryRequestStatus.CANCELLED,
-      EnumDeliveryRequestStatus.DISPUTED,
-      EnumDeliveryRequestStatus.EXPIRED,
-    ].includes(delivery.status);
-
-    if (isTerminal && delivery.status !== EnumDeliveryRequestStatus.COMPLETED) {
-      // Cancelled / disputed / expired: enforce expiry
+    // Tracking only matters when there's a driver to follow.
+    // ACTIVE: never expire — driver is on the road.
+    // COMPLETED: never expire — customer/dealer can review the final trip.
+    // Everything else: enforce expiry (no driver moving anyway).
+    if (
+      delivery.status !== EnumDeliveryRequestStatus.ACTIVE &&
+      delivery.status !== EnumDeliveryRequestStatus.COMPLETED
+    ) {
       if (
         !delivery.trackingShareExpiresAt ||
         delivery.trackingShareExpiresAt.getTime() < Date.now()
@@ -1164,7 +1160,6 @@ async getTrackingLink(input: {
         throw new ConflictException("Tracking link expired");
       }
     }
-    // COMPLETED: always viewable. Active/in-progress: always viewable.
 
     const points = delivery.trackingSession?.points ?? [];
     const latestPoint = points.length > 0 ? points[points.length - 1] : null;
