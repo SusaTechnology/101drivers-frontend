@@ -1208,6 +1208,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3">
+            {!['ACTIVE', 'COMPLETED'].includes(deliveryData.status) && (
             <Button
               variant="outline"
               onClick={() => navigate({ to: '/dealer-edit-delivery', state: { id: deliveryData.id } })}
@@ -1216,6 +1217,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
               <Calendar className="h-4 w-4 text-lime-500" />
               Edit Schedule
             </Button>
+            )}
     {(deliveryData.status === 'BOOKED' || deliveryData.status === 'ACTIVE') && (
       <Button
         onClick={() => navigate({ to: `/live-track?deliveryId=${deliveryData.id}` })}
@@ -1553,6 +1555,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                         <Download className="h-4 w-4" />
                         Download Report
                       </Button>
+                      {!['ACTIVE', 'COMPLETED'].includes(deliveryData.status) && (
                       <Button 
                         variant="outline" 
                         className="flex-1 py-4 rounded-2xl gap-2"
@@ -1561,6 +1564,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                         <Edit className="h-4 w-4 text-lime-500" />
                         Edit Order
                       </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
