@@ -487,10 +487,36 @@ export default function DriverActiveDeliveryPage() {
         // ── Accept this reading ──
         prevCoordsRef.current = { lat: rawLat, lng: rawLng }
         prevGpsTimeRef.current = now
-        smoothedPositionRef.current = finalCoords
         latestPositionRef.current = finalCoords
 
-        // 1. Update driver UI (map marker, heading, etc.)
+        // 1. Update driver UI — skip if position barely changed (prevents
+        //    unnecessary re-renders and panTo calls when stationary)
+        const prevSmoothed = smoothedPositionRef.current
+        smoothedPositionRef.current = finalCoords
+        if (prevSmoothed &&
+            Math.abs(finalCoords.lat - prevSmoothed.lat) < 0.000001 &&
+            Math.abs(finalCoords.lng - prevSmoothed.lng) < 0.000001) {
+          // Position didn't change (~0.1mm) — skip setState, still update health
+          setLastLocationTime(new Date())
+          consecutiveMissedRef.current = 0
+          setLocationHealth('healthy')
+          // Still emit if throttle allows (dealer needs periodic confirmation driver is alive)
+          const emitNow = Date.now()
+          if (emitNow - lastEmitTimeRef.current >= EMIT_THROTTLE_MS) {
+            lastEmitTimeRef.current = emitNow
+            if (deliveryIdRef.current) {
+              const socket = getSocket()
+              const payload = { lat: finalCoords.lat, lng: finalCoords.lng, recordedAt: new Date().toISOString() }
+              if (socket?.connected) {
+                socket.emit('driver:location', payload)
+              } else {
+                locationPingMutation.mutate(payload)
+              }
+            }
+          }
+          return
+        }
+
         setDriverPosition(finalCoords)
 
         // 2. Compute heading from raw coords (not smoothed — raw shows real direction)

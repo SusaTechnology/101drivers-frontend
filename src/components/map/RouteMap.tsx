@@ -147,7 +147,7 @@ export default function RouteMap({
       return;
     }
 
-    // Animate to new position
+    // Move marker to new position
     if (driverPosition && driverMarkerRef.current) {
       // Update heading immediately
       if (heading != null) {
@@ -166,6 +166,18 @@ export default function RouteMap({
       // Cancel any running animation
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
 
+      // ── UBER PATTERN: When following, snap marker instantly ──
+      // The map panTo handles all visual smoothness. Animating the marker
+      // AND panning the map creates a "double animation" where the map
+      // arrives before the marker catches up — looks laggy.
+      // Uber keeps the car fixed in center; only the map moves.
+      if (followDriver && followingRef.current) {
+        driverMarkerRef.current.setPosition(to);
+        animPosRef.current = to;
+        return;
+      }
+
+      // ── NOT following: animate marker smoothly (e.g., user dragged away) ──
       const duration = 2800; // ms — completes before next ~3s GPS ping (with throttle)
       const startTime = performance.now();
 
@@ -182,7 +194,7 @@ export default function RouteMap({
 
       animFrameRef.current = requestAnimationFrame(step);
     }
-  }, [map, isLoaded, driverPosition, heading]);
+  }, [map, isLoaded, driverPosition, heading, followDriver]);
 
   // Cleanup marker on unmount
   useEffect(() => {
