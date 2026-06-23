@@ -1145,20 +1145,11 @@ async getTrackingLink(input: {
       throw new NotFoundException("Tracking link not found");
     }
 
-    // Tracking only matters when there's a driver to follow.
-    // ACTIVE: never expire — driver is on the road.
-    // COMPLETED: never expire — customer/dealer can review the final trip.
-    // Everything else: enforce expiry (no driver moving anyway).
-    if (
-      delivery.status !== EnumDeliveryRequestStatus.ACTIVE &&
-      delivery.status !== EnumDeliveryRequestStatus.COMPLETED
-    ) {
-      if (
-        !delivery.trackingShareExpiresAt ||
-        delivery.trackingShareExpiresAt.getTime() < Date.now()
-      ) {
-        throw new ConflictException("Tracking link expired");
-      }
+    // Tracking only matters when there's a driver actively on the road.
+    // ACTIVE: always allow — driver is moving, never expire mid-trip.
+    // Everything else (COMPLETED, CANCELLED, DRAFT, etc.): no live driver to follow.
+    if (delivery.status !== EnumDeliveryRequestStatus.ACTIVE) {
+      throw new ConflictException("Tracking is not available for this delivery status");
     }
 
     const points = delivery.trackingSession?.points ?? [];
