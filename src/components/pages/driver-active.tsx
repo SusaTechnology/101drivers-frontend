@@ -206,6 +206,7 @@ export default function DriverActiveDeliveryPage() {
   const trackingInterval = useRef<NodeJS.Timeout>()
   // 👇 NEW: ref to store latest position for interval
   const latestPositionRef = useRef<google.maps.LatLngLiteral | null>(null)
+  const deliveryIdRef = useRef<string | undefined>(undefined)
   const dropoffSectionRef = useRef<HTMLDivElement>(null)
   const prevCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
 
@@ -418,15 +419,18 @@ export default function DriverActiveDeliveryPage() {
     return () => clearInterval(interval)
   }, [lastLocationTime, locationHealth])
 
-  // 👇 NEW: update ref when driverPosition changes
+  // 👇 Keep refs in sync with state (avoids stale closures in intervals)
   useEffect(() => {
     latestPositionRef.current = driverPosition
   }, [driverPosition])
+  useEffect(() => {
+    deliveryIdRef.current = deliveryId
+  }, [deliveryId])
 
   // Send an immediate ping the moment GPS position is first acquired
   const hasPingedRef = useRef(false)
   useEffect(() => {
-    if (driverPosition && !hasPingedRef.current && deliveryId) {
+    if (driverPosition && !hasPingedRef.current && deliveryIdRef.current) {
       hasPingedRef.current = true
       sendLocationPing(driverPosition)
     }
@@ -459,7 +463,7 @@ export default function DriverActiveDeliveryPage() {
   // Returns a Promise so the caller can await it (needed before complete-trip)
   const sendLocationPing = (position: google.maps.LatLngLiteral): Promise<void> => {
     return new Promise((resolve) => {
-      if (!deliveryId) { resolve(); return }
+      if (!deliveryIdRef.current) { resolve(); return }
       const payload = {
         lat: position.lat,
         lng: position.lng,
