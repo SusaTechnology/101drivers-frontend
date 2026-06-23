@@ -209,6 +209,9 @@ export default function DriverActiveDeliveryPage() {
   const deliveryIdRef = useRef<string | undefined>(undefined)
   const dropoffSectionRef = useRef<HTMLDivElement>(null)
   const prevCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
+  const prevGpsTimeRef = useRef<number>(0) // timestamp of last accepted GPS reading
+  // Smoothed position ref — used to prevent UI jitter from bad GPS
+  const smoothedPositionRef = useRef<google.maps.LatLngLiteral | null>(null)
 
   // ── Geofence: distance to dropoff ──
   const GEO_RADIUS_MILES = 0.1
@@ -365,39 +368,121 @@ export default function DriverActiveDeliveryPage() {
   const lastEmitTimeRef = useRef(0)
   const EMIT_THROTTLE_MS = 3000
 
-  // Geolocation: GPS fires → update UI immediately → emit to server via socket (throttled)
+  // ── GPS quality constants (Uber-style filtering) ──
+  const MAX_GPS_ACCURACY = 50       // meters — reject readings worse than this
+  const MAX_SPEED_MS = 80           // m/s (~180 mph) — reject impossible teleportation
+  const MIN_MOVE_METERS = 5         // meters — if barely moved, keep previous position (no jitter)
+  const SMOOTH_FACTOR = 0.35        // exponential smoothing (0 = never update, 1 = no smoothing)
+
+  // Haversine distance in meters between two points
+  function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371000
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLng = ((lng2 - lng1) * Math.PI) / 180
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  }
+
+  // Geolocation: GPS fires → filter for quality → smooth → update UI → emit via socket (throttled)
   useEffect(() => {
     if (!pickupCoords || !dropoffCoords) return
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        const rawLat = pos.coords.latitude
+        const rawLng = pos.coords.longitude
+        const accuracy = pos.coords.accuracy // meters — lower is better
+        const now = Date.now()
 
-        // 1. Update driver UI immediately (map marker, heading, etc.)
-        setDriverPosition(coords)
-        latestPositionRef.current = coords
+        // ── FILTER 1: Accuracy — reject low-confidence readings ──
+        // GPS accuracy > 50m means the true position could be anywhere in a 50m radius.
+        // These cause the jumping you see — especially in cities with building reflections.
+        if (accuracy > MAX_GPS_ACCURACY) {
+          // Don't update anything — just wait for a better reading
+          return
+        }
 
-        // Compute heading
-        const nativeHeading = pos.coords.heading
-        if (nativeHeading != null && !isNaN(nativeHeading)) {
-          setDriverHeading(nativeHeading)
-        } else {
-          const prev = prevCoordsRef.current
-          if (prev && (Math.abs(pos.coords.latitude - prev.lat) > 0.00001 || Math.abs(pos.coords.longitude - prev.lng) > 0.00001)) {
-            setDriverHeading((Math.atan2(pos.coords.longitude - prev.lng, pos.coords.latitude - prev.lat) * 180 / Math.PI + 360) % 360)
+        // ── FILTER 2: Speed plausibility — reject teleportation ──
+        // If the distance / time implies > 80 m/s (~180 mph), it's a GPS glitch.
+        // This prevents the "jump back to start" bug you described.
+        const prev = prevCoordsRef.current
+        const prevTime = prevGpsTimeRef.current
+        if (prev && prevTime > 0) {
+          const dtSec = (now - prevTime) / 1000
+          if (dtSec > 0.1) { // skip if too close in time (first reading)
+            const dist = haversineMeters(prev.lat, prev.lng, rawLat, rawLng)
+            const speed = dist / dtSec
+            if (speed > MAX_SPEED_MS) {
+              // Impossible speed — skip this reading entirely
+              return
+            }
           }
         }
-        prevCoordsRef.current = coords
+
+        // ── FILTER 3: Stationary jitter suppression ──
+        // When not moving, GPS still bounces around by 3-15m.
+        // If we moved less than 5m, keep the previous smoothed position.
+        let useLat = rawLat
+        let useLng = rawLng
+        if (prev) {
+          const dist = haversineMeters(prev.lat, prev.lng, rawLat, rawLng)
+          if (dist < MIN_MOVE_METERS) {
+            // Barely moved — use previous smoothed position, not the noisy new one
+            const smoothed = smoothedPositionRef.current
+            if (smoothed) {
+              useLat = smoothed.lat
+              useLng = smoothed.lng
+            } else {
+              useLat = prev.lat
+              useLng = prev.lng
+            }
+          }
+        }
+
+        // ── SMOOTH: Exponential moving average ──
+        // Blends new reading with previous to remove micro-jitter.
+        // Uber uses Kalman filters; this is the lightweight equivalent.
+        const smoothed = smoothedPositionRef.current
+        let finalLat = useLat
+        let finalLng = useLng
+        if (smoothed) {
+          // Weight: closer readings (low accuracy) get more weight from new value
+          // High accuracy (< 10m) = trust it more, low accuracy (10-50m) = smooth more
+          const alpha = accuracy < 10 ? 0.6 : SMOOTH_FACTOR
+          finalLat = smoothed.lat + (useLat - smoothed.lat) * alpha
+          finalLng = smoothed.lng + (useLng - smoothed.lng) * alpha
+        }
+        const finalCoords = { lat: finalLat, lng: finalLng }
+
+        // ── Accept this reading ──
+        prevCoordsRef.current = { lat: rawLat, lng: rawLng }
+        prevGpsTimeRef.current = now
+        smoothedPositionRef.current = finalCoords
+        latestPositionRef.current = finalCoords
+
+        // 1. Update driver UI (map marker, heading, etc.)
+        setDriverPosition(finalCoords)
+
+        // Compute heading from SMOOTHED positions (not raw — prevents heading flicker)
+        const nativeHeading = pos.coords.heading
+        if (nativeHeading != null && !isNaN(nativeHeading) && nativeHeading !== 0) {
+          setDriverHeading(nativeHeading)
+        } else {
+          const prevSmoothed = smoothedPositionRef.current
+          // Use raw coords for heading calc to detect actual direction change
+          if (prev && (Math.abs(rawLat - prev.lat) > 0.00001 || Math.abs(rawLng - prev.lng) > 0.00001)) {
+            setDriverHeading((Math.atan2(rawLng - prev.lng, rawLat - prev.lat) * 180 / Math.PI + 360) % 360)
+          }
+        }
         setLastLocationTime(new Date())
         consecutiveMissedRef.current = 0
         setLocationHealth('healthy')
 
         // 2. Emit to server via socket, throttled to every 3s
-        const now = Date.now()
         if (now - lastEmitTimeRef.current >= EMIT_THROTTLE_MS) {
           lastEmitTimeRef.current = now
           if (deliveryIdRef.current) {
             const socket = getSocket()
-            const payload = { lat: coords.lat, lng: coords.lng, recordedAt: new Date().toISOString() }
+            const payload = { lat: finalCoords.lat, lng: finalCoords.lng, recordedAt: new Date().toISOString() }
             if (socket?.connected) {
               socket.emit('driver:location', payload)
             } else {
