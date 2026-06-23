@@ -588,7 +588,6 @@ async completeTrip(input: {
       where: { id: input.deliveryId },
       data: {
         status: EnumDeliveryRequestStatus.COMPLETED,
-        trackingShareExpiresAt: businessNow().toJSDate(),
       },
     });
 
@@ -1146,11 +1145,14 @@ async getTrackingLink(input: {
       throw new NotFoundException("Tracking link not found");
     }
 
-    if (
-      !delivery.trackingShareExpiresAt ||
-      delivery.trackingShareExpiresAt.getTime() < Date.now()
-    ) {
-      throw new ConflictException("Tracking link expired");
+    // Completed deliveries are always viewable — skip expiration check
+    if (delivery.status !== EnumDeliveryRequestStatus.COMPLETED) {
+      if (
+        !delivery.trackingShareExpiresAt ||
+        delivery.trackingShareExpiresAt.getTime() < Date.now()
+      ) {
+        throw new ConflictException("Tracking link expired");
+      }
     }
 
     const points = delivery.trackingSession?.points ?? [];
