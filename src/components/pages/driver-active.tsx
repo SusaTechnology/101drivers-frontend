@@ -398,7 +398,7 @@ export default function DriverActiveDeliveryPage() {
           setLocationHealth('warning')
         }
       },
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
     console.log("setDriverPosition",watchId, driverPosition)
     return () => navigator.geolocation.clearWatch(watchId);

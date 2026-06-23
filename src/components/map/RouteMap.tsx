@@ -104,6 +104,83 @@ export default function RouteMap({
   const [trackPolyline, setTrackPolyline] = useState<google.maps.Polyline | null>(null);
   const initialDriverFocusDone = useRef(false);
 
+  // ── Imperative driver marker with smooth position animation ──
+  const driverMarkerRef = useRef<google.maps.Marker | null>(null);
+  const animPosRef = useRef<google.maps.LatLngLiteral | null>(null);
+  const animFrameRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+
+    // Create marker on first driver position
+    if (!driverMarkerRef.current && driverPosition) {
+      driverMarkerRef.current = new google.maps.Marker({
+        map,
+        position: driverPosition,
+        icon: {
+          url: '/icons/car.png?v=2',
+          scaledSize: new google.maps.Size(48, 48),
+          anchor: new google.maps.Point(24, 24),
+          rotation: heading != null ? heading : undefined,
+        },
+      });
+      animPosRef.current = driverPosition;
+      return;
+    }
+
+    // Remove marker if position cleared
+    if (!driverPosition && driverMarkerRef.current) {
+      driverMarkerRef.current.setMap(null);
+      driverMarkerRef.current = null;
+      animPosRef.current = null;
+      return;
+    }
+
+    // Animate to new position
+    if (driverPosition && driverMarkerRef.current) {
+      // Update heading immediately
+      if (heading != null) {
+        driverMarkerRef.current.setIcon({
+          url: '/icons/car.png?v=2',
+          scaledSize: new google.maps.Size(48, 48),
+          anchor: new google.maps.Point(24, 24),
+          rotation: heading,
+        });
+      }
+
+      const from = animPosRef.current || driverPosition;
+      const to = driverPosition;
+      if (from.lat === to.lat && from.lng === to.lng) return;
+
+      // Cancel any running animation
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+
+      const duration = 2500; // ms — completes before next 5s GPS ping
+      const startTime = performance.now();
+
+      const step = (now: number) => {
+        const t = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - (1 - t) * (1 - t); // ease-out quadratic
+        const lat = from.lat + (to.lat - from.lat) * eased;
+        const lng = from.lng + (to.lng - from.lng) * eased;
+        const pos = { lat, lng };
+        animPosRef.current = pos;
+        driverMarkerRef.current?.setPosition(pos);
+        if (t < 1) animFrameRef.current = requestAnimationFrame(step);
+      };
+
+      animFrameRef.current = requestAnimationFrame(step);
+    }
+  }, [map, isLoaded, driverPosition, heading]);
+
+  // Cleanup marker on unmount
+  useEffect(() => {
+    return () => {
+      if (driverMarkerRef.current) { driverMarkerRef.current.setMap(null); driverMarkerRef.current = null; }
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, []);
+
   // Use external directions if provided, otherwise use internal
   const directions = externalDirections ?? internalDirections;
 
@@ -307,18 +384,7 @@ export default function RouteMap({
       {/* Dropoff marker */}
       {dropoff && <Marker position={dropoff} {...(showMarkerLabels ? { label: 'B' } : {})} />}
 
-      {/* Driver position marker - car.png, rotates with heading */}
-      {driverPosition && (
-        <Marker
-          position={driverPosition}
-          icon={{
-            url: '/icons/car.png?v=2',
-            scaledSize: new google.maps.Size(48, 48),
-            anchor: new google.maps.Point(24, 24),
-            rotation: heading != null ? heading : undefined,
-          }}
-        />
-      )}
+      {/* Driver position marker — created imperatively with smooth animation above */}
 
       {/* Render directions if available */}
       {directions && (
