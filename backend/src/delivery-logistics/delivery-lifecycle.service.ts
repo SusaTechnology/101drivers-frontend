@@ -1097,7 +1097,7 @@ async getTrackingLink(input: {
 
   return {
     token: delivery.trackingShareToken,
-    expiresAt: delivery.trackingShareExpiresAt.toISOString(),
+    expiresAt: delivery.trackingShareExpiresAt?.toISOString() ?? null,
     trackingUrl: this.buildPublicTrackingUrl(delivery.trackingShareToken),
   };
 }
@@ -1163,7 +1163,7 @@ async getTrackingLink(input: {
       status: delivery.status,
       serviceType: delivery.serviceType,
       pickupPin: delivery.pickupPin,
-      expiresAt: delivery.trackingShareExpiresAt.toISOString(),
+      expiresAt: delivery.trackingShareExpiresAt?.toISOString() ?? null,
       pickup: {
         address: delivery.pickupAddress,
         lat: delivery.pickupLat,
