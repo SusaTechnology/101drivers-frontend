@@ -60,7 +60,15 @@ export function setUser(user: typeof currentUser) {
   else localStorage.removeItem(USER_KEY);
 }
 
+// Remember the last known roles so the session-expired redirect
+// can send the user to the correct role-specific login page even after clearAuth().
+let lastKnownRoles: string[] = [];
+
 export function clearAuth() {
+  // Snapshot roles before wiping — provider.tsx needs them for redirect
+  if (currentUser?.roles) {
+    lastKnownRoles = [...currentUser.roles];
+  }
   currentAccessToken = null;
   currentUser = null;
   refreshTokenPromise = null;
@@ -69,6 +77,11 @@ export function clearAuth() {
   localStorage.removeItem(USER_KEY);
   // Disconnect WebSocket when user logs out
   socketDisconnect();
+}
+
+/** Returns the last known roles even after clearAuth() wiped the user. */
+export function getLastKnownRoles(): string[] {
+  return lastKnownRoles;
 }
 
 // Check if user is currently authenticated
