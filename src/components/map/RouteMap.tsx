@@ -184,7 +184,7 @@ export default function RouteMap({
         map,
         position: driverPosition,
         icon: {
-          url: '/icons/car.png?v=2',
+          url: '/icons/car.svg',
           scaledSize: new google.maps.Size(48, 48),
           anchor: new google.maps.Point(24, 24),
           rotation: heading != null ? heading : undefined,
@@ -207,7 +207,7 @@ export default function RouteMap({
       // Update heading immediately
       if (heading != null) {
         driverMarkerRef.current.setIcon({
-          url: '/icons/car.png?v=2',
+          url: '/icons/car.svg',
           scaledSize: new google.maps.Size(48, 48),
           anchor: new google.maps.Point(24, 24),
           rotation: heading,
