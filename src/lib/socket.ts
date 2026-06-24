@@ -1,8 +1,14 @@
 /**
  * Socket.io connection manager for live tracking.
  *
- * To revert: delete this file + src/hooks/useSocket.ts, remove socketConnect/socketDisconnect
- * calls from dataQuery.ts, restore original refetchInterval values in tracking pages.
+ * Key design decisions (Uber-grade reliability):
+ *   - Socket object is NEVER replaced after creation. All listeners registered
+ *     via useSocketEvent stay attached forever. Token changes use socket.auth
+ *     + disconnect/connect on the SAME object.
+ *   - Room registry is module-level (not on the socket object). Survives
+ *     reconnection and socket reuse.
+ *   - Reconnection is infinite with 60s max backoff. The socket never gives up.
+ *   - All room joins use ack callbacks to detect auth failures.
  */
 import { io, Socket } from 'socket.io-client';
 import { handleFeedEvent } from './driver-feed-tracker';
@@ -12,30 +18,21 @@ const TRACKING_NS = '/tracking';
 
 let socket: Socket | null = null;
 
-// ── Room tracking: auto re-join on reconnect ──
+// ── Room tracking: module-level registry (survives socket reconnection) ──
 type RoomEntry = { event: string; payload?: Record<string, string> };
-const activeRooms = new Set<string>();
+const roomRegistry = new Map<string, RoomEntry>();
 
 function trackRoom(roomKey: string, event: string, payload?: Record<string, string>): void {
-  activeRooms.add(roomKey);
-  // Store the event + payload so we can re-emit on reconnect
-  if (!socket) return;
-  (socket as any).__rooms = (socket as any).__rooms || {};
-  (socket as any).__rooms[roomKey] = { event, payload };
+  roomRegistry.set(roomKey, { event, payload });
 }
 
 function untrackRoom(roomKey: string): void {
-  activeRooms.delete(roomKey);
-  if (socket) {
-    (socket as any).__rooms = (socket as any).__rooms || {};
-    delete (socket as any).__rooms[roomKey];
-  }
+  roomRegistry.delete(roomKey);
 }
 
 function rejoinAllRooms(): void {
-  if (!socket) return;
-  const rooms = (socket as any).__rooms || {};
-  for (const [roomKey, entry] of Object.entries<RoomEntry>(rooms)) {
+  if (!socket?.connected) return;
+  for (const [roomKey, entry] of roomRegistry) {
     const doEmit = () => {
       if (entry.payload) {
         socket!.emit(entry.event, entry.payload, (ack: any) => {
@@ -57,6 +54,11 @@ function rejoinAllRooms(): void {
 
 /**
  * Connect to the tracking WebSocket namespace with JWT auth.
+ *
+ * IMPORTANT: The socket object is created ONCE and never replaced.
+ * All useSocketEvent listeners stay on the same object forever.
+ * Token changes update socket.auth and reconnect the transport only.
+ *
  * Safe to call multiple times — won't create duplicate connections.
  */
 export function socketConnect(token?: string | null): Socket | null {
@@ -65,32 +67,41 @@ export function socketConnect(token?: string | null): Socket | null {
     return null;
   }
 
-  // Don't reconnect if already connected — preserve existing authenticated session
+  // Already connected — just update auth if token changed
   if (socket?.connected) {
+    const currentToken = (socket.auth as any)?.token;
+    if (token && token !== currentToken) {
+      socket.auth = { token };
+      socket.disconnect().connect();
+    }
     return socket;
   }
 
-  // Clean up any existing disconnected socket
+  // Socket exists but disconnected — reuse the SAME object.
+  // This preserves all useSocketEvent listeners attached to it.
+  // socket.connect() resets the reconnection attempt counter.
   if (socket) {
-    socket.disconnect();
-    socket = null;
+    socket.auth = token ? { token } : {};
+    socket.connect();
+    return socket;
   }
 
+  // First time ever — create the socket (this object lives for the session)
   const auth = token ? { token } : {};
 
   socket = io(`${WS_URL}${TRACKING_NS}`, {
     auth,
     transports: ['websocket', 'polling'], // prefer websocket, fall back to polling
     reconnection: true,
-    reconnectionAttempts: 10,
+    // No reconnectionAttempts cap — the socket NEVER gives up.
+    // Uber/WhatsApp keep trying forever. With 60s max backoff, this is
+    // a single lightweight TCP attempt per minute — negligible battery/CPU cost.
     reconnectionDelay: 2000,
-    reconnectionDelayMax: 30000,
+    reconnectionDelayMax: 60000,
     timeout: 10000,
   });
 
   // ── Shared driver-feed listener (single listener, persists for socket lifetime) ──
-  // Handles: seen-ID tracking, unread-count increment, notification sound,
-  // and forwarding the event to whichever dashboard page has registered a refetch callback.
   socket.on('delivery:feed-update', (data) => {
     handleFeedEvent(data);
   });
@@ -113,11 +124,12 @@ export function socketConnect(token?: string | null): Socket | null {
 }
 
 /**
- * Disconnect from the tracking WebSocket.
+ * Disconnect from the tracking WebSocket and clear all room state.
  * Safe to call even if not connected.
+ * Called on logout — the next socketConnect() will create a fresh socket.
  */
 export function socketDisconnect(): void {
-  activeRooms.clear();
+  roomRegistry.clear();
   if (socket) {
     socket.disconnect();
     socket = null;
@@ -186,7 +198,6 @@ export function socketJoinPublic(token: string): void {
       }
     });
   } else {
-    // Socket still connecting — wait for 'connect' then join
     socket.once('connect', () => {
       socket!.emit('join:public', { token }, (ack: any) => {
         if (socket?.connected && !ack?.joined) {

@@ -179,6 +179,10 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const [driverPosition, setDriverPosition] = useState<google.maps.LatLngLiteral | null>(null)
   const [routePoints, setRoutePoints] = useState<google.maps.LatLngLiteral[]>([])
 
+  // Track when socket last pushed a position — prevents the 15s poll from
+  // overwriting fresher socket data with stale DB data.
+  const lastSocketUpdateRef = useRef<number>(0)
+
   // Rating state
   const [ratingStars, setRatingStars] = useState(0)
   const [ratingComment, setRatingComment] = useState('')
@@ -263,11 +267,11 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     refetchInterval: 15000, // 15s polling — socket is primary, this is fallback
   })
 
-  // 3. Set driver position from tracking data
-  // NOTE: do NOT set routePoints from DB — historical points may contain bad GPS
-  // readings that draw lines across the map. Trail built from live socket events.
+  // 3. Set driver position from tracking data ONLY if socket hasn't pushed recently.
+  // Prevents the 15s poll from overwriting fresher socket positions.
   useEffect(() => {
-    if (trackingData?.trackingSession?.latestPoint) {
+    const socketIsFresh = Date.now() - lastSocketUpdateRef.current < 30_000
+    if (trackingData?.trackingSession?.latestPoint && !socketIsFresh) {
       const p = trackingData.trackingSession.latestPoint
       setDriverPosition({ lat: p.lat, lng: p.lng })
     }
@@ -287,6 +291,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   // 5. Socket.IO: Listen for real-time location updates
   // Build trail only from live socket points; skip duplicates/jitter (< 10m).
   useSocketEvent('delivery:location-update', (data: any) => {
+    lastSocketUpdateRef.current = Date.now()
     setDriverPosition({ lat: data.lat, lng: data.lng })
     setRoutePoints(prev => {
       const last = prev[prev.length - 1]

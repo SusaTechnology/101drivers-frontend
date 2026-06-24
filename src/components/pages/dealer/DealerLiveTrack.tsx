@@ -32,7 +32,7 @@ import { cn } from '@/lib/utils'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
-import { useSocketEvent } from '@/hooks/useSocket'
+import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
 import { socketJoinPublic, socketLeavePublic, socketJoinDelivery, socketLeaveDelivery } from '@/lib/socket'
 
 // Helper to format time
@@ -224,6 +224,11 @@ export default function DealerLiveTrack() {
   const [driverPosition, setDriverPosition] = useState<google.maps.LatLngLiteral | null>(null)
   const [routePoints, setRoutePoints] = useState<google.maps.LatLngLiteral[]>([]) // 👈 new state for route points
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
+  const socketConnected = useSocketConnected()
+
+  // Track when socket last pushed a position — prevents the 15s poll from
+  // overwriting fresher socket data with stale DB data (causes backward snap).
+  const lastSocketUpdateRef = useRef<number>(0)
 
   const user = getUser()
   const dealerId = user?.profileId
@@ -265,7 +270,11 @@ export default function DealerLiveTrack() {
     refetchInterval: 15000, // 15s polling — socket is primary, this is fallback
   })
 
-  // Update coordinates and route points when tracking data arrives
+  // Update pickup/dropoff from tracking data (these never come via socket).
+  // Only apply driverPosition from DB poll if socket hasn't pushed data recently.
+  // This prevents the 15s poll from overwriting fresher socket positions
+  // with stale DB data, which causes the car to snap backward.
+  const SOCKET_FRESHNESS_MS = 30_000 // 30s — if no socket update in 30s, poll takes over
   useEffect(() => {
     if (trackingData?.pickup) {
       setPickupCoords({ lat: trackingData.pickup.lat, lng: trackingData.pickup.lng })
@@ -273,15 +282,13 @@ export default function DealerLiveTrack() {
     if (trackingData?.dropoff) {
       setDropoffCoords({ lat: trackingData.dropoff.lat, lng: trackingData.dropoff.lng })
     }
-    if (trackingData?.trackingSession?.latestPoint) {
+    const socketIsFresh = Date.now() - lastSocketUpdateRef.current < SOCKET_FRESHNESS_MS
+    if (trackingData?.trackingSession?.latestPoint && !socketIsFresh) {
       const point = trackingData.trackingSession.latestPoint
       setDriverPosition({ lat: point.lat, lng: point.lng })
-    } else {
+    } else if (!socketIsFresh) {
       setDriverPosition(null)
     }
-    // NOTE: do NOT set routePoints from DB historical points.
-    // Old points may contain bad GPS readings (initial lock before settling)
-    // that draw lines across the map. Trail is built purely from live socket events.
   }, [trackingData])
 
   // ── SOCKET.IO: Join public room AND authenticated delivery room ──
@@ -299,6 +306,7 @@ export default function DealerLiveTrack() {
   // Build the orange trail only from live socket points (accurate, current GPS).
   // Skip duplicates/jitter: only add if moved > ~10m from last point.
   useSocketEvent('delivery:location-update', (data: any) => {
+    lastSocketUpdateRef.current = Date.now()
     setDriverPosition({ lat: data.lat, lng: data.lng })
     setRoutePoints(prev => {
       const last = prev[prev.length - 1]
@@ -440,8 +448,22 @@ export default function DealerLiveTrack() {
                 Real‑time location of the driver. Updates every 5 seconds.
               </p>
               
-              {/* Last update status bar */}
+              {/* Connection quality + last update status bar */}
               <div className="flex items-center gap-3 mt-3">
+                {/* Socket connection indicator */}
+                <div className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold",
+                  socketConnected
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                )}>
+                  {socketConnected ? (
+                    <div className="h-2 w-2 rounded-full bg-green-500" />
+                  ) : (
+                    <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                  )}
+                  {socketConnected ? 'Live' : 'Reconnecting'}
+                </div>
                 <div className={cn(
                   "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold",
                   isDataStale 

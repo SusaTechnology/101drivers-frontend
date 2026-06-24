@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 import { useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
-import { useSocketEvent } from '@/hooks/useSocket'
+import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
 import { socketJoinPublic, socketLeavePublic, socketConnect, socketDisconnect } from '@/lib/socket'
 
 const formatTime = (dateString?: string) => {
@@ -65,6 +65,10 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
   const [routePoints, setRoutePoints] = useState<google.maps.LatLngLiteral[]>([])
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
   const [mapExpanded, setMapExpanded] = useState(false)
+  const socketConnected = useSocketConnected()
+
+  // Track when socket last pushed a position — prevents poll overwrite.
+  const lastSocketUpdateRef = useRef<number>(0)
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
@@ -89,7 +93,9 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
     refetchInterval: 60000, // SOCKET.IO: slowed from 5s to 60s as fallback
   })
 
-  // Update coordinates and route points when tracking data arrives
+  // Update coordinates when tracking data arrives.
+  // Only apply driverPosition from DB poll if socket hasn't pushed recently.
+  const SOCKET_FRESHNESS_MS = 60_000 // 60s — public page has 60s poll interval
   useEffect(() => {
     if (trackingData?.pickup) {
       setPickupCoords({ lat: trackingData.pickup.lat, lng: trackingData.pickup.lng })
@@ -97,14 +103,13 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
     if (trackingData?.dropoff) {
       setDropoffCoords({ lat: trackingData.dropoff.lat, lng: trackingData.dropoff.lng })
     }
-    if (trackingData?.trackingSession?.latestPoint) {
+    const socketIsFresh = Date.now() - lastSocketUpdateRef.current < SOCKET_FRESHNESS_MS
+    if (trackingData?.trackingSession?.latestPoint && !socketIsFresh) {
       const point = trackingData.trackingSession.latestPoint
       setDriverPosition({ lat: point.lat, lng: point.lng })
-    } else {
+    } else if (!socketIsFresh) {
       setDriverPosition(null)
     }
-    // NOTE: do NOT load routePoints from DB — may contain bad GPS points.
-    // Trail is built purely from live socket events below.
   }, [trackingData])
 
   // ── SOCKET.IO: Connect (unauthenticated) and join public tracking room ──
@@ -121,6 +126,7 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
 
   // ── SOCKET.IO: Listen for real-time location updates ──
   const handleLocationUpdate = useCallback((data: any) => {
+    lastSocketUpdateRef.current = Date.now()
     setDriverPosition({ lat: data.lat, lng: data.lng })
     setRoutePoints(prev => {
       const last = prev[prev.length - 1]
@@ -261,19 +267,35 @@ export default function PublicTrackPage({ token }: PublicTrackPageProps) {
           {/* Status indicators */}
           <div className="flex items-center gap-3 mt-3">
             {!isTripCompleted && (
-              <div className={cn(
-                "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold",
-                isDataStale
-                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                  : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-              )}>
-                {isDataStale ? (
-                  <AlertCircle className="h-3.5 w-3.5" />
-                ) : (
-                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                )}
-                {isDataStale ? 'Stale data' : getLastUpdateText()}
-              </div>
+              <>
+                {/* Socket connection indicator */}
+                <div className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold",
+                  socketConnected
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                )}>
+                  {socketConnected ? (
+                    <div className="h-2 w-2 rounded-full bg-green-500" />
+                  ) : (
+                    <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                  )}
+                  {socketConnected ? 'Live' : 'Reconnecting'}
+                </div>
+                <div className={cn(
+                  "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold",
+                  isDataStale
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                    : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                )}>
+                  {isDataStale ? (
+                    <AlertCircle className="h-3.5 w-3.5" />
+                  ) : (
+                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  )}
+                  {isDataStale ? 'Stale data' : getLastUpdateText()}
+                </div>
+              </>
             )}
 
             <Button
