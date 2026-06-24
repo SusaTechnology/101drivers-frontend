@@ -1,6 +1,45 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import PickupZoneOverlay from './PickupZoneOverlay';
+
+/**
+ * Generate a car icon data-URI with heading baked into the SVG transform.
+ * This avoids Google Maps' Icon.rotation which compresses/distorts SVGs.
+ * The SVG has 64x64 viewBox with the car ~40x54 centered — rotation never clips.
+ */
+const CAR_SVG_BASE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs><filter id="ds" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.5"/></filter></defs>
+  <g filter="url(#ds)" transform="translate(32,32)">
+    <path d="M -8 -26 C -8 -27 -7 -27.5 -6 -27.5 L 6 -27.5 C 7 -27.5 8 -27 8 -26 L 9.5 -22 L 11 -17 C 11.5 -15.5 11.5 -14 11 -12.5 L 10 -8 L 10 8 L 11 12.5 C 11.5 14 11.5 15.5 11 17 L 9.5 22 L 8 25 C 8 26 7 26.5 6 26.5 L -6 26.5 C -7 26.5 -8 26 -8 25 L -9.5 22 L -11 17 C -11.5 15.5 -11.5 14 -11 12.5 L -10 8 L -10 -8 L -11 -12.5 C -11.5 -14 -11.5 -15.5 -11 -17 L -9.5 -22 Z" fill="#FFF" stroke="#CCC" stroke-width="0.4"/>
+    <path d="M -7 -26 L 7 -26 L 9 -22 L -9 -22 Z" fill="#F8F8F8"/>
+    <path d="M -7.5 -21.5 L -6 -17 L 6 -17 L 7.5 -21.5 Z" fill="#64B5F6" opacity="0.85"/>
+    <path d="M -6.5 -21 L -5.5 -17.5 L 0 -17.5 L 0 -21 Z" fill="#FFF" opacity="0.3"/>
+    <rect x="-7" y="-16.5" width="14" height="14" rx="1" fill="#F0F0F0"/>
+    <path d="M -6.5 2.5 L -7.5 7 L 7.5 7 L 6.5 2.5 Z" fill="#64B5F6" opacity="0.6"/>
+    <path d="M -7 8 L 7 8 L 7.5 10 L 9 15 L 9.5 20 L 8 24 L -8 24 L -9.5 20 L -9 15 L -7.5 10 Z" fill="#F5F5F5"/>
+    <ellipse cx="-12" cy="-19" rx="2" ry="1.2" fill="#FFF" stroke="#CCC" stroke-width="0.3"/>
+    <ellipse cx="12" cy="-19" rx="2" ry="1.2" fill="#FFF" stroke="#CCC" stroke-width="0.3"/>
+    <path d="M -10 -25 L -8.5 -25 L -10 -21.5 Z" fill="#FFD54F" opacity="0.9"/>
+    <path d="M 10 -25 L 8.5 -25 L 10 -21.5 Z" fill="#FFD54F" opacity="0.9"/>
+    <path d="M -10 21.5 L -8.5 24.5 L -10 24.5 Z" fill="#EF5350" opacity="0.9"/>
+    <path d="M 10 21.5 L 8.5 24.5 L 10 24.5 Z" fill="#EF5350" opacity="0.9"/>
+    <path d="M -11 -13 C -13 -12 -13 -8 -11 -7" stroke="#BBB" stroke-width="0.5" fill="none"/>
+    <path d="M 11 -13 C 13 -12 13 -8 11 -7" stroke="#BBB" stroke-width="0.5" fill="none"/>
+    <path d="M -11 7 C -13 8 -13 12 -11 13" stroke="#BBB" stroke-width="0.5" fill="none"/>
+    <path d="M 11 7 C 13 8 13 12 11 13" stroke="#BBB" stroke-width="0.5" fill="none"/>
+  </g>
+</svg>`;
+
+function getCarIconUrl(headingDeg: number | null | undefined): string {
+  const rotation = headingDeg != null ? headingDeg : 0;
+  // Inject rotation into the SVG transform so Google Maps shows a pre-rotated image.
+  // No Icon.rotation needed — the SVG itself is already turned the right way.
+  const rotated = CAR_SVG_BASE.replace(
+    'translate(32,32)',
+    `translate(32,32) rotate(${rotation})`
+  );
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(rotated);
+}
 
 const containerStyle = {
   width: '100%',
@@ -184,10 +223,9 @@ export default function RouteMap({
         map,
         position: driverPosition,
         icon: {
-          url: '/icons/car.svg',
+          url: getCarIconUrl(heading),
           scaledSize: new google.maps.Size(48, 48),
           anchor: new google.maps.Point(24, 24),
-          rotation: heading != null ? heading : undefined,
         },
       });
       animPosRef.current = driverPosition;
@@ -207,10 +245,9 @@ export default function RouteMap({
       // Update heading immediately
       if (heading != null) {
         driverMarkerRef.current.setIcon({
-          url: '/icons/car.svg',
+          url: getCarIconUrl(heading),
           scaledSize: new google.maps.Size(48, 48),
           anchor: new google.maps.Point(24, 24),
-          rotation: heading,
         });
       }
 
