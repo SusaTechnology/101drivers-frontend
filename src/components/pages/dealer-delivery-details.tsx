@@ -82,7 +82,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, useDataMutation } from '@/lib/tanstack/dataQuery'
 import { socketJoinPublic, socketLeavePublic, socketJoinDelivery, socketLeaveDelivery } from '@/lib/socket'
-import { useSocketEvent } from '@/hooks/useSocket'
+import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 
@@ -182,6 +182,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   // Track when socket last pushed a position — prevents the 15s poll from
   // overwriting fresher socket data with stale DB data.
   const lastSocketUpdateRef = useRef<number>(0)
+  const socketConnected = useSocketConnected()
 
   // Rating state
   const [ratingStars, setRatingStars] = useState(0)
@@ -1224,13 +1225,28 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
             </Button>
             )}
     {(deliveryData.status === 'BOOKED' || deliveryData.status === 'ACTIVE') && (
-      <Button
-        onClick={() => navigate({ to: `/live-track?deliveryId=${deliveryData.id}` })}
-        className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-lime-500 text-slate-950 font-extrabold hover:bg-lime-600"
-      >
-        <Navigation className="h-4 w-4" />
-        Start Live Tracking
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          onClick={() => navigate({ to: `/live-track?deliveryId=${deliveryData.id}` })}
+          className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-lime-500 text-slate-950 font-extrabold hover:bg-lime-600"
+        >
+          <Navigation className="h-4 w-4" />
+          Start Live Tracking
+        </Button>
+        <div className={cn(
+          "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold",
+          socketConnected
+            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+            : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+        )}>
+          {socketConnected ? (
+            <div className="h-2 w-2 rounded-full bg-green-500" />
+          ) : (
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+          )}
+          {socketConnected ? 'Live' : 'Reconnecting'}
+        </div>
+      </div>
     )}
     {deliveryData.status === 'COMPLETED' && (
       <div className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-200 dark:border-emerald-800">
