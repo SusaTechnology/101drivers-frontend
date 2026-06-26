@@ -311,6 +311,67 @@ evidence: {
     super(prisma.deliveryRequest);
   }
 
+  /**
+   * Fetch driver details by driverId with rating & deliveryCount computed.
+   * Used as fallback when no assignment record exists but a driverId is known
+   * from payout, rating, or other relations.
+   */
+  private async resolveDriverInfo(driverId: string): Promise<any | null> {
+    if (!driverId) return null;
+    try {
+      const driver = await this.prisma.driver.findUnique({
+        where: { id: driverId },
+        select: {
+          id: true,
+          phone: true,
+          profilePhotoUrl: true,
+          status: true,
+          _count: {
+            select: {
+              assignments: true,
+              ratingsReceived: true,
+            },
+          },
+          ratingsReceived: {
+            select: { stars: true },
+            take: 100,
+          },
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+              email: true,
+            },
+          },
+        },
+      });
+      if (!driver) return null;
+
+      const ratings = driver.ratingsReceived || [];
+      driver.rating = ratings.length
+        ? Number((ratings.reduce((sum: number, r: any) => sum + (r.stars || 0), 0) / ratings.length).toFixed(1))
+        : null;
+      driver.deliveryCount = driver._count?.assignments || 0;
+      delete driver._count;
+      delete driver.ratingsReceived;
+      return driver;
+    } catch {
+      return null;
+    }
+  }
+
+  private computeDriverFields(driver: any): void {
+    if (!driver) return;
+    const ratings = driver.ratingsReceived || [];
+    driver.rating = ratings.length
+      ? Number((ratings.reduce((sum: number, r: any) => sum + (r.stars || 0), 0) / ratings.length).toFixed(1))
+      : null;
+    driver.deliveryCount = driver._count?.assignments || 0;
+    delete driver._count;
+    delete driver.ratingsReceived;
+  }
+
   protected override async postProcessOne(record: any | null): Promise<any | null> {
     if (!record) return record;
 
@@ -318,13 +379,25 @@ evidence: {
     if (record.assignments?.length) {
       for (const a of record.assignments) {
         if (a.driver) {
-          const ratings = a.driver.ratingsReceived || [];
-          a.driver.rating = ratings.length
-            ? Number((ratings.reduce((sum: number, r: any) => sum + (r.stars || 0), 0) / ratings.length).toFixed(1))
-            : null;
-          a.driver.deliveryCount = a.driver._count?.assignments || 0;
-          delete a.driver._count;
-          delete a.driver.ratingsReceived;
+          this.computeDriverFields(a.driver);
+        }
+      }
+    }
+
+    // Fallback: if no active assignment but we know the driverId from payout/rating,
+    // fetch driver info directly and inject a synthetic assignment
+    if ((!record.assignments?.length) && (record.status === 'BOOKED' || record.status === 'ACTIVE' || record.status === 'COMPLETED')) {
+      const driverId = record.payout?.driverId || record.rating?.driverId;
+      if (driverId) {
+        const driverInfo = await this.resolveDriverInfo(driverId);
+        if (driverInfo) {
+          record.assignments = [{
+            id: '__fallback__',
+            assignedAt: record.createdAt,
+            reason: null,
+            driverId: driverInfo.id,
+            driver: driverInfo,
+          }];
         }
       }
     }
@@ -337,13 +410,24 @@ evidence: {
       if (record.assignments?.length) {
         for (const a of record.assignments) {
           if (a.driver) {
-            const ratings = a.driver.ratingsReceived || [];
-            a.driver.rating = ratings.length
-              ? Number((ratings.reduce((sum: number, r: any) => sum + (r.stars || 0), 0) / ratings.length).toFixed(1))
-              : null;
-            a.driver.deliveryCount = a.driver._count?.assignments || 0;
-            delete a.driver._count;
-            delete a.driver.ratingsReceived;
+            this.computeDriverFields(a.driver);
+          }
+        }
+      }
+
+      // Same fallback for list endpoints
+      if ((!record.assignments?.length) && (record.status === 'BOOKED' || record.status === 'ACTIVE' || record.status === 'COMPLETED')) {
+        const driverId = record.payout?.driverId || record.rating?.driverId;
+        if (driverId) {
+          const driverInfo = await this.resolveDriverInfo(driverId);
+          if (driverInfo) {
+            record.assignments = [{
+              id: '__fallback__',
+              assignedAt: record.createdAt,
+              reason: null,
+              driverId: driverInfo.id,
+              driver: driverInfo,
+            }];
           }
         }
       }

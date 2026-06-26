@@ -474,16 +474,17 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const miles = deliveryData?.quote?.distanceMiles
   const priceType = deliveryData?.payment ? 'Final' : (deliveryData?.quote ? 'Est.' : '—')
 
-  // Driver info from assignments
+  // Driver info from assignments (or fallback-injected by backend when no assignment record exists)
   const assignment = deliveryData?.assignments?.[0]
   const driver = assignment?.driver ? {
     id: assignment.driver.id,
     name: assignment.driver.user?.fullName || 'Driver',
-    rating: assignment.driver.rating || '—',
-    deliveries: assignment.driver.deliveryCount || '—',
+    rating: assignment.driver.rating ?? '—',
+    deliveries: assignment.driver.deliveryCount ?? '—',
     verified: assignment.driver.status === 'APPROVED',
-    phone: assignment.driver.phone || '—',
-    avatar: assignment.driver.selfiePhotoUrl || assignment.driver.profilePhotoUrl || '',
+    phone: assignment.driver.phone || assignment.driver.user?.phone || '—',
+    avatar: assignment.driver.profilePhotoUrl || '',
+    email: assignment.driver.user?.email || '',
   } : null
 
   // Timeline based on real timestamps
