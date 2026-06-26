@@ -393,8 +393,9 @@ export default function DriverActiveDeliveryPage() {
   }
 
   // Geolocation: GPS fires → filter → Kalman predict+correct → update UI → emit via socket (throttled)
+  // Starts IMMEDIATELY — not gated on pickup/dropoff coords.
+  // The driver needs to see their position even before route is calculated.
   useEffect(() => {
-    if (!pickupCoords || !dropoffCoords) return
 
     // Reset all tracking state when watchPosition restarts
     smoothedPositionRef.current = null
@@ -1044,13 +1045,13 @@ export default function DriverActiveDeliveryPage() {
 
           {/* Full-screen map */}
           <div className="fixed inset-0 z-0">
-            {isLoaded && pickupCoords && dropoffCoords ? (
+            {isLoaded ? (
               <RouteMap
                 pickup={pickupCoords}
                 dropoff={dropoffCoords}
                 driverPosition={driverPosition}
                 driverHeading={driverHeading}
-                directionsResult={routes[0]}
+                directionsResult={routes[0] || null}
                 selectedRouteIndex={selectedRouteIndex}
                 isLoaded={isLoaded}
                 focusOnDriver={true}
