@@ -376,8 +376,8 @@ export default function DriverActiveDeliveryPage() {
   // When stationary: prediction = current, GPS noise is tiny innovation → icon stays frozen ✅
   // When driving: prediction moves forward with velocity, GPS corrects small errors ✅
   // When multipath: prediction is far from bogus GPS → innovation is large → rejected ✅
-  const GPS_WARMUP_READINGS = 3     // skip first N readings (cold start = garbage coords)
-  const MAX_GPS_ACCURACY = 50       // meters — reject low-confidence readings
+  const GPS_WARMUP_READINGS = 0     // skip first N readings (cold start = garbage coords)
+  const MAX_GPS_ACCURACY = 100      // meters — reject low-confidence readings
   const MAX_INNOVATION_METERS = 50  // meters — reject if GPS too far from KF prediction
   const KF_ALPHA = 0.3              // position correction weight (0=predict, 1=GPS)
   const KF_BETA = 0.15              // velocity update weight (how fast velocity adapts)
@@ -396,6 +396,18 @@ export default function DriverActiveDeliveryPage() {
   // Starts IMMEDIATELY — not gated on pickup/dropoff coords.
   // The driver needs to see their position even before route is calculated.
   useEffect(() => {
+
+    // ── FAST INITIAL FIX: getCurrentPosition is faster than watchPosition's
+    // first callback. Gets the car icon on the map 1-2s sooner.
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (Math.abs(pos.coords.latitude) < 1 && Math.abs(pos.coords.longitude) < 1) return
+        if (pos.coords.accuracy > MAX_GPS_ACCURACY) return
+        setDriverPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+      },
+      () => {}, // ignore errors — watchPosition will handle retries
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 5000 }
+    )
 
     // Reset all tracking state when watchPosition restarts
     smoothedPositionRef.current = null
@@ -561,7 +573,7 @@ export default function DriverActiveDeliveryPage() {
       { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [pickupCoords, dropoffCoords])
+  }, []) // GPS starts once on mount — NOT gated on pickup/dropoff coords
 
   // Monitor location health: show warning if no update for 120s
   useEffect(() => {
