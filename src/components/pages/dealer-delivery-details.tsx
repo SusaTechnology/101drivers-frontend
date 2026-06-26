@@ -66,6 +66,7 @@ import {
   Settings,
   AlertCircle,
   User,
+  Sun,
   ShieldCheck,
   FileText,
   Calendar,
@@ -82,7 +83,8 @@ import {
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, useDataMutation } from '@/lib/tanstack/dataQuery'
 import { socketJoinPublic, socketLeavePublic, socketJoinDelivery, socketLeaveDelivery } from '@/lib/socket'
-import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { useDealerDeliverySocket } from '@/hooks/useDealerDeliverySocket'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import { toast } from 'sonner'
 
@@ -182,7 +184,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   // Track when socket last pushed a position — prevents the 15s poll from
   // overwriting fresher socket data with stale DB data.
   const lastSocketUpdateRef = useRef<number>(0)
-  const socketConnected = useSocketConnected()
+  const { socketConnected } = useDealerDeliverySocket({ dealerId, deliveryId: id })
 
   // Rating state
   const [ratingStars, setRatingStars] = useState(0)
@@ -1192,8 +1194,6 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                   Delivery #{deliveryData.id?.slice(-6).toUpperCase() || id?.slice(-6).toUpperCase()}
                 </h1>
 
-                <StatusBadge status={deliveryData.status} />
-
                 <Badge variant="secondary" className="gap-1 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest">
                   <MapPin className="h-3 w-3" />
                   CA Only
@@ -1214,7 +1214,29 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
           </div>
 
           {/* Actions */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Status tag — left side */}
+            <StatusBadge status={deliveryData.status} />
+
+            {/* Dynamic status banner — next to status tag, left of Live badge */}
+            {deliveryData.status === 'LISTED' && (
+              <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <Sun className="h-4 w-4 text-slate-400" />
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Waiting for a driver to accept this delivery...</span>
+              </div>
+            )}
+            {deliveryData.status === 'BOOKED' && (
+              <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <CheckCircle className="h-4 w-4 text-amber-500" />
+                <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Driver has accepted this delivery</span>
+              </div>
+            )}
+            {deliveryData.status === 'ACTIVE' && (
+              <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <Car className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <span className="text-xs font-bold text-green-700 dark:text-green-300">Tracking live — Delivery is active</span>
+              </div>
+            )}
             {!['ACTIVE', 'COMPLETED'].includes(deliveryData.status) && (
             <Button
               variant="outline"

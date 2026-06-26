@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useTheme } from '@/lib/theme'
 import { toast } from 'sonner'
@@ -82,12 +82,10 @@ import {
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useDataMutation, authFetch, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import NotificationBell from '@/components/notifications/NotificationBell'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import { BUSINESS_TZ } from '@/lib/timezone'
-import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
-import { socketJoinDealer, socketLeaveDealer } from '@/lib/socket'
+import { useDealerDeliverySocket } from '@/hooks/useDealerDeliverySocket'
 
 // Helper functions
 const formatDate = (dateString: string) => {
@@ -169,7 +167,6 @@ export default function DealerDashboard() {
   const navigate = useNavigate()
   const user = getUser()
   const dealerId = user?.profileId
-  const queryClient = useQueryClient()
 
   const { isLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
@@ -213,7 +210,7 @@ export default function DealerDashboard() {
 
   const isPrivateCustomer = customerProfile?.customerType === 'PRIVATE'
 
-  const socketConnected = useSocketConnected()
+  const { socketConnected } = useDealerDeliverySocket({ dealerId })
 
   const { data: deliveriesData, isLoading, isFetching, isError, error, refetch } = useDataQuery({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/customers/${dealerId}/deliveries`,
@@ -312,20 +309,6 @@ export default function DealerDashboard() {
     [tipStatuses],
   )
 
-
-  // ── SOCKET.IO: Join dealer room for real-time updates ──
-  useEffect(() => {
-    if (dealerId) socketJoinDealer(dealerId)
-    return () => { if (dealerId) socketLeaveDealer(dealerId) }
-  }, [dealerId])
-
-  // ── SOCKET.IO: Listen for delivery status changes ──
-  const handleStatusChanged = useCallback((data: any) => {
-    if (data?.deliveryId && dealerId) {
-      queryClient.invalidateQueries({ queryKey: ['deliveries', dealerId] })
-    }
-  }, [dealerId, queryClient])
-  useSocketEvent('delivery:status-changed', handleStatusChanged)
 
   const stats = useMemo(() => ({
     active: deliveries.filter(d => d.status === 'ACTIVE').length,
