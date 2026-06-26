@@ -184,7 +184,6 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   // Track when socket last pushed a position — prevents the 15s poll from
   // overwriting fresher socket data with stale DB data.
   const lastSocketUpdateRef = useRef<number>(0)
-  const { socketConnected } = useDealerDeliverySocket({ dealerId, deliveryId: id })
 
   // Rating state
   const [ratingStars, setRatingStars] = useState(0)
@@ -200,6 +199,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
   const user = getUser()
   const dealerId = user?.profileId
+  const { socketConnected } = useDealerDeliverySocket({ dealerId, deliveryId: id })
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
