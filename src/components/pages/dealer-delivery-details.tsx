@@ -1328,14 +1328,10 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
           </div>
         </section>
 
-        {/* Main layout */}
-        <section className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left: Map + route + tabs */}
-          <div className="lg:col-span-7 space-y-6">
-            {/* Map section */}
-            <Card className="border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden hover:shadow-xl transition-shadow">
-              <div className="grid grid-cols-1 lg:grid-cols-12">
-                <div className="lg:col-span-7 relative min-h-[400px] sm:min-h-[500px] lg:min-h-[700px] bg-slate-50 dark:bg-slate-950">
+        {/* Full-width map section */}
+        <section className="mt-8">
+          <Card className="border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden hover:shadow-xl transition-shadow">
+              <div className="relative min-h-[400px] sm:min-h-[500px] lg:min-h-[700px] bg-slate-50 dark:bg-slate-950">
                   {isLoaded && pickupCoords && dropoffCoords ? (
                     <RouteMap
                       pickup={pickupCoords}
@@ -1390,7 +1386,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                   </div>
                 </div>
 
-                <div className="lg:col-span-5 p-6 sm:p-8 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800">
+              <div className="p-6 sm:p-8 border-t border-slate-200 dark:border-slate-800">
                   <Label className="text-[11px] font-black uppercase tracking-widest text-slate-400">Route</Label>
 
                   <div className="mt-4 space-y-4">
@@ -1457,10 +1453,13 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                     </p>
                   </div>
                 </div>
-              </div>
             </Card>
+        </section>
 
-            {/* Tabs */}
+        {/* Main layout: Tabs + Driver card */}
+        <section className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left: Tabs */}
+          <div className="lg:col-span-7 space-y-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="details" className="gap-2">
