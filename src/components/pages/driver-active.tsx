@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useSocketEvent } from '@/hooks/useSocket'
+import { useSocketEvent, useSocketConnected } from '@/hooks/useSocket'
 import { socketJoinDelivery, socketLeaveDelivery, getSocket } from '@/lib/socket'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
@@ -180,6 +180,7 @@ export default function DriverActiveDeliveryPage() {
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null)
   const [driverPosition, setDriverPosition] = useState<google.maps.LatLngLiteral | null>(null)
   const [driverHeading, setDriverHeading] = useState<number | null>(null)
+  const socketConnected = useSocketConnected()
   const [workflowStatus, setWorkflowStatus] = useState<any>(null)
 
   // Detect desktop (no touch screen + not small screen)
@@ -376,8 +377,8 @@ export default function DriverActiveDeliveryPage() {
   // When stationary: prediction = current, GPS noise is tiny innovation → icon stays frozen ✅
   // When driving: prediction moves forward with velocity, GPS corrects small errors ✅
   // When multipath: prediction is far from bogus GPS → innovation is large → rejected ✅
-  const GPS_WARMUP_READINGS = 0     // skip first N readings (cold start = garbage coords)
-  const MAX_GPS_ACCURACY = 100      // meters — reject low-confidence readings
+  const GPS_WARMUP_READINGS = 2     // skip first N readings (cold start = garbage coords)
+  const MAX_GPS_ACCURACY = 50       // meters — reject low-confidence readings
   const MAX_INNOVATION_METERS = 50  // meters — reject if GPS too far from KF prediction
   const KF_ALPHA = 0.3              // position correction weight (0=predict, 1=GPS)
   const KF_BETA = 0.15              // velocity update weight (how fast velocity adapts)
@@ -397,16 +398,18 @@ export default function DriverActiveDeliveryPage() {
   // The driver needs to see their position even before route is calculated.
   useEffect(() => {
 
-    // ── FAST INITIAL FIX: getCurrentPosition is faster than watchPosition's
-    // first callback. Gets the car icon on the map 1-2s sooner.
+    // ── FAST INITIAL FIX: getCurrentPosition with LOW accuracy for instant result ──
+    // Uses enableHighAccuracy:false so the browser returns a cell/WiFi-based
+    // position within ~1 second (no satellite lock needed). This puts the car
+    // icon on the map immediately. Once watchPosition (enableHighAccuracy:true)
+    // returns GPS-grade readings, those take over seamlessly via the Kalman filter.
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         if (Math.abs(pos.coords.latitude) < 1 && Math.abs(pos.coords.longitude) < 1) return
-        if (pos.coords.accuracy > MAX_GPS_ACCURACY) return
         setDriverPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude })
       },
       () => {}, // ignore errors — watchPosition will handle retries
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 5000 }
+      { enableHighAccuracy: false, maximumAge: 60000, timeout: 5000 }
     )
 
     // Reset all tracking state when watchPosition restarts
@@ -1074,6 +1077,26 @@ export default function DriverActiveDeliveryPage() {
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
                 Loading map...
+              </div>
+            )}
+
+            {/* Overlay: Getting location... */}
+            {isLoaded && !driverPosition && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
+                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-full px-5 py-2.5 shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-2.5">
+                  <div className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Getting location...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Overlay: Socket disconnected */}
+            {!socketConnected && driverPosition && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
+                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-full px-5 py-2.5 shadow-lg border border-amber-200 dark:border-amber-800 flex items-center gap-2.5">
+                  <div className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Reconnecting...</span>
+                </div>
               </div>
             )}
           </div>
