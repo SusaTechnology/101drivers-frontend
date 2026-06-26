@@ -252,8 +252,8 @@ export default function DealerDashboard() {
       const scheduleDate = item.customerChose === 'PICKUP_WINDOW' ? formatDate(item.pickupWindowStart) : formatDate(item.dropoffWindowStart)
       const scheduleTime = item.customerChose === 'PICKUP_WINDOW' ? formatTimeWindow(item.pickupWindowStart, item.pickupWindowEnd) : formatTimeWindow(item.dropoffWindowStart, item.dropoffWindowEnd)
       const carPhoto = item.proofs?.find((p: any) => p.type === 'PICKUP_START' || p.type === 'PICKUP_PHOTO')?.photoUrl
-      const progress = item.status === 'ACTIVE' ? Math.floor(Math.random() * 40) + 30 : 0
-      const etaMinutes = item.etaMinutes || item.quote?.etaMinutes || Math.floor(Math.random() * 30) + 15
+      // progress removed — was using Math.random() fake data
+      const etaMinutes = item.etaMinutes || item.quote?.etaMinutes || 0
       const price = item.quote?.estimatedPrice || item.payment?.amount || 0
       const miles = item.quote?.distanceMiles || 0
 
@@ -279,7 +279,6 @@ export default function DealerDashboard() {
         miles,
         driver,
         carPhoto,
-        progress,
         etaMinutes,
         createdById: item.customer?.id,
         createdAt: item.createdAt,
@@ -646,9 +645,10 @@ export default function DealerDashboard() {
                   <CardContent className="p-4">
                     {delivery.status === 'ACTIVE' && (
                       <div className="mb-4 p-3 rounded-2xl bg-lime-50 dark:bg-lime-950/20 border border-lime-200 dark:border-lime-800">
-                        <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><Timer className="h-4 w-4 text-lime-600" /><span className="text-sm font-bold text-lime-700 dark:text-lime-400">{formatDuration(delivery.etaMinutes)} remaining</span></div><span className="text-sm font-bold text-lime-600">{delivery.progress}%</span></div>
-                        <Progress value={delivery.progress} className="h-2 bg-lime-200 dark:bg-lime-900" />
-                        <div className="flex items-center justify-between mt-2 text-xs text-lime-600 dark:text-lime-400"><span>{delivery.pickup}</span><ArrowRight className="h-3 w-3" /><span>{delivery.dropoff}</span></div>
+                        {/* TODO: Re-enable with real progress from tracking data instead of random mock */}
+                        {/* <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><Timer className="h-4 w-4 text-lime-600" /><span className="text-sm font-bold text-lime-700 dark:text-lime-400">{formatDuration(delivery.etaMinutes)} remaining</span></div><span className="text-sm font-bold text-lime-600">{delivery.progress}%</span></div> */}
+                        {/* <Progress value={delivery.progress} className="h-2 bg-lime-200 dark:bg-lime-900" /> */}
+                        <div className="flex items-center justify-between text-xs text-lime-600 dark:text-lime-400"><span>{delivery.pickup}</span><ArrowRight className="h-3 w-3" /><span>{delivery.dropoff}</span></div>
                       </div>
                     )}
                     <div className="flex items-start gap-4">
