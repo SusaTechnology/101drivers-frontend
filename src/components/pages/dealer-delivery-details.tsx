@@ -483,7 +483,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     deliveries: assignment.driver.deliveryCount ?? '—',
     verified: assignment.driver.status === 'APPROVED',
     phone: assignment.driver.phone || assignment.driver.user?.phone || '—',
-    avatar: assignment.driver.profilePhotoUrl || '',
+    avatar: assignment.driver.selfiePhotoUrl || '',
     email: assignment.driver.user?.email || '',
   } : null
 

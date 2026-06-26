@@ -259,7 +259,7 @@ assignments: {
       select: {
         id: true,
         phone: true,
-        profilePhotoUrl: true,
+        selfiePhotoUrl: true,
         status: true,
         _count: {
           select: {
@@ -324,7 +324,7 @@ evidence: {
         select: {
           id: true,
           phone: true,
-          profilePhotoUrl: true,
+          selfiePhotoUrl: true,
           status: true,
           _count: {
             select: {

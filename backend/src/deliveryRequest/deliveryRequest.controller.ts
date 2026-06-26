@@ -1355,7 +1355,7 @@ async schedulePreview(
               select: {
                 id: true,
                 phone: true,
-                profilePhotoUrl: true,
+                selfiePhotoUrl: true,
                 status: true,
                 _count: {
                   select: {
