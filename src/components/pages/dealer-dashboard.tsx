@@ -76,6 +76,8 @@ import {
   Smartphone,
   Mail,
   Layers,
+  Star,
+  CheckCircle2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useDataMutation, authFetch, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
@@ -284,6 +286,32 @@ export default function DealerDashboard() {
       }
     })
   }, [deliveriesData])
+
+  // ── Fetch rating + tip status for completed deliveries (History tab) ──
+  const completedIds = useMemo(
+    () => deliveries.filter(d => d.status === 'COMPLETED').map(d => d.id),
+    [deliveries],
+  )
+  const { data: ratingStatuses } = useDataQuery<any[]>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/deliveryRatings?limit=1000`,
+    noFilter: true,
+    enabled: completedIds.length > 0,
+    staleTime: 60_000,
+  })
+  const { data: tipStatuses } = useDataQuery<any[]>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/tips?limit=1000`,
+    noFilter: true,
+    enabled: completedIds.length > 0,
+    staleTime: 60_000,
+  })
+  const ratedDeliveryIds = useMemo(
+    () => new Set((ratingStatuses || []).map((r: any) => r.delivery?.id).filter(Boolean)),
+    [ratingStatuses],
+  )
+  const tippedDeliveryIds = useMemo(
+    () => new Set((tipStatuses || []).map((t: any) => t.delivery?.id).filter(Boolean)),
+    [tipStatuses],
+  )
 
 
   // ── SOCKET.IO: Join dealer room for real-time updates ──
@@ -651,7 +679,28 @@ export default function DealerDashboard() {
                       ) : delivery.status === 'LISTED' || delivery.status === 'QUOTED' || delivery.status === 'EXPIRED' ? (
                         <Link to="/dealer-edit-delivery" state={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition"><Edit3 className="h-5 w-5" />{delivery.status === 'EXPIRED' ? 'Reactivate' : 'Edit'}</Link>
                       ) : (
-                        <Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition"><Eye className="h-5 w-5" />View Details</Link>
+                        // History tab: COMPLETED / CANCELLED — show View Details + Rate & Tip Driver
+                        <div className="flex gap-2 w-full">
+                          <Link to="/dealer-delivery-details" search={{ id: delivery.id }} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition text-sm"><Eye className="h-4 w-4" />View Details</Link>
+                          {delivery.status === 'COMPLETED' && delivery.driver && (
+                            <Link
+                              to="/dealer-delivery-details"
+                              search={{ id: delivery.id }}
+                              className={cn(
+                                "flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl font-bold transition text-sm",
+                                ratedDeliveryIds.has(delivery.id) && tippedDeliveryIds.has(delivery.id)
+                                  ? "bg-green-500 text-white hover:bg-green-600"
+                                  : "bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-700"
+                              )}
+                            >
+                              {ratedDeliveryIds.has(delivery.id) && tippedDeliveryIds.has(delivery.id) ? (
+                                <><CheckCircle2 className="h-4 w-4" />Done</>
+                              ) : (
+                                <><Star className="h-4 w-4" />Rate & Tip Driver</>
+                              )}
+                            </Link>
+                          )}
+                        </div>
                       )}
                     </div>
                   </CardContent>

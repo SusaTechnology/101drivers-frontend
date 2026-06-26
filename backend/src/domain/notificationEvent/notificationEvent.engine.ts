@@ -674,6 +674,50 @@ async notifyTripCompleted(input: {
     });
   }
 
+  // ── Schedule a follow-up email ~18 hours later reminding to rate/tip ──
+  if (customerEmail) {
+    const deliveryId = delivery.id;
+    const name = customerName;
+    const email = customerEmail;
+    // 18 hours = 64,800,000 ms — within the 12-24h window requested
+    setTimeout(async () => {
+      try {
+        // Check if already rated before sending reminder
+        const existingRating = await this.prisma.deliveryRating.findFirst({
+          where: { deliveryId },
+        });
+        if (existingRating) return; // already rated, skip reminder
+
+        await this.mailService.sendMail({
+          to: email,
+          subject: "How was your delivery? Rate your driver",
+          html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111; max-width: 480px; margin: 0 auto;">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <div style="font-size: 24px; font-weight: 800; color: #111;">101 Drivers</div>
+              </div>
+              <p style="font-size: 16px;">Hi ${name},</p>
+              <p style="font-size: 16px;">Your delivery was completed yesterday. We'd love to hear how it went!</p>
+              <p style="font-size: 16px;">Your feedback helps us maintain quality and helps drivers improve.</p>
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="https://101drivers.techbee.et"
+                   style="display: inline-block; padding: 14px 32px; background: #111; color: #fff; text-decoration: none; border-radius: 12px; font-size: 16px; font-weight: 700;">
+                  Go to 101 Drivers to Rate
+                </a>
+              </div>
+              <p style="font-size: 13px; color: #888; margin-top: 24px;">
+                You can rate your driver from the delivery details page in your dashboard.
+              </p>
+            </div>
+          `,
+        });
+        this.logger.log(`Rating reminder email sent for delivery ${deliveryId}`);
+      } catch (err: any) {
+        this.logger.warn(`Failed to send rating reminder for ${deliveryId}: ${err.message}`);
+      }
+    }, 18 * 60 * 60 * 1000);
+  }
+
   return true;
 }
   async notifyScheduleChangeRequested(input: {

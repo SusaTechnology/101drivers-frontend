@@ -1918,18 +1918,19 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                 </Badge>
               </CardHeader>
               <CardContent>
-                {/* Driver info only visible after booking (BOOKED, ACTIVE, COMPLETED) */}
-                {driver && !['LISTED', 'DRAFT', 'EXPIRED', 'CANCELLED'].includes(deliveryData.status) ? (
+                {/* Driver info section */}
+                {['BOOKED', 'ACTIVE', 'COMPLETED'].includes(deliveryData.status) ? (
+                  driver ? (
                   <>
                     <div className="mt-6 flex items-center gap-4">
                       <div
-                        className="w-16 h-16 rounded-3xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden flex items-center justify-center"
+                        className="w-16 h-16 rounded-3xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden flex items-center justify-center cursor-pointer"
                         onClick={() => { if (driver.avatar) { setPhotoDialogSrc(driver.avatar); setPhotoDialogTitle(driver.name); setPhotoDialogOpen(true); }}}
                       >
                         {driver.avatar ? (
-                          <img src={driver.avatar} alt={driver.name} className="w-full h-full object-cover cursor-pointer" />
+                          <img src={driver.avatar} alt={driver.name} className="w-full h-full object-cover" />
                         ) : (
-                          <User className="h-8 w-8 text-slate-600 dark:text-slate-300" />
+                          <User className="h-8 w-8 text-slate-400" />
                         )}
                       </div>
 
@@ -1971,6 +1972,13 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                       </Button>
                     </div>
                   </>
+                  ) : (
+                    <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+                      <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
+                        Driver info is loading. Try refreshing the page.
+                      </p>
+                    </div>
+                  )
                 ) : (
                   <div className="mt-6 p-6 text-center text-slate-500">
                     <User className="h-12 w-12 mx-auto mb-3 text-slate-400" />
