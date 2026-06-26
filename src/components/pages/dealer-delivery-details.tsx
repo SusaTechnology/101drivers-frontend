@@ -1320,7 +1320,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
             {/* Map section */}
             <Card className="border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden hover:shadow-xl transition-shadow">
               <div className="grid grid-cols-1 lg:grid-cols-12">
-                <div className="lg:col-span-7 relative min-h-[400px] sm:min-h-[500px] bg-slate-50 dark:bg-slate-950">
+                <div className="lg:col-span-7 relative min-h-[400px] sm:min-h-[500px] lg:min-h-[700px] bg-slate-50 dark:bg-slate-950">
                   {isLoaded && pickupCoords && dropoffCoords ? (
                     <RouteMap
                       pickup={pickupCoords}
