@@ -1337,6 +1337,50 @@ async schedulePreview(
         vehicleMake: true,
         vehicleModel: true,
         vinVerificationCode: true,
+
+        assignments: {
+          where: {
+            unassignedAt: null,
+          },
+          orderBy: {
+            assignedAt: "desc",
+          },
+          take: 1,
+          select: {
+            id: true,
+            assignedAt: true,
+            reason: true,
+            driverId: true,
+            driver: {
+              select: {
+                id: true,
+                phone: true,
+                profilePhotoUrl: true,
+                status: true,
+                _count: {
+                  select: {
+                    assignments: true,
+                    ratingsReceived: true,
+                  },
+                },
+                ratingsReceived: {
+                  select: {
+                    stars: true,
+                  },
+                  take: 100,
+                },
+                user: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    phone: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
     if (result === null) {

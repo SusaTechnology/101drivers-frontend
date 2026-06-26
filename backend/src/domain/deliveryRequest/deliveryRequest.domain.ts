@@ -261,6 +261,18 @@ assignments: {
         phone: true,
         profilePhotoUrl: true,
         status: true,
+        _count: {
+          select: {
+            assignments: true,
+            ratingsReceived: true,
+          },
+        },
+        ratingsReceived: {
+          select: {
+            stars: true,
+          },
+          take: 100,
+        },
         user: {
           select: {
             id: true,
@@ -297,5 +309,45 @@ evidence: {
 
   constructor(private readonly prisma: PrismaService) {
     super(prisma.deliveryRequest);
+  }
+
+  protected override async postProcessOne(record: any | null): Promise<any | null> {
+    if (!record) return record;
+
+    // Compute driver rating and deliveryCount from raw data
+    if (record.assignments?.length) {
+      for (const a of record.assignments) {
+        if (a.driver) {
+          const ratings = a.driver.ratingsReceived || [];
+          a.driver.rating = ratings.length
+            ? Number((ratings.reduce((sum: number, r: any) => sum + (r.stars || 0), 0) / ratings.length).toFixed(1))
+            : null;
+          a.driver.deliveryCount = a.driver._count?.assignments || 0;
+          delete a.driver._count;
+          delete a.driver.ratingsReceived;
+        }
+      }
+    }
+
+    return record;
+  }
+
+  protected override async postProcessMany(records: any[]): Promise<any[]> {
+    for (const record of records) {
+      if (record.assignments?.length) {
+        for (const a of record.assignments) {
+          if (a.driver) {
+            const ratings = a.driver.ratingsReceived || [];
+            a.driver.rating = ratings.length
+              ? Number((ratings.reduce((sum: number, r: any) => sum + (r.stars || 0), 0) / ratings.length).toFixed(1))
+              : null;
+            a.driver.deliveryCount = a.driver._count?.assignments || 0;
+            delete a.driver._count;
+            delete a.driver.ratingsReceived;
+          }
+        }
+      }
+    }
+    return records;
   }
 }
