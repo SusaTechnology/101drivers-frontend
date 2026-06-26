@@ -492,7 +492,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   // Timeline based on real timestamps
   const timelineItems = [
     {
-      status: 'Request submitted',
+      status: 'Delivery Requested',
       time: deliveryData?.createdAt ? formatDateTime(deliveryData.createdAt) : '—',
       completed: !!deliveryData?.createdAt,
       icon: CheckCircle,
@@ -1574,14 +1574,14 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                                   )}>{item.time}</div>
                                 </div>
                                 <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                                  {item.status === 'Request submitted' && 'Confirmation email sent to you.'}
-                                  {item.status === 'Booked' && 'Driver has accepted your delivery. You can now see the driver\'s name, photo, and profile.'}
-                                  {item.status === 'Payment' && item.completed && 'Card authorized successfully. Funds will be captured when the delivery is complete.'}
+                                  {item.status === 'Delivery Requested' && 'Confirmation email sent to you.'}
+                                  {item.status === 'Booked' && 'Driver has accepted your delivery. Their profile is now visible.'}
+                                  {item.status === 'Payment' && item.completed && 'Card authorized successfully. Funds will be charged once the delivery is complete.'}
                                   {item.status === 'Payment' && item.pending && 'Tap here to enter your card details and authorize payment.'}
                                   {item.status === 'Payment' && item.failed && 'Payment failed. Tap here to try again with a different card.'}
                                   {item.status === 'Payment' && item.time === 'Voided' && 'Payment was cancelled and the authorization hold was released.'}
-                                  {item.status === 'Active' && 'Driver has picked up the vehicle and is heading to the drop-off location. Real-time tracking is now available.'}
-                                  {item.status === 'Completed' && 'Delivery is complete. Final odometer reading and six vehicle pictures with geolocation are now available.'}
+                                  {item.status === 'Active' && 'Driver has started the delivery and is en route to the drop-off location. Real-time tracking is now available.'}
+                                  {item.status === 'Completed' && 'Delivery is complete. All delivery details, pickup and drop-off timestamps, final odometer reading, and vehicle photos with geolocations are now available.'}
                                 </div>
                               </div>
                             </div>
