@@ -319,7 +319,7 @@ evidence: {
   private async resolveDriverInfo(driverId: string): Promise<any | null> {
     if (!driverId) return null;
     try {
-      const driver = await this.prisma.driver.findUnique({
+      const raw = await this.prisma.driver.findUnique({
         where: { id: driverId },
         select: {
           id: true,
@@ -346,8 +346,9 @@ evidence: {
           },
         },
       });
-      if (!driver) return null;
+      if (!raw) return null;
 
+      const driver = raw as any;
       const ratings = driver.ratingsReceived || [];
       driver.rating = ratings.length
         ? Number((ratings.reduce((sum: number, r: any) => sum + (r.stars || 0), 0) / ratings.length).toFixed(1))
