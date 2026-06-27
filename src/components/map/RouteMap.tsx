@@ -3,35 +3,64 @@ import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import PickupZoneOverlay from './PickupZoneOverlay';
 import carSvgRaw from '@/assets/car.svg?raw';
 
-// Pink dot anchor in SVG coordinate space (338×739) — front of the car
+// Original SVG viewBox dimensions
+const SVG_VIEW_W = 338;
+const SVG_VIEW_H = 739;
+
+// Pink dot anchor in original SVG coordinate space — front of the car
 const CAR_ANCHOR_SVG_X = 247;
 const CAR_ANCHOR_SVG_Y = 244;
-
-// Display size on map (preserves 338:739 ≈ 0.46:1 aspect ratio)
-const CAR_DISPLAY_W = 35;
-const CAR_DISPLAY_H = 76;
-
-// Anchor in display coordinates (proportional to pink dot)
-const CAR_ANCHOR_X = Math.round((CAR_ANCHOR_SVG_X / 338) * CAR_DISPLAY_W);
-const CAR_ANCHOR_Y = Math.round((CAR_ANCHOR_SVG_Y / 739) * CAR_DISPLAY_H);
 
 // The SVG is drawn at ~45° isometric angle.
 // Subtract 45 so heading=0 (north) counter-rotates the car to point north.
 const CAR_BASE_ANGLE = 45;
 
+// Rotation-safe viewBox: max distance from anchor to any corner ≈ 553.
+// We use a square viewBox (2*560 × 2*560) centered on the anchor so the
+// car never clips during any heading rotation.  Browsers ignore overflow
+// on SVGs rendered as <img> (which is how Google Maps uses data-URIs),
+// so expanding the viewBox is the only reliable fix.
+const ROT_PAD = 560;
+const PAD_X = ROT_PAD - CAR_ANCHOR_SVG_X; // 313
+const PAD_Y = ROT_PAD - CAR_ANCHOR_SVG_Y; // 316
+const PADDED_VIEW_W = ROT_PAD * 2; // 1120
+const PADDED_VIEW_H = ROT_PAD * 2; // 1120
+
+// Display size — scale so the car's visual width stays ~35 px
+const CAR_DISPLAY_W = Math.round((PADDED_VIEW_W / SVG_VIEW_W) * 35); // ~116
+const CAR_DISPLAY_H = CAR_DISPLAY_W; // 1:1 to match square viewBox
+
+// Anchor sits at the exact center of the square display
+const CAR_ANCHOR_X = Math.round(CAR_DISPLAY_W / 2);
+const CAR_ANCHOR_Y = Math.round(CAR_DISPLAY_H / 2);
+
 /**
  * Generate a car icon data-URI with heading baked into the SVG transform.
- * Rotates around the pink dot anchor point (247, 244) in SVG space.
- * Uses (heading - 45) because the SVG car is drawn at a 45° isometric angle.
+ * The raw car SVG is wrapped in a larger rotation-safe viewport so that
+ * no part of the car is clipped at any heading.  Rotation happens around
+ * the pink-dot anchor (247, 244) in the original SVG coordinate space.
  */
 function getCarIconUrl(headingDeg: number | null | undefined): string {
   const rotation = headingDeg != null ? headingDeg - CAR_BASE_ANGLE : -CAR_BASE_ANGLE;
   const rotateTransform =
     `translate(${CAR_ANCHOR_SVG_X},${CAR_ANCHOR_SVG_Y}) rotate(${rotation}) translate(${-CAR_ANCHOR_SVG_X},${-CAR_ANCHOR_SVG_Y})`;
-  const rotated = carSvgRaw
-    .replace('__ROTATE__', `<g transform="${rotateTransform}">`)
-    .replace('__ENDROTATE__', '</g>');
-  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(rotated);
+
+  // Strip outer <svg …> and </svg> tags from the raw file, and remove
+  // the __ROTATE__ / __ENDROTATE__ placeholders (we add our own <g> wrapper).
+  const innerContent = carSvgRaw
+    .replace(/<svg[^>]*>/, '')
+    .replace(/<\/svg>/, '')
+    .replace('__ROTATE__', '')
+    .replace('__ENDROTATE__', '');
+
+  // Build a new SVG with an expanded viewBox that fits all rotations.
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-PAD_X} ${-PAD_Y} ${PADDED_VIEW_W} ${PADDED_VIEW_H}" width="${PADDED_VIEW_W}" height="${PADDED_VIEW_H}">` +
+    `<g transform="${rotateTransform}">` +
+    innerContent +
+    '</g></svg>';
+
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 
 const containerStyle = {
