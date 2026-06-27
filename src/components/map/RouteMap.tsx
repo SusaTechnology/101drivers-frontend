@@ -5,38 +5,40 @@ import PickupZoneOverlay from './PickupZoneOverlay';
 /**
  * Generate a car icon data-URI with heading baked into the SVG transform.
  * This avoids Google Maps' Icon.rotation which compresses/distorts SVGs.
- * The SVG has 64x64 viewBox with the car ~40x54 centered — rotation never clips.
+ *
+ * The SVG has 48x48 viewBox. Car points UP (north = 0 degrees).
+ * Anchor point (front of car) is at (24, 13) — the GPS coordinate sits
+ * exactly at the front bumper. Rotation happens around this anchor.
  */
-const CAR_SVG_BASE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <defs><filter id="ds" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.5"/></filter></defs>
-  <g filter="url(#ds)" transform="translate(32,32)">
-    <path d="M -8 -26 C -8 -27 -7 -27.5 -6 -27.5 L 6 -27.5 C 7 -27.5 8 -27 8 -26 L 9.5 -22 L 11 -17 C 11.5 -15.5 11.5 -14 11 -12.5 L 10 -8 L 10 8 L 11 12.5 C 11.5 14 11.5 15.5 11 17 L 9.5 22 L 8 25 C 8 26 7 26.5 6 26.5 L -6 26.5 C -7 26.5 -8 26 -8 25 L -9.5 22 L -11 17 C -11.5 15.5 -11.5 14 -11 12.5 L -10 8 L -10 -8 L -11 -12.5 C -11.5 -14 -11.5 -15.5 -11 -17 L -9.5 -22 Z" fill="#FFF" stroke="#CCC" stroke-width="0.4"/>
-    <path d="M -7 -26 L 7 -26 L 9 -22 L -9 -22 Z" fill="#F8F8F8"/>
-    <path d="M -7.5 -21.5 L -6 -17 L 6 -17 L 7.5 -21.5 Z" fill="#64B5F6" opacity="0.85"/>
-    <path d="M -6.5 -21 L -5.5 -17.5 L 0 -17.5 L 0 -21 Z" fill="#FFF" opacity="0.3"/>
-    <rect x="-7" y="-16.5" width="14" height="14" rx="1" fill="#F0F0F0"/>
-    <path d="M -6.5 2.5 L -7.5 7 L 7.5 7 L 6.5 2.5 Z" fill="#64B5F6" opacity="0.6"/>
-    <path d="M -7 8 L 7 8 L 7.5 10 L 9 15 L 9.5 20 L 8 24 L -8 24 L -9.5 20 L -9 15 L -7.5 10 Z" fill="#F5F5F5"/>
-    <ellipse cx="-12" cy="-19" rx="2" ry="1.2" fill="#FFF" stroke="#CCC" stroke-width="0.3"/>
-    <ellipse cx="12" cy="-19" rx="2" ry="1.2" fill="#FFF" stroke="#CCC" stroke-width="0.3"/>
-    <path d="M -10 -25 L -8.5 -25 L -10 -21.5 Z" fill="#FFD54F" opacity="0.9"/>
-    <path d="M 10 -25 L 8.5 -25 L 10 -21.5 Z" fill="#FFD54F" opacity="0.9"/>
-    <path d="M -10 21.5 L -8.5 24.5 L -10 24.5 Z" fill="#EF5350" opacity="0.9"/>
-    <path d="M 10 21.5 L 8.5 24.5 L 10 24.5 Z" fill="#EF5350" opacity="0.9"/>
-    <path d="M -11 -13 C -13 -12 -13 -8 -11 -7" stroke="#BBB" stroke-width="0.5" fill="none"/>
-    <path d="M 11 -13 C 13 -12 13 -8 11 -7" stroke="#BBB" stroke-width="0.5" fill="none"/>
-    <path d="M -11 7 C -13 8 -13 12 -11 13" stroke="#BBB" stroke-width="0.5" fill="none"/>
-    <path d="M 11 7 C 13 8 13 12 11 13" stroke="#BBB" stroke-width="0.5" fill="none"/>
+const CAR_SVG_BASE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs><filter id="ds" x="-30%" y="-20%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.4"/></filter></defs>
+  <g transform="__ROTATE__">
+    <g filter="url(#ds)">
+      <path d="M 15.5 15 Q 15.5 12.5 18 12.5 L 30 12.5 Q 32.5 12.5 32.5 15 L 34 17 L 36 21 L 36 31 Q 36 33 34 33 L 14 33 Q 12 33 12 31 L 12 21 L 14 17 Z" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="0.3"/>
+      <path d="M 17.5 14.5 L 17.5 19 L 20 21 L 28 21 L 30.5 19 L 30.5 14.5 Z" fill="#90CAF9" opacity="0.8"/>
+      <path d="M 18.5 14.5 L 18.5 18.5 L 20.5 20.5 L 24 20.5 L 24 14.5 Z" fill="#FFFFFF" opacity="0.25"/>
+      <path d="M 19 27 L 29 27 L 30.5 30 L 29 32 L 19 32 L 17.5 30 Z" fill="#90CAF9" opacity="0.5"/>
+      <rect x="18" y="21" width="12" height="6" rx="0.6" fill="#F5F5F5"/>
+      <rect x="12.5" y="18.5" width="2.5" height="1.8" rx="0.6" fill="#FFD54F"/>
+      <rect x="33" y="18.5" width="2.5" height="1.8" rx="0.6" fill="#FFD54F"/>
+      <rect x="12.5" y="30.5" width="2.5" height="1.5" rx="0.5" fill="#EF5350"/>
+      <rect x="33" y="30.5" width="2.5" height="1.5" rx="0.5" fill="#EF5350"/>
+    </g>
   </g>
 </svg>`;
 
+// Front of car (anchor point) — GPS coordinate sits here
+const CAR_ANCHOR_X = 24;
+const CAR_ANCHOR_Y = 13;
+
 function getCarIconUrl(headingDeg: number | null | undefined): string {
   const rotation = headingDeg != null ? headingDeg : 0;
-  // Inject rotation into the SVG transform so Google Maps shows a pre-rotated image.
-  // No Icon.rotation needed — the SVG itself is already turned the right way.
+  // Rotate the entire car around the front anchor point (24, 13).
+  // translate(24,13) moves origin to front of car,
+  // rotate(heading) spins it, translate(-24,-13) moves origin back.
   const rotated = CAR_SVG_BASE.replace(
-    'translate(32,32)',
-    `translate(32,32) rotate(${rotation})`
+    '__ROTATE__',
+    `translate(${CAR_ANCHOR_X},${CAR_ANCHOR_Y}) rotate(${rotation}) translate(${-CAR_ANCHOR_X},${-CAR_ANCHOR_Y})`
   );
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(rotated);
 }
@@ -225,7 +227,7 @@ export default function RouteMap({
         icon: {
           url: getCarIconUrl(heading),
           scaledSize: new google.maps.Size(48, 48),
-          anchor: new google.maps.Point(24, 24),
+          anchor: new google.maps.Point(CAR_ANCHOR_X, CAR_ANCHOR_Y),
         },
       });
       animPosRef.current = driverPosition;
@@ -247,7 +249,7 @@ export default function RouteMap({
         driverMarkerRef.current.setIcon({
           url: getCarIconUrl(heading),
           scaledSize: new google.maps.Size(48, 48),
-          anchor: new google.maps.Point(24, 24),
+          anchor: new google.maps.Point(CAR_ANCHOR_X, CAR_ANCHOR_Y),
         });
       }
 
