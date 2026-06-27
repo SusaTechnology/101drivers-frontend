@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import PickupZoneOverlay from './PickupZoneOverlay';
-import carSvgRaw from '/icons/car.svg?raw';
+import carSvgRaw from '@/assets/car.svg?raw';
 
 // Front of car (anchor point) — GPS coordinate sits exactly here
 const CAR_ANCHOR_X = 24;
