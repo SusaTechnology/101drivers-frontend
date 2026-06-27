@@ -322,7 +322,7 @@ export default function RouteMap({
         position: driverPosition,
         icon: {
           url: getCarIconUrl(heading),
-          scaledSize: new google.maps.Size(100, 120),
+          scaledSize: new google.maps.Size(35, 78),
           anchor: new google.maps.Point(24, 24),
         },
       });
