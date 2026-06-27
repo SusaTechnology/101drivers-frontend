@@ -3,6 +3,37 @@ import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import PickupZoneOverlay from './PickupZoneOverlay';
 import carSvgRaw from '@/assets/car.svg?raw';
 
+// Pink dot anchor in SVG coordinate space (338×739) — front of the car
+const CAR_ANCHOR_SVG_X = 247;
+const CAR_ANCHOR_SVG_Y = 244;
+
+// Display size on map (preserves 338:739 ≈ 0.46:1 aspect ratio)
+const CAR_DISPLAY_W = 35;
+const CAR_DISPLAY_H = 76;
+
+// Anchor in display coordinates (proportional to pink dot)
+const CAR_ANCHOR_X = Math.round((CAR_ANCHOR_SVG_X / 338) * CAR_DISPLAY_W);
+const CAR_ANCHOR_Y = Math.round((CAR_ANCHOR_SVG_Y / 739) * CAR_DISPLAY_H);
+
+// The SVG is drawn at ~45° isometric angle.
+// Subtract 45 so heading=0 (north) counter-rotates the car to point north.
+const CAR_BASE_ANGLE = 45;
+
+/**
+ * Generate a car icon data-URI with heading baked into the SVG transform.
+ * Rotates around the pink dot anchor point (247, 244) in SVG space.
+ * Uses (heading - 45) because the SVG car is drawn at a 45° isometric angle.
+ */
+function getCarIconUrl(headingDeg: number | null | undefined): string {
+  const rotation = headingDeg != null ? headingDeg - CAR_BASE_ANGLE : -CAR_BASE_ANGLE;
+  const rotateTransform =
+    `translate(${CAR_ANCHOR_SVG_X},${CAR_ANCHOR_SVG_Y}) rotate(${rotation}) translate(${-CAR_ANCHOR_SVG_X},${-CAR_ANCHOR_SVG_Y})`;
+  const rotated = carSvgRaw
+    .replace('__ROTATE__', `<g transform="${rotateTransform}">`)
+    .replace('__ENDROTATE__', '</g>');
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(rotated);
+}
+
 const containerStyle = {
   width: '100%',
   height: '100%',
