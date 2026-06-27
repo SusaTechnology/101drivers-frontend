@@ -1,49 +1,180 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <!-- Uber-style top-down white car. Points UP (north = 0°). -->
   <defs>
-    <filter id="ds" x="-30%" y="-20%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.4"/>
+    <!-- Drop shadow under the car -->
+    <filter id="ds" x="-40%" y="-30%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2.5" flood-color="#000" flood-opacity="0.45"/>
     </filter>
+
+    <!-- Body gradient: lighter center (roof highlight), darker edges (panels) -->
+    <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#D6D6D6"/>
+      <stop offset="18%" stop-color="#F0F0F0"/>
+      <stop offset="50%" stop-color="#FFFFFF"/>
+      <stop offset="82%" stop-color="#F0F0F0"/>
+      <stop offset="100%" stop-color="#D6D6D6"/>
+    </linearGradient>
+
+    <!-- Hood gradient: subtle front-to-back shading -->
+    <linearGradient id="hoodGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FAFAFA"/>
+      <stop offset="100%" stop-color="#E8E8E8"/>
+    </linearGradient>
+
+    <!-- Trunk gradient -->
+    <linearGradient id="trunkGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E8E8E8"/>
+      <stop offset="100%" stop-color="#D8D8D8"/>
+    </linearGradient>
+
+    <!-- Windshield gradient: glass reflection -->
+    <linearGradient id="windshieldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#B3E5FC"/>
+      <stop offset="40%" stop-color="#81D4FA"/>
+      <stop offset="60%" stop-color="#4FC3F7"/>
+      <stop offset="100%" stop-color="#29B6F6"/>
+    </linearGradient>
+
+    <!-- Rear window gradient -->
+    <linearGradient id="rearWindowGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#81D4FA"/>
+      <stop offset="100%" stop-color="#4FC3F7"/>
+    </linearGradient>
+
+    <!-- Roof gradient: subtle dome highlight -->
+    <radialGradient id="roofGrad" cx="0.45" cy="0.4" r="0.6">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F0F0F0"/>
+    </radialGradient>
+
+    <!-- Headlight glow gradient -->
+    <radialGradient id="headlightGrad" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#FFF9C4"/>
+      <stop offset="60%" stop-color="#FFD54F"/>
+      <stop offset="100%" stop-color="#FFB300"/>
+    </radialGradient>
+
+    <!-- Taillight glow gradient -->
+    <radialGradient id="taillightGrad" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#FF8A80"/>
+      <stop offset="60%" stop-color="#EF5350"/>
+      <stop offset="100%" stop-color="#C62828"/>
+    </radialGradient>
+
+    <!-- Side panel shadow (left) -->
+    <linearGradient id="sideShadowL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Side panel shadow (right) -->
+    <linearGradient id="sideShadowR" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0%" stop-color="#000" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
   </defs>
 
   <g filter="url(#ds)">
-    <!-- Car body -->
+    <!-- ═══ CAR BODY ═══ -->
     <path d="
-      M 15.5 15
-      Q 15.5 12.5 18 12.5
-      L 30 12.5
-      Q 32.5 12.5 32.5 15
-      L 34 17
-      L 36 21
-      L 36 31
-      Q 36 33 34 33
-      L 14 33
-      Q 12 33 12 31
-      L 12 21
-      L 14 17
+      M 16 14.5
+      Q 16 11.5 19 11.5
+      L 29 11.5
+      Q 32 11.5 32 14.5
+      L 33.5 17
+      L 35.5 21.5
+      L 35.5 31.5
+      Q 35.5 34 33 34
+      L 15 34
+      Q 12.5 34 12.5 31.5
+      L 12.5 21.5
+      L 14.5 17
       Z
-    " fill="#FFFFFF" stroke="#E0E0E0" stroke-width="0.3"/>
+    " fill="url(#bodyGrad)" stroke="#C0C0C0" stroke-width="0.4"/>
 
-    <!-- Windshield -->
-    <path d="M 17.5 14.5 L 17.5 19 L 20 21 L 28 21 L 30.5 19 L 30.5 14.5 Z" fill="#90CAF9" opacity="0.8"/>
+    <!-- ═══ HOOD (front body panel) ═══ -->
+    <path d="M 17 14.5 L 17 19.5 L 19.5 21.5 L 28.5 21.5 L 31 19.5 L 31 14.5 Z" fill="url(#hoodGrad)"/>
 
-    <!-- Windshield glare -->
-    <path d="M 18.5 14.5 L 18.5 18.5 L 20.5 20.5 L 24 20.5 L 24 14.5 Z" fill="#FFFFFF" opacity="0.25"/>
+    <!-- Hood center line (subtle 3D crease) -->
+    <line x1="24" y1="13" x2="24" y2="20" stroke="#E0E0E0" stroke-width="0.3" opacity="0.6"/>
 
-    <!-- Rear window -->
-    <path d="M 19 27 L 29 27 L 30.5 30 L 29 32 L 19 32 L 17.5 30 Z" fill="#90CAF9" opacity="0.5"/>
+    <!-- ═══ WINDSHIELD ═══ -->
+    <path d="M 18 15 L 18 19 L 20 21 L 28 21 L 30 19 L 30 15 Z" fill="url(#windshieldGrad)" opacity="0.85"/>
 
-    <!-- Roof -->
-    <rect x="18" y="21" width="12" height="6" rx="0.6" fill="#F5F5F5"/>
+    <!-- Windshield reflection glare (left side) -->
+    <path d="M 18.5 15.2 L 18.5 18.5 L 20.2 20.2 L 23.5 20.2 L 23.5 15.2 Z" fill="#FFF" opacity="0.35"/>
 
+    <!-- Windshield divider (center pillar reflection) -->
+    <line x1="24" y1="15" x2="24" y2="21" stroke="#B3E5FC" stroke-width="0.3" opacity="0.5"/>
+
+    <!-- ═══ ROOF ═══ -->
+    <rect x="18.5" y="21" width="11" height="6" rx="0.8" fill="url(#roofGrad)"/>
+
+    <!-- Roof edge highlights (3D rim light) -->
+    <line x1="18.8" y1="21.2" x2="29.2" y2="21.2" stroke="#FFF" stroke-width="0.3" opacity="0.5"/>
+    <line x1="18.8" y1="26.8" x2="29.2" y2="26.8" stroke="#D0D0D0" stroke-width="0.3" opacity="0.4"/>
+
+    <!-- ═══ REAR WINDOW ═══ -->
+    <path d="M 19 27 L 29 27 L 30.5 30.5 L 29 33 L 19 33 L 17.5 30.5 Z" fill="url(#rearWindowGrad)" opacity="0.55"/>
+
+    <!-- ═══ TRUNK (rear body panel) ═══ -->
+    <path d="M 15 27 L 15 32 Q 15 33.5 16.5 33.5 L 31.5 33.5 Q 33 33.5 33 32 L 33 27 Z" fill="url(#trunkGrad)"/>
+
+    <!-- Trunk center line -->
+    <line x1="24" y1="28" x2="24" y2="33" stroke="#D0D0D0" stroke-width="0.3" opacity="0.5"/>
+
+    <!-- ═══ SIDE PANEL SHADOWS (3D depth) ═══ -->
+    <!-- Left side shadow -->
+    <path d="
+      M 16 14.5
+      Q 16 11.5 19 11.5
+      L 19.5 11.5
+      L 18 14.5 L 14.5 17 L 12.5 21.5 L 12.5 31.5 Q 12.5 34 15 34 L 15.5 34
+      L 15 34 Q 12.5 34 12.5 31.5 L 12.5 21.5 L 14.5 17 Z
+    " fill="url(#sideShadowL)" opacity="0.7"/>
+
+    <!-- Right side shadow -->
+    <path d="
+      M 32 14.5
+      Q 32 11.5 29 11.5
+      L 28.5 11.5
+      L 30 14.5 L 33.5 17 L 35.5 21.5 L 35.5 31.5 Q 35.5 34 33 34 L 32.5 34
+      L 33 34 Q 35.5 34 35.5 31.5 L 35.5 21.5 L 33.5 17 Z
+    " fill="url(#sideShadowR)" opacity="0.7"/>
+
+    <!-- ═══ HEADLIGHTS (front) ═══ -->
     <!-- Left headlight -->
-    <rect x="12.5" y="18.5" width="2.5" height="1.8" rx="0.6" fill="#FFD54F"/>
+    <path d="M 13 18 Q 12.5 18.5 12.5 19.5 L 12.5 21 Q 12.5 21.5 13 21.5 L 15 21.5 L 15 18 Z" fill="url(#headlightGrad)"/>
     <!-- Right headlight -->
-    <rect x="33" y="18.5" width="2.5" height="1.8" rx="0.6" fill="#FFD54F"/>
+    <path d="M 35 18 Q 35.5 18.5 35.5 19.5 L 35.5 21 Q 35.5 21.5 35 21.5 L 33 21.5 L 33 18 Z" fill="url(#headlightGrad)"/>
 
+    <!-- Headlight bright spots -->
+    <circle cx="13.8" cy="19.8" r="0.5" fill="#FFF" opacity="0.7"/>
+    <circle cx="34.2" cy="19.8" r="0.5" fill="#FFF" opacity="0.7"/>
+
+    <!-- ═══ TAILLIGHTS (rear) ═══ -->
     <!-- Left taillight -->
-    <rect x="12.5" y="30.5" width="2.5" height="1.5" rx="0.5" fill="#EF5350"/>
+    <path d="M 13 31 Q 12.5 31.5 12.5 32 L 12.5 33 Q 12.5 33.5 13 33.5 L 15.5 33.5 L 15.5 31 Z" fill="url(#taillightGrad)"/>
     <!-- Right taillight -->
-    <rect x="33" y="30.5" width="2.5" height="1.5" rx="0.5" fill="#EF5350"/>
+    <path d="M 35 31 Q 35.5 31.5 35.5 32 L 35.5 33 Q 35.5 33.5 35 33.5 L 32.5 33.5 L 32.5 31 Z" fill="url(#taillightGrad)"/>
+
+    <!-- ═══ WHEEL WELLS (dark recesses for 3D depth) ═══ -->
+    <!-- Front-left -->
+    <ellipse cx="14" cy="19" rx="1.8" ry="2.5" fill="#2C2C2C" opacity="0.25"/>
+    <!-- Front-right -->
+    <ellipse cx="34" cy="19" rx="1.8" ry="2.5" fill="#2C2C2C" opacity="0.25"/>
+    <!-- Rear-left -->
+    <ellipse cx="14" cy="31" rx="1.8" ry="2.5" fill="#2C2C2C" opacity="0.25"/>
+    <!-- Rear-right -->
+    <ellipse cx="34" cy="31" rx="1.8" ry="2.5" fill="#2C2C2C" opacity="0.25"/>
+
+    <!-- ═══ BODY EDGE HIGHLIGHTS (top-down 3D rim) ═══ -->
+    <!-- Left edge highlight -->
+    <path d="M 19 11.8 L 16.2 15 L 14.2 17.5" stroke="#FFF" stroke-width="0.35" fill="none" opacity="0.45" stroke-linecap="round"/>
+    <!-- Right edge highlight -->
+    <path d="M 29 11.8 L 31.8 15 L 33.8 17.5" stroke="#FFF" stroke-width="0.35" fill="none" opacity="0.45" stroke-linecap="round"/>
+
+    <!-- ═══ SIDE MIRRORS ═══ -->
+    <ellipse cx="11" cy="17" rx="1.2" ry="0.7" fill="#E0E0E0" stroke="#BDBDBD" stroke-width="0.2" transform="rotate(-20, 11, 17)"/>
+    <ellipse cx="37" cy="17" rx="1.2" ry="0.7" fill="#E0E0E0" stroke="#BDBDBD" stroke-width="0.2" transform="rotate(20, 37, 17)"/>
   </g>
 </svg>
