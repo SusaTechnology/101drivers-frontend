@@ -26,8 +26,8 @@ const PAD_Y = ROT_PAD - CAR_ANCHOR_SVG_Y; // 316
 const PADDED_VIEW_W = ROT_PAD * 2; // 1120
 const PADDED_VIEW_H = ROT_PAD * 2; // 1120
 
-// Display size — scale so the car's visual width stays ~35 px
-const CAR_DISPLAY_W = Math.round((PADDED_VIEW_W / SVG_VIEW_W) * 35); // ~116
+// Display size — scale so the car's visual width stays ~45 px
+const CAR_DISPLAY_W = Math.round((PADDED_VIEW_W / SVG_VIEW_W) * 45); // ~149
 const CAR_DISPLAY_H = CAR_DISPLAY_W; // 1:1 to match square viewBox
 
 // Anchor sits at the exact center of the square display
