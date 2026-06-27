@@ -1,45 +1,25 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import PickupZoneOverlay from './PickupZoneOverlay';
+import carSvgRaw from '/icons/car.svg?raw';
+
+// Front of car (anchor point) — GPS coordinate sits exactly here
+const CAR_ANCHOR_X = 24;
+const CAR_ANCHOR_Y = 13;
 
 /**
  * Generate a car icon data-URI with heading baked into the SVG transform.
  * This avoids Google Maps' Icon.rotation which compresses/distorts SVGs.
  *
- * The SVG has 48x48 viewBox. Car points UP (north = 0 degrees).
- * Anchor point (front of car) is at (24, 13) — the GPS coordinate sits
- * exactly at the front bumper. Rotation happens around this anchor.
+ * The car.svg points UP (north = 0 degrees). We dynamically wrap it in a
+ * rotation <g> that spins the car around the front anchor point (24, 13).
  */
-const CAR_SVG_BASE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <defs><filter id="ds" x="-30%" y="-20%" width="160%" height="160%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.4"/></filter></defs>
-  <g transform="__ROTATE__">
-    <g filter="url(#ds)">
-      <path d="M 15.5 15 Q 15.5 12.5 18 12.5 L 30 12.5 Q 32.5 12.5 32.5 15 L 34 17 L 36 21 L 36 31 Q 36 33 34 33 L 14 33 Q 12 33 12 31 L 12 21 L 14 17 Z" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="0.3"/>
-      <path d="M 17.5 14.5 L 17.5 19 L 20 21 L 28 21 L 30.5 19 L 30.5 14.5 Z" fill="#90CAF9" opacity="0.8"/>
-      <path d="M 18.5 14.5 L 18.5 18.5 L 20.5 20.5 L 24 20.5 L 24 14.5 Z" fill="#FFFFFF" opacity="0.25"/>
-      <path d="M 19 27 L 29 27 L 30.5 30 L 29 32 L 19 32 L 17.5 30 Z" fill="#90CAF9" opacity="0.5"/>
-      <rect x="18" y="21" width="12" height="6" rx="0.6" fill="#F5F5F5"/>
-      <rect x="12.5" y="18.5" width="2.5" height="1.8" rx="0.6" fill="#FFD54F"/>
-      <rect x="33" y="18.5" width="2.5" height="1.8" rx="0.6" fill="#FFD54F"/>
-      <rect x="12.5" y="30.5" width="2.5" height="1.5" rx="0.5" fill="#EF5350"/>
-      <rect x="33" y="30.5" width="2.5" height="1.5" rx="0.5" fill="#EF5350"/>
-    </g>
-  </g>
-</svg>`;
-
-// Front of car (anchor point) — GPS coordinate sits here
-const CAR_ANCHOR_X = 24;
-const CAR_ANCHOR_Y = 13;
-
 function getCarIconUrl(headingDeg: number | null | undefined): string {
   const rotation = headingDeg != null ? headingDeg : 0;
-  // Rotate the entire car around the front anchor point (24, 13).
-  // translate(24,13) moves origin to front of car,
-  // rotate(heading) spins it, translate(-24,-13) moves origin back.
-  const rotated = CAR_SVG_BASE.replace(
-    '__ROTATE__',
-    `translate(${CAR_ANCHOR_X},${CAR_ANCHOR_Y}) rotate(${rotation}) translate(${-CAR_ANCHOR_X},${-CAR_ANCHOR_Y})`
-  );
+  const rotateTransform = `translate(${CAR_ANCHOR_X},${CAR_ANCHOR_Y}) rotate(${rotation}) translate(${-CAR_ANCHOR_X},${-CAR_ANCHOR_Y})`;
+  const rotated = carSvgRaw
+    .replace('fill="none">', `fill="none"><g transform="${rotateTransform}">`)
+    .replace('</svg>', '</g></svg>');
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(rotated);
 }
 
