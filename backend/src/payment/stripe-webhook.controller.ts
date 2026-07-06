@@ -378,27 +378,16 @@ export class StripeWebhookController {
     const driverId = account.metadata?.driverId;
     if (!driverId) return;
 
+    // Map Stripe account status to our status
     const chargesEnabled = account.charges_enabled;
     const payoutsEnabled = account.payouts_enabled;
     const detailsSubmitted = account.details_submitted;
 
-    try {
-      // Update the Driver record with Connect account status
-      await this.prisma.driver.update({
-        where: { id: driverId },
-        data: {
-          stripeConnectAccountId: account.id,
-          stripeConnectOnboardingComplete: !!(detailsSubmitted && chargesEnabled && payoutsEnabled),
-        },
-      });
-
-      if (detailsSubmitted && chargesEnabled && payoutsEnabled) {
-        this.logger.log(`Driver ${driverId} Stripe account fully activated: ${account.id}`);
-      } else if (detailsSubmitted) {
-        this.logger.log(`Driver ${driverId} Stripe account partially onboarded: ${account.id}`);
-      }
-    } catch (err: any) {
-      this.logger.error(`Failed to update driver ${driverId} Connect status: ${err.message}`);
+    if (detailsSubmitted && chargesEnabled && payoutsEnabled) {
+      // Account is fully onboarded
+      this.logger.log(`Driver ${driverId} Stripe account activated: ${account.id}`);
+    } else if (detailsSubmitted) {
+      this.logger.log(`Driver ${driverId} Stripe account pending: ${account.id}`);
     }
   }
 

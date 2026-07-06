@@ -985,16 +985,24 @@ async unsuspendCustomer(
           take: 1,
           orderBy: { assignedAt: 'desc' },
           select: {
+            assignedAt: true,
             driver: {
               select: {
                 id: true,
                 phone: true,
                 status: true,
                 profilePhotoUrl: true,
+                selfiePhotoUrl: true,
                 user: {
                   select: {
                     fullName: true,
                   },
+                },
+                ratingsReceived: {
+                  select: { stars: true },
+                },
+                _count: {
+                  select: { assignments: true },
                 },
               },
             },

@@ -361,7 +361,7 @@ export class GoogleMapsService {
       travelMode: "DRIVE",
       routingPreference: "TRAFFIC_AWARE_OPTIMAL",
       computeAlternativeRoutes: true,
-      routeModifiers: { avoidHighways: true },
+      // routeModifiers: { avoidHighways: true },
       languageCode: "en-US",
       units: "IMPERIAL",
     };

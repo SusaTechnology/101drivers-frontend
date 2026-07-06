@@ -172,7 +172,7 @@ export class DriverDistrictPreferencePolicyService {
       status === EnumDriverStatus.REJECTED
     ) {
       throw new AppException(
-        "DriverDistrictPreference is not allowed for a suspended or rejected driver",
+        "DriverDistrictPreference is not allowed for a suspended driver",
         ErrorCodes.BUSINESS_RULE_VIOLATION
       );
     }

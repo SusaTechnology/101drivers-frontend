@@ -38,11 +38,11 @@ import { AdminAuditLogModule } from "./adminAuditLog/adminAuditLog.module";
 import { AppSettingModule } from "./appSetting/appSetting.module";
 import { DealerLeadModule } from "./dealerLead/dealerLead.module";
 import { InvestorLeadModule } from "./investorLead/investorLead.module";
+import { GatewayModule } from "./gateways/gateway.module";
 import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { SecretsManagerModule } from "./providers/secrets/secretsManager.module";
 import { ServeStaticModule } from "@nestjs/serve-static";
-import { GatewayModule } from "./gateways/gateway.module";
 import { ServeStaticOptionsService } from "./serveStaticOptions.service";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
@@ -52,6 +52,7 @@ import { ApolloDriver, ApolloDriverConfig } from "@nestjs/apollo";
 import { ACLModule } from "./auth/acl.module";
 import { AuthModule } from "./auth/auth.module";
 import { EmailVerificationModule } from "./auth/email-verification/email-verification.module";
+import { UploadModule } from "./upload/upload.module";
 import { AdminDashboardModule } from "./adminDashboard/adminDashboard.module";
 import { ReportsModule } from "./reports/reports.module";
 import { EmailVerificationTokenModule } from "./emailVerificationToken/emailVerificationToken.module";
@@ -109,6 +110,7 @@ import { MailService } from "./common/mail/mail.service";
     PrismaModule,
     SecretsManagerModule,
     StripeModule,
+    UploadModule,
     ReferralModule,
     AdminDashboardModule,
     ReportsModule,

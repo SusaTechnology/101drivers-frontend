@@ -137,7 +137,7 @@ export class DriverAlertPreferencePolicyService {
       status === EnumDriverStatus.REJECTED
     ) {
       throw new AppException(
-        "DriverAlertPreference is not allowed for a suspended or rejected driver",
+        "DriverAlertPreference is not allowed for a suspended driver",
         ErrorCodes.BUSINESS_RULE_VIOLATION
       );
     }

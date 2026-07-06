@@ -291,24 +291,19 @@ export class SchedulingPolicyEngine {
       );
     }
 
-    // When the user explicitly picks a date, only return slots for THAT date
-    // (filtering out any that have already passed).  Do NOT fall through to
-    // the next day.  When no preferredDate is given, scan up to 7 days so the
-    // user always sees at least one available slot.
-    const slotMaxDays = input.preferredDate ? 1 : 7;
-
+    // Try up to 7 days forward to find a day with operating hours + available slots
     const suggestedPickupSlots = this.buildSuggestedSlotsMultiDay(
       baseDate,
       slotTemplates,
       operatingHours,
-      slotMaxDays
+      7
     );
 
     const actualSlotDate = this.resolveSlotDate(
       baseDate,
       slotTemplates,
       operatingHours,
-      slotMaxDays
+      7
     );
 
     // YYYY-MM-DD string in business TZ for frontend calendar sync
@@ -640,15 +635,8 @@ export class SchedulingPolicyEngine {
   /**
    * Try building slots across multiple consecutive days (up to maxDays).
    * Returns slots for the FIRST day that has at least one valid slot.
-   * When maxDays=1 (user selected a specific date), only that date's slots
-   * are returned — no fallback to the next day.
-   *
-   * Past-slot filtering: the first candidate day (d === 0) always has
-   * already-started slots removed.  Subsequent days (d > 0) are guaranteed
-   * to be in the future, so no filtering is needed.
-   *
-   * Using d === 0 (not isToday) ensures correctness even when a past date
-   * is explicitly selected as preferredDate.
+   * This prevents "no slots" when the target day has no operating hours
+   * but other days in the week do.
    */
   private buildSuggestedSlotsMultiDay(
     baseDate: Date,
@@ -660,19 +648,18 @@ export class SchedulingPolicyEngine {
     }>,
     maxDays: number = 7
   ): SlotCandidate[] {
-    const now = this.businessNow();
+    const now = this.businessNow().toJSDate();
 
     for (let d = 0; d < maxDays; d++) {
       const candidateDate = this.addMinutes(baseDate, d * 24 * 60);
-
       const slots = this.buildSuggestedSlots(
         candidateDate,
         slotTemplates,
         operatingHours
       );
-      // Remove slots that have already started (only for the first candidate day)
+      // Remove slots that have already started (only matters for today)
       const available = d === 0
-        ? slots.filter(s => s.start > now.toJSDate())
+        ? slots.filter(s => s.start > now)
         : slots;
       if (available.length > 0) {
         return available;
@@ -683,8 +670,7 @@ export class SchedulingPolicyEngine {
 
   /**
    * Find the first date (within maxDays of baseDate) that yields
-   * at least one valid (non-past) slot. Used to determine sameDay vs nextDay status.
-   * Must mirror the same past-slot filtering logic as buildSuggestedSlotsMultiDay.
+   * at least one valid slot. Used to determine sameDay vs nextDay status.
    */
   private resolveSlotDate(
     baseDate: Date,
@@ -696,21 +682,14 @@ export class SchedulingPolicyEngine {
     }>,
     maxDays: number = 7
   ): Date | null {
-    const now = this.businessNow();
-
     for (let d = 0; d < maxDays; d++) {
       const candidateDate = this.addMinutes(baseDate, d * 24 * 60);
-
       const slots = this.buildSuggestedSlots(
         candidateDate,
         slotTemplates,
         operatingHours
       );
-      // Filter out slots that have already started (only for the first candidate day)
-      const available = d === 0
-        ? slots.filter(s => s.start > now.toJSDate())
-        : slots;
-      if (available.length > 0) {
+      if (slots.length > 0) {
         return candidateDate;
       }
     }

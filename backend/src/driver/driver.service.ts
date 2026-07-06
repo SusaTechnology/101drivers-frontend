@@ -670,6 +670,10 @@ async getDriverDeliveriesByStatus(input: {
     unassignedAt: null,
     delivery: {
       ...(status ? { status: status as any } : {}),
+      NOT: {
+      status: 'COMPLETED',
+      payout: null,
+    },
     },
   };
 
