@@ -1,6 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ArrowRight, Clock } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { CheckCircle, ArrowRight, Clock, Home } from "lucide-react";
 
 export function DriverApplicationSubmitted() {
   return (
@@ -31,13 +32,15 @@ export function DriverApplicationSubmitted() {
             </div>
           </div>
           <div className="p-6 sm:p-10">
-            <Button
-              onClick={() => window.history.back()}
-              className="w-full h-12 rounded-2xl font-bold bg-lime-500 hover:bg-lime-600 text-black transition-colors"
-            >
-              <ArrowRight className="w-4 h-4 mr-2 rotate-180" />
-              Go Back
-            </Button>
+             <Link to="/" className="flex-1">
+                <Button
+                  variant="outline"
+                  className="w-full h-12 rounded-2xl font-bold"
+                >
+                  <Home className="w-5 h-5 mr-2" />
+                  Back to Home
+                </Button>
+              </Link>
           </div>
         </div>
       </div>

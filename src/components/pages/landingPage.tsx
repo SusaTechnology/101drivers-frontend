@@ -548,7 +548,7 @@ export default function LandingPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950">
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <NavBar />
       <main className="w-full">
 

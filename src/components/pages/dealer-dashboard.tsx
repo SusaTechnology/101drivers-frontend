@@ -280,7 +280,7 @@ export default function DealerDashboard() {
         createdById: item.customer?.id,
         createdAt: item.createdAt,
       }
-    })
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [deliveriesData])
 
   // ── Fetch rating + tip status for completed deliveries (History tab) ──

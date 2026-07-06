@@ -483,9 +483,9 @@ export default function DriverJobDetailsPage() {
               <Button variant="outline" size="icon" className="w-10 h-10 rounded-2xl" onClick={toggleTheme}>
                 {mounted && theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </Button>
-              <Button onClick={handleSignOut} variant="link" className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition p-0 h-auto">
+              {/* <Button onClick={handleSignOut} variant="link" className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition p-0 h-auto">
                 Sign Out
-              </Button>
+              </Button> */}
             </div>
           </div>
         </header>
@@ -563,13 +563,13 @@ export default function DriverJobDetailsPage() {
               )}
             </Button>
 
-            <Button
+            {/* <Button
               onClick={handleSignOut}
               variant="link"
               className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-primary transition p-0 h-auto"
             >
               Sign Out
-            </Button>
+            </Button> */}
           </div>
         </div>
       </header>

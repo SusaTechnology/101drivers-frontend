@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -34,6 +34,7 @@ import {
   ArrowRight,
   User,
   Shield,
+  LogIn,
   Home,
   Info,
   Menu,
@@ -231,7 +232,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [agreementAcceptedAt] = useState<string | null>(null);
   // Determine if we're using token-based (from email) or auth-based (from login) flow
   const usingToken = !!token;
-
+  const navigate = useNavigate()
   // Fetch onboarding status on mount
   useEffect(() => {
     if (usingToken) {
@@ -611,11 +612,12 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => window.history.back()}
+                  onClick={() =>  {window.close();
+                    navigate({to:"/landing"})}}
                   className="flex-1 inline-flex items-center justify-center h-12 rounded-2xl font-bold bg-lime-500 hover:bg-lime-600 text-black transition-colors"
                 >
-                  <ArrowRight className="w-4 h-4 mr-2 rotate-180" />
-                  Go Back
+                  {/* <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> */}
+                  Done
                 </button>
               </div>
             </CardContent>
@@ -1365,6 +1367,14 @@ function Header({
         </div>
 
         <div className="flex items-center gap-4">
+          <Link
+            to="/driver-signin"
+            className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+          >
+            <LogIn className="h-4 w-4" />
+            Driver Sign In
+          </Link>
+
           <Button
             variant="outline"
             size="icon"
@@ -1404,6 +1414,12 @@ function Header({
               About
             </Link>
             <Separator className="my-2" />
+            <Link
+              to="/driver-signin"
+              className="text-sm font-bold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors"
+            >
+              Driver Sign In
+            </Link>
           </div>
         </div>
       )}

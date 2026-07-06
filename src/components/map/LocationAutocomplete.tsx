@@ -88,9 +88,6 @@ export default function LocationAutocomplete({
   strictBounds = false,
   bounds,
 }: LocationAutocompleteProps) {
-  // Stabilize types reference to prevent unnecessary callback recreation
-  const stableTypes = useRef(types);
-  useEffect(() => { stableTypes.current = types; }, [types]);
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -119,13 +116,13 @@ export default function LocationAutocomplete({
     autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
     const dummyDiv = document.createElement('div');
     placesServiceRef.current = new google.maps.places.PlacesService(dummyDiv);
+    
+    console.log('Places services initialized');
   }, [isLoaded]);
 
-  // Sync external value changes — only update if actually different to prevent cursor reset
+  // Sync external value changes
   useEffect(() => {
-    if (value !== inputValue) {
-      setInputValue(value);
-    }
+    setInputValue(value);
   }, [value]);
 
   // Close dropdown when clicking outside
@@ -149,11 +146,10 @@ export default function LocationAutocomplete({
     }
 
     setIsLoading(true);
-    setShowDropdown(true);
 
     const request: google.maps.places.AutocompletionRequest = {
         input,
-        types: stableTypes.current,
+        types: ['geocode', 'establishment'],
         componentRestrictions: { country: 'us' },
       };
 
@@ -171,33 +167,25 @@ export default function LocationAutocomplete({
       request.radius = 50000;
     }
 
-    try {
-      // Create a fresh service instance for each request to avoid stale state
-      const service = new google.maps.places.AutocompleteService();
-      service.getPlacePredictions(request,
-        (results, status) => {
-          setIsLoading(false);
-          
-          if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
-            setPredictions([]);
-            setShowDropdown(false);
-            return;
-          }
-
-          // Client-side filter: Google's API doesn't reliably enforce strictBounds
-          // on getPlacePredictions, so we double-check each prediction's state term.
-          const filtered = strictBounds ? filterToCA(results) : results;
-
-          setPredictions(filtered);
-          setShowDropdown(filtered.length > 0);
+    autocompleteServiceRef.current.getPlacePredictions(request,
+      (results, status) => {
+        setIsLoading(false);
+        
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
+          setPredictions([]);
+          setShowDropdown(false);
+          return;
         }
-      );
-    } catch (err) {
-      setIsLoading(false);
-      setPredictions([]);
-      setShowDropdown(false);
-    }
-  }, [strictBounds, bounds, userLocation]);
+
+        // Client-side filter: Google's API doesn't reliably enforce strictBounds
+        // on getPlacePredictions, so we double-check each prediction's state term.
+        const filtered = strictBounds ? filterToCA(results) : results;
+
+        setPredictions(filtered);
+        setShowDropdown(filtered.length > 0);
+      }
+    );
+  }, [types, strictBounds, bounds, userLocation]);
 
   // Handle input change with debounce
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {

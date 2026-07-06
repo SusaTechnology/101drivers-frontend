@@ -110,7 +110,7 @@ const MENU_SECTIONS = [
         description: 'Time windows, days, and blackout periods',
       },
       {
-        href: '/driver/wallet',
+        href: '/driver/payouts',
         icon: CreditCard,
         title: 'Payouts',
         description: 'Payout method, history, and statements',

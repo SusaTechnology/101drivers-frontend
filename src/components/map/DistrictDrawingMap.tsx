@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { GoogleMap, DrawingManager, Polygon, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, Polygon, InfoWindow } from '@react-google-maps/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Check, X, Undo2, MousePointerClick, Plus, GripVertical, Move } from 'lucide-react';
@@ -45,69 +45,113 @@ export default function DistrictDrawingMap({
   isSaving = false,
 }: DistrictDrawingMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
-  const drawingManagerRef = useRef<google.maps.drawing.DrawingManager | null>(null);
   const editPolygonRef = useRef<google.maps.Polygon | null>(null);
-  const [drawingMode, setDrawingMode] = useState(false);
+
+  // Drawing state (manual, no DrawingManager)
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [drawingPoints, setDrawingPoints] = useState<google.maps.LatLngLiteral[]>([]);
+
   const [draftPolygons, setDraftPolygons] = useState<DraftPolygon[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [hoveredDistrict, setHoveredDistrict] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [editVertexCount, setEditVertexCount] = useState(0);
 
-  // For the click popup (shows Edit/Delete actions)
+  // Popup for click on polygon
   const [popupDistrict, setPopupDistrict] = useState<District | null>(null);
   const [popupAnchor, setPopupAnchor] = useState<google.maps.LatLng | null>(null);
 
+  // Total vertices from draft polygons (for toolbar badge)
   const totalVertices = draftPolygons.reduce((sum, dp) => sum + dp.paths.length, 0);
 
+  // Store map ref
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
 
-  // Toggle drawing mode
-  const toggleDrawing = useCallback(() => {
-    if (drawingMode) {
-      setDrawingMode(false);
-      if (drawingManagerRef.current) {
-        drawingManagerRef.current.setDrawingMode(null);
-      }
-    } else {
-      setDrawingMode(true);
-      setEditingId(null);
-      editPolygonRef.current = null;
-      if (drawingManagerRef.current) {
-        drawingManagerRef.current.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
-      }
-    }
-  }, [drawingMode]);
+  // Map click/dblclick handlers (manual drawing)
+  const handleMapClick = useCallback(
+    (e: google.maps.MapMouseEvent) => {
+      if (!isDrawingMode || !e.latLng) return;
+      const latLng = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      const points = drawingPoints;
 
-  const handleDrawingManagerLoad = useCallback((dm: google.maps.drawing.DrawingManager) => {
-    drawingManagerRef.current = dm;
-    dm.setDrawingMode(null);
-
-    google.maps.event.addListener(dm, 'polygoncomplete', (polygon: google.maps.Polygon) => {
-      const path = polygon.getPath();
-      const coords: google.maps.LatLngLiteral[] = [];
-      for (let i = 0; i < path.getLength(); i++) {
-        const point = path.getAt(i);
-        coords.push({ lat: point.lat(), lng: point.lng() });
+      // Check if clicking near the first point to close polygon
+      if (points.length >= 3) {
+        const first = points[0];
+        const dist = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(first.lat, first.lng),
+          e.latLng,
+        );
+        if (dist < 10) {
+          // Close polygon – finish drawing
+          setIsDrawingMode(false);
+          const newDraft: DraftPolygon = {
+            paths: [...points],
+            code: `ZONE_${draftPolygons.length + 1}`,
+            name: `Zone ${draftPolygons.length + 1}`,
+          };
+          setDraftPolygons((prev) => [...prev, newDraft]);
+          setDrawingPoints([]);
+          return;
+        }
       }
 
-      const newDraft: DraftPolygon = {
-        paths: coords,
-        code: `ZONE_${draftPolygons.length + 1}`,
-        name: `Zone ${draftPolygons.length + 1}`,
+      // Add point
+      setDrawingPoints((prev) => [...prev, latLng]);
+    },
+    [isDrawingMode, drawingPoints, draftPolygons.length],
+  );
+
+  const handleMapDblClick = useCallback(
+    (e: google.maps.MapMouseEvent) => {
+      if (!isDrawingMode) return;
+      e.stop();
+      if (drawingPoints.length >= 3) {
+        setIsDrawingMode(false);
+        const newDraft: DraftPolygon = {
+          paths: [...drawingPoints],
+          code: `ZONE_${draftPolygons.length + 1}`,
+          name: `Zone ${draftPolygons.length + 1}`,
+        };
+        setDraftPolygons((prev) => [...prev, newDraft]);
+        setDrawingPoints([]);
+      }
+    },
+    [isDrawingMode, drawingPoints, draftPolygons.length],
+  );
+
+  // Attach/detach map listeners when drawing mode changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (isDrawingMode) {
+      const clickListener = map.addListener('click', handleMapClick);
+      const dblClickListener = map.addListener('dblclick', handleMapDblClick);
+      return () => {
+        google.maps.event.removeListener(clickListener);
+        google.maps.event.removeListener(dblClickListener);
       };
-      setDraftPolygons((prev) => [...prev, newDraft]);
+    }
+    return () => {}; // no listeners when not drawing
+  }, [isDrawingMode, handleMapClick, handleMapDblClick]);
 
-      // Remove the drawn overlay (we'll render our own)
-      polygon.setMap(null);
-
-      // Turn off drawing mode after completing one polygon
-      setDrawingMode(false);
-      dm.setDrawingMode(null);
-    });
-  }, [draftPolygons.length]);
+  // Toggle drawing mode on/off
+  const toggleDrawing = useCallback(() => {
+    if (isDrawingMode) {
+      // Cancel drawing
+      setIsDrawingMode(false);
+      setDrawingPoints([]);
+    } else {
+      // Start drawing
+      setIsDrawingMode(true);
+      setEditingId(null);
+      setPopupDistrict(null);
+      setPopupAnchor(null);
+      editPolygonRef.current = null;
+    }
+  }, [isDrawingMode]);
 
   // Save draft polygon as a district
   const handleSaveDraft = useCallback(
@@ -138,20 +182,15 @@ export default function DistrictDrawingMap({
     [],
   );
 
-  // Start editing existing district polygon
-  const startEdit = useCallback(
-    (district: District) => {
-      setEditingId(district.id || null);
-      setEditingName(district.name);
-      setTooltipDistrict(null);
-      setTooltipAnchor(null);
-      setDrawingMode(false);
-      if (drawingManagerRef.current) {
-        drawingManagerRef.current.setDrawingMode(null);
-      }
-    },
-    [],
-  );
+  // Start editing an existing district
+  const startEdit = useCallback((district: District) => {
+    setEditingId(district.id || null);
+    setEditingName(district.name);
+    setPopupDistrict(null);
+    setPopupAnchor(null);
+    setIsDrawingMode(false);
+    setDrawingPoints([]);
+  }, []);
 
   const cancelEdit = useCallback(() => {
     setEditingId(null);
@@ -160,7 +199,7 @@ export default function DistrictDrawingMap({
     setEditVertexCount(0);
   }, []);
 
-  // Save edited polygon — reads from the edit polygon ref
+  // Save edited polygon
   const saveEdit = useCallback(() => {
     if (!editingId) return;
     const poly = editPolygonRef.current;
@@ -174,7 +213,6 @@ export default function DistrictDrawingMap({
       const geoJson = polygonToGeoJson(coords as any);
       onUpdate?.(editingId, { name: editingName, geoJson });
     } else {
-      // Fallback: just update name
       onUpdate?.(editingId, { name: editingName });
     }
     setEditingId(null);
@@ -183,27 +221,19 @@ export default function DistrictDrawingMap({
     setEditVertexCount(0);
   }, [editingId, editingName, onUpdate]);
 
-  // Track vertex count on the edit polygon
-  const handleEditPolygonLoad = useCallback(
-    (poly: google.maps.Polygon) => {
-      editPolygonRef.current = poly;
-      const count = poly.getPath().getLength();
-      setEditVertexCount(count);
+  // Track vertex count on edit polygon
+  const handleEditPolygonLoad = useCallback((poly: google.maps.Polygon) => {
+    editPolygonRef.current = poly;
+    setEditVertexCount(poly.getPath().getLength());
 
-      // Listen for vertex changes
-      google.maps.event.clearListeners(poly, 'dragend');
-      google.maps.event.addListener(poly.getPath(), 'insert_at', () => {
-        setEditVertexCount(poly.getPath().getLength());
-      });
-      google.maps.event.addListener(poly.getPath(), 'remove_at', () => {
-        setEditVertexCount(poly.getPath().getLength());
-      });
-      google.maps.event.addListener(poly.getPath(), 'set_at', () => {
-        setEditVertexCount(poly.getPath().getLength());
-      });
-    },
-    [],
-  );
+    const updateCount = () => setEditVertexCount(poly.getPath().getLength());
+    google.maps.event.clearListeners(poly.getPath(), 'insert_at');
+    google.maps.event.clearListeners(poly.getPath(), 'remove_at');
+    google.maps.event.clearListeners(poly.getPath(), 'set_at');
+    poly.getPath().addListener('insert_at', updateCount);
+    poly.getPath().addListener('remove_at', updateCount);
+    poly.getPath().addListener('set_at', updateCount);
+  }, []);
 
   // Fit map to show all polygons
   const fitAllBounds = useCallback(() => {
@@ -226,43 +256,46 @@ export default function DistrictDrawingMap({
       });
     });
 
+    // Include drawing preview if any
+    if (isDrawingMode && drawingPoints.length > 0) {
+      drawingPoints.forEach((p) => bounds.extend(p));
+      hasAny = true;
+    }
+
     if (hasAny) {
       const mapDiv = mapRef.current.getDiv();
       const padV = Math.round(mapDiv.clientHeight * 0.12);
       const padH = Math.round(mapDiv.clientWidth * 0.08);
       mapRef.current.fitBounds(bounds, { top: padV, right: padH, bottom: padV, left: padH });
     }
-  }, [districts, draftPolygons]);
+  }, [districts, draftPolygons, isDrawingMode, drawingPoints]);
 
   // Auto-fit when districts load
   useEffect(() => {
-    if (districts.length > 0 && !editingId && draftPolygons.length === 0) {
+    if (districts.length > 0 && !editingId && draftPolygons.length === 0 && !isDrawingMode) {
       const timer = setTimeout(fitAllBounds, 500);
       return () => clearTimeout(timer);
     }
-  }, [districts, editingId, draftPolygons, fitAllBounds]);
+  }, [districts, editingId, draftPolygons, isDrawingMode, fitAllBounds]);
 
-  // Build paths for editing
+  // Edit paths for the polygon being edited
   const editPaths = editingId
     ? geoJsonToPaths(districts.find((d) => d.id === editingId)?.geoJson)
     : [];
 
-  // Click on polygon to show action popup (Edit/Delete)
+  // Polygon click popup
   const handlePolygonClick = useCallback(
     (e: google.maps.MapMouseEvent, district: District) => {
-      if (drawingMode) return;
-      // Toggle popup: if same district clicked again, close it; otherwise open
+      if (isDrawingMode) return;
       if (popupDistrict?.id === district.id) {
         setPopupDistrict(null);
         setPopupAnchor(null);
       } else {
         setPopupDistrict(district);
-        if (e.latLng) {
-          setPopupAnchor(e.latLng);
-        }
+        if (e.latLng) setPopupAnchor(e.latLng);
       }
     },
-    [drawingMode, popupDistrict],
+    [isDrawingMode, popupDistrict],
   );
 
   const closePopup = useCallback(() => {
@@ -272,7 +305,7 @@ export default function DistrictDrawingMap({
 
   const handlePopupEdit = useCallback(
     (district: District) => {
- setPopupDistrict(null);
+      setPopupDistrict(null);
       setPopupAnchor(null);
       startEdit(district);
     },
@@ -281,27 +314,29 @@ export default function DistrictDrawingMap({
 
   const handlePopupDelete = useCallback(
     (district: District) => {
-      if (district.id) {
-        onDelete?.(district.id);
-      }
+      if (district.id) onDelete?.(district.id);
       setPopupDistrict(null);
       setPopupAnchor(null);
     },
     [onDelete],
   );
 
-  // Hover to show tooltip (lighter, just name hint)
   const handlePolygonMouseOver = useCallback(
     (e: google.maps.MapMouseEvent, district: District) => {
-      if (drawingMode) return;
+      if (isDrawingMode) return;
       setHoveredDistrict(district.id || null);
     },
-    [drawingMode],
+    [isDrawingMode],
   );
 
   const handlePolygonMouseOut = useCallback(() => {
     setHoveredDistrict(null);
   }, []);
+
+  // Preview polygon while drawing
+  const drawingPreview = isDrawingMode && drawingPoints.length >= 2
+    ? (drawingPoints.length >= 3 ? [...drawingPoints, drawingPoints[0]] : drawingPoints)
+    : [];
 
   return (
     <div className="flex flex-col h-full">
@@ -309,12 +344,12 @@ export default function DistrictDrawingMap({
       <div className="flex flex-wrap items-center gap-2 p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <Button
           size="sm"
-          variant={drawingMode ? 'default' : 'outline'}
+          variant={isDrawingMode ? 'default' : 'outline'}
           onClick={toggleDrawing}
           disabled={!!editingId}
           className="rounded-xl font-extrabold text-xs gap-1.5"
         >
-          {drawingMode ? (
+          {isDrawingMode ? (
             <>
               <X className="h-3.5 w-3.5" />
               Cancel Drawing
@@ -337,7 +372,7 @@ export default function DistrictDrawingMap({
           Fit All
         </Button>
 
-        {drawingMode && (
+        {isDrawingMode && (
           <Badge className="bg-amber-50 dark:bg-amber-900/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-black">
             Click points on the map to draw a polygon. Double-click to finish.
           </Badge>
@@ -350,7 +385,7 @@ export default function DistrictDrawingMap({
           </Badge>
         )}
 
-        {!drawingMode && !editingId && (
+        {!isDrawingMode && !editingId && (
           <Badge variant="secondary" className="text-[10px] font-black text-slate-500">
             <MousePointerClick className="h-3 w-3 mr-1" />
             Click any zone on the map to edit it
@@ -372,7 +407,6 @@ export default function DistrictDrawingMap({
 
       {/* Map + Side Panel */}
       <div className="flex flex-1 min-h-0 relative">
-        {/* Map */}
         <div className="flex-1">
           <GoogleMap
             mapContainerStyle={CONTAINER_STYLE}
@@ -390,30 +424,11 @@ export default function DistrictDrawingMap({
               clickableIcons: false,
             }}
           >
-            <DrawingManager
-              onLoad={handleDrawingManagerLoad}
-              options={{
-                drawingMode: drawingMode ? google.maps.drawing.OverlayType.POLYGON : null,
-                drawingControl: false,
-                polygonOptions: {
-                  fillColor: '#3b82f6',
-                  fillOpacity: 0.2,
-                  strokeColor: '#3b82f6',
-                  strokeWeight: 3,
-                  editable: false,
-                  draggable: false,
-                },
-              }}
-            />
-
-            {/* Existing districts (non-editing) */}
+            {/* Existing districts (non‑editing) */}
             {districts.map((district) => {
               const paths = geoJsonToPaths(district.geoJson);
               if (paths.length === 0) return null;
-
               const isEditing = editingId === district.id;
-              const isHovered = hoveredDistrict === district.id;
-
               if (isEditing) return null;
 
               return (
@@ -425,11 +440,11 @@ export default function DistrictDrawingMap({
                       fillColor: '#a9ce42',
                       fillOpacity: 0,
                       strokeColor: '#a9ce42',
-                      strokeOpacity: isHovered ? 0.5 : 0.3,
+                      strokeOpacity: hoveredDistrict === district.id ? 0.5 : 0.3,
                       strokeWeight: 8,
-                      clickable: !drawingMode,
+                      clickable: !isDrawingMode,
                       zIndex: 1,
-                      cursor: drawingMode ? 'default' : 'pointer',
+                      cursor: isDrawingMode ? 'default' : 'pointer',
                     }}
                   />
                   {/* Main fill */}
@@ -437,13 +452,13 @@ export default function DistrictDrawingMap({
                     paths={paths}
                     options={{
                       fillColor: '#a9ce42',
-                      fillOpacity: isHovered ? 0.35 : 0.2,
+                      fillOpacity: hoveredDistrict === district.id ? 0.35 : 0.2,
                       strokeColor: '#a9ce42',
-                      strokeOpacity: isHovered ? 1 : 0.9,
-                      strokeWeight: isHovered ? 4 : 3,
-                      clickable: !drawingMode,
+                      strokeOpacity: hoveredDistrict === district.id ? 1 : 0.9,
+                      strokeWeight: hoveredDistrict === district.id ? 4 : 3,
+                      clickable: !isDrawingMode,
                       zIndex: 2,
-                      cursor: drawingMode ? 'default' : 'pointer',
+                      cursor: isDrawingMode ? 'default' : 'pointer',
                     }}
                     onMouseover={(e) => handlePolygonMouseOver(e, district)}
                     onMouseout={handlePolygonMouseOut}
@@ -453,14 +468,13 @@ export default function DistrictDrawingMap({
               );
             })}
 
-            {/* Click action popup — Edit / Delete */}
-            {popupDistrict && popupAnchor && !editingId && !drawingMode && (
+            {/* Popup for click actions (Edit/Delete) */}
+            {popupDistrict && popupAnchor && !editingId && !isDrawingMode && (
               <InfoWindow
                 position={popupAnchor}
                 options={{
                   pixelOffset: new google.maps.Size(0, -10),
                   maxWidth: 240,
-                  closeIcon: { url: '' } as any,
                   disableAutoPan: true,
                 }}
                 onCloseClick={closePopup}
@@ -503,15 +517,6 @@ export default function DistrictDrawingMap({
                         fontSize: '11px',
                         fontWeight: 800,
                         cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.background = '#fef3c7';
-                        e.currentTarget.style.borderColor = '#fbbf24';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.background = '#fffbeb';
-                        e.currentTarget.style.borderColor = '#e2e8f0';
                       }}
                     >
                       ✏️ Edit
@@ -532,15 +537,6 @@ export default function DistrictDrawingMap({
                         fontSize: '11px',
                         fontWeight: 800,
                         cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.background = '#fee2e2';
-                        e.currentTarget.style.borderColor = '#f87171';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.background = '#fef2f2';
-                        e.currentTarget.style.borderColor = '#fecaca';
                       }}
                     >
                       🗑️ Delete
@@ -550,7 +546,7 @@ export default function DistrictDrawingMap({
               </InfoWindow>
             )}
 
-            {/* Edit polygon overlay (when editing existing) */}
+            {/* Edit polygon (editing existing) */}
             {editingId && editPaths.length > 0 && (
               <Polygon
                 onLoad={handleEditPolygonLoad}
@@ -568,10 +564,9 @@ export default function DistrictDrawingMap({
               />
             )}
 
-            {/* Draft polygons (unsaved) — blue */}
+            {/* Draft polygons (unsaved) – blue */}
             {draftPolygons.map((draft, index) => (
               <React.Fragment key={`draft-${index}`}>
-                {/* Glow */}
                 <Polygon
                   paths={draft.paths}
                   options={{
@@ -584,7 +579,6 @@ export default function DistrictDrawingMap({
                     zIndex: 3,
                   }}
                 />
-                {/* Main */}
                 <Polygon
                   paths={draft.paths}
                   options={{
@@ -599,6 +593,24 @@ export default function DistrictDrawingMap({
                 />
               </React.Fragment>
             ))}
+
+            {/* Drawing preview (current drawing) */}
+            {isDrawingMode && drawingPreview.length > 0 && (
+              <Polygon
+                paths={drawingPreview}
+                options={{
+                  fillColor: '#3b82f6',
+                  fillOpacity: 0.1,
+                  strokeColor: '#3b82f6',
+                  strokeOpacity: 0.8,
+                  strokeWeight: 3,
+                  strokeDasharray: '6 4',
+                  clickable: false,
+                  editable: false,
+                  zIndex: 5,
+                }}
+              />
+            )}
           </GoogleMap>
         </div>
 
@@ -618,8 +630,7 @@ export default function DistrictDrawingMap({
                   className="w-full px-3 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl mb-3 focus:outline-none focus:ring-2 focus:ring-amber-400"
                   placeholder="Zone name"
                 />
-                
-                {/* Edit instructions */}
+
                 <div className="bg-amber-50 dark:bg-amber-900/10 rounded-xl p-3 mb-3 space-y-2">
                   <div className="text-[10px] font-black text-amber-700 dark:text-amber-300">
                     How to edit:
@@ -723,8 +734,8 @@ export default function DistrictDrawingMap({
           </div>
         )}
 
-        {/* Quick-help overlay when map is idle (no edit, no draw) */}
-        {!editingId && !drawingMode && draftPolygons.length === 0 && districts.length > 0 && (
+        {/* Quick‑help overlay when idle */}
+        {!editingId && !isDrawingMode && draftPolygons.length === 0 && districts.length > 0 && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
             <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg px-4 py-2.5 flex items-center gap-3">
               <MousePointerClick className="h-4 w-4 text-amber-500 shrink-0" />

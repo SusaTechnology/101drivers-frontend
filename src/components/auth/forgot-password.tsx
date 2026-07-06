@@ -447,6 +447,7 @@ export function ResetPassword() {
                   id="newPassword"
                   type={showNewPassword ? "text" : "password"}
                   autoComplete="new-password"
+                  placeholder="••••••••"
                   className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                   disabled={resetPasswordMutation.isPending}
                   ref={(e) => {
@@ -494,6 +495,7 @@ export function ResetPassword() {
                 <Input
                   id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
+                  placeholder="••••••••"
                   autoComplete="new-password"
                   className="h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                   disabled={resetPasswordMutation.isPending}

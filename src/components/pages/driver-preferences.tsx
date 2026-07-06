@@ -56,6 +56,7 @@ import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import PickupZoneOverlay from '@/components/map/PickupZoneOverlay'
 import { usePickupZones } from '@/hooks/usePickupZones'
+import PolicySheet from '../shared/PolicySheet'
 // import DriverBottomNav from '../layout/DriverBottomNav'
 
 // Form schema – includes all fields for the combined payload
@@ -119,14 +120,6 @@ const MOCK_PREFERENCES = {
   ],
 }
 
-// Bottom navigation items
-// const bottomNavItems = [
-//   { href: '/driver/dashboard', label: 'Home', icon: Home },
-//   { href: '/driver-active', label: 'Active', icon: Car },
-//   { href: '/driver-inbox', label: 'Inbox', icon: Inbox },
-//   { href: '/driver-menu', label: 'Menu', icon: MenuIcon },
-// ]
-
 export default function DriverPreferencesPage() {
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
@@ -134,7 +127,7 @@ export default function DriverPreferencesPage() {
   const driver = getUser()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
-
+  const [openPolicySheet, setOpenPolicySheet] = useState<'agreement' | 'terms' | 'privacy' | null>(null);
   // Google Maps API loader
   const { isLoaded: googleMapsLoaded } = useJsApiLoader({
     id: GOOGLE_MAPS_SCRIPT_ID,
@@ -630,6 +623,92 @@ export default function DriverPreferencesPage() {
                 </div>
               </div>
             </div>
+
+            {/* ─── Added license & email information ─── */}
+            {driverProfileLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              </div>
+            ) : driverProfile ? (
+              <>
+                <Separator className="my-4" />
+                <div className="space-y-4">
+                  {/* Email */}
+                  
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Email
+                    </Label>
+                    <Input
+                      readOnly
+                      value={driverProfile.user?.email || ''}
+                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm bg-slate-50 dark:bg-slate-800/20"
+                    />
+                  </div>
+
+                  {/* License Number & State */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                        License Number
+                      </Label>
+                      <Input
+                        readOnly
+                        value={driverProfile.licenseNumber || ''}
+                        className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm bg-slate-50 dark:bg-slate-800/20"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                        License State
+                      </Label>
+                      <Input
+                        readOnly
+                        value={driverProfile.licenseState || ''}
+                        className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm bg-slate-50 dark:bg-slate-800/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* License Images */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                        License Front
+                      </Label>
+                      {driverProfile.licenseFrontUrl ? (
+                        <img
+                          src={driverProfile.licenseFrontUrl}
+                          alt="License Front"
+                          className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                        />
+                      ) : (
+                        <div className="h-32 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-xs">
+                          No image
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                        License Back
+                      </Label>
+                      {driverProfile.licenseBackUrl ? (
+                        <img
+                          src={driverProfile.licenseBackUrl}
+                          alt="License Back"
+                          className="w-full h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
+                        />
+                      ) : (
+                        <div className="h-32 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-xs">
+                          No image
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
+            {/* ─── End of added section ─── */}
           </CardContent>
         </Card>
 
@@ -935,11 +1014,40 @@ export default function DriverPreferencesPage() {
             </div>
           </CardContent>
         </Card>
+        {/* Legal links */}
+<div className="flex flex-wrap justify-center gap-4 mt-6 text-sm">
+  <button
+    type="button"
+    onClick={() => setOpenPolicySheet('agreement')}
+    className="text-lime-500 dark:text-lime-400 font-bold underline underline-offset-2 hover:text-lime-600 dark:hover:text-lime-300 transition"
+  >
+    Independent Driver Agreement
+  </button>
+  <button
+    type="button"
+    onClick={() => setOpenPolicySheet('terms')}
+    className="text-lime-500 dark:text-lime-400 font-bold underline underline-offset-2 hover:text-lime-600 dark:hover:text-lime-300 transition"
+  >
+    Terms of Service
+  </button>
+  <button
+    type="button"
+    onClick={() => setOpenPolicySheet('privacy')}
+    className="text-lime-500 dark:text-lime-400 font-bold underline underline-offset-2 hover:text-lime-600 dark:hover:text-lime-300 transition"
+  >
+    Privacy Policy
+  </button>
+</div>
       </main>
-
-      {/* Bottom Navigation */}
-      {/* <DriverBottomNav /> */}
-
+      <PolicySheet
+      open={!!openPolicySheet}
+      onOpenChange={(open) => {
+        if (!open) setOpenPolicySheet(null);
+      }}
+      type={openPolicySheet ?? "agreement"} // default type (won't be used when null)
+      closeLabel="Return to Preferences"
+      fromSignUp= {false}
+    />
     </div>
   )
 }

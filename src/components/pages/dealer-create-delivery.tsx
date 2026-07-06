@@ -2557,9 +2557,9 @@ const handleQuotePreview = () => {
                           if (slot) handleSlotSelect(slot);
                         }}
                       >
-                        <SelectTrigger className={cn(
+                           <SelectTrigger className={cn(
                           "h-14 rounded-2xl transition-colors",
-                          showValidationErrors && !selectedSlot
+                          !selectedSlot
                             ? "border-red-300 dark:border-red-800"
                             : "border-slate-200 dark:border-slate-700"
                         )}>
@@ -2573,8 +2573,6 @@ const handleQuotePreview = () => {
                           ))}
                         </SelectContent>
                       </Select>
-                    ) : !isLoadingSlots && schedulePreviewData ? (
-                      <p className="text-sm text-amber-600 dark:text-amber-400 py-2">No available time slots for the selected date. All slots have passed or the business is closed.</p>
                     ) : null}
                   </div>
                 )}
@@ -2753,7 +2751,7 @@ const handleQuotePreview = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="licensePlate" className="text-xs font-bold">
-                      License Plate {!licensePlate && <span className="text-red-500"> *</span>}
+                      License Plate Number {!licensePlate && <span className="text-red-500"> *</span>}
                     </Label>
                     <Input
                       id="licensePlate"
@@ -3010,13 +3008,13 @@ const handleQuotePreview = () => {
                         htmlFor="recipientName"
                         className="text-xs font-bold"
                       >
-                        Name {(!recipientName || recipientName.trim().length === 0) && <span className="text-red-500"> *</span>}
+                        Recipient’s Full Name {(!recipientName || recipientName.trim().length === 0) && <span className="text-red-500"> *</span>}
                       </Label>
                       <Input
                         id="recipientName"
                         {...register("recipientName")}
                         className={cn("h-14 rounded-2xl", showValidationErrors && (!recipientName || recipientName.trim().length < 1) && "border-red-500 ring-1 ring-red-500")}
-                        placeholder="Full name"
+                        placeholder="John Smith"
                         data-validation-error={(!recipientName || recipientName.trim().length < 1) ? "true" : undefined}
                       />
                       {showValidationErrors && (!recipientName || recipientName.trim().length < 1) && (

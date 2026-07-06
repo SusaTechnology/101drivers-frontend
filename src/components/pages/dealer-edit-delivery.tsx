@@ -308,6 +308,7 @@ export default function EditDeliveryPage() {
   const [schedulePreviewData, setSchedulePreviewData] = useState<SchedulePreviewResponse | null>(null);
   const [hasCalculated, setHasCalculated] = useState(false);
   const [quoteId, setQuoteId] = useState<string | null>(null);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [quoteData, setQuoteData] = useState({
     miles: 0,
     total: 0,
@@ -1804,16 +1805,37 @@ export default function EditDeliveryPage() {
                           <span className="text-xs text-slate-500 font-normal">Arrival will be calculated</span>
                         </Label>
                       </div>
-                      <div className="flex items-center space-x-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-lime-500 transition-colors cursor-pointer">
-                        <RadioGroupItem value="DROPOFF_WINDOW" id="dropoff-choice" />
-                        <Label htmlFor="dropoff-choice" className="cursor-pointer font-medium">
-                          <span className="flex items-center gap-2">
-                            <Flag className="h-4 w-4 text-lime-500" />
-                            I want to set arrival time
-                          </span>
-                          <span className="text-xs text-slate-500 font-normal">Pickup will be calculated</span>
-                        </Label>
-                      </div>
+                    {(() => {
+                      const isLongRoute = (schedulePreviewData?.etaMinutes > 45) || (quoteData.miles > 7.5);
+                      return (
+                        <div className={cn(
+                          "flex items-center space-x-3 p-4 rounded-xl border transition-colors",
+                          isLongRoute
+                            ? "border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed"
+                            : customerChose === "DROPOFF_WINDOW"
+                              ? "border-lime-500 bg-lime-50 dark:bg-lime-900/20"
+                              : customerChose
+                                ? "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer"
+                                : showValidationErrors && selectedDate
+                                  ? "border-red-300 dark:border-red-800 hover:border-lime-500 cursor-pointer"
+                                  : "border-slate-200 dark:border-slate-700 hover:border-lime-500 cursor-pointer"
+                        )}>
+                          <RadioGroupItem value="DROPOFF_WINDOW" id="dropoff-choice" disabled={isLongRoute} />
+                          <Label htmlFor="dropoff-choice" className={cn("font-medium", isLongRoute && "cursor-not-allowed text-slate-400")}>
+                            <span className="flex items-center gap-2">
+                              <Flag className="h-4 w-4 text-lime-500" />
+                              I want to set arrival time
+                            </span>
+                            <span className="text-xs text-slate-500 font-normal">
+                              {isLongRoute
+                                ? `Not available — route is ${quoteData.miles > 7.5 ? 'too long' : 'too slow'} (${quoteData.miles} mi, ~${formatDuration(schedulePreviewData?.etaMinutes || 0)})`
+                                : "Pickup will be calculated"
+                              }
+                            </span>
+                          </Label>
+                        </div>
+                      );
+                    })()}
                     </RadioGroup>
                   </div>
                   </>)}
@@ -1842,7 +1864,12 @@ export default function EditDeliveryPage() {
                             if (slot) handleSlotSelect(slot);
                           }}
                         >
-                          <SelectTrigger className="h-14 rounded-2xl">
+                           <SelectTrigger className={cn(
+                              "h-14 rounded-2xl transition-colors",
+                              !selectedSlot
+                               ? "border-red-300 dark:border-red-800"
+                               : "border-slate-200 dark:border-slate-700"
+                             )}>                                        
                             <SelectValue placeholder="Choose a time slot..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -1853,8 +1880,6 @@ export default function EditDeliveryPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                      ) : !isLoadingSlots && schedulePreviewData ? (
-                        <p className="text-sm text-amber-600 dark:text-amber-400 py-2">No available time slots for the selected date. All slots have passed or the business is closed.</p>
                       ) : null}
                     </div>
                   )}
@@ -2021,7 +2046,7 @@ export default function EditDeliveryPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="licensePlate" className="text-xs font-bold">
-                          License Plate
+                          License Plate Number
                         </Label>
                         <Input
                           id="licensePlate"
@@ -2262,13 +2287,13 @@ export default function EditDeliveryPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="recipientName" className="text-xs font-bold">
-                          Recipient name <span className="text-red-500">*</span>
+                          Recipient’s Full Name <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="recipientName"
                           {...register("recipientName")}
                           className="h-14 rounded-2xl"
-                          placeholder="Buyer / receiver"
+                          placeholder="John Smith"
                         />
                         {errors.recipientName && (
                           <p className="text-xs text-red-500">{errors.recipientName.message}</p>

@@ -74,6 +74,7 @@ import {
   Maximize,
   Minimize,
   Inbox,
+  Camera,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -182,7 +183,23 @@ export default function DriverActiveDeliveryPage() {
   const [driverHeading, setDriverHeading] = useState<number | null>(null)
   const socketConnected = useSocketConnected()
   const [workflowStatus, setWorkflowStatus] = useState<any>(null)
+const DROPOFF_PHOTO_LABELS = [
+  'Left Front Corner',
+  'Right Front Corner',
+  'Passenger Side',
+  'Right Rear Corner',
+  'Left Rear Corner',
+  "Driver's Side",
+]
 
+const DROPOFF_REF_IMAGES = [
+  `/assets/angle-1-left-front.jpeg`,
+  `/assets/angle-2-right-front.jpeg`,
+  `/assets/angle-3-passenger-side.jpeg`,
+  `/assets/angle-4-right-rear.jpeg`,
+  `/assets/angle-5-left-rear.jpeg`,
+  `/assets/angle-6-driver-side.jpeg`,
+]
   // Detect desktop (no touch screen + not small screen)
   useEffect(() => {
     const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0
@@ -1080,25 +1097,7 @@ export default function DriverActiveDeliveryPage() {
               </div>
             )}
 
-            {/* Overlay: Getting location... */}
-            {isLoaded && !driverPosition && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-full px-5 py-2.5 shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-2.5">
-                  <div className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Getting location...</span>
-                </div>
-              </div>
-            )}
-
-            {/* Overlay: Socket disconnected */}
-            {!socketConnected && driverPosition && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-full px-5 py-2.5 shadow-lg border border-amber-200 dark:border-amber-800 flex items-center gap-2.5">
-                  <div className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse" />
-                  <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Reconnecting...</span>
-                </div>
-              </div>
-            )}
+            {/* (The "Getting location..." and "Reconnecting..." overlays have been moved next to the tracking badge inside the header.) */}
           </div>
 
           {/* Top overlay — address + ETA + payout */}
@@ -1141,8 +1140,8 @@ export default function DriverActiveDeliveryPage() {
                   </div>
                 </div>
 
-                {/* GPS tracking status indicator — inside header overlay, below content */}
-                <div className="mt-3 pointer-events-auto">
+                {/* GPS tracking status indicator + getting location / reconnecting badges */}
+                <div className="mt-3 pointer-events-auto flex items-center gap-2">
                   <div className={cn(
                     'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full backdrop-blur shadow-lg text-[10px] font-extrabold uppercase tracking-widest',
                     locationHealth === 'healthy'
@@ -1157,6 +1156,22 @@ export default function DriverActiveDeliveryPage() {
                     )} />
                     {locationHealth === 'healthy' ? 'Tracking' : locationHealth === 'warning' ? 'Weak GPS' : 'No GPS'}
                   </div>
+
+                  {/* Getting location badge */}
+                  {isLoaded && !driverPosition && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full backdrop-blur shadow-lg text-[10px] font-extrabold uppercase tracking-widest bg-blue-500/90 text-white">
+                      <div className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                      Getting location...
+                    </div>
+                  )}
+
+                  {/* Reconnecting badge */}
+                  {!socketConnected && driverPosition && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full backdrop-blur shadow-lg text-[10px] font-extrabold uppercase tracking-widest bg-amber-500/90 text-white">
+                      <div className="h-1.5 w-1.5 rounded-full bg-amber-200 animate-pulse" />
+                      Reconnecting...
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1626,27 +1641,88 @@ export default function DriverActiveDeliveryPage() {
                 className="hidden"
               />
 
-              <div className="grid grid-cols-3 gap-2">
-                {dropoffPhotoSlots.map((slot, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    onClick={() => handleAddDropoffPhoto(index)}
-                    className={cn(
-                      "h-16 rounded-2xl border-2 border-dashed flex items-center justify-center p-0 hover:bg-primary/5 transition overflow-hidden",
-                      slot.file ? "border-primary bg-primary/10" : "border-slate-200 dark:border-slate-700"
-                    )}
-                  >
-                    {slot.preview ? (
-                      <img src={slot.preview} alt={`Dropoff ${index + 1}`} className="h-full w-full object-cover" />
-                    ) : slot.file ? (
-                      <Check className="w-5 h-5 text-primary" />
-                    ) : (
-                      <AddAPhoto className="w-5 h-5 text-primary" />
-                    )}
-                  </Button>
-                ))}
-              </div>
+             <div className="grid grid-cols-3 gap-2">
+  {dropoffPhotoSlots.map((slot, index) => {
+    const isCaptured = !!slot.preview
+    const uploadedPhoto = uploadedDropoffPhotos.find(p => p.slotIndex === index + 1)
+    const imageToShow = uploadedPhoto?.imageUrl || slot.preview
+
+    return (
+      <button
+        key={index}
+        type="button"
+        onClick={() => !isDesktop && !isUploading && handleAddDropoffPhoto(index)}
+        disabled={isDesktop || isUploading}
+        className={cn(
+          "aspect-[3/4] rounded-2xl border-2 overflow-hidden relative flex flex-col items-center justify-end transition",
+          imageToShow
+            ? "border-green-300 dark:border-green-700"
+            : "border-slate-200 dark:border-slate-700 hover:border-primary/50 active:scale-[0.97]",
+          isDesktop && "cursor-not-allowed opacity-60"
+        )}
+      >
+        {/* Reference image shown when no photo captured yet */}
+        <img
+          src={DROPOFF_REF_IMAGES[index]}
+          alt={DROPOFF_PHOTO_LABELS[index]}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+          className={cn(
+            "absolute inset-0 w-full h-full object-cover transition-opacity",
+            imageToShow ? "opacity-0" : "opacity-60"
+          )}
+          loading="lazy"
+        />
+
+        {/* Uploaded / preview photo overlay */}
+        {imageToShow && (
+          <img
+            src={imageToShow}
+            alt={`Dropoff ${index + 1}`}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
+
+        {/* Uploading spinner (when upload is in progress for this slot) */}
+        {isUploading && slot.file && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {/* Checkmark badge */}
+        {imageToShow && !isUploading && (
+          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center z-10 shadow">
+            <Check className="w-3 h-3 text-white" />
+          </div>
+        )}
+
+        {/* Bottom label strip */}
+        <div className={cn(
+          "relative z-10 w-full px-1.5 py-2 flex flex-col items-center justify-center gap-0.5",
+          imageToShow
+            ? "bg-gradient-to-t from-black/70 via-black/40 to-transparent"
+            : "bg-gradient-to-t from-black/60 via-black/30 to-transparent"
+        )}>
+          <span className={cn(
+            "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black shrink-0",
+            imageToShow ? "bg-green-500 text-white" : "bg-white/60 text-slate-900"
+          )}>
+            {index + 1}
+          </span>
+          <span className="text-[9px] font-bold text-white leading-tight text-center">
+            {DROPOFF_PHOTO_LABELS[index]}
+          </span>
+          {!imageToShow && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <Camera className="w-3 h-3 text-white/70" />
+              <span className="text-[9px] font-bold text-white/70">Tap to capture</span>
+            </div>
+          )}
+        </div>
+      </button>
+    )
+  })}
+</div>
 
               <div className="mt-4 flex flex-col gap-3">
                 <Button

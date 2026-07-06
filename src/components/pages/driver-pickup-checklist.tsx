@@ -735,13 +735,13 @@ const handleUploadOdometerPhoto = async () => {
     }
 
     // If before pickup window and GPS says NOT at pickup, block
-    if (delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === false) {
-      toast.error('Not at pickup location', {
-        description: 'GPS shows you are not at the pickup lot yet. Please go to the pickup location to start early.',
-        duration: 8000,
-      })
-      return
-    }
+    // if (delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date() && isDriverAtPickup === false) {
+    //   toast.error('Not at pickup location', {
+    //     description: 'GPS shows you are not at the pickup lot yet. Please go to the pickup location to start early.',
+    //     duration: 8000,
+    //   })
+    //   return
+    // }
 
     // If before the scheduled window, show confirmation dialog instead of starting immediately
     if (delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date()) {
@@ -1475,9 +1475,13 @@ const handleUploadOdometerPhoto = async () => {
                             </Button>
                           ) : (
                             <>
-                            <Button
+                           <Button
                               onClick={handleUploadCarPhotos}
-                              disabled={uploadCarPhotosMutation.isPending || photosUploading}
+                              disabled={
+                                uploadCarPhotosMutation.isPending ||
+                                photosUploading ||
+                                !photoSlots.every(slot => slot.file !== null)
+                              }
                               className="flex-1 lime-btn font-extrabold rounded-2xl py-3 hover:opacity-90 transition disabled:bg-slate-200 disabled:dark:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                               {uploadCarPhotosMutation.isPending || photosUploading ? (
@@ -1492,7 +1496,16 @@ const handleUploadOdometerPhoto = async () => {
                                 </>
                               )}
                             </Button>
-                            <p className="mt-2 text-[11px] text-slate-400 text-center">Take all 6 photos, then tap Upload.</p>
+                            {photoSlots.every(slot => slot.file !== null) ? (
+                              <p className="mt-2 text-[11px] text-slate-400 text-center">
+                                Take all 6 photos, then tap Upload.
+                              </p>
+                            ) : (
+                              <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400 text-center font-medium">
+                                Capture all 6 vehicle photos to enable upload
+                              </p>
+                            )}
+                            {/* <p className="mt-2 text-[11px] text-slate-400 text-center">Take all 6 photos, then tap Upload.</p> */}
                             </>
                           )}
                         </div>
@@ -1902,7 +1915,7 @@ const handleUploadOdometerPhoto = async () => {
                             { label: 'Vehicle photos uploaded', done: photosSaved },
                             { label: 'VIN photo uploaded', done: vinPhotoSaved },
                             { label: 'Odometer photo uploaded', done: odometerSaved },
-                            { label: 'Last 4 digits of VIN entered', done: vinValue.length === 4 },
+                            { label: 'VIN verified', done: vinVerified },
                           ].map((item, i) => (
                             <div key={i} className="flex items-center gap-2">
                               {item.done ? (
@@ -1936,119 +1949,6 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
           </div>
-
-           {/* <div className="lg:col-span-5 space-y-6">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-              <CardContent className="p-6 sm:p-7">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white">Checklist status</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">All steps must be complete to start.</p>
-                  </div>
-                  <div className="w-11 h-11 rounded-2xl bg-primary/15 flex items-center justify-center">
-                    <FactCheck className="w-5 h-5 text-primary" />
-                  </div>
-                </div>
-
-                <div className="mt-5 space-y-3">
-                  {[
-                    { id: 1, label: 'Staff greeted' },
-                    { id: 2, label: 'Vehicle photos' },
-                    { id: 3, label: 'VIN photo' },
-                    { id: 4, label: 'Odometer photo' },
-                    { id: 5, label: 'Confirm & Submit' },
-                  ].map((step) => (
-                    <div key={step.id} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                      <div className="flex items-center gap-3">
-                        <RadioButtonUnchecked className={cn(
-                          "w-5 h-5",
-                          getStepStatus(step.id) === 'Done' ? "text-primary" : "text-slate-400"
-                        )} />
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">
-                          {step.label}
-                        </p>
-                      </div>
-                      <span className={cn(
-                        "text-[11px] font-black uppercase tracking-widest",
-                        getStepStatus(step.id) === 'Done' ? "text-primary" : "text-slate-400"
-                      )}>
-                        {getStepStatus(step.id)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30">
-                  <div className="flex items-start gap-3">
-                    <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-extrabold text-amber-900 dark:text-amber-200">Quality tips</p>
-                      <ul className="mt-2 space-y-1 text-[11px] text-amber-900/80 dark:text-amber-200/80">
-                        <li>- Walk clockwise: front, front-right, right, rear, rear-left, left.</li>
-                        <li>- Take photos in good light, avoid glare on the odometer.</li>
-                        <li>- VIN photo must clearly show the last 4 characters.</li>
-                        <li>- After submission, keep location services ON for tracking.</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-              <CardContent className="p-6 sm:p-7">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">What happens next</h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">After you submit the checklist.</p>
-
-                <div className="mt-5 space-y-3">
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <MapPin className="w-5 h-5 text-primary shrink-0" />
-                      <div>
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Tracking auto-starts</p>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Location services activate automatically on submission.</p>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-black uppercase tracking-widest text-primary">Auto</span>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <TaskAlt className="w-5 h-5 text-primary shrink-0" />
-                      <div>
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Start the trip</p>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Tap Start once you&apos;re ready to drive.</p>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">Manual</span>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <Distance className="w-5 h-5 text-primary shrink-0" />
-                      <div>
-                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">Drop-off checklist</p>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">Complete drop-off photos + odometer at destination.</p>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">Finish</span>
-                  </div>
-                </div>
-
-                <div className="mt-5 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30">
-                  <div className="flex items-start gap-3">
-                    <Shield className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-extrabold text-blue-900 dark:text-blue-200">Drive safe</p>
-                      <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-1">
-                        Keep driving slow and safe after pickup. Observe all traffic laws and speed limits.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div> */}
         </section>
         )}
       </main>
@@ -2057,15 +1957,6 @@ const handleUploadOdometerPhoto = async () => {
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 safe-bottom">
         <div className="max-w-[980px] mx-auto px-5 sm:px-6 py-4">
           <div className="grid grid-cols-1 gap-3">
-            {/* <Button
-              onClick={handleCancel}
-              variant="outline"
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl py-4 font-extrabold hover:bg-primary/5 transition flex items-center justify-center gap-2"
-            >
-              <X className="w-4 h-4 text-primary" />
-              Cancel
-            </Button> */}
-
             <Button
               onClick={handleStartTrip}
               disabled={!allStepsComplete || startTripMutation.isPending || hasOtherActiveDelivery}
