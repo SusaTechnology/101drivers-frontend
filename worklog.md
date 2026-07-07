@@ -502,3 +502,32 @@ Stage Summary:
 - The build is unblocked — `npm start` will work
 - Phase 1 (driver UI) + Phase 2 (DB persistence + dealer visibility) are both fully functional
 - The only convention to remember: PICKUP_PHOTO slotIndex=7 is the dashboard photo, slots 1-6 are vehicle angles
+
+---
+Task ID: dashboard-photo-phase2-v3
+Agent: Main Agent
+Task: Phase 2 v3 — Restore DASHBOARD_PHOTO enum approach WITH base file hand-edits (user confirmed this is acceptable)
+
+Work Log:
+- User clarified: hand-editing Amplication base files is acceptable as long as we don't regenerate them. The team doesn't regenerate base files in their workflow.
+- Restored all DASHBOARD_PHOTO files from commit 6acc788:
+  - backend/prisma/schema.prisma: DASHBOARD_PHOTO in EnumDeliveryEvidenceType enum
+  - backend/prisma/migrations/20260101000000_add_dashboard_photo/migration.sql: additive ALTER TYPE migration
+  - backend/src/deliveryEvidence/base/EnumDeliveryEvidenceType.ts: DashboardPhoto = "DASHBOARD_PHOTO"
+  - backend/src/deliveryEvidence/base/DeliveryEvidence.ts: added | "DASHBOARD_PHOTO" to type union
+  - backend/src/deliveryEvidence/base/DeliveryEvidenceCreateInput.ts: added | "DASHBOARD_PHOTO"
+  - backend/src/deliveryEvidence/base/DeliveryEvidenceUpdateInput.ts: added | "DASHBOARD_PHOTO"
+  - backend/src/deliveryEvidence/base/DeliveryEvidenceWhereInput.ts: added | "DASHBOARD_PHOTO"
+  - backend/src/domain/deliveryEvidence/deliveryEvidence.engine.ts: attachPickupDashboardPhoto uses DASHBOARD_PHOTO type, slotIndex=1; hasPickupDashboardPhoto uses DASHBOARD_PHOTO; countPickupPhotos reverted (no slotIndex filter)
+  - src/components/pages/dealer-delivery-details.tsx: dashboardPhoto filter uses type === 'DASHBOARD_PHOTO'; pickupPhotos filter has no slotIndex exclusion
+- Ran prisma generate → @prisma/client now has DASHBOARD_PHOTO, matches the base file unions → no type mismatch
+- Verified: backend tsc --noEmit 0 errors; frontend tsc clean; vite build succeeds
+- Replaced the slot 7 approach (Phase 2 v2) with the cleaner DASHBOARD_PHOTO enum approach
+
+Stage Summary:
+- Dashboard photo is now persisted as its own DASHBOARD_PHOTO evidence type (slotIndex=1)
+- Dealer sees it in the dedicated "Dashboard photo" card (filtered by type === 'DASHBOARD_PHOTO')
+- Admin sees it in the existing Evidence Photos grid (auto-renders all evidence rows)
+- Base files are hand-edited to include DASHBOARD_PHOTO in the union types — these edits will persist as long as the team does NOT regenerate the base files via Amplication
+- Migration is additive: ALTER TYPE ... ADD VALUE IF NOT EXISTS 'DASHBOARD_PHOTO' — safe for live server
+- Build is fully unblocked — npm start works

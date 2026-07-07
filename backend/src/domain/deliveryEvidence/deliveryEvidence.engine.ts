@@ -141,10 +141,8 @@ export class DeliveryEvidenceEngine {
 
   /**
    * Attach (or replace) the single dashboard/touchscreen photo taken at
-   * pickup. Reuses the existing PICKUP_PHOTO enum value with slotIndex = 7
-   * (slots 1-6 are the vehicle angle photos). This avoids adding a new enum
-   * value to the Prisma schema, which would require regenerating the
-   * Amplication base files.
+   * pickup.  Stored with slotIndex = 1 to satisfy the unique constraint
+   * @@unique([deliveryId, phase, type, slotIndex]).
    */
   async attachPickupDashboardPhoto(
     deliveryId: string,
@@ -157,8 +155,8 @@ export class DeliveryEvidenceEngine {
       {
         deliveryId,
         phase: EnumDeliveryEvidencePhase.PICKUP,
-        type: EnumDeliveryEvidenceType.PICKUP_PHOTO,
-        slotIndex: 7,
+        type: EnumDeliveryEvidenceType.DASHBOARD_PHOTO,
+        slotIndex: 1,
         imageUrl: url,
       },
       db
@@ -171,8 +169,7 @@ export class DeliveryEvidenceEngine {
       where: {
         deliveryId,
         phase: EnumDeliveryEvidencePhase.PICKUP,
-        type: EnumDeliveryEvidenceType.PICKUP_PHOTO,
-        slotIndex: 7,
+        type: EnumDeliveryEvidenceType.DASHBOARD_PHOTO,
         imageUrl: { not: null },
       },
     });
@@ -203,7 +200,6 @@ export class DeliveryEvidenceEngine {
         deliveryId,
         phase: EnumDeliveryEvidencePhase.PICKUP,
         type: EnumDeliveryEvidenceType.PICKUP_PHOTO,
-        slotIndex: { in: [1, 2, 3, 4, 5, 6] },
         imageUrl: { not: null },
       },
     });

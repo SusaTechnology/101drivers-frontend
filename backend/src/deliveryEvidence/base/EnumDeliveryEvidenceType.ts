@@ -17,6 +17,7 @@ export enum EnumDeliveryEvidenceType {
   OdometerStart = "ODOMETER_START",
   OdometerEnd = "ODOMETER_END",
   VinConfirmation = "VIN_CONFIRMATION",
+  DashboardPhoto = "DASHBOARD_PHOTO",
 }
 
 registerEnumType(EnumDeliveryEvidenceType, {
