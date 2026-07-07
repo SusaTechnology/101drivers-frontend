@@ -847,16 +847,16 @@ const handleUploadDashboardPhoto = async () => {
               <div className="mt-4 space-y-2">
                 <div className="flex gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 shrink-0" />
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pickup</p>
-                    <AddressLink address={delivery.pickupAddress} className="text-[13px] font-medium" />
+                    <AddressLink address={delivery.pickupAddress} className="text-[13px] font-medium break-words" />
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Dropoff</p>
-                    <AddressLink address={delivery.dropoffAddress} className="text-[13px] font-medium" />
+                    <AddressLink address={delivery.dropoffAddress} className="text-[13px] font-medium break-words" />
                   </div>
                 </div>
               </div>
@@ -914,7 +914,7 @@ const handleUploadDashboardPhoto = async () => {
                   <div className="w-9 h-9 rounded-2xl bg-blue-500/10 border border-blue-200 dark:border-blue-800/40 flex items-center justify-center shrink-0">
                     <Shield className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <h3 className="text-[15px] font-black text-slate-900 dark:text-white">Customer Authorization</h3>
                     <p className="text-[13px] text-slate-600 dark:text-slate-400 mt-2">
                       The customer has a 4-digit PIN. Ask them for it.
@@ -1023,9 +1023,9 @@ const handleUploadDashboardPhoto = async () => {
 
         {/* Steps — only render when delivery data is available */}
         {delivery && (
-        <section className="mt-6 grid gap-6">
+        <section className="mt-6 space-y-6">
           {/* Left: checklist steps */}
-          <div className="lg:col-span-7 space-y-6">
+          <div className="space-y-6 min-w-0">
 
             {/* ── Step 1: Driver Authorization (PIN) ── */}
             <Card className={cn(
@@ -1043,7 +1043,7 @@ const handleUploadDashboardPhoto = async () => {
                     {pinVerified ? <Check className="w-4 h-4" /> : 1}
                   </div>
 
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-2">
@@ -1159,7 +1159,7 @@ const handleUploadDashboardPhoto = async () => {
                     {greeted ? <Check className="w-4 h-4 text-primary" /> : 2}
                   </div>
 
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h2 className="text-lg font-black text-slate-900 dark:text-white">Verify the vehicle</h2>
@@ -1256,7 +1256,7 @@ const handleUploadDashboardPhoto = async () => {
                      photosUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 3}
                   </div>
 
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-2">
@@ -1485,7 +1485,7 @@ const handleUploadDashboardPhoto = async () => {
                      dashboardUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 4}
                   </div>
 
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h2 className="text-lg font-black text-slate-900 dark:text-white">Dashboard/Touchscreen Photo &amp; Reading</h2>
@@ -1644,7 +1644,7 @@ const handleUploadDashboardPhoto = async () => {
                     {vinVerified ? <Check className="w-4 h-4" /> : 5}
                   </div>
 
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h2 className="text-lg font-black text-slate-900 dark:text-white">Confirm &amp; Start Delivery</h2>
