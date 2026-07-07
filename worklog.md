@@ -368,3 +368,40 @@ Stage Summary:
 - Tracker seeding ensures sounds work even if driver refreshes on non-dashboard page
 - `staleTime: Infinity` on seed query prevents duplicate fetches with dashboard feed query
 
+
+---
+Task ID: dashboard-photo-phase1
+Agent: Main Agent
+Task: Phase 1 — Consolidate odometer photo + VIN photo into one dashboard photo, update copy, update help FAQ, fix dealer subtext
+
+Work Log:
+- Updated `src/lib/pickup-photo-store.ts`: changed PhotoType union from `'car' | 'odometer' | 'vin'` to `'car' | 'dashboard'` (lines 14-15, 55)
+- Updated `src/components/pages/driver-pickup-checklist.tsx` (1930 lines → ~1850 lines):
+  - Removed `vinPhotoSaved` from PersistedState type; renamed `odometerSaved` → `dashboardSaved`
+  - Deleted all VIN photo state (vinPhoto, vinPhotoSaved, vinPhotoUploading, vinPhotoUploadError), refs (vinPhotoInputRef), handlers (handleAddVinPhoto, handleUploadVinPhoto), mutation (uploadVinPhotoMutation)
+  - Renamed all odometer* variables → dashboard* (dashboardPhoto, dashboardSaved, dashboardUploading, dashboardUploadError, dashboardInputRef, dashboardError, uploadDashboardMutation, handleAddDashboardPhoto, handleUploadDashboardPhoto)
+  - Deleted entire Step 4 "VIN Photo" card (~140 lines of JSX)
+  - Renamed Step 5 "Odometer Photo & Reading" → Step 4 "Dashboard/Touchscreen Photo & Reading"
+  - Updated subheader to customer's exact wording: "Capture a clear photo of the dashboard or touchscreen that clearly shows the fuel gauge or battery charge level. The vehicle must have at least half tank or half charge."
+  - Added EV callout: "For Teslas and other EVs, the touchscreen counts as the dashboard — make sure the battery charge level is clearly visible."
+  - Updated photo hint from "Odometer reading must be visible" → "Fuel gauge or battery charge level must be clearly visible"
+  - Renumbered Step 6 → Step 5 (badge number 6→5, "Step 6" label → "Step 5")
+  - Updated summary checklist: removed "VIN photo uploaded" item, renamed "Odometer photo uploaded" → "Dashboard photo uploaded"
+  - Updated Step 3 success hint: "Next: take a photo of the full VIN number." → "Next: take a dashboard photo showing the fuel gauge or battery charge level."
+  - Removed unused `QrCode` import
+  - Fixed typo "their their 4-digit PIN" → "their 4-digit PIN"
+  - Updated IndexedDB key from 'odometer'/'vin' → 'dashboard'
+  - Updated getStepStatus switch for new 5-step layout
+- Updated `src/components/pages/help.tsx`: rewrote "What is the pickup checklist?" FAQ with full step-by-step including dashboard photo + fuel/charge requirement; added new FAQ "Do I need to take a picture of the fuel/charge level?" with EV/Tesla mention
+- Updated `src/components/pages/dealer-delivery-details.tsx`: fixed misleading "Photos at both ends" subtext → "Recorded at pickup and drop-off"
+- Verified: `tsc --noEmit` shows 0 errors in edited files (only pre-existing TanStack Router type mismatches elsewhere); `vite build` succeeds
+
+Stage Summary:
+- Driver pickup checklist now has 5 steps instead of 6: (1) PIN authorization, (2) Verify vehicle, (3) Vehicle photos, (4) Dashboard/Touchscreen Photo & Reading, (5) Confirm & Start
+- The VIN photo step is completely removed — VIN is still verified via the 4-digit text input in Step 5
+- The dashboard photo step now requires the photo to show fuel gauge or battery charge level (at least half)
+- Help section updated with detailed pickup checklist FAQ + new fuel/charge FAQ
+- Dealer delivery details page no longer falsely claims "Photos at both ends" for odometer
+- Phase 1 is frontend-only — no backend migration needed
+- Phase 2 (backend DASHBOARD_PHOTO enum + persist URL for dealer/admin visibility) still pending
+- Note: existing drivers mid-checklist will lose their "odometer photo uploaded" flag due to the localStorage key rename (odometerSaved → dashboardSaved); acceptable since checklist takes minutes to complete

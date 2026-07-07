@@ -78,7 +78,11 @@ const driverFaqs = [
   },
   {
     question: 'What is the pickup checklist?',
-    answer: 'Before starting a trip, you must verify the last 4 digits of the VIN, record the odometer reading, and take 6 photos of the vehicle at pickup. All steps are required.',
+    answer: 'Before starting a trip, you must: (1) get the 4-digit authorization PIN from the customer, (2) confirm you are at the vehicle, (3) take 6 photos of the vehicle clockwise — Left Front Corner, Right Front Corner, Passenger Side, Right Rear Corner, Left Rear Corner, Driver\'s Side, (4) take ONE dashboard/touchscreen photo that clearly shows the fuel gauge or battery charge level (the vehicle must have at least half a tank or half charge), and (5) enter the current odometer reading and the last 4 digits of the VIN. All steps are required.',
+  },
+  {
+    question: 'Do I need to take a picture of the fuel/charge level?',
+    answer: 'Yes. The vehicle must have at least half a tank of gas or half battery charge. Always take a clear photo of the dashboard or touchscreen showing the fuel gauge or charge indicator before starting delivery. For Teslas and other EVs, the touchscreen counts as the dashboard — make sure the battery charge level is clearly visible.',
   },
   {
     question: 'What is the drop-off checklist?',

@@ -11,8 +11,8 @@
  *     key:   `${deliveryId}::${type}::${index}`
  *     value: { file: File }
  *
- *   type   = "car" | "odometer" | "vin"
- *   index  = 0-5 for car photos, 0 for odometer/vin
+ *   type   = "car" | "dashboard"
+ *   index  = 0-5 for car photos, 0 for dashboard
  */
 
 const DB_NAME = '101drivers-pickup'
@@ -52,7 +52,7 @@ function tx(
 
 // ── Public API ──────────────────────────────────────────────────────────
 
-type PhotoType = 'car' | 'odometer' | 'vin'
+type PhotoType = 'car' | 'dashboard'
 
 function key(deliveryId: string, type: PhotoType, index: number): string {
   return `${deliveryId}::${type}::${index}`

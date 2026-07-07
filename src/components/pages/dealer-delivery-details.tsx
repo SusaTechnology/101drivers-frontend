@@ -1684,7 +1684,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                             </div>
                             <div>
                               <div className="font-black text-slate-900 dark:text-white">Odometer start/end</div>
-                              <div className="text-sm text-slate-600 dark:text-slate-400">Photos at both ends</div>
+                              <div className="text-sm text-slate-600 dark:text-slate-400">Recorded at pickup and drop-off</div>
                             </div>
                           </div>
                           <div className="mt-4 grid grid-cols-2 gap-3">

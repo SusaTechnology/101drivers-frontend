@@ -30,7 +30,6 @@ import {
   Menu as MenuIcon,
   MapPin,
   CarFront,
-  QrCode,
   Shield,
   Play,
   Clock,
@@ -88,9 +87,8 @@ type PersistedState = {
   greeted: boolean
   photosSaved: boolean
   uploadedPhotos: Array<{ slotIndex: number; imageUrl: string }>
-  odometerSaved: boolean
+  dashboardSaved: boolean
   odometerValue: string
-  vinPhotoSaved: boolean
   vinVerified: boolean
   vinValue: string
   step1Timestamp: string | null
@@ -258,19 +256,13 @@ export default function DriverPickupChecklistPage() {
   const [photoErrors, setPhotoErrors] = useState<Set<number>>(new Set())
   const [photosUploading, setPhotosUploading] = useState(false)
 
-  // ── Step 3: VIN Photo ──
-  const [odometerPhoto, setOdometerPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
+  // ── Step 4: Dashboard photo + odometer reading ──
+  const [dashboardPhoto, setDashboardPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
   const [odometerValue, setOdometerValue] = useState(saved?.odometerValue ?? '')
-  const [odometerSaved, setOdometerSaved] = useState(saved?.odometerSaved ?? false)
-  const [odometerUploading, setOdometerUploading] = useState(false)
-  const [odometerUploadError, setOdometerUploadError] = useState(false)
-
-  // ── Step 4: Odometer photo + reading ──
-  const [vinPhoto, setVinPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
-  const [vinPhotoSaved, setVinPhotoSaved] = useState(saved?.vinPhotoSaved ?? false)
-  const [vinPhotoUploading, setVinPhotoUploading] = useState(false)
-  const [vinPhotoUploadError, setVinPhotoUploadError] = useState(false)
-  const [odometerError, setOdometerError] = useState<string | null>(null)
+  const [dashboardSaved, setDashboardSaved] = useState(saved?.dashboardSaved ?? false)
+  const [dashboardUploading, setDashboardUploading] = useState(false)
+  const [dashboardUploadError, setDashboardUploadError] = useState(false)
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
   // ── Restore photo files from IndexedDB on mount (survives reload) ──
   const [photosRestored, setPhotosRestored] = useState(false)
   useEffect(() => {
@@ -281,26 +273,20 @@ export default function DriverPickupChecklistPage() {
       if (cancelled) return
 
       const newSlots = Array(6).fill(null).map(() => ({ file: null as File | null, preview: null as string | null }))
-      let restoredOdometer: File | null = null
-      let restoredVin: File | null = null
+      let restoredDashboard: File | null = null
 
       for (const p of photos) {
         const preview = URL.createObjectURL(p.file)
         if (p.type === 'car' && p.index >= 0 && p.index < 6) {
           newSlots[p.index] = { file: p.file, preview }
-        } else if (p.type === 'odometer') {
-          restoredOdometer = p.file
-        } else if (p.type === 'vin') {
-          restoredVin = p.file
+        } else if (p.type === 'dashboard') {
+          restoredDashboard = p.file
         }
       }
 
       setPhotoSlots(newSlots)
-      if (restoredOdometer) {
-        setOdometerPhoto({ file: restoredOdometer, preview: URL.createObjectURL(restoredOdometer) })
-      }
-      if (restoredVin) {
-        setVinPhoto({ file: restoredVin, preview: URL.createObjectURL(restoredVin) })
+      if (restoredDashboard) {
+        setDashboardPhoto({ file: restoredDashboard, preview: URL.createObjectURL(restoredDashboard) })
       }
       setPhotosRestored(true)
     }).catch(() => {
@@ -324,10 +310,9 @@ export default function DriverPickupChecklistPage() {
 
   // Refs for file inputs
   const carPhotoInputRef = useRef<HTMLInputElement>(null)
-  const odometerInputRef = useRef<HTMLInputElement>(null)
-  const vinPhotoInputRef = useRef<HTMLInputElement>(null)
+  const dashboardInputRef = useRef<HTMLInputElement>(null)
   const currentSlotIndex = useRef<number | null>(null)
-  const currentInputTarget = useRef<'car' | 'odometer' | 'vin'>('car')
+  const currentInputTarget = useRef<'car' | 'dashboard'>('car')
 
   // Persist progress to localStorage whenever key state changes
   useEffect(() => {
@@ -336,14 +321,13 @@ export default function DriverPickupChecklistPage() {
       greeted,
       photosSaved,
       uploadedPhotos,
-      odometerSaved,
+      dashboardSaved,
       odometerValue,
-      vinPhotoSaved,
       vinVerified,
       vinValue,
       step1Timestamp: greeted ? saved?.step1Timestamp ?? new Date().toISOString() : null,
     })
-  }, [greeted, photosSaved, uploadedPhotos, odometerSaved, odometerValue, vinPhotoSaved, vinVerified, vinValue, deliveryId])
+  }, [greeted, photosSaved, uploadedPhotos, dashboardSaved, odometerValue, vinVerified, vinValue, deliveryId])
 
   // Theme handling
   useEffect(() => {
@@ -359,8 +343,7 @@ export default function DriverPickupChecklistPage() {
       photoSlots.forEach(slot => {
         if (slot.preview) URL.revokeObjectURL(slot.preview)
       })
-      if (odometerPhoto.preview) URL.revokeObjectURL(odometerPhoto.preview)
-      if (vinPhoto.preview) URL.revokeObjectURL(vinPhoto.preview)
+      if (dashboardPhoto.preview) URL.revokeObjectURL(dashboardPhoto.preview)
     }
   }, [])
 
@@ -397,38 +380,19 @@ export default function DriverPickupChecklistPage() {
     }
   )
 
-  // Upload odometer photo
-  const uploadOdometerMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
+  // Upload dashboard photo
+  const uploadDashboardMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
     `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
     {
       onSuccess: (data) => {
-        setOdometerUploading(false)
-        setOdometerSaved(true)
-        toast.success('Odometer photo saved')
+        setDashboardUploading(false)
+        setDashboardSaved(true)
+        toast.success('Dashboard photo saved')
       },
       onError: () => {
-        setOdometerUploading(false)
-        setOdometerUploadError(true)
-        toast.error('Odometer photo failed to upload', {
-          description: 'Tap to retry.',
-        })
-      },
-    }
-  )
-
-  // Upload VIN photo
-  const uploadVinPhotoMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
-    `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
-    {
-      onSuccess: (data) => {
-        setVinPhotoUploading(false)
-        setVinPhotoSaved(true)
-        toast.success('VIN photo saved')
-      },
-      onError: () => {
-        setVinPhotoUploading(false)
-        setVinPhotoUploadError(true)
-        toast.error('VIN photo failed to upload', {
+        setDashboardUploading(false)
+        setDashboardUploadError(true)
+        toast.error('Dashboard photo failed to upload', {
           description: 'Tap to retry.',
         })
       },
@@ -531,64 +495,37 @@ export default function DriverPickupChecklistPage() {
     }
   }
 
-  // Step 3: VIN photo
-  const handleAddOdometerPhoto = () => {
-  setOdometerError(null)
-  currentInputTarget.current = 'odometer'
-  odometerInputRef.current?.click()
+  // Step 4: Dashboard photo
+  const handleAddDashboardPhoto = () => {
+  setDashboardError(null)
+  currentInputTarget.current = 'dashboard'
+  dashboardInputRef.current?.click()
 }
 
-const handleUploadOdometerPhoto = async () => {
-  if (!odometerPhoto.file) {
-    setOdometerError('Take a photo of the odometer')
+const handleUploadDashboardPhoto = async () => {
+  if (!dashboardPhoto.file) {
+    setDashboardError('Take a dashboard photo')
     return
   }
   if (!odometerValue) {
-    setOdometerError('Enter the mileage reading')
+    setDashboardError('Enter the mileage reading')
     return
   }
 
-  setOdometerError(null) // clear any error
-  setOdometerUploading(true)
+  setDashboardError(null) // clear any error
+  setDashboardUploading(true)
   try {
-    const compressed = await compressPhoto(odometerPhoto.file)
+    const compressed = await compressPhoto(dashboardPhoto.file)
     const formData = new FormData()
     formData.append('files', compressed)
     formData.append('deliveryId', deliveryId)
     formData.append('phase', 'PICKUP')
-    uploadOdometerMutation.mutate(formData)
+    uploadDashboardMutation.mutate(formData)
   } catch (err) {
-    setOdometerUploading(false)
+    setDashboardUploading(false)
     toast.error('Photo compression failed', { description: 'Please try again.' })
   }
 }
-
-  // Step 4: Odometer photo
-  const handleAddVinPhoto = () => {
-    currentInputTarget.current = 'vin'
-    vinPhotoInputRef.current?.click()
-  }
-
-  const handleUploadVinPhoto = async () => {
-    if (!vinPhoto.file) {
-      toast.error('Photo required', {
-        description: 'Please take a photo of the full VIN number.',
-      })
-      return
-    }
-    setVinPhotoUploading(true)
-    try {
-      const compressed = await compressPhoto(vinPhoto.file)
-      const formData = new FormData()
-      formData.append('files', compressed)
-      formData.append('deliveryId', deliveryId)
-      formData.append('phase', 'PICKUP')
-      uploadVinPhotoMutation.mutate(formData)
-    } catch (err) {
-      setVinPhotoUploading(false)
-      toast.error('Photo compression failed', { description: 'Please try again.' })
-    }
-  }
 
   // Unified file change handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -606,20 +543,13 @@ const handleUploadOdometerPhoto = async () => {
       })
       // Persist to IndexedDB so it survives reload
       if (deliveryId) savePhoto(deliveryId, 'car', index, file).catch(() => {})
-    } else if (currentInputTarget.current === 'odometer') {
+    } else if (currentInputTarget.current === 'dashboard') {
       const previewUrl = URL.createObjectURL(file)
-      if (odometerPhoto.preview) URL.revokeObjectURL(odometerPhoto.preview)
-      setOdometerPhoto({ file, preview: previewUrl })
-      setOdometerUploadError(false)
+      if (dashboardPhoto.preview) URL.revokeObjectURL(dashboardPhoto.preview)
+      setDashboardPhoto({ file, preview: previewUrl })
+      setDashboardUploadError(false)
       // Persist to IndexedDB
-      if (deliveryId) savePhoto(deliveryId, 'odometer', 0, file).catch(() => {})
-    } else if (currentInputTarget.current === 'vin') {
-      const previewUrl = URL.createObjectURL(file)
-      if (vinPhoto.preview) URL.revokeObjectURL(vinPhoto.preview)
-      setVinPhoto({ file, preview: previewUrl })
-      setVinPhotoUploadError(false)
-      // Persist to IndexedDB
-      if (deliveryId) savePhoto(deliveryId, 'vin', 0, file).catch(() => {})
+      if (deliveryId) savePhoto(deliveryId, 'dashboard', 0, file).catch(() => {})
     }
 
     e.target.value = ''
@@ -654,16 +584,12 @@ const handleUploadOdometerPhoto = async () => {
       toast.error('Car photos not uploaded', { description: 'Please upload all 6 vehicle photos.' })
       return
     }
-    if (!odometerSaved) {
-      toast.error('Odometer photo not saved', { description: 'Please upload the odometer photo.' })
+    if (!dashboardSaved) {
+      toast.error('Dashboard photo not saved', { description: 'Please upload the dashboard photo.' })
       return
     }
     if (!odometerValue || isNaN(Number(odometerValue)) || Number(odometerValue) < 0) {
       toast.error('Odometer reading required', { description: 'Please enter the current odometer mileage.' })
-      return
-    }
-    if (!vinPhotoSaved) {
-      toast.error('VIN photo not saved', { description: 'Please upload the VIN photo.' })
       return
     }
     // VIN is guaranteed 4 digits when called from auto-submit, but validate anyway
@@ -718,7 +644,7 @@ const handleUploadOdometerPhoto = async () => {
       return
     }
 
-    if (!vinVerified || !photosSaved || !odometerSaved || !vinPhotoSaved || !pinVerified) {
+    if (!vinVerified || !photosSaved || !dashboardSaved || !pinVerified) {
       toast.error('Cannot start trip', {
         description: 'Please complete all required steps first.',
       })
@@ -774,9 +700,9 @@ const handleUploadOdometerPhoto = async () => {
   }
 
   // Check if all steps are complete (used for disabling button after submission)
-  const allStepsComplete = greeted && photosSaved && odometerSaved && vinPhotoSaved && vinVerified && pinVerified
+  const allStepsComplete = greeted && photosSaved && dashboardSaved && vinVerified && pinVerified
   // Check if all inputs are filled (ready to submit — turns button green)
-  const readyToSubmit = greeted && photosSaved && odometerSaved && vinPhotoSaved && /^\d{4}$/.test(vinValue) && !!odometerValue && !isNaN(Number(odometerValue))
+  const readyToSubmit = greeted && photosSaved && dashboardSaved && /^\d{4}$/.test(vinValue) && !!odometerValue && !isNaN(Number(odometerValue))
 
   // PIN verification handler
   const verifyPinLock = useRef(false)
@@ -821,10 +747,9 @@ const handleUploadOdometerPhoto = async () => {
     switch (stepId) {
       case 1: return greeted ? 'Done' : 'Pending'
       case 2: return photosSaved ? 'Done' : 'Pending'
-      case 3: return vinPhotoSaved ? 'Done' : 'Pending'
-      case 4: return odometerSaved ? 'Done' : 'Pending'
-      case 5: return vinVerified ? 'Done' : 'Pending'
-      case 6: return pinVerified ? 'Done' : 'Pending'
+      case 3: return dashboardSaved ? 'Done' : 'Pending'
+      case 4: return vinVerified ? 'Done' : 'Pending'
+      case 5: return pinVerified ? 'Done' : 'Pending'
       default: return 'Pending'
     }
   }
@@ -1115,7 +1040,7 @@ const handleUploadOdometerPhoto = async () => {
                           <h2 className="text-lg font-black text-slate-900 dark:text-white">Driver Authorization</h2>
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Please ask the customer for their their 4-digit PIN
+                          Please ask the customer for their 4-digit PIN
                         </p>
                         {(() => {
                           const isBusiness = delivery?.customer?.customerType === 'BUSINESS'
@@ -1513,7 +1438,7 @@ const handleUploadOdometerPhoto = async () => {
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
                         <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Vehicle photos uploaded</p>
-                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: take a photo of the full VIN number.</p>
+                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: take a dashboard photo showing the fuel gauge or battery charge level.</p>
                       </div>
                     )}
                   </div>
@@ -1521,18 +1446,18 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
 
-            {/* ── Step 4: VIN Photo ── */}
+            {/* ── Step 4: Dashboard photo + odometer reading ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
-              vinPhotoSaved && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
-              vinPhotoUploading && "border-amber-200 dark:border-amber-800/40"
+              dashboardSaved && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
+              dashboardUploading && "border-amber-200 dark:border-amber-800/40"
             )}>
               <CardContent className="p-6 sm:p-7">
-                {vinPhotoUploading && (
+                {dashboardUploading && (
                   <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
                     <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                     <p className="text-[12px] font-bold text-amber-700 dark:text-amber-300">
-                      Uploading VIN photo...
+                      Uploading dashboard photo...
                     </p>
                   </div>
                 )}
@@ -1540,163 +1465,25 @@ const handleUploadOdometerPhoto = async () => {
                 <div className="flex items-start gap-4">
                   <div className={cn(
                     "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
-                    vinPhotoSaved
+                    dashboardSaved
                       ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
-                      : vinPhotoUploading
+                      : dashboardUploading
                         ? "bg-amber-100 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40 text-amber-700"
                         : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
-                    {vinPhotoSaved ? <Check className="w-4 h-4" /> :
-                     vinPhotoUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 4}
+                    {dashboardSaved ? <Check className="w-4 h-4" /> :
+                     dashboardUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 4}
                   </div>
 
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">VIN Photo</h2>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Dashboard/Touchscreen Photo &amp; Reading</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Take a clear photo showing the full VIN number (required).
+                          Capture a clear photo of the dashboard or touchscreen that clearly shows the fuel gauge or battery charge level. The vehicle must have at least half tank or half charge.
                         </p>
-                      </div>
-                      <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
-                        <QrCode className="w-3.5 h-3.5 text-primary mr-1" />
-                        Required
-                      </Badge>
-                    </div>
-
-                    {!vinPhotoSaved ? (
-                      <>
-                        <input
-                          ref={vinPhotoInputRef}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleFileChange}
-                          className="hidden"
-                        />
-
-                        <div className="mt-5">
-                          <Button
-                            variant="outline"
-                            onClick={() => !isDesktop && handleAddVinPhoto()}
-                            disabled={isDesktop || vinPhotoUploading}
-                            className={cn(
-                              "w-full h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
-                              vinPhoto.preview
-                                ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
-                                : vinPhotoUploadError && !vinPhotoUploading
-                                  ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/10 cursor-pointer"
-                                  : vinPhotoUploadError && vinPhotoUploading
-                                    ? "border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/10"
-                                    : "border-slate-200 dark:border-slate-700"
-                            )}
-                          >
-                            {vinPhoto.preview ? (
-                              <div className="relative w-full h-full">
-                                <img
-                                  src={vinPhoto.preview}
-                                  alt="VIN"
-                                  className="h-full w-full object-cover"
-                                />
-                                {vinPhotoUploading && (
-                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                  </div>
-                                )}
-                                {!vinPhotoUploading && !vinPhotoUploadError && (
-                                  <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-                                    <Check className="w-3 h-3 text-white" />
-                                  </div>
-                                )}
-                                {vinPhotoUploadError && !vinPhotoUploading && (
-                                  <div className="absolute inset-0 bg-red-900/30 flex flex-col items-center justify-center gap-1">
-                                    <XCircle className="w-5 h-5 text-red-200" />
-                                    <span className="text-[9px] font-bold text-white">Tap to retry</span>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <>
-                                <Camera className="w-8 h-8 text-primary/60" />
-                                <span className="text-sm font-bold text-primary/70">Tap to take photo</span>
-                                <p className="text-[10px] text-slate-400 -mt-1">Full VIN number must be visible</p>
-                              </>
-                            )}
-                          </Button>
-                        </div>
-
-                        <Button
-                          onClick={handleUploadVinPhoto}
-                          disabled={!vinPhoto.file || vinPhotoUploading}
-                          className={cn(
-                            "mt-4 w-full font-extrabold rounded-2xl py-3 transition flex items-center justify-center gap-2",
-                            vinPhotoUploading && vinPhotoUploadError
-                              ? "bg-amber-500 text-white cursor-wait"
-                              : vinPhotoUploading
-                                ? "lime-btn cursor-wait"
-                                : "lime-btn hover:opacity-90 disabled:bg-slate-200 disabled:dark:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
-                          )}
-                        >
-                          {vinPhotoUploading ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                              Retrying...
-                            </>
-                          ) : (
-                            <>
-                              <CloudUpload className="w-4 h-4" />
-                              {vinPhotoUploadError ? 'Retry VIN upload' : 'Upload VIN photo'}
-                            </>
-                          )}
-                        </Button>
-                        <p className="mt-2 text-[11px] text-slate-400 text-center">Take the photo, then tap Upload.</p>
-                      </>
-                    ) : (
-                      <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
-                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">VIN photo uploaded</p>
-                        <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: enter the odometer reading.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* ── Step 5: Odometer photo ── */}
-            <Card className={cn(
-              "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
-              odometerSaved && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10",
-              odometerUploading && "border-amber-200 dark:border-amber-800/40"
-            )}>
-              <CardContent className="p-6 sm:p-7">
-                {odometerUploading && (
-                  <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                    <p className="text-[12px] font-bold text-amber-700 dark:text-amber-300">
-                      Uploading odometer photo...
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex items-start gap-4">
-                  <div className={cn(
-                    "w-9 h-9 rounded-2xl flex items-center justify-center font-black text-sm border",
-                    odometerSaved
-                      ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
-                      : odometerUploading
-                        ? "bg-amber-100 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40 text-amber-700"
-                        : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
-                  )}>
-                    {odometerSaved ? <Check className="w-4 h-4" /> :
-                     odometerUploading ? <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : 5}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Odometer Photo & Reading</h2>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Capture a clear photo of the odometer and enter the mileage shown (both required).
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                          For Teslas and other EVs, the touchscreen counts as the dashboard — make sure the battery charge level is clearly visible.
                         </p>
                       </div>
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
@@ -1705,10 +1492,10 @@ const handleUploadOdometerPhoto = async () => {
                       </Badge>
                     </div>
 
-                    {!odometerSaved ? (
+                    {!dashboardSaved ? (
                       <>
                         <input
-                          ref={odometerInputRef}
+                          ref={dashboardInputRef}
                           type="file"
                           accept="image/*"
                           capture="environment"
@@ -1729,7 +1516,7 @@ const handleUploadOdometerPhoto = async () => {
                               value={odometerValue}
                               onChange={(e) => {
                                 setOdometerValue(e.target.value)
-                                setOdometerError(null) // clear error when typing
+                                setDashboardError(null) // clear error when typing
                               }}
                               className="h-12 text-base font-bold rounded-xl border-slate-200 dark:border-slate-700"
                             />
@@ -1742,37 +1529,37 @@ const handleUploadOdometerPhoto = async () => {
                         <div className="mt-4">
                           <Button
                             variant="outline"
-                            onClick={() => !isDesktop && handleAddOdometerPhoto()}
-                            disabled={isDesktop || odometerUploading}
+                            onClick={() => !isDesktop && handleAddDashboardPhoto()}
+                            disabled={isDesktop || dashboardUploading}
                             className={cn(
                               "w-full h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
-                              odometerPhoto.preview
+                              dashboardPhoto.preview
                                 ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
-                                : odometerUploadError && !odometerUploading
+                                : dashboardUploadError && !dashboardUploading
                                   ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/10 cursor-pointer"
-                                  : odometerUploadError && odometerUploading
+                                  : dashboardUploadError && dashboardUploading
                                     ? "border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/10"
                                     : "border-slate-200 dark:border-slate-700"
                             )}
                           >
-                            {odometerPhoto.preview ? (
+                            {dashboardPhoto.preview ? (
                               <div className="relative w-full h-full">
                                 <img
-                                  src={odometerPhoto.preview}
-                                  alt="Odometer"
+                                  src={dashboardPhoto.preview}
+                                  alt="Dashboard"
                                   className="h-full w-full object-cover"
                                 />
-                                {odometerUploading && (
+                                {dashboardUploading && (
                                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                   </div>
                                 )}
-                                {!odometerUploading && !odometerUploadError && (
+                                {!dashboardUploading && !dashboardUploadError && (
                                   <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
                                     <Check className="w-3 h-3 text-white" />
                                   </div>
                                 )}
-                                {odometerUploadError && !odometerUploading && (
+                                {dashboardUploadError && !dashboardUploading && (
                                   <div className="absolute inset-0 bg-red-900/30 flex flex-col items-center justify-center gap-1">
                                     <XCircle className="w-5 h-5 text-red-200" />
                                     <span className="text-[9px] font-bold text-white">Tap to retry</span>
@@ -1783,25 +1570,25 @@ const handleUploadOdometerPhoto = async () => {
                               <>
                                 <Camera className="w-8 h-8 text-primary/60" />
                                 <span className="text-sm font-bold text-primary/70">Tap to take photo</span>
-                                <p className="text-[10px] text-slate-400 -mt-1">Odometer reading must be visible</p>
+                                <p className="text-[10px] text-slate-400 -mt-1">Fuel gauge or battery charge level must be clearly visible</p>
                               </>
                             )}
                           </Button>
                         </div>
 
                         <Button
-                          onClick={handleUploadOdometerPhoto}
-                          disabled={!odometerPhoto.file || odometerUploading}
+                          onClick={handleUploadDashboardPhoto}
+                          disabled={!dashboardPhoto.file || dashboardUploading}
                           className={cn(
                             "mt-4 w-full font-extrabold rounded-2xl py-3 transition flex items-center justify-center gap-2",
-                            odometerUploading && odometerUploadError
+                            dashboardUploading && dashboardUploadError
                               ? "bg-amber-500 text-white cursor-wait"
-                              : odometerUploading
+                              : dashboardUploading
                                 ? "lime-btn cursor-wait"
                                 : "lime-btn hover:opacity-90 disabled:bg-slate-200 disabled:dark:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
                           )}
                         >
-                          {odometerUploading ? (
+                          {dashboardUploading ? (
                             <>
                               <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                               Retrying...
@@ -1809,20 +1596,20 @@ const handleUploadOdometerPhoto = async () => {
                           ) : (
                             <>
                               <CloudUpload className="w-4 h-4" />
-                              {odometerUploadError ? 'Retry Upload' : 'Upload Photo'}
+                              {dashboardUploadError ? 'Retry Upload' : 'Upload Photo'}
                             </>
                           )}
                         </Button>
                         <p className="mt-2 text-[11px] text-slate-400 text-center">After taking the photo, tap Upload.</p>
-                        {odometerError && (
+                        {dashboardError && (
                         <p className="mt-2 text-[12px] font-bold text-red-500">
-                          {odometerError}
+                          {dashboardError}
                         </p>
                       )}
                       </>
                     ) : (
                       <div className="mt-4 p-4 rounded-2xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40">
-                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Odometer photo uploaded</p>
+                        <p className="text-sm font-extrabold text-green-700 dark:text-green-300">Dashboard photo uploaded</p>
                         <p className="text-[11px] text-green-600 dark:text-green-400 mt-1">Next: enter VIN digits and submit.</p>
                       </div>
                     )}
@@ -1831,7 +1618,7 @@ const handleUploadOdometerPhoto = async () => {
               </CardContent>
             </Card>
 
-            {/* ── Step 6: Confirm & Start Delivery ── */}
+            {/* ── Step 5: Confirm & Start Delivery ── */}
             <Card className={cn(
               "border-slate-200 dark:border-slate-800 shadow-lg hover-lift",
               vinVerified && "border-green-200 dark:border-green-800/40 bg-green-50/50 dark:bg-green-900/10"
@@ -1844,7 +1631,7 @@ const handleUploadOdometerPhoto = async () => {
                       ? "bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800/40 text-green-700"
                       : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
                   )}>
-                    {vinVerified ? <Check className="w-4 h-4" /> : 6}
+                    {vinVerified ? <Check className="w-4 h-4" /> : 5}
                   </div>
 
                   <div className="flex-1">
@@ -1857,7 +1644,7 @@ const handleUploadOdometerPhoto = async () => {
                       </div>
                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
                         <Lock className="w-3.5 h-3.5 text-primary mr-1" />
-                        Step 6
+                        Step 5
                       </Badge>
                     </div>
 
@@ -1913,8 +1700,7 @@ const handleUploadOdometerPhoto = async () => {
                             { label: 'PIN verified', done: pinVerified },
                             { label: 'Staff greeted', done: greeted },
                             { label: 'Vehicle photos uploaded', done: photosSaved },
-                            { label: 'VIN photo uploaded', done: vinPhotoSaved },
-                            { label: 'Odometer photo uploaded', done: odometerSaved },
+                            { label: 'Dashboard photo uploaded', done: dashboardSaved },
                             { label: 'VIN verified', done: vinVerified },
                           ].map((item, i) => (
                             <div key={i} className="flex items-center gap-2">
