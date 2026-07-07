@@ -541,14 +541,15 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   }
 
   // Filter evidence photos
+  // Pickup photos: slots 1-6 are vehicle angles; slot 7 is the dashboard photo.
   const pickupPhotos = deliveryData?.evidence?.filter(
-    (e: any) => e.phase === 'PICKUP' && e.type === 'PICKUP_PHOTO' && e.imageUrl
+    (e: any) => e.phase === 'PICKUP' && e.type === 'PICKUP_PHOTO' && e.imageUrl && e.slotIndex !== 7
   ) || []
   const dropoffPhotos = deliveryData?.evidence?.filter(
     (e: any) => e.phase === 'DROPOFF' && e.type === 'DROPOFF_PHOTO' && e.imageUrl
   ) || []
   const dashboardPhoto = deliveryData?.evidence?.find(
-    (e: any) => e.phase === 'PICKUP' && e.type === 'DASHBOARD_PHOTO' && e.imageUrl
+    (e: any) => e.phase === 'PICKUP' && e.type === 'PICKUP_PHOTO' && e.slotIndex === 7 && e.imageUrl
   ) || null
 
   // Submit rating
