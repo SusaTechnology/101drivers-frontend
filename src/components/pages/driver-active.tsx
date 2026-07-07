@@ -1691,6 +1691,9 @@ const DROPOFF_REF_IMAGES = [
                 <CardDescription className="text-sm mt-1">
                   (6 Required)
                 </CardDescription>
+                <CardDescription className="text-sm mt-3">
+                Click the boxes below and follow the reference guide. Take each photo from the numbered angles.
+                </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -1806,7 +1809,7 @@ const DROPOFF_REF_IMAGES = [
                   className={cn(
                     "w-full rounded-2xl py-3 font-extrabold flex items-center justify-center gap-2 transition",
                     isUploading
-                      ? "bg-amber-500 text-white cursor-wait"
+                      ? "text-slate-500 dark:text-slate-400 cursor-wait"
                       : dropoffPhotoSlots.filter(s => s.file !== null).length >= 6
                         ? "lime-btn hover:opacity-90"
                         : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
@@ -1847,7 +1850,7 @@ const DROPOFF_REF_IMAGES = [
                     onClick={() => !isDesktop && handleAddDropoffDashboardPhoto()}
                     disabled={isDesktop || dropoffDashboardUploading}
                     className={cn(
-                      "w-full aspect-video rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
+                      "w-full h-28 aspect-video rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
                       dropoffDashboardPhoto.preview
                         ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
                         : dropoffDashboardUploadError
@@ -1883,7 +1886,7 @@ const DROPOFF_REF_IMAGES = [
                       className={cn(
                         "mt-2 w-full font-extrabold rounded-2xl py-2.5 transition flex items-center justify-center gap-2",
                         dropoffDashboardUploading
-                          ? "bg-amber-500 text-white cursor-wait"
+                          ? "text-slate-500 dark:text-slate-400 cursor-wait"
                           : "lime-btn hover:opacity-90 disabled:bg-slate-200 disabled:dark:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
                       )}
                     >

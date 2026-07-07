@@ -1268,7 +1268,7 @@ const handleUploadDashboardPhoto = async () => {
                           )}
                         </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                          Follow the reference guide below. Take each photo from the numbered angle.
+                          Click the boxes below and Follow the reference guide below. Take each photo from the numbered angle.
                         </p>
                       </div>
                     </div>
