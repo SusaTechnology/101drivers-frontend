@@ -1804,16 +1804,16 @@ const DROPOFF_REF_IMAGES = [
                   onClick={handleUploadDropoffPhotos}
                   disabled={isUploading || dropoffPhotoSlots.filter(s => s.file !== null).length < 6}
                   className={cn(
-                    "w-full font-extrabold rounded-2xl py-3 flex items-center justify-center gap-2 transition",
+                    "w-full rounded-2xl py-3 font-extrabold flex items-center justify-center gap-2 transition",
                     isUploading
                       ? "bg-amber-500 text-white cursor-wait"
                       : dropoffPhotoSlots.filter(s => s.file !== null).length >= 6
-                        ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        ? "lime-btn hover:opacity-90"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                   )}
                 >
                   <CloudUpload className="w-4 h-4" />
-                  {dropoffPhotosSaved ? 'Photos Uploaded' : isUploading ? 'Uploading...' : 'Upload All Photos'}
+                  {isUploading ? 'Uploading...' : dropoffPhotosSaved ? 'Photos Uploaded ✓' : 'Upload Photos'}
                 </Button>
 
                 {/* Drop-off Dashboard Photo */}
