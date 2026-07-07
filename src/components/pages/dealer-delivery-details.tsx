@@ -547,6 +547,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const dropoffPhotos = deliveryData?.evidence?.filter(
     (e: any) => e.phase === 'DROPOFF' && e.type === 'DROPOFF_PHOTO' && e.imageUrl
   ) || []
+  const dashboardPhoto = deliveryData?.evidence?.find(
+    (e: any) => e.phase === 'PICKUP' && e.type === 'DASHBOARD_PHOTO' && e.imageUrl
+  ) || null
 
   // Submit rating
   const handleSubmitRating = () => {
@@ -1738,6 +1741,44 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                             {pickupPhotos.length === 0 && (
                               <div className="col-span-full text-center py-8 text-slate-500">
                                 No pickup photos uploaded yet.
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Dashboard / Touchscreen Photo */}
+                      <Card className="rounded-3xl border-slate-200 dark:border-slate-800 md:col-span-2">
+                        <CardContent className="p-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-lime-500/15 flex items-center justify-center">
+                              <Gauge className="h-5 w-5 text-lime-500" />
+                            </div>
+                            <div>
+                              <div className="font-black text-slate-900 dark:text-white">Dashboard photo</div>
+                              <div className="text-sm text-slate-600 dark:text-slate-400">
+                                Fuel gauge or battery charge level at pickup
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-5">
+                            {dashboardPhoto ? (
+                              <a
+                                href={dashboardPhoto.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block max-w-md aspect-video rounded-2xl bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 overflow-hidden hover:opacity-90 transition"
+                              >
+                                <img
+                                  src={dashboardPhoto.imageUrl}
+                                  alt="Dashboard at pickup"
+                                  className="w-full h-full object-cover"
+                                />
+                              </a>
+                            ) : (
+                              <div className="text-center py-8 text-slate-500">
+                                No dashboard photo uploaded for this delivery.
                               </div>
                             )}
                           </div>

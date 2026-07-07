@@ -55,6 +55,7 @@ async submitPickupCompliance(input: {
     slotIndex: number;
     imageUrl: string;
   }>;
+  dashboardPhotoUrl?: string | null;
 }) {
   return this.prisma.$transaction(async (tx) => {
     const delivery = await this.getDeliveryForDriver(
@@ -99,6 +100,16 @@ async submitPickupCompliance(input: {
         input.driverId,
         photo.slotIndex,
         photo.imageUrl
+      );
+    }
+
+    // Persist the dashboard/touchscreen photo (optional — older clients
+    // that don't send this field are unaffected).
+    if (input.dashboardPhotoUrl && `${input.dashboardPhotoUrl}`.trim()) {
+      await this.deliveryEvidenceEngine.attachPickupDashboardPhoto(
+        input.deliveryId,
+        `${input.dashboardPhotoUrl}`.trim(),
+        tx
       );
     }
 

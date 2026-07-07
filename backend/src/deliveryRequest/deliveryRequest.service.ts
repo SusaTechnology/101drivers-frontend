@@ -675,6 +675,7 @@ async submitPickupCompliance(input: {
     slotIndex: number;
     imageUrl: string;
   }>;
+  dashboardPhotoUrl?: string | null;
 }): Promise<any> {
   await this.deliveryComplianceEngine.submitPickupCompliance({
     deliveryId: input.deliveryId,
@@ -685,6 +686,7 @@ async submitPickupCompliance(input: {
       slotIndex: Number(photo.slotIndex),
       imageUrl: this.trimRequiredString(photo.imageUrl),
     })),
+    dashboardPhotoUrl: input.dashboardPhotoUrl ?? null,
   });
 
   return this.domain.findUnique({ id: input.deliveryId });

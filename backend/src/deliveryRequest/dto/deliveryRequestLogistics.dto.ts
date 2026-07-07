@@ -533,6 +533,14 @@ export class SubmitPickupComplianceBody {
     type: [DeliveryCompliancePhotoInput],
   })
   photos!: DeliveryCompliancePhotoInput[];
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "URL of the dashboard/touchscreen photo showing fuel gauge or battery charge level. Captured by the driver app and persisted as a DASHBOARD_PHOTO evidence row so dealers and admins can view it.",
+  })
+  dashboardPhotoUrl?: string | null;
 }
 
 export class SubmitDropoffComplianceBody {

@@ -88,6 +88,7 @@ type PersistedState = {
   photosSaved: boolean
   uploadedPhotos: Array<{ slotIndex: number; imageUrl: string }>
   dashboardSaved: boolean
+  dashboardPhotoUrl: string | null
   odometerValue: string
   vinVerified: boolean
   vinValue: string
@@ -260,6 +261,7 @@ export default function DriverPickupChecklistPage() {
   const [dashboardPhoto, setDashboardPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
   const [odometerValue, setOdometerValue] = useState(saved?.odometerValue ?? '')
   const [dashboardSaved, setDashboardSaved] = useState(saved?.dashboardSaved ?? false)
+  const [dashboardPhotoUrl, setDashboardPhotoUrl] = useState<string | null>(saved?.dashboardPhotoUrl ?? null)
   const [dashboardUploading, setDashboardUploading] = useState(false)
   const [dashboardUploadError, setDashboardUploadError] = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
@@ -322,12 +324,13 @@ export default function DriverPickupChecklistPage() {
       photosSaved,
       uploadedPhotos,
       dashboardSaved,
+      dashboardPhotoUrl,
       odometerValue,
       vinVerified,
       vinValue,
       step1Timestamp: greeted ? saved?.step1Timestamp ?? new Date().toISOString() : null,
     })
-  }, [greeted, photosSaved, uploadedPhotos, dashboardSaved, odometerValue, vinVerified, vinValue, deliveryId])
+  }, [greeted, photosSaved, uploadedPhotos, dashboardSaved, dashboardPhotoUrl, odometerValue, vinVerified, vinValue, deliveryId])
 
   // Theme handling
   useEffect(() => {
@@ -387,6 +390,11 @@ export default function DriverPickupChecklistPage() {
       onSuccess: (data) => {
         setDashboardUploading(false)
         setDashboardSaved(true)
+        // Capture the uploaded URL so it can be sent with pickup-compliance.
+        // Without this the file is orphaned on the CDN and dealer/admin
+        // can never see it.
+        const url = data?.files?.[0]?.url
+        if (url) setDashboardPhotoUrl(url)
         toast.success('Dashboard photo saved')
       },
       onError: () => {
@@ -605,6 +613,8 @@ const handleUploadDashboardPhoto = async () => {
       vinVerificationCode: vin,
       odometerStart: Math.floor(Number(odometerValue)),
       photos: uploadedPhotos.map(p => ({ slotIndex: p.slotIndex, imageUrl: p.imageUrl })),
+      // Persist the dashboard photo URL so dealer/admin can see it.
+      dashboardPhotoUrl: dashboardPhotoUrl ?? null,
     }
 
     saveProgressMutation.mutate(payload)

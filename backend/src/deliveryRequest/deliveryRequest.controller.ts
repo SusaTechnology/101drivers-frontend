@@ -771,6 +771,7 @@ async submitPickupCompliance(
     vinVerificationCode: body.vinVerificationCode,
     odometerStart: body.odometerStart,
     photos: body.photos ?? [],
+    dashboardPhotoUrl: body.dashboardPhotoUrl ?? null,
   });
 }
 

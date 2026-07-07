@@ -139,6 +139,43 @@ export class DeliveryEvidenceEngine {
     );
   }
 
+  /**
+   * Attach (or replace) the single dashboard/touchscreen photo taken at
+   * pickup.  Stored with slotIndex = 1 to satisfy the unique constraint
+   * @@unique([deliveryId, phase, type, slotIndex]).
+   */
+  async attachPickupDashboardPhoto(
+    deliveryId: string,
+    imageUrl: string,
+    tx?: Tx
+  ) {
+    const db = tx ?? this.prisma;
+    const url = this.requireImageUrl(imageUrl);
+    return this.upsertPhotoEvidence(
+      {
+        deliveryId,
+        phase: EnumDeliveryEvidencePhase.PICKUP,
+        type: EnumDeliveryEvidenceType.DASHBOARD_PHOTO,
+        slotIndex: 1,
+        imageUrl: url,
+      },
+      db
+    );
+  }
+
+  async hasPickupDashboardPhoto(deliveryId: string, tx?: Tx): Promise<boolean> {
+    const db = tx ?? this.prisma;
+    const count = await db.deliveryEvidence.count({
+      where: {
+        deliveryId,
+        phase: EnumDeliveryEvidencePhase.PICKUP,
+        type: EnumDeliveryEvidenceType.DASHBOARD_PHOTO,
+        imageUrl: { not: null },
+      },
+    });
+    return count > 0;
+  }
+
   async upsertDropoffOdometerEvidence(
     deliveryId: string,
     value: string,

@@ -1065,6 +1065,7 @@ enum EnumDeliveryEvidenceType {
   ODOMETER_START
   ODOMETER_END
   VIN_CONFIRMATION
+  DASHBOARD_PHOTO
 }
 
 enum EnumDeliveryStatusHistoryActorRole {

@@ -405,3 +405,38 @@ Stage Summary:
 - Phase 1 is frontend-only — no backend migration needed
 - Phase 2 (backend DASHBOARD_PHOTO enum + persist URL for dealer/admin visibility) still pending
 - Note: existing drivers mid-checklist will lose their "odometer photo uploaded" flag due to the localStorage key rename (odometerSaved → dashboardSaved); acceptable since checklist takes minutes to complete
+
+---
+Task ID: dashboard-photo-phase2
+Agent: Main Agent
+Task: Phase 2 — Persist dashboard photo to DB so dealer/admin can see it (backend migration + DTO + engine + frontend capture + dealer UI)
+
+Work Log:
+- Added `DASHBOARD_PHOTO` to `EnumDeliveryEvidenceType` in `backend/prisma/schema.prisma`
+- Mirrored the new value in `backend/src/deliveryEvidence/base/EnumDeliveryEvidenceType.ts`
+- Updated 4 stale Amplication-generated union types in `backend/src/deliveryEvidence/base/` (DeliveryEvidence.ts, DeliveryEvidenceUpdateInput.ts, DeliveryEvidenceCreateInput.ts, DeliveryEvidenceWhereInput.ts) to include `| "DASHBOARD_PHOTO"`
+- Created additive Prisma migration `backend/prisma/migrations/20260101000000_add_dashboard_photo/migration.sql` — single `ALTER TYPE ... ADD VALUE IF NOT EXISTS` statement, safe for live server, no data loss
+- Added `attachPickupDashboardPhoto()` + `hasPickupDashboardPhoto()` methods to `backend/src/domain/deliveryEvidence/deliveryEvidence.engine.ts` — stores as `DASHBOARD_PHOTO` with slotIndex=1, reuses existing `upsertPhotoEvidence` helper
+- Extended `SubmitPickupComplianceBody` DTO in `backend/src/deliveryRequest/dto/deliveryRequestLogistics.dto.ts` with optional `dashboardPhotoUrl?: string | null` field
+- Updated `deliveryCompliance.engine.ts → submitPickupCompliance` to accept `dashboardPhotoUrl` and persist it as a `DASHBOARD_PHOTO` evidence row (optional — old clients unaffected)
+- Updated `deliveryRequest.service.ts → submitPickupCompliance` to forward `dashboardPhotoUrl`
+- Updated `deliveryRequest.controller.ts → submitPickupCompliance` endpoint to forward `dashboardPhotoUrl`
+- Ran `prisma generate` to refresh the Prisma client with the new enum value
+- Frontend `driver-pickup-checklist.tsx`:
+  - Added `dashboardPhotoUrl` to `PersistedState`
+  - Added `dashboardPhotoUrl` state (initialized from saved)
+  - Captured the uploaded URL in `uploadDashboardMutation.onSuccess` (was previously discarded — the orphaned-photo bug)
+  - Included `dashboardPhotoUrl` in the final `pickup-compliance` payload
+  - Added `dashboardPhotoUrl` to the `persistState` effect
+- Frontend `dealer-delivery-details.tsx`:
+  - Added `dashboardPhoto` filter to extract the `DASHBOARD_PHOTO` evidence row
+  - Added a new "Dashboard photo" card between Pickup Photos and Drop-off Photos cards, showing the photo (clickable to open full-size) with a "No dashboard photo uploaded" fallback
+- Admin UI needs no change — the existing "Evidence Photos" card at admin-delivery-details.tsx L691-755 renders ALL DeliveryEvidence rows, so the new DASHBOARD_PHOTO row will appear automatically once persisted
+- Verified: backend `tsc --noEmit` clean for all edited files; frontend `tsc --noEmit` clean for edited files; `vite build` succeeds
+
+Stage Summary:
+- Dashboard photo URL is now captured on the driver side, sent in the pickup-compliance payload, persisted as a `DASHBOARD_PHOTO` evidence row in the DB, and visible to both dealer (new card) and admin (auto-rendered in existing evidence grid)
+- The orphaned-photo bug from Phase 1 (uploaded file → discarded URL) is fixed
+- Migration is purely additive (`ALTER TYPE ... ADD VALUE IF NOT EXISTS`) — safe to run on a live server with `prisma migrate deploy`
+- No existing Prisma fields removed; no schema breaking changes; old clients that don't send `dashboardPhotoUrl` continue to work
+- Phase 1 + Phase 2 together fully satisfy the customer's request (consolidated dashboard photo + dealer/admin visibility)
