@@ -583,20 +583,25 @@ const handleUploadDashboardPhoto = async () => {
   // Step 6: Submit all checklist data (called on 4th VIN digit)
   const handleSubmitAll = (overrideVin?: string) => {
     const vin = overrideVin ?? vinValue
-    // Validate prerequisite steps
+    // Validate prerequisite steps — set vinError with a clear message so
+    // the red helper appears under the VIN input (same UX as the PIN field).
     if (!greeted) {
-      toast.error('Step 1 missing', { description: 'Please confirm you are at the vehicle.' })
+      setVinError('Confirm you are at the vehicle first (Step 2).')
+      toast.error('Step 2 missing', { description: 'Please confirm you are at the vehicle.' })
       return
     }
     if (!photosSaved || uploadedPhotos.length !== 6) {
+      setVinError('Upload all 6 vehicle photos first (Step 3).')
       toast.error('Car photos not uploaded', { description: 'Please upload all 6 vehicle photos.' })
       return
     }
     if (!dashboardSaved) {
+      setVinError('Upload the dashboard photo first (Step 4).')
       toast.error('Dashboard photo not saved', { description: 'Please upload the dashboard photo.' })
       return
     }
     if (!odometerValue || isNaN(Number(odometerValue)) || Number(odometerValue) < 0) {
+      setVinError('Enter the odometer reading first (Step 4).')
       toast.error('Odometer reading required', { description: 'Please enter the current odometer mileage.' })
       return
     }
@@ -606,6 +611,8 @@ const handleUploadDashboardPhoto = async () => {
       toast.error('VIN digits required', { description: 'Enter the last 4 digits (numbers only).' })
       return
     }
+    // Clear any prior error before submitting
+    setVinError(null)
 
     // Backend expects exactly 6 photos (slots 1-6) + odometerStart as number + vinVerificationCode
     const payload = {
