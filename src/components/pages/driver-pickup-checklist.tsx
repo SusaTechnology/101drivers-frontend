@@ -1488,7 +1488,7 @@ const handleUploadDashboardPhoto = async () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Dashboard/Touchscreen Photo &amp; Reading</h2>
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white">Dashboard/ Touchscreen Photo &amp; Reading</h2>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                           Capture a clear photo of the dashboard or touchscreen that clearly shows the fuel gauge or battery charge level. The vehicle must have at least half tank or half charge.
                         </p>
@@ -1580,12 +1580,11 @@ const handleUploadDashboardPhoto = async () => {
                               <>
                                 <Camera className="w-8 h-8 text-primary/60" />
                                 <span className="text-sm font-bold text-primary/70">Tap to take photo</span>
-                                <p className="text-[10px] text-slate-400 -mt-1">Fuel gauge or battery charge level must be clearly visible</p>
+                                <p className="text-[8px] text-slate-400 -mt-1">Fuel gauge or battery charge level must be clearly visible</p>
                               </>
                             )}
                           </Button>
                         </div>
-
                         <Button
                           onClick={handleUploadDashboardPhoto}
                           disabled={!dashboardPhoto.file || dashboardUploading}
