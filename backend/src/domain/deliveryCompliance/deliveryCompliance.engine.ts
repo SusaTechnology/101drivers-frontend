@@ -129,6 +129,7 @@ async submitDropoffCompliance(input: {
     slotIndex: number;
     imageUrl: string;
   }>;
+  dashboardPhotoUrl?: string | null;
 }) {
   return this.prisma.$transaction(async (tx) => {
     const delivery = await this.getDeliveryForDriver(
@@ -169,6 +170,15 @@ async submitDropoffCompliance(input: {
       );
     }
 
+    // Persist the drop-off dashboard/touchscreen photo (required for trip completion).
+    if (input.dashboardPhotoUrl && `${input.dashboardPhotoUrl}`.trim()) {
+      await this.deliveryEvidenceEngine.attachDropoffDashboardPhoto(
+        input.deliveryId,
+        `${input.dashboardPhotoUrl}`.trim(),
+        tx
+      );
+    }
+
     return this.getDriverWorkflowSummary(
       input.deliveryId,
       input.driverId,
@@ -192,6 +202,12 @@ async submitDropoffCompliance(input: {
     const dropoffPhotoCount =
       await this.deliveryEvidenceEngine.countDropoffPhotos(deliveryId, db);
 
+    const hasPickupDashboardPhoto =
+      await this.deliveryEvidenceEngine.hasPickupDashboardPhoto(deliveryId, db);
+
+    const hasDropoffDashboardPhoto =
+      await this.deliveryEvidenceEngine.hasDropoffDashboardPhoto(deliveryId, db);
+
     const pickupMissing: string[] = [];
     if (!compliance.vinConfirmed) pickupMissing.push("vinVerification");
     if (compliance.odometerStart == null) pickupMissing.push("odometerStart");
@@ -201,6 +217,7 @@ async submitDropoffCompliance(input: {
     ) {
       pickupMissing.push("pickupPhotos");
     }
+    if (!hasPickupDashboardPhoto) pickupMissing.push("pickupDashboardPhoto");
 
     const dropoffMissing: string[] = [];
     if (compliance.odometerEnd == null) dropoffMissing.push("odometerEnd");
@@ -217,6 +234,7 @@ async submitDropoffCompliance(input: {
     ) {
       dropoffMissing.push("dropoffPhotos");
     }
+    if (!hasDropoffDashboardPhoto) dropoffMissing.push("dropoffDashboardPhoto");
 
     return {
       deliveryId,
@@ -228,6 +246,7 @@ async submitDropoffCompliance(input: {
         photoCount: pickupPhotoCount,
         requiredPhotoCount:
           DeliveryComplianceEngine.REQUIRED_PICKUP_PHOTO_COUNT,
+        dashboardPhoto: hasPickupDashboardPhoto,
         completedAt: compliance.pickupCompletedAt,
         ready: pickupMissing.length === 0,
         missing: pickupMissing,
@@ -237,6 +256,7 @@ async submitDropoffCompliance(input: {
         photoCount: dropoffPhotoCount,
         requiredPhotoCount:
           DeliveryComplianceEngine.REQUIRED_DROPOFF_PHOTO_COUNT,
+        dashboardPhoto: hasDropoffDashboardPhoto,
         completedAt: compliance.dropoffCompletedAt,
         ready: dropoffMissing.length === 0,
         missing: dropoffMissing,

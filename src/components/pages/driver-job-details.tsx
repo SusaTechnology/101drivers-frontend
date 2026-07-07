@@ -816,9 +816,25 @@ export default function DriverJobDetailsPage() {
                 </AlertDialogHeader>
 
                 <div className="mt-2 space-y-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                  <p>
-                    Before you confirm this delivery, please note:
-                    After the customer gives you the PIN, you must upload all required photos, enter the odometer reading, enter the last 4 digits of the VIN, and enter the PIN before you start driving.
+                  <p className="font-bold text-slate-900 dark:text-white">Before you confirm, here's the full delivery flow:</p>
+                  <ol className="list-decimal pl-5 space-y-1.5">
+                    <li>Open the app and choose Map View or List View.</li>
+                    <li>Toggle on "Use my current location".</li>
+                    <li>Filter pickups by distance and date.</li>
+                    <li>Tap on the job you want, review the schedule and all important messages.</li>
+                    <li>Accept the job — once confirmed, it moves to My Bookings.</li>
+                    <li>Go to My Bookings and tap the job when you're ready to start.</li>
+                    <li>Arrive at the pickup location on time.</li>
+                    <li>Introduce yourself politely at the dealership.</li>
+                    <li>Receive the 4-digit authorization PIN from the customer and verify it's the correct vehicle.</li>
+                    <li>Take six pictures in this order: Left front corner, Right front corner, Passenger full side, Right rear corner, Left rear corner, Driver's full side.</li>
+                    <li>Take a Dashboard Photo showing the fuel gauge or battery charge level (must be at least half full).</li>
+                    <li>Enter the current odometer reading.</li>
+                    <li>Enter the last four digits of the VIN.</li>
+                    <li>Start delivery and follow the route on the map.</li>
+                  </ol>
+                  <p className="pt-2 text-amber-700 dark:text-amber-300 font-semibold">
+                    At delivery: take six similar pictures and another dashboard photo, hand over the keys to the recipient, and complete the delivery.
                   </p>
                   <p>
                     You will not be able to complete the delivery or get paid if these steps are not completed correctly.

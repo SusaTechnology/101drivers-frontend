@@ -700,6 +700,7 @@ async submitDropoffCompliance(input: {
     slotIndex: number;
     imageUrl: string;
   }>;
+  dashboardPhotoUrl?: string | null;
 }): Promise<any> {
   await this.deliveryComplianceEngine.submitDropoffCompliance({
     deliveryId: input.deliveryId,
@@ -709,6 +710,7 @@ async submitDropoffCompliance(input: {
       slotIndex: Number(photo.slotIndex),
       imageUrl: this.trimRequiredString(photo.imageUrl),
     })),
+    dashboardPhotoUrl: input.dashboardPhotoUrl ?? null,
   });
 
   return this.domain.findUnique({ id: input.deliveryId });

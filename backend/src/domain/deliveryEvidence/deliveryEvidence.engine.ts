@@ -176,6 +176,44 @@ export class DeliveryEvidenceEngine {
     return count > 0;
   }
 
+  /**
+   * Attach (or replace) the single dashboard/touchscreen photo taken at
+   * drop-off. Same DASHBOARD_PHOTO type as pickup, but phase=DROPOFF —
+   * the @@unique([deliveryId, phase, type, slotIndex]) constraint lets
+   * PICKUP/DASHBOARD_PHOTO/1 and DROPOFF/DASHBOARD_PHOTO/1 coexist.
+   */
+  async attachDropoffDashboardPhoto(
+    deliveryId: string,
+    imageUrl: string,
+    tx?: Tx
+  ) {
+    const db = tx ?? this.prisma;
+    const url = this.requireImageUrl(imageUrl);
+    return this.upsertPhotoEvidence(
+      {
+        deliveryId,
+        phase: EnumDeliveryEvidencePhase.DROPOFF,
+        type: EnumDeliveryEvidenceType.DASHBOARD_PHOTO,
+        slotIndex: 1,
+        imageUrl: url,
+      },
+      db
+    );
+  }
+
+  async hasDropoffDashboardPhoto(deliveryId: string, tx?: Tx): Promise<boolean> {
+    const db = tx ?? this.prisma;
+    const count = await db.deliveryEvidence.count({
+      where: {
+        deliveryId,
+        phase: EnumDeliveryEvidencePhase.DROPOFF,
+        type: EnumDeliveryEvidenceType.DASHBOARD_PHOTO,
+        imageUrl: { not: null },
+      },
+    });
+    return count > 0;
+  }
+
   async upsertDropoffOdometerEvidence(
     deliveryId: string,
     value: string,

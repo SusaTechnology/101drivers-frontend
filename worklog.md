@@ -531,3 +531,46 @@ Stage Summary:
 - Base files are hand-edited to include DASHBOARD_PHOTO in the union types — these edits will persist as long as the team does NOT regenerate the base files via Amplication
 - Migration is additive: ALTER TYPE ... ADD VALUE IF NOT EXISTS 'DASHBOARD_PHOTO' — safe for live server
 - Build is fully unblocked — npm start works
+
+---
+Task ID: dashboard-photo-phase3
+Agent: Main Agent
+Task: Phase 3 — Drop-off dashboard photo (required, visible to dealer+admin) + 14-step driver instructions on job-details pre-book dialog
+
+Work Log:
+Backend (all non-base files; no schema change — reuses existing DASHBOARD_PHOTO enum with phase=DROPOFF):
+- deliveryEvidence.engine.ts: added attachDropoffDashboardPhoto() + hasDropoffDashboardPhoto() (phase=DROPOFF, type=DASHBOARD_PHOTO, slotIndex=1 — the @@unique constraint lets PICKUP/1 and DROPOFF/1 coexist)
+- deliveryCompliance.engine.ts: submitDropoffCompliance now accepts optional dashboardPhotoUrl and persists it via attachDropoffDashboardPhoto
+- deliveryCompliance.engine.ts: getDriverWorkflowSummary now requires both pickup AND dropoff dashboard photos — adds 'pickupDashboardPhoto' and 'dropoffDashboardPhoto' to the missing arrays (hard-blocks trip start/complete)
+- deliveryRequestLogistics.dto.ts: extended SubmitDropoffComplianceBody with optional dashboardPhotoUrl field
+- deliveryRequest.service.ts + deliveryRequest.controller.ts: forward dashboardPhotoUrl through for dropoff
+
+Frontend:
+- src/lib/pickup-photo-store.ts: extended PhotoType union with 'dropoff-dashboard' (for IndexedDB persistence)
+- src/components/pages/driver-active.tsx:
+  - Added dropoffDashboardPhoto, dropoffDashboardSaved, dropoffDashboardUrl, dropoffDashboardUploading, dropoffDashboardUploadError state
+  - Added dropoffDashboardInputRef + isDropoffDashboardInput ref discriminator
+  - Imported savePhoto from pickup-photo-store
+  - handleDropoffFileChange now branches on isDropoffDashboardInput (dashboard vs vehicle photos)
+  - handleAddDropoffPhoto sets isDropoffDashboardInput=false
+  - Added handleAddDropoffDashboardPhoto + handleUploadDropoffDashboardPhoto + uploadDropoffDashboardMutation (captures URL on success — fixes the orphaned-photo bug for dropoff too)
+  - dropoffReady now requires dropoffDashboardSaved; missingItems includes 'Drop-off dashboard photo'
+  - submitComplianceMutation payload includes dashboardPhotoUrl: dropoffDashboardUrl ?? null
+  - Added dashboard photo UI section in the dropoff card (between Upload All Photos button and odometer/notes grid): camera tile + upload button + success checkmark
+- src/components/pages/dealer-delivery-details.tsx:
+  - Added dropoffDashboardPhoto evidence filter
+  - Added 'Drop-off dashboard photo' card (mirrors the pickup one) between Dropoff Photos and Tracking cards
+- src/components/pages/driver-job-details.tsx:
+  - Replaced the plain paragraph in the 'Important - Read Carefully' AlertDialog with a 14-step numbered list (the customer's full delivery flow)
+  - Added amber callout for the drop-off steps
+  - Kept the existing 'will not be able to complete' and 'going off route' warnings
+
+Stage Summary:
+- Drop-off now requires a dashboard photo (hard-blocks trip completion if missing)
+- Drop-off dashboard photo is persisted as DASHBOARD_PHOTO with phase=DROPOFF
+- Dealer sees it in a dedicated 'Drop-off dashboard photo' card
+- Admin sees it automatically in the existing Evidence Photos grid (renders all evidence rows)
+- Driver sees the full 14-step delivery flow in the pre-book 'Important - Read Carefully' dialog
+- No schema change, no migration, no base file regeneration needed
+- Verified: backend tsc clean, frontend tsc clean, vite build succeeds
+- Phase 1 + 2 + 3 together fully satisfy the customer's request: consolidated dashboard photo at pickup AND drop-off, dealer/admin visibility, full driver instructions

@@ -794,6 +794,7 @@ async submitDropoffCompliance(
     driverId: body.driverId,
     odometerEnd: body.odometerEnd,
     photos: body.photos ?? [],
+    dashboardPhotoUrl: body.dashboardPhotoUrl ?? null,
   });
 }
 

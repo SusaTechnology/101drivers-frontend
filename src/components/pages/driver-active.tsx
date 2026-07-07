@@ -100,6 +100,7 @@ import {
 import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
 import { compressPhoto, compressPhotos, buildCompressedUploadPayload } from '@/lib/image-compress'
+import { savePhoto } from '@/lib/pickup-photo-store'
 
 import { BUSINESS_TZ } from '@/lib/timezone'
 import DriverBottomNav from '../layout/DriverBottomNav'
@@ -219,8 +220,17 @@ const DROPOFF_REF_IMAGES = [
   const [dropoffPhotosSaved, setDropoffPhotosSaved] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
 
+  // Dropoff dashboard photo state (mirrors pickup dashboard photo)
+  const [dropoffDashboardPhoto, setDropoffDashboardPhoto] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null })
+  const [dropoffDashboardSaved, setDropoffDashboardSaved] = useState(false)
+  const [dropoffDashboardUrl, setDropoffDashboardUrl] = useState<string | null>(null)
+  const [dropoffDashboardUploading, setDropoffDashboardUploading] = useState(false)
+  const [dropoffDashboardUploadError, setDropoffDashboardUploadError] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dropoffDashboardInputRef = useRef<HTMLInputElement>(null)
   const currentSlotIndex = useRef<number | null>(null)
+  const isDropoffDashboardInput = useRef(false)
   const trackingInterval = useRef<NodeJS.Timeout>()
   // 👇 NEW: ref to store latest position for interval
   const latestPositionRef = useRef<google.maps.LatLngLiteral | null>(null)
@@ -330,9 +340,10 @@ const DROPOFF_REF_IMAGES = [
   const odometerEndNum = odometerEnd && !isNaN(Number(odometerEnd)) ? Number(odometerEnd) : null
   const odometerStartNum = deliveryData?.compliance?.odometerStart ?? null
   const odometerValid = odometerEndNum !== null && (odometerStartNum === null || odometerEndNum > odometerStartNum)
-  const dropoffReady = photosUploaded && odometerValid && locationHealth !== 'lost'
+  const dropoffReady = photosUploaded && dropoffDashboardSaved && odometerValid && locationHealth !== 'lost'
   const missingItems: string[] = []
   if (!photosUploaded) missingItems.push(`${6 - uploadedDropoffPhotos.length} dropoff photo(s)`)
+  if (!dropoffDashboardSaved) missingItems.push('Drop-off dashboard photo')
   if (!odometerValid) {
     if (odometerEndNum === null) missingItems.push('Odometer reading')
     else missingItems.push('Odometer must be greater than start')
@@ -769,25 +780,36 @@ const DROPOFF_REF_IMAGES = [
       })
       return
     }
+    isDropoffDashboardInput.current = false
     currentSlotIndex.current = index
     fileInputRef.current?.click()
   }
 
   const handleDropoffFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || currentSlotIndex.current === null) return
+    if (!file) return
 
-    const index = currentSlotIndex.current
-    const previewUrl = URL.createObjectURL(file)
-
-    setDropoffPhotoSlots(prev => {
-      const newSlots = [...prev]
-      if (newSlots[index].preview) {
-        URL.revokeObjectURL(newSlots[index].preview!)
-      }
-      newSlots[index] = { file, preview: previewUrl }
-      return newSlots
-    })
+    if (isDropoffDashboardInput.current) {
+      // Dropoff dashboard photo branch
+      const previewUrl = URL.createObjectURL(file)
+      if (dropoffDashboardPhoto.preview) URL.revokeObjectURL(dropoffDashboardPhoto.preview)
+      setDropoffDashboardPhoto({ file, preview: previewUrl })
+      setDropoffDashboardUploadError(false)
+      if (deliveryId) savePhoto(deliveryId, 'dropoff-dashboard', 0, file).catch(() => {})
+    } else {
+      // Dropoff vehicle photos branch (existing behavior)
+      if (currentSlotIndex.current === null) return
+      const index = currentSlotIndex.current
+      const previewUrl = URL.createObjectURL(file)
+      setDropoffPhotoSlots(prev => {
+        const newSlots = [...prev]
+        if (newSlots[index].preview) {
+          URL.revokeObjectURL(newSlots[index].preview!)
+        }
+        newSlots[index] = { file, preview: previewUrl }
+        return newSlots
+      })
+    }
 
     e.target.value = ''
   }
@@ -812,6 +834,58 @@ const DROPOFF_REF_IMAGES = [
       },
     }
   )
+
+  // Upload dropoff dashboard photo (single file)
+  const uploadDropoffDashboardMutation = useFileUpload<{ ok: boolean; files: Array<{ slotIndex: number; url: string }> }>(
+    `${import.meta.env.VITE_API_URL}/api/uploads/delivery-evidence`,
+    {
+      onSuccess: (data) => {
+        setDropoffDashboardUploading(false)
+        setDropoffDashboardSaved(true)
+        const url = data?.files?.[0]?.url
+        if (url) setDropoffDashboardUrl(url)
+        toast.success('Drop-off dashboard photo saved')
+      },
+      onError: () => {
+        setDropoffDashboardUploading(false)
+        setDropoffDashboardUploadError(true)
+        toast.error('Drop-off dashboard photo failed to upload', {
+          description: 'Tap to retry.',
+        })
+      },
+    }
+  )
+
+  const handleAddDropoffDashboardPhoto = () => {
+    if (isDesktop) {
+      toast.error('Use your phone', {
+        description: 'The drop-off dashboard photo must be taken with your phone camera.',
+        duration: 5000,
+      })
+      return
+    }
+    isDropoffDashboardInput.current = true
+    dropoffDashboardInputRef.current?.click()
+  }
+
+  const handleUploadDropoffDashboardPhoto = async () => {
+    if (!dropoffDashboardPhoto.file) {
+      toast.error('Photo required', { description: 'Please take a dashboard photo showing the fuel gauge or battery charge level.' })
+      return
+    }
+    setDropoffDashboardUploading(true)
+    try {
+      const compressed = await compressPhoto(dropoffDashboardPhoto.file)
+      const formData = new FormData()
+      formData.append('files', compressed)
+      formData.append('deliveryId', deliveryId)
+      formData.append('phase', 'DROPOFF')
+      uploadDropoffDashboardMutation.mutate(formData)
+    } catch (err) {
+      setDropoffDashboardUploading(false)
+      toast.error('Photo compression failed', { description: 'Please try again.' })
+    }
+  }
 
   const handleUploadDropoffPhotos = async () => {
     const selectedCount = dropoffPhotoSlots.filter(slot => slot.file !== null).length
@@ -914,7 +988,7 @@ const DROPOFF_REF_IMAGES = [
       return
     }
 
-    // Step 1: Submit dropoff compliance (odometerEnd + photos) to DB
+    // Step 1: Submit dropoff compliance (odometerEnd + photos + dashboard photo) to DB
     // On success, the onSuccess callback above auto-calls handleCompleteTrip()
     submitComplianceMutation.mutate({
       driverId,
@@ -923,6 +997,7 @@ const DROPOFF_REF_IMAGES = [
         slotIndex: p.slotIndex,
         imageUrl: p.imageUrl,
       })),
+      dashboardPhotoUrl: dropoffDashboardUrl ?? null,
     })
   }
 
@@ -1740,6 +1815,92 @@ const DROPOFF_REF_IMAGES = [
                   <CloudUpload className="w-4 h-4" />
                   {dropoffPhotosSaved ? 'Photos Uploaded' : isUploading ? 'Uploading...' : 'Upload All Photos'}
                 </Button>
+
+                {/* Drop-off Dashboard Photo */}
+                <div className="mt-2 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Speed className="w-4 h-4 text-primary" />
+                    <div>
+                      <div className="text-sm font-extrabold text-slate-900 dark:text-white">Dashboard Photo</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Fuel gauge or battery charge level must be clearly visible (at least half tank/charge).
+                      </div>
+                    </div>
+                    {dropoffDashboardSaved && (
+                      <div className="ml-auto w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    ref={dropoffDashboardInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleDropoffFileChange}
+                    className="hidden"
+                  />
+
+                  <Button
+                    variant="outline"
+                    onClick={() => !isDesktop && handleAddDropoffDashboardPhoto()}
+                    disabled={isDesktop || dropoffDashboardUploading}
+                    className={cn(
+                      "w-full h-24 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
+                      dropoffDashboardPhoto.preview
+                        ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
+                        : dropoffDashboardUploadError
+                          ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-900/10"
+                          : "border-slate-200 dark:border-slate-700"
+                    )}
+                  >
+                    {dropoffDashboardPhoto.preview ? (
+                      <div className="relative w-full h-full">
+                        <img
+                          src={dropoffDashboardPhoto.preview}
+                          alt="Drop-off dashboard"
+                          className="h-full w-full object-cover"
+                        />
+                        {dropoffDashboardUploading && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <Camera className="w-6 h-6 text-primary/60" />
+                        <span className="text-xs font-bold text-primary/70">Tap to take photo</span>
+                      </>
+                    )}
+                  </Button>
+
+                  {!dropoffDashboardSaved && (
+                    <Button
+                      onClick={handleUploadDropoffDashboardPhoto}
+                      disabled={!dropoffDashboardPhoto.file || dropoffDashboardUploading}
+                      className={cn(
+                        "mt-2 w-full font-extrabold rounded-2xl py-2.5 transition flex items-center justify-center gap-2",
+                        dropoffDashboardUploading
+                          ? "bg-amber-500 text-white cursor-wait"
+                          : "lime-btn hover:opacity-90 disabled:bg-slate-200 disabled:dark:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed"
+                      )}
+                    >
+                      {dropoffDashboardUploading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <CloudUpload className="w-4 h-4" />
+                          Upload Dashboard Photo
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-2">

@@ -559,6 +559,14 @@ export class SubmitDropoffComplianceBody {
     type: [DeliveryCompliancePhotoInput],
   })
   photos!: DeliveryCompliancePhotoInput[];
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "URL of the dashboard/touchscreen photo taken at drop-off showing fuel gauge or battery charge level. Persisted as a DASHBOARD_PHOTO evidence row (phase=DROPOFF) so dealers and admins can view it.",
+  })
+  dashboardPhotoUrl?: string | null;
 }
 export class CancelDeliveryBody {
   @swagger.ApiProperty({
