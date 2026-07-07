@@ -854,52 +854,13 @@ export default function DriverPreferencesPage() {
           </CardContent>
         </Card>
 
-        {/* District Preferences */}
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
-          <CardContent className="p-6 sm:p-7 space-y-5">
-            <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white">District Preferences</h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                Choose specific districts to prioritize.
-              </p>
-            </div>
-
-            {districtsLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              </div>
-            ) : districtsError ? (
-              <Alert variant="destructive">
-                <AlertTitle>Error loading districts</AlertTitle>
-                <AlertDescription>
-                  {districtsErrorObj?.message || 'Please try again later.'}
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {districtList?.map((district: any) => (
-                  <Label
-                    key={district.id}
-                    className={cn(
-                      "flex items-center gap-3 p-4 rounded-2xl border cursor-pointer transition",
-                      serviceDistrictIds.includes(district.id)
-                        ? "border-primary bg-primary/5"
-                        : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900"
-                    )}
-                  >
-                    <Checkbox
-                      checked={serviceDistrictIds.includes(district.id)}
-                      onCheckedChange={() => handleDistrictChange(district.id)}
-                    />
-                    <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                      {district.name || district.label}
-                    </span>
-                  </Label>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* District Preferences card removed from UI per customer request.
+            Backend logic (serviceDistrictIds form field, submit payload,
+            driver-job-feed matching) is intentionally LEFT INTACT so the
+            feature keeps working and can be re-enabled later by re-adding
+            the card. The form field defaults to [] and the submit payload
+            still sends serviceDistrictIds, so existing saved districts are
+            preserved on Save. */}
 
         {/* Alert Preferences */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
