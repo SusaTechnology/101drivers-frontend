@@ -1819,15 +1819,15 @@ const DROPOFF_REF_IMAGES = [
                 {/* Drop-off Dashboard Photo */}
                 <div className="mt-2 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
                   <div className="flex items-center gap-2 mb-2">
-                    <Speed className="w-4 h-4 text-primary" />
-                    <div>
+                    <Speed className="w-4 h-4 text-primary shrink-0" />
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-extrabold text-slate-900 dark:text-white">Dashboard Photo</div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
                         Fuel gauge or battery charge level must be clearly visible (at least half tank/charge).
                       </div>
                     </div>
                     {dropoffDashboardSaved && (
-                      <div className="ml-auto w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                      <div className="ml-auto shrink-0 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
                         <Check className="w-3 h-3 text-white" />
                       </div>
                     )}
@@ -1847,7 +1847,7 @@ const DROPOFF_REF_IMAGES = [
                     onClick={() => !isDesktop && handleAddDropoffDashboardPhoto()}
                     disabled={isDesktop || dropoffDashboardUploading}
                     className={cn(
-                      "w-full h-24 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
+                      "w-full aspect-video rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 font-extrabold hover:bg-primary/5 transition relative overflow-hidden",
                       dropoffDashboardPhoto.preview
                         ? "border-green-300 dark:border-green-700 bg-green-50/50 dark:bg-green-900/10"
                         : dropoffDashboardUploadError
