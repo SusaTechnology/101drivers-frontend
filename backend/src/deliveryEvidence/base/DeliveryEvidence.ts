@@ -102,8 +102,7 @@ class DeliveryEvidence {
     | "DROPOFF_PHOTO"
     | "ODOMETER_START"
     | "ODOMETER_END"
-    | "VIN_CONFIRMATION"
-    | "DASHBOARD_PHOTO";
+    | "VIN_CONFIRMATION";
 
   @ApiProperty({
     required: true,
