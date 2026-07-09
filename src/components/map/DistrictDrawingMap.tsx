@@ -3,7 +3,7 @@ import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { GoogleMap, Polygon, InfoWindow } from '@react-google-maps/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Check, X, Undo2, MousePointerClick, Plus, GripVertical, Move } from 'lucide-react';
+import { Trash2, Check, X, Undo2, MousePointerClick, Plus, GripVertical, Move, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { geoJsonToPaths, polygonToGeoJson } from '@/hooks/useAdminServiceDistricts';
 
@@ -64,7 +64,7 @@ export default function DistrictDrawingMap({
 
   // Side panel state — collapsible + draggable so it doesn't block the map
   const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [panelPos, setPanelPos] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   const [panelDragging, setPanelDragging] = useState(false);
   const panelDragOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -74,11 +74,16 @@ export default function DistrictDrawingMap({
     // Only drag from the header bar, not from inputs/buttons
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) return;
-    setPanelDragging(true);
     const panel = panelRef.current;
     if (!panel) return;
     const rect = panel.getBoundingClientRect();
+    // Initialize panelPos to the panel's current screen position so there's
+    // no jump when dragging starts (the panel was previously anchored with
+    // right:12, so we capture its actual left/top here and switch to left/top
+    // positioning for the drag).
+    setPanelPos({ x: rect.left, y: rect.top });
     panelDragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    setPanelDragging(true);
   }, []);
 
   useEffect(() => {
@@ -684,9 +689,9 @@ export default function DistrictDrawingMap({
               panelDragging && "cursor-grabbing"
             )}
             style={{
-              top: panelPos.y || 12,
-              right: panelPos.x === 0 ? 12 : 'auto',
-              left: panelPos.x !== 0 ? panelPos.x : 'auto',
+              top: panelPos.y ?? 12,
+              right: panelPos.x === null ? 12 : 'auto',
+              left: panelPos.x !== null ? panelPos.x : 'auto',
             }}
           >
             {/* Drag header bar */}
@@ -705,7 +710,7 @@ export default function DistrictDrawingMap({
                 className="w-6 h-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition"
                 aria-label={panelCollapsed ? 'Expand panel' : 'Minimize panel'}
               >
-                {panelCollapsed ? <Plus className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                {panelCollapsed ? <Plus className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
               </button>
             </div>
 
