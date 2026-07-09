@@ -64,23 +64,24 @@ export default function DistrictDrawingMap({
 
   // Side panel state — collapsible + draggable so it doesn't block the map
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  // panelPos uses viewport coordinates (position: fixed). null = never dragged,
+  // use default absolute positioning (right: 12, top: 12).
   const [panelPos, setPanelPos] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   const [panelDragging, setPanelDragging] = useState(false);
   const panelDragOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // Drag handlers for the side panel
+  // Drag handlers for the side panel.
+  // Uses position: fixed (viewport coordinates) so getBoundingClientRect()
+  // coords match the positioning context — no jump, no flicker.
   const handlePanelDragStart = useCallback((e: React.MouseEvent) => {
-    // Only drag from the header bar, not from inputs/buttons
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) return;
     const panel = panelRef.current;
     if (!panel) return;
     const rect = panel.getBoundingClientRect();
-    // Initialize panelPos to the panel's current screen position so there's
-    // no jump when dragging starts (the panel was previously anchored with
-    // right:12, so we capture its actual left/top here and switch to left/top
-    // positioning for the drag).
+    // If first drag, switch from absolute (right-anchored) to fixed (left/top).
+    // Set panelPos to the panel's current viewport position so it stays put.
     setPanelPos({ x: rect.left, y: rect.top });
     panelDragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     setPanelDragging(true);
@@ -89,6 +90,7 @@ export default function DistrictDrawingMap({
   useEffect(() => {
     if (!panelDragging) return;
     const handleMove = (e: MouseEvent) => {
+      // position: fixed uses viewport coords — matches e.clientX/Y directly
       setPanelPos({ x: e.clientX - panelDragOffset.current.x, y: e.clientY - panelDragOffset.current.y });
     };
     const handleUp = () => setPanelDragging(false);
@@ -540,7 +542,7 @@ export default function DistrictDrawingMap({
                 position={popupAnchor}
                 options={{
                   pixelOffset: new google.maps.Size(0, -10),
-                  maxWidth: 240,
+                  maxWidth: 320,
                   disableAutoPan: true,
                 }}
                 onCloseClick={closePopup}
@@ -554,58 +556,59 @@ export default function DistrictDrawingMap({
                     boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
                     margin: '-8px -12px',
                     overflow: 'hidden',
+                    minWidth: '260px',
                   }}
                 >
                   {/* Header */}
-                  <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontWeight: 800, fontSize: '13px', color: '#1e293b', marginBottom: '2px' }}>
+                  <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ fontWeight: 800, fontSize: '14px', color: '#1e293b', marginBottom: '3px' }}>
                       {popupDistrict.name}
                     </div>
-                    <div style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b', fontFamily: 'monospace' }}>
                       {popupDistrict.code}
                     </div>
                   </div>
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: '6px', padding: '8px 10px 10px' }}>
+                  {/* Actions — stacked vertically for better mobile UX */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 12px 12px' }}>
                     <button
                       onClick={() => handlePopupEdit(popupDistrict)}
                       style={{
-                        flex: 1,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '5px',
-                        padding: '7px 12px',
-                        borderRadius: '10px',
+                        gap: '6px',
+                        padding: '10px 16px',
+                        borderRadius: '12px',
                         border: '1px solid #e2e8f0',
                         background: '#fffbeb',
                         color: '#92400e',
-                        fontSize: '11px',
+                        fontSize: '13px',
                         fontWeight: 800,
                         cursor: 'pointer',
+                        minHeight: '40px',
                       }}
                     >
-                      ✏️ Edit
+                      ✏️ Edit Zone
                     </button>
                     <button
                       onClick={() => handlePopupDelete(popupDistrict)}
                       style={{
-                        flex: 1,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '5px',
-                        padding: '7px 12px',
-                        borderRadius: '10px',
+                        gap: '6px',
+                        padding: '10px 16px',
+                        borderRadius: '12px',
                         border: '1px solid #fecaca',
                         background: '#fef2f2',
                         color: '#991b1b',
-                        fontSize: '11px',
+                        fontSize: '13px',
                         fontWeight: 800,
                         cursor: 'pointer',
+                        minHeight: '40px',
                       }}
                     >
-                      🗑️ Delete
+                      🗑️ Delete Zone
                     </button>
                   </div>
                 </div>
@@ -685,14 +688,14 @@ export default function DistrictDrawingMap({
           <div
             ref={panelRef}
             className={cn(
-              "absolute z-20 w-80 max-h-[calc(100%-24px)] overflow-hidden rounded-2xl shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700",
+              "z-[1000] w-80 max-h-[calc(100%-24px)] overflow-hidden rounded-2xl shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700",
               panelDragging && "cursor-grabbing"
             )}
-            style={{
-              top: panelPos.y ?? 12,
-              right: panelPos.x === null ? 12 : 'auto',
-              left: panelPos.x !== null ? panelPos.x : 'auto',
-            }}
+            style={
+              panelPos.x !== null
+                ? { position: 'fixed', left: panelPos.x, top: panelPos.y ?? 12 }
+                : { position: 'absolute', right: 12, top: 12 }
+            }
           >
             {/* Drag header bar */}
             <div
