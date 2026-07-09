@@ -4,6 +4,7 @@ import { GoogleMap, Polygon, InfoWindow } from '@react-google-maps/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Check, X, Undo2, MousePointerClick, Plus, GripVertical, Move } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { geoJsonToPaths, polygonToGeoJson } from '@/hooks/useAdminServiceDistricts';
 
 const CONTAINER_STYLE: React.CSSProperties = {
@@ -60,6 +61,39 @@ export default function DistrictDrawingMap({
   // Popup for click on polygon
   const [popupDistrict, setPopupDistrict] = useState<District | null>(null);
   const [popupAnchor, setPopupAnchor] = useState<google.maps.LatLng | null>(null);
+
+  // Side panel state — collapsible + draggable so it doesn't block the map
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [panelDragging, setPanelDragging] = useState(false);
+  const panelDragOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // Drag handlers for the side panel
+  const handlePanelDragStart = useCallback((e: React.MouseEvent) => {
+    // Only drag from the header bar, not from inputs/buttons
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button')) return;
+    setPanelDragging(true);
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    panelDragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }, []);
+
+  useEffect(() => {
+    if (!panelDragging) return;
+    const handleMove = (e: MouseEvent) => {
+      setPanelPos({ x: e.clientX - panelDragOffset.current.x, y: e.clientY - panelDragOffset.current.y });
+    };
+    const handleUp = () => setPanelDragging(false);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+  }, [panelDragging]);
 
   // Total vertices from draft polygons (for toolbar badge)
   const totalVertices = draftPolygons.reduce((sum, dp) => sum + dp.paths.length, 0);
@@ -398,6 +432,33 @@ export default function DistrictDrawingMap({
           </Badge>
         )}
 
+        {/* Zone selector — pick any zone by name when they're layered on top of each other */}
+        {!isDrawingMode && !editingId && districts.length > 0 && (
+          <select
+            value=""
+            onChange={(e) => {
+              const d = districts.find((d) => d.id === e.target.value);
+              if (d) {
+                setPopupDistrict(d);
+                const paths = geoJsonToPaths(d.geoJson);
+                if (paths.length > 0 && mapRef.current) {
+                  const bounds = new google.maps.LatLngBounds();
+                  paths.forEach((p) => bounds.extend(p));
+                  mapRef.current.fitBounds(bounds, 60);
+                  // Set popup anchor to the first vertex so the Edit/Delete popup appears
+                  setPopupAnchor(new google.maps.LatLng(paths[0].lat, paths[0].lng));
+                }
+              }
+            }}
+            className="text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/40 max-w-[160px]"
+          >
+            <option value="">Select zone…</option>
+            {districts.map((d) => (
+              <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+            ))}
+          </select>
+        )}
+
         {(totalVertices > 0 || editVertexCount > 0) && (
           <span className="text-[10px] text-slate-400 font-medium">
             {totalVertices + editVertexCount} vertices total
@@ -614,123 +675,159 @@ export default function DistrictDrawingMap({
           </GoogleMap>
         </div>
 
-        {/* Side Panel - Edit/Draft cards */}
+        {/* Side Panel - Edit/Draft cards (draggable + collapsible) */}
         {(draftPolygons.length > 0 || editingId) && (
-          <div className="absolute top-3 right-3 z-10 w-80 max-h-[calc(100%-24px)] overflow-y-auto space-y-2">
-            {/* Editing existing */}
-            {editingId && (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-lg p-4">
-                <div className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-3">
-                  ✏️ Editing Zone
-                </div>
-                <input
-                  type="text"
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl mb-3 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  placeholder="Zone name"
-                />
+          <div
+            ref={panelRef}
+            className={cn(
+              "absolute z-20 w-80 max-h-[calc(100%-24px)] overflow-hidden rounded-2xl shadow-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700",
+              panelDragging && "cursor-grabbing"
+            )}
+            style={{
+              top: panelPos.y || 12,
+              right: panelPos.x === 0 ? 12 : 'auto',
+              left: panelPos.x !== 0 ? panelPos.x : 'auto',
+            }}
+          >
+            {/* Drag header bar */}
+            <div
+              onMouseDown={handlePanelDragStart}
+              className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 cursor-grab active:cursor-grabbing select-none"
+            >
+              <div className="flex items-center gap-2">
+                <GripVertical className="h-4 w-4 text-slate-400" />
+                <span className="text-[11px] font-black text-slate-600 dark:text-slate-300">
+                  {editingId ? 'Edit Zone' : `${draftPolygons.length} New Zone${draftPolygons.length > 1 ? 's' : ''}`}
+                </span>
+              </div>
+              <button
+                onClick={() => setPanelCollapsed(!panelCollapsed)}
+                className="w-6 h-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition"
+                aria-label={panelCollapsed ? 'Expand panel' : 'Minimize panel'}
+              >
+                {panelCollapsed ? <Plus className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+              </button>
+            </div>
 
-                <div className="bg-amber-50 dark:bg-amber-900/10 rounded-xl p-3 mb-3 space-y-2">
-                  <div className="text-[10px] font-black text-amber-700 dark:text-amber-300">
-                    How to edit:
-                  </div>
-                  <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
-                    <GripVertical className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                    <span><strong>Drag vertices</strong> — white dots on the boundary to reshape the zone</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
-                    <Move className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                    <span><strong>Drag the whole shape</strong> — click inside and drag to reposition</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
-                    <Plus className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                    <span><strong>Click an edge</strong> — between two vertices to add a new point</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
-                    <Trash2 className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
-                    <span><strong>Right-click a vertex</strong> — to remove it from the polygon</span>
-                  </div>
-                </div>
+            {/* Collapsible body */}
+            {!panelCollapsed && (
+              <div className="overflow-y-auto max-h-[calc(100%-40px)] space-y-2 p-2">
+                {/* Editing existing */}
+                {editingId && (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-amber-200 dark:border-amber-800 p-3">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-2">
+                      ✏️ Editing Zone
+                    </div>
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      className="w-full px-3 py-2 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl mb-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      placeholder="Zone name"
+                    />
 
-                <div className="flex items-center justify-between text-[10px] text-slate-500 mb-3">
-                  <span>{editVertexCount} vertices</span>
-                </div>
+                    <div className="bg-amber-50 dark:bg-amber-900/10 rounded-xl p-2.5 mb-2 space-y-1.5">
+                      <div className="text-[10px] font-black text-amber-700 dark:text-amber-300">
+                        How to edit:
+                      </div>
+                      <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                        <GripVertical className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                        <span><strong>Drag vertices</strong> — white dots on the boundary to reshape the zone</span>
+                      </div>
+                      <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                        <Move className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                        <span><strong>Drag the whole shape</strong> — click inside and drag to reposition</span>
+                      </div>
+                      <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                        <Plus className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                        <span><strong>Click an edge</strong> — between two vertices to add a new point</span>
+                      </div>
+                      <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                        <Trash2 className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                        <span><strong>Right-click a vertex</strong> — to remove it from the polygon</span>
+                      </div>
+                    </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={saveEdit}
-                    disabled={isSaving || !editingName}
-                    className="flex-1 rounded-xl font-extrabold text-xs gap-1 bg-amber-500 hover:bg-amber-600 text-white"
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mb-2">
+                      <span>{editVertexCount} vertices</span>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={saveEdit}
+                        disabled={isSaving || !editingName}
+                        className="flex-1 rounded-xl font-extrabold text-xs gap-1 bg-amber-500 hover:bg-amber-600 text-white"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={cancelEdit}
+                        className="rounded-xl font-extrabold text-xs gap-1"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Draft (new unsaved) polygons */}
+                {draftPolygons.map((draft, index) => (
+                  <div
+                    key={`draft-panel-${index}`}
+                    className="bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-800 p-3"
                   >
-                    <Check className="h-3.5 w-3.5" />
-                    Save Changes
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={cancelEdit}
-                    className="rounded-xl font-extrabold text-xs gap-1"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                    Cancel
-                  </Button>
-                </div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-2">
+                      🆕 New Zone {index + 1}
+                    </div>
+                    <div className="space-y-1.5 mb-2">
+                      <input
+                        type="text"
+                        value={draft.name}
+                        onChange={(e) => handleUpdateDraft(index, { name: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        placeholder="Zone name"
+                      />
+                      <input
+                        type="text"
+                        value={draft.code}
+                        onChange={(e) =>
+                          handleUpdateDraft(index, {
+                            code: e.target.value.toUpperCase().replace(/\s+/g, '_'),
+                          })
+                        }
+                        className="w-full px-3 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
+                        placeholder="ZONE_CODE"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mb-2">{draft.paths.length} vertices</p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleSaveDraft(index)}
+                        disabled={isSaving || !draft.name || !draft.code}
+                        className="flex-1 rounded-xl font-extrabold text-xs gap-1 bg-blue-500 hover:bg-blue-600 text-white"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRemoveDraft(index)}
+                        className="rounded-xl text-xs gap-1"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-
-            {/* Draft (new unsaved) polygons */}
-            {draftPolygons.map((draft, index) => (
-              <div
-                key={`draft-panel-${index}`}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-blue-200 dark:border-blue-800 shadow-lg p-4"
-              >
-                <div className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-2">
-                  🆕 New Zone {index + 1}
-                </div>
-                <div className="space-y-1.5 mb-2">
-                  <input
-                    type="text"
-                    value={draft.name}
-                    onChange={(e) => handleUpdateDraft(index, { name: e.target.value })}
-                    className="w-full px-3 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    placeholder="Zone name"
-                  />
-                  <input
-                    type="text"
-                    value={draft.code}
-                    onChange={(e) =>
-                      handleUpdateDraft(index, {
-                        code: e.target.value.toUpperCase().replace(/\s+/g, '_'),
-                      })
-                    }
-                    className="w-full px-3 py-1.5 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
-                    placeholder="ZONE_CODE"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 mb-2">{draft.paths.length} vertices</p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleSaveDraft(index)}
-                    disabled={isSaving || !draft.name || !draft.code}
-                    className="flex-1 rounded-xl font-extrabold text-xs gap-1 bg-blue-500 hover:bg-blue-600 text-white"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    Save
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleRemoveDraft(index)}
-                    className="rounded-xl text-xs gap-1"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
           </div>
         )}
 
