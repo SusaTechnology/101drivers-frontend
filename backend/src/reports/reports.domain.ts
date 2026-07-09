@@ -892,6 +892,9 @@ export class ReportsDomain {
   async getInsuranceMileageReport(query: InsuranceMileageReportQueryDto) {
     const baseWhere: Prisma.TrackingSessionWhereInput = {
       ...this.trackingBaseWhere(query),
+      ...(query.status
+        ? { delivery: { status: query.status } }
+        : {}),
     };
 
     // ── Driven hours helper ──
@@ -904,6 +907,11 @@ export class ReportsDomain {
     };
 
     const hasHoursFilter = query.minDrivenHours != null || query.maxDrivenHours != null;
+
+    // When exporting (format != json), strip pagination so all matching rows
+    // are returned. Hard cap at 50,000 rows to prevent OOM.
+    const isExport = query.format && query.format !== "json";
+    const EXPORT_ROW_CAP = 50000;
 
     const rowSelect: Prisma.TrackingSessionSelect = {
       id: true,
@@ -918,6 +926,8 @@ export class ReportsDomain {
           id: true,
           status: true,
           serviceType: true,
+          pickupAddress: true,
+          dropoffAddress: true,
           customer: {
             select: {
               id: true,
@@ -968,12 +978,14 @@ export class ReportsDomain {
       };
 
       // Fetch ALL rows (no DB pagination) since we must filter in-memory.
+      // Cap at EXPORT_ROW_CAP to prevent OOM on large datasets.
       const allRows = await this.prisma.trackingSession.findMany({
         where,
         orderBy: {
           [query.sortBy || "createdAt"]: query.sortOrder,
         } as Prisma.TrackingSessionOrderByWithRelationInput,
         select: rowSelect,
+        ...(isExport ? { take: EXPORT_ROW_CAP } : {}),
       });
 
       // Filter by driven hours range in-memory
@@ -992,7 +1004,9 @@ export class ReportsDomain {
 
       const rows = await this.prisma.trackingSession.findMany({
         where: baseWhere,
-        ...this.paginate(query.page, query.pageSize),
+        ...(isExport
+          ? { take: EXPORT_ROW_CAP }
+          : this.paginate(query.page, query.pageSize) as any),
         orderBy: {
           [query.sortBy || "createdAt"]: query.sortOrder,
         } as Prisma.TrackingSessionOrderByWithRelationInput,
@@ -1016,9 +1030,10 @@ export class ReportsDomain {
       };
     });
 
-    // When hours filter is active, apply in-memory pagination after filtering.
+    // When hours filter is active, apply in-memory pagination after filtering
+    // (unless this is an export — exports return ALL rows).
     // Otherwise DB already handled pagination.
-    const displayRows = hasHoursFilter
+    const displayRows = hasHoursFilter && !isExport
       ? mappedRows.slice(
           (query.page - 1) * query.pageSize,
           query.page * query.pageSize,
@@ -1157,7 +1172,11 @@ export class ReportsDomain {
       groupings: {
         byPeriod,
       },
-      pagination: this.calcPagination(query.page, query.pageSize, totalRows),
+      pagination: this.calcPagination(
+        isExport ? 1 : query.page,
+        isExport ? totalRows : query.pageSize,
+        totalRows
+      ),
     };
   }
 }

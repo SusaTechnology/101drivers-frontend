@@ -36,10 +36,11 @@ import { Navbar } from '../shared/layout/testNavbar';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
-import { useInsuranceMileageReport, formatReportDate, formatReportMiles, downloadReport } from '@/hooks/useAdminReports';
+import { useInsuranceMileageReport, formatReportDate, formatReportMiles } from '@/hooks/useAdminReports';
 import { useCustomerLookup } from '@/hooks/useAdminDashboard';
 import { useDriverLookup } from '@/hooks/useAdminDeliveries';
 import type { InsuranceMileageReportParams, InsuranceMileageReportRow } from '@/types/report';
+import ExportDialog from '@/components/shared/ExportDialog';
 import type { CustomerLookupItem } from '@/types/dashboard';
 import type { DriverLookupItem } from '@/types/delivery';
 import {
@@ -110,6 +111,8 @@ export default function AdminInsuranceReportingPage() {
   const [driverId, setDriverId] = useState('');
   const [groupBy, setGroupBy] = useState<'week' | 'month'>('month');
   const [serviceType, setServiceType] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
   const [sortBy, setSortBy] = useState('startedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [minDrivenHours, setMinDrivenHours] = useState('');
@@ -167,10 +170,11 @@ export default function AdminInsuranceReportingPage() {
     if (customerId.trim()) params.customerId = customerId.trim();
     if (driverId.trim()) params.driverId = driverId.trim();
     if (serviceType && serviceType !== 'all') params.serviceType = serviceType;
+    if (statusFilter) params.status = statusFilter;
     if (minDrivenHours !== '') params.minDrivenHours = parseFloat(minDrivenHours);
     if (maxDrivenHours !== '') params.maxDrivenHours = parseFloat(maxDrivenHours);
     return params;
-  }, [dateFrom, dateTo, customerId, driverId, groupBy, serviceType, sortBy, sortOrder, minDrivenHours, maxDrivenHours, page, pageSize]);
+  }, [dateFrom, dateTo, customerId, driverId, groupBy, serviceType, statusFilter, sortBy, sortOrder, minDrivenHours, maxDrivenHours, page, pageSize]);
 
   const { data, isLoading, isFetching, isError, refetch } = useInsuranceMileageReport(queryParams);
 
@@ -195,6 +199,7 @@ export default function AdminInsuranceReportingPage() {
     setDriverId('');
     setGroupBy('month');
     setServiceType('all');
+    setStatusFilter('');
     setSortBy('startedAt');
     setSortOrder('desc');
     setMinDrivenHours('');
@@ -265,17 +270,9 @@ export default function AdminInsuranceReportingPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => handleExport('csv')}>
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setExportOpen(true)}>
               <Download className="h-3.5 w-3.5 mr-1" />
-              CSV
-            </Button>
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => handleExport('xlsx')}>
-              <Download className="h-3.5 w-3.5 mr-1" />
-              Excel
-            </Button>
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => handleExport('pdf')}>
-              <Download className="h-3.5 w-3.5 mr-1" />
-              PDF
+              Export
             </Button>
             <Button onClick={handleRefresh} disabled={isFetching} size="sm" className="bg-primary text-slate-950 hover:bg-primary/90 rounded-xl">
               <RefreshCw className={cn("h-3.5 w-3.5 mr-1", isFetching && "animate-spin")} />
@@ -678,6 +675,52 @@ export default function AdminInsuranceReportingPage() {
           </Card>
         </section>
       </main>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        reportKey="insurance-mileage"
+        reportTitle="Insurance & Mileage Report"
+        currentFilters={{
+          from: dateFrom,
+          to: dateTo,
+          customerId: customerId.trim(),
+          driverId: driverId.trim(),
+          serviceType: serviceType !== 'all' ? serviceType : '',
+          status: statusFilter,
+          minDrivenHours: minDrivenHours !== '' ? minDrivenHours : '',
+          maxDrivenHours: maxDrivenHours !== '' ? maxDrivenHours : '',
+        }}
+        filterConfigs={[
+          { key: 'from', label: 'Date From', type: 'date' },
+          { key: 'to', label: 'Date To', type: 'date' },
+          {
+            key: 'status',
+            label: 'Delivery Status',
+            type: 'select',
+            options: [
+              { value: 'COMPLETED', label: 'Completed' },
+              { value: 'ACTIVE', label: 'Active' },
+              { value: 'CANCELLED', label: 'Cancelled' },
+              { value: 'BOOKED', label: 'Booked' },
+              { value: 'LISTED', label: 'Listed' },
+            ],
+          },
+          {
+            key: 'serviceType',
+            label: 'Service Type',
+            type: 'select',
+            options: [
+              { value: 'home', label: 'Home' },
+              { value: 'dealer', label: 'Dealer' },
+              { value: 'service', label: 'Service' },
+            ],
+          },
+          { key: 'minDrivenHours', label: 'Min Hours', type: 'number', placeholder: '0' },
+          { key: 'maxDrivenHours', label: 'Max Hours', type: 'number', placeholder: '100' },
+        ]}
+      />
     </div>
   );
 }

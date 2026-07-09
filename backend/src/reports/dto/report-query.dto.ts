@@ -72,6 +72,16 @@ export class BaseReportQueryDto {
   @IsOptional()
   @IsIn(["asc", "desc"])
   sortOrder: "asc" | "desc" = "desc";
+
+  @ApiPropertyOptional({
+    description:
+      "Comma-separated list of column keys to include in the export. " +
+      "When omitted, all columns are included. Example: 'deliveryId,driverName,drivenMiles'. " +
+      "Only applies when format is csv/xlsx/pdf — ignored for json.",
+  })
+  @IsOptional()
+  @IsString()
+  columns?: string;
 }
 
 export class DeliveriesReportQueryDto extends BaseReportQueryDto {
@@ -202,4 +212,9 @@ export class InsuranceMileageReportQueryDto extends BaseReportQueryDto {
   @IsNumber()
   @Min(0)
   maxDrivenHours?: number;
+
+  @ApiPropertyOptional({ enum: EnumDeliveryRequestStatus })
+  @IsOptional()
+  @IsEnum(EnumDeliveryRequestStatus)
+  status?: EnumDeliveryRequestStatus;
 }

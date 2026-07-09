@@ -70,6 +70,7 @@ export class ReportExportService {
     const enterprisePayload = {
       ...payload,
       rows: mappedRows,
+      columns: payload.columns as any,
     };
 
     switch (format) {
@@ -78,7 +79,11 @@ export class ReportExportService {
           format: "csv",
           filename: this.makeFilename(reportKey, "csv"),
           contentType: "text/csv; charset=utf-8",
-          buffer: buildCsvBuffer(typedReportKey, mappedRows),
+          buffer: buildCsvBuffer(
+            typedReportKey,
+            mappedRows,
+            payload.columns as any
+          ),
         };
 
       case "xlsx":

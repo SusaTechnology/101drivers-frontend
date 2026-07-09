@@ -76,7 +76,7 @@ export class ReportsService {
 
   private async finalize(
     reportKey: EnterpriseReportKey,
-    query: { format?: string } & Record<string, any>,
+    query: { format?: string; columns?: string } & Record<string, any>,
     data: {
       rows: any[];
       summary?: Record<string, any>;
@@ -90,7 +90,25 @@ export class ReportsService {
     const pagination = this.buildPagination(data);
 
     const displayRows = mapReportRows(reportKey, data.rows ?? []);
-    const columns = REPORT_COLUMNS[reportKey] ?? [];
+    const allColumns = REPORT_COLUMNS[reportKey] ?? [];
+
+    // Filter columns based on the `columns` query param (comma-separated keys).
+    // Only applies to exports (csv/xlsx/pdf). For JSON, return all columns.
+    let columns = allColumns;
+    if (format !== "json" && query.columns && typeof query.columns === "string") {
+      const requestedKeys = query.columns
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean);
+      if (requestedKeys.length > 0) {
+        const filtered = allColumns.filter((col: any) =>
+          requestedKeys.includes(col.key)
+        );
+        if (filtered.length > 0) {
+          columns = filtered;
+        }
+      }
+    }
 
     const payload = {
       reportKey,

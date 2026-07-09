@@ -13,6 +13,7 @@ import {
   PaymentsReportQueryDto,
   PayoutsReportQueryDto,
 } from "./dto/report-query.dto";
+import { REPORT_COLUMNS } from "./export/report-column.definitions";
 
 @swagger.ApiTags("reports")
 @swagger.ApiBearerAuth()
@@ -120,5 +121,23 @@ export class ReportsController {
   ) {
     const result = await this.service.insuranceMileage(query);
     return this.sendReportResult(res, result);
+  }
+
+  /**
+   * Returns the available columns for a given report key.
+   * Used by the frontend export dialog to build the column selection UI.
+   */
+  @common.Get("columns/:reportKey")
+  @swagger.ApiOkResponse({
+    description: "Available columns for the specified report",
+  })
+  getReportColumns(@common.Param("reportKey") reportKey: string) {
+    const columns = (REPORT_COLUMNS as any)[reportKey];
+    if (!columns) {
+      throw new common.NotFoundException(
+        `Unknown report key: ${reportKey}`
+      );
+    }
+    return { reportKey, columns };
   }
 }

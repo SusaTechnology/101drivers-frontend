@@ -1,6 +1,7 @@
 import {
   EnterpriseReportKey,
   REPORT_COLUMNS,
+  ReportColumnDefinition,
 } from "./report-column.definitions";
 import { formatCellValue } from "./report-formatters";
 
@@ -13,6 +14,7 @@ export async function buildXlsxBuffer(
     summary: Record<string, any>;
     groupings: Record<string, any>;
     rows: Record<string, any>[];
+    columns?: ReportColumnDefinition[];
     pagination: {
       page: number;
       pageSize: number;
@@ -30,7 +32,7 @@ export async function buildXlsxBuffer(
   }
 
   const workbook = new ExcelJS.Workbook();
-  const columns = REPORT_COLUMNS[reportKey];
+  const columns = payload.columns ?? REPORT_COLUMNS[reportKey];
 
   const summarySheet = workbook.addWorksheet("Summary");
   summarySheet.columns = [
