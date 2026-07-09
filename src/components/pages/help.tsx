@@ -173,7 +173,10 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
           </div>
         </div>
 
-        {/* Tab switcher */}
+        {/* Tab switcher — hidden on the driver help page so drivers don't see
+            a way to navigate to customer help. Only shown on the customer help
+            page (and when type is undefined, e.g. a generic landing). */}
+        {isDriver ? null : (
         <div className="flex gap-2 mb-8">
           <Link
             to="/help-customer"
@@ -198,6 +201,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
             Driver Help
           </Link>
         </div>
+        )}
 
         {/* Content */}
         {isCustomer && (
