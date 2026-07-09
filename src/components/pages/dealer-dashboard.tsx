@@ -419,7 +419,10 @@ export default function DealerDashboard() {
       <div className={cn("absolute left-0 right-0 flex justify-center pt-4 transition-all duration-200 z-50", pullDistance > 0 ? "opacity-100" : "opacity-0")} style={{ top: pullDistance * 0.5 }}><RefreshCw className={cn("h-6 w-6 text-lime-500", refreshing && "animate-spin")} /></div>
 
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+      <header
+        className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
         <div className="max-w-[980px] mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center"><div className="w-10 h-10 rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-200"><img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" /></div></Link>

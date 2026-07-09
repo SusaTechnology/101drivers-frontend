@@ -348,37 +348,6 @@
   backdrop-filter: blur(12px);
 }
 
-/*
- * Safe-area top padding for sticky/fixed headers.
- *
- * Problem: Every page header uses `sticky top-0` which pins it to the
- * very top of the viewport. On iPad (Split View, Stage Manager) and
- * iPhone (notch, Dynamic Island), the system status bar overlaps the
- * header — cutting off the logo, title, and buttons.
- *
- * Fix: This is the CSS equivalent of SwiftUI respecting the safe area.
- * `viewport-fit=cover` (set in index.html) makes `env(safe-area-inset-top)`
- * resolve to the actual status-bar/notch height. On desktop browsers it
- * resolves to 0, so this is a no-op there.
- *
- * Targets the `header` element when it's sticky or fixed AND has the
- * `z-50` class (which all app headers use). This avoids touching
- * non-app headers (like the marketing landing page).
- */
-header.sticky.z-50,
-header.fixed.z-50,
-header.sticky.z-40,
-header.fixed.z-40 {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-/*
- * Some headers use inline `style={{ paddingTop: 'env(safe-area-inset-top)' }}`
- * already (e.g. driver-pickup-checklist). For those, the inline style wins
- * and this rule is a harmless no-op. For all others, this rule adds the
- * padding without needing to edit 25+ files.
- */
-
 /* Custom card styles for the dealer sign-in */
 .custom-card {
   @apply rounded-3xl border bg-card p-6 shadow-sm;
