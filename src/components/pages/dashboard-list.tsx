@@ -14,6 +14,7 @@ import {
   RefreshCw,
   MapPin,
   Bell,
+  HelpCircle,
   Inbox,
   Menu,
   X,
@@ -874,7 +875,7 @@ export default function DriverGigBoardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5">
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-200 dark:border-emerald-800/40">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -900,9 +901,16 @@ export default function DriverGigBoardPage() {
             <Link
               to="/driver/dashboard"
               className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
-              aria-label="Settings"
+              aria-label="Map view"
             >
               <Map className="w-4 h-4" />
+            </Link>
+            <Link
+              to="/help-driver"
+              className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
+              aria-label="Help"
+            >
+              <HelpCircle className="w-4 h-4" />
             </Link>
             <Link
               to="/driver/preferences"
