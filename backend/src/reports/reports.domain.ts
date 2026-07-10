@@ -960,6 +960,16 @@ export class ReportsDomain {
               },
             },
           },
+          payment: {
+            select: {
+              amount: true,
+            },
+          },
+          payout: {
+            select: {
+              netAmount: true,
+            },
+          },
         },
       },
     };

@@ -3,7 +3,7 @@ import { EnterpriseReportKey } from "./report-column.definitions";
 type AnyRow = Record<string, any>;
 
 function nameOfBusiness(entity?: AnyRow | null): string {
-  return entity?.businessName ?? entity?.companyName ?? "";
+  return entity?.businessName ?? entity?.companyName ?? entity?.user?.fullName ?? "";
 }
 
 function nameOfUser(entity?: AnyRow | null): string {
@@ -102,7 +102,7 @@ export function mapReportRows(
     case "insurance-mileage":
       return rows.map((r) => ({
         deliveryId: r.deliveryId ?? r.id,
-        status: r.status ?? "",
+        status: r.delivery?.status ?? r.status ?? "",
         drivenMiles: r.drivenMiles ?? 0,
         drivenHours: r.drivenHours ?? 0,
         startedAt: r.startedAt,
@@ -112,6 +112,8 @@ export function mapReportRows(
         pickupAddress: r.delivery?.pickupAddress ?? "",
         dropoffAddress: r.delivery?.dropoffAddress ?? "",
         customerName: nameOfBusiness(r.delivery?.customer),
+        paymentAmount: r.delivery?.payment?.amount ?? null,
+        payoutAmount: r.delivery?.payout?.netAmount ?? null,
       }));
 
     default:

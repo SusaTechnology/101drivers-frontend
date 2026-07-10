@@ -338,45 +338,53 @@ function ReportView({
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
                       <tr>
-                        <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Delivery ID</th>
                         <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Status</th>
                         <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Customer</th>
                         <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Driver</th>
                         <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Route</th>
                         <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Started</th>
+                        <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Stopped</th>
                         <th className="px-4 py-3 text-right font-black uppercase tracking-wider text-slate-400">Miles</th>
                         <th className="px-4 py-3 text-right font-black uppercase tracking-wider text-slate-400">Hours</th>
+                        <th className="px-4 py-3 text-right font-black uppercase tracking-wider text-slate-400">Payment</th>
+                        <th className="px-4 py-3 text-right font-black uppercase tracking-wider text-slate-400">Payout</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.rows.map((row: any) => (
                         <tr key={row.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                          <td className="px-4 py-3 font-mono text-slate-700 dark:text-slate-300">
-                            {row.deliveryId?.slice(-8) ?? '—'}
-                          </td>
                           <td className="px-4 py-3">
                             <Badge variant="outline" className="text-[10px] font-bold">
-                              {row.delivery?.status || row.status || '—'}
+                              {row.status || '—'}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-[120px] truncate">
-                            {row.delivery?.customer?.businessName || row.delivery?.customer?.user?.fullName || '—'}
+                            {row.customerName || '—'}
                           </td>
                           <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-[120px] truncate">
-                            {row.assignedDriver?.user?.fullName || '—'}
+                            {row.driverName || '—'}
                           </td>
                           <td className="px-4 py-3 text-slate-500 max-w-[150px] truncate">
-                            {row.delivery?.pickupAddress ? `${row.delivery.pickupAddress.split(',')[0]} → ` : ''}
-                            {row.delivery?.dropoffAddress ? row.delivery.dropoffAddress.split(',')[0] : '—'}
+                            {row.pickupAddress ? `${row.pickupAddress.split(',')[0]} → ` : ''}
+                            {row.dropoffAddress ? row.dropoffAddress.split(',')[0] : '—'}
                           </td>
                           <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
                             {row.startedAt ? formatReportDate(row.startedAt) : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                            {row.stoppedAt ? formatReportDate(row.stoppedAt) : '—'}
                           </td>
                           <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-700 dark:text-slate-300">
                             {formatReportMiles(row.drivenMiles)}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">
                             {row.drivenHours != null ? row.drivenHours.toFixed(1) : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
+                            {row.paymentAmount != null ? `$${row.paymentAmount.toFixed(2)}` : '—'}
+                          </td>
+                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">
+                            {row.payoutAmount != null ? `$${row.payoutAmount.toFixed(2)}` : '—'}
                           </td>
                         </tr>
                       ))}
