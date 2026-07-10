@@ -6,12 +6,8 @@ import {
 import { formatCellValue } from "./report-formatters";
 
 /**
- * Builds a human-readable PDF with:
- *   - Page 1: Summary cover (title, generated date, filters, summary stats)
- *   - Page 2+: Table layout with header row, zebra-striped data rows,
- *     auto-sized columns, repeating headers on each page, page numbers
- *
- * No row cap — renders all matching rows with proper pagination.
+ * Builds a human-readable PDF with a table layout.
+ * No summary page. No row cap. Page numbers on every page.
  */
 export async function buildPdfBuffer(
   reportKey: EnterpriseReportKey,
@@ -35,11 +31,9 @@ export async function buildPdfBuffer(
   const doc = new PDFDocument({
     size: "A4",
     margin: 40,
-    bufferPages: true, // enables page numbering via doc.bufferedPageRange
+    // No bufferPages — we track page numbers manually
   });
   const chunks: Buffer[] = [];
-
-  // Use payload.columns if provided (filtered by user), otherwise all
   const columns = payload.columns ?? REPORT_COLUMNS[reportKey];
   const rows = payload.rows ?? [];
 
@@ -47,18 +41,18 @@ export async function buildPdfBuffer(
   const PAGE_WIDTH = doc.page.width;
   const MARGIN = 40;
   const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-  const HEADER_BG = "#e2e8f0"; // slate-200
-  const ROW_BG_ALT = "#f8fafc"; // slate-50
+  const HEADER_BG = "#e2e8f0";
+  const ROW_BG_ALT = "#f8fafc";
   const ROW_BG = "#ffffff";
-  const TEXT_COLOR = "#1e293b"; // slate-800
-  const MUTED_COLOR = "#64748b"; // slate-500
+  const TEXT_COLOR = "#1e293b";
+  const MUTED_COLOR = "#64748b";
   const ROW_HEIGHT = 18;
   const HEADER_HEIGHT = 22;
   const DATA_FONT_SIZE = 8;
   const HEADER_FONT_SIZE = 8;
+  const PAGE_NUMBER_Y = doc.page.height - 25;
 
   // ── Calculate column widths ──
-  // Distribute width proportionally based on label length, with a minimum.
   const minColWidth = 50;
   const totalLabelChars = columns.reduce(
     (sum, col) => sum + Math.max(col.label.length, 8),
@@ -66,13 +60,25 @@ export async function buildPdfBuffer(
   );
   const colWidths = columns.map((col) => {
     const proportion = Math.max(col.label.length, 8) / totalLabelChars;
-    return Math.max(minColWidth, (CONTENT_WIDTH * proportion));
+    return Math.max(minColWidth, CONTENT_WIDTH * proportion);
   });
-
-  // Scale to fit content width exactly
   const totalColWidth = colWidths.reduce((sum, w) => sum + w, 0);
   const scaleFactor = CONTENT_WIDTH / totalColWidth;
   const scaledWidths = colWidths.map((w) => w * scaleFactor);
+
+  // ── Track page count manually ──
+  let pageCount = 1;
+
+  // ── Page number helper (writes at bottom of current page) ──
+  const writePageNumber = (current: number, total: number) => {
+    doc.fontSize(8).font("Helvetica").fillColor(MUTED_COLOR);
+    doc.text(
+      `Page ${current} of ${total}`,
+      MARGIN,
+      PAGE_NUMBER_Y,
+      { align: "center", width: CONTENT_WIDTH, lineBreak: false }
+    );
+  };
 
   return await new Promise<Buffer>((resolve, reject) => {
     doc.on("data", (chunk: Buffer | Uint8Array) => {
@@ -81,14 +87,13 @@ export async function buildPdfBuffer(
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    // ════════════════════════════════════════════════════════════
-    // Data Table — starts on page 1, no summary cover
-    // ════════════════════════════════════════════════════════════
+    // Calculate total pages first
+    const rowsPerPage = Math.floor((doc.page.height - MARGIN * 2 - HEADER_HEIGHT) / ROW_HEIGHT);
+    const totalPages = rows.length === 0 ? 1 : Math.ceil(rows.length / rowsPerPage);
 
     let y = MARGIN;
     let rowIndex = 0;
     let currentPageRows = 0;
-    const rowsPerPage = Math.floor((doc.page.height - MARGIN * 2 - HEADER_HEIGHT) / ROW_HEIGHT);
 
     // Draw table header
     const drawHeader = () => {
@@ -101,6 +106,7 @@ export async function buildPdfBuffer(
         doc.text(text, x + 3, y + 6, {
           width: scaledWidths[i] - 6,
           ellipsis: true,
+          lineBreak: false,
         });
         x += scaledWidths[i];
       }
@@ -110,16 +116,22 @@ export async function buildPdfBuffer(
 
     drawHeader();
 
-    // If there are no rows, remove the empty page
     if (rows.length === 0) {
+      doc.fillColor(MUTED_COLOR).fontSize(10).font("Helvetica");
       doc.text("No data found for the selected filters.", MARGIN, y + 20);
-    } else {
+      writePageNumber(1, 1);
+      doc.end();
+      return;
+    }
+
     // Draw data rows
-    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-      const row = rows[rowIdx];
-      // Check if we need a new page — but only if there are more rows after this one
-      if (currentPageRows >= rowsPerPage && rowIdx < rows.length) {
+    for (const row of rows) {
+      // Check if we need a new page
+      if (currentPageRows >= rowsPerPage) {
+        // Write page number on the current page before moving on
+        writePageNumber(pageCount, totalPages);
         doc.addPage();
+        pageCount++;
         y = MARGIN;
         drawHeader();
       }
@@ -139,6 +151,7 @@ export async function buildPdfBuffer(
         doc.text(text, x + 3, y + 4, {
           width: scaledWidths[i] - 6,
           ellipsis: true,
+          lineBreak: false,
         });
         x += scaledWidths[i];
       }
@@ -147,22 +160,9 @@ export async function buildPdfBuffer(
       rowIndex++;
       currentPageRows++;
     }
-    } // close else (rows.length > 0)
 
-    // ════════════════════════════════════════════════════════════
-    // PAGE NUMBERS — add to every page
-    // ════════════════════════════════════════════════════════════
-    const range = doc.bufferedPageRange();
-    for (let i = range.start; i < range.start + range.count; i++) {
-      doc.switchToPage(i);
-      doc.fontSize(8).font("Helvetica").fillColor(MUTED_COLOR);
-      doc.text(
-        `Page ${i + 1} of ${range.count}`,
-        MARGIN,
-        doc.page.height - 25,
-        { align: "center", width: CONTENT_WIDTH }
-      );
-    }
+    // Write page number on the last page
+    writePageNumber(pageCount, totalPages);
 
     doc.end();
   });
@@ -178,57 +178,4 @@ function truncate(text: string, maxWidth: number, fontSize: number, doc: any): s
     truncated = truncated.slice(0, -1);
   }
   return truncated.length > 0 ? truncated + "…" : "";
-}
-
-function formatDate(d: Date): string {
-  return d
-    .toISOString()
-    .replace("T", " ")
-    .replace(".000Z", " UTC");
-}
-
-function formatNumber(value: any): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "number") {
-    return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
-  }
-  return String(value);
-}
-
-function formatFilterLabel(key: string): string {
-  const labels: Record<string, string> = {
-    from: "Date From",
-    to: "Date To",
-    customerId: "Customer ID",
-    driverId: "Driver ID",
-    status: "Delivery Status",
-    serviceType: "Service Type",
-    minDrivenHours: "Min Driven Hours",
-    maxDrivenHours: "Max Driven Hours",
-    groupBy: "Group By",
-    sortBy: "Sort By",
-    sortOrder: "Sort Order",
-  };
-  return labels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
-}
-
-function formatFilterValue(key: string, value: any): string {
-  if (value === null || value === undefined || value === "") return "";
-  if (key === "from" || key === "to") {
-    return formatDate(new Date(value));
-  }
-  return String(value);
-}
-
-function formatSummaryLabel(key: string): string {
-  const labels: Record<string, string> = {
-    totalTrackingSessions: "Total Tracking Sessions",
-    totalDrivenMiles: "Total Driven Miles",
-    averageMilesPerTrip: "Average Miles Per Trip",
-    totalDrivenHours: "Total Driven Hours",
-    averageDrivenHoursPerTrip: "Average Driven Hours Per Trip",
-    startedCount: "Sessions Started",
-    stoppedCount: "Sessions Stopped",
-  };
-  return labels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
 }
