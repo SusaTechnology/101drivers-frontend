@@ -40,7 +40,8 @@ import { useInsuranceMileageReport, formatReportDate, formatReportMiles } from '
 import { useCustomerLookup } from '@/hooks/useAdminDashboard';
 import { useDriverLookup } from '@/hooks/useAdminDeliveries';
 import type { InsuranceMileageReportParams, InsuranceMileageReportRow } from '@/types/report';
-import ExportDialog from '@/components/shared/ExportDialog';
+import { DataTable } from '@/components/shared/DataTable';
+import type { ColumnDef } from '@tanstack/react-table';
 import type { CustomerLookupItem } from '@/types/dashboard';
 import type { DriverLookupItem } from '@/types/delivery';
 import {
@@ -117,6 +118,11 @@ export default function AdminInsuranceReportingPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [minDrivenHours, setMinDrivenHours] = useState('');
   const [maxDrivenHours, setMaxDrivenHours] = useState('');
+  const [minMiles, setMinMiles] = useState('');
+  const [maxMiles, setMaxMiles] = useState('');
+  const [minPayment, setMinPayment] = useState('');
+  const [maxPayment, setMaxPayment] = useState('');
+  const [pickupSearch, setPickupSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
 
@@ -173,8 +179,13 @@ export default function AdminInsuranceReportingPage() {
     if (statusFilter) params.status = statusFilter;
     if (minDrivenHours !== '') params.minDrivenHours = parseFloat(minDrivenHours);
     if (maxDrivenHours !== '') params.maxDrivenHours = parseFloat(maxDrivenHours);
+    if (minMiles) (params as any).minDrivenMiles = parseFloat(minMiles);
+    if (maxMiles) (params as any).maxDrivenMiles = parseFloat(maxMiles);
+    if (minPayment) (params as any).minPaymentAmount = parseFloat(minPayment);
+    if (maxPayment) (params as any).maxPaymentAmount = parseFloat(maxPayment);
+    if (pickupSearch) (params as any).pickupAddressSearch = pickupSearch;
     return params;
-  }, [dateFrom, dateTo, customerId, driverId, groupBy, serviceType, statusFilter, sortBy, sortOrder, minDrivenHours, maxDrivenHours, page, pageSize]);
+  }, [dateFrom, dateTo, customerId, driverId, groupBy, serviceType, statusFilter, sortBy, sortOrder, minDrivenHours, maxDrivenHours, minMiles, maxMiles, minPayment, maxPayment, pickupSearch, page, pageSize]);
 
   const { data, isLoading, isFetching, isError, refetch } = useInsuranceMileageReport(queryParams);
 
@@ -204,52 +215,100 @@ export default function AdminInsuranceReportingPage() {
     setSortOrder('desc');
     setMinDrivenHours('');
     setMaxDrivenHours('');
+    setMinMiles('');
+    setMaxMiles('');
+    setMinPayment('');
+    setMaxPayment('');
+    setPickupSearch('');
     setPage(1);
     setCustomerSearch('');
     setDriverSearch('');
   }, []);
 
-  const ReportRow = ({ row }: { row: InsuranceMileageReportRow }) => (
-    <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
-      <td className="px-4 py-3">
-        <Link
-          to="/admin-delivery-detail"
-          search={{ deliveryId: row.deliveryId }}
-          className="text-sm font-black text-primary hover:underline"
-        >
-          {row.deliveryId.slice(-8).toUpperCase()}
-        </Link>
-      </td>
-      <td className="px-4 py-3">
-        <Badge variant="outline" className="text-[10px]">
-          {row.status}
-        </Badge>
-      </td>
-      <td className="px-4 py-3 text-sm font-bold text-slate-900 dark:text-white">
-        {formatReportMiles(row.drivenMiles)}
-      </td>
-      <td className="px-4 py-3 text-sm font-bold text-slate-900 dark:text-white">
-        {formatDrivenHours(row.drivenHours)}
-      </td>
-      <td className="px-4 py-3 text-xs text-slate-500">
-        {formatReportDate(row.startedAt)}
-      </td>
-      <td className="px-4 py-3 text-xs text-slate-500">
-        {formatReportDate(row.stoppedAt)}
-      </td>
-      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
-        {row.delivery?.pickupAddress && (
-          <div className="max-w-[150px] truncate">{row.delivery.pickupAddress}</div>
-        )}
-      </td>
-      <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
-        {row.assignedDriver?.fullName || '—'}
-      </td>
-      <td className="px-4 py-3 text-xs text-slate-500">
-        {row.period}
-      </td>
-    </tr>
-  );
+  const handleSortChange = (newSortBy: string, newSortOrder: 'asc' | 'desc') => {
+    setSortBy(newSortBy);
+    setSortOrder(newSortOrder);
+    setPage(1);
+  };
+
+  // Column definitions for TanStack Table
+  const columns: ColumnDef<any>[] = useMemo(() => [
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      size: 90,
+      meta: { label: 'Status', sortable: true, sortKey: 'delivery.status' },
+      cell: ({ getValue }) => <Badge variant="outline" className="text-[10px] font-bold">{getValue() || '—'}</Badge>,
+    },
+    {
+      accessorKey: 'customerName',
+      header: 'Customer',
+      size: 120,
+      meta: { label: 'Customer', sortable: false },
+      cell: ({ getValue }) => <span className="text-xs">{getValue() || '—'}</span>,
+    },
+    {
+      accessorKey: 'driverName',
+      header: 'Driver',
+      size: 120,
+      meta: { label: 'Driver', sortable: false },
+      cell: ({ getValue }) => <span className="text-xs">{getValue() || '—'}</span>,
+    },
+    {
+      id: 'route',
+      header: 'Route',
+      size: 180,
+      meta: { label: 'Route', sortable: false },
+      cell: ({ row }) => (
+        <span className="text-xs">
+          {row.original.pickupAddress ? `${row.original.pickupAddress.split(',')[0]} → ` : ''}
+          {row.original.dropoffAddress ? row.original.dropoffAddress.split(',')[0] : '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'startedAt',
+      header: 'Started',
+      size: 130,
+      meta: { label: 'Started', sortable: true, sortKey: 'startedAt' },
+      cell: ({ getValue }) => <span className="text-xs">{getValue() ? formatReportDate(getValue()) : '—'}</span>,
+    },
+    {
+      accessorKey: 'stoppedAt',
+      header: 'Stopped',
+      size: 130,
+      meta: { label: 'Stopped', sortable: true, sortKey: 'stoppedAt' },
+      cell: ({ getValue }) => <span className="text-xs">{getValue() ? formatReportDate(getValue()) : '—'}</span>,
+    },
+    {
+      accessorKey: 'drivenMiles',
+      header: 'Miles',
+      size: 70,
+      meta: { label: 'Miles', sortable: true, sortKey: 'drivenMiles' },
+      cell: ({ getValue }) => <span className="text-xs font-bold tabular-nums">{formatReportMiles(getValue())}</span>,
+    },
+    {
+      accessorKey: 'drivenHours',
+      header: 'Hours',
+      size: 60,
+      meta: { label: 'Hours', sortable: true, sortKey: 'drivenHours' },
+      cell: ({ getValue }) => <span className="text-xs tabular-nums">{getValue() != null ? formatDrivenHours(getValue()) : '—'}</span>,
+    },
+    {
+      accessorKey: 'paymentAmount',
+      header: 'Payment',
+      size: 80,
+      meta: { label: 'Payment', sortable: false },
+      cell: ({ getValue }) => <span className="text-xs tabular-nums">{getValue() != null ? `$${getValue().toFixed(2)}` : '—'}</span>,
+    },
+    {
+      accessorKey: 'payoutAmount',
+      header: 'Payout',
+      size: 80,
+      meta: { label: 'Payout', sortable: false },
+      cell: ({ getValue }) => <span className="text-xs tabular-nums">{getValue() != null ? `$${getValue().toFixed(2)}` : '—'}</span>,
+    },
+  ], []);
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
@@ -555,7 +614,7 @@ export default function AdminInsuranceReportingPage() {
                 </div>
                 {/* Min Driven Hours */}
                 <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Driven Hrs</Label>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Hrs</Label>
                   <Input
                     type="number"
                     min="0"
@@ -568,7 +627,7 @@ export default function AdminInsuranceReportingPage() {
                 </div>
                 {/* Max Driven Hours */}
                 <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Driven Hrs</Label>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Hrs</Label>
                   <Input
                     type="number"
                     min="0"
@@ -578,6 +637,80 @@ export default function AdminInsuranceReportingPage() {
                     onChange={(e) => { setMaxDrivenHours(e.target.value); setPage(1); }}
                     className="mt-1.5 rounded-xl h-9 text-sm"
                   />
+                </div>
+                {/* Min Miles */}
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Miles</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={minMiles}
+                    onChange={(e) => { setMinMiles(e.target.value); setPage(1); }}
+                    className="mt-1.5 rounded-xl h-9 text-sm"
+                  />
+                </div>
+                {/* Max Miles */}
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Miles</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="Any"
+                    value={maxMiles}
+                    onChange={(e) => { setMaxMiles(e.target.value); setPage(1); }}
+                    className="mt-1.5 rounded-xl h-9 text-sm"
+                  />
+                </div>
+                {/* Min Payment */}
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Payment $</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={minPayment}
+                    onChange={(e) => { setMinPayment(e.target.value); setPage(1); }}
+                    className="mt-1.5 rounded-xl h-9 text-sm"
+                  />
+                </div>
+                {/* Max Payment */}
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Payment $</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="Any"
+                    value={maxPayment}
+                    onChange={(e) => { setMaxPayment(e.target.value); setPage(1); }}
+                    className="mt-1.5 rounded-xl h-9 text-sm"
+                  />
+                </div>
+                {/* Pickup Address Search */}
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pickup Address</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Los Angeles"
+                    value={pickupSearch}
+                    onChange={(e) => { setPickupSearch(e.target.value); setPage(1); }}
+                    className="mt-1.5 rounded-xl h-9 text-sm"
+                  />
+                </div>
+                {/* Status Filter */}
+                <div>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</Label>
+                  <Select value={statusFilter || 'all'} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1); }}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      <SelectItem value="COMPLETED">Completed</SelectItem>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="BOOKED">Booked</SelectItem>
+                      <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                      <SelectItem value="EXPIRED">Expired</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 {/* Group By */}
                 <div>
@@ -620,107 +753,143 @@ export default function AdminInsuranceReportingPage() {
           </Card>
         </section>
 
-        {/* Data Table */}
+        {/* Data Table — TanStack Table with resizable columns */}
         <section>
           <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
             <CardContent className="p-0">
-              {isLoading ? (
-                <div className="p-6 space-y-3">{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}</div>
-              ) : isError ? (
-                <div className="p-8 text-center">
-                  <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-3" />
-                  <p className="text-rose-700 dark:text-rose-300 font-bold">Failed to load report</p>
-                  <Button onClick={() => refetch()} variant="outline" className="mt-4 rounded-xl">Try Again</Button>
-                </div>
-              ) : data?.rows?.length === 0 ? (
-                <div className="p-8 text-center">
-                  <Car className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-600 dark:text-slate-400 font-medium">No mileage data found</p>
-                  <p className="text-slate-500 text-sm mt-1">Try adjusting your filters</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Delivery</th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Status</th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Miles</th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-amber-500 text-left">Driven Hours</th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Started</th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Stopped</th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Route</th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Driver</th>
-                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Period</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data?.rows?.map(row => <ReportRow key={row.id} row={row} />)}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {data?.pagination && data.pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                  <p className="text-xs text-slate-500">Showing {((data.pagination.page - 1) * data.pagination.pageSize) + 1} - {Math.min(data.pagination.page * data.pagination.pageSize, data.pagination.totalRows)} of {data.pagination.totalRows}</p>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setPage(p => p - 1)} disabled={page === 1} className="rounded-xl"><ChevronLeft className="w-4 h-4" /></Button>
-                    <span className="text-xs text-slate-500">Page {page} of {data.pagination.totalPages}</span>
-                    <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={page >= data.pagination.totalPages} className="rounded-xl"><ChevronRight className="w-4 h-4" /></Button>
-                  </div>
-                </div>
-              )}
+              <DataTable
+                columns={columns}
+                data={data?.displayRows || data?.rows || []}
+                isLoading={isLoading}
+                isError={isError}
+                page={page}
+                pageSize={pageSize}
+                totalRows={data?.pagination?.totalRows ?? 0}
+                totalPages={data?.pagination?.totalPages ?? 1}
+                onPageChange={setPage}
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSortChange={handleSortChange}
+                emptyMessage="No mileage data found. Try adjusting your filters."
+              />
             </CardContent>
           </Card>
         </section>
       </main>
 
-      {/* Export Dialog */}
-      <ExportDialog
+      {/* Export Dialog — uses page filters, no redundant filter inputs */}
+      <AdminExportDialog
         open={exportOpen}
         onOpenChange={setExportOpen}
-        reportKey="insurance-mileage"
-        reportTitle="Insurance & Mileage Report"
-        currentFilters={{
-          from: dateFrom,
-          to: dateTo,
-          customerId: customerId.trim(),
-          driverId: driverId.trim(),
-          serviceType: serviceType !== 'all' ? serviceType : '',
-          status: statusFilter,
-          minDrivenHours: minDrivenHours !== '' ? minDrivenHours : '',
-          maxDrivenHours: maxDrivenHours !== '' ? maxDrivenHours : '',
-        }}
-        filterConfigs={[
-          { key: 'from', label: 'Date From', type: 'date' },
-          { key: 'to', label: 'Date To', type: 'date' },
-          {
-            key: 'status',
-            label: 'Delivery Status',
-            type: 'select',
-            options: [
-              { value: 'COMPLETED', label: 'Completed' },
-              { value: 'ACTIVE', label: 'Active' },
-              { value: 'CANCELLED', label: 'Cancelled' },
-              { value: 'BOOKED', label: 'Booked' },
-              { value: 'LISTED', label: 'Listed' },
-            ],
-          },
-          {
-            key: 'serviceType',
-            label: 'Service Type',
-            type: 'select',
-            options: [
-              { value: 'home', label: 'Home' },
-              { value: 'dealer', label: 'Dealer' },
-              { value: 'service', label: 'Service' },
-            ],
-          },
-          { key: 'minDrivenHours', label: 'Min Hours', type: 'number', placeholder: '0' },
-          { key: 'maxDrivenHours', label: 'Max Hours', type: 'number', placeholder: '100' },
-        ]}
+        pageFilters={queryParams}
+        totalRows={data?.pagination?.totalRows ?? 0}
       />
     </div>
   );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Admin Export Dialog — same as portal: columns + format + row count notice
+// ════════════════════════════════════════════════════════════════════════
+
+function AdminExportDialog({ open, onOpenChange, pageFilters, totalRows }: any) {
+  const [format, setFormat] = useState<'csv' | 'xlsx' | 'pdf'>('csv')
+  const [isExporting, setIsExporting] = useState(false)
+  const [availableColumns, setAvailableColumns] = useState<Array<{ key: string; label: string }>>([])
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
+  const [columnsLoading, setColumnsLoading] = useState(false)
+
+  useEffect(() => {
+    if (open && availableColumns.length === 0) {
+      setColumnsLoading(true)
+      fetch(`${import.meta.env.VITE_API_URL}/api/reports/columns/insurance-mileage`)
+        .then(r => { if (!r.ok) throw new Error(); return r.json() })
+        .then(data => { const cols = data.columns || []; setAvailableColumns(cols); setSelectedColumns(new Set(cols.map((c: any) => c.key))) })
+        .catch(() => toast.error('Failed to load columns'))
+        .finally(() => setColumnsLoading(false))
+    }
+  }, [open, availableColumns.length])
+
+  const toggleColumn = (key: string) => {
+    setSelectedColumns(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  const toggleAll = () => {
+    selectedColumns.size === availableColumns.length ? setSelectedColumns(new Set()) : setSelectedColumns(new Set(availableColumns.map(c => c.key)))
+  }
+
+  const handleExport = async () => {
+    if (selectedColumns.size === 0) { toast.error('Select at least one column'); return }
+    setIsExporting(true)
+    try {
+      const params = new URLSearchParams()
+      params.set('format', format)
+      Object.entries(pageFilters).forEach(([k, v]: any) => {
+        if (v !== undefined && v !== null && v !== '' && k !== 'page' && k !== 'pageSize') params.set(k, String(v))
+      })
+      params.set('columns', Array.from(selectedColumns).join(','))
+
+      const { downloadReport } = await import('@/hooks/useAdminReports')
+      await downloadReport('insurance-mileage', Object.fromEntries(params.entries()), format)
+      toast.success(`Report downloaded as ${format.toUpperCase()}`)
+      onOpenChange(false)
+    } catch (error: any) { toast.error('Export failed', { description: error?.message || 'Please try again' }) }
+    finally { setIsExporting(false) }
+  }
+
+  if (!open) return null
+  const allSelected = selectedColumns.size === availableColumns.length
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => onOpenChange(false)}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[560px] w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-black flex items-center gap-2 mb-4">
+          <Download className="w-5 h-5 text-primary" /> Export Report
+        </h2>
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/40 mb-4">
+          <AlertCircle className="w-4 h-4 text-blue-500 shrink-0" />
+          <div className="text-xs text-blue-700 dark:text-blue-300">
+            <span className="font-bold">Filters from the page will be applied.</span> This export will contain{' '}
+            <span className="font-black">{totalRows.toLocaleString()}</span> row{totalRows !== 1 ? 's' : ''}.
+            {totalRows > 10000 && <span className="text-amber-600 dark:text-amber-400"> This may take a moment.</span>}
+          </div>
+        </div>
+        <div className="space-y-3 mb-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Columns ({selectedColumns.size}/{availableColumns.length})</Label>
+            <button onClick={toggleAll} className="text-[11px] font-bold text-primary hover:underline">{allSelected ? 'Deselect All' : 'Select All'}</button>
+          </div>
+          {columnsLoading ? (
+            <div className="flex justify-center py-4"><div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+          ) : (
+            <div className="grid grid-cols-2 gap-1.5 p-1">
+              {availableColumns.map((col) => (
+                <label key={col.key} className={cn("flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition text-sm", selectedColumns.has(col.key) ? "border-primary bg-primary/5 font-bold text-slate-900 dark:text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800")}>
+                  <input type="checkbox" checked={selectedColumns.has(col.key)} onChange={() => toggleColumn(col.key)} className="w-4 h-4 rounded accent-lime-500" />
+                  <span className="truncate">{col.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-end gap-4 pt-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="space-y-2">
+            <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Format</Label>
+            <div className="flex gap-2">
+              {(['csv', 'xlsx', 'pdf'] as const).map((fmt) => (
+                <button key={fmt} onClick={() => setFormat(fmt)} className={cn("px-4 py-2 rounded-xl border-2 transition text-[11px] font-extrabold", format === fmt ? "border-primary bg-primary/5 text-primary" : "border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800")}>
+                  {fmt === 'csv' ? 'CSV' : fmt === 'xlsx' ? 'Excel' : 'PDF'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outline" className="rounded-xl font-bold" onClick={() => onOpenChange(false)} disabled={isExporting}>Cancel</Button>
+            <Button className="lime-btn rounded-xl font-extrabold gap-2" onClick={handleExport} disabled={isExporting || selectedColumns.size === 0}>
+              {isExporting ? (<><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />Exporting...</>) : (<><Download className="w-4 h-4" />Export</>)}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
