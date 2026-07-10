@@ -102,4 +102,23 @@ export class AuthController {
   ): Promise<{ success: boolean; message: string }> {
     return this.authService.resetPassword(body);
   }
+
+  /**
+   * Insurance Portal Login — validates a shared portal password and returns
+   * a JWT for a designated admin account. No per-user credentials needed.
+   * Used by the standalone /insurance-portal page.
+   */
+  @Post("insurance-portal-login")
+  @HttpCode(HttpStatus.OK)
+  async insurancePortalLogin(
+    @Body() body: { password: string },
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response
+  ): Promise<UserInfo> {
+    return this.authService.insurancePortalLogin(
+      body?.password ?? "",
+      request,
+      response
+    );
+  }
 }
