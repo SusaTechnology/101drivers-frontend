@@ -100,7 +100,6 @@ export const REPORT_COLUMNS: Record<
     { key: "paidAt", label: "Paid At", type: "datetime", width: 22 },
   ],
   "insurance-mileage": [
-    { key: "deliveryId", label: "Delivery ID", width: 22 },
     { key: "status", label: "Status", type: "status", width: 18 },
     { key: "drivenMiles", label: "Driven Miles", type: "miles", width: 14 },
     { key: "drivenHours", label: "Driven Hours", type: "number", width: 14 },

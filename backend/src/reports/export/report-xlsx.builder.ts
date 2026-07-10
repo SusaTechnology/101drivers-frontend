@@ -34,29 +34,8 @@ export async function buildXlsxBuffer(
   const workbook = new ExcelJS.Workbook();
   const columns = payload.columns ?? REPORT_COLUMNS[reportKey];
 
-  const summarySheet = workbook.addWorksheet("Summary");
-  summarySheet.columns = [
-    { header: "Field", key: "field", width: 28 },
-    { header: "Value", key: "value", width: 80 },
-  ];
-
-  const summaryRows = [
-    ["Report", payload.reportKey],
-    ["Generated At", payload.generatedAt],
-    ["Page", payload.pagination.page],
-    ["Page Size", payload.pagination.pageSize],
-    ["Total Rows", payload.pagination.totalRows],
-    ["Total Pages", payload.pagination.totalPages],
-    ["Filters", JSON.stringify(payload.filtersApplied || {})],
-    ["Summary", JSON.stringify(payload.summary || {})],
-  ];
-
-  for (const [field, value] of summaryRows) {
-    summarySheet.addRow({ field, value });
-  }
-
-  summarySheet.getRow(1).font = { bold: true };
-
+  // Only the data sheet — no Summary or Groupings sheets.
+  // The export should contain only the table data.
   const dataSheet = workbook.addWorksheet("Data");
   dataSheet.columns = columns.map((c) => ({
     header: c.label,
@@ -79,20 +58,6 @@ export async function buildXlsxBuffer(
       normalized[column.key] = formatCellValue(row[column.key], column);
     }
     dataSheet.addRow(normalized);
-  }
-
-  const groupingsSheet = workbook.addWorksheet("Groupings");
-  groupingsSheet.columns = [
-    { header: "Grouping", key: "grouping", width: 30 },
-    { header: "Value", key: "value", width: 100 },
-  ];
-  groupingsSheet.getRow(1).font = { bold: true };
-
-  for (const [grouping, value] of Object.entries(payload.groupings || {})) {
-    groupingsSheet.addRow({
-      grouping,
-      value: JSON.stringify(value),
-    });
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

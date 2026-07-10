@@ -82,60 +82,8 @@ export async function buildPdfBuffer(
     doc.on("error", reject);
 
     // ════════════════════════════════════════════════════════════
-    // PAGE 1 — Summary Cover
+    // Data Table — starts on page 1, no summary cover
     // ════════════════════════════════════════════════════════════
-    const reportTitle = payload.reportKey
-      .replace(/-/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase()) + " Report";
-
-    doc.fillColor(TEXT_COLOR);
-    doc.fontSize(22).font("Helvetica-Bold").text(reportTitle, { align: "center" });
-    doc.moveDown(0.3);
-
-    doc.fontSize(10).font("Helvetica").fillColor(MUTED_COLOR);
-    doc.text(`Generated: ${formatDate(new Date(payload.generatedAt))}`, {
-      align: "center",
-    });
-    doc.moveDown(1);
-
-    // ── Filters Applied ──
-    if (payload.filtersApplied && Object.keys(payload.filtersApplied).length > 0) {
-      doc.fontSize(12).font("Helvetica-Bold").fillColor(TEXT_COLOR);
-      doc.text("Filters Applied", MARGIN, doc.y);
-      doc.moveDown(0.3);
-
-      doc.fontSize(9).font("Helvetica").fillColor(MUTED_COLOR);
-      for (const [key, value] of Object.entries(payload.filtersApplied)) {
-        if (key === "format" || key === "columns") continue; // skip meta filters
-        const displayValue = formatFilterValue(key, value);
-        if (displayValue) {
-          doc.text(`${formatFilterLabel(key)}: ${displayValue}`, MARGIN + 10);
-        }
-      }
-      doc.moveDown(1);
-    }
-
-    // ── Summary Stats ──
-    if (payload.summary && Object.keys(payload.summary).length > 0) {
-      doc.fontSize(12).font("Helvetica-Bold").fillColor(TEXT_COLOR);
-      doc.text("Summary", MARGIN, doc.y);
-      doc.moveDown(0.3);
-
-      doc.fontSize(10).font("Helvetica").fillColor(TEXT_COLOR);
-      for (const [key, value] of Object.entries(payload.summary)) {
-        doc.text(`${formatSummaryLabel(key)}: ${formatNumber(value)}`, MARGIN + 10);
-      }
-      doc.moveDown(1);
-    }
-
-    // ── Row count ──
-    doc.fontSize(10).font("Helvetica-Oblique").fillColor(MUTED_COLOR);
-    doc.text(`Total rows in this report: ${rows.length.toLocaleString()}`);
-
-    // ════════════════════════════════════════════════════════════
-    // PAGE 2+ — Data Table
-    // ════════════════════════════════════════════════════════════
-    doc.addPage();
 
     let y = MARGIN;
     let rowIndex = 0;

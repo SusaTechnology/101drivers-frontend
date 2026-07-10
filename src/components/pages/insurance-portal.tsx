@@ -435,7 +435,33 @@ function PortalExportDialog({
   const [format, setFormat] = useState<'csv' | 'xlsx' | 'pdf'>('csv')
   const [filters, setFilters] = useState<Record<string, any>>({})
   const [isExporting, setIsExporting] = useState(false)
+  const [availableColumns, setAvailableColumns] = useState<Array<{ key: string; label: string }>>([])
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
+  const [columnsLoading, setColumnsLoading] = useState(false)
 
+  // Fetch available columns when dialog opens
+  useEffect(() => {
+    if (open && availableColumns.length === 0) {
+      setColumnsLoading(true)
+      fetch(`${API_BASE}/api/insurance-portal/columns`, {
+        headers: { 'X-Portal-Password': portalPassword },
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to load columns')
+          return res.json()
+        })
+        .then(data => {
+          const cols = data.columns || []
+          setAvailableColumns(cols)
+          // All columns selected by default
+          setSelectedColumns(new Set(cols.map((c: any) => c.key)))
+        })
+        .catch(() => toast.error('Failed to load columns'))
+        .finally(() => setColumnsLoading(false))
+    }
+  }, [open, portalPassword, availableColumns.length])
+
+  // Initialize filters when dialog opens
   useEffect(() => {
     if (open) {
       setFilters({
@@ -446,7 +472,29 @@ function PortalExportDialog({
     }
   }, [open, currentFilters])
 
+  const toggleColumn = (key: string) => {
+    setSelectedColumns(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    if (selectedColumns.size === availableColumns.length) {
+      setSelectedColumns(new Set())
+    } else {
+      setSelectedColumns(new Set(availableColumns.map(c => c.key)))
+    }
+  }
+
   const handleExport = async () => {
+    if (selectedColumns.size === 0) {
+      toast.error('Select at least one column')
+      return
+    }
+
     setIsExporting(true)
     try {
       const params = new URLSearchParams()
@@ -454,6 +502,8 @@ function PortalExportDialog({
       if (filters.from) params.set('from', filters.from)
       if (filters.to) params.set('to', filters.to)
       if (filters.status) params.set('status', filters.status)
+      // Send selected columns as comma-separated keys
+      params.set('columns', Array.from(selectedColumns).join(','))
 
       const response = await fetch(`${API_BASE}/api/insurance-portal/export?${params}`, {
         headers: { 'X-Portal-Password': portalPassword },
@@ -491,9 +541,11 @@ function PortalExportDialog({
 
   if (!open) return null
 
+  const allSelected = selectedColumns.size === availableColumns.length
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => onOpenChange(false)}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[480px] w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[520px] w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-black flex items-center gap-2 mb-4">
           <Download className="w-5 h-5 text-primary" />
           Export Report
@@ -527,6 +579,48 @@ function PortalExportDialog({
           </div>
         </div>
 
+        {/* Column Selection */}
+        <div className="space-y-3 mb-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+              Columns ({selectedColumns.size}/{availableColumns.length})
+            </Label>
+            <button
+              onClick={toggleAll}
+              className="text-[11px] font-bold text-primary hover:underline"
+            >
+              {allSelected ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+          {columnsLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto p-1">
+              {availableColumns.map((col) => (
+                <label
+                  key={col.key}
+                  className={cn(
+                    "flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition text-sm",
+                    selectedColumns.has(col.key)
+                      ? "border-primary bg-primary/5 font-bold text-slate-900 dark:text-white"
+                      : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedColumns.has(col.key)}
+                    onChange={() => toggleColumn(col.key)}
+                    className="w-4 h-4 rounded accent-lime-500"
+                  />
+                  <span className="truncate">{col.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Format */}
         <div className="space-y-3 mb-6">
           <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Format</Label>
@@ -553,7 +647,11 @@ function PortalExportDialog({
           <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => onOpenChange(false)} disabled={isExporting}>
             Cancel
           </Button>
-          <Button className="flex-1 lime-btn rounded-xl font-extrabold gap-2" onClick={handleExport} disabled={isExporting}>
+          <Button
+            className="flex-1 lime-btn rounded-xl font-extrabold gap-2"
+            onClick={handleExport}
+            disabled={isExporting || selectedColumns.size === 0}
+          >
             {isExporting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
