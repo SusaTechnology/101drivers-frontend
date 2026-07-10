@@ -328,7 +328,7 @@ function ReportView({
               <div className="text-center py-16 text-slate-500">
                 Failed to load report. Please try refreshing.
               </div>
-            ) : !data?.rows || data.rows.length === 0 ? (
+            ) : !data?.displayRows || data.displayRows.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
                 No tracking sessions found for the selected filters.
               </div>
@@ -351,7 +351,7 @@ function ReportView({
                       </tr>
                     </thead>
                     <tbody>
-                      {data.rows.map((row: any) => (
+                      {data.displayRows.map((row: any) => (
                         <tr key={row.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
                           <td className="px-4 py-3">
                             <Badge variant="outline" className="text-[10px] font-bold">
