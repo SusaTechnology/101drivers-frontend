@@ -13,6 +13,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatReportDate, formatReportMiles } from '@/hooks/useAdminReports'
+import { DataTable } from '@/components/shared/DataTable'
+import type { ColumnDef } from '@tanstack/react-table'
 
 const API_BASE = import.meta.env.VITE_API_URL
 
@@ -171,9 +173,96 @@ function ReportView(props: any) {
   const [data, setData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isError, setIsError] = useState(false)
+  const [sortBy, setSortBy] = useState('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
+  const handleSortChange = (newSortBy: string, newSortOrder: 'asc' | 'desc') => {
+    setSortBy(newSortBy)
+    setSortOrder(newSortOrder)
+    setPage(1)
+  }
+
+  // Column definitions for TanStack Table
+  const columns: ColumnDef<any>[] = useMemo(() => [
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      size: 90,
+      meta: { label: 'Status', sortable: true, sortKey: 'delivery.status' },
+      cell: ({ getValue }) => <Badge variant="outline" className="text-[10px] font-bold">{getValue() || '—'}</Badge>,
+    },
+    {
+      accessorKey: 'customerName',
+      header: 'Customer',
+      size: 120,
+      meta: { label: 'Customer', sortable: false },
+      cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
+    },
+    {
+      accessorKey: 'driverName',
+      header: 'Driver',
+      size: 120,
+      meta: { label: 'Driver', sortable: false },
+      cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
+    },
+    {
+      id: 'route',
+      header: 'Route',
+      size: 180,
+      meta: { label: 'Route', sortable: false },
+      cell: ({ row }) => (
+        <span>
+          {row.original.pickupAddress ? `${row.original.pickupAddress.split(',')[0]} → ` : ''}
+          {row.original.dropoffAddress ? row.original.dropoffAddress.split(',')[0] : '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'startedAt',
+      header: 'Started',
+      size: 130,
+      meta: { label: 'Started', sortable: true, sortKey: 'startedAt' },
+      cell: ({ getValue }) => <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>,
+    },
+    {
+      accessorKey: 'stoppedAt',
+      header: 'Stopped',
+      size: 130,
+      meta: { label: 'Stopped', sortable: true, sortKey: 'stoppedAt' },
+      cell: ({ getValue }) => <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>,
+    },
+    {
+      accessorKey: 'drivenMiles',
+      header: 'Miles',
+      size: 70,
+      meta: { label: 'Miles', sortable: true, sortKey: 'drivenMiles' },
+      cell: ({ getValue }) => <span className="font-bold tabular-nums">{formatReportMiles(getValue())}</span>,
+    },
+    {
+      accessorKey: 'drivenHours',
+      header: 'Hours',
+      size: 60,
+      meta: { label: 'Hours', sortable: true, sortKey: 'drivenHours' },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() != null ? getValue().toFixed(1) : '—'}</span>,
+    },
+    {
+      accessorKey: 'paymentAmount',
+      header: 'Payment',
+      size: 80,
+      meta: { label: 'Payment', sortable: false },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() != null ? `$${getValue().toFixed(2)}` : '—'}</span>,
+    },
+    {
+      accessorKey: 'payoutAmount',
+      header: 'Payout',
+      size: 80,
+      meta: { label: 'Payout', sortable: false },
+      cell: ({ getValue }) => <span className="tabular-nums">{getValue() != null ? `$${getValue().toFixed(2)}` : '—'}</span>,
+    },
+  ], [])
 
   const queryParams = useMemo(() => {
-    const params: Record<string, any> = { page, pageSize, sortBy: 'createdAt', sortOrder: 'desc' }
+    const params: Record<string, any> = { page, pageSize, sortBy, sortOrder }
     if (dateFrom) params.from = dateFrom
     if (dateTo) params.to = dateTo
     if (statusFilter) params.status = statusFilter
@@ -339,63 +428,24 @@ function ReportView(props: any) {
           </CardContent>
         </Card>
 
-        {/* Report Table */}
+        {/* Report Table — TanStack Table with resizable columns */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
           <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>
-            ) : isError ? (
-              <div className="text-center py-16 text-slate-500">Failed to load report. Please try refreshing.</div>
-            ) : !data?.displayRows || data.displayRows.length === 0 ? (
-              <div className="text-center py-16 text-slate-500">No tracking sessions found for the selected filters.</div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Status</th>
-                        <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Customer</th>
-                        <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Driver</th>
-                        <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Route</th>
-                        <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Started</th>
-                        <th className="px-4 py-3 text-left font-black uppercase tracking-wider text-slate-400">Stopped</th>
-                        <th className="px-4 py-3 text-right font-black uppercase tracking-wider text-slate-400">Miles</th>
-                        <th className="px-4 py-3 text-right font-black uppercase tracking-wider text-slate-400">Hours</th>
-                        <th className="px-4 py-3 text-right font-black uppercase tracking-wider text-slate-400">Payment</th>
-                        <th className="px-4 py-3 text-right font-black uppercase tracking-wider text-slate-400">Payout</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.displayRows.map((row: any) => (
-                        <tr key={row.id || row.deliveryId} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                          <td className="px-4 py-3"><Badge variant="outline" className="text-[10px] font-bold">{row.status || '—'}</Badge></td>
-                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-[120px] truncate">{row.customerName || '—'}</td>
-                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-[120px] truncate">{row.driverName || '—'}</td>
-                          <td className="px-4 py-3 text-slate-500 max-w-[150px] truncate">{row.pickupAddress ? `${row.pickupAddress.split(',')[0]} → ` : ''}{row.dropoffAddress ? row.dropoffAddress.split(',')[0] : '—'}</td>
-                          <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{row.startedAt ? formatReportDate(row.startedAt) : '—'}</td>
-                          <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{row.stoppedAt ? formatReportDate(row.stoppedAt) : '—'}</td>
-                          <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-700 dark:text-slate-300">{formatReportMiles(row.drivenMiles)}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.drivenHours != null ? row.drivenHours.toFixed(1) : '—'}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">{row.paymentAmount != null ? `$${row.paymentAmount.toFixed(2)}` : '—'}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400">{row.payoutAmount != null ? `$${row.payoutAmount.toFixed(2)}` : '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {data?.pagination && data.pagination.totalPages > 1 && (
-                  <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-                    <p className="text-xs text-slate-500">Showing {((data.pagination.page - 1) * data.pagination.pageSize) + 1} – {Math.min(data.pagination.page * data.pagination.pageSize, data.pagination.totalRows)} of {data.pagination.totalRows}</p>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setPage((p: number) => p - 1)} disabled={page === 1} className="rounded-xl"><ChevronLeft className="w-4 h-4" /></Button>
-                      <span className="text-xs text-slate-500">Page {page} of {data.pagination.totalPages}</span>
-                      <Button variant="outline" size="sm" onClick={() => setPage((p: number) => p + 1)} disabled={page >= data.pagination.totalPages} className="rounded-xl"><ChevronRight className="w-4 h-4" /></Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+            <DataTable
+              columns={columns}
+              data={data?.displayRows || []}
+              isLoading={isLoading}
+              isError={isError}
+              page={page}
+              pageSize={pageSize}
+              totalRows={data?.pagination?.totalRows ?? 0}
+              totalPages={data?.pagination?.totalPages ?? 1}
+              onPageChange={setPage}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSortChange={handleSortChange}
+              emptyMessage="No tracking sessions found for the selected filters."
+            />
           </CardContent>
         </Card>
       </main>
