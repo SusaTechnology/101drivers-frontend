@@ -608,7 +608,7 @@ function PortalExportDialog({
                 <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
               </div>
             ) : (
-              <div className="space-y-1.5 p-1">
+              <div className="grid grid-cols-2 gap-1.5 p-1">
                 {availableColumns.map((col) => (
                   <label
                     key={col.key}

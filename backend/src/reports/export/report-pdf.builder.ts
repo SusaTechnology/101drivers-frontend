@@ -7,8 +7,13 @@ import { formatCellValue } from "./report-formatters";
 
 /**
  * Builds a human-readable PDF with a table layout.
- * Landscape orientation for wider tables. No summary page.
- * No row cap. Page numbers on every page. No empty/duplicate pages.
+ * Landscape orientation. No summary page. No row cap.
+ * Page numbers on every page. NO empty/duplicate pages.
+ *
+ * KEY FIX: Disable pdfkit's auto-page-break by setting doc.page.maxY
+ * to a very large value. This prevents pdfkit from silently creating
+ * empty pages when doc.text() advances the internal y cursor past the
+ * page bottom. We control page breaks explicitly via doc.addPage().
  */
 export async function buildPdfBuffer(
   reportKey: EnterpriseReportKey,
@@ -29,16 +34,20 @@ export async function buildPdfBuffer(
     throw new Error("PDF export requires 'pdfkit'. Install it with: npm i pdfkit");
   }
 
-  // Landscape A4: 842 x 595 points
   const doc = new PDFDocument({
-    size: [842, 595],
+    size: [842, 595], // Landscape A4
     margin: 30,
   });
+
+  // CRITICAL: Disable pdfkit's auto-page-break.
+  // pdfkit auto-creates a new page when doc.y exceeds page.maxY.
+  // We control page breaks explicitly with doc.addPage().
+  doc.page.maxY = 999999;
+
   const chunks: Buffer[] = [];
   const columns = payload.columns ?? REPORT_COLUMNS[reportKey];
   const rows = payload.rows ?? [];
 
-  // ── Layout constants ──
   const MARGIN = 30;
   const PAGE_WIDTH = 842;
   const PAGE_HEIGHT = 595;
@@ -54,7 +63,7 @@ export async function buildPdfBuffer(
   const HEADER_FONT_SIZE = 7;
   const FOOTER_Y = PAGE_HEIGHT - 20;
 
-  // ── Calculate column widths ──
+  // Column widths
   const minColWidth = 40;
   const totalLabelChars = columns.reduce(
     (sum, col) => sum + Math.max(col.label.length, 6),
@@ -68,17 +77,15 @@ export async function buildPdfBuffer(
   const scaleFactor = CONTENT_WIDTH / totalColWidth;
   const scaledWidths = colWidths.map((w) => w * scaleFactor);
 
-  // ── Calculate rows per page based on actual y position ──
-  const maxRowY = FOOTER_Y - 5; // stop before footer
-  const usableHeight = maxRowY - MARGIN - HEADER_HEIGHT;
+  // Rows per page
+  const usableHeight = FOOTER_Y - 5 - MARGIN - HEADER_HEIGHT;
   const rowsPerPage = Math.floor(usableHeight / ROW_HEIGHT);
   const totalPages = rows.length === 0 ? 1 : Math.ceil(rows.length / rowsPerPage);
 
   let pageCount = 1;
 
+  // Page number — uses doc.text() but auto-page-break is disabled
   const writePageNumber = (current: number, total: number) => {
-    // Save current y to restore after writing page number
-    const savedY = doc.y;
     doc.fontSize(7).font("Helvetica").fillColor(MUTED_COLOR);
     doc.text(
       `Page ${current} of ${total}`,
@@ -86,9 +93,6 @@ export async function buildPdfBuffer(
       FOOTER_Y,
       { align: "center", width: CONTENT_WIDTH, lineBreak: false }
     );
-    // CRITICAL: Reset doc.y to prevent pdfkit from auto-creating a new page
-    // doc.text() advances doc.y past FOOTER_Y, which triggers auto page breaks
-    doc.y = savedY;
   };
 
   return await new Promise<Buffer>((resolve, reject) => {
@@ -102,7 +106,6 @@ export async function buildPdfBuffer(
     let rowIndex = 0;
     let currentPageRows = 0;
 
-    // Draw table header
     const drawHeader = () => {
       doc.rect(MARGIN, y, CONTENT_WIDTH, HEADER_HEIGHT).fill(HEADER_BG);
       doc.fillColor(TEXT_COLOR).font("Helvetica-Bold").fontSize(HEADER_FONT_SIZE);
@@ -118,8 +121,6 @@ export async function buildPdfBuffer(
         x += scaledWidths[i];
       }
       y += HEADER_HEIGHT;
-      // Reset pdfkit's internal cursor to prevent auto page breaks
-      doc.y = y;
       currentPageRows = 0;
     };
 
@@ -133,22 +134,20 @@ export async function buildPdfBuffer(
       return;
     }
 
-    // Draw data rows
     for (const row of rows) {
-      // Check if we need a new page — BEFORE drawing the row
       if (currentPageRows >= rowsPerPage) {
         writePageNumber(pageCount, totalPages);
         doc.addPage();
+        // Re-disable auto-page-break on the new page
+        doc.page.maxY = 999999;
         pageCount++;
         y = MARGIN;
         drawHeader();
       }
 
-      // Zebra stripe background
       const bg = rowIndex % 2 === 0 ? ROW_BG : ROW_BG_ALT;
       doc.rect(MARGIN, y, CONTENT_WIDTH, ROW_HEIGHT).fill(bg);
 
-      // Draw cell values
       doc.fillColor(TEXT_COLOR).font("Helvetica").fontSize(DATA_FONT_SIZE);
       let x = MARGIN;
       for (let i = 0; i < columns.length; i++) {
@@ -164,25 +163,15 @@ export async function buildPdfBuffer(
         x += scaledWidths[i];
       }
 
-      // CRITICAL: Reset pdfkit's internal y cursor to our tracked y.
-      // doc.text() advances doc.y internally; if it goes past the page
-      // bottom, pdfkit silently auto-creates a new page (the empty page bug).
-      // By resetting doc.y after each row, we prevent auto page breaks.
-      doc.y = y + ROW_HEIGHT;
-
       y += ROW_HEIGHT;
       rowIndex++;
       currentPageRows++;
     }
 
-    // Write page number on the last page
     writePageNumber(pageCount, totalPages);
-
     doc.end();
   });
 }
-
-// ── Helpers ──
 
 function truncate(text: string, maxWidth: number, fontSize: number, doc: any): string {
   doc.fontSize(fontSize);
