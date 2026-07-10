@@ -28,6 +28,8 @@ export function configureCors(app: INestApplication) {
       "X-Requested-With",
       "X-Tenant-Code",
       "x-tenant-code",
+      "X-Portal-Password",
+      "x-portal-password",
     ],
   });
 }
