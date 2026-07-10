@@ -77,7 +77,8 @@ export async function buildPdfBuffer(
   let pageCount = 1;
 
   const writePageNumber = (current: number, total: number) => {
-    doc.save();
+    // Save current y to restore after writing page number
+    const savedY = doc.y;
     doc.fontSize(7).font("Helvetica").fillColor(MUTED_COLOR);
     doc.text(
       `Page ${current} of ${total}`,
@@ -85,7 +86,9 @@ export async function buildPdfBuffer(
       FOOTER_Y,
       { align: "center", width: CONTENT_WIDTH, lineBreak: false }
     );
-    doc.restore();
+    // CRITICAL: Reset doc.y to prevent pdfkit from auto-creating a new page
+    // doc.text() advances doc.y past FOOTER_Y, which triggers auto page breaks
+    doc.y = savedY;
   };
 
   return await new Promise<Buffer>((resolve, reject) => {
@@ -115,6 +118,8 @@ export async function buildPdfBuffer(
         x += scaledWidths[i];
       }
       y += HEADER_HEIGHT;
+      // Reset pdfkit's internal cursor to prevent auto page breaks
+      doc.y = y;
       currentPageRows = 0;
     };
 
@@ -158,6 +163,12 @@ export async function buildPdfBuffer(
         });
         x += scaledWidths[i];
       }
+
+      // CRITICAL: Reset pdfkit's internal y cursor to our tracked y.
+      // doc.text() advances doc.y internally; if it goes past the page
+      // bottom, pdfkit silently auto-creates a new page (the empty page bug).
+      // By resetting doc.y after each row, we prevent auto page breaks.
+      doc.y = y + ROW_HEIGHT;
 
       y += ROW_HEIGHT;
       rowIndex++;
