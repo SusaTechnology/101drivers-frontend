@@ -182,7 +182,7 @@ function ReportView({
 
   // Build query params
   const queryParams = useMemo(() => {
-    const params: Record<string, any> = { page, pageSize, sortBy: 'startedAt', sortOrder: 'desc' }
+    const params: Record<string, any> = { page, pageSize, sortBy: 'createdAt', sortOrder: 'desc' }
     if (dateFrom) params.from = dateFrom
     if (dateTo) params.to = dateTo
     if (statusFilter) params.status = statusFilter

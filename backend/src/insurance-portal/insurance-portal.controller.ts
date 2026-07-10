@@ -105,11 +105,12 @@ export class InsurancePortalController {
         "Format is required for export. Use csv, xlsx, or pdf."
       );
     }
-    // Explicitly set columns on the query to ensure it's not lost during DTO transformation
-    if (columnsParam) {
-      query.columns = columnsParam;
-    }
-    const result = await this.reportsService.insuranceMileage(query);
+    // Force columns onto the query object — bypasses any DTO transformation issues
+    const queryWithColumns = {
+      ...query,
+      columns: columnsParam || undefined,
+    } as any;
+    const result = await this.reportsService.insuranceMileage(queryWithColumns);
     const exportResult = result as any;
     if (exportResult?.buffer && exportResult?.contentType && exportResult?.filename) {
       res.setHeader("Content-Type", exportResult.contentType);
