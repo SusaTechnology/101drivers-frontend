@@ -277,12 +277,15 @@ function ReportView(props: any) {
     return params
   }, [dateFrom, dateTo, statusFilter, serviceType, customerId, driverId, minMiles, maxMiles, minPayment, maxPayment, pickupSearch, page, pageSize])
 
-  const queryString = new URLSearchParams(
-    Object.entries(queryParams).reduce((acc, [k, v]) => {
-      if (v !== undefined && v !== null && v !== '') acc[k] = String(v)
-      return acc
-    }, {} as Record<string, string>)
-  ).toString()
+  // Memoize the query string so it only changes when queryParams actually changes
+  const queryString = useMemo(() => {
+    return new URLSearchParams(
+      Object.entries(queryParams).reduce((acc, [k, v]) => {
+        if (v !== undefined && v !== null && v !== '') acc[k] = String(v)
+        return acc
+      }, {} as Record<string, string>)
+    ).toString()
+  }, [queryParams])
 
   const fetchData = React.useCallback(async () => {
     setIsLoading(true)
