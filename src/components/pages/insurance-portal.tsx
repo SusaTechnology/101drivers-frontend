@@ -553,125 +553,127 @@ function PortalExportDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => onOpenChange(false)}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[520px] w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[760px] w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-black flex items-center gap-2 mb-4">
           <Download className="w-5 h-5 text-primary" />
           Export Report
         </h2>
 
-        {/* Filters */}
-        <div className="space-y-3 mb-4">
-          <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Filters</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-[11px] font-bold text-slate-600">Date From</Label>
-              <Input type="date" value={filters.from || ''} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="h-10 text-sm rounded-xl" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[11px] font-bold text-slate-600">Date To</Label>
-              <Input type="date" value={filters.to || ''} onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="h-10 text-sm rounded-xl" />
+        {/* Two-column layout: Filters (left) + Columns (right) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+          {/* LEFT: Filters */}
+          <div className="space-y-3">
+            <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Filters</Label>
+            <div className="space-y-2">
+              <div>
+                <Label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">Date From</Label>
+                <Input type="date" value={filters.from || ''} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="h-9 text-sm rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">Date To</Label>
+                <Input type="date" value={filters.to || ''} onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="h-9 text-sm rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 block">Delivery Status</Label>
+                <select
+                  value={filters.status || ''}
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  className="w-full h-9 px-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                >
+                  <option value="">All</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="CANCELLED">Cancelled</option>
+                  <option value="BOOKED">Booked</option>
+                </select>
+              </div>
             </div>
           </div>
-          <div className="space-y-1">
-            <Label className="text-[11px] font-bold text-slate-600">Delivery Status</Label>
-            <select
-              value={filters.status || ''}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-            >
-              <option value="">All</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="ACTIVE">Active</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
+
+          {/* RIGHT: Column Selection */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                Columns ({selectedColumns.size}/{availableColumns.length})
+              </Label>
+              <button
+                onClick={toggleAll}
+                className="text-[11px] font-bold text-primary hover:underline"
+              >
+                {allSelected ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+            {columnsLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-[220px] overflow-y-auto p-1">
+                {availableColumns.map((col) => (
+                  <label
+                    key={col.key}
+                    className={cn(
+                      "flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition text-sm",
+                      selectedColumns.has(col.key)
+                        ? "border-primary bg-primary/5 font-bold text-slate-900 dark:text-white"
+                        : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedColumns.has(col.key)}
+                      onChange={() => toggleColumn(col.key)}
+                      className="w-4 h-4 rounded accent-lime-500"
+                    />
+                    <span className="truncate">{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Column Selection */}
-        <div className="space-y-3 mb-4">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-              Columns ({selectedColumns.size}/{availableColumns.length})
-            </Label>
-            <button
-              onClick={toggleAll}
-              className="text-[11px] font-bold text-primary hover:underline"
-            >
-              {allSelected ? 'Deselect All' : 'Select All'}
-            </button>
-          </div>
-          {columnsLoading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto p-1">
-              {availableColumns.map((col) => (
-                <label
-                  key={col.key}
+        {/* Format + Actions */}
+        <div className="flex items-end gap-4 pt-2 border-t border-slate-200 dark:border-slate-700">
+          <div className="space-y-2">
+            <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Format</Label>
+            <div className="flex gap-2">
+              {(['csv', 'xlsx', 'pdf'] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  onClick={() => setFormat(fmt)}
                   className={cn(
-                    "flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition text-sm",
-                    selectedColumns.has(col.key)
-                      ? "border-primary bg-primary/5 font-bold text-slate-900 dark:text-white"
-                      : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    "px-4 py-2 rounded-xl border-2 transition text-[11px] font-extrabold",
+                    format === fmt ? "border-primary bg-primary/5 text-primary" : "border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
                   )}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedColumns.has(col.key)}
-                    onChange={() => toggleColumn(col.key)}
-                    className="w-4 h-4 rounded accent-lime-500"
-                  />
-                  <span className="truncate">{col.label}</span>
-                </label>
+                  {fmt === 'csv' ? 'CSV' : fmt === 'xlsx' ? 'Excel' : 'PDF'}
+                </button>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* Format */}
-        <div className="space-y-3 mb-6">
-          <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Format</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {(['csv', 'xlsx', 'pdf'] as const).map((fmt) => (
-              <button
-                key={fmt}
-                onClick={() => setFormat(fmt)}
-                className={cn(
-                  "flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition",
-                  format === fmt ? "border-primary bg-primary/5" : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                )}
-              >
-                <span className={cn("text-[11px] font-extrabold", format === fmt ? "text-primary" : "text-slate-500")}>
-                  {fmt === 'csv' ? 'CSV' : fmt === 'xlsx' ? 'Excel' : 'PDF'}
-                </span>
-              </button>
-            ))}
           </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2">
-          <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => onOpenChange(false)} disabled={isExporting}>
-            Cancel
-          </Button>
-          <Button
-            className="flex-1 lime-btn rounded-xl font-extrabold gap-2"
-            onClick={handleExport}
-            disabled={isExporting || selectedColumns.size === 0}
-          >
-            {isExporting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Exporting...
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                Export
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outline" className="rounded-xl font-bold" onClick={() => onOpenChange(false)} disabled={isExporting}>
+              Cancel
+            </Button>
+            <Button
+              className="lime-btn rounded-xl font-extrabold gap-2"
+              onClick={handleExport}
+              disabled={isExporting || selectedColumns.size === 0}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Export
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

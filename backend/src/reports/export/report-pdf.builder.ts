@@ -7,7 +7,8 @@ import { formatCellValue } from "./report-formatters";
 
 /**
  * Builds a human-readable PDF with a table layout.
- * No summary page. No row cap. Page numbers on every page.
+ * Landscape orientation for wider tables. No summary page.
+ * No row cap. Page numbers on every page. No empty/duplicate pages.
  */
 export async function buildPdfBuffer(
   reportKey: EnterpriseReportKey,
@@ -28,56 +29,63 @@ export async function buildPdfBuffer(
     throw new Error("PDF export requires 'pdfkit'. Install it with: npm i pdfkit");
   }
 
+  // Landscape A4: 842 x 595 points
   const doc = new PDFDocument({
-    size: "A4",
-    margin: 40,
-    // No bufferPages — we track page numbers manually
+    size: [842, 595],
+    margin: 30,
   });
   const chunks: Buffer[] = [];
   const columns = payload.columns ?? REPORT_COLUMNS[reportKey];
   const rows = payload.rows ?? [];
 
   // ── Layout constants ──
-  const PAGE_WIDTH = doc.page.width;
-  const MARGIN = 40;
+  const MARGIN = 30;
+  const PAGE_WIDTH = 842;
+  const PAGE_HEIGHT = 595;
   const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
   const HEADER_BG = "#e2e8f0";
   const ROW_BG_ALT = "#f8fafc";
   const ROW_BG = "#ffffff";
   const TEXT_COLOR = "#1e293b";
   const MUTED_COLOR = "#64748b";
-  const ROW_HEIGHT = 18;
-  const HEADER_HEIGHT = 22;
-  const DATA_FONT_SIZE = 8;
-  const HEADER_FONT_SIZE = 8;
-  const PAGE_NUMBER_Y = doc.page.height - 25;
+  const ROW_HEIGHT = 16;
+  const HEADER_HEIGHT = 20;
+  const DATA_FONT_SIZE = 7;
+  const HEADER_FONT_SIZE = 7;
+  const FOOTER_Y = PAGE_HEIGHT - 20;
 
   // ── Calculate column widths ──
-  const minColWidth = 50;
+  const minColWidth = 40;
   const totalLabelChars = columns.reduce(
-    (sum, col) => sum + Math.max(col.label.length, 8),
+    (sum, col) => sum + Math.max(col.label.length, 6),
     0
   );
   const colWidths = columns.map((col) => {
-    const proportion = Math.max(col.label.length, 8) / totalLabelChars;
+    const proportion = Math.max(col.label.length, 6) / totalLabelChars;
     return Math.max(minColWidth, CONTENT_WIDTH * proportion);
   });
   const totalColWidth = colWidths.reduce((sum, w) => sum + w, 0);
   const scaleFactor = CONTENT_WIDTH / totalColWidth;
   const scaledWidths = colWidths.map((w) => w * scaleFactor);
 
-  // ── Track page count manually ──
+  // ── Calculate rows per page based on actual y position ──
+  const maxRowY = FOOTER_Y - 5; // stop before footer
+  const usableHeight = maxRowY - MARGIN - HEADER_HEIGHT;
+  const rowsPerPage = Math.floor(usableHeight / ROW_HEIGHT);
+  const totalPages = rows.length === 0 ? 1 : Math.ceil(rows.length / rowsPerPage);
+
   let pageCount = 1;
 
-  // ── Page number helper (writes at bottom of current page) ──
   const writePageNumber = (current: number, total: number) => {
-    doc.fontSize(8).font("Helvetica").fillColor(MUTED_COLOR);
+    doc.save();
+    doc.fontSize(7).font("Helvetica").fillColor(MUTED_COLOR);
     doc.text(
       `Page ${current} of ${total}`,
       MARGIN,
-      PAGE_NUMBER_Y,
+      FOOTER_Y,
       { align: "center", width: CONTENT_WIDTH, lineBreak: false }
     );
+    doc.restore();
   };
 
   return await new Promise<Buffer>((resolve, reject) => {
@@ -86,10 +94,6 @@ export async function buildPdfBuffer(
     });
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
-
-    // Calculate total pages first
-    const rowsPerPage = Math.floor((doc.page.height - MARGIN * 2 - HEADER_HEIGHT) / ROW_HEIGHT);
-    const totalPages = rows.length === 0 ? 1 : Math.ceil(rows.length / rowsPerPage);
 
     let y = MARGIN;
     let rowIndex = 0;
@@ -102,9 +106,9 @@ export async function buildPdfBuffer(
       let x = MARGIN;
       for (let i = 0; i < columns.length; i++) {
         const col = columns[i];
-        const text = truncate(col.label, scaledWidths[i] - 6, HEADER_FONT_SIZE, doc);
-        doc.text(text, x + 3, y + 6, {
-          width: scaledWidths[i] - 6,
+        const text = truncate(col.label, scaledWidths[i] - 4, HEADER_FONT_SIZE, doc);
+        doc.text(text, x + 2, y + 5, {
+          width: scaledWidths[i] - 4,
           ellipsis: true,
           lineBreak: false,
         });
@@ -126,9 +130,8 @@ export async function buildPdfBuffer(
 
     // Draw data rows
     for (const row of rows) {
-      // Check if we need a new page
+      // Check if we need a new page — BEFORE drawing the row
       if (currentPageRows >= rowsPerPage) {
-        // Write page number on the current page before moving on
         writePageNumber(pageCount, totalPages);
         doc.addPage();
         pageCount++;
@@ -147,9 +150,9 @@ export async function buildPdfBuffer(
         const col = columns[i];
         const rawValue = row[col.key];
         const formatted = formatCellValue(rawValue, col);
-        const text = truncate(String(formatted ?? ""), scaledWidths[i] - 6, DATA_FONT_SIZE, doc);
-        doc.text(text, x + 3, y + 4, {
-          width: scaledWidths[i] - 6,
+        const text = truncate(String(formatted ?? ""), scaledWidths[i] - 4, DATA_FONT_SIZE, doc);
+        doc.text(text, x + 2, y + 3, {
+          width: scaledWidths[i] - 4,
           ellipsis: true,
           lineBreak: false,
         });
