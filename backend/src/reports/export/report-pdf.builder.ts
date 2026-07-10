@@ -40,9 +40,10 @@ export async function buildPdfBuffer(
   });
 
   // CRITICAL: Disable pdfkit's auto-page-break.
-  // pdfkit auto-creates a new page when doc.y exceeds page.maxY.
+  // pdfkit auto-creates a new page when doc.y exceeds page.maxY().
   // We control page breaks explicitly with doc.addPage().
-  doc.page.maxY = 999999;
+  // maxY is a METHOD in pdfkit (not a property), so we override it as a function.
+  doc.page.maxY = () => 999999;
 
   const chunks: Buffer[] = [];
   const columns = payload.columns ?? REPORT_COLUMNS[reportKey];
@@ -139,7 +140,7 @@ export async function buildPdfBuffer(
         writePageNumber(pageCount, totalPages);
         doc.addPage();
         // Re-disable auto-page-break on the new page
-        doc.page.maxY = 999999;
+        doc.page.maxY = () => 999999;
         pageCount++;
         y = MARGIN;
         drawHeader();
