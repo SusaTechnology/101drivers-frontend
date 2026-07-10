@@ -388,9 +388,9 @@ function ReportView(props: any) {
               <FilterField label="Service Type">
                 <select value={serviceType} onChange={(e) => { setServiceType(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                   <option value="">All</option>
-                  <option value="home">Home</option>
-                  <option value="dealer">Dealer</option>
-                  <option value="service">Service</option>
+                  <option value="home">Home Delivery</option>
+                  <option value="dealer">Between Locations</option>
+                  <option value="service">Service Pickup/return</option>
                 </select>
               </FilterField>
               <FilterField label="Customer">
