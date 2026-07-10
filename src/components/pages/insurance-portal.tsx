@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import {
   Shield, Lock, Eye, EyeOff, Loader2, Download, RefreshCw,
   ChevronLeft, ChevronRight, Truck, MapPin, Navigation, Clock,
-  Filter, DollarSign, User, Search, Info,
+  Filter, DollarSign, User, Search, Info, X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -305,20 +305,20 @@ function ReportView(props: any) {
                 </select>
               </FilterField>
               <FilterField label="Customer">
-                <select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <option value="">All Customers</option>
-                  {customerList.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  items={customerList}
+                  value={customerId}
+                  onChange={(id) => { setCustomerId(id); setPage(1) }}
+                  placeholder="All Customers"
+                />
               </FilterField>
               <FilterField label="Driver">
-                <select value={driverId} onChange={(e) => { setDriverId(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <option value="">All Drivers</option>
-                  {driverList.map((d: any) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  items={driverList}
+                  value={driverId}
+                  onChange={(id) => { setDriverId(id); setPage(1) }}
+                  placeholder="All Drivers"
+                />
               </FilterField>
               <FilterField label="Min Miles">
                 <Input type="number" value={minMiles} onChange={(e) => { setMinMiles(e.target.value); setPage(1) }} placeholder="0" className="h-9 text-sm rounded-xl" />
@@ -557,6 +557,120 @@ function FilterField({ label, children }: { label: string; children: React.React
     <div className="space-y-1">
       <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
       {children}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// SearchableSelect — type to filter, click to select
+// ════════════════════════════════════════════════════════════════════════
+
+function SearchableSelect({ items, value, onChange, placeholder }: {
+  items: Array<{ id: string; name: string }>
+  value: string
+  onChange: (id: string) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
+  // Find the selected item's name for display
+  const selectedItem = items.find((item) => item.id === value)
+  const displayValue = selectedItem ? selectedItem.name : ''
+
+  // Filter items by search text
+  const filtered = items.filter((item) =>
+    item.name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleSelect = (id: string) => {
+    onChange(id)
+    setOpen(false)
+    setSearch('')
+  }
+
+  const handleClear = () => {
+    onChange('')
+    setSearch('')
+  }
+
+  return (
+    <div className="relative">
+      <div
+        className="w-full h-9 px-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between cursor-pointer"
+        onClick={() => setOpen(!open)}
+      >
+        <span className={cn("truncate", displayValue ? "text-slate-900 dark:text-white font-semibold" : "text-slate-400")}>
+          {displayValue || placeholder}
+        </span>
+        <div className="flex items-center gap-1 shrink-0">
+          {value && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleClear() }}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <ChevronRight className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", open && "rotate-90")} />
+        </div>
+      </div>
+
+      {open && (
+        <>
+          {/* Backdrop to close on outside click */}
+          <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setSearch('') }} />
+
+          {/* Dropdown panel */}
+          <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl max-h-[240px] overflow-hidden">
+            {/* Search input */}
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Type to search..."
+                  className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Options list */}
+            <div className="overflow-y-auto max-h-[180px]">
+              <button
+                type="button"
+                onClick={() => handleSelect('')}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition",
+                  !value ? "bg-primary/5 font-bold text-primary" : "text-slate-600 dark:text-slate-400"
+                )}
+              >
+                {placeholder}
+              </button>
+              {filtered.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelect(item.id)}
+                  className={cn(
+                    "w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition truncate",
+                    value === item.id ? "bg-primary/5 font-bold text-primary" : "text-slate-600 dark:text-slate-400"
+                  )}
+                >
+                  {item.name}
+                </button>
+              ))}
+              {filtered.length === 0 && (
+                <div className="px-3 py-4 text-xs text-center text-slate-400">No results found</div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
