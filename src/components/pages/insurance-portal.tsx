@@ -1,18 +1,18 @@
 //@ts-nocheck
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link } from '@tanstack/react-router'
+import React, { useState, useEffect, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   Shield,
   Lock,
+  Eye,
+  EyeOff,
   Loader2,
   Download,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
   Truck,
-  Calendar,
   MapPin,
   Navigation,
   Clock,
@@ -23,55 +23,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import ExportDialog from '@/components/shared/ExportDialog'
-import { useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
 import { formatReportDate, formatReportMiles } from '@/hooks/useAdminReports'
-import { BUSINESS_TZ } from '@/lib/timezone'
 
 const API_BASE = import.meta.env.VITE_API_URL
-
-interface InsuranceRow {
-  id: string
-  deliveryId: string
-  status: string
-  startedAt: string | null
-  stoppedAt: string | null
-  drivenMiles: number | null
-  drivenHours: number | null
-  createdAt: string
-  delivery: {
-    id: string
-    status: string
-    serviceType: string
-    pickupAddress?: string
-    dropoffAddress?: string
-    customer?: { businessName?: string; user?: { fullName?: string } }
-  }
-  assignedDriver?: { id: string; user?: { fullName?: string } } | null
-}
-
-interface InsuranceData {
-  rows: InsuranceRow[]
-  summary: {
-    totalTrackingSessions: number
-    totalDrivenMiles: number
-    averageMilesPerTrip: number
-    totalDrivenHours: number
-    averageDrivenHoursPerTrip: number
-    startedCount: number
-    stoppedCount: number
-  }
-  pagination: {
-    page: number
-    pageSize: number
-    totalRows: number
-    totalPages: number
-  }
-}
 
 export default function InsurancePortalPage() {
   const [authenticated, setAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
 
   // Report filters
@@ -84,8 +43,8 @@ export default function InsurancePortalPage() {
 
   // Check for existing session on mount
   useEffect(() => {
-    const token = sessionStorage.getItem('insurancePortalToken')
-    if (token) {
+    const saved = sessionStorage.getItem('insurancePortalPassword')
+    if (saved) {
       setAuthenticated(true)
     }
   }, [])
@@ -95,11 +54,9 @@ export default function InsurancePortalPage() {
     if (!password) return
     setLoggingIn(true)
     try {
-      const response = await fetch(`${API_BASE}/api/auth/insurance-portal-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ password }),
+      // Test the password by fetching the columns endpoint
+      const response = await fetch(`${API_BASE}/api/insurance-portal/columns`, {
+        headers: { 'X-Portal-Password': password },
       })
 
       if (!response.ok) {
@@ -107,12 +64,9 @@ export default function InsurancePortalPage() {
         throw new Error(errorData?.message || 'Invalid password')
       }
 
-      const data = await response.json()
-      if (data.accessToken) {
-        sessionStorage.setItem('insurancePortalToken', data.accessToken)
-        setAuthenticated(true)
-        toast.success('Welcome to the Insurance Portal')
-      }
+      sessionStorage.setItem('insurancePortalPassword', password)
+      setAuthenticated(true)
+      toast.success('Welcome to the Insurance Portal')
     } catch (error: any) {
       toast.error('Login failed', { description: error?.message || 'Please try again' })
     } finally {
@@ -121,7 +75,7 @@ export default function InsurancePortalPage() {
   }
 
   const handleLogout = () => {
-    sessionStorage.removeItem('insurancePortalToken')
+    sessionStorage.removeItem('insurancePortalPassword')
     setAuthenticated(false)
     setPassword('')
   }
@@ -131,7 +85,6 @@ export default function InsurancePortalPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
         <div className="w-full max-w-md">
-          {/* Logo */}
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl overflow-hidden bg-black mx-auto mb-3 border border-slate-200">
               <img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" />
@@ -151,13 +104,21 @@ export default function InsurancePortalPage() {
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <Input
                       id="password"
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter password"
-                      className="h-12 pl-11 rounded-xl text-sm"
+                      className="h-12 pl-11 pr-11 rounded-xl text-sm"
                       autoFocus
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
                 <Button
@@ -202,7 +163,7 @@ export default function InsurancePortalPage() {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Report View Component
+// Report View Component — standalone, no app bar, no routing
 // ════════════════════════════════════════════════════════════════════════
 
 function ReportView({
@@ -214,7 +175,10 @@ function ReportView({
   pageSize,
   exportOpen, setExportOpen,
 }: any) {
-  const [isFetching, setIsFetching] = useState(false)
+  const portalPassword = sessionStorage.getItem('insurancePortalPassword') || ''
+  const [data, setData] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isError, setIsError] = useState(false)
 
   // Build query params
   const queryParams = useMemo(() => {
@@ -225,7 +189,7 @@ function ReportView({
     return params
   }, [dateFrom, dateTo, statusFilter, page, pageSize])
 
-  // Fetch report data
+  // Build query string
   const queryString = new URLSearchParams(
     Object.entries(queryParams).reduce((acc, [k, v]) => {
       if (v !== undefined && v !== null && v !== '') acc[k] = String(v)
@@ -233,13 +197,30 @@ function ReportView({
     }, {} as Record<string, string>)
   ).toString()
 
-  const { data, isLoading, isError, refetch } = useDataQuery<InsuranceData>({
-    apiEndPoint: `${API_BASE}/api/reports/insurance-mileage?${queryString}`,
-    noFilter: true,
-  })
+  // Fetch report data using the portal endpoint (raw fetch with password header)
+  const fetchData = React.useCallback(async () => {
+    setIsLoading(true)
+    setIsError(false)
+    try {
+      const response = await fetch(`${API_BASE}/api/insurance-portal/report?${queryString}`, {
+        headers: { 'X-Portal-Password': portalPassword },
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const json = await response.json()
+      setData(json)
+    } catch (err) {
+      setIsError(true)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [queryString, portalPassword])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const handleRefresh = () => {
-    refetch()
+    fetchData()
     toast.success('Report refreshed')
   }
 
@@ -252,7 +233,7 @@ function ReportView({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Header — standalone, no admin nav */}
+      {/* Header — standalone, no admin nav, no links */}
       <header
         className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
@@ -268,8 +249,8 @@ function ReportView({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={handleRefresh} disabled={isFetching} size="sm" variant="outline" className="rounded-xl">
-              <RefreshCw className={cn("h-3.5 w-3.5 mr-1", isFetching && "animate-spin")} />
+            <Button onClick={handleRefresh} disabled={isError} size="sm" variant="outline" className="rounded-xl">
+              <RefreshCw className="w-3.5 h-3.5 mr-1" />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
             <Button size="sm" className="rounded-xl lime-btn" onClick={() => setExportOpen(true)}>
@@ -329,7 +310,7 @@ function ReportView({
                 </select>
               </div>
               <Button variant="outline" size="sm" className="rounded-xl" onClick={resetFilters}>
-                <Filter className="w-3.5 h-3.5 mr-1" />
+                <Filter className="w-3.5 w-3.5 mr-1" />
                 Reset
               </Button>
             </div>
@@ -368,7 +349,7 @@ function ReportView({
                       </tr>
                     </thead>
                     <tbody>
-                      {data.rows.map((row: InsuranceRow) => (
+                      {data.rows.map((row: any) => (
                         <tr key={row.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
                           <td className="px-4 py-3 font-mono text-slate-700 dark:text-slate-300">
                             {row.deliveryId?.slice(-8) ?? '—'}
@@ -426,34 +407,167 @@ function ReportView({
         </Card>
       </main>
 
-      {/* Export Dialog */}
-      <ExportDialog
+      {/* Export Dialog — uses the portal export endpoint */}
+      <PortalExportDialog
         open={exportOpen}
         onOpenChange={setExportOpen}
-        reportKey="insurance-mileage"
-        reportTitle="Insurance & Mileage Report"
+        portalPassword={portalPassword}
         currentFilters={{
           from: dateFrom,
           to: dateTo,
           status: statusFilter,
         }}
-        filterConfigs={[
-          { key: 'from', label: 'Date From', type: 'date' },
-          { key: 'to', label: 'Date To', type: 'date' },
-          {
-            key: 'status',
-            label: 'Delivery Status',
-            type: 'select',
-            options: [
-              { value: 'COMPLETED', label: 'Completed' },
-              { value: 'ACTIVE', label: 'Active' },
-              { value: 'CANCELLED', label: 'Cancelled' },
-              { value: 'BOOKED', label: 'Booked' },
-              { value: 'LISTED', label: 'Listed' },
-            ],
-          },
-        ]}
       />
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Portal Export Dialog — uses the portal export endpoint (no JWT)
+// ════════════════════════════════════════════════════════════════════════
+
+function PortalExportDialog({
+  open,
+  onOpenChange,
+  portalPassword,
+  currentFilters,
+}: any) {
+  const [format, setFormat] = useState<'csv' | 'xlsx' | 'pdf'>('csv')
+  const [filters, setFilters] = useState<Record<string, any>>({})
+  const [isExporting, setIsExporting] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setFilters({
+        from: currentFilters.from || '',
+        to: currentFilters.to || '',
+        status: currentFilters.status || '',
+      })
+    }
+  }, [open, currentFilters])
+
+  const handleExport = async () => {
+    setIsExporting(true)
+    try {
+      const params = new URLSearchParams()
+      params.set('format', format)
+      if (filters.from) params.set('from', filters.from)
+      if (filters.to) params.set('to', filters.to)
+      if (filters.status) params.set('status', filters.status)
+
+      const response = await fetch(`${API_BASE}/api/insurance-portal/export?${params}`, {
+        headers: { 'X-Portal-Password': portalPassword },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = `insurance-mileage-report.${format}`
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (match && match[1]) filename = match[1].replace(/['"]/g, '')
+      }
+
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
+
+      toast.success(`Report downloaded as ${format.toUpperCase()}`)
+      onOpenChange(false)
+    } catch (error: any) {
+      toast.error('Export failed', { description: error?.message || 'Please try again' })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => onOpenChange(false)}>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[480px] w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-black flex items-center gap-2 mb-4">
+          <Download className="w-5 h-5 text-primary" />
+          Export Report
+        </h2>
+
+        {/* Filters */}
+        <div className="space-y-3 mb-4">
+          <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Filters</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-[11px] font-bold text-slate-600">Date From</Label>
+              <Input type="date" value={filters.from || ''} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="h-10 text-sm rounded-xl" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[11px] font-bold text-slate-600">Date To</Label>
+              <Input type="date" value={filters.to || ''} onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="h-10 text-sm rounded-xl" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] font-bold text-slate-600">Delivery Status</Label>
+            <select
+              value={filters.status || ''}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="w-full h-10 px-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            >
+              <option value="">All</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="ACTIVE">Active</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Format */}
+        <div className="space-y-3 mb-6">
+          <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Format</Label>
+          <div className="grid grid-cols-3 gap-2">
+            {(['csv', 'xlsx', 'pdf'] as const).map((fmt) => (
+              <button
+                key={fmt}
+                onClick={() => setFormat(fmt)}
+                className={cn(
+                  "flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition",
+                  format === fmt ? "border-primary bg-primary/5" : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                )}
+              >
+                <span className={cn("text-[11px] font-extrabold", format === fmt ? "text-primary" : "text-slate-500")}>
+                  {fmt === 'csv' ? 'CSV' : fmt === 'xlsx' ? 'Excel' : 'PDF'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <Button variant="outline" className="flex-1 rounded-xl font-bold" onClick={() => onOpenChange(false)} disabled={isExporting}>
+            Cancel
+          </Button>
+          <Button className="flex-1 lime-btn rounded-xl font-extrabold gap-2" onClick={handleExport} disabled={isExporting}>
+            {isExporting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                Export
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

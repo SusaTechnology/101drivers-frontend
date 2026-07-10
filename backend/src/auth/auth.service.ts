@@ -3,9 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   Logger,
-  NotFoundException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { Request, Response } from "express";
 import { Credentials } from "./Credentials";
 import { PasswordService } from "./password.service";
@@ -61,7 +59,6 @@ export class AuthService {
     private readonly emailVerificationService: EmailVerificationService,
     private readonly notificationEventEngine: NotificationEventEngine,
     private readonly mailService: MailService,
-    private readonly configService: ConfigService,
   ) {}
 
   private normalizeIdentifier(identifier: string): string {
@@ -244,91 +241,6 @@ export class AuthService {
       email: user.email ?? null,
       fullName: user.fullName ?? null,
       roles: user.roles,
-      customerApprovalStatus: authMeta.customerApprovalStatus,
-      driverStatus: authMeta.driverStatus,
-      onboardingCompleted: authMeta.onboardingCompleted,
-      onboardingToken: authMeta.onboardingToken,
-      isActive: user.isActive,
-    } as UserInfo;
-  }
-
-  /**
-   * Insurance Portal Login — validates a shared portal password and issues
-   * a JWT for a designated admin account. This lets the insurance company
-   * access ONLY the insurance report page without needing their own login.
-   *
-   * Env vars required:
-   *   INSURANCE_PORTAL_PASSWORD — the shared password
-   *   INSURANCE_PORTAL_USER_EMAIL — the email of the designated admin account
-   */
-  async insurancePortalLogin(
-    password: string,
-    request: Request,
-    response: Response
-  ): Promise<UserInfo> {
-    const portalPassword = this.configService.get<string>("INSURANCE_PORTAL_PASSWORD");
-    const portalUserEmail = this.configService.get<string>("INSURANCE_PORTAL_USER_EMAIL");
-
-    if (!portalPassword || !portalUserEmail) {
-      throw new BadRequestException(
-        "Insurance portal is not configured. Set INSURANCE_PORTAL_PASSWORD and INSURANCE_PORTAL_USER_EMAIL env vars."
-      );
-    }
-
-    if (password !== portalPassword) {
-      throw new UnauthorizedException("Invalid portal password");
-    }
-
-    // Look up the designated admin user by email
-    const user = await this.findUserByIdentifier(portalUserEmail);
-    if (!user) {
-      throw new NotFoundException(
-        "Designated portal admin account not found. Please create an admin user with the email specified in INSURANCE_PORTAL_USER_EMAIL."
-      );
-    }
-
-    if (!user.isActive) {
-      throw new UnauthorizedException("Portal admin account is disabled");
-    }
-
-    // user.roles is EnumUserRoles (single value) — wrap in array for token service
-    const roleList = [String(user.roles)];
-
-    // Issue tokens (no password check — the portal password IS the auth)
-    const accessToken = await this.tokenService.createToken({
-      id: user.id,
-      username: user.username,
-      roles: roleList,
-    });
-
-    const refreshToken = await this.tokenService.createRefreshToken({
-      id: user.id,
-      username: user.username,
-      roles: roleList,
-    });
-
-    const authMeta = await this.resolveAuthMeta(user.id, roleList);
-    const cookieOptions = getCookieOptionsFromRequest(request);
-
-    response.cookie("accessToken", accessToken, {
-      ...cookieOptions,
-      maxAge: 15 * 60 * 1000,
-    });
-
-    response.cookie("refreshToken", refreshToken, {
-      ...cookieOptions,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-      id: user.id,
-      profileId: authMeta.profileId,
-      username: user.username,
-      email: user.email ?? null,
-      fullName: user.fullName ?? null,
-      roles: roleList,
       customerApprovalStatus: authMeta.customerApprovalStatus,
       driverStatus: authMeta.driverStatus,
       onboardingCompleted: authMeta.onboardingCompleted,
