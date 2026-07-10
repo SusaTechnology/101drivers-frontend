@@ -110,10 +110,15 @@ export async function buildPdfBuffer(
 
     drawHeader();
 
+    // If there are no rows, remove the empty page
+    if (rows.length === 0) {
+      doc.text("No data found for the selected filters.", MARGIN, y + 20);
+    } else {
     // Draw data rows
-    for (const row of rows) {
-      // Check if we need a new page
-      if (currentPageRows >= rowsPerPage) {
+    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+      const row = rows[rowIdx];
+      // Check if we need a new page — but only if there are more rows after this one
+      if (currentPageRows >= rowsPerPage && rowIdx < rows.length) {
         doc.addPage();
         y = MARGIN;
         drawHeader();
@@ -142,6 +147,7 @@ export async function buildPdfBuffer(
       rowIndex++;
       currentPageRows++;
     }
+    } // close else (rows.length > 0)
 
     // ════════════════════════════════════════════════════════════
     // PAGE NUMBERS — add to every page

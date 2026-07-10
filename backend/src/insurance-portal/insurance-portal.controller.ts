@@ -96,6 +96,7 @@ export class InsurancePortalController {
   async exportReport(
     @common.Headers() headers: Record<string, any>,
     @common.Query() query: InsuranceMileageReportQueryDto,
+    @common.Query("columns") columnsParam: string,
     @common.Res({ passthrough: false }) res: Response
   ) {
     await this.validatePassword(headers);
@@ -103,6 +104,10 @@ export class InsurancePortalController {
       throw new common.BadRequestException(
         "Format is required for export. Use csv, xlsx, or pdf."
       );
+    }
+    // Explicitly set columns on the query to ensure it's not lost during DTO transformation
+    if (columnsParam) {
+      query.columns = columnsParam;
     }
     const result = await this.reportsService.insuranceMileage(query);
     const exportResult = result as any;
