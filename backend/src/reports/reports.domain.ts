@@ -890,11 +890,42 @@ export class ReportsDomain {
   }
 
   async getInsuranceMileageReport(query: InsuranceMileageReportQueryDto) {
-    const baseWhere: Prisma.TrackingSessionWhereInput = {
-      ...this.trackingBaseWhere(query),
-      ...(query.status
-        ? { delivery: { status: query.status } }
+    // Build the delivery filter — merge status, serviceType, customerId,
+    // driverId, address search, and payment amount range
+    const deliveryFilter: Prisma.DeliveryRequestWhereInput = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.serviceType ? { serviceType: query.serviceType } : {}),
+      ...(query.customerId ? { customerId: query.customerId } : {}),
+      ...(query.driverId
+        ? {
+            assignments: {
+              some: { driverId: query.driverId, unassignedAt: null },
+            },
+          }
         : {}),
+      ...(query.pickupAddressSearch
+        ? { pickupAddress: { contains: query.pickupAddressSearch, mode: "insensitive" } }
+        : {}),
+      ...(query.dropoffAddressSearch
+        ? { dropoffAddress: { contains: query.dropoffAddressSearch, mode: "insensitive" } }
+        : {}),
+      ...(query.minPaymentAmount != null || query.maxPaymentAmount != null
+        ? {
+            payment: {
+              amount: {
+                ...(query.minPaymentAmount != null ? { gte: query.minPaymentAmount } : {}),
+                ...(query.maxPaymentAmount != null ? { lte: query.maxPaymentAmount } : {}),
+              },
+            },
+          }
+        : {}),
+    };
+
+    const baseWhere: Prisma.TrackingSessionWhereInput = {
+      ...this.buildDateRange("createdAt", query.from, query.to),
+      delivery: deliveryFilter,
+      ...(query.minDrivenMiles != null ? { drivenMiles: { gte: query.minDrivenMiles } } : {}),
+      ...(query.maxDrivenMiles != null ? { drivenMiles: { lte: query.maxDrivenMiles } } : {}),
     };
 
     // ── Driven hours helper ──
@@ -1074,6 +1105,8 @@ export class ReportsDomain {
                     driverId: true,
                   },
                 },
+                payment: { select: { amount: true } },
+                payout: { select: { netAmount: true } },
               },
             },
           },
@@ -1174,6 +1207,12 @@ export class ReportsDomain {
         : await this.prisma.trackingSession.count({
             where: { ...baseWhere, stoppedAt: { not: null } },
           }),
+      totalPaymentAmount: allForGrouping.reduce(
+        (sum, r) => sum + (r.delivery?.payment?.amount ?? 0), 0
+      ),
+      totalPayoutAmount: allForGrouping.reduce(
+        (sum, r) => sum + (r.delivery?.payout?.netAmount ?? 0), 0
+      ),
     };
 
     return {

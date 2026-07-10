@@ -217,4 +217,42 @@ export class InsuranceMileageReportQueryDto extends BaseReportQueryDto {
   @IsOptional()
   @IsEnum(EnumDeliveryRequestStatus)
   status?: EnumDeliveryRequestStatus;
+
+  @ApiPropertyOptional({ description: "Minimum driven miles (inclusive)" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minDrivenMiles?: number;
+
+  @ApiPropertyOptional({ description: "Maximum driven miles (inclusive)" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxDrivenMiles?: number;
+
+  @ApiPropertyOptional({ description: "Minimum payment amount (inclusive)" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minPaymentAmount?: number;
+
+  @ApiPropertyOptional({ description: "Maximum payment amount (inclusive)" })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  maxPaymentAmount?: number;
+
+  @ApiPropertyOptional({ description: "Filter by pickup address keyword" })
+  @IsOptional()
+  @IsString()
+  pickupAddressSearch?: string;
+
+  @ApiPropertyOptional({ description: "Filter by dropoff address keyword" })
+  @IsOptional()
+  @IsString()
+  dropoffAddressSearch?: string;
 }
