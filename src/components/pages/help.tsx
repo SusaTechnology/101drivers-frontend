@@ -77,6 +77,26 @@ const driverFaqs = [
     answer: 'Once approved, browse the job feed on your dashboard. Available deliveries are shown with distance, pay estimate, and pickup time. Tap "Book" to accept a job.',
   },
   {
+    question: 'How much can I earn per delivery?',
+    answer: 'Payouts are shown upfront before you book. Most deliveries are scheduled in advance, so you can clearly see how much you\'ll make and plan your routes and earnings accordingly.',
+  },
+  {
+    question: 'If I deliver a car from A to B, how do I get back?',
+    answer: 'You plan your own routes. Since most jobs are in the greater Los Angeles and Southern California area, the app helps you find the next available pickup nearby so you can stay efficient and minimize deadhead miles. Many drivers use public transport or occasional Uber between jobs.',
+  },
+  {
+    question: 'Do I need to use my own car?',
+    answer: 'No. You don\'t need your own car for this job. You\'re only driving the customer\'s vehicle from pickup to drop-off, so you have zero car expenses — making your net earnings much higher than rideshare or delivery gigs.',
+  },
+  {
+    question: 'Am I insured while delivering?',
+    answer: 'Yes. All drivers are fully insured by 101 Drivers Inc. from the moment you start the delivery until it is completed.',
+  },
+  {
+    question: 'As a driver, what happens after I start a delivery?',
+    answer: 'Once you start the delivery, make sure your dashcam is recording, keep your phone screen on, and follow the exact route shown on the map. This is very important for insurance purposes.',
+  },
+  {
     question: 'What is the pickup checklist?',
     answer: 'Before starting a trip, you must: (1) get the 4-digit authorization PIN from the customer, (2) confirm you are at the vehicle, (3) take 6 photos of the vehicle clockwise — Left Front Corner, Right Front Corner, Passenger Side, Right Rear Corner, Left Rear Corner, Driver\'s Side, (4) take ONE dashboard/touchscreen photo that clearly shows the fuel gauge or battery charge level (the vehicle must have at least half a tank or half charge), and (5) enter the current odometer reading and the last 4 digits of the VIN. All steps are required.',
   },
@@ -95,6 +115,10 @@ const driverFaqs = [
   {
     question: 'Can I set my preferred areas?',
     answer: 'Yes! Go to your preferences to set your home city, preferred radius, and district preferences. The job feed prioritizes deliveries near your location.',
+  },
+  {
+    question: 'How do I change my profile picture?',
+    answer: 'Your profile picture must be a clear, front-facing photo with no sunglasses or hats. If you need to update it, please contact customer support — changes can only be made in person.',
   },
   {
     question: 'What if there\'s an issue during delivery?',
@@ -135,7 +159,10 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Nav bar */}
-      <nav className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+      <nav
+        className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      >
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link
             to="/"
