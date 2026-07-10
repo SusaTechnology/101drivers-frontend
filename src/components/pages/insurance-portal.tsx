@@ -36,6 +36,8 @@ export default function InsurancePortalPage() {
   const [minPayment, setMinPayment] = useState('')
   const [maxPayment, setMaxPayment] = useState('')
   const [pickupSearch, setPickupSearch] = useState('')
+  const [driverList, setDriverList] = useState<Array<{ id: string; name: string }>>([])
+  const [customerList, setCustomerList] = useState<Array<{ id: string; name: string; type: string }>>([])
   const [page, setPage] = useState(1)
   const [pageSize] = useState(25)
   const [exportOpen, setExportOpen] = useState(false)
@@ -44,6 +46,22 @@ export default function InsurancePortalPage() {
     const saved = sessionStorage.getItem('insurancePortalPassword')
     if (saved) setAuthenticated(true)
   }, [])
+
+  // Fetch driver + customer lists when authenticated
+  useEffect(() => {
+    if (!authenticated) return
+    const pwd = sessionStorage.getItem('insurancePortalPassword') || ''
+    // Fetch drivers
+    fetch(`${API_BASE}/api/insurance-portal/drivers`, { headers: { 'X-Portal-Password': pwd } })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setDriverList(data))
+      .catch(() => {})
+    // Fetch customers
+    fetch(`${API_BASE}/api/insurance-portal/customers`, { headers: { 'X-Portal-Password': pwd } })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setCustomerList(data))
+      .catch(() => {})
+  }, [authenticated])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -127,6 +145,8 @@ export default function InsurancePortalPage() {
     page={page} setPage={setPage}
     pageSize={pageSize}
     exportOpen={exportOpen} setExportOpen={setExportOpen}
+    driverList={driverList}
+    customerList={customerList}
   />
 }
 
@@ -144,6 +164,7 @@ function ReportView(props: any) {
     minPayment, setMinPayment, maxPayment, setMaxPayment,
     pickupSearch, setPickupSearch,
     page, setPage, pageSize, exportOpen, setExportOpen,
+    driverList, customerList,
   } = props
 
   const portalPassword = sessionStorage.getItem('insurancePortalPassword') || ''
@@ -283,11 +304,21 @@ function ReportView(props: any) {
                   <option value="service">Service</option>
                 </select>
               </FilterField>
-              <FilterField label="Customer ID">
-                <Input value={customerId} onChange={(e) => { setCustomerId(e.target.value); setPage(1) }} placeholder="Enter customer ID" className="h-9 text-sm rounded-xl" />
+              <FilterField label="Customer">
+                <select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  <option value="">All Customers</option>
+                  {customerList.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </FilterField>
-              <FilterField label="Driver ID">
-                <Input value={driverId} onChange={(e) => { setDriverId(e.target.value); setPage(1) }} placeholder="Enter driver ID" className="h-9 text-sm rounded-xl" />
+              <FilterField label="Driver">
+                <select value={driverId} onChange={(e) => { setDriverId(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  <option value="">All Drivers</option>
+                  {driverList.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
               </FilterField>
               <FilterField label="Min Miles">
                 <Input type="number" value={minMiles} onChange={(e) => { setMinMiles(e.target.value); setPage(1) }} placeholder="0" className="h-9 text-sm rounded-xl" />

@@ -92,6 +92,51 @@ export class InsurancePortalController {
     };
   }
 
+  /**
+   * GET /api/insurance-portal/drivers
+   * Returns a list of all drivers (id + name) for the filter dropdown.
+   */
+  @common.Get("drivers")
+  async getDrivers(@common.Headers() headers: Record<string, any>) {
+    await this.validatePassword(headers);
+    const drivers = await this.prisma.driver.findMany({
+      where: { user: { isActive: true } },
+      select: {
+        id: true,
+        user: { select: { fullName: true, email: true } },
+      },
+      orderBy: { user: { fullName: "asc" } },
+    });
+    return drivers.map((d: any) => ({
+      id: d.id,
+      name: d.user?.fullName || d.user?.email || "Unknown",
+    }));
+  }
+
+  /**
+   * GET /api/insurance-portal/customers
+   * Returns a list of all customers (id + name) for the filter dropdown.
+   */
+  @common.Get("customers")
+  async getCustomers(@common.Headers() headers: Record<string, any>) {
+    await this.validatePassword(headers);
+    const customers = await this.prisma.customer.findMany({
+      where: { user: { isActive: true } },
+      select: {
+        id: true,
+        businessName: true,
+        customerType: true,
+        user: { select: { fullName: true, email: true } },
+      },
+      orderBy: { businessName: "asc" },
+    });
+    return customers.map((c: any) => ({
+      id: c.id,
+      name: c.businessName || c.user?.fullName || c.user?.email || "Unknown",
+      type: c.customerType,
+    }));
+  }
+
   @common.Get("export")
   async exportReport(
     @common.Headers() headers: Record<string, any>,
