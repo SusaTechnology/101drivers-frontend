@@ -100,10 +100,12 @@ export class ReportsService {
         .split(",")
         .map((k) => k.trim())
         .filter(Boolean);
+      console.log(`[Reports] Column filtering: requested=${JSON.stringify(requestedKeys)}, allKeys=${allColumns.map((c: any) => c.key)}`);
       if (requestedKeys.length > 0) {
         const filtered = allColumns.filter((col: any) =>
           requestedKeys.includes(col.key)
         );
+        console.log(`[Reports] Filtered columns: ${filtered.map((c: any) => c.key)}`);
         if (filtered.length > 0) {
           columns = filtered;
         }

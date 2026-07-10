@@ -105,15 +105,16 @@ export class InsurancePortalController {
         "Format is required for export. Use csv, xlsx, or pdf."
       );
     }
-    // Force columns onto the query object — use JSON round-trip to convert
-    // the DTO class instance to a plain object, then add columns.
-    // Spreading a class instance only copies own properties, not inherited ones.
-    const queryPlain = JSON.parse(JSON.stringify(query));
-    if (columnsParam) {
-      queryPlain.columns = columnsParam;
-    }
+
+    // Build a plain object with ALL query params + columns
+    const queryPlain: any = {
+      ...JSON.parse(JSON.stringify(query)),
+      columns: columnsParam || undefined,
+    };
+
     const result = await this.reportsService.insuranceMileage(queryPlain);
     const exportResult = result as any;
+
     if (exportResult?.buffer && exportResult?.contentType && exportResult?.filename) {
       res.setHeader("Content-Type", exportResult.contentType);
       res.setHeader(
