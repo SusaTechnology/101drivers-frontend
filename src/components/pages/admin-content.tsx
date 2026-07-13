@@ -17,6 +17,7 @@ import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
 import { useDataQuery, getAccessToken } from '@/lib/tanstack/dataQuery'
+import { useQueryClient } from '@tanstack/react-query'
 import { driverFaqs, customerFaqs } from '@/components/pages/help'
 
 const API_BASE = import.meta.env.VITE_API_URL
@@ -120,6 +121,7 @@ const CONTENT_SECTIONS = [
 
 export default function AdminContentPage() {
   const { actionItems, signOut } = useAdminActions()
+  const queryClient = useQueryClient()
   const [activeKey, setActiveKey] = useState('agreement')
   const [content, setContent] = useState<string>('')
   const [faqs, setFaqs] = useState<Array<{ question: string; answer: string }>>([])
@@ -168,6 +170,9 @@ export default function AdminContentPage() {
     }).then(res => {
       if (!res.ok) throw new Error()
       toast.success('Content saved successfully')
+      // Invalidate the React Query cache for this key so that the next
+      // tab switch refetches fresh data instead of showing stale cache.
+      queryClient.invalidateQueries({ queryKey: ['admin-content', activeKey] })
     }).catch(() => toast.error('Failed to save content'))
     .finally(() => setIsSaving(false))
   }

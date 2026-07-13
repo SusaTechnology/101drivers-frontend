@@ -116,6 +116,17 @@ const configCards = [
       { icon: FileText, label: "Requirements" },
       { icon: Download, label: "Exports" },
     ]
+  },
+  {
+    href: "/admin-content",
+    icon: FileText,
+    title: "Content Editor",
+    description: "Edit the Independent Driver Agreement, Terms of Service, Privacy Policy, and Driver/Customer Help FAQs without code changes.",
+    chips: [
+      { icon: FileText, label: "Policies" },
+      { icon: Users, label: "FAQs" },
+      { icon: Edit3, label: "WYSIWYG" },
+    ]
   }
 ]
 
