@@ -18,7 +18,7 @@ import { useAdminActions } from '@/hooks/useAdminActions'
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
 import { useDataQuery, useCreate, getAccessToken } from '@/lib/tanstack/dataQuery'
 import { driverFaqs, customerFaqs } from '@/components/pages/help'
-import { renderToStaticMarkup } from 'react-dom/server'
+import { createRoot } from 'react-dom/client'
 import PrivacyPolicy from '@/components/pages/privacy'
 import TermsOfService from '@/components/pages/terms'
 
@@ -117,34 +117,51 @@ export default function AdminContentPage() {
       setFaqs(defaultFaqs.map(f => ({ question: f.question, answer: f.answer })))
       toast.success('Loaded current FAQs from code')
     } else {
-      // Use ReactDOMServer.renderToStaticMarkup to get the HTML from the component
-      try {
-        toast.info('Extracting current content...')
-        const Component = activeKey === 'privacy' ? PrivacyPolicy : TermsOfService
-        const html = renderToStaticMarkup(React.createElement(Component))
-        // Parse the rendered HTML and extract the <main> content
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(html, 'text/html')
-        const mainEl = doc.querySelector('main')
-        if (mainEl && mainEl.innerHTML.trim()) {
-          // Clean up: remove script/style tags
-          mainEl.querySelectorAll('script, style').forEach(el => el.remove())
-          setContent(mainEl.innerHTML)
-          toast.success('Loaded current content')
-        } else {
-          // If no <main> found, use the whole body
-          const body = doc.body
-          if (body && body.innerHTML.trim()) {
-            body.querySelectorAll('script, style').forEach(el => el.remove())
-            setContent(body.innerHTML)
-            toast.success('Loaded current content')
-          } else {
-            toast.error('Could not extract content from the component')
+      // Use createRoot to render the component in a hidden div, then extract innerHTML
+      toast.info('Extracting current content...')
+      const Component = activeKey === 'privacy' ? PrivacyPolicy : TermsOfService
+
+      // Create a hidden div to render into
+      const hiddenDiv = document.createElement('div')
+      hiddenDiv.style.position = 'absolute'
+      hiddenDiv.style.left = '-9999px'
+      hiddenDiv.style.top = '-9999px'
+      document.body.appendChild(hiddenDiv)
+
+      const root = createRoot(hiddenDiv)
+      root.render(React.createElement(Component))
+
+      // Wait for React to finish rendering, then extract the content
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try {
+            const mainEl = hiddenDiv.querySelector('main')
+            let html = ''
+            if (mainEl && mainEl.innerHTML.trim()) {
+              // Clean up: remove script/style tags
+              mainEl.querySelectorAll('script, style').forEach(el => el.remove())
+              html = mainEl.innerHTML
+            } else {
+              // Fallback: use the whole div content
+              hiddenDiv.querySelectorAll('script, style').forEach(el => el.remove())
+              html = hiddenDiv.innerHTML
+            }
+
+            if (html.trim()) {
+              setContent(html)
+              toast.success('Loaded current content')
+            } else {
+              toast.error('Could not extract content from the component')
+            }
+          } catch (err) {
+            toast.error('Failed to extract content: ' + (err?.message || 'Unknown error'))
+          } finally {
+            // Clean up: unmount and remove the hidden div
+            root.unmount()
+            document.body.removeChild(hiddenDiv)
           }
-        }
-      } catch (err) {
-        toast.error('Failed to extract content: ' + (err?.message || 'Unknown error'))
-      }
+        })
+      })
     }
   }
 
