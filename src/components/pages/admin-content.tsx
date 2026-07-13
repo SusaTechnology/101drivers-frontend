@@ -203,9 +203,12 @@ export default function AdminContentPage() {
             <h1 className="text-2xl font-black">Content Editor</h1>
           </div>
           <div className="flex items-center gap-2">
+            {/* "Import Current" button — commented out for now since the content
+                has already been seeded. Uncomment to re-enable.
             <Button onClick={handleImportCurrent} disabled={isSaving || isLoading} variant="outline" className="rounded-xl font-bold gap-2 text-xs">
               <Download className="w-3.5 h-3.5" /> Import Current
             </Button>
+            */}
             <Button onClick={handleSave} disabled={isSaving || isLoading} className="lime-btn rounded-xl font-extrabold gap-2">
               {isSaving ? <><Loader2 className="w-4 h-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4" />Save Changes</>}
             </Button>
@@ -241,17 +244,17 @@ export default function AdminContentPage() {
                 <CardContent className="p-4">
                   <div className="mb-3">
                     <h2 className="text-lg font-black">{activeSection.label}</h2>
-                    <p className="text-xs text-slate-500 mt-1">Edit below. Click "Import Current" to start from the existing content, or write from scratch.</p>
+                    <p className="text-xs text-slate-500 mt-1">Edit the content below. Changes will appear on the public site after you click Save.</p>
                   </div>
                   {content ? (
                     <RichTextEditor key={activeKey} content={content} onChange={setContent} />
                   ) : (
                     <div
                       className="min-h-[400px] p-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-center text-slate-400 text-sm"
-                      onClick={handleImportCurrent}
+                      // onClick={handleImportCurrent}
                       role="button"
                     >
-                      Click here or "Import Current" to load existing content. You can also start typing by importing first.
+                      No saved content yet. Start typing below, or ask an admin to seed the initial content.
                     </div>
                   )}
                 </CardContent>
@@ -271,7 +274,7 @@ export default function AdminContentPage() {
                   <div className="space-y-4">
                     {faqs.length === 0 && (
                       <div className="text-center py-8 text-slate-500 text-sm">
-                        No FAQs yet. Click "Import Current" to load existing FAQs, or "Add FAQ" to create one.
+                        No FAQs saved yet. Click "Add FAQ" to create one, or ask an admin to seed the initial FAQs.
                       </div>
                     )}
                     {faqs.map((faq, index) => (
