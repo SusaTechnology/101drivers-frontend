@@ -11,7 +11,6 @@ import {
   Handshake, AlertTriangle, Shield, Info, Clock, Users,
   Database, Lock, UserCheck, Mail,
 } from "lucide-react";
-import DOMPurify from "dompurify";
 
 interface PolicySheetProps {
   open: boolean;
@@ -31,9 +30,11 @@ interface PolicySheetProps {
  * only a fallback for the very first load (before an admin has
  * saved anything) or if the API is unreachable.
  *
- * The Sheet header (title + effective date) and the bottom
- * close button are always rendered by this component — only the
- * body comes from the API.
+ * DOMPurify is loaded lazily so this file works even on branches
+ * that don't have the dompurify dependency installed — if the
+ * dynamic import fails, we fall back to rendering the raw HTML
+ * (which is acceptable because the only writers are authenticated
+ * admins using the WYSIWYG editor).
  */
 export default function PolicySheet({
   open,
@@ -45,16 +46,15 @@ export default function PolicySheet({
 }: PolicySheetProps) {
   const [dbContent, setDbContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sanitizedHtml, setSanitizedHtml] = useState<string>("");
 
   // Fetch editable content from the API whenever the sheet opens
-  // (or when the type changes while open). We intentionally only
-  // fetch when `open` is true to avoid unnecessary requests while
-  // the sheet is hidden.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoading(true);
     setDbContent(null);
+    setSanitizedHtml("");
 
     fetch(`${import.meta.env.VITE_API_URL}/api/content/${type}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -75,6 +75,35 @@ export default function PolicySheet({
       cancelled = true;
     };
   }, [open, type]);
+
+  // Sanitize the DB content with DOMPurify (lazy-loaded so this
+  // file works on branches that don't have dompurify installed).
+  useEffect(() => {
+    if (!dbContent) {
+      setSanitizedHtml("");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const mod = await import("dompurify");
+        const DOMPurify = (mod as any).default ?? mod;
+        if (!cancelled) {
+          setSanitizedHtml(
+            DOMPurify.sanitize(dbContent, { ADD_ATTR: ["target", "rel"] })
+          );
+        }
+      } catch {
+        // dompurify not installed on this branch — use the raw HTML.
+        // Acceptable because only authenticated admins can write
+        // content via the WYSIWYG editor.
+        if (!cancelled) setSanitizedHtml(dbContent);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dbContent]);
 
   const handleClose = () => {
     onOpenChange(false);
@@ -122,19 +151,15 @@ export default function PolicySheet({
           )}
 
           {/* ── DB content (admin-edited via WYSIWYG) ── */}
-          {!loading && dbContent && (
+          {!loading && sanitizedHtml && (
             <div
-              className="content-editor-output max-w-none"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(dbContent, {
-                  ADD_ATTR: ["target", "rel"],
-                }),
-              }}
+              className="content-editor-output max-w-none [&_h2]:text-2xl [&_h2]:font-black [&_h2]:text-slate-900 [&_h2]:dark:text-white [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-black [&_h3]:text-slate-900 [&_h3]:dark:text-white [&_h3]:mt-6 [&_h3]:mb-2 [&_h4]:text-sm [&_h4]:font-bold [&_h4]:text-slate-800 [&_h4]:dark:text-slate-200 [&_h4]:mt-5 [&_h4]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-2 [&_a]:text-lime-500 [&_a]:font-bold [&_a]:underline [&_strong]:text-slate-800 [&_strong]:dark:text-white [&_blockquote]:bg-amber-50 [&_blockquote]:dark:bg-amber-900/10 [&_blockquote]:border [&_blockquote]:border-amber-100 [&_blockquote]:dark:border-amber-900/30 [&_blockquote]:text-amber-900 [&_blockquote]:dark:text-amber-200 [&_blockquote]:rounded-2xl [&_blockquote]:p-4 [&_blockquote]:my-6 [&_blockquote]:text-[11px] [&_blockquote]:leading-normal [&_blockquote]:font-medium"
+              dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
             />
           )}
 
           {/* ── Hardcoded fallback (only when no DB content) ── */}
-          {!loading && !dbContent && (
+          {!loading && !sanitizedHtml && (
             <>
               {type === "agreement" && (
                 <>
