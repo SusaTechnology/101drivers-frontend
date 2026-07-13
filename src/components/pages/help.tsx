@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 
 // FAQ data
-const customerFaqs = [
+export const customerFaqs = [
   {
     question: 'How do I request a vehicle delivery?',
     answer: 'Enter your pickup and drop-off addresses on our homepage, get an instant quote, then proceed to book. You can track your delivery in real-time once a driver is assigned.',
@@ -67,7 +67,7 @@ const customerFaqs = [
   },
 ]
 
-const driverFaqs = [
+export const driverFaqs = [
   {
     question: 'How do I become a 101 Drivers driver?',
     answer: 'Sign up on our driver registration page. You\'ll need to verify your email, provide your details, and get approved by our team before you can start accepting deliveries.',

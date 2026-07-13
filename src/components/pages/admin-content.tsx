@@ -17,6 +17,7 @@ import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
 import { getAccessToken } from '@/lib/tanstack/dataQuery'
+import { driverFaqs, customerFaqs } from '@/components/pages/help'
 
 const API_BASE = import.meta.env.VITE_API_URL
 
@@ -97,6 +98,38 @@ export default function AdminContentPage() {
     setFaqs(faqs.filter((_, i) => i !== index))
   }
 
+  // Import current hardcoded content into the editor
+  const handleImportCurrent = async () => {
+    if (activeSection.type === 'faq') {
+      // For FAQs, load the hardcoded arrays from help.tsx
+      const defaultFaqs = activeKey === 'help-driver' ? driverFaqs : customerFaqs
+      setFaqs(defaultFaqs.map(f => ({ question: f.question, answer: f.answer })))
+      toast.success('Loaded current FAQs from code')
+    } else {
+      // For richtext, fetch the public page and extract the main content
+      try {
+        toast.info('Fetching current page content...')
+        const pageUrl = activeKey === 'privacy' ? '/privacy' : '/terms'
+        const res = await fetch(pageUrl)
+        const html = await res.text()
+        // Parse the HTML and extract the <main> content
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(html, 'text/html')
+        const mainEl = doc.querySelector('main')
+        if (mainEl) {
+          // Clean up: remove script tags, inline styles that might break the editor
+          mainEl.querySelectorAll('script, style').forEach(el => el.remove())
+          setContent(mainEl.innerHTML)
+          toast.success('Loaded current content from the page')
+        } else {
+          toast.error('Could not find content on the page')
+        }
+      } catch {
+        toast.error('Failed to fetch current content')
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
@@ -110,9 +143,14 @@ export default function AdminContentPage() {
             </Link>
             <h1 className="text-2xl font-black">Content Editor</h1>
           </div>
-          <Button onClick={handleSave} disabled={isSaving || isLoading} className="lime-btn rounded-xl font-extrabold gap-2">
-            {isSaving ? <><Loader2 className="w-4 h-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4" />Save Changes</>}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleImportCurrent} disabled={isSaving || isLoading} variant="outline" className="rounded-xl font-bold gap-2 text-xs">
+              <FileText className="w-3.5 h-3.5" /> Import Current Content
+            </Button>
+            <Button onClick={handleSave} disabled={isSaving || isLoading} className="lime-btn rounded-xl font-extrabold gap-2">
+              {isSaving ? <><Loader2 className="w-4 h-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4" />Save Changes</>}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
