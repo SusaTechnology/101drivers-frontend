@@ -18,6 +18,7 @@ import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
 import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as LandingIndexRouteImport } from './routes/landing/index'
+import { Route as InsurancePortalIndexRouteImport } from './routes/insurance-portal/index'
 import { Route as HelpDriverIndexRouteImport } from './routes/help-driver/index'
 import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/index'
 import { Route as DriverIndexRouteImport } from './routes/driver/index'
@@ -156,6 +157,11 @@ const LiveTrackIndexRoute = LiveTrackIndexRouteImport.update({
 const LandingIndexRoute = LandingIndexRouteImport.update({
   id: '/landing/',
   path: '/landing/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InsurancePortalIndexRoute = InsurancePortalIndexRouteImport.update({
+  id: '/insurance-portal/',
+  path: '/insurance-portal/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpDriverIndexRoute = HelpDriverIndexRouteImport.update({
@@ -749,6 +755,7 @@ export interface FileRoutesByFullPath {
   '/driver/': typeof DriverIndexRoute
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
+  '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/landing/': typeof LandingIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -853,6 +860,7 @@ export interface FileRoutesByTo {
   '/driver': typeof DriverIndexRoute
   '/help-customer': typeof HelpCustomerIndexRoute
   '/help-driver': typeof HelpDriverIndexRoute
+  '/insurance-portal': typeof InsurancePortalIndexRoute
   '/landing': typeof LandingIndexRoute
   '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
@@ -959,6 +967,7 @@ export interface FileRoutesById {
   '/driver/': typeof DriverIndexRoute
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
+  '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/landing/': typeof LandingIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -1066,6 +1075,7 @@ export interface FileRouteTypes {
     | '/driver/'
     | '/help-customer/'
     | '/help-driver/'
+    | '/insurance-portal/'
     | '/landing/'
     | '/live-track/'
     | '/map-test/'
@@ -1170,6 +1180,7 @@ export interface FileRouteTypes {
     | '/driver'
     | '/help-customer'
     | '/help-driver'
+    | '/insurance-portal'
     | '/landing'
     | '/live-track'
     | '/map-test'
@@ -1275,6 +1286,7 @@ export interface FileRouteTypes {
     | '/driver/'
     | '/help-customer/'
     | '/help-driver/'
+    | '/insurance-portal/'
     | '/landing/'
     | '/live-track/'
     | '/map-test/'
@@ -1359,6 +1371,7 @@ export interface RootRouteChildren {
   DriverWalletIndexRoute: typeof DriverWalletIndexRoute
   HelpCustomerIndexRoute: typeof HelpCustomerIndexRoute
   HelpDriverIndexRoute: typeof HelpDriverIndexRoute
+  InsurancePortalIndexRoute: typeof InsurancePortalIndexRoute
   LandingIndexRoute: typeof LandingIndexRoute
   LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
@@ -1434,6 +1447,13 @@ declare module '@tanstack/react-router' {
       path: '/landing'
       fullPath: '/landing/'
       preLoaderRoute: typeof LandingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/insurance-portal/': {
+      id: '/insurance-portal/'
+      path: '/insurance-portal'
+      fullPath: '/insurance-portal/'
+      preLoaderRoute: typeof InsurancePortalIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help-driver/': {
@@ -2222,6 +2242,7 @@ const rootRouteChildren: RootRouteChildren = {
   DriverWalletIndexRoute: DriverWalletIndexRoute,
   HelpCustomerIndexRoute: HelpCustomerIndexRoute,
   HelpDriverIndexRoute: HelpDriverIndexRoute,
+  InsurancePortalIndexRoute: InsurancePortalIndexRoute,
   LandingIndexRoute: LandingIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,
