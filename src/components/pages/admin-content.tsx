@@ -16,7 +16,7 @@ import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
-import { useDataQuery, getAccessToken } from '@/lib/tanstack/dataQuery'
+import { getAccessToken } from '@/lib/tanstack/dataQuery'
 import { useQueryClient } from '@tanstack/react-query'
 import { driverFaqs, customerFaqs } from '@/components/pages/help'
 
@@ -126,38 +126,48 @@ export default function AdminContentPage() {
   const [content, setContent] = useState<string>('')
   const [faqs, setFaqs] = useState<Array<{ question: string; answer: string }>>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   const activeSection = CONTENT_SECTIONS.find(s => s.key === activeKey)!
 
-  // Load content using useDataQuery — keyed by activeKey so it refetches on tab switch
-  const { data: contentData, isLoading } = useDataQuery<{ key: string; content: any }>({
-    apiEndPoint: `${API_BASE}/api/content/${activeKey}`,
-    noFilter: true,
-    queryKey: ['admin-content', activeKey],
-  })
-
-  // Reset state immediately when switching tabs — prevents the previous
-  // tab's content from being shown while the new tab's data is fetching.
+  // Fetch content for the active tab directly with fetch().
+  // We intentionally do NOT use useDataQuery here because it uses
+  // `keepPreviousData` (placeholderData: keepPreviousData), which keeps
+  // the PREVIOUS tab's data visible as a placeholder while the new tab
+  // is fetching. That caused a bug where switching from Agreement to
+  // Privacy would briefly show the Agreement content under the Privacy
+  // heading. A plain fetch gives us full control: we clear state
+  // immediately on tab switch, show a loading spinner, and only apply
+  // data that matches the currently active tab.
   useEffect(() => {
+    let cancelled = false
+    setIsLoading(true)
     setContent('')
     setFaqs([])
-  }, [activeKey])
 
-  // Apply fetched data when it arrives — BUT only if the data's key
-  // matches the currently active tab. This guards against
-  // `keepPreviousData` (used by useDataQuery) which keeps the OLD tab's
-  // data visible as a placeholder while the new tab is fetching. Without
-  // this check, switching from "Agreement" to "Privacy" would briefly
-  // re-apply the Agreement content under the Privacy heading.
-  useEffect(() => {
-    if (!isLoading && contentData && contentData.key === activeKey) {
-      if (activeSection.type === 'richtext') {
-        setContent(typeof contentData.content === 'string' ? contentData.content : '')
-      } else {
-        setFaqs(Array.isArray(contentData.content) ? contentData.content : [])
-      }
+    fetch(`${API_BASE}/api/content/${activeKey}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return
+        if (data && data.key === activeKey) {
+          if (activeSection.type === 'richtext') {
+            setContent(typeof data.content === 'string' ? data.content : '')
+          } else {
+            setFaqs(Array.isArray(data.content) ? data.content : [])
+          }
+        }
+      })
+      .catch(() => {
+        /* swallow — empty state will show */
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
     }
-  }, [contentData, isLoading, activeKey, activeSection.type])
+  }, [activeKey, activeSection.type])
 
   const handleSave = () => {
     setIsSaving(true)
