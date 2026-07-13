@@ -42,10 +42,22 @@ import {
   MapPin,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import DOMPurify from 'dompurify'
 
 export default function PrivacyPolicy() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('terms')
+  const [dbContent, setDbContent] = useState<string | null>(null)
+  const [loadingContent, setLoadingContent] = useState(true)
+
+  // Fetch editable content from the API
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/api/content/privacy`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.content) setDbContent(data.content) })
+      .catch(() => {})
+      .finally(() => setLoadingContent(false))
+  }, [])
 
   // If the URL has #privacy-top hash, activate the privacy tab on load
   useEffect(() => {
@@ -232,7 +244,25 @@ export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <Header />
-      
+
+      {/* If admin has edited the content, render it from the DB (sanitized) */}
+      {dbContent ? (
+        <main className="w-full max-w-[1024px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+          <div
+            className="prose prose-slate dark:prose-invert max-w-none"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(dbContent) }}
+          />
+        </main>
+      ) : loadingContent ? (
+        <main className="w-full max-w-[1024px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-xl w-1/3" />
+            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-full" />
+            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-full" />
+            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-2/3" />
+          </div>
+        </main>
+      ) : (
       <main className="w-full max-w-[1024px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
         {/* Quick Navigation */}
         <div className="flex flex-wrap gap-2 mb-8">
@@ -702,7 +732,8 @@ export default function PrivacyPolicy() {
           </CardContent>
         </Card>
       </main>
-      
+      )}
+
       <Footer />
     </div>
   )

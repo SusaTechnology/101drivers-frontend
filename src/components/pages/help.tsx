@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -156,6 +156,21 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
   const isCustomer = type === 'customer'
   const isDriver = type === 'driver'
 
+  // Fetch editable FAQs from API — fall back to hardcoded if not set
+  const [dbFaqs, setDbFaqs] = useState<Array<{ question: string; answer: string }> | null>(null)
+
+  useEffect(() => {
+    const contentKey = isDriver ? 'help-driver' : 'help-customer'
+    fetch(`${import.meta.env.VITE_API_URL}/api/content/${contentKey}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.content && Array.isArray(data.content) && data.content.length > 0) setDbFaqs(data.content) })
+      .catch(() => {})
+  }, [isDriver])
+
+  // Use DB FAQs if available, otherwise fall back to hardcoded
+  const activeDriverFaqs = dbFaqs && isDriver ? dbFaqs : driverFaqs
+  const activeCustomerFaqs = dbFaqs && isCustomer ? dbFaqs : customerFaqs
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Nav bar */}
@@ -243,7 +258,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
               </CardHeader>
               <CardContent>
                 <div className="divide-y-0">
-                  {customerFaqs.map((faq, i) => (
+                  {activeCustomerFaqs.map((faq, i) => (
                     <FaqItem key={i} question={faq.question} answer={faq.answer} />
                   ))}
                 </div>
@@ -317,7 +332,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
               </CardHeader>
               <CardContent>
                 <div className="divide-y-0">
-                  {driverFaqs.map((faq, i) => (
+                  {activeDriverFaqs.map((faq, i) => (
                     <FaqItem key={i} question={faq.question} answer={faq.answer} />
                   ))}
                 </div>

@@ -62,10 +62,11 @@ import { StripeModule } from "./providers/stripe/stripe.module";
 import { ReferralModule } from "./referral/referral.module";
 import { StripeWebhookController } from "./payment/stripe-webhook.controller";
 import { InsurancePortalController } from "./insurance-portal/insurance-portal.controller";
+import { ContentController } from "./content/content.controller";
 import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "./common/mail/mail.service";
 @Module({
-  controllers: [StripeWebhookController, InsurancePortalController],
+  controllers: [StripeWebhookController, InsurancePortalController, ContentController],
   imports: [
     ACLModule,
     AuthModule,

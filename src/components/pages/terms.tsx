@@ -1,10 +1,11 @@
 // terms-of-service.tsx
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import DOMPurify from 'dompurify'
 import {
   FileText,
   ArrowRight,
@@ -26,6 +27,16 @@ import { cn } from '@/lib/utils'
 
 export default function TermsOfService() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [dbContent, setDbContent] = useState<string | null>(null)
+  const [loadingContent, setLoadingContent] = useState(true)
+
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/api/content/terms`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.content) setDbContent(data.content) })
+      .catch(() => {})
+      .finally(() => setLoadingContent(false))
+  }, [])
 
   // Header component
   const Header = () => (
@@ -159,7 +170,23 @@ export default function TermsOfService() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <Header />
-      
+
+      {dbContent ? (
+        <main className="w-full max-w-[1024px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+          <div
+            className="prose prose-slate dark:prose-invert max-w-none"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(dbContent) }}
+          />
+        </main>
+      ) : loadingContent ? (
+        <main className="w-full max-w-[1024px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-xl w-1/3" />
+            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-full" />
+            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-2/3" />
+          </div>
+        </main>
+      ) : (
       <main className="w-full max-w-[1024px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
         <Card className="border-slate-200 dark:border-slate-800 rounded-3xl hover:shadow-xl transition-shadow">
           <CardContent className="p-7 sm:p-10">
@@ -258,7 +285,8 @@ export default function TermsOfService() {
           </CardContent>
         </Card>
       </main>
-      
+      )}
+
       <Footer />
     </div>
   )
