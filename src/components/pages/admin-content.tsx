@@ -1,11 +1,11 @@
 //@ts-nocheck
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   FileText, HelpCircle, Save, Loader2, ArrowLeft, Plus, Trash2,
-  Shield, BookOpen,
+  Shield, Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,8 +16,11 @@ import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
-import { getAccessToken } from '@/lib/tanstack/dataQuery'
+import { useDataQuery, useCreate, getAccessToken } from '@/lib/tanstack/dataQuery'
 import { driverFaqs, customerFaqs } from '@/components/pages/help'
+import { renderToStaticMarkup } from 'react-dom/server'
+import PrivacyPolicy from '@/components/pages/privacy'
+import TermsOfService from '@/components/pages/terms'
 
 const API_BASE = import.meta.env.VITE_API_URL
 
@@ -33,57 +36,66 @@ export default function AdminContentPage() {
   const [activeKey, setActiveKey] = useState('privacy')
   const [content, setContent] = useState<string>('')
   const [faqs, setFaqs] = useState<Array<{ question: string; answer: string }>>([])
-  const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
   const activeSection = CONTENT_SECTIONS.find(s => s.key === activeKey)!
 
-  const fetchContent = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const token = getAccessToken()
-      const res = await fetch(`${API_BASE}/api/content/${activeKey}`)
-      if (!res.ok) throw new Error()
-      const data = await res.json()
+  // Load content using built-in useDataQuery hook
+  const { data: contentData, isLoading } = useDataQuery<{ key: string; content: any }>({
+    apiEndPoint: `${API_BASE}/api/content/${activeKey}`,
+    noFilter: true,
+  })
+
+  // When data loads or key changes, update state
+  useEffect(() => {
+    if (!isLoading && contentData) {
       if (activeSection.type === 'richtext') {
-        setContent(data.content || '')
+        setContent(typeof contentData.content === 'string' ? contentData.content : '')
       } else {
-        setFaqs(Array.isArray(data.content) ? data.content : [])
+        setFaqs(Array.isArray(contentData.content) ? contentData.content : [])
       }
-    } catch {
-      toast.error('Failed to load content')
+    } else if (!isLoading && !contentData) {
       if (activeSection.type === 'richtext') setContent('')
       else setFaqs([])
-    } finally {
-      setIsLoading(false)
     }
-  }, [activeKey, activeSection])
+  }, [contentData, isLoading, activeKey])
 
-  useEffect(() => { fetchContent() }, [fetchContent])
+  // Save using built-in useCreate hook
+  const saveMutation = useCreate<any, any>(
+    `${API_BASE}/api/content/${activeKey}`,
+    {
+      onSuccess: () => {
+        toast.success('Content saved successfully')
+        setIsSaving(false)
+      },
+      onError: () => {
+        toast.error('Failed to save content')
+        setIsSaving(false)
+      },
+    }
+  )
 
-  const handleSave = async () => {
+  const handleSave = () => {
     setIsSaving(true)
-    try {
-      const token = getAccessToken()
-      const body = activeSection.type === 'richtext'
-        ? { content }
-        : { content: faqs }
-
-      const res = await fetch(`${API_BASE}/api/content/${activeKey}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(body),
-      })
+    const body = activeSection.type === 'richtext'
+      ? { content }
+      : { content: faqs }
+    // useCreate sends POST by default — but our endpoint is PUT
+    // Use fetch with token for PUT since useCreate doesn't support PUT method easily
+    const token = getAccessToken()
+    fetch(`${API_BASE}/api/content/${activeKey}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    }).then(res => {
       if (!res.ok) throw new Error()
       toast.success('Content saved successfully')
-    } catch {
+    }).catch(() => {
       toast.error('Failed to save content')
-    } finally {
-      setIsSaving(false)
-    }
+    }).finally(() => setIsSaving(false))
   }
 
   const addFaq = () => {
@@ -99,33 +111,39 @@ export default function AdminContentPage() {
   }
 
   // Import current hardcoded content into the editor
-  const handleImportCurrent = async () => {
+  const handleImportCurrent = () => {
     if (activeSection.type === 'faq') {
-      // For FAQs, load the hardcoded arrays from help.tsx
       const defaultFaqs = activeKey === 'help-driver' ? driverFaqs : customerFaqs
       setFaqs(defaultFaqs.map(f => ({ question: f.question, answer: f.answer })))
       toast.success('Loaded current FAQs from code')
     } else {
-      // For richtext, fetch the public page and extract the main content
+      // Use ReactDOMServer.renderToStaticMarkup to get the HTML from the component
       try {
-        toast.info('Fetching current page content...')
-        const pageUrl = activeKey === 'privacy' ? '/privacy' : '/terms'
-        const res = await fetch(pageUrl)
-        const html = await res.text()
-        // Parse the HTML and extract the <main> content
+        toast.info('Extracting current content...')
+        const Component = activeKey === 'privacy' ? PrivacyPolicy : TermsOfService
+        const html = renderToStaticMarkup(React.createElement(Component))
+        // Parse the rendered HTML and extract the <main> content
         const parser = new DOMParser()
         const doc = parser.parseFromString(html, 'text/html')
         const mainEl = doc.querySelector('main')
-        if (mainEl) {
-          // Clean up: remove script tags, inline styles that might break the editor
+        if (mainEl && mainEl.innerHTML.trim()) {
+          // Clean up: remove script/style tags
           mainEl.querySelectorAll('script, style').forEach(el => el.remove())
           setContent(mainEl.innerHTML)
-          toast.success('Loaded current content from the page')
+          toast.success('Loaded current content')
         } else {
-          toast.error('Could not find content on the page')
+          // If no <main> found, use the whole body
+          const body = doc.body
+          if (body && body.innerHTML.trim()) {
+            body.querySelectorAll('script, style').forEach(el => el.remove())
+            setContent(body.innerHTML)
+            toast.success('Loaded current content')
+          } else {
+            toast.error('Could not extract content from the component')
+          }
         }
-      } catch {
-        toast.error('Failed to fetch current content')
+      } catch (err) {
+        toast.error('Failed to extract content: ' + (err?.message || 'Unknown error'))
       }
     }
   }
@@ -145,7 +163,7 @@ export default function AdminContentPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={handleImportCurrent} disabled={isSaving || isLoading} variant="outline" className="rounded-xl font-bold gap-2 text-xs">
-              <FileText className="w-3.5 h-3.5" /> Import Current Content
+              <Download className="w-3.5 h-3.5" /> Import Current Content
             </Button>
             <Button onClick={handleSave} disabled={isSaving || isLoading} className="lime-btn rounded-xl font-extrabold gap-2">
               {isSaving ? <><Loader2 className="w-4 h-4 animate-spin" />Saving...</> : <><Save className="w-4 h-4" />Save Changes</>}
@@ -182,9 +200,18 @@ export default function AdminContentPage() {
                 <CardContent className="p-4">
                   <div className="mb-3">
                     <h2 className="text-lg font-black">{activeSection.label}</h2>
-                    <p className="text-xs text-slate-500 mt-1">Edit the content below. Changes go live immediately after saving.</p>
+                    <p className="text-xs text-slate-500 mt-1">Edit the content below. Changes go live immediately after saving. Click "Import Current Content" to start from the existing page.</p>
                   </div>
-                  <RichTextEditor content={content} onChange={setContent} />
+                  {content ? (
+                    <RichTextEditor content={content} onChange={setContent} />
+                  ) : (
+                    <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+                      <p className="text-sm text-slate-500 mb-3">No content saved yet.</p>
+                      <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={handleImportCurrent}>
+                        <Download className="w-3.5 h-3.5" /> Import Current Content
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -193,7 +220,7 @@ export default function AdminContentPage() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-lg font-black">{activeSection.label}</h2>
-                      <p className="text-xs text-slate-500 mt-1">Add, edit, or remove FAQ items.</p>
+                      <p className="text-xs text-slate-500 mt-1">Add, edit, or remove FAQ items. Click "Import Current Content" to load existing FAQs.</p>
                     </div>
                     <Button size="sm" variant="outline" className="rounded-xl gap-1.5" onClick={addFaq}>
                       <Plus className="w-3.5 h-3.5" /> Add FAQ
@@ -201,7 +228,9 @@ export default function AdminContentPage() {
                   </div>
                   <div className="space-y-4">
                     {faqs.length === 0 && (
-                      <div className="text-center py-8 text-slate-500 text-sm">No FAQs yet. Click "Add FAQ" to create one.</div>
+                      <div className="text-center py-8 text-slate-500 text-sm">
+                        No FAQs yet. Click "Import Current Content" to load existing FAQs, or "Add FAQ" to create one.
+                      </div>
                     )}
                     {faqs.map((faq, index) => (
                       <div key={index} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
