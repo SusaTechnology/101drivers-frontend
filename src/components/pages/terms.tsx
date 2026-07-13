@@ -174,7 +174,7 @@ export default function TermsOfService() {
       {dbContent ? (
         <main className="w-full max-w-[1024px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
           <div
-            className="prose prose-slate dark:prose-invert max-w-none"
+            className="content-editor-output max-w-none"
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(dbContent) }}
           />
         </main>
