@@ -134,22 +134,28 @@ export default function AdminContentPage() {
     queryKey: ['admin-content', activeKey],
   })
 
-  // Reset state when switching tabs + load new data when it arrives
+  // Reset state immediately when switching tabs — prevents the previous
+  // tab's content from being shown while the new tab's data is fetching.
   useEffect(() => {
-    // Reset on tab switch
     setContent('')
     setFaqs([])
   }, [activeKey])
 
+  // Apply fetched data when it arrives — BUT only if the data's key
+  // matches the currently active tab. This guards against
+  // `keepPreviousData` (used by useDataQuery) which keeps the OLD tab's
+  // data visible as a placeholder while the new tab is fetching. Without
+  // this check, switching from "Agreement" to "Privacy" would briefly
+  // re-apply the Agreement content under the Privacy heading.
   useEffect(() => {
-    if (!isLoading && contentData) {
+    if (!isLoading && contentData && contentData.key === activeKey) {
       if (activeSection.type === 'richtext') {
         setContent(typeof contentData.content === 'string' ? contentData.content : '')
       } else {
         setFaqs(Array.isArray(contentData.content) ? contentData.content : [])
       }
     }
-  }, [contentData, isLoading, activeKey])
+  }, [contentData, isLoading, activeKey, activeSection.type])
 
   const handleSave = () => {
     setIsSaving(true)
