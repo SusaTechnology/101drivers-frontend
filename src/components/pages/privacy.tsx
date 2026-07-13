@@ -336,7 +336,7 @@ export default function PrivacyPolicy() {
                   Your eligibility to participate in certain 101 Drivers services may be subject to additional requirements as determined by 101 Drivers.
                 </P>
                 <P>
-                  By becoming a Driver, you represent and warrant that you are at least 21 years old and meet the following criteria:
+                  By becoming a Driver, you represent and warrant that you are at least 25 years old and meet the following criteria:
                 </P>
                 <ul className="list-disc pl-5 space-y-1">
                   <Li>No more than 1 distracted driving violation in the last 36 months</Li>
