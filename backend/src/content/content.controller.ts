@@ -19,6 +19,7 @@ import { PrismaService } from "../prisma/prisma.service";
 @common.Controller("content")
 export class ContentController {
   private static readonly VALID_KEYS = new Set([
+    "agreement",
     "privacy",
     "terms",
     "help-driver",
