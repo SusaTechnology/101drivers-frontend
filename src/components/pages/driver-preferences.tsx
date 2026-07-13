@@ -837,20 +837,18 @@ export default function DriverPreferencesPage() {
               </div>
             </div>
 
-            {/* CA Only Toggle */}
-            <div className="flex items-center justify-between">
+            {/* CA Only Toggle — always on, disabled (we only operate in CA) */}
+            <div className="flex items-center justify-between opacity-60">
               <div className="flex items-center gap-3">
                 <MapPin className="w-4 h-4 text-slate-500" />
                 <div>
                   <p className="text-sm font-extrabold text-slate-900 dark:text-white">CA Only</p>
-                  <p className="text-[11px] text-slate-500">Restrict service area to California</p>
+                  <p className="text-[11px] text-slate-500">We currently operate in California only</p>
                 </div>
               </div>
               <Switch
-                // checked={caOnly}
                 checked={true}
                 disabled={true}
-                onCheckedChange={setCaOnly}
               />
             </div>
           </CardContent>
