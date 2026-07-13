@@ -847,7 +847,9 @@ export default function DriverPreferencesPage() {
                 </div>
               </div>
               <Switch
-                checked={caOnly}
+                // checked={caOnly}
+                checked={true}
+                disabled={true}
                 onCheckedChange={setCaOnly}
               />
             </div>
