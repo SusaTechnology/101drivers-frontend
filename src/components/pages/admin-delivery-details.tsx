@@ -310,28 +310,33 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     );
   };
 
-  // Determine if this delivery was "closed by driver" rather than completed
-  // via the normal admin-verified flow. We look at the most recent status
-  // history entry that moved the delivery to COMPLETED — if its actorRole
-  // is DRIVER, the driver self-completed the trip (closed it) rather than
-  // an admin marking it complete.
-  const wasClosedByDriver = (): boolean => {
-    if (!delivery?.statusHistory || delivery.status !== 'COMPLETED') return false;
-    // Find the most recent entry that transitioned TO COMPLETED
+  // Determine WHO closed/cancelled this delivery. Drivers cannot cancel
+  // (backend explicitly rejects it), so only ADMIN or CUSTOMER can close.
+  // We look at the most recent status history entry that moved the
+  // delivery to CANCELLED — the actorRole on that entry tells us who.
+  // Returns null if the delivery isn't cancelled or no history found.
+  const closedByActorRole = (): string | null => {
+    if (!delivery?.statusHistory || delivery.status !== 'CANCELLED') return null;
+    // Find the most recent entry that transitioned TO CANCELLED
     for (let i = delivery.statusHistory.length - 1; i >= 0; i--) {
       const entry = delivery.statusHistory[i];
-      if (entry.toStatus === 'COMPLETED') {
-        return entry.actorRole === 'DRIVER';
+      if (entry.toStatus === 'CANCELLED') {
+        return entry.actorRole;
       }
     }
-    return false;
+    return null;
   };
 
-  // Human-readable status label — uses "Closed by Driver" when the driver
-  // self-completed the trip, otherwise just the raw status.
+  // Human-readable status label. When a delivery is CANCELLED, show
+  // "Closed by Admin" or "Closed by Customer" based on who cancelled it,
+  // instead of the raw "CANCELLED" string. Drivers can't cancel, so we
+  // don't handle that case.
   const statusLabel = (): string => {
-    if (delivery?.status === 'COMPLETED' && wasClosedByDriver()) {
-      return 'Closed by Driver';
+    if (delivery?.status === 'CANCELLED') {
+      const role = closedByActorRole();
+      if (role === 'ADMIN') return 'Closed by Admin';
+      if (role === 'PRIVATE_CUSTOMER' || role === 'BUSINESS_CUSTOMER') return 'Closed by Customer';
+      return 'Cancelled';
     }
     return delivery?.status || '';
   };
@@ -660,9 +665,9 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                     <p className="text-[10px] text-slate-400 mb-1">Tracking Status</p>
                     <p className="text-sm font-bold">
                       {delivery.status === 'COMPLETED'
-                        ? statusLabel()
+                        ? 'Completed'
                         : delivery.status === 'CANCELLED'
-                          ? 'Cancelled'
+                          ? statusLabel()
                           : getTrackingStatusLabel(delivery.tracking?.status || 'NOT_STARTED')}
                     </p>
                   </div>
@@ -843,7 +848,6 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                       <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No drop-off evidence photos</p>
                       <p className="text-xs text-slate-400 mt-1">
                         This delivery was marked as completed but no drop-off photos were submitted.
-                        {wasClosedByDriver() && ' The driver closed this trip without uploading drop-off evidence.'}
                       </p>
                     </div>
                   )}
