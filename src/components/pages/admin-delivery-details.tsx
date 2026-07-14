@@ -47,6 +47,8 @@ import { useAdminActions } from '@/hooks/useAdminActions';
 import { useAdminDeliveryDetail, useDeliveryActions, useDriverLookup } from '@/hooks/useAdminDeliveries';
 import {
   getStatusColor,
+  getDisplayStatus,
+  getClosedByLabel,
   getServiceTypeLabel,
   getTrackingStatusLabel,
   formatMiles,
@@ -296,7 +298,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   };
 
   // Status badge component
-  const StatusBadge = ({ status }: { status: string }) => {
+  const StatusBadge = ({ status, label }: { status: string; label?: string }) => {
     const colors = getStatusColor(status);
     return (
       <Badge className={cn(
@@ -305,41 +307,16 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
         colors.text,
         colors.border
       )}>
-        {status}
+        {label ?? status}
       </Badge>
     );
   };
 
-  // Determine WHO closed/cancelled this delivery. Drivers cannot cancel
-  // (backend explicitly rejects it), so only ADMIN or CUSTOMER can close.
-  // We look at the most recent status history entry that moved the
-  // delivery to CANCELLED — the actorRole on that entry tells us who.
-  // Returns null if the delivery isn't cancelled or no history found.
-  const closedByActorRole = (): string | null => {
-    if (!delivery?.statusHistory || delivery.status !== 'CANCELLED') return null;
-    // Find the most recent entry that transitioned TO CANCELLED
-    for (let i = delivery.statusHistory.length - 1; i >= 0; i--) {
-      const entry = delivery.statusHistory[i];
-      if (entry.toStatus === 'CANCELLED') {
-        return entry.actorRole;
-      }
-    }
-    return null;
-  };
-
-  // Human-readable status label. When a delivery is CANCELLED, show
-  // "Closed by Admin" or "Closed by Customer" based on who cancelled it,
-  // instead of the raw "CANCELLED" string. Drivers can't cancel, so we
-  // don't handle that case.
-  const statusLabel = (): string => {
-    if (delivery?.status === 'CANCELLED') {
-      const role = closedByActorRole();
-      if (role === 'ADMIN') return 'Closed by Admin';
-      if (role === 'PRIVATE_CUSTOMER' || role === 'BUSINESS_CUSTOMER') return 'Closed by Customer';
-      return 'Cancelled';
-    }
-    return delivery?.status || '';
-  };
+  // Compute the display status using the shared utility.
+  // A CANCELLED delivery that was closed by admin/customer WITHOUT
+  // drop-off evidence is shown as "CLOSED" instead of "CANCELLED".
+  const displayStatus = delivery ? getDisplayStatus(delivery) : '';
+  const closedByLabel = delivery ? getClosedByLabel(delivery.closedByActorRole) : null;
 
   // Loading state
   if (isLoading) {
@@ -446,7 +423,14 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 <Numbers className="h-4 w-4" />
                 {delivery.id.slice(-8).toUpperCase()}
               </div>
-              <StatusBadge status={statusLabel()} />
+              <StatusBadge
+                status={displayStatus}
+                label={
+                  displayStatus === 'CLOSED'
+                    ? (closedByLabel ?? 'Closed')
+                    : displayStatus
+                }
+              />
               {delivery.scheduling?.isUrgent && (
                 <Badge className="bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 text-[10px] font-bold">
                   <AlertTriangle className="w-3 h-3 mr-1" />
@@ -664,11 +648,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
                     <p className="text-[10px] text-slate-400 mb-1">Tracking Status</p>
                     <p className="text-sm font-bold">
-                      {delivery.status === 'COMPLETED'
-                        ? 'Completed'
-                        : delivery.status === 'CANCELLED'
-                          ? statusLabel()
-                          : getTrackingStatusLabel(delivery.tracking?.status || 'NOT_STARTED')}
+                      {displayStatus === 'CLOSED'
+                        ? (closedByLabel ?? 'Closed')
+                        : delivery.status === 'COMPLETED'
+                          ? 'Completed'
+                          : delivery.status === 'CANCELLED'
+                            ? 'Cancelled'
+                            : getTrackingStatusLabel(delivery.tracking?.status || 'NOT_STARTED')}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
@@ -782,8 +768,12 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               </Card>
             )}
 
-            {/* Drop-off Evidences — always shown when delivery is completed */}
-            {delivery.status === 'COMPLETED' && (
+            {/* Drop-off Evidences — only shown for real COMPLETED deliveries
+                (not CLOSED). CLOSED deliveries are COMPLETED in the backend
+                but have no drop-off evidence because they were closed by
+                an admin/customer without the driver completing the normal
+                dropoff compliance flow, so there's nothing to show here. */}
+            {delivery.status === 'COMPLETED' && displayStatus !== 'CLOSED' && (
               <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
                 <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between">

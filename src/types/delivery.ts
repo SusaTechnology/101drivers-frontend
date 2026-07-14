@@ -194,6 +194,18 @@ export interface DeliveryListItem {
   payout: Payout | null;
   tracking: TrackingSession;
   counts: DeliveryCounts;
+  /**
+   * Actor role of whoever cancelled the delivery (ADMIN, PRIVATE_CUSTOMER,
+   * BUSINESS_CUSTOMER). null if not cancelled or unknown.
+   * Used by the frontend to show "Closed by Admin/Customer".
+   */
+  closedByActorRole?: string | null;
+  /**
+   * Whether any DROPOFF-phase evidence exists. Used by the frontend to
+   * decide if a cancelled delivery should show as "Closed" (no drop-off
+   * evidence = closed without completing the trip).
+   */
+  hasDropoffEvidence?: boolean;
 }
 
 // Filters applied
@@ -384,6 +396,10 @@ export interface AdminDeliveryDetail extends DeliveryListItem {
   notifications: DeliveryNotification[];
   financialSummary: FinancialSummary;
   _count: DeliveryCounts;
+  /** Actor role of whoever cancelled (ADMIN, PRIVATE_CUSTOMER, BUSINESS_CUSTOMER). null if not cancelled. */
+  closedByActorRole?: string | null;
+  /** Whether any DROPOFF-phase evidence exists. */
+  hasDropoffEvidence?: boolean;
 }
 
 // Query params for the list endpoint

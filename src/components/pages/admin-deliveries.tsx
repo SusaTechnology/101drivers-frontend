@@ -29,6 +29,8 @@ import {
   useAdminDeliveries,
   formatRelativeTime,
   getStatusColor,
+  getDisplayStatus,
+  getClosedByLabel,
   getServiceTypeLabel,
   formatMiles,
 } from '@/hooks/useAdminDeliveries';
@@ -91,6 +93,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
   ACTIVE: { label: 'Active', color: 'text-emerald-600', bgColor: 'bg-emerald-50 dark:bg-emerald-900/20', borderColor: 'border-emerald-200 dark:border-emerald-800' },
   COMPLETED: { label: 'Done', color: 'text-green-600', bgColor: 'bg-green-50 dark:bg-green-900/20', borderColor: 'border-green-200 dark:border-green-800' },
   CANCELLED: { label: 'Cancelled', color: 'text-slate-500', bgColor: 'bg-slate-100 dark:bg-slate-900/50', borderColor: 'border-slate-300 dark:border-slate-700' },
+  CLOSED: { label: 'Closed', color: 'text-orange-600', bgColor: 'bg-orange-50 dark:bg-orange-900/20', borderColor: 'border-orange-200 dark:border-orange-800' },
   EXPIRED: { label: 'Expired', color: 'text-amber-600', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
   DISPUTED: { label: 'Disputed', color: 'text-rose-600', bgColor: 'bg-rose-50 dark:bg-rose-900/20', borderColor: 'border-rose-200 dark:border-rose-800' },
 };
@@ -273,24 +276,26 @@ export default function AdminDeliveriesPage() {
   // Fetch data
   const { data, isLoading, isFetching, isError, error, refetch } = useAdminDeliveries(queryParams);
   
-  // Calculate metrics from data - count by all statuses
+  // Calculate metrics from data - count by DISPLAY status (so "Closed"
+  // deliveries are counted separately from "Cancelled")
   const metrics = useMemo(() => {
     if (!data?.items) {
       return {
         DRAFT: 0, QUOTED: 0, LISTED: 0, BOOKED: 0, 
-        ACTIVE: 0, COMPLETED: 0, CANCELLED: 0, EXPIRED: 0, DISPUTED: 0,
+        ACTIVE: 0, COMPLETED: 0, CANCELLED: 0, CLOSED: 0, EXPIRED: 0, DISPUTED: 0,
         total: 0, disputedCount: 0
       };
     }
     
     const counts: Record<string, number> = {
       DRAFT: 0, QUOTED: 0, LISTED: 0, BOOKED: 0, 
-      ACTIVE: 0, COMPLETED: 0, CANCELLED: 0, EXPIRED: 0, DISPUTED: 0,
+      ACTIVE: 0, COMPLETED: 0, CANCELLED: 0, CLOSED: 0, EXPIRED: 0, DISPUTED: 0,
     };
     
     data.items.forEach(d => {
-      if (counts[d.status] !== undefined) {
-        counts[d.status]++;
+      const displayStatus = getDisplayStatus(d);
+      if (counts[displayStatus] !== undefined) {
+        counts[displayStatus]++;
       }
     });
     
@@ -350,8 +355,9 @@ export default function AdminDeliveriesPage() {
     setPage(1);
   }, []);
   
-  // Status badge component - matching delivery-details style
-  const StatusBadge = ({ status }: { status: DeliveryStatus }) => {
+  // Status badge component - matching delivery-details style.
+  // Accepts any string (including 'CLOSED' which is a frontend-only status).
+  const StatusBadge = ({ status, label }: { status: string; label?: string }) => {
     const colors = getStatusColor(status);
     return (
       <Badge className={cn(
@@ -360,7 +366,7 @@ export default function AdminDeliveriesPage() {
         colors.text,
         colors.border
       )}>
-        {status}
+        {label ?? status}
       </Badge>
     );
   };
@@ -386,7 +392,14 @@ export default function AdminDeliveriesPage() {
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-2xl text-[11px] font-black uppercase tracking-widest border border-primary/20 bg-primary/10 text-slate-800 dark:text-slate-200">
                   {delivery.id.slice(-8).toUpperCase()}
                 </div>
-                <StatusBadge status={delivery.status} />
+                <StatusBadge
+                  status={getDisplayStatus(delivery)}
+                  label={
+                    getDisplayStatus(delivery) === 'CLOSED'
+                      ? (getClosedByLabel(delivery.closedByActorRole) ?? 'Closed')
+                      : getDisplayStatus(delivery)
+                  }
+                />
                 <Badge variant="outline" className="text-[10px] font-medium">
                   {getServiceTypeLabel(delivery.serviceType)}
                 </Badge>

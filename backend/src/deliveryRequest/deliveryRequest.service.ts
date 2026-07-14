@@ -1154,6 +1154,32 @@ async getAdminDeliveries(input: {
             notifications: true,
           },
         },
+
+        // ── Fields for "Closed" display status ──
+        // A delivery is "Closed" (frontend-only concept) when it's marked
+        // COMPLETED in the backend but has NO drop-off evidence — meaning
+        // the trip was ended without the driver going through the normal
+        // dropoff compliance flow. This usually happens when a customer
+        // or admin closes the delivery directly.
+        //
+        // We fetch:
+        //   - The most recent COMPLETED status history entry (to get the
+        //     actorRole — who ended the trip)
+        //   - Whether any DROPOFF-phase evidence exists
+        statusHistory: {
+          where: { toStatus: "COMPLETED" as any },
+          orderBy: { createdAt: "desc" as any },
+          take: 1,
+          select: {
+            actorRole: true,
+            toStatus: true,
+          },
+        },
+        evidence: {
+          where: { phase: "DROPOFF" as any },
+          select: { id: true },
+          take: 1,
+        },
       },
     }),
   ]);
@@ -1162,6 +1188,18 @@ async getAdminDeliveries(input: {
     items: items.map((row: any) => {
       const activeAssignment = row.assignments?.[0] ?? null;
       const latestTrackingPoint = row.trackingSession?.points?.[0] ?? null;
+
+      // Compute "closed by" info for the display status.
+      // If the delivery is COMPLETED, find the actorRole from the
+      // most recent COMPLETED status history entry — this tells us
+      // who ended the trip (DRIVER = normal completion, ADMIN/CUSTOMER
+      // = closed without normal dropoff flow).
+      const completeEntry = row.statusHistory?.[0];
+      const closedByActorRole =
+        row.status === EnumDeliveryRequestStatus.COMPLETED && completeEntry
+          ? completeEntry.actorRole
+          : null;
+      const hasDropoffEvidence = (row.evidence?.length ?? 0) > 0;
 
       return {
         id: row.id,
@@ -1213,6 +1251,12 @@ async getAdminDeliveries(input: {
         },
 
         counts: row._count,
+
+        // Display-status fields used by the frontend to show "Closed"
+        // instead of "Cancelled" when a delivery was closed by an
+        // admin/customer without drop-off evidence.
+        closedByActorRole,
+        hasDropoffEvidence,
       };
     }),
     count,
@@ -1516,6 +1560,17 @@ async getAdminDeliveryDetail(input: {
     audits,
     notifications,
     financialSummary,
+
+    // Display-status fields used by the frontend to show "Closed"
+    // instead of "Completed" when a delivery was ended without drop-off
+    // evidence (typically closed by admin/customer without the driver
+    // completing the normal dropoff compliance flow).
+    closedByActorRole:
+      delivery.status === EnumDeliveryRequestStatus.COMPLETED
+        ? statusHistory.find((e: any) => e.toStatus === "COMPLETED")?.actorRole ?? null
+        : null,
+    hasDropoffEvidence:
+      (delivery.evidence?.filter((e: any) => e.phase === "DROPOFF").length ?? 0) > 0,
   };
 }
 async adminAssignDriver(input: {

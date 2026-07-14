@@ -210,6 +210,14 @@ export function getStatusColor(status: string): {
         text: 'text-slate-600 dark:text-slate-400',
         border: 'border-slate-300 dark:border-slate-700',
       };
+    case 'CLOSED':
+      // "Closed" = cancelled by admin/customer without drop-off evidence.
+      // Uses a distinct orange/amber color to distinguish from regular "Cancelled".
+      return {
+        bg: 'bg-orange-50 dark:bg-orange-900/10',
+        text: 'text-orange-700 dark:text-orange-300',
+        border: 'border-orange-200 dark:border-orange-800',
+      };
     case 'DISPUTED':
       return {
         bg: 'bg-rose-50 dark:bg-rose-900/10',
@@ -229,6 +237,52 @@ export function getStatusColor(status: string): {
         border: 'border-slate-200 dark:border-slate-700',
       };
   }
+}
+
+/**
+ * Compute the display status for a delivery.
+ *
+ * The backend marks deliveries as COMPLETED when the trip ends. But some
+ * deliveries are "closed" (ended by a customer or admin) without the driver
+ * going through the normal dropoff compliance flow — these have status
+ * COMPLETED but NO drop-off evidence. The frontend should show these as
+ * "CLOSED" instead of "COMPLETED" so admins can distinguish them.
+ *
+ * Returns:
+ *   'CLOSED'    — status is COMPLETED but no drop-off evidence (trip was
+ *                 closed without completing the normal dropoff flow)
+ *   'COMPLETED' — status is COMPLETED AND has drop-off evidence (normal
+ *                 completion by the driver)
+ *   otherwise   — the raw backend status (DRAFT, QUOTED, LISTED, BOOKED,
+ *                 ACTIVE, CANCELLED, EXPIRED, DISPUTED)
+ *
+ * For CLOSED deliveries, getClosedByLabel() gives the human-readable
+ * "Closed by Admin" / "Closed by Customer" string based on who triggered
+ * the COMPLETED transition.
+ */
+export function getDisplayStatus(delivery: {
+  status: string;
+  closedByActorRole?: string | null;
+  hasDropoffEvidence?: boolean;
+}): string {
+  if (delivery.status === 'COMPLETED' && !delivery.hasDropoffEvidence) {
+    return 'CLOSED';
+  }
+  return delivery.status;
+}
+
+/**
+ * Human-readable label for a closed delivery — "Closed by Admin" or
+ * "Closed by Customer". Returns null if not closed or actor unknown.
+ * For driver-completed trips, actorRole is DRIVER and this returns null
+ * (but those wouldn't be "Closed" anyway since they have dropoff evidence).
+ */
+export function getClosedByLabel(closedByActorRole?: string | null): string | null {
+  if (closedByActorRole === 'ADMIN') return 'Closed by Admin';
+  if (closedByActorRole === 'PRIVATE_CUSTOMER' || closedByActorRole === 'BUSINESS_CUSTOMER') {
+    return 'Closed by Customer';
+  }
+  return null;
 }
 
 /**
