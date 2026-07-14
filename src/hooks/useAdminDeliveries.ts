@@ -265,7 +265,7 @@ export function getDisplayStatus(delivery: {
   closedByActorRole?: string | null;
   hasDropoffEvidence?: boolean;
 }): string {
-  if (delivery.status === 'COMPLETED' && !delivery.hasDropoffEvidence) {
+  if (delivery.status === 'COMPLETED' && delivery.closedByActorRole != 'DRIVER') {
     return 'CLOSED';
   }
   return delivery.status;

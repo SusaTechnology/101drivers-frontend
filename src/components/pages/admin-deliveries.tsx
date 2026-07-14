@@ -383,7 +383,6 @@ export default function AdminDeliveriesPage() {
     const driverName = delivery.activeAssignment?.driver?.user?.fullName || null;
     const trackingStatus = delivery.tracking?.status || 'NOT_STARTED';
     const drivenMiles = delivery.tracking?.drivenMiles;
-    
     return (
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-primary/30 transition-colors">
         <CardContent className="p-4">
