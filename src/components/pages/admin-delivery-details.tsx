@@ -310,6 +310,32 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     );
   };
 
+  // Determine if this delivery was "closed by driver" rather than completed
+  // via the normal admin-verified flow. We look at the most recent status
+  // history entry that moved the delivery to COMPLETED — if its actorRole
+  // is DRIVER, the driver self-completed the trip (closed it) rather than
+  // an admin marking it complete.
+  const wasClosedByDriver = (): boolean => {
+    if (!delivery?.statusHistory || delivery.status !== 'COMPLETED') return false;
+    // Find the most recent entry that transitioned TO COMPLETED
+    for (let i = delivery.statusHistory.length - 1; i >= 0; i--) {
+      const entry = delivery.statusHistory[i];
+      if (entry.toStatus === 'COMPLETED') {
+        return entry.actorRole === 'DRIVER';
+      }
+    }
+    return false;
+  };
+
+  // Human-readable status label — uses "Closed by Driver" when the driver
+  // self-completed the trip, otherwise just the raw status.
+  const statusLabel = (): string => {
+    if (delivery?.status === 'COMPLETED' && wasClosedByDriver()) {
+      return 'Closed by Driver';
+    }
+    return delivery?.status || '';
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -415,7 +441,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 <Numbers className="h-4 w-4" />
                 {delivery.id.slice(-8).toUpperCase()}
               </div>
-              <StatusBadge status={delivery.status} />
+              <StatusBadge status={statusLabel()} />
               {delivery.scheduling?.isUrgent && (
                 <Badge className="bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 text-[10px] font-bold">
                   <AlertTriangle className="w-3 h-3 mr-1" />
@@ -634,7 +660,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                     <p className="text-[10px] text-slate-400 mb-1">Tracking Status</p>
                     <p className="text-sm font-bold">
                       {delivery.status === 'COMPLETED'
-                        ? 'Completed'
+                        ? statusLabel()
                         : delivery.status === 'CANCELLED'
                           ? 'Cancelled'
                           : getTrackingStatusLabel(delivery.tracking?.status || 'NOT_STARTED')}
@@ -688,23 +714,23 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               </CardContent>
             </Card>
 
-            {/* Evidence Photos */}
-            {delivery.evidence && delivery.evidence.length > 0 && (
+            {/* Pickup Evidences */}
+            {delivery.evidence && delivery.evidence.filter(e => e.phase === 'PICKUP').length > 0 && (
               <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
                 <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-black flex items-center gap-2">
                       <Camera className="w-4 h-4 text-primary" />
-                      Evidence Photos
+                      Pickup Evidences
                     </CardTitle>
                     <Badge variant="outline" className="text-[10px]">
-                      {delivery.evidence.length} items
+                      {delivery.evidence.filter(e => e.phase === 'PICKUP').length} items
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="p-4">
                   <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {delivery.evidence.map((item) => (
+                    {delivery.evidence.filter(e => e.phase === 'PICKUP').map((item) => (
                       <button
                         key={item.id}
                         onClick={() => {
@@ -740,16 +766,87 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                         </div>
                         <Badge
                           variant="outline"
-                          className={cn(
-                            "absolute top-1 right-1 text-[8px] px-1 py-0",
-                            item.phase === 'PICKUP' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
-                          )}
+                          className="absolute top-1 right-1 text-[8px] px-1 py-0 bg-blue-100 text-blue-700"
                         >
-                          {item.phase}
+                          {item.type}
                         </Badge>
                       </button>
                     ))}
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Drop-off Evidences — always shown when delivery is completed */}
+            {delivery.status === 'COMPLETED' && (
+              <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
+                <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-black flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-primary" />
+                      Drop-off Evidences
+                    </CardTitle>
+                    <Badge variant="outline" className="text-[10px]">
+                      {delivery.evidence?.filter(e => e.phase === 'DROPOFF').length || 0} items
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4">
+                  {(delivery.evidence && delivery.evidence.filter(e => e.phase === 'DROPOFF').length > 0) ? (
+                    <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                      {delivery.evidence.filter(e => e.phase === 'DROPOFF').map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setSelectedEvidence(item);
+                            setEvidencePreviewOpen(true);
+                          }}
+                          className="relative group cursor-pointer text-left"
+                        >
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.type}
+                              className="w-full aspect-square object-cover rounded-xl border border-slate-200 dark:border-slate-800 group-hover:ring-2 group-hover:ring-primary/50 transition-all"
+                            />
+                          ) : item.value ? (
+                            <div className="w-full aspect-square rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/50 transition-all">
+                              <span className="text-[10px] font-mono text-slate-500 text-center p-2">{item.value}</span>
+                            </div>
+                          ) : (
+                            <div className="w-full aspect-square rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/50 transition-all">
+                              <Camera className="w-5 h-5 text-slate-300" />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-2">
+                            {item.imageUrl && (
+                              <div className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                                <Download className="w-4 h-4 text-white" />
+                              </div>
+                            )}
+                            <div className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition">
+                              <Eye className="w-4 h-4 text-white" />
+                            </div>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className="absolute top-1 right-1 text-[8px] px-1 py-0 bg-emerald-100 text-emerald-700"
+                          >
+                            {item.type}
+                          </Badge>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <Camera className="w-8 h-8 text-slate-300 mb-2" />
+                      <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No drop-off evidence photos</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        This delivery was marked as completed but no drop-off photos were submitted.
+                        {wasClosedByDriver() && ' The driver closed this trip without uploading drop-off evidence.'}
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
