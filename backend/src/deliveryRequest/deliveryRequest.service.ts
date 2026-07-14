@@ -932,7 +932,18 @@ async getAdminDeliveries(input: {
   const staleCutoff = new Date(Date.now() - 30 * 60 * 1000);
 
   const where: Prisma.DeliveryRequestWhereInput = {
-    ...(input.status ? { status: input.status as any } : {}),
+    // 'CLOSED' is a frontend-only status — it means COMPLETED deliveries
+    // that have NO drop-off evidence (closed by admin/customer without
+    // the driver completing the normal dropoff flow). Map it to the
+    // equivalent Prisma query.
+    ...(input.status === 'CLOSED'
+      ? {
+          status: EnumDeliveryRequestStatus.COMPLETED,
+          evidence: { none: { phase: 'DROPOFF' as any } },
+        }
+      : input.status
+        ? { status: input.status as any }
+        : {}),
     ...(input.customerId ? { customerId: input.customerId } : {}),
     ...(input.customerType
       ? { customer: { customerType: input.customerType as any } }

@@ -858,14 +858,25 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                   <div className="relative">
                     <div className="absolute left-4 top-2 bottom-2 w-px bg-slate-200 dark:bg-slate-800" />
                     <div className="space-y-4">
-                      {delivery.statusHistory.map((entry, index) => (
+                      {delivery.statusHistory.map((entry, index) => {
+                        // If this is the COMPLETED transition and the delivery
+                        // is "Closed" (no dropoff evidence, closed by admin/
+                        // customer), show "Closed by ..." instead of "COMPLETED".
+                        const isClosedTransition =
+                          entry.toStatus === 'COMPLETED' &&
+                          displayStatus === 'CLOSED';
+                        const entryStatus = isClosedTransition ? 'CLOSED' : entry.toStatus;
+                        const entryLabel = isClosedTransition
+                          ? (closedByLabel ?? 'Closed')
+                          : entry.toStatus;
+                        return (
                         <div key={entry.id} className="relative flex gap-4">
                           <div className="w-8 h-8 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center z-10 shrink-0">
                             <div className="w-2 h-2 rounded-full bg-primary" />
                           </div>
                           <div className="flex-1 pb-4">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <StatusBadge status={entry.toStatus} />
+                              <StatusBadge status={entryStatus} label={entryLabel} />
                               {entry.fromStatus && (
                                 <>
                                   <ArrowRight className="w-3 h-3 text-slate-300" />
@@ -882,7 +893,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                             </p>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </CardContent>

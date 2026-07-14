@@ -71,6 +71,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 // Status options for filter - matching API statuses
+// 'CLOSED' is a frontend-only status (COMPLETED + no dropoff evidence);
+// the backend maps it to the right subset of COMPLETED deliveries.
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'All Statuses' },
   { value: 'DRAFT', label: 'Draft' },
@@ -79,6 +81,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'BOOKED', label: 'Booked' },
   { value: 'ACTIVE', label: 'Active' },
   { value: 'COMPLETED', label: 'Completed' },
+  { value: 'CLOSED', label: 'Closed' },
   { value: 'CANCELLED', label: 'Cancelled' },
   { value: 'EXPIRED', label: 'Expired' },
   { value: 'DISPUTED', label: 'Disputed' },
