@@ -741,8 +741,9 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                             <span className="text-[10px] font-mono text-slate-500 text-center p-2">{item.value}</span>
                           </div>
                         ) : (
-                          <div className="w-full aspect-square rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/50 transition-all">
+                          <div className="w-full aspect-square rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-1 group-hover:ring-2 group-hover:ring-primary/50 transition-all">
                             <Camera className="w-5 h-5 text-slate-300" />
+                            <span className="text-[8px] font-bold uppercase tracking-wide text-slate-400 text-center px-1">No photo</span>
                           </div>
                         )}
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-2">
@@ -759,7 +760,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                           variant="outline"
                           className="absolute top-1 right-1 text-[8px] px-1 py-0 bg-blue-100 text-blue-700"
                         >
-                          {item.type}
+                          {item.type.replace(/_/g, ' ')}
                         </Badge>
                       </button>
                     ))}
@@ -768,12 +769,12 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               </Card>
             )}
 
-            {/* Drop-off Evidences — only shown for real COMPLETED deliveries
-                (not CLOSED). CLOSED deliveries are COMPLETED in the backend
-                but have no drop-off evidence because they were closed by
-                an admin/customer without the driver completing the normal
-                dropoff compliance flow, so there's nothing to show here. */}
-            {delivery.status === 'COMPLETED' && displayStatus !== 'CLOSED' && (
+            {/* Drop-off Evidences — shown for all COMPLETED deliveries (including
+                CLOSED ones). If there are no drop-off photos, an empty state
+                is shown explaining that no drop-off evidence was submitted.
+                This is important for CLOSED deliveries where the driver didn't
+                complete the normal dropoff flow. */}
+            {delivery.status === 'COMPLETED' && (
               <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
                 <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between">
@@ -809,8 +810,9 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                               <span className="text-[10px] font-mono text-slate-500 text-center p-2">{item.value}</span>
                             </div>
                           ) : (
-                            <div className="w-full aspect-square rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/50 transition-all">
+                            <div className="w-full aspect-square rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-1 group-hover:ring-2 group-hover:ring-primary/50 transition-all">
                               <Camera className="w-5 h-5 text-slate-300" />
+                              <span className="text-[8px] font-bold uppercase tracking-wide text-slate-400 text-center px-1">No photo</span>
                             </div>
                           )}
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-2">
@@ -827,7 +829,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                             variant="outline"
                             className="absolute top-1 right-1 text-[8px] px-1 py-0 bg-emerald-100 text-emerald-700"
                           >
-                            {item.type}
+                            {item.type.replace(/_/g, ' ')}
                           </Badge>
                         </button>
                       ))}
@@ -837,7 +839,9 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                       <Camera className="w-8 h-8 text-slate-300 mb-2" />
                       <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No drop-off evidence photos</p>
                       <p className="text-xs text-slate-400 mt-1">
-                        This delivery was marked as completed but no drop-off photos were submitted.
+                        {displayStatus === 'CLOSED'
+                          ? (closedByLabel ?? 'This delivery') + ' — no drop-off photos were submitted.'
+                          : 'This delivery was marked as completed but no drop-off photos were submitted.'}
                       </p>
                     </div>
                   )}
