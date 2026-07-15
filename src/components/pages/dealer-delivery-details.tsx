@@ -55,6 +55,7 @@ import {
   Phone,
   MessageCircle,
   Star,
+  StarHalf,
   Shield,
   QrCode,
   Gauge,
@@ -2050,26 +2051,39 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                               310-962-8402
                             </a>
                           </div>
-                          {/* Rating: 5 stars — golden for the rating number, gray for the rest */}
+                          {/* Rating: 5 stars with half-star support.
+                              e.g. 4.5 = 4 full golden + 1 half golden/gray + 0 gray
+                              No number — just the stars. */}
                           <div className="flex items-center gap-0.5">
                             {[1, 2, 3, 4, 5].map((star) => {
                               const ratingNum = typeof driver.rating === 'number' ? driver.rating : parseFloat(driver.rating) || 0;
-                              const isFilled = star <= Math.round(ratingNum);
+                              const diff = ratingNum - (star - 1);
+                              // diff > 1  → full golden star
+                              // diff = 0.5 → half star (half golden, half gray)
+                              // diff < 0.5 → full gray star
+                              if (diff >= 1) {
+                                return (
+                                  <Star
+                                    key={star}
+                                    className="h-4 w-4 fill-amber-400 text-amber-400"
+                                  />
+                                );
+                              }
+                              if (diff >= 0.5) {
+                                return (
+                                  <StarHalf
+                                    key={star}
+                                    className="h-4 w-4 fill-amber-400 text-amber-400"
+                                  />
+                                );
+                              }
                               return (
                                 <Star
                                   key={star}
-                                  className={cn(
-                                    'h-4 w-4',
-                                    isFilled
-                                      ? 'fill-amber-400 text-amber-400'
-                                      : 'fill-slate-200 text-slate-200 dark:fill-slate-700 dark:text-slate-700'
-                                  )}
+                                  className="h-4 w-4 fill-slate-200 text-slate-200 dark:fill-slate-700 dark:text-slate-700"
                                 />
                               );
                             })}
-                            <span className="ml-1 text-sm font-black text-amber-500">
-                              {typeof driver.rating === 'number' ? driver.rating.toFixed(1) : driver.rating}
-                            </span>
                           </div>
                         </div>
                         <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
