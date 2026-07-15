@@ -1,5 +1,5 @@
 //@ts-nocheck
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -127,6 +127,11 @@ export default function AdminContentPage() {
   const [faqs, setFaqs] = useState<Array<{ question: string; answer: string }>>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  // Refs for auto-scrolling to newly added FAQ items.
+  // faqRefs maps index → the question Input element for that FAQ.
+  const faqRefs = useRef<Array<HTMLDivElement | null>>([])
+  // Tracks which FAQ index was just added (so we scroll to it + focus).
+  const [newFaqIndex, setNewFaqIndex] = useState<number | null>(null)
 
   const activeSection = CONTENT_SECTIONS.find(s => s.key === activeKey)!
 
@@ -198,7 +203,32 @@ export default function AdminContentPage() {
     }
   }
 
-  const addFaq = () => setFaqs([...faqs, { question: '', answer: '' }])
+  const addFaq = () => {
+    const newIndex = faqs.length
+    setFaqs([...faqs, { question: '', answer: '' }])
+    setNewFaqIndex(newIndex)
+  }
+
+  // When a new FAQ is added, scroll it into view and focus the question
+  // input. This runs after the render so the new FAQ element exists.
+  useEffect(() => {
+    if (newFaqIndex === null) return
+    const faqDiv = faqRefs.current[newFaqIndex]
+    if (faqDiv) {
+      // scrollIntoView with smooth behavior + 'nearest' block so it
+      // doesn't jump to the very top of the page.
+      faqDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      // Focus the question input inside this FAQ item.
+      const questionInput = faqDiv.querySelector('input')
+      if (questionInput) {
+        // Small delay so scrollIntoView finishes first.
+        setTimeout(() => questionInput.focus(), 300)
+      }
+    }
+    // Clear so it doesn't re-trigger on re-renders.
+    setNewFaqIndex(null)
+  }, [newFaqIndex, faqs])
+
   const updateFaq = (index: number, field: 'question' | 'answer', value: string) => {
     setFaqs(faqs.map((f, i) => i === index ? { ...f, [field]: value } : f))
   }
@@ -209,8 +239,9 @@ export default function AdminContentPage() {
       <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
 
       <main className="max-w-[1200px] mx-auto px-6 py-6">
-        {/* Header — Import and Save always visible side by side */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Header — sticky at top so Save Changes button is always visible.
+            z-30 keeps it above the sidebar/editor content. */}
+        <div className="sticky top-0 z-30 -mx-6 px-6 py-4 mb-6 bg-background-light dark:bg-background-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/admin-config" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900">
               <ArrowLeft className="w-3.5 h-3.5" /> Back
@@ -231,8 +262,9 @@ export default function AdminContentPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
-          {/* Sidebar */}
-          <div className="space-y-2">
+          {/* Sidebar — sticky so it stays visible while the editor scrolls.
+              top-20 leaves room for the sticky header above. */}
+          <div className="lg:sticky lg:top-20 lg:self-start space-y-2">
             {CONTENT_SECTIONS.map((section) => (
               <button
                 key={section.key}
@@ -293,7 +325,11 @@ export default function AdminContentPage() {
                       </div>
                     )}
                     {faqs.map((faq, index) => (
-                      <div key={index} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                      <div
+                        key={index}
+                        ref={(el) => { faqRefs.current[index] = el }}
+                        className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 scroll-mt-32"
+                      >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-black text-slate-400">FAQ #{index + 1}</span>
                           <button onClick={() => removeFaq(index)} className="text-red-400 hover:text-red-600 transition">
