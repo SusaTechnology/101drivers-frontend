@@ -291,7 +291,10 @@ export default function AdminContentPage() {
             ) : activeSection.type === 'richtext' ? (
               <Card className="border-slate-200 dark:border-slate-800">
                 <CardContent className="p-4">
-                  <div className="mb-3">
+                  {/* Section title — sticky so the title stays visible while
+                      scrolling through long content. top-16 lg:top-20 = navbar
+                      height. bg matches card so content scrolls under cleanly. */}
+                  <div className="sticky top-16 lg:top-20 z-20 -mx-4 px-4 py-3 mb-3 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
                     <h2 className="text-lg font-black">{activeSection.label}</h2>
                     <p className="text-xs text-slate-500 mt-1">Edit the content below. Changes will appear on the public site after you click Save.</p>
                   </div>
