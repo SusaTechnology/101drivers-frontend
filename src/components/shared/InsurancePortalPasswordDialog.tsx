@@ -38,16 +38,24 @@ export function InsurancePortalPasswordDialog({
   const [password, setPassword] = useState("");
   const [isSet, setIsSet] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Track whether the password has been fetched for the current open
+  // session. When the dialog opens, hasFetched is false → we show the
+  // loading spinner IMMEDIATELY on the first render (before the useEffect
+  // even runs). This prevents the browser from autofilling the empty
+  // password input during the brief window before isLoading is set.
+  const [hasFetched, setHasFetched] = useState(false);
 
   // Fetch current password when dialog opens
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // Reset when dialog closes so next open starts fresh
+      setHasFetched(false);
+      setPassword("");
+      setIsSet(false);
+      return;
+    }
     let cancelled = false;
-    setIsLoading(true);
-    setPassword("");
-    setIsSet(false);
 
     const token = getAccessToken();
     fetch(`${API_BASE}/api/insurance-portal/password`, {
@@ -63,13 +71,18 @@ export function InsurancePortalPasswordDialog({
         /* swallow — empty state will show */
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setHasFetched(true);
       });
 
     return () => {
       cancelled = true;
     };
   }, [open]);
+
+  // Show loading spinner if dialog is open but we haven't fetched yet.
+  // This is true on the FIRST render after open becomes true, because
+  // hasFetched was reset to false when the dialog closed.
+  const isLoading = open && !hasFetched;
 
   const handleSave = () => {
     if (!password || password.length < 4) {
@@ -145,6 +158,10 @@ export function InsurancePortalPasswordDialog({
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password (min 4 characters)..."
                   className="h-10 text-sm rounded-xl pr-10"
+                  // Prevent browser from autofilling this field with saved
+                  // passwords. We fetch the real value from the backend.
+                  autoComplete="new-password"
+                  name="portal-password-new"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleSave();
                   }}
