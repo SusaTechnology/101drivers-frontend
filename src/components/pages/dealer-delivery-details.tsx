@@ -2040,10 +2040,36 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
                       <div className="flex-1">
                         <div className="flex items-center justify-between gap-3">
-                          <div className="font-black text-slate-900 dark:text-white text-lg">{driver.name}</div>
-                          <div className="flex items-center gap-1 text-amber-500">
-                            <Star className="h-4 w-4 fill-amber-500" />
-                            <span className="text-sm font-black text-slate-900 dark:text-white">{driver.rating}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-slate-900 dark:text-white text-lg">{driver.name}</span>
+                            <a
+                              href="tel:3109628402"
+                              className="inline-flex items-center gap-1 text-sm font-bold text-lime-600 dark:text-lime-400 hover:underline"
+                            >
+                              <Phone className="h-3 w-3" />
+                              310-962-8402
+                            </a>
+                          </div>
+                          {/* Rating: 5 stars — golden for the rating number, gray for the rest */}
+                          <div className="flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map((star) => {
+                              const ratingNum = typeof driver.rating === 'number' ? driver.rating : parseFloat(driver.rating) || 0;
+                              const isFilled = star <= Math.round(ratingNum);
+                              return (
+                                <Star
+                                  key={star}
+                                  className={cn(
+                                    'h-4 w-4',
+                                    isFilled
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'fill-slate-200 text-slate-200 dark:fill-slate-700 dark:text-slate-700'
+                                  )}
+                                />
+                              );
+                            })}
+                            <span className="ml-1 text-sm font-black text-amber-500">
+                              {typeof driver.rating === 'number' ? driver.rating.toFixed(1) : driver.rating}
+                            </span>
                           </div>
                         </div>
                         <div className="text-sm text-slate-600 dark:text-slate-400 mt-1">
