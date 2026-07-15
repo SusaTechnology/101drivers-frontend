@@ -1486,6 +1486,7 @@ async getAdminDeliveryDetail(input: {
               id: true,
               phone: true,
               profilePhotoUrl: true,
+              selfiePhotoUrl: true,
               status: true,
               user: {
                 select: {

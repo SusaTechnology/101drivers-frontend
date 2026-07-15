@@ -53,6 +53,7 @@ export interface Driver {
   id: string;
   phone?: string | null;
   profilePhotoUrl?: string | null;
+  selfiePhotoUrl?: string | null;
   status: DriverStatus;
   user: User;
 }

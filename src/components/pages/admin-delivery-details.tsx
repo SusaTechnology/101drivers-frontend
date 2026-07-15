@@ -133,6 +133,10 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   const [openDisputeOpen, setOpenDisputeOpen] = useState(false);
   const [evidencePreviewOpen, setEvidencePreviewOpen] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
+  // Photo dialog for viewing driver selfie/profile photo full-size
+  const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [photoDialogSrc, setPhotoDialogSrc] = useState<string>('');
+  const [photoDialogTitle, setPhotoDialogTitle] = useState<string>('');
   
   // Form states
   const [assignDriverForm, setAssignDriverForm] = useState({
@@ -431,7 +435,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     : delivery.customer.user?.fullName || delivery.customer.contactName || 'Unknown';
 
   const driverName = delivery.activeAssignment?.driver?.user?.fullName || null;
-  const driverPhoto = delivery.activeAssignment?.driver?.profilePhotoUrl || null;
+  const driverPhoto = delivery.activeAssignment?.driver?.profilePhotoUrl || delivery.activeAssignment?.driver?.selfiePhotoUrl || null;
+  const driverUserId = delivery.activeAssignment?.driver?.user?.id || null;
   const vehicleInfo = [delivery.vehicleMake, delivery.vehicleModel, delivery.vehicleColor]
     .filter(Boolean)
     .join(' ') || 'Not specified';
@@ -1006,19 +1011,37 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               <CardContent className="p-4">
                 {driverName ? (
                   <div className="flex items-center gap-3 mb-4">
+                    {/* Driver photo — clickable to view full-size selfie */}
                     {driverPhoto ? (
-                      <img 
-                        src={driverPhoto} 
+                      <img
+                        src={driverPhoto}
                         alt={driverName}
-                        className="w-12 h-12 rounded-full object-cover border-2 border-primary"
+                        className="w-12 h-12 rounded-full object-cover border-2 border-primary cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                        onClick={() => {
+                          setPhotoDialogSrc(driverPhoto);
+                          setPhotoDialogTitle(driverName + ' — Driver Photo');
+                          setPhotoDialogOpen(true);
+                        }}
                       />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
                         <User className="w-6 h-6 text-primary" />
                       </div>
                     )}
-                    <div>
-                      <p className="text-sm font-semibold">{driverName}</p>
+                    <div className="flex-1 min-w-0">
+                      {/* Driver name — links to admin user detail page */}
+                      {driverUserId ? (
+                        <Link
+                          to="/admin-user-detail/$userId"
+                          params={{ userId: driverUserId }}
+                          className="text-sm font-semibold text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          {driverName}
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      ) : (
+                        <p className="text-sm font-semibold">{driverName}</p>
+                      )}
                       <p className="text-[10px] text-slate-500">
                         Assigned {formatDeliveryDate(delivery.activeAssignment?.assignedAt, true)}
                       </p>
@@ -1678,6 +1701,43 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Driver Photo Dialog — full-size view of driver selfie/profile photo */}
+      <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="w-5 h-5 text-primary" />
+              {photoDialogTitle || 'Driver Photo'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800">
+            {photoDialogSrc ? (
+              <img
+                src={photoDialogSrc}
+                alt={photoDialogTitle}
+                className="w-full max-h-[60vh] object-contain"
+              />
+            ) : (
+              <div className="p-10 text-center text-slate-400">No photo available</div>
+            )}
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setPhotoDialogOpen(false)} className="rounded-xl">
+              Close
+            </Button>
+            {photoDialogSrc && (
+              <Button
+                onClick={() => window.open(photoDialogSrc, '_blank')}
+                className="bg-primary text-slate-950 rounded-xl"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Open Full Size
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
