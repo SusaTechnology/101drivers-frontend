@@ -239,9 +239,10 @@ export default function AdminContentPage() {
       <Navbar brand={<Brand />} items={navItems} actions={actionItems} onSignOut={signOut} title="Admin" />
 
       <main className="max-w-[1200px] mx-auto px-6 py-6">
-        {/* Header — sticky at top so Save Changes button is always visible.
-            z-30 keeps it above the sidebar/editor content. */}
-        <div className="sticky top-0 z-30 -mx-6 px-6 py-4 mb-6 bg-background-light dark:bg-background-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        {/* Header — sticky below the navbar so Save Changes is always visible.
+            top-16 lg:top-20 matches the navbar height (h-16 mobile, h-20 desktop).
+            z-30 keeps it above the sidebar/editor content but below navbar (z-50). */}
+        <div className="sticky top-16 lg:top-20 z-30 -mx-6 px-6 py-4 mb-6 bg-background-light dark:bg-background-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/admin-config" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900">
               <ArrowLeft className="w-3.5 h-3.5" /> Back
@@ -263,8 +264,9 @@ export default function AdminContentPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
           {/* Sidebar — sticky so it stays visible while the editor scrolls.
-              top-20 leaves room for the sticky header above. */}
-          <div className="lg:sticky lg:top-20 lg:self-start space-y-2">
+              top-36 lg:top-40 leaves room for the navbar (h-16/h-20) + the
+              sticky content header (~60px) above it. */}
+          <div className="lg:sticky lg:top-36 lg:self-start space-y-2">
             {CONTENT_SECTIONS.map((section) => (
               <button
                 key={section.key}
@@ -309,7 +311,11 @@ export default function AdminContentPage() {
             ) : (
               <Card className="border-slate-200 dark:border-slate-800">
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-4">
+                  {/* FAQ header — sticky so the "Add FAQ" button is always
+                      visible while scrolling through many FAQ items.
+                      top-16 lg:top-20 = navbar height. bg-white/dark matches
+                      the card background so content scrolls under it cleanly. */}
+                  <div className="sticky top-16 lg:top-20 z-20 -mx-4 px-4 py-3 mb-4 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <div>
                       <h2 className="text-lg font-black">{activeSection.label}</h2>
                       <p className="text-xs text-slate-500 mt-1">Add, edit, or remove FAQ items.</p>
@@ -328,7 +334,7 @@ export default function AdminContentPage() {
                       <div
                         key={index}
                         ref={(el) => { faqRefs.current[index] = el }}
-                        className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 scroll-mt-32"
+                        className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 scroll-mt-44 lg:scroll-mt-48"
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-black text-slate-400">FAQ #{index + 1}</span>
