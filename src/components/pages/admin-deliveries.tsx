@@ -27,6 +27,7 @@ import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { 
   useAdminDeliveries,
+  useAdminDeliveryStats,
   formatRelativeTime,
   getStatusColor,
   getDisplayStatus,
@@ -34,6 +35,7 @@ import {
   getServiceTypeLabel,
   formatMiles,
 } from '@/hooks/useAdminDeliveries';
+import { useQueryClient } from '@tanstack/react-query';
 import { downloadReport } from '@/hooks/useAdminReports';
 import type { 
   DeliveryListItem, 
@@ -142,6 +144,7 @@ const CUSTOMER_TYPE_OPTIONS: { value: string; label: string }[] = [
 
 export default function AdminDeliveriesPage() {
   const { actionItems, signOut } = useAdminActions();
+  const queryClient = useQueryClient();
   
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -279,41 +282,30 @@ export default function AdminDeliveriesPage() {
   // Fetch data
   const { data, isLoading, isFetching, isError, error, refetch } = useAdminDeliveries(queryParams);
   
-  // Calculate metrics from data - count by DISPLAY status (so "Closed"
-  // deliveries are counted separately from "Cancelled")
+  // Fetch GLOBAL stats — these are NOT affected by filters or pagination.
+  // The counts stay stable when the admin changes filters or pages.
+  // Fetches once on mount and refetches at most every 60s (staleTime).
+  const { data: statsData } = useAdminDeliveryStats();
+  
+  // Use the global stats for the KPI cards. Fall back to zeros while loading.
   const metrics = useMemo(() => {
-    if (!data?.items) {
+    if (!statsData) {
       return {
         DRAFT: 0, QUOTED: 0, LISTED: 0, BOOKED: 0, 
         ACTIVE: 0, COMPLETED: 0, CANCELLED: 0, CLOSED: 0, EXPIRED: 0, DISPUTED: 0,
         total: 0, disputedCount: 0
       };
     }
-    
-    const counts: Record<string, number> = {
-      DRAFT: 0, QUOTED: 0, LISTED: 0, BOOKED: 0, 
-      ACTIVE: 0, COMPLETED: 0, CANCELLED: 0, CLOSED: 0, EXPIRED: 0, DISPUTED: 0,
-    };
-    
-    data.items.forEach(d => {
-      const displayStatus = getDisplayStatus(d);
-      if (counts[displayStatus] !== undefined) {
-        counts[displayStatus]++;
-      }
-    });
-    
-    return {
-      ...counts,
-      total: data.items.length,
-      disputedCount: data.items.filter(d => d.dispute !== null).length,
-    };
-  }, [data?.items]);
+    return statsData;
+  }, [statsData]);
   
   // Handlers
   const handleRefresh = useCallback(() => {
     refetch();
+    // Also invalidate the stats cache so the KPI cards refresh
+    queryClient.invalidateQueries({ queryKey: ['admin-delivery-stats'] });
     toast.success('Deliveries refreshed');
-  }, [refetch]);
+  }, [refetch, queryClient]);
   
   const handleExport = useCallback(async (format: string) => {
     try {

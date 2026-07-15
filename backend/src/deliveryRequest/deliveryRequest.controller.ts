@@ -297,6 +297,26 @@ staleTracking: query.staleTracking === true,
   });
 }
 
+/**
+ * GET /api/deliveryRequests/admin/stats
+ * Returns global delivery status counts — NOT affected by filters or
+ * pagination. Used by the admin deliveries page KPI cards so the counts
+ * stay stable when filters/page change.
+ *
+ * Must be declared BEFORE @Get(":id/admin") so the route "admin/stats"
+ * doesn't get captured by the ":id" param route.
+ */
+@common.Get("admin/stats")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "DeliveryRequest",
+  action: "read",
+  possession: "any",
+})
+async getAdminDeliveryStats(): Promise<any> {
+  return this.service.getAdminDeliveryStats();
+}
+
 @common.Get(":id/admin")
 @swagger.ApiOkResponse({ type: AdminDeliveryDetailResponseDto })
 @nestAccessControl.UseRoles({

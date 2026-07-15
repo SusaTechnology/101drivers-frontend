@@ -81,6 +81,41 @@ export function useAdminDeliveryDetail(deliveryId: string | undefined) {
 }
 
 /**
+ * Hook for fetching global delivery status counts.
+ *
+ * These counts are NOT affected by filters or pagination — they always
+ * reflect the total counts across ALL deliveries in the database.
+ * Used by the admin deliveries page KPI cards so the counts stay stable
+ * when the admin changes filters or pages.
+ *
+ * The response includes both COMPLETED (has dropoff evidence) and CLOSED
+ * (COMPLETED but no dropoff evidence) as separate counts.
+ */
+export interface DeliveryStats {
+  DRAFT: number;
+  QUOTED: number;
+  LISTED: number;
+  BOOKED: number;
+  ACTIVE: number;
+  COMPLETED: number;
+  CLOSED: number;
+  CANCELLED: number;
+  EXPIRED: number;
+  DISPUTED: number;
+  total: number;
+  disputedCount: number;
+}
+
+export function useAdminDeliveryStats() {
+  return useDataQuery<DeliveryStats>({
+    apiEndPoint: `${API_BASE_URL}/api/deliveryRequests/admin/stats`,
+    noFilter: true,
+    staleTime: 60 * 1000, // 1 minute — counts stay stable for 1 min
+    queryKey: ['admin-delivery-stats'],
+  });
+}
+
+/**
  * Hook for fetching driver lookup list (minimal)
  */
 export function useDriverLookup() {

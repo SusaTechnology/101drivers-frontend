@@ -1297,6 +1297,110 @@ async getAdminDeliveries(input: {
   };
 }
 
+/**
+ * Global delivery status counts — NOT affected by filters or pagination.
+ *
+ * Used by the admin deliveries page KPI cards so the counts stay stable
+ * when the admin changes filters or pages.
+ *
+ * Key logic:
+ *   - "COMPLETED" (display) = status COMPLETED + HAS dropoff evidence
+ *   - "CLOSED" (display)    = status COMPLETED + NO dropoff evidence
+ *     (closed by admin/customer without the driver completing the normal
+ *     dropoff compliance flow)
+ *   - All other statuses map 1:1 to their DB status.
+ *
+ * Returns an object like:
+ *   { DRAFT, QUOTED, LISTED, BOOKED, ACTIVE, COMPLETED, CLOSED,
+ *     CANCELLED, EXPIRED, DISPUTED, total, disputedCount }
+ */
+async getAdminDeliveryStats(): Promise<{
+  DRAFT: number;
+  QUOTED: number;
+  LISTED: number;
+  BOOKED: number;
+  ACTIVE: number;
+  COMPLETED: number;
+  CLOSED: number;
+  CANCELLED: number;
+  EXPIRED: number;
+  DISPUTED: number;
+  total: number;
+  disputedCount: number;
+}> {
+  // Group deliveries by status, and for COMPLETED deliveries, further
+  // split into "has dropoff evidence" (COMPLETED) vs "no dropoff evidence"
+  // (CLOSED). We use a single query with conditional aggregation via
+  // _count on the evidence relation filtered by phase.
+  const rows = await this.prisma.deliveryRequest.groupBy({
+    by: ["status"],
+    _count: { _all: true },
+  });
+
+  // For COMPLETED deliveries, we need to know how many have dropoff evidence
+  // vs how many don't. We do this with two separate count queries.
+  const [completedWithDropoff, completedWithoutDropoff, disputedCount] =
+    await Promise.all([
+      // COMPLETED + HAS dropoff evidence → display "COMPLETED"
+      this.prisma.deliveryRequest.count({
+        where: {
+          status: EnumDeliveryRequestStatus.COMPLETED,
+          evidence: { some: { phase: "DROPOFF" as any } },
+        },
+      }),
+      // COMPLETED + NO dropoff evidence → display "CLOSED"
+      this.prisma.deliveryRequest.count({
+        where: {
+          status: EnumDeliveryRequestStatus.COMPLETED,
+          evidence: { none: { phase: "DROPOFF" as any } },
+        },
+      }),
+      // Deliveries with a dispute
+      this.prisma.deliveryRequest.count({
+        where: {
+          OR: [
+            { status: EnumDeliveryRequestStatus.DISPUTED },
+            { dispute: { isNot: null } },
+          ],
+        },
+      }),
+    ]);
+
+  // Build the counts map from the groupBy result
+  const counts: Record<string, number> = {
+    DRAFT: 0,
+    QUOTED: 0,
+    LISTED: 0,
+    BOOKED: 0,
+    ACTIVE: 0,
+    COMPLETED: 0,
+    CLOSED: 0,
+    CANCELLED: 0,
+    EXPIRED: 0,
+    DISPUTED: 0,
+  };
+
+  let total = 0;
+  for (const row of rows) {
+    const status = row.status as string;
+    const count = row._count._all;
+    total += count;
+    if (status === "COMPLETED") {
+      // Split COMPLETED into COMPLETED (has dropoff) + CLOSED (no dropoff)
+      counts.COMPLETED = completedWithDropoff;
+      counts.CLOSED = completedWithoutDropoff;
+    } else if (counts[status] !== undefined) {
+      counts[status] = count;
+    }
+  }
+
+  return {
+    ...counts,
+    total,
+    disputedCount,
+  } as any;
+}
+
 async getAdminDeliveryDetail(input: {
   deliveryId: string;
 }): Promise<any> {
