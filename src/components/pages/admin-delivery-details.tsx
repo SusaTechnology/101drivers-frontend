@@ -705,23 +705,34 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               </CardContent>
             </Card>
 
-            {/* Pickup Evidences */}
-            {delivery.evidence && delivery.evidence.filter(e => e.phase === 'PICKUP').length > 0 && (
+            {/* All Evidence — shows every piece of evidence the driver
+                captured: pickup photos, drop-off photos, odometer readings,
+                VIN confirmation, dashboard photo, etc. Shown regardless
+                of delivery status (including CLOSED deliveries). */}
+            {delivery.evidence && delivery.evidence.length > 0 && (
               <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
                 <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-black flex items-center gap-2">
                       <Camera className="w-4 h-4 text-primary" />
-                      Pickup Evidences
+                      All Evidence
                     </CardTitle>
                     <Badge variant="outline" className="text-[10px]">
-                      {delivery.evidence.filter(e => e.phase === 'PICKUP').length} items
+                      {delivery.evidence.length} items
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="p-4">
                   <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {delivery.evidence.filter(e => e.phase === 'PICKUP').map((item) => (
+                    {/* Sort: PICKUP phase first, then DROPOFF */}
+                    {[...delivery.evidence]
+                      .sort((a, b) => {
+                        if (a.phase !== b.phase) {
+                          return a.phase === 'PICKUP' ? -1 : 1;
+                        }
+                        return a.type.localeCompare(b.type);
+                      })
+                      .map((item) => (
                       <button
                         key={item.id}
                         onClick={() => {
@@ -755,92 +766,25 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                             <Eye className="w-4 h-4 text-white" />
                           </div>
                         </div>
+                        {/* Phase badge (top-right): blue for PICKUP, green for DROPOFF */}
                         <Badge
                           variant="outline"
-                          className="absolute top-1 right-1 text-[8px] px-1 py-0 bg-blue-100 text-blue-700"
+                          className={cn(
+                            "absolute top-1 right-1 text-[8px] px-1 py-0",
+                            item.phase === 'PICKUP'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          )}
                         >
-                          {item.type}
+                          {item.type.replace(/_/g, ' ')}
                         </Badge>
+                        {/* Phase label (bottom-left): small PICKUP/DROPOFF tag */}
+                        <span className="absolute bottom-1 left-1 text-[7px] font-black uppercase tracking-wider px-1 py-0.5 rounded bg-black/40 text-white">
+                          {item.phase}
+                        </span>
                       </button>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Drop-off Evidences — only shown for real COMPLETED deliveries
-                (not CLOSED). CLOSED deliveries are COMPLETED in the backend
-                but have no drop-off evidence because they were closed by
-                an admin/customer without the driver completing the normal
-                dropoff compliance flow, so there's nothing to show here. */}
-            {delivery.status === 'COMPLETED' && displayStatus !== 'CLOSED' && (
-              <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
-                <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-black flex items-center gap-2">
-                      <Camera className="w-4 h-4 text-primary" />
-                      Drop-off Evidences
-                    </CardTitle>
-                    <Badge variant="outline" className="text-[10px]">
-                      {delivery.evidence?.filter(e => e.phase === 'DROPOFF').length || 0} items
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-4">
-                  {(delivery.evidence && delivery.evidence.filter(e => e.phase === 'DROPOFF').length > 0) ? (
-                    <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                      {delivery.evidence.filter(e => e.phase === 'DROPOFF').map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            setSelectedEvidence(item);
-                            setEvidencePreviewOpen(true);
-                          }}
-                          className="relative group cursor-pointer text-left"
-                        >
-                          {item.imageUrl ? (
-                            <img
-                              src={item.imageUrl}
-                              alt={item.type}
-                              className="w-full aspect-square object-cover rounded-xl border border-slate-200 dark:border-slate-800 group-hover:ring-2 group-hover:ring-primary/50 transition-all"
-                            />
-                          ) : item.value ? (
-                            <div className="w-full aspect-square rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/50 transition-all">
-                              <span className="text-[10px] font-mono text-slate-500 text-center p-2">{item.value}</span>
-                            </div>
-                          ) : (
-                            <div className="w-full aspect-square rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/50 transition-all">
-                              <Camera className="w-5 h-5 text-slate-300" />
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-2">
-                            {item.imageUrl && (
-                              <div className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition">
-                                <Download className="w-4 h-4 text-white" />
-                              </div>
-                            )}
-                            <div className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition">
-                              <Eye className="w-4 h-4 text-white" />
-                            </div>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className="absolute top-1 right-1 text-[8px] px-1 py-0 bg-emerald-100 text-emerald-700"
-                          >
-                            {item.type}
-                          </Badge>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                      <Camera className="w-8 h-8 text-slate-300 mb-2" />
-                      <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No drop-off evidence photos</p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        This delivery was marked as completed but no drop-off photos were submitted.
-                      </p>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
