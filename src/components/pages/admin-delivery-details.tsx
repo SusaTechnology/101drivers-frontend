@@ -96,6 +96,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getUser, useDataMutation } from '@/lib/tanstack/dataQuery';
+import { PhotoDialog, downloadImageAsFile } from '@/components/ui/photo-dialog';
 
 export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: string }) {
   const { actionItems, signOut } = useAdminActions();
@@ -1702,42 +1703,15 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Driver Photo Dialog — full-size view of driver selfie/profile photo */}
-      <Dialog open={photoDialogOpen} onOpenChange={setPhotoDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <User className="w-5 h-5 text-primary" />
-              {photoDialogTitle || 'Driver Photo'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800">
-            {photoDialogSrc ? (
-              <img
-                src={photoDialogSrc}
-                alt={photoDialogTitle}
-                className="w-full max-h-[60vh] object-contain"
-              />
-            ) : (
-              <div className="p-10 text-center text-slate-400">No photo available</div>
-            )}
-          </div>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setPhotoDialogOpen(false)} className="rounded-xl">
-              Close
-            </Button>
-            {photoDialogSrc && (
-              <Button
-                onClick={() => window.open(photoDialogSrc, '_blank')}
-                className="bg-primary text-slate-950 rounded-xl"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Open Full Size
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Driver Photo Dialog — uses the reusable PhotoDialog component */}
+      <PhotoDialog
+        open={photoDialogOpen}
+        onOpenChange={setPhotoDialogOpen}
+        src={photoDialogSrc}
+        title={photoDialogTitle || 'Driver Photo'}
+        showDownload
+        onDownload={(src, title) => downloadImageAsFile(src, title)}
+      />
     </div>
   );
 }
