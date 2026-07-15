@@ -318,7 +318,7 @@ export default function AdminContentPage() {
                       visible while scrolling through many FAQ items.
                       top-16 lg:top-20 = navbar height. bg-white/dark matches
                       the card background so content scrolls under it cleanly. */}
-                  <div className="sticky top-16 lg:top-20 z-20 -mx-4 px-4 py-3 mb-4 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  <div className="sticky top-36 lg:top-36 z-20 -mx-4 px-4 py-3 mb-4 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <div>
                       <h2 className="text-lg font-black">{activeSection.label}</h2>
                       <p className="text-xs text-slate-500 mt-1">Add, edit, or remove FAQ items.</p>
