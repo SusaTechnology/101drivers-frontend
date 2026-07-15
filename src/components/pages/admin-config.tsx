@@ -129,6 +129,18 @@ const configCards = [
       { icon: Users, label: "FAQs" },
       { icon: Edit3, label: "WYSIWYG" },
     ]
+  },
+  {
+    // No href — this card opens a dialog instead of navigating
+    href: null,
+    onClick: "openPortalPasswordDialog",
+    icon: Lock,
+    title: "Insurance Portal Password",
+    description: "Set or change the password used to access the standalone insurance reporting portal at /insurance-portal. Share it with authorized insurance partners.",
+    chips: [
+      { icon: Lock, label: "Password" },
+      { icon: Shield, label: "Portal Access" },
+    ]
   }
 ]
 
@@ -245,85 +257,68 @@ export default function AdminConfigHubPage() {
 
         {/* Config cards */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {configCards.map((card) => (
-            <Link
-              key={card.href}
-              to={card.href}
-              className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 hover-lift"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center">
-                  <card.icon className="w-6 h-6 text-primary font-bold" />
-                </div>
-                <Badge
-                  variant="outline"
-                  className="chip-gray group-hover:border-primary/40 group-hover:bg-primary/10 transition"
-                >
-                  <ArrowRight className="w-3.5 h-3.5 text-primary mr-1" />
-                  Open
-                </Badge>
-              </div>
-
-              <h2 className="mt-5 text-2xl font-black text-slate-900 dark:text-white">
-                {card.title}
-              </h2>
-
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                {card.description}
-              </p>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                {card.chips.map((chip) => (
-                  <Badge key={chip.label} variant="outline" className="chip-gray">
-                    <chip.icon className="w-3.5 h-3.5 text-primary mr-1" />
-                    {chip.label}
+          {configCards.map((card) => {
+            // Cards with href render as <Link>, cards with onClick render
+            // as a <button> that opens a dialog.
+            const inner = (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center">
+                    <card.icon className="w-6 h-6 text-primary font-bold" />
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="chip-gray group-hover:border-primary/40 group-hover:bg-primary/10 transition"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5 text-primary mr-1" />
+                    Open
                   </Badge>
-                ))}
-              </div>
-            </Link>
-          ))}
-        </section>
+                </div>
 
-        {/* Insurance Portal Password — opens a dialog, not a page */}
-        <section className="mt-6">
-          <button
-            onClick={() => setPortalPasswordOpen(true)}
-            className="group w-full text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 hover-lift"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center">
-                <Lock className="w-6 h-6 text-primary font-bold" />
-              </div>
-              <Badge
-                variant="outline"
-                className="chip-gray group-hover:border-primary/40 group-hover:bg-primary/10 transition"
+                <h2 className="mt-5 text-2xl font-black text-slate-900 dark:text-white">
+                  {card.title}
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {card.description}
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {card.chips.map((chip) => (
+                    <Badge key={chip.label} variant="outline" className="chip-gray">
+                      <chip.icon className="w-3.5 h-3.5 text-primary mr-1" />
+                      {chip.label}
+                    </Badge>
+                  ))}
+                </div>
+              </>
+            );
+
+            const cardClass = "group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 hover-lift";
+
+            if (card.href) {
+              return (
+                <Link key={card.href} to={card.href} className={cardClass}>
+                  {inner}
+                </Link>
+              );
+            }
+
+            // No href → this card opens a dialog
+            return (
+              <button
+                key={card.title}
+                onClick={() => {
+                  if (card.onClick === "openPortalPasswordDialog") {
+                    setPortalPasswordOpen(true);
+                  }
+                }}
+                className={`${cardClass} text-left w-full`}
               >
-                <ArrowRight className="w-3.5 h-3.5 text-primary mr-1" />
-                Open
-              </Badge>
-            </div>
-
-            <h2 className="mt-5 text-2xl font-black text-slate-900 dark:text-white">
-              Insurance Portal Password
-            </h2>
-
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Set or change the password used to access the standalone insurance
-              reporting portal at /insurance-portal. Share it with authorized
-              insurance partners.
-            </p>
-
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Badge variant="outline" className="chip-gray">
-                <Lock className="w-3.5 h-3.5 text-primary mr-1" />
-                Password
-              </Badge>
-              <Badge variant="outline" className="chip-gray">
-                <Shield className="w-3.5 h-3.5 text-primary mr-1" />
-                Portal Access
-              </Badge>
-            </div>
-          </button>
+                {inner}
+              </button>
+            );
+          })}
         </section>
       </main>
 
