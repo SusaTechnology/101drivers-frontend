@@ -318,6 +318,46 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   const displayStatus = delivery ? getDisplayStatus(delivery) : '';
   const closedByLabel = delivery ? getClosedByLabel(delivery.closedByActorRole) : null;
 
+  // Build the evidence list for a given phase, ensuring DASHBOARD_PHOTO
+  // is always present (as a "No photo" placeholder if missing).
+  // The admin must always see a DASHBOARD_PHOTO box on both the Pickup
+  // and Drop-off cards — even if the driver didn't capture it.
+  const buildEvidenceWithDashboard = (phase: 'PICKUP' | 'DROPOFF'): Evidence[] => {
+    if (!delivery?.evidence) {
+      // No evidence at all — return just the dashboard placeholder
+      return [{
+        id: `placeholder-dashboard-${phase}`,
+        phase,
+        type: 'DASHBOARD_PHOTO',
+        slotIndex: 1,
+        imageUrl: null,
+        value: null,
+        createdAt: '',
+        updatedAt: '',
+      } as Evidence];
+    }
+    const phaseEvidence = delivery.evidence.filter(e => e.phase === phase);
+    const hasDashboard = phaseEvidence.some(e => e.type === 'DASHBOARD_PHOTO');
+    if (hasDashboard) {
+      return phaseEvidence;
+    }
+    // No DASHBOARD_PHOTO record — add a placeholder so the admin sees
+    // that it's missing.
+    return [...phaseEvidence, {
+      id: `placeholder-dashboard-${phase}`,
+      phase,
+      type: 'DASHBOARD_PHOTO',
+      slotIndex: 1,
+      imageUrl: null,
+      value: null,
+      createdAt: '',
+      updatedAt: '',
+    } as Evidence];
+  };
+
+  const pickupEvidence = delivery ? buildEvidenceWithDashboard('PICKUP') : [];
+  const dropoffEvidence = delivery ? buildEvidenceWithDashboard('DROPOFF') : [];
+
   // Loading state
   if (isLoading) {
     return (
@@ -705,8 +745,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               </CardContent>
             </Card>
 
-            {/* Pickup Evidences */}
-            {delivery.evidence && delivery.evidence.filter(e => e.phase === 'PICKUP').length > 0 && (
+            {/* Pickup Evidences — always shows DASHBOARD_PHOTO box even if missing */}
+            {pickupEvidence.length > 0 && (
               <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
                 <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center justify-between">
@@ -715,13 +755,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                       Pickup Evidences
                     </CardTitle>
                     <Badge variant="outline" className="text-[10px]">
-                      {delivery.evidence.filter(e => e.phase === 'PICKUP').length} items
+                      {pickupEvidence.length} items
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="p-4">
                   <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {delivery.evidence.filter(e => e.phase === 'PICKUP').map((item) => (
+                    {pickupEvidence.map((item) => (
                       <button
                         key={item.id}
                         onClick={() => {
@@ -769,11 +809,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               </Card>
             )}
 
-            {/* Drop-off Evidences — shown for all COMPLETED deliveries (including
-                CLOSED ones). If there are no drop-off photos, an empty state
-                is shown explaining that no drop-off evidence was submitted.
-                This is important for CLOSED deliveries where the driver didn't
-                complete the normal dropoff flow. */}
+            {/* Drop-off Evidences — always shows DASHBOARD_PHOTO box even if missing.
+                Shown for all COMPLETED deliveries (including CLOSED ones). */}
             {delivery.status === 'COMPLETED' && (
               <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
                 <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
@@ -783,14 +820,14 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                       Drop-off Evidences
                     </CardTitle>
                     <Badge variant="outline" className="text-[10px]">
-                      {delivery.evidence?.filter(e => e.phase === 'DROPOFF').length || 0} items
+                      {dropoffEvidence.length} items
                     </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="p-4">
-                  {(delivery.evidence && delivery.evidence.filter(e => e.phase === 'DROPOFF').length > 0) ? (
+                  {dropoffEvidence.length > 0 ? (
                     <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                      {delivery.evidence.filter(e => e.phase === 'DROPOFF').map((item) => (
+                      {dropoffEvidence.map((item) => (
                         <button
                           key={item.id}
                           onClick={() => {
