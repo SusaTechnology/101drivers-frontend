@@ -242,12 +242,12 @@ export default function AdminContentPage() {
         {/* Header — sticky below the navbar so Save Changes is always visible.
             top-16 lg:top-20 matches the navbar height (h-16 mobile, h-20 desktop).
             z-30 keeps it above the sidebar/editor content but below navbar (z-50). */}
-        <div className="sticky top-16 lg:top-20 z-30 -mx-6 px-6 py-4 mb-6 bg-background-light dark:bg-background-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="sticky top-16 lg:top-20 z-30 mx-6 px-6 py-2 mb-3 bg-background-light dark:bg-background-dark border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/admin-config" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900">
               <ArrowLeft className="w-3.5 h-3.5" /> Back
             </Link>
-            <h1 className="text-2xl font-black">Content Editor</h1>
+            <h1 className="text-xl font-black">Content Editor</h1>
           </div>
           <div className="flex items-center gap-2">
             {/* "Import Current" button — commented out for now since the content
