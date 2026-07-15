@@ -74,7 +74,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           visible while scrolling through long content.
           top-[200px] clears: navbar (80px) + content header (~60px) +
           section title (~60px). z-10 keeps it above the editor content. */}
-      <div className="sticky top-[200px] z-10 flex items-center gap-1 p-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-wrap rounded-t-2xl">
+      <div className="sticky top-[150px] z-10 flex items-center gap-1 p-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-wrap rounded-t-2xl">
         {toolbarBtn(() => editor.chain().focus().toggleBold().run(), editor.isActive('bold'), <Bold className="w-4 h-4" />, 'Bold')}
         {toolbarBtn(() => editor.chain().focus().toggleItalic().run(), editor.isActive('italic'), <Italic className="w-4 h-4" />, 'Italic')}
         <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
