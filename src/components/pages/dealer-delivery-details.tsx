@@ -373,8 +373,10 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     onSuccess: (_data, variables) => {
       setShowActionDialog(false)
       const target = (variables as any)?.toStatus
-      if (target === 'COMPLETED') {
-        toast.success('Delivery closed', { description: 'This delivery has been marked as completed.' })
+      if (target === 'CLOSED') {
+        toast.success('Delivery closed', { description: 'This delivery has been marked as closed.' })
+      } else if (target === 'COMPLETED') {
+        toast.success('Delivery completed', { description: 'This delivery has been marked as completed.' })
       } else if (target === 'LISTED') {
         toast.success('Delivery reverted', { description: 'The driver has been unassigned and the delivery is back on the board.' })
       }
@@ -1282,6 +1284,12 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       <div className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-200 dark:border-emerald-800">
         <CheckSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
         <span className="text-sm font-black text-emerald-700 dark:text-emerald-300">Delivery Completed</span>
+      </div>
+    )}
+    {deliveryData.status === 'CLOSED' && (
+      <div className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-slate-50 dark:bg-slate-900/20 border-2 border-slate-200 dark:border-slate-800">
+        <CheckSquare className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+        <span className="text-sm font-black text-slate-700 dark:text-slate-300">Delivery Closed</span>
       </div>
     )}
     {deliveryData.status === 'ACTIVE' && (
@@ -2460,7 +2468,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
             <AlertDialogDescription>
               {deliveryData?.status === 'BOOKED'
                 ? 'This delivery is booked but not yet started. You can complete it now or revert it to Listed so another driver can pick it up.'
-                : 'Are you sure you want to close this delivery? This will move it to Completed and cannot be undone.'}
+                : 'Are you sure you want to close this delivery? This will move it to Closed and cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2477,12 +2485,12 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
               </Button>
             )}
             <Button
-              onClick={() => handleTransitionDelivery('COMPLETED', 'Dealer manually closed delivery')}
+              onClick={() => handleTransitionDelivery('CLOSED', 'Dealer manually closed delivery')}
               disabled={transitionDeliveryMutation.isPending}
               className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-red-600 text-white hover:bg-red-700 font-extrabold"
             >
               <CheckSquare className="h-4 w-4" />
-              {transitionDeliveryMutation.isPending ? 'Closing...' : 'Complete Delivery'}
+              {transitionDeliveryMutation.isPending ? 'Closing...' : 'Close Delivery'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
