@@ -55,6 +55,8 @@ import {
   EyeOff,
   Bell,
   BellRing,
+  HelpCircle,
+  Share2,
   Menu,
   X,
   Car,
@@ -431,15 +433,19 @@ export default function DealerDashboard() {
             <Link to="/" className="flex items-center"><div className="w-10 h-10 rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-200"><img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" /></div></Link>
             <div className="leading-tight"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: BUSINESS_TZ })}</div><div className="text-sm font-extrabold text-slate-900 dark:text-white">{isPrivateCustomer ? 'My Deliveries' : 'Delivery Dashboard'}</div></div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <span className={cn("text-xs font-bold transition-colors", !showAll ? "text-lime-600" : "text-slate-400")}>My</span>
               <Switch checked={showAll} onCheckedChange={setShowAll} className="data-[state=checked]:bg-lime-500" />
               <span className={cn("text-xs font-bold transition-colors", showAll ? "text-lime-600" : "text-slate-400")}>All</span>
             </div>
-            <Button variant={showMapView ? "default" : "outline"} size="icon" className={cn("w-10 h-10 rounded-xl", showMapView && "bg-lime-500 text-slate-950")} onClick={() => setShowMapView(!showMapView)}><Map className="h-5 w-5" /></Button>
+            <Button variant={showMapView ? "default" : "outline"} size="icon" className={cn("w-10 h-10 rounded-xl", showMapView && "bg-lime-500 text-slate-950")} onClick={() => setShowMapView(!showMapView)} title="Map view"><Map className="h-5 w-5" /></Button>
             <NotificationBell />
-            <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl" onClick={toggleTheme}>{mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</Button>
+            <Button asChild variant="ghost" size="icon" className="w-10 h-10 rounded-xl" title="Help">
+              <Link to="/help-customer"><HelpCircle className="h-5 w-5" /></Link>
+            </Button>
+            <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl" onClick={toggleTheme} title="Toggle theme">{mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</Button>
+            <Button variant="ghost" size="icon" className="hidden sm:flex w-10 h-10 rounded-xl" onClick={handleExportCSV} title="Export CSV"><Share2 className="h-5 w-5" /></Button>
             <Button variant="ghost" size="icon" className="hidden sm:flex w-10 h-10 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={handleSignOut} title="Sign Out"><LogOut className="w-5 h-5" /></Button>
             <Button variant="ghost" size="icon" className="sm:hidden w-10 h-10 rounded-xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</Button>
           </div>
@@ -449,6 +455,8 @@ export default function DealerDashboard() {
             <div className="max-w-[980px] mx-auto px-4 py-4 space-y-3">
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100 dark:bg-slate-800"><span className="text-sm font-bold">View Mode</span><div className="flex items-center gap-2"><span className={cn("text-xs font-bold", !showAll && "text-lime-600")}>My</span><Switch checked={showAll} onCheckedChange={setShowAll} className="data-[state=checked]:bg-lime-500" /><span className={cn("text-xs font-bold", showAll && "text-lime-600")}>All</span></div></div>
               <Button onClick={() => setNotificationSettingsOpen(true)} variant="outline" className="w-full justify-start p-3 rounded-xl font-bold"><Bell className="h-4 w-4 mr-2" />Notifications</Button>
+              <Link to="/help-customer" className="block p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"><HelpCircle className="h-4 w-4 inline mr-2" />Help Center</Link>
+              <button onClick={handleExportCSV} className="w-full text-left p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"><Share2 className="h-4 w-4 inline mr-2" />Export Deliveries (CSV)</button>
               <Link to="/dealer-drafts" className="block p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"><FileText className="h-4 w-4 inline mr-2" />Drafts</Link>
               <Link to="/dealer-settings" className="block p-3 rounded-xl bg-slate-100 dark:bg-slate-800 font-bold"><User className="h-4 w-4 inline mr-2" />Settings</Link>
               <button onClick={handleSignOut} className="w-full p-3 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-600 font-bold text-left"><LogOut className="h-4 w-4 inline mr-2" />Sign Out</button>
