@@ -414,11 +414,23 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   // Initialize edit forms when user data loads
   React.useEffect(() => {
     if (user) {
+      // Resolve the best available phone for the User-account edit form.
+      // For drivers the canonical phone is user.driver.phone; for
+      // business/private customers it usually lives on the customer record
+      // (businessPhone for the business line, contactPhone for the account
+      // contact). user.phone itself is often null for these roles.
+      const bestUserPhone =
+        user.phone ||
+        user.driver?.phone ||
+        user.customer?.businessPhone ||
+        user.customer?.contactPhone ||
+        user.customer?.phone ||
+        '';
       editUserForm.reset({
         email: user.email,
         username: user.username,
         fullName: user.fullName,
-        phone: user.phone || '',
+        phone: bestUserPhone,
       });
       if (user.customer) {
         editCustomerForm.reset({
