@@ -256,10 +256,11 @@ export class DeliveryStatusHistoryPolicyService {
       LISTED: ["BOOKED", "CANCELLED", "EXPIRED", "LISTED"],
       BOOKED: ["ACTIVE", "CANCELLED", "DISPUTED", "BOOKED"],
       ACTIVE: ["COMPLETED", "CANCELLED", "DISPUTED", "ACTIVE"],
-      COMPLETED: ["DISPUTED", "COMPLETED"],
+      COMPLETED: ["CLOSED", "DISPUTED", "COMPLETED"],
+      CLOSED: ["DISPUTED", "CLOSED"],
       CANCELLED: ["CANCELLED"],
       EXPIRED: ["QUOTED"],
-      DISPUTED: ["ACTIVE", "COMPLETED", "CANCELLED", "DISPUTED"],
+      DISPUTED: ["ACTIVE", "COMPLETED", "CLOSED", "CANCELLED", "DISPUTED"],
     };
 
     if (!allowed[fromStatus].includes(toStatus)) {
@@ -324,6 +325,7 @@ export class DeliveryStatusHistoryPolicyService {
       value !== EnumDeliveryStatusHistoryFromStatus.BOOKED &&
       value !== EnumDeliveryStatusHistoryFromStatus.ACTIVE &&
       value !== EnumDeliveryStatusHistoryFromStatus.COMPLETED &&
+      value !== EnumDeliveryStatusHistoryFromStatus.CLOSED &&
       value !== EnumDeliveryStatusHistoryFromStatus.CANCELLED &&
       value !== EnumDeliveryStatusHistoryFromStatus.EXPIRED &&
       value !== EnumDeliveryStatusHistoryFromStatus.DISPUTED
@@ -343,6 +345,7 @@ export class DeliveryStatusHistoryPolicyService {
       value !== EnumDeliveryStatusHistoryToStatus.BOOKED &&
       value !== EnumDeliveryStatusHistoryToStatus.ACTIVE &&
       value !== EnumDeliveryStatusHistoryToStatus.COMPLETED &&
+      value !== EnumDeliveryStatusHistoryToStatus.CLOSED &&
       value !== EnumDeliveryStatusHistoryToStatus.CANCELLED &&
       value !== EnumDeliveryStatusHistoryToStatus.EXPIRED &&
       value !== EnumDeliveryStatusHistoryToStatus.DISPUTED

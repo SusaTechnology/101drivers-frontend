@@ -527,6 +527,7 @@ class DeliveryRequest {
     | "BOOKED"
     | "ACTIVE"
     | "COMPLETED"
+    | "CLOSED"
     | "CANCELLED"
     | "EXPIRED"
     | "DISPUTED";

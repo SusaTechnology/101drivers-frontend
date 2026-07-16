@@ -96,6 +96,7 @@ class DeliveryStatusHistory {
     | "BOOKED"
     | "ACTIVE"
     | "COMPLETED"
+    | "CLOSED"
     | "CANCELLED"
     | "EXPIRED"
     | "DISPUTED"
@@ -136,6 +137,7 @@ class DeliveryStatusHistory {
     | "BOOKED"
     | "ACTIVE"
     | "COMPLETED"
+    | "CLOSED"
     | "CANCELLED"
     | "EXPIRED"
     | "DISPUTED";
