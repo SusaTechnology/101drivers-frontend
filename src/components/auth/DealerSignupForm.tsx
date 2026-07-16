@@ -279,7 +279,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     fetchWithoutRefresh: true,
     publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint
     onSuccess: (data, variables) => {
-      toast.success("Application submitted successfully!", {
+      toast.success("Sign-up submitted successfully!", {
         description: "Your account is pending admin approval.",
       });
       // Clear draft from localStorage
@@ -1499,7 +1499,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
 
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed text-center">
                       {otpSent
-                        ? "After verification, your application will be submitted for admin approval."
+                        ? "After verification, your sign-up request will be submitted for admin approval."
                         : "After submission, you'll receive a verification code via email."}
                     </p>
 
@@ -1528,10 +1528,10 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                   </div>
                   
                   <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">
-                    Application Submitted!
+                    Sign-up Submitted!
                   </h2>
                   <p className="text-lg text-slate-600 dark:text-slate-400 mt-3 max-w-md">
-                    Thank you. Our team has received your application. We will review your details and contact you within 1-2 business days to schedule a discussion call.
+                    Thank you. Our team has received your sign-up request. We will review your details and contact you within 1-2 business days to schedule an onboarding call.
                   </p>
                   
                   {/* Status Badge */}
@@ -1556,14 +1556,14 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                       <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-3">
                         <span className="text-lg font-black text-blue-600 dark:text-blue-400">1</span>
                       </div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Application Review</h4>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Sign-up Review</h4>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Our team will carefully review your submitted information.</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
                       <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-3">
                         <span className="text-lg font-black text-purple-600 dark:text-purple-400">2</span>
                       </div>
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Discussion Call</h4>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Onboarding Call</h4>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">We will contact you directly to schedule a call and walk you through the platform.</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
@@ -1571,7 +1571,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         <span className="text-lg font-black text-green-600 dark:text-green-400">3</span>
                       </div>
                       <h4 className="font-bold text-slate-900 dark:text-white text-sm">Account Activation</h4>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Once approved, you'll receive access to your dashboard to start creating delivery orders.</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Once approved, you'll receive access to your account portal to start creating delivery orders.</p>
                     </div>
                   </div>
                 </div>
@@ -1583,7 +1583,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     <div>
                       <p className="text-sm font-bold text-slate-900 dark:text-white">While You Wait</p>
                       <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                        Our team typically responds within 1-2 business days. If you handle high delivery volume, please have your monthly order numbers ready when we contact you — this allows us to offer you the best possible rates.
+                        Our team typically responds within 1-2 business days. If you manage high delivery volume, please have your monthly order numbers ready when we contact you — this allows us to offer you the best possible rates.
                       </p>
                     </div>
                   </div>
