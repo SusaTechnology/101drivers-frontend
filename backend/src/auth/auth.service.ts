@@ -649,6 +649,25 @@ export class AuthService {
     );
   }
 
+  /**
+   * Lightweight OTP check that does NOT consume the token.
+   * Used by the dealer signup form for live verification feedback
+   * (auto-verifies as soon as the user types the 6th digit).
+   * The actual token consumption happens later via consumeTokenForEmail
+   * inside signupBusinessCustomer when the form is finally submitted.
+   */
+  async verifyOtp(
+    email: string,
+    verificationToken: string
+  ): Promise<{ verified: boolean }> {
+    const verified = await this.emailVerificationService.checkTokenForEmail(
+      email,
+      verificationToken,
+      EnumEmailVerificationPurpose.SIGNUP
+    );
+    return { verified };
+  }
+
   async forgotPassword(
     dto: ForgotPasswordDto
   ): Promise<{ success: boolean; message: string }> {

@@ -122,4 +122,53 @@ export class EmailVerificationService {
       },
     });
   }
+
+  /**
+   * Check whether a token is valid WITHOUT consuming it.
+   * Used for live OTP verification feedback (e.g. dealer signup form
+   * auto-verifies as the user types the 6th digit).
+   * The actual consumption still happens via consumeTokenForEmail
+   * when the signup form is finally submitted.
+   */
+  async checkTokenForEmail(
+    email: string,
+    token: string,
+    purpose: EnumEmailVerificationPurpose = EnumEmailVerificationPurpose.SIGNUP
+  ): Promise<boolean> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedToken = token.trim();
+
+    if (!normalizedToken) {
+      return false;
+    }
+
+    if (!/^\d{6}$/.test(normalizedToken)) {
+      return false;
+    }
+
+    const tokenHash = this.hashToken(normalizedToken);
+
+    const record = await this.prisma.emailVerificationToken.findFirst({
+      where: {
+        email: normalizedEmail,
+        tokenHash,
+        purpose,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!record) {
+      return false;
+    }
+
+    if (record.verifiedAt) {
+      return false;
+    }
+
+    if (record.expiresAt < new Date()) {
+      return false;
+    }
+
+    return true;
+  }
 }

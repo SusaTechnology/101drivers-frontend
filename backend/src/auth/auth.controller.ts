@@ -19,6 +19,7 @@ import { SignupCustomerDto } from "./dto/SignupCustomer.dto";
 import { JwtAuthGuard } from "./jwt/jwtAuth.guard";
 import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
+import { VerifyOtpDto } from "./dto/VerifyOtp.dto";
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
@@ -86,6 +87,20 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response
   ): Promise<any> {
     return this.authService.signupBusinessCustomer(body, request, response);
+  }
+
+  /**
+   * Lightweight OTP verification endpoint.
+   * Checks whether the 6-digit code is valid for the given email
+   * WITHOUT consuming the token. Used by the dealer signup form for
+   * live verification feedback (auto-verifies as the user types the
+   * 6th digit). The actual token consumption happens inside
+   * signupBusinessCustomer when the form is finally submitted.
+   */
+  @Post("verify-otp")
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(@Body() body: VerifyOtpDto): Promise<{ verified: boolean }> {
+    return this.authService.verifyOtp(body.email, body.verificationToken);
   }
   @Post("forgot-password")
   @HttpCode(HttpStatus.OK)

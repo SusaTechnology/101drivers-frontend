@@ -149,6 +149,8 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   const [otpSent, setOtpSent] = useState(false);
   const [otpValue, setOtpValue] = useState("");
   const [otpFocused, setOtpFocused] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpAttempted, setOtpAttempted] = useState(false);
   const [pendingSignupData, setPendingSignupData] = useState<DealerSignupPayload | null>(null);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   
@@ -235,6 +237,10 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       });
       setOtpSent(true);
       setPendingSignupData(variables); // Store data for second step
+      // Reset OTP verification state for the new code
+      setOtpVerified(false);
+      setOtpAttempted(false);
+      setOtpValue("");
     },
     onError: (error) => {
       const errorMessage = error.message || "Please try again later.";
@@ -304,6 +310,10 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       toast.success("Code resent successfully", {
         description: "Check your email for the new verification code.",
       });
+      // Reset OTP verification state for the new code
+      setOtpVerified(false);
+      setOtpAttempted(false);
+      setOtpValue("");
     },
     onError: (error) => {
       toast.error("Failed to resend code", {
@@ -313,6 +323,58 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     successMessage: "Code resent successfully",
     errorMessage: "Failed to resend code",
   });
+
+  // Mutation for live OTP verification (does NOT consume the token).
+  // Fires automatically when the user types the 6th digit.
+  const verifyOtpCheckMutation = useDataMutation<
+    { verified: boolean },
+    { email: string; verificationToken: string }
+  >({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/verify-otp`,
+    fetchWithoutRefresh: true,
+    publicEndpoint: true,
+    onSuccessInvalidate: false,
+    onSuccess: (data, variables) => {
+      // Only apply the result if the user hasn't changed the code while
+      // the request was in flight.
+      if (variables.verificationToken === otpValueRef.current) {
+        setOtpVerified(data.verified);
+        setOtpAttempted(true);
+      }
+    },
+    onError: () => {
+      setOtpVerified(false);
+      setOtpAttempted(true);
+    },
+  });
+
+  // Ref to track the latest otpValue inside mutation callbacks without
+  // re-creating the mutation on every keystroke.
+  const otpValueRef = useRef(otpValue);
+  useEffect(() => {
+    otpValueRef.current = otpValue;
+  }, [otpValue]);
+
+  // Auto-verify: when the user has typed exactly 6 digits, fire the
+  // check endpoint. Reset state when they edit below 6.
+  useEffect(() => {
+    if (!otpSent) return;
+    if (otpValue.length === 6) {
+      if (!verifyOtpCheckMutation.isPending) {
+        verifyOtpCheckMutation.mutate({
+          email: pendingSignupData?.email ?? "",
+          verificationToken: otpValue,
+        });
+      }
+    } else {
+      // User is still typing — reset verification state
+      if (otpVerified || otpAttempted) {
+        setOtpVerified(false);
+        setOtpAttempted(false);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otpValue, otpSent]);
 
   const {
     register: registerSignup,
@@ -525,8 +587,11 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       sendOtpMutation.mutate(basePayload);
     } else {
       // Step 2: Verify OTP and complete registration
-      if (!otpValue.trim()) {
-        toast.error("Please enter the OTP");
+      // The OTP has already been live-verified via the /api/auth/verify-otp
+      // endpoint (otpVerified === true). The button is disabled until that
+      // succeeds, so if we reach here the code is valid.
+      if (!otpVerified) {
+        toast.error("Please enter a valid verification code");
         return;
       }
       const payloadWithOtp: DealerSignupPayloadWithOtp = {
@@ -559,7 +624,6 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
 
   // Determine if any mutation is pending
   const isPending = sendOtpMutation.isPending || verifyOtpMutation.isPending || resendCodeMutation.isPending;
-
   return (
     <div className={embedded ? "w-full" : "w-full max-w-[1100px] mx-auto px-6 lg:px-8 py-10 lg:py-14"}>
       {/* Title Section — skip when embedded (landing page has its own intro) */}
@@ -1091,7 +1155,8 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     {/* Password */}
                     <div className={cn(
                       "space-y-4 p-4 rounded-2xl border transition-all duration-300",
-                      signupErrors.password || signupErrors.confirmPassword
+                      (signupErrors.password || signupErrors.confirmPassword ||
+                       (watchPassword && watchConfirmPassword && watchPassword !== watchConfirmPassword))
                         ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
                         : "border-transparent"
                     )}>
@@ -1274,24 +1339,56 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                             )}
                           </Button>
                         </div>
-                        <Input
-                          id="otp"
-                          value={otpValue}
-                          onChange={(e) => setOtpValue(e.target.value)}
-                          onFocus={() => setOtpFocused(true)}
-                          onBlur={() => setOtpFocused(false)}
-                          className={cn(
-                            "h-14 rounded-2xl text-center text-lg tracking-widest font-mono border-2 transition-colors outline-none",
-                            otpFocused && !otpValue.trim()
-                              ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200"
-                              : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-slate-400 dark:focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-700"
+                        <div className="relative">
+                          <Input
+                            id="otp"
+                            value={otpValue}
+                            onChange={(e) => setOtpValue(e.target.value)}
+                            onFocus={() => setOtpFocused(true)}
+                            onBlur={() => setOtpFocused(false)}
+                            className={cn(
+                              "h-14 rounded-2xl text-center text-lg tracking-widest font-mono border-2 transition-colors outline-none",
+                              otpVerified
+                                ? "border-green-400 dark:border-green-500 bg-green-50 dark:bg-green-950/30 focus:border-green-500 focus:ring-2 focus:ring-green-200 pr-14"
+                                : otpAttempted && otpValue.length === 6
+                                ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200 pr-14"
+                                : otpFocused && !otpValue.trim()
+                                ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200"
+                                : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-slate-400 dark:focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-700"
+                            )}
+                            placeholder="123456"
+                            maxLength={6}
+                            disabled={isPending}
+                          />
+                          {/* Status icon on the right */}
+                          {(otpVerified || (otpAttempted && otpValue.length === 6 && !verifyOtpCheckMutation.isPending)) && (
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
+                              {otpVerified ? (
+                                <CheckCircle className="w-6 h-6 text-green-500" />
+                              ) : (
+                                <X className="w-6 h-6 text-red-500" />
+                              )}
+                            </div>
                           )}
-                          placeholder="123456"
-                          maxLength={6}
-                          disabled={isPending}
-                        />
-                        <p className="text-[11px] text-slate-500">
-                          Enter the 6-digit code sent to your email.
+                          {verifyOtpCheckMutation.isPending && otpValue.length === 6 && !otpVerified && (
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
+                              <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-300 border-t-slate-600" />
+                            </div>
+                          )}
+                        </div>
+                        <p className={cn(
+                          "text-[11px] font-medium",
+                          otpVerified
+                            ? "text-green-600 dark:text-green-400"
+                            : otpAttempted && otpValue.length === 6
+                            ? "text-red-500"
+                            : "text-slate-500"
+                        )}>
+                          {otpVerified
+                            ? "Verified"
+                            : otpAttempted && otpValue.length === 6
+                            ? "Invalid code — please check and re-enter"
+                            : "Enter the 6-digit code sent to your email."}
                         </p>
                       </div>
                     )}
@@ -1369,11 +1466,11 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         isPending ||
                         !selectedBusiness ||
                         !acceptTerms ||
-                        (otpSent && !otpValue.trim())
+                        (otpSent && !otpVerified)
                       }
                       className={cn(
                         "w-full py-4 rounded-2xl transition flex items-center justify-center gap-2 text-lg font-extrabold",
-                        !selectedBusiness || !acceptTerms
+                        !selectedBusiness || !acceptTerms || (otpSent && !otpVerified)
                           ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                           : "bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20 hover:brightness-95",
                       )}
@@ -1381,7 +1478,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                       {isPending ? (
                         <>
                           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-950"></div>
-                          {sendOtpMutation.isPending || resendCodeMutation.isPending ? "Sending Code..." : "Verifying..."}
+                          {sendOtpMutation.isPending || resendCodeMutation.isPending ? "Sending Code..." : "Submitting..."}
                         </>
                       ) : !selectedBusiness ? (
                         "Select Business First"
@@ -1389,7 +1486,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         "Accept Terms & Conditions"
                       ) : otpSent ? (
                         <>
-                          Verify & Submit
+                          {otpVerified ? "Verify & Submit" : "Enter Valid Code"}
                           <ArrowRight className="w-5 h-5" />
                         </>
                       ) : (
