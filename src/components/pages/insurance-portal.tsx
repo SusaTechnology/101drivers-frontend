@@ -173,7 +173,7 @@ function ReportView(props: any) {
   const [data, setData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [sortBy, setSortBy] = useState('createdAt')
+  const [sortBy, setSortBy] = useState('startedAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const handleSortChange = (newSortBy: string, newSortOrder: 'asc' | 'desc') => {
@@ -183,81 +183,63 @@ function ReportView(props: any) {
   }
 
   // Column definitions for TanStack Table
+  // Per-ride columns required by the insurance compliance spec:
+  // Driver ID, Ride ID, Start Time, End Time, Start Location, End Location, Miles.
+  // Mirrors the admin insurance-reporting page exactly so a carrier sees the
+  // same report inside or outside the admin portal.
   const columns: ColumnDef<any>[] = useMemo(() => [
     {
-      accessorKey: 'status',
-      header: 'Status',
-      size: 90,
-      meta: { label: 'Status', sortable: true, sortKey: 'delivery.status' },
-      cell: ({ getValue }) => <Badge variant="outline" className="text-[10px] font-bold">{getValue() || '—'}</Badge>,
-    },
-    {
-      accessorKey: 'customerName',
-      header: 'Customer',
-      size: 120,
-      meta: { label: 'Customer', sortable: false },
-      cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
-    },
-    {
-      accessorKey: 'driverName',
-      header: 'Driver',
-      size: 120,
-      meta: { label: 'Driver', sortable: false },
-      cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
-    },
-    {
-      id: 'route',
-      header: 'Route',
-      size: 180,
-      meta: { label: 'Route', sortable: false },
-      cell: ({ row }) => (
-        <span>
-          {row.original.pickupAddress ? `${row.original.pickupAddress.split(',')[0]} → ` : ''}
-          {row.original.dropoffAddress ? row.original.dropoffAddress.split(',')[0] : '—'}
+      accessorKey: 'driverId',
+      header: 'Driver ID',
+      size: 140,
+      meta: { label: 'Driver ID', sortable: false },
+      cell: ({ row, getValue }) => (
+        <span className="font-mono">
+          {getValue() || (row.original.driverName ? row.original.driverName : '—')}
         </span>
       ),
     },
     {
+      accessorKey: 'deliveryId',
+      header: 'Ride ID',
+      size: 140,
+      meta: { label: 'Ride ID', sortable: false },
+      cell: ({ getValue }) => <span className="font-mono">{getValue() || '—'}</span>,
+    },
+    {
       accessorKey: 'startedAt',
-      header: 'Started',
-      size: 130,
-      meta: { label: 'Started', sortable: true, sortKey: 'startedAt' },
+      header: 'Start Time',
+      size: 150,
+      meta: { label: 'Start Time', sortable: true, sortKey: 'startedAt' },
       cell: ({ getValue }) => <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>,
     },
     {
       accessorKey: 'stoppedAt',
-      header: 'Stopped',
-      size: 130,
-      meta: { label: 'Stopped', sortable: true, sortKey: 'stoppedAt' },
+      header: 'End Time',
+      size: 150,
+      meta: { label: 'End Time', sortable: true, sortKey: 'stoppedAt' },
       cell: ({ getValue }) => <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>,
+    },
+    {
+      accessorKey: 'pickupAddress',
+      header: 'Start Location',
+      size: 220,
+      meta: { label: 'Start Location', sortable: false },
+      cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
+    },
+    {
+      accessorKey: 'dropoffAddress',
+      header: 'End Location',
+      size: 220,
+      meta: { label: 'End Location', sortable: false },
+      cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
     },
     {
       accessorKey: 'drivenMiles',
       header: 'Miles',
-      size: 70,
+      size: 80,
       meta: { label: 'Miles', sortable: true, sortKey: 'drivenMiles' },
       cell: ({ getValue }) => <span className="font-bold tabular-nums">{formatReportMiles(getValue())}</span>,
-    },
-    {
-      accessorKey: 'drivenHours',
-      header: 'Hours',
-      size: 60,
-      meta: { label: 'Hours', sortable: true, sortKey: 'drivenHours' },
-      cell: ({ getValue }) => <span className="tabular-nums">{getValue() != null ? getValue().toFixed(1) : '—'}</span>,
-    },
-    {
-      accessorKey: 'paymentAmount',
-      header: 'Payment',
-      size: 80,
-      meta: { label: 'Payment', sortable: false },
-      cell: ({ getValue }) => <span className="tabular-nums">{getValue() != null ? `$${getValue().toFixed(2)}` : '—'}</span>,
-    },
-    {
-      accessorKey: 'payoutAmount',
-      header: 'Payout',
-      size: 80,
-      meta: { label: 'Payout', sortable: false },
-      cell: ({ getValue }) => <span className="tabular-nums">{getValue() != null ? `$${getValue().toFixed(2)}` : '—'}</span>,
     },
   ], [])
 
@@ -307,9 +289,9 @@ function ReportView(props: any) {
 
   const resetFilters = () => {
     setDateFrom(''); setDateTo(''); setStatusFilter(''); setServiceType('')
-    setCustomerId(''); setDriverId(''); setCustomerSearch(''); setDriverSearch('')
-    setMinMiles(''); setMaxMiles(''); setMinPayment(''); setMaxPayment('')
-    setPickupSearch(''); setPage(1)
+    setDriverId(''); setDriverSearch('')
+    setMinMiles(''); setMaxMiles('')
+    setPickupSearch(''); setSortBy('startedAt'); setSortOrder('desc'); setPage(1)
   }
 
   const summary = data?.summary || {}
@@ -371,38 +353,12 @@ function ReportView(props: any) {
               </span>
               <button onClick={resetFilters} className="text-[11px] font-bold text-primary hover:underline">Reset All</button>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
               <FilterField label="Date From">
                 <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} className="h-9 text-sm rounded-xl" />
               </FilterField>
               <FilterField label="Date To">
                 <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }} className="h-9 text-sm rounded-xl" />
-              </FilterField>
-              <FilterField label="Status">
-                <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <option value="">All</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="BOOKED">Booked</option>
-                  <option value="CANCELLED">Cancelled</option>
-                  <option value="EXPIRED">Expired</option>
-                </select>
-              </FilterField>
-              <FilterField label="Service Type">
-                <select value={serviceType} onChange={(e) => { setServiceType(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <option value="">All</option>
-                  <option value="home">Home Delivery</option>
-                  <option value="dealer">Between Locations</option>
-                  <option value="service">Service Pickup/return</option>
-                </select>
-              </FilterField>
-              <FilterField label="Customer">
-                <SearchableSelect
-                  items={customerList}
-                  value={customerId}
-                  onChange={(id) => { setCustomerId(id); setPage(1) }}
-                  placeholder="All Customers"
-                />
               </FilterField>
               <FilterField label="Driver">
                 <SearchableSelect
@@ -412,20 +368,46 @@ function ReportView(props: any) {
                   placeholder="All Drivers"
                 />
               </FilterField>
+              <FilterField label="Service Type">
+                <select value={serviceType} onChange={(e) => { setServiceType(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  <option value="">All Services</option>
+                  <option value="HOME_DELIVERY">Home Delivery</option>
+                  <option value="BETWEEN_LOCATIONS">Between Locations</option>
+                  <option value="SERVICE_PICKUP_RETURN">Service Pickup/Return</option>
+                </select>
+              </FilterField>
+              <FilterField label="Status">
+                <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  <option value="">All Statuses</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="BOOKED">Booked</option>
+                  <option value="CANCELLED">Cancelled</option>
+                  <option value="EXPIRED">Expired</option>
+                </select>
+              </FilterField>
               <FilterField label="Min Miles">
                 <Input type="number" value={minMiles} onChange={(e) => { setMinMiles(e.target.value); setPage(1) }} placeholder="0" className="h-9 text-sm rounded-xl" />
               </FilterField>
               <FilterField label="Max Miles">
-                <Input type="number" value={maxMiles} onChange={(e) => { setMaxMiles(e.target.value); setPage(1) }} placeholder="9999" className="h-9 text-sm rounded-xl" />
-              </FilterField>
-              <FilterField label="Min Payment ($)">
-                <Input type="number" value={minPayment} onChange={(e) => { setMinPayment(e.target.value); setPage(1) }} placeholder="0" className="h-9 text-sm rounded-xl" />
-              </FilterField>
-              <FilterField label="Max Payment ($)">
-                <Input type="number" value={maxPayment} onChange={(e) => { setMaxPayment(e.target.value); setPage(1) }} placeholder="9999" className="h-9 text-sm rounded-xl" />
+                <Input type="number" value={maxMiles} onChange={(e) => { setMaxMiles(e.target.value); setPage(1) }} placeholder="Any" className="h-9 text-sm rounded-xl" />
               </FilterField>
               <FilterField label="Pickup Address">
                 <Input value={pickupSearch} onChange={(e) => { setPickupSearch(e.target.value); setPage(1) }} placeholder="e.g. Los Angeles" className="h-9 text-sm rounded-xl" />
+              </FilterField>
+              <FilterField label="Sort By">
+                <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  <option value="startedAt">Start Time</option>
+                  <option value="stoppedAt">End Time</option>
+                  <option value="drivenMiles">Miles</option>
+                  <option value="createdAt">Created Date</option>
+                </select>
+              </FilterField>
+              <FilterField label="Order">
+                <select value={sortOrder} onChange={(e) => { setSortOrder(e.target.value as 'asc' | 'desc'); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  <option value="desc">Newest First</option>
+                  <option value="asc">Oldest First</option>
+                </select>
               </FilterField>
             </div>
           </CardContent>

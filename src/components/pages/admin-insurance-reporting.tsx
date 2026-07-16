@@ -124,7 +124,7 @@ export default function AdminInsuranceReportingPage() {
   const [maxPayment, setMaxPayment] = useState('');
   const [pickupSearch, setPickupSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(25);
 
   // Search state for dropdowns
   const [customerSearch, setCustomerSearch] = useState('');
@@ -232,81 +232,63 @@ export default function AdminInsuranceReportingPage() {
   };
 
   // Column definitions for TanStack Table
+  // Per-ride columns required by the insurance compliance spec:
+  // Driver ID, Ride ID, Start Time, End Time, Start Location, End Location, Miles.
+  // Both this admin page and the insurance-portal page render the exact same
+  // column set so the report a carrier sees is identical to what an admin sees.
   const columns: ColumnDef<any>[] = useMemo(() => [
     {
-      accessorKey: 'status',
-      header: 'Status',
-      size: 90,
-      meta: { label: 'Status', sortable: true, sortKey: 'delivery.status' },
-      cell: ({ getValue }) => <Badge variant="outline" className="text-[10px] font-bold">{getValue() || '—'}</Badge>,
-    },
-    {
-      accessorKey: 'customerName',
-      header: 'Customer',
-      size: 120,
-      meta: { label: 'Customer', sortable: false },
-      cell: ({ getValue }) => <span className="text-xs">{getValue() || '—'}</span>,
-    },
-    {
-      accessorKey: 'driverName',
-      header: 'Driver',
-      size: 120,
-      meta: { label: 'Driver', sortable: false },
-      cell: ({ getValue }) => <span className="text-xs">{getValue() || '—'}</span>,
-    },
-    {
-      id: 'route',
-      header: 'Route',
-      size: 180,
-      meta: { label: 'Route', sortable: false },
-      cell: ({ row }) => (
-        <span className="text-xs">
-          {row.original.pickupAddress ? `${row.original.pickupAddress.split(',')[0]} → ` : ''}
-          {row.original.dropoffAddress ? row.original.dropoffAddress.split(',')[0] : '—'}
+      accessorKey: 'driverId',
+      header: 'Driver ID',
+      size: 140,
+      meta: { label: 'Driver ID', sortable: false },
+      cell: ({ row, getValue }) => (
+        <span className="text-xs font-mono">
+          {getValue() || (row.original.driverName ? row.original.driverName : '—')}
         </span>
       ),
     },
     {
+      accessorKey: 'deliveryId',
+      header: 'Ride ID',
+      size: 140,
+      meta: { label: 'Ride ID', sortable: false },
+      cell: ({ getValue }) => <span className="text-xs font-mono">{getValue() || '—'}</span>,
+    },
+    {
       accessorKey: 'startedAt',
-      header: 'Started',
-      size: 130,
-      meta: { label: 'Started', sortable: true, sortKey: 'startedAt' },
+      header: 'Start Time',
+      size: 150,
+      meta: { label: 'Start Time', sortable: true, sortKey: 'startedAt' },
       cell: ({ getValue }) => <span className="text-xs">{getValue() ? formatReportDate(getValue()) : '—'}</span>,
     },
     {
       accessorKey: 'stoppedAt',
-      header: 'Stopped',
-      size: 130,
-      meta: { label: 'Stopped', sortable: true, sortKey: 'stoppedAt' },
+      header: 'End Time',
+      size: 150,
+      meta: { label: 'End Time', sortable: true, sortKey: 'stoppedAt' },
       cell: ({ getValue }) => <span className="text-xs">{getValue() ? formatReportDate(getValue()) : '—'}</span>,
+    },
+    {
+      accessorKey: 'pickupAddress',
+      header: 'Start Location',
+      size: 220,
+      meta: { label: 'Start Location', sortable: false },
+      cell: ({ getValue }) => <span className="text-xs">{getValue() || '—'}</span>,
+    },
+    {
+      accessorKey: 'dropoffAddress',
+      header: 'End Location',
+      size: 220,
+      meta: { label: 'End Location', sortable: false },
+      cell: ({ getValue }) => <span className="text-xs">{getValue() || '—'}</span>,
     },
     {
       accessorKey: 'drivenMiles',
       header: 'Miles',
-      size: 70,
+      size: 80,
       meta: { label: 'Miles', sortable: true, sortKey: 'drivenMiles' },
       cell: ({ getValue }) => <span className="text-xs font-bold tabular-nums">{formatReportMiles(getValue())}</span>,
-    },
-    {
-      accessorKey: 'drivenHours',
-      header: 'Hours',
-      size: 60,
-      meta: { label: 'Hours', sortable: true, sortKey: 'drivenHours' },
-      cell: ({ getValue }) => <span className="text-xs tabular-nums">{getValue() != null ? formatDrivenHours(getValue()) : '—'}</span>,
-    },
-    {
-      accessorKey: 'paymentAmount',
-      header: 'Payment',
-      size: 80,
-      meta: { label: 'Payment', sortable: false },
-      cell: ({ getValue }) => <span className="text-xs tabular-nums">{getValue() != null ? `$${getValue().toFixed(2)}` : '—'}</span>,
-    },
-    {
-      accessorKey: 'payoutAmount',
-      header: 'Payout',
-      size: 80,
-      meta: { label: 'Payout', sortable: false },
-      cell: ({ getValue }) => <span className="text-xs tabular-nums">{getValue() != null ? `$${getValue().toFixed(2)}` : '—'}</span>,
     },
   ], []);
 
@@ -451,87 +433,7 @@ export default function AdminInsuranceReportingPage() {
                     className="mt-1.5 rounded-xl h-9 text-sm" 
                   />
                 </div>
-                {/* Customer Select */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                    <Building2 className="w-3 h-3" />
-                    Customer
-                  </Label>
-                  <Popover open={isCustomerSelectOpen} onOpenChange={setIsCustomerSelectOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={isCustomerSelectOpen}
-                        className="w-full mt-1.5 rounded-xl h-9 justify-between font-normal text-sm"
-                      >
-                        {selectedCustomer ? (
-                          <span className="flex items-center gap-2 truncate">
-                            {selectedCustomer.customerType === 'BUSINESS' ? (
-                              <Building2 className="w-3 h-3 shrink-0" />
-                            ) : (
-                              <User className="w-3 h-3 shrink-0" />
-                            )}
-                            <span className="truncate">{selectedCustomer.name}</span>
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">Select customer...</span>
-                        )}
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-0" align="start">
-                      <Command shouldFilter={false}>
-                        <CommandInput
-                          placeholder="Search customer..."
-                          value={customerSearch}
-                          onValueChange={setCustomerSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {isLoadingCustomers ? 'Loading...' : 'No customer found.'}
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {filteredCustomers.slice(0, 50).map((customer) => (
-                              <CommandItem
-                                key={customer.id}
-                                value={customer.id}
-                                onSelect={() => {
-                                  setCustomerId(customer.id === customerId ? '' : customer.id);
-                                  setCustomerSearch('');
-                                  setIsCustomerSelectOpen(false);
-                                  setPage(1);
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <Check
-                                  className={cn(
-                                    'h-4 w-4',
-                                    customerId === customer.id ? 'opacity-100' : 'opacity-0'
-                                  )}
-                                />
-                                {customer.customerType === 'BUSINESS' ? (
-                                  <Building2 className="w-3 h-3 text-muted-foreground" />
-                                ) : (
-                                  <User className="w-3 h-3 text-muted-foreground" />
-                                )}
-                                <span className="truncate">{customer.name}</span>
-                                <span className="text-xs text-muted-foreground ml-auto">
-                                  {customer.customerType === 'BUSINESS' ? 'Business' : 'Private'}
-                                </span>
-                              </CommandItem>
-                            ))}
-                            {filteredCustomers.length > 50 && (
-                              <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
-                                Showing 50 of {filteredCustomers.length} customers. Refine your search.
-                              </div>
-                            )}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                
                 {/* Driver Select */}
                 <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1">
@@ -612,32 +514,8 @@ export default function AdminInsuranceReportingPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Min Driven Hours */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Hrs</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.25"
-                    placeholder="0"
-                    value={minDrivenHours}
-                    onChange={(e) => { setMinDrivenHours(e.target.value); setPage(1); }}
-                    className="mt-1.5 rounded-xl h-9 text-sm"
-                  />
-                </div>
-                {/* Max Driven Hours */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Hrs</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.25"
-                    placeholder="Any"
-                    value={maxDrivenHours}
-                    onChange={(e) => { setMaxDrivenHours(e.target.value); setPage(1); }}
-                    className="mt-1.5 rounded-xl h-9 text-sm"
-                  />
-                </div>
+                
+                
                 {/* Min Miles */}
                 <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Miles</Label>
@@ -662,30 +540,8 @@ export default function AdminInsuranceReportingPage() {
                     className="mt-1.5 rounded-xl h-9 text-sm"
                   />
                 </div>
-                {/* Min Payment */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Payment $</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={minPayment}
-                    onChange={(e) => { setMinPayment(e.target.value); setPage(1); }}
-                    className="mt-1.5 rounded-xl h-9 text-sm"
-                  />
-                </div>
-                {/* Max Payment */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Payment $</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="Any"
-                    value={maxPayment}
-                    onChange={(e) => { setMaxPayment(e.target.value); setPage(1); }}
-                    className="mt-1.5 rounded-xl h-9 text-sm"
-                  />
-                </div>
+                
+                
                 {/* Pickup Address Search */}
                 <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pickup Address</Label>
@@ -712,16 +568,7 @@ export default function AdminInsuranceReportingPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Group By */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Group By</Label>
-                  <Select value={groupBy} onValueChange={(v) => setGroupBy(v as 'week' | 'month')}>
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {GROUP_BY_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+                
                 {/* Sort By */}
                 <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1">

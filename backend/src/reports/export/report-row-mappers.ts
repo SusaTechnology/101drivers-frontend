@@ -102,6 +102,7 @@ export function mapReportRows(
     case "insurance-mileage":
       return rows.map((r) => ({
         deliveryId: r.deliveryId ?? r.id,
+        driverId: r.assignedDriver?.id ?? null,
         status: r.delivery?.status ?? r.status ?? "",
         drivenMiles: r.drivenMiles ?? 0,
         drivenHours: r.drivenHours ?? 0,
