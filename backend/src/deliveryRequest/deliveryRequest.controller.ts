@@ -175,6 +175,32 @@ async adminForceCancelDelivery(
   });
 }
 
+/**
+ * POST /api/deliveryRequests/:id/close
+ * Close a delivery — sets status to CLOSED (not COMPLETED).
+ * Used when a dealer/customer ends a delivery without the driver
+ * completing the normal dropoff compliance flow.
+ * Body: { actorUserId?, actorRole?, reason? }
+ */
+@common.Post(":id/close")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "DeliveryRequest",
+  action: "update",
+  possession: "any",
+})
+async closeDelivery(
+  @common.Param("id") id: string,
+  @common.Body() body: { actorUserId?: string; actorRole?: string; reason?: string }
+): Promise<any> {
+  return this.service.closeDelivery({
+    deliveryId: id,
+    actorUserId: body.actorUserId ?? null,
+    actorRole: body.actorRole ?? null,
+    reason: body.reason ?? null,
+  });
+}
+
 @common.Post(":id/open-dispute")
 @swagger.ApiOkResponse({ type: Object })
 @nestAccessControl.UseRoles({

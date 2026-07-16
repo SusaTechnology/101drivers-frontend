@@ -932,24 +932,8 @@ async getAdminDeliveries(input: {
   const staleCutoff = new Date(Date.now() - 30 * 60 * 1000);
 
   const where: Prisma.DeliveryRequestWhereInput = {
-    // 'CLOSED' and 'COMPLETED' are both COMPLETED in the DB. The difference:
-    //   CLOSED    = COMPLETED + NO drop-off evidence (closed by admin/customer)
-    //   COMPLETED = COMPLETED + HAS drop-off evidence (driver finished normally)
-    // Without the evidence filter, selecting "Completed" would also show
-    // closed deliveries — which we don't want.
-    ...(input.status === 'CLOSED'
-      ? {
-          status: EnumDeliveryRequestStatus.COMPLETED,
-          evidence: { none: { phase: 'DROPOFF' as any } },
-        }
-      : input.status === 'COMPLETED'
-        ? {
-            status: EnumDeliveryRequestStatus.COMPLETED,
-            evidence: { some: { phase: 'DROPOFF' as any } },
-          }
-        : input.status
-          ? { status: input.status as any }
-          : {}),
+    // CLOSED is now a real DB status — just filter by status directly
+    ...(input.status ? { status: input.status as any } : {}),
     ...(input.customerId ? { customerId: input.customerId } : {}),
     ...(input.customerType
       ? { customer: { customerType: input.customerType as any } }
@@ -1172,30 +1156,16 @@ async getAdminDeliveries(input: {
           },
         },
 
-        // ── Fields for "Closed" display status ──
-        // A delivery is "Closed" (frontend-only concept) when it's marked
-        // COMPLETED in the backend but has NO drop-off evidence — meaning
-        // the trip was ended without the driver going through the normal
-        // dropoff compliance flow. This usually happens when a customer
-        // or admin closes the delivery directly.
-        //
-        // We fetch:
-        //   - The most recent COMPLETED status history entry (to get the
-        //     actorRole — who ended the trip)
-        //   - Whether any DROPOFF-phase evidence exists
+        // "Closed by" actorRole — fetch the most recent CLOSED status
+        // history entry so the frontend can show "Closed by Admin/Customer"
         statusHistory: {
-          where: { toStatus: "COMPLETED" as any },
+          where: { toStatus: "CLOSED" as any },
           orderBy: { createdAt: "desc" as any },
           take: 1,
           select: {
             actorRole: true,
             toStatus: true,
           },
-        },
-        evidence: {
-          where: { phase: "DROPOFF" as any },
-          select: { id: true },
-          take: 1,
         },
       },
     }),
@@ -1206,17 +1176,12 @@ async getAdminDeliveries(input: {
       const activeAssignment = row.assignments?.[0] ?? null;
       const latestTrackingPoint = row.trackingSession?.points?.[0] ?? null;
 
-      // Compute "closed by" info for the display status.
-      // If the delivery is COMPLETED, find the actorRole from the
-      // most recent COMPLETED status history entry — this tells us
-      // who ended the trip (DRIVER = normal completion, ADMIN/CUSTOMER
-      // = closed without normal dropoff flow).
-      const completeEntry = row.statusHistory?.[0];
+      // "Closed by" actorRole for CLOSED deliveries
+      const closedEntry = row.statusHistory?.[0];
       const closedByActorRole =
-        row.status === EnumDeliveryRequestStatus.COMPLETED && completeEntry
-          ? completeEntry.actorRole
+        row.status === EnumDeliveryRequestStatus.CLOSED && closedEntry
+          ? closedEntry.actorRole
           : null;
-      const hasDropoffEvidence = (row.evidence?.length ?? 0) > 0;
 
       return {
         id: row.id,
@@ -1269,11 +1234,8 @@ async getAdminDeliveries(input: {
 
         counts: row._count,
 
-        // Display-status fields used by the frontend to show "Closed"
-        // instead of "Cancelled" when a delivery was closed by an
-        // admin/customer without drop-off evidence.
+        // "Closed by" actor role for CLOSED deliveries
         closedByActorRole,
-        hasDropoffEvidence,
       };
     }),
     count,
@@ -1328,56 +1290,24 @@ async getAdminDeliveryStats(): Promise<{
   total: number;
   disputedCount: number;
 }> {
-  // Group deliveries by status, and for COMPLETED deliveries, further
-  // split into "has dropoff evidence" (COMPLETED) vs "no dropoff evidence"
-  // (CLOSED). We use a single query with conditional aggregation via
-  // _count on the evidence relation filtered by phase.
+  // CLOSED is now a real DB status — just count by status directly
   const rows = await this.prisma.deliveryRequest.groupBy({
     by: ["status"],
     _count: { _all: true },
   });
 
-  // For COMPLETED deliveries, we need to know how many have dropoff evidence
-  // vs how many don't. We do this with two separate count queries.
-  const [completedWithDropoff, completedWithoutDropoff, disputedCount] =
-    await Promise.all([
-      // COMPLETED + HAS dropoff evidence → display "COMPLETED"
-      this.prisma.deliveryRequest.count({
-        where: {
-          status: EnumDeliveryRequestStatus.COMPLETED,
-          evidence: { some: { phase: "DROPOFF" as any } },
-        },
-      }),
-      // COMPLETED + NO dropoff evidence → display "CLOSED"
-      this.prisma.deliveryRequest.count({
-        where: {
-          status: EnumDeliveryRequestStatus.COMPLETED,
-          evidence: { none: { phase: "DROPOFF" as any } },
-        },
-      }),
-      // Deliveries with a dispute
-      this.prisma.deliveryRequest.count({
-        where: {
-          OR: [
-            { status: EnumDeliveryRequestStatus.DISPUTED },
-            { dispute: { isNot: null } },
-          ],
-        },
-      }),
-    ]);
+  const disputedCount = await this.prisma.deliveryRequest.count({
+    where: {
+      OR: [
+        { status: EnumDeliveryRequestStatus.DISPUTED },
+        { dispute: { isNot: null } },
+      ],
+    },
+  });
 
-  // Build the counts map from the groupBy result
   const counts: Record<string, number> = {
-    DRAFT: 0,
-    QUOTED: 0,
-    LISTED: 0,
-    BOOKED: 0,
-    ACTIVE: 0,
-    COMPLETED: 0,
-    CLOSED: 0,
-    CANCELLED: 0,
-    EXPIRED: 0,
-    DISPUTED: 0,
+    DRAFT: 0, QUOTED: 0, LISTED: 0, BOOKED: 0, ACTIVE: 0,
+    COMPLETED: 0, CLOSED: 0, CANCELLED: 0, EXPIRED: 0, DISPUTED: 0,
   };
 
   let total = 0;
@@ -1385,20 +1315,12 @@ async getAdminDeliveryStats(): Promise<{
     const status = row.status as string;
     const count = row._count._all;
     total += count;
-    if (status === "COMPLETED") {
-      // Split COMPLETED into COMPLETED (has dropoff) + CLOSED (no dropoff)
-      counts.COMPLETED = completedWithDropoff;
-      counts.CLOSED = completedWithoutDropoff;
-    } else if (counts[status] !== undefined) {
+    if (counts[status] !== undefined) {
       counts[status] = count;
     }
   }
 
-  return {
-    ...counts,
-    total,
-    disputedCount,
-  } as any;
+  return { ...counts, total, disputedCount } as any;
 }
 
 async getAdminDeliveryDetail(input: {
@@ -1683,16 +1605,11 @@ async getAdminDeliveryDetail(input: {
     notifications,
     financialSummary,
 
-    // Display-status fields used by the frontend to show "Closed"
-    // instead of "Completed" when a delivery was ended without drop-off
-    // evidence (typically closed by admin/customer without the driver
-    // completing the normal dropoff compliance flow).
+    // "Closed by" actor role for CLOSED deliveries
     closedByActorRole:
-      delivery.status === EnumDeliveryRequestStatus.COMPLETED
-        ? statusHistory.find((e: any) => e.toStatus === "COMPLETED")?.actorRole ?? null
+      delivery.status === EnumDeliveryRequestStatus.CLOSED
+        ? statusHistory.find((e: any) => e.toStatus === "CLOSED")?.actorRole ?? null
         : null,
-    hasDropoffEvidence:
-      (delivery.evidence?.filter((e: any) => e.phase === "DROPOFF").length ?? 0) > 0,
   };
 }
 async adminAssignDriver(input: {
@@ -1739,6 +1656,28 @@ async adminForceCancelDelivery(input: {
     deliveryId: input.deliveryId,
     actorUserId: input.actorUserId ?? null,
     reason: this.trimRequiredString(input.reason),
+  });
+
+  return this.getAdminDeliveryDetail({
+    deliveryId: input.deliveryId,
+  });
+}
+
+/**
+ * Close a delivery (dealer/customer path).
+ * Marks the delivery as CLOSED instead of COMPLETED.
+ */
+async closeDelivery(input: {
+  deliveryId: string;
+  actorUserId?: string | null;
+  actorRole?: string | null;
+  reason?: string | null;
+}): Promise<any> {
+  await this.lifecycleService.closeDelivery({
+    deliveryId: input.deliveryId,
+    actorUserId: input.actorUserId ?? null,
+    actorRole: (input.actorRole as any) ?? null,
+    reason: this.trimOptionalString(input.reason) ?? null,
   });
 
   return this.getAdminDeliveryDetail({

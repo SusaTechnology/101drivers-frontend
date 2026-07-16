@@ -277,44 +277,23 @@ export function getStatusColor(status: string): {
 /**
  * Compute the display status for a delivery.
  *
- * The backend marks deliveries as COMPLETED when the trip ends. But some
- * deliveries are "closed" (ended by a customer or admin) without the driver
- * going through the normal dropoff compliance flow — these have status
- * COMPLETED but NO drop-off evidence. The frontend should show these as
- * "CLOSED" instead of "COMPLETED" so admins can distinguish them.
- *
- * Returns:
- *   'CLOSED'    — status is COMPLETED but no drop-off evidence (trip was
- *                 closed without completing the normal dropoff flow)
- *   'COMPLETED' — status is COMPLETED AND has drop-off evidence (normal
- *                 completion by the driver)
- *   otherwise   — the raw backend status (DRAFT, QUOTED, LISTED, BOOKED,
- *                 ACTIVE, CANCELLED, EXPIRED, DISPUTED)
- *
- * For CLOSED deliveries, getClosedByLabel() gives the human-readable
- * "Closed by Admin" / "Closed by Customer" string based on who triggered
- * the COMPLETED transition.
+ * CLOSED is now a real DB status (not a frontend-computed display status),
+ * so this function just returns the raw status. Kept for backwards compat.
  */
 export function getDisplayStatus(delivery: {
   status: string;
   closedByActorRole?: string | null;
-  hasDropoffEvidence?: boolean;
 }): string {
-  if (delivery.status === 'COMPLETED' && delivery.closedByActorRole != 'DRIVER') {
-    return 'CLOSED';
-  }
   return delivery.status;
 }
 
 /**
  * Human-readable label for a closed delivery — "Closed by Admin" or
  * "Closed by Customer". Returns null if not closed or actor unknown.
- * For driver-completed trips, actorRole is DRIVER and this returns null
- * (but those wouldn't be "Closed" anyway since they have dropoff evidence).
  */
 export function getClosedByLabel(closedByActorRole?: string | null): string | null {
   if (closedByActorRole === 'ADMIN') return 'Closed by Admin';
-  if (closedByActorRole === 'PRIVATE_CUSTOMER' || closedByActorRole === 'BUSINESS_CUSTOMER') {
+  if (closedByActorRole === 'PRIVATE_CUSTOMER' || closedByActorRole === 'BUSINESS_CUSTOMER' || closedByActorRole === 'DEALER') {
     return 'Closed by Customer';
   }
   return null;

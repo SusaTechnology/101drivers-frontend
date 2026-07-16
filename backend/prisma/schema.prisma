@@ -1043,6 +1043,7 @@ enum EnumDeliveryRequestStatus {
   BOOKED
   ACTIVE
   COMPLETED
+  CLOSED
   CANCELLED
   EXPIRED
   DISPUTED
@@ -1087,6 +1088,7 @@ enum EnumDeliveryStatusHistoryFromStatus {
   BOOKED
   ACTIVE
   COMPLETED
+  CLOSED
   CANCELLED
   EXPIRED
   DISPUTED
@@ -1099,6 +1101,7 @@ enum EnumDeliveryStatusHistoryToStatus {
   BOOKED
   ACTIVE
   COMPLETED
+  CLOSED
   CANCELLED
   EXPIRED
   DISPUTED
@@ -1177,6 +1180,7 @@ enum EnumPayoutBatchStatus {
   PENDING
   PROCESSING
   COMPLETED
+  CLOSED
   FAILED
   CANCELLED
 }
@@ -1347,6 +1351,7 @@ enum EnumReferralStatus {
   ONBOARDING_COMPLETE
   TRIPPING
   COMPLETED
+  CLOSED
   REWARD_PAID
 }
 

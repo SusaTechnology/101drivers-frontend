@@ -122,16 +122,21 @@ export class DeliveryLifecycleService {
     [EnumDeliveryRequestStatus.BOOKED]: [
       EnumDeliveryRequestStatus.ACTIVE,
       EnumDeliveryRequestStatus.COMPLETED,
+      EnumDeliveryRequestStatus.CLOSED,
       EnumDeliveryRequestStatus.CANCELLED,
       EnumDeliveryRequestStatus.DISPUTED,
       EnumDeliveryRequestStatus.LISTED,
     ],
     [EnumDeliveryRequestStatus.ACTIVE]: [
       EnumDeliveryRequestStatus.COMPLETED,
+      EnumDeliveryRequestStatus.CLOSED,
       EnumDeliveryRequestStatus.DISPUTED,
       EnumDeliveryRequestStatus.CANCELLED,
     ],
     [EnumDeliveryRequestStatus.COMPLETED]: [
+      EnumDeliveryRequestStatus.DISPUTED,
+    ],
+    [EnumDeliveryRequestStatus.CLOSED]: [
       EnumDeliveryRequestStatus.DISPUTED,
     ],
     [EnumDeliveryRequestStatus.CANCELLED]: [],
@@ -622,6 +627,72 @@ async completeTrip(input: {
     return result;
   });
 }
+
+  /**
+   * Close a delivery — used when a dealer/customer ends a delivery
+   * without the driver going through the normal dropoff compliance
+   * flow. The delivery is marked CLOSED (not COMPLETED).
+   * Can be called from BOOKED or ACTIVE status.
+   */
+  async closeDelivery(input: {
+    deliveryId: string;
+    actorUserId?: string | null;
+    actorRole?: EnumDeliveryStatusHistoryActorRole | null;
+    reason?: string | null;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const delivery = await tx.deliveryRequest.findUnique({
+        where: { id: input.deliveryId },
+        select: { id: true, status: true },
+      });
+
+      if (!delivery) {
+        throw new NotFoundException("Delivery request not found");
+      }
+
+      if (
+        delivery.status !== EnumDeliveryRequestStatus.BOOKED &&
+        delivery.status !== EnumDeliveryRequestStatus.ACTIVE
+      ) {
+        throw new BadRequestException(
+          `Only BOOKED or ACTIVE deliveries can be closed. Current status: ${delivery.status}`
+        );
+      }
+
+      // Stop tracking session if one is active
+      if (delivery.status === EnumDeliveryRequestStatus.ACTIVE) {
+        await tx.trackingSession.updateMany({
+          where: { deliveryId: input.deliveryId },
+          data: {
+            stoppedAt: businessNow().toJSDate(),
+            status: EnumTrackingSessionStatus.STOPPED,
+          },
+        });
+      }
+
+      await tx.deliveryRequest.update({
+        where: { id: input.deliveryId },
+        data: { status: EnumDeliveryRequestStatus.CLOSED },
+      });
+
+      await tx.deliveryStatusHistory.create({
+        data: {
+          deliveryId: input.deliveryId,
+          actorUserId: input.actorUserId ?? null,
+          actorRole: input.actorRole ?? null,
+          actorType: EnumDeliveryStatusHistoryActorType.USER,
+          note: input.reason ?? "Delivery closed by customer",
+          fromStatus: delivery.status as any,
+          toStatus: EnumDeliveryStatusHistoryToStatus.CLOSED,
+        },
+      });
+
+      return { ok: true, deliveryId: input.deliveryId };
+    }).then(async (result) => {
+      this.emitStatusChanged(input.deliveryId, "CLOSED");
+      return result;
+    });
+  }
 
   // ── GPS Proximity Check for "Start Pickup Now" ──
   // Verifies the driver is physically near the pickup location.
