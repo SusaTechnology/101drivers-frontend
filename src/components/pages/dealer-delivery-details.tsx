@@ -2032,7 +2032,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
               </CardHeader>
               <CardContent>
                 {/* Driver info section */}
-                {['BOOKED', 'ACTIVE', 'COMPLETED'].includes(deliveryData.status) ? (
+                {['BOOKED', 'ACTIVE', 'COMPLETED', 'CLOSED'].includes(deliveryData.status) ? (
                   driver ? (
                   <>
                     <div className="mt-6 flex items-center gap-4">

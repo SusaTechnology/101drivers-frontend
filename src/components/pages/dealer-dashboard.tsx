@@ -128,6 +128,7 @@ const statusConfig = {
   BOOKED: { label: 'Booked', color: 'blue', bgColor: 'bg-blue-50 dark:bg-blue-950/30', textColor: 'text-blue-600 dark:text-blue-400', borderColor: 'border-blue-200 dark:border-blue-800', dotColor: 'bg-blue-500' },
   ACTIVE: { label: 'Active', color: 'lime', bgColor: 'bg-lime-50 dark:bg-lime-950/30', textColor: 'text-lime-600 dark:text-lime-400', borderColor: 'border-lime-200 dark:border-lime-800', dotColor: 'bg-lime-500' },
   COMPLETED: { label: 'Completed', color: 'green', bgColor: 'bg-green-50 dark:bg-green-950/30', textColor: 'text-green-600 dark:text-green-400', borderColor: 'border-green-200 dark:border-green-800', dotColor: 'bg-green-500' },
+  CLOSED: { label: 'Closed', color: 'slate', bgColor: 'bg-slate-100 dark:bg-slate-800', textColor: 'text-slate-600 dark:text-slate-400', borderColor: 'border-slate-200 dark:border-slate-700', dotColor: 'bg-slate-500' },
   CANCELLED: { label: 'Cancelled', color: 'red', bgColor: 'bg-red-50 dark:bg-red-950/30', textColor: 'text-red-600 dark:text-red-400', borderColor: 'border-red-200 dark:border-red-800', dotColor: 'bg-red-500' },
   EXPIRED: { label: 'Expired', color: 'amber', bgColor: 'bg-amber-50 dark:bg-amber-950/30', textColor: 'text-amber-600 dark:text-amber-400', borderColor: 'border-amber-200 dark:border-amber-800', dotColor: 'bg-amber-500' },
 }
@@ -324,7 +325,7 @@ export default function DealerDashboard() {
     else if (activeFilter === 'LISTED') result = result.filter(d => d.status === 'LISTED' || d.status === 'QUOTED')
     else if (activeFilter === 'BOOKED') result = result.filter(d => d.status === 'BOOKED')
     else if (activeFilter === 'EXPIRED') result = result.filter(d => d.status === 'EXPIRED')
-    else if (activeFilter === 'HISTORY') result = result.filter(d => ['COMPLETED', 'CANCELLED'].includes(d.status))
+    else if (activeFilter === 'HISTORY') result = result.filter(d => ['COMPLETED', 'CLOSED', 'CANCELLED'].includes(d.status))
     if (!showAll && dealerId) result = result.filter(d => d.createdById === dealerId)
     if (dateFrom) result = result.filter(d => new Date(d.pickupWindowStart || d.createdAt) >= dateFrom)
     if (dateTo) result = result.filter(d => new Date(d.pickupWindowStart || d.createdAt) <= dateTo)
@@ -360,8 +361,10 @@ export default function DealerDashboard() {
       setActionDialogDeliveryId(null)
       setActionDialogStatus(null)
       const target = (variables as any)?.toStatus
-      if (target === 'COMPLETED') {
-        toast.success('Delivery closed', { description: 'This delivery has been marked as completed.' })
+      if (target === 'CLOSED') {
+        toast.success('Delivery closed', { description: 'This delivery has been marked as closed.' })
+      } else if (target === 'COMPLETED') {
+        toast.success('Delivery completed', { description: 'This delivery has been marked as completed.' })
       } else if (target === 'LISTED') {
         toast.success('Delivery reverted', { description: 'The driver has been unassigned and the delivery is back on the board.' })
       }
@@ -593,7 +596,7 @@ export default function DealerDashboard() {
       <div className="px-4 py-3">
         <div className="max-w-[980px] mx-auto">
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {[{ id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: stats.listed }, { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: stats.booked }, { id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: stats.active }, { id: 'EXPIRED', label: 'Expired', icon: <Timer className="h-4 w-4" />, count: stats.expired }, { id: 'HISTORY', label: 'History', icon: <History className="h-4 w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CANCELLED'].includes(d.status)).length }].map((tab) => (
+            {[{ id: 'LISTED', label: 'Listed', icon: <Package className="h-4 w-4" />, count: stats.listed }, { id: 'BOOKED', label: 'Booked', icon: <CheckCircle className="h-4 w-4" />, count: stats.booked }, { id: 'ACTIVE', label: 'Active', icon: <Navigation className="h-4 w-4" />, count: stats.active }, { id: 'EXPIRED', label: 'Expired', icon: <Timer className="h-4 w-4" />, count: stats.expired }, { id: 'HISTORY', label: 'History', icon: <History className="h-4 w-4" />, count: deliveries.filter(d => ['COMPLETED', 'CLOSED', 'CANCELLED'].includes(d.status)).length }].map((tab) => (
               <Button key={tab.id} variant={activeFilter === tab.id ? "default" : "outline"} className={cn("flex items-center gap-2 px-4 py-2 rounded-full h-auto shrink-0", activeFilter === tab.id ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "bg-white dark:bg-slate-900")} onClick={() => setActiveFilter(tab.id)}>
                 {tab.icon}<span className="font-bold">{tab.label}</span>{tab.count > 0 && <Badge variant="secondary" className="ml-1 px-2 py-0.5 text-xs rounded-full">{tab.count}</Badge>}
               </Button>
@@ -625,6 +628,7 @@ export default function DealerDashboard() {
                       <div className={cn("w-2.5 h-2.5 rounded-full", config.dotColor, delivery.status === 'ACTIVE' && "animate-pulse")} />
                       <span className={cn("text-sm font-black uppercase tracking-wider", config.textColor)}>{config.label}</span>
                       {delivery.status === 'ACTIVE' && <Badge className="ml-2 bg-lime-500 text-slate-950 text-[10px] animate-pulse"><Activity className="h-3 w-3 mr-1" />LIVE</Badge>}
+                      {delivery.status === 'CLOSED' && <Badge className="ml-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px]"><CheckSquare className="h-3 w-3 mr-1" />Closed by you</Badge>}
                     </div>
                     <div className="flex items-center gap-2"><span className="text-xs font-mono text-slate-500">#{delivery.ref}</span><span className="text-xs font-bold text-slate-400">{delivery.miles.toFixed(1)} mi</span></div>
                   </div>
@@ -707,7 +711,7 @@ export default function DealerDashboard() {
             <AlertDialogDescription>
               {actionDialogStatus === 'BOOKED'
                 ? 'This delivery is booked but not yet started. You can complete it now or revert it to Listed so another driver can pick it up.'
-                : 'Are you sure you want to close this delivery? This will move it to Completed and cannot be undone.'}
+                : 'Are you sure you want to close this delivery? This will move it to Closed and cannot be undone.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -723,12 +727,12 @@ export default function DealerDashboard() {
               </button>
             )}
             <button
-              onClick={() => handleTransition('COMPLETED', 'Dealer manually closed delivery')}
+              onClick={() => handleTransition('CLOSED', 'Dealer manually closed delivery')}
               disabled={transitionMutation.isPending}
               className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 font-extrabold disabled:opacity-50 transition"
             >
               <CheckSquare className="h-4 w-4" />
-              {transitionMutation.isPending ? 'Closing...' : 'Complete Delivery'}
+              {transitionMutation.isPending ? 'Closing...' : 'Close Delivery'}
             </button>
           </AlertDialogFooter>
         </AlertDialogContent>
