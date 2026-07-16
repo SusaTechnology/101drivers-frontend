@@ -1250,14 +1250,29 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                           </Label>
                           <div className="text-sm font-medium flex items-center gap-2">
                             <Phone className="w-4 h-4 text-slate-400" />
-                            {user.phone ? (
-                              <a
-                                href={`tel:${user.phone.replace(/[^+\d]/g, '')}`}
-                                className="text-primary hover:underline"
-                              >
-                                {user.phone}
-                              </a>
-                            ) : '—'}
+                            {(() => {
+                              // Resolve the best available phone number for this user.
+                              // Drivers expose phone on user.driver; business/private
+                              // customers usually store it on the customer object
+                              // (businessPhone for businesses, contactPhone for the
+                              // account contact, customer.phone as a generic fallback).
+                              const displayPhone =
+                                user.phone ||
+                                user.driver?.phone ||
+                                user.customer?.businessPhone ||
+                                user.customer?.contactPhone ||
+                                user.customer?.phone ||
+                                '';
+                              if (!displayPhone) return '—';
+                              return (
+                                <a
+                                  href={`tel:${displayPhone.replace(/[^+\d]/g, '')}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {displayPhone}
+                                </a>
+                              );
+                            })()}
                           </div>
                         </div>
 
