@@ -179,6 +179,7 @@ model PricingConfig {
   description         String?
   driverSharePct      Float
   feePassThrough      Boolean                      @default(true)
+  flatMiles           Float?
   id                  String                       @id @default(cuid())
   insuranceFee        Float
   name                String?

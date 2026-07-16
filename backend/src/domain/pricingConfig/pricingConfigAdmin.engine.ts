@@ -53,6 +53,7 @@ export class PricingConfigAdminEngine {
             active: body.active ?? true,
             pricingMode: body.pricingMode,
             baseFee: this.toNumber(body.baseFee),
+            flatMiles: this.toNullableNumber(body.flatMiles),
             perMileRate: this.toNullableNumber(body.perMileRate),
             insuranceFee: this.toNumber(body.insuranceFee),
             transactionFeePct: this.toNullableNumber(body.transactionFeePct),
@@ -73,6 +74,7 @@ export class PricingConfigAdminEngine {
             active: body.active ?? true,
             pricingMode: body.pricingMode,
             baseFee: this.toNumber(body.baseFee),
+            flatMiles: this.toNullableNumber(body.flatMiles),
             perMileRate: this.toNullableNumber(body.perMileRate),
             insuranceFee: this.toNumber(body.insuranceFee),
             transactionFeePct: this.toNullableNumber(body.transactionFeePct),
@@ -178,6 +180,17 @@ export class PricingConfigAdminEngine {
     ) {
       throw new BadRequestException(
         "perMileRate is required when pricingMode is PER_MILE"
+      );
+    }
+
+    // flatMiles is only meaningful for PER_MILE mode. Reject it for other modes
+    // to keep the data model clean and avoid surprising the admin later.
+    if (
+      body.flatMiles != null &&
+      body.pricingMode !== EnumPricingConfigPricingMode.PER_MILE
+    ) {
+      throw new BadRequestException(
+        "flatMiles is only allowed when pricingMode is PER_MILE"
       );
     }
 

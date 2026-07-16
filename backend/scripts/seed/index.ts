@@ -69,6 +69,7 @@ type DemoRefs = {
   driver3UserId: string;
   driver3Id: string;
   pricingConfigId: string;
+  postpaidDealerPricingConfigId: string;
   westsideDistrictId: string;
   pasadenaDistrictId: string;
   midtownDistrictId: string;
@@ -437,6 +438,7 @@ async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {
   });
 
   const pricingConfig = await ensurePricingConfiguration();
+  const postpaidDealerPricingConfig = await ensurePostpaidDealerPricingConfiguration();
 
   return {
     adminUserId: adminUser.id,
@@ -453,6 +455,7 @@ async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {
     driver3UserId: driver3User.id,
     driver3Id: driver3.id,
     pricingConfigId: pricingConfig.id,
+    postpaidDealerPricingConfigId: postpaidDealerPricingConfig.id,
     westsideDistrictId: westsideDistrict.id,
     pasadenaDistrictId: pasadenaDistrict.id,
     midtownDistrictId: midtownDistrict.id,
@@ -1431,6 +1434,41 @@ async function ensurePricingConfiguration() {
       });
     }
   }
+
+  return pricingConfig;
+}
+
+// Postpaid dealer pricing config: $101 flat fee covers the first 50 miles,
+// then $2 per additional mile. Spec: price = 101 + max(0, miles - 50) * 2.
+// All three values (baseFee, flatMiles, perMileRate) are admin-editable.
+async function ensurePostpaidDealerPricingConfiguration() {
+  const existing = await prisma.pricingConfig.findFirst({
+    where: { name: "Postpaid Dealer Default Pricing" },
+  });
+
+  const data = {
+    name: "Postpaid Dealer Default Pricing",
+    description:
+      "$101 flat fee covers the first 50 miles, then $2 per additional mile. " +
+      "Attach this config to postpaid dealer (Customer) records.",
+    active: true,
+    baseFee: 101,
+    flatMiles: 50,
+    perMileRate: 2,
+    pricingMode: EnumPricingConfigPricingMode.PER_MILE,
+    insuranceFee: 8,
+    driverSharePct: 60,
+    feePassThrough: true,
+    transactionFeeFixed: 3,
+    transactionFeePct: 2.9,
+  };
+
+  const pricingConfig = existing
+    ? await prisma.pricingConfig.update({
+        where: { id: existing.id },
+        data,
+      })
+    : await prisma.pricingConfig.create({ data });
 
   return pricingConfig;
 }

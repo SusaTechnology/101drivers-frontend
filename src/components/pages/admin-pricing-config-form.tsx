@@ -261,9 +261,9 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
             </AlertTitle>
             <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs mt-1">
               <ul className="list-disc list-inside space-y-1 mt-2">
-                <li><strong>PER_MILE:</strong> Requires perMileRate, tiers and categoryRules must be empty</li>
-                <li><strong>FLAT_TIER:</strong> Requires tiers array, categoryRules must be empty, perMileRate null</li>
-                <li><strong>CATEGORY_ABC:</strong> Requires categoryRules array, tiers must be empty, perMileRate null</li>
+                <li><strong>PER_MILE:</strong> Requires perMileRate. <strong>flatMiles</strong> is optional (default 0 = charge from mile 0). tiers and categoryRules must be empty. Formula: <code className="font-mono">baseFee + max(0, miles − flatMiles) × perMileRate</code></li>
+                <li><strong>FLAT_TIER:</strong> Requires tiers array, categoryRules must be empty, perMileRate null, flatMiles null</li>
+                <li><strong>CATEGORY_ABC:</strong> Requires categoryRules array, tiers must be empty, perMileRate null, flatMiles null</li>
               </ul>
             </AlertDescription>
           </Alert>

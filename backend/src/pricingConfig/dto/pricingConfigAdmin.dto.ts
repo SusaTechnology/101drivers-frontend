@@ -126,6 +126,18 @@ export class SavePricingConfigBody {
   @swagger.ApiProperty({
     required: false,
     nullable: true,
+    description:
+      "PER_MILE only. Free miles included in the base fee. NULL or 0 = charge per-mile from mile 0. " +
+      "Example: flatMiles=50 means miles 0-50 are covered by baseFee; miles 51+ are billed at perMileRate.",
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  flatMiles?: number | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
   })
   @IsOptional()
   @IsNumber()

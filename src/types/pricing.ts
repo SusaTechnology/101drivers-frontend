@@ -50,6 +50,7 @@ export interface PricingConfig {
   description: string | null;
   pricingMode: PricingMode;
   baseFee: number;
+  flatMiles: number | null;
   perMileRate: number | null;
   insuranceFee: number;
   transactionFeePct: number;
@@ -77,6 +78,7 @@ export interface PricingConfigPayload {
   description: string;
   pricingMode: PricingMode;
   baseFee: number;
+  flatMiles: number | null;
   perMileRate: number | null;
   insuranceFee: number;
   transactionFeePct: number;
@@ -97,6 +99,7 @@ export interface PricingConfigFormData {
   description: string;
   pricingMode: PricingMode;
   baseFee: number;
+  flatMiles: number | null;
   perMileRate: number | null;
   insuranceFee: number;
   transactionFeePct: number;
@@ -128,8 +131,9 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigFormData = {
   name: '',
   description: '',
   pricingMode: 'PER_MILE',
-  baseFee: 45,
-  perMileRate: 4.5,
+  baseFee: 101,
+  flatMiles: 50,
+  perMileRate: 2,
   insuranceFee: 8,
   transactionFeePct: 2.9,
   transactionFeeFixed: 3,
@@ -184,6 +188,7 @@ export function configToFormData(config: PricingConfig): PricingConfigFormData {
     description: config.description || '',
     pricingMode: config.pricingMode,
     baseFee: config.baseFee,
+    flatMiles: config.flatMiles,
     perMileRate: config.perMileRate,
     insuranceFee: config.insuranceFee,
     transactionFeePct: config.transactionFeePct,

@@ -41,6 +41,7 @@ export class PricingConfigPolicyService {
         active: true,
         pricingMode: true,
         baseFee: true,
+        flatMiles: true,
         perMileRate: true,
         insuranceFee: true,
         transactionFeePct: true,
@@ -58,6 +59,7 @@ export class PricingConfigPolicyService {
       active: this.resolveUpdatedValue(data.active, existing!.active),
       pricingMode: this.resolveUpdatedValue(data.pricingMode, existing!.pricingMode),
       baseFee: this.resolveUpdatedValue(data.baseFee, existing!.baseFee),
+      flatMiles: this.resolveUpdatedValue(data.flatMiles, existing!.flatMiles),
       perMileRate: this.resolveUpdatedValue(data.perMileRate, existing!.perMileRate),
       insuranceFee: this.resolveUpdatedValue(data.insuranceFee, existing!.insuranceFee),
       transactionFeePct: this.resolveUpdatedValue(
@@ -158,6 +160,22 @@ export class PricingConfigPolicyService {
         row.perMileRate,
         "perMileRate is required for PER_MILE pricing mode"
       );
+
+      // flatMiles is optional, but if provided it must be a non-negative number.
+      if (row.flatMiles !== undefined && row.flatMiles !== null) {
+        this.ensureNonNegativeNumber(
+          row.flatMiles,
+          "flatMiles must be a non-negative number"
+        );
+      }
+    } else {
+      // flatMiles is only meaningful for PER_MILE. Reject for other modes.
+      if (row.flatMiles !== undefined && row.flatMiles !== null) {
+        throw new AppException(
+          "flatMiles is only allowed for PER_MILE pricing mode",
+          ErrorCodes.BUSINESS_RULE_VIOLATION
+        );
+      }
     }
 
     if (

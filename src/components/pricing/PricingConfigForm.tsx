@@ -19,6 +19,7 @@ import {
   FileText,
   CheckCircle,
   Star,
+  Route,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ const createPricingConfigSchema = (pricingMode: PricingMode) => {
     description: z.string().optional(),
     pricingMode: z.enum(['CATEGORY_ABC', 'FLAT_TIER', 'PER_MILE']),
     baseFee: z.number().min(0, 'Base fee must be 0 or greater'),
+    flatMiles: z.number().nullable(),
     perMileRate: z.number().nullable(),
     insuranceFee: z.number().min(0, 'Insurance fee must be 0 or greater'),
     transactionFeePct: z.number().min(0, 'Transaction fee % must be 0 or greater').max(100),
@@ -226,6 +228,7 @@ export function PricingConfigForm({
     if (newMode === 'CATEGORY_ABC') {
       setValue('tiers', []);
       setValue('perMileRate', null);
+      setValue('flatMiles', null);
       // Set default category rules if empty
       if (categoryRuleFields.length === 0) {
         replaceCategoryRules(DEFAULT_CATEGORY_RULES);
@@ -233,6 +236,7 @@ export function PricingConfigForm({
     } else if (newMode === 'FLAT_TIER') {
       setValue('categoryRules', []);
       setValue('perMileRate', null);
+      setValue('flatMiles', null);
       // Set default tier if empty
       if (tierFields.length === 0) {
         appendTier(DEFAULT_TIER);
@@ -240,7 +244,8 @@ export function PricingConfigForm({
     } else if (newMode === 'PER_MILE') {
       setValue('tiers', []);
       setValue('categoryRules', []);
-      setValue('perMileRate', 4.5);
+      setValue('perMileRate', 2);
+      setValue('flatMiles', 50);
     }
   };
 
@@ -262,16 +267,21 @@ export function PricingConfigForm({
     const transactionFeePct = watchedTransactionFeePct || 0;
     const driverSharePct = watchedDriverSharePct || 0;
     const perMileRate = watchedPerMileRate || 0;
+    const flatMiles = watch('flatMiles') ?? 0;
 
     // Example quote: 50 miles
     const exampleMiles = 50;
-    const transportationCost = pricingMode === 'PER_MILE' ? exampleMiles * perMileRate : 200;
+    // PER_MILE now honors flatMiles: billableMiles = max(0, miles - flatMiles)
+    const billableMiles = Math.max(0, exampleMiles - (flatMiles || 0));
+    const transportationCost = pricingMode === 'PER_MILE' ? billableMiles * perMileRate : 200;
     const transactionFee = transportationCost * (transactionFeePct / 100) + (watch('transactionFeeFixed') || 0);
     const totalFees = baseFee + insuranceFee + transactionFee;
     const driverShare = transportationCost * (driverSharePct / 100);
 
     return {
       exampleMiles,
+      billableMiles: pricingMode === 'PER_MILE' ? billableMiles : exampleMiles,
+      flatMilesAllowance: flatMiles || 0,
       transportationCost,
       transactionFee,
       totalFees,
@@ -430,7 +440,7 @@ export function PricingConfigForm({
                 <div>
                   <div className="font-bold text-slate-900 dark:text-white">Per Mile Pricing</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Simple per-mile rate calculation. The price is calculated based on distance multiplied by the per-mile rate.
+                    Flat fee plus per-mile charge. With <strong>flatMiles</strong> set, the flat fee covers the first N miles and the per-mile rate applies only to miles beyond that. Formula: <code className="font-mono text-[11px]">baseFee + max(0, miles − flatMiles) × perMileRate</code>.
                   </p>
                 </div>
               </div>
@@ -498,28 +508,95 @@ export function PricingConfigForm({
           <CardHeader className="border-b border-slate-100 dark:border-slate-800">
             <CardTitle className="text-xl font-black">Per Mile Rate</CardTitle>
             <CardDescription className="text-sm mt-1">
-              Set the per-mile rate for this configuration
+              Set the flat fee, free miles included, and per-mile rate for this configuration
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6 sm:p-7">
-            <div className="bg-slate-50 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 p-5">
-              <Label htmlFor="perMileRate" className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
-                Rate per Mile ($)
-              </Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  id="perMileRate"
-                  type="number"
-                  step="0.01"
-                  {...register('perMileRate', { valueAsNumber: true })}
-                  className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
-                  placeholder="4.50"
-                />
+            <div className="bg-slate-50 dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 space-y-5">
+              {/* Formula hint */}
+              <div className="flex items-start gap-2 p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40">
+                <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed">
+                  <strong>Formula:</strong>{' '}
+                  <code className="px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 font-mono text-[10px]">
+                    price = flat_fee + max(0, miles − flat_miles) × per_mile_rate
+                  </code>
+                  <br />
+                  The flat fee covers the first <strong>flat_miles</strong> miles. Miles beyond that are billed at the per-mile rate.
+                </p>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-                This rate will be multiplied by the distance to calculate transportation cost
-              </p>
+
+              {/* Two fields side-by-side: flatMiles + perMileRate */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="flatMiles" className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
+                    Free Miles Included (flat_miles)
+                  </Label>
+                  <div className="relative">
+                    <Route className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input
+                      id="flatMiles"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      {...register('flatMiles', { valueAsNumber: true })}
+                      className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                      placeholder="50"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                    Leave empty or 0 to charge per-mile from mile 0 (legacy behavior).
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="perMileRate" className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
+                    Rate per Mile ($)
+                  </Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input
+                      id="perMileRate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      {...register('perMileRate', { valueAsNumber: true })}
+                      className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                      placeholder="2.00"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+                    Applied to miles beyond the free allowance.
+                  </p>
+                </div>
+              </div>
+
+              {/* Live example breakdown */}
+              {(() => {
+                const exampleMiles = 75;
+                const flatMilesVal = (watch('flatMiles') as number | null | undefined) ?? 0;
+                const perMileRateVal = (watch('perMileRate') as number | null | undefined) ?? 0;
+                const baseFeeVal = (watch('baseFee') as number | null | undefined) ?? 0;
+                const billable = Math.max(0, exampleMiles - (flatMilesVal || 0));
+                const overageCharge = billable * perMileRateVal;
+                const total = (baseFeeVal || 0) + overageCharge;
+                return (
+                  <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">
+                      Live example · {exampleMiles} miles
+                    </div>
+                    <div className="font-mono text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                      <div>flat_fee        = ${baseFeeVal.toFixed(2)}</div>
+                      <div>billable_miles  = max(0, {exampleMiles} − {flatMilesVal || 0}) = <strong>{billable.toFixed(2)} mi</strong></div>
+                      <div>overage_charge  = {billable.toFixed(2)} × ${perMileRateVal.toFixed(2)}/mi = <strong>${overageCharge.toFixed(2)}</strong></div>
+                      <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 text-sm">
+                        <span className="text-slate-500 dark:text-slate-400">total = </span>
+                        <strong className="text-slate-900 dark:text-white">${baseFeeVal.toFixed(2)} + ${overageCharge.toFixed(2)} = ${total.toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </CardContent>
         </Card>
@@ -922,7 +999,12 @@ export function PricingConfigForm({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Transportation {pricingMode === 'PER_MILE' && `(${preview.exampleMiles} mi × $${watchedPerMileRate || 0}/mi)`}
+                  Transportation{' '}
+                  {pricingMode === 'PER_MILE' && (
+                    preview.flatMilesAllowance > 0
+                      ? `(max(0, ${preview.exampleMiles} − ${preview.flatMilesAllowance}) mi × $${watchedPerMileRate || 0}/mi)`
+                      : `(${preview.exampleMiles} mi × $${watchedPerMileRate || 0}/mi)`
+                  )}
                 </span>
                 <span className="font-bold text-slate-900 dark:text-white">${preview.transportationCost.toFixed(2)}</span>
               </div>

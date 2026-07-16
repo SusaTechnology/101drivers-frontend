@@ -20,6 +20,8 @@ function transformToPayload(data: PricingConfigFormData): PricingConfigPayload {
     description: data.description || '',
     pricingMode: data.pricingMode,
     baseFee: data.baseFee,
+    // flatMiles only applies to PER_MILE; null/undefined for other modes
+    flatMiles: data.pricingMode === 'PER_MILE' ? data.flatMiles : null,
     perMileRate: data.pricingMode === 'PER_MILE' ? data.perMileRate : null,
     insuranceFee: data.insuranceFee,
     transactionFeePct: data.transactionFeePct,

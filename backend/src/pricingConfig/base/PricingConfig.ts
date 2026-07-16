@@ -105,6 +105,18 @@ class PricingConfig {
   feePassThrough!: boolean;
 
   @ApiProperty({
+    required: false,
+    type: Number,
+  })
+  @IsNumber()
+  @Max(99999999999)
+  @IsOptional()
+  @Field(() => Number, {
+    nullable: true,
+  })
+  flatMiles!: number | null;
+
+  @ApiProperty({
     required: true,
     type: String,
   })

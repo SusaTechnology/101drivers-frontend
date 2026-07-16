@@ -50,6 +50,7 @@ type ResolvedPricingContext = {
     insuranceFee: number;
     driverSharePct: number;
     feePassThrough: boolean;
+    flatMiles: number | null;
     perMileRate: number | null;
     pricingMode: EnumPricingConfigPricingMode;
     transactionFeeFixed: number | null;
@@ -103,9 +104,19 @@ export class PricingEngineService {
         throw new BadRequestException("PER_MILE config requires perMileRate");
       }
 
+      // flatMiles is the "free miles included" allowance. NULL or 0 means
+      // charge per-mile from mile 0 (legacy behavior). When set (e.g. 50),
+      // the formula becomes:  baseFee + max(0, miles - flatMiles) * perMileRate
+      // so a 30-mile delivery with flatMiles=50 costs only the baseFee,
+      // and a 75-mile delivery costs baseFee + (75 - 50) * perMileRate.
+      const flatMilesAllowance = Number(config.flatMiles ?? 0);
+      const billableMiles = Number(
+        Math.max(0, input.distanceMiles - flatMilesAllowance).toFixed(4)
+      );
+
       baseFare = Number((config.baseFee ?? 0).toFixed(2));
       distanceCharge = Number(
-        (input.distanceMiles * config.perMileRate).toFixed(2)
+        (billableMiles * config.perMileRate).toFixed(2)
       );
     } else if (effectiveMode === EnumQuotePricingMode.FLAT_TIER) {
       const tier = config.tiers.find((item) => {
@@ -202,6 +213,14 @@ export class PricingEngineService {
         transactionFee,
         feePassThrough: config.feePassThrough,
         total: estimatedPrice,
+        ...(effectiveMode === EnumQuotePricingMode.PER_MILE
+          ? {
+              flatMilesAllowance: Number((config.flatMiles ?? 0).toFixed(2)),
+              billedMiles: Number(
+                Math.max(0, input.distanceMiles - (config.flatMiles ?? 0)).toFixed(2)
+              ),
+            }
+          : {}),
       },
       pricingSnapshot: {
         pricingConfigId: config.id,
@@ -214,6 +233,7 @@ export class PricingEngineService {
         mileageCategory,
         driverSharePct: config.driverSharePct,
         baseFee: config.baseFee,
+        flatMiles: config.flatMiles,
         insuranceFee: config.insuranceFee,
         perMileRate: config.perMileRate,
         transactionFeeFixed: config.transactionFeeFixed,
@@ -279,6 +299,7 @@ export class PricingEngineService {
             insuranceFee: true,
             driverSharePct: true,
             feePassThrough: true,
+            flatMiles: true,
             perMileRate: true,
             pricingMode: true,
             transactionFeeFixed: true,
@@ -350,6 +371,7 @@ export class PricingEngineService {
         insuranceFee: true,
         driverSharePct: true,
         feePassThrough: true,
+        flatMiles: true,
         perMileRate: true,
         pricingMode: true,
         transactionFeeFixed: true,
