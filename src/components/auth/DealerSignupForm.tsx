@@ -148,6 +148,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   // OTP flow states
   const [otpSent, setOtpSent] = useState(false);
   const [otpValue, setOtpValue] = useState("");
+  const [otpFocused, setOtpFocused] = useState(false);
   const [pendingSignupData, setPendingSignupData] = useState<DealerSignupPayload | null>(null);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   
@@ -1277,7 +1278,14 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                           id="otp"
                           value={otpValue}
                           onChange={(e) => setOtpValue(e.target.value)}
-                          className="h-14 rounded-2xl text-center text-lg tracking-widest font-mono border-2 border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-red-200 focus:ring-2"
+                          onFocus={() => setOtpFocused(true)}
+                          onBlur={() => setOtpFocused(false)}
+                          className={cn(
+                            "h-14 rounded-2xl text-center text-lg tracking-widest font-mono border-2 transition-colors outline-none",
+                            otpFocused && !otpValue.trim()
+                              ? "border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-950/30 focus:border-red-500 focus:ring-2 focus:ring-red-200"
+                              : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:border-slate-400 dark:focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:focus:ring-slate-700"
+                          )}
                           placeholder="123456"
                           maxLength={6}
                           disabled={isPending}
