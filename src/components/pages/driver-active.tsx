@@ -710,9 +710,28 @@ const DROPOFF_REF_IMAGES = [
   // ── SOCKET.IO: Listen for status changes from backend (e.g. admin completes delivery) ──
   const handleDriverStatusChanged = useCallback((data: any) => {
     if (data.deliveryId === deliveryId) {
-      toast.info(`Delivery status updated: ${data.status}`, {
-        description: 'Refreshing delivery details...',
-      })
+      // Status-specific toast so the driver knows exactly what happened.
+      // CLOSED is only ever triggered by the dealer (customer) from the
+      // dealer-delivery-details page, so we can word it as "customer closed".
+      const status = data?.status as string | undefined
+      let title = 'Delivery status updated'
+      let description = 'Refreshing delivery details...'
+      if (status === 'CLOSED') {
+        title = 'Customer closed this delivery'
+        description = 'The customer marked this delivery as closed. You can return to your jobs.'
+      } else if (status === 'COMPLETED') {
+        title = 'Delivery completed'
+        description = 'This delivery has been marked as completed.'
+      } else if (status === 'CANCELLED') {
+        title = 'Delivery cancelled'
+        description = 'The customer or admin cancelled this delivery.'
+      } else if (status === 'DISPUTED') {
+        title = 'Delivery disputed'
+        description = 'A dispute has been opened on this delivery.'
+      } else if (status) {
+        title = `Delivery status updated: ${status}`
+      }
+      toast.info(title, { description })
       activeDeliveryQuery.refetch()
     }
   }, [deliveryId, activeDeliveryQuery])
