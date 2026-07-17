@@ -119,8 +119,26 @@ export abstract class BaseDomain<
     const { where, select, ...rest } = args as any;
     const merge = this.mergeSelects(select);
 
+    // Defensive normalization for callers (REST controllers, GraphQL resolvers,
+    // ad-hoc service code) that pass a `limit` arg. Prisma's findMany only
+    // accepts `take`/`skip`, not `limit`, and `take` must be a number.
+    // Some HTTP controllers do `plainToClass(FindManyArgs, request.query)` which
+    // keeps unknown query string props like `?limit=1000` on the args object,
+    // and those then leak through `...rest` into Prisma and crash with
+    // `PrismaClientValidationError: Unknown argument 'limit'`.
+    // We translate `limit` -> `take` (with int coercion) and drop the legacy key.
+    const { limit, ...prismaRest } = rest as Record<string, any>;
+    const normalized: Record<string, any> = { ...prismaRest };
+    if (normalized.take == null && limit != null) {
+      const asNum =
+        typeof limit === "string" ? parseInt(limit, 10) : Number(limit);
+      if (Number.isFinite(asNum) && asNum > 0) {
+        normalized.take = asNum;
+      }
+    }
+
     const rows = await this.prismaClient.findMany({
-      ...rest,
+      ...normalized,
       where,
       ...merge,
     });
