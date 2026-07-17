@@ -170,9 +170,13 @@ export class StripePaymentController {
         captureMethod: 'automatic', // Tips charge immediately (post-completion)
       });
 
-      // Upsert tip record
+      // Upsert tip record — capture the tip row id so the frontend can PATCH
+      // the same row by id after the Stripe payment confirms. Without this,
+      // the frontend's `existingTip` (fetched on page load, before the tip
+      // was created) is undefined and the PATCH hits /api/tips/undefined → 404.
+      let tipId: string;
       if (existingTip) {
-        await this.prisma.tip.update({
+        const updated = await this.prisma.tip.update({
           where: { deliveryId },
           data: {
             amount,
@@ -180,9 +184,11 @@ export class StripePaymentController {
             providerRef: result.paymentIntentId,
             status: "AUTHORIZED",
           },
+          select: { id: true },
         });
+        tipId = updated.id;
       } else {
-        await this.prisma.tip.create({
+        const created = await this.prisma.tip.create({
           data: {
             amount,
             deliveryId,
@@ -190,10 +196,13 @@ export class StripePaymentController {
             providerRef: result.paymentIntentId,
             status: "AUTHORIZED",
           },
+          select: { id: true },
         });
+        tipId = created.id;
       }
 
       return {
+        tipId,
         paymentIntentId: result.paymentIntentId,
         clientSecret: result.clientSecret,
         status: "requires_payment_method",

@@ -10,13 +10,15 @@ function TipPaymentForm({
   clientSecret,
   tipAmount,
   driverName,
+  tipId,
   onSuccess,
   onError,
 }: {
   clientSecret: string;
   tipAmount: number;
   driverName: string;
-  onSuccess: (paymentIntentId: string) => void;
+  tipId: string;
+  onSuccess: (paymentIntentId: string, tipId: string) => void;
   onError: (message: string) => void;
 }) {
   const stripe = useStripe();
@@ -48,7 +50,7 @@ function TipPaymentForm({
       setMessage("Tip sent!");
       setSucceeded(true);
       setLoading(false);
-      onSuccess?.(paymentIntent.id);
+      onSuccess?.(paymentIntent.id, tipId);
     } else {
       setLoading(false);
     }
@@ -118,7 +120,7 @@ interface StripeTipPaymentWrapperProps {
   deliveryId: string;
   tipAmount: number;
   driverName: string;
-  onSuccess?: (paymentIntentId: string) => void;
+  onSuccess?: (paymentIntentId: string, tipId: string) => void;
   onError?: (message: string) => void;
 }
 
@@ -130,6 +132,7 @@ export default function StripeTipPaymentWrapper({
   onError,
 }: StripeTipPaymentWrapperProps) {
   const [clientSecret, setClientSecret] = useState<string>("");
+  const [tipId, setTipId] = useState<string>("");
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Fetch Stripe config
@@ -141,23 +144,26 @@ export default function StripeTipPaymentWrapper({
   const publishableKey = configData?.publishableKey || "";
 
   // Create tip PaymentIntent
-  const tipIntentMutation = useDataMutation<{ clientSecret: string }, { deliveryId: string; amount: number }>({
+  const tipIntentMutation = useDataMutation<{ clientSecret: string; tipId?: string }, { deliveryId: string; amount: number }>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/tip-intent`,
     method: "POST",
     onSuccessInvalidate: false,
     onSuccess: (data) => {
       console.log('[StripeTipPaymentWrapper] Tip intent response:', data);
-      const secret = data?.clientSecret || data?.data?.clientSecret;
-      if (secret) {
+      const secret = data?.clientSecret;
+      const id = data?.tipId;
+      if (secret && id) {
         setClientSecret(secret);
+        setTipId(id);
         setFetchError(null);
       } else {
-        console.error('[StripeTipPaymentWrapper] No clientSecret in response:', data);
+        console.error('[StripeTipPaymentWrapper] Missing clientSecret or tipId in response:', data);
         setFetchError("Failed to create tip payment. Please try again.");
       }
     },
-    onError: (error) => {
-      setFetchError(error.message || "Failed to create tip payment.");
+    onError: (error: unknown) => {
+      const msg = error instanceof Error ? error.message : "Failed to create tip payment.";
+      setFetchError(msg);
     },
   });
 
@@ -219,6 +225,7 @@ export default function StripeTipPaymentWrapper({
         clientSecret={clientSecret}
         tipAmount={tipAmount}
         driverName={driverName}
+        tipId={tipId}
         onSuccess={onSuccess}
         onError={onError}
       />

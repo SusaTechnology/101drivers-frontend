@@ -401,12 +401,14 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const [showTipPaymentModal, setShowTipPaymentModal] = useState(false)
   const [pendingTipAmount, setPendingTipAmount] = useState<number>(0)
 
-  // Tip mutation — updates tip status in DB after successful Stripe payment
-  // Uses existingTip.id (the Tip's own ID), NOT the delivery ID
+  // Tip mutation — updates tip status in DB after successful Stripe payment.
+  // Uses pathParams: { id } so the URL is built per-call from the tipId
+  // returned by the tip-intent endpoint. Previously this used existingTip?.id
+  // captured at hook init, but existingTip was undefined on the first tip
+  // (the query hadn't refetched), so the PATCH went to /api/tips/undefined → 404.
   const tipUpdateMutation = useDataMutation({
-    apiEndPoint: existingTip ? `${import.meta.env.VITE_API_URL}/api/tips/${existingTip.id}` : '',
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/tips/:id`,
     method: 'PATCH',
-    enabled: !!existingTip,
     onSuccessInvalidate: false,
     successMessage: '',
     onSuccess: () => {
@@ -600,10 +602,18 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     setShowTipPaymentModal(true)
   }
 
-  // Called after Stripe tip payment succeeds — updates tip status to CAPTURED
-  const handleTipPaymentSuccess = (paymentIntentId: string) => {
+  // Called after Stripe tip payment succeeds — updates tip status to CAPTURED.
+  // tipId comes from the tip-intent response (captured in StripeTipPaymentWrapper)
+  // and is passed here so we can PATCH the correct row by id.
+  const handleTipPaymentSuccess = (paymentIntentId: string, tipId: string) => {
+    if (!tipId) {
+      console.error('[handleTipPaymentSuccess] No tipId provided — cannot PATCH tip status')
+      toast.error('Failed to record tip', { description: 'Missing tip ID. The webhook will update the tip shortly.' })
+      return
+    }
     tipUpdateMutation.mutate({
       status: 'CAPTURED',
+      pathParams: { id: tipId },
     })
   }
 
