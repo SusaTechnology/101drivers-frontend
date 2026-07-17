@@ -12,6 +12,11 @@
 // and Miles are already covered by the original Started / Stopped / Miles
 // columns so they are not duplicated.
 //
+// Every cell uses a fallback chain so a field never shows "—" when there is
+// any usable underlying data. Example: if `customerName` is empty, the
+// Customer cell falls back to `customerEmail`; if `driverId` is null, the
+// Driver ID cell falls back to `driverEmail`, then to "Unassigned".
+//
 // Any change here automatically flows to both pages so a carrier sees exactly
 // the same report an admin sees.
 
@@ -36,94 +41,162 @@ function formatMoney(value: number | null | undefined): string {
   return `$${Number(value).toFixed(2)}`;
 }
 
+/** First non-empty string from a list of candidates. */
+function firstNonEmpty(...vals: Array<string | null | undefined>): string {
+  for (const v of vals) {
+    if (v != null && String(v).trim() !== '') return String(v);
+  }
+  return '';
+}
+
 export const INSURANCE_REPORT_COLUMNS: ColumnDef<any>[] = [
-  // ── Original insurance-portal columns (kept intact) ──────────────────────
+  // ── Status (delivery status preferred, tracking-session status as fallback) ──
   {
     accessorKey: 'status',
     header: 'Status',
     size: 90,
     meta: { label: 'Status', sortable: true, sortKey: 'delivery.status' },
-    cell: ({ getValue }) => (
-      <Badge variant="outline" className="text-[10px] font-bold">
-        {getValue() || '—'}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const value = firstNonEmpty(
+        row.original.deliveryStatus,
+        row.original.status,
+        row.original.trackingStatus,
+      );
+      return (
+        <Badge variant="outline" className="text-[10px] font-bold">
+          {value || '—'}
+        </Badge>
+      );
+    },
   },
+
+  // ── Customer (business name → contact name → full name → email) ──────────
   {
     accessorKey: 'customerName',
     header: 'Customer',
-    size: 120,
+    size: 140,
     meta: { label: 'Customer', sortable: false },
-    cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
+    cell: ({ row }) => {
+      const value = firstNonEmpty(
+        row.original.customerName,
+        row.original.customerEmail,
+      );
+      return <span>{value || '—'}</span>;
+    },
   },
+
+  // ── Driver (full name → email) ───────────────────────────────────────────
   {
     accessorKey: 'driverName',
     header: 'Driver',
-    size: 120,
+    size: 140,
     meta: { label: 'Driver', sortable: false },
-    cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
+    cell: ({ row }) => {
+      const value = firstNonEmpty(
+        row.original.driverName,
+        row.original.driverEmail,
+      );
+      return <span>{value || '—'}</span>;
+    },
   },
-  // ── Per-ride insurance-compliance spec columns (added) ───────────────────
+
+  // ── Per-ride insurance-compliance spec: Driver ID ────────────────────────
+  // Falls back to driver email (truncated) when the driver row exists but the
+  // ID column is somehow null, then to "Unassigned" when no driver at all.
   {
     accessorKey: 'driverId',
     header: 'Driver ID',
-    size: 140,
+    size: 150,
     meta: { label: 'Driver ID', sortable: false },
-    cell: ({ getValue }) => (
-      <span className="font-mono">{getValue() || '—'}</span>
-    ),
+    cell: ({ row }) => {
+      const id = firstNonEmpty(row.original.driverId);
+      if (id) return <span className="font-mono">{id}</span>;
+      const email = firstNonEmpty(row.original.driverEmail);
+      if (email) return <span className="font-mono text-slate-500">{email}</span>;
+      return <span className="text-slate-400 italic">Unassigned</span>;
+    },
   },
+
+  // ── Per-ride insurance-compliance spec: Ride ID (delivery ID) ────────────
+  // Falls back to trackingSessionId if deliveryId is missing.
   {
     accessorKey: 'deliveryId',
     header: 'Ride ID',
-    size: 140,
+    size: 150,
     meta: { label: 'Ride ID', sortable: false },
-    cell: ({ getValue }) => <span className="font-mono">{getValue() || '—'}</span>,
+    cell: ({ row }) => {
+      const id = firstNonEmpty(
+        row.original.deliveryId,
+        row.original.trackingSessionId,
+      );
+      return <span className="font-mono">{id || '—'}</span>;
+    },
   },
-  // ── Original Route column (kept — combined pickup → dropoff view) ─────────
+
+  // ── Original Route column (combined pickup → dropoff view) ───────────────
   {
     id: 'route',
     header: 'Route',
     size: 180,
     meta: { label: 'Route', sortable: false },
-    cell: ({ row }) => (
-      <span>
-        {row.original.pickupAddress ? `${row.original.pickupAddress.split(',')[0]} → ` : ''}
-        {row.original.dropoffAddress ? row.original.dropoffAddress.split(',')[0] : '—'}
-      </span>
-    ),
+    cell: ({ row }) => {
+      const pickup = firstNonEmpty(row.original.pickupAddress);
+      const dropoff = firstNonEmpty(row.original.dropoffAddress);
+      const pickupShort = pickup ? pickup.split(',')[0] : '';
+      const dropoffShort = dropoff ? dropoff.split(',')[0] : '';
+      if (!pickupShort && !dropoffShort) return <span className="text-slate-400">—</span>;
+      return (
+        <span>
+          {pickupShort ? `${pickupShort} → ` : '— → '}
+          {dropoffShort || '—'}
+        </span>
+      );
+    },
   },
-  // ── Per-ride insurance-compliance spec: separate start/end location ──────
+
+  // ── Per-ride insurance-compliance spec: Start Location ───────────────────
   {
     accessorKey: 'pickupAddress',
     header: 'Start Location',
     size: 220,
     meta: { label: 'Start Location', sortable: false },
-    cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
+    cell: ({ row }) => (
+      <span>{firstNonEmpty(row.original.pickupAddress) || '—'}</span>
+    ),
   },
+
+  // ── Per-ride insurance-compliance spec: End Location ─────────────────────
   {
     accessorKey: 'dropoffAddress',
     header: 'End Location',
     size: 220,
     meta: { label: 'End Location', sortable: false },
-    cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
+    cell: ({ row }) => (
+      <span>{firstNonEmpty(row.original.dropoffAddress) || '—'}</span>
+    ),
   },
-  // ── Original Started / Stopped columns (= insurance spec Start/End Time) ─
+
+  // ── Started / Stopped (= insurance spec Start Time / End Time) ───────────
   {
     accessorKey: 'startedAt',
     header: 'Started',
     size: 130,
     meta: { label: 'Started', sortable: true, sortKey: 'startedAt' },
-    cell: ({ getValue }) => <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>,
+    cell: ({ getValue }) => (
+      <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>
+    ),
   },
   {
     accessorKey: 'stoppedAt',
     header: 'Stopped',
     size: 130,
     meta: { label: 'Stopped', sortable: true, sortKey: 'stoppedAt' },
-    cell: ({ getValue }) => <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>,
+    cell: ({ getValue }) => (
+      <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>
+    ),
   },
-  // ── Original Miles / Hours / Payment / Payout columns ────────────────────
+
+  // ── Miles / Hours / Payment / Payout ─────────────────────────────────────
   {
     accessorKey: 'drivenMiles',
     header: 'Miles',

@@ -3,11 +3,24 @@ import { EnterpriseReportKey } from "./report-column.definitions";
 type AnyRow = Record<string, any>;
 
 function nameOfBusiness(entity?: AnyRow | null): string {
-  return entity?.businessName ?? entity?.companyName ?? entity?.user?.fullName ?? "";
+  return (
+    entity?.businessName ??
+    entity?.companyName ??
+    entity?.contactName ??
+    entity?.user?.fullName ??
+    entity?.user?.email ??
+    ""
+  );
 }
 
 function nameOfUser(entity?: AnyRow | null): string {
-  return entity?.user?.fullName ?? entity?.fullName ?? "";
+  return (
+    entity?.user?.fullName ??
+    entity?.fullName ??
+    entity?.user?.email ??
+    entity?.email ??
+    ""
+  );
 }
 
 export function mapReportRows(
@@ -101,18 +114,29 @@ export function mapReportRows(
 
     case "insurance-mileage":
       return rows.map((r) => ({
-        deliveryId: r.deliveryId ?? r.id,
-        driverId: r.assignedDriver?.id ?? null,
+        trackingSessionId: r.id ?? null,
+        deliveryId: r.deliveryId ?? r.delivery?.id ?? r.id ?? null,
+        driverId: r.assignedDriver?.id ?? r.delivery?.assignments?.[0]?.driver?.id ?? null,
+        driverName: nameOfUser(r.assignedDriver ?? r.delivery?.assignments?.[0]?.driver),
+        driverEmail:
+          r.assignedDriver?.user?.email ??
+          r.delivery?.assignments?.[0]?.driver?.user?.email ??
+          "",
+        customerId: r.delivery?.customer?.id ?? null,
+        customerName: nameOfBusiness(r.delivery?.customer),
+        customerEmail: r.delivery?.customer?.user?.email ?? "",
+        customerType: r.delivery?.customer?.customerType ?? "",
+        serviceType: r.delivery?.serviceType ?? "",
+        deliveryStatus: r.delivery?.status ?? "",
+        trackingStatus: r.status ?? "",
         status: r.delivery?.status ?? r.status ?? "",
         drivenMiles: r.drivenMiles ?? 0,
         drivenHours: r.drivenHours ?? 0,
-        startedAt: r.startedAt,
-        stoppedAt: r.stoppedAt,
+        startedAt: r.startedAt ?? null,
+        stoppedAt: r.stoppedAt ?? null,
         period: r.period ?? "",
-        driverName: nameOfUser(r.assignedDriver),
         pickupAddress: r.delivery?.pickupAddress ?? "",
         dropoffAddress: r.delivery?.dropoffAddress ?? "",
-        customerName: nameOfBusiness(r.delivery?.customer),
         paymentAmount: r.delivery?.payment?.amount ?? null,
         payoutAmount: r.delivery?.payout?.netAmount ?? null,
       }));

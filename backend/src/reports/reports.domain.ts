@@ -963,6 +963,8 @@ export class ReportsDomain {
             select: {
               id: true,
               businessName: true,
+              contactName: true,
+              customerType: true,
               user: {
                 select: {
                   id: true,

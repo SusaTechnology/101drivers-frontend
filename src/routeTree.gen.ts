@@ -81,6 +81,7 @@ import { Route as AdminDeliveryDetailIndexRouteImport } from './routes/admin-del
 import { Route as AdminDeliveriesIndexRouteImport } from './routes/admin-deliveries/index'
 import { Route as AdminDealerDetailIndexRouteImport } from './routes/admin-dealer-detail/index'
 import { Route as AdminDashboardIndexRouteImport } from './routes/admin-dashboard/index'
+import { Route as AdminContentIndexRouteImport } from './routes/admin-content/index'
 import { Route as AdminConfigIndexRouteImport } from './routes/admin-config/index'
 import { Route as AdminAuditLogsIndexRouteImport } from './routes/admin-audit-logs/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
@@ -497,6 +498,11 @@ const AdminDashboardIndexRoute = AdminDashboardIndexRouteImport.update({
   path: '/admin-dashboard/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminContentIndexRoute = AdminContentIndexRouteImport.update({
+  id: '/admin-content/',
+  path: '/admin-content/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminConfigIndexRoute = AdminConfigIndexRouteImport.update({
   id: '/admin-config/',
   path: '/admin-config/',
@@ -693,6 +699,7 @@ export interface FileRoutesByFullPath {
   '/about/': typeof AboutIndexRoute
   '/admin-audit-logs/': typeof AdminAuditLogsIndexRoute
   '/admin-config/': typeof AdminConfigIndexRoute
+  '/admin-content/': typeof AdminContentIndexRoute
   '/admin-dashboard/': typeof AdminDashboardIndexRoute
   '/admin-dealer-detail/': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries/': typeof AdminDeliveriesIndexRoute
@@ -798,6 +805,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutIndexRoute
   '/admin-audit-logs': typeof AdminAuditLogsIndexRoute
   '/admin-config': typeof AdminConfigIndexRoute
+  '/admin-content': typeof AdminContentIndexRoute
   '/admin-dashboard': typeof AdminDashboardIndexRoute
   '/admin-dealer-detail': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries': typeof AdminDeliveriesIndexRoute
@@ -905,6 +913,7 @@ export interface FileRoutesById {
   '/about/': typeof AboutIndexRoute
   '/admin-audit-logs/': typeof AdminAuditLogsIndexRoute
   '/admin-config/': typeof AdminConfigIndexRoute
+  '/admin-content/': typeof AdminContentIndexRoute
   '/admin-dashboard/': typeof AdminDashboardIndexRoute
   '/admin-dealer-detail/': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries/': typeof AdminDeliveriesIndexRoute
@@ -1013,6 +1022,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/admin-audit-logs/'
     | '/admin-config/'
+    | '/admin-content/'
     | '/admin-dashboard/'
     | '/admin-dealer-detail/'
     | '/admin-deliveries/'
@@ -1118,6 +1128,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/admin-audit-logs'
     | '/admin-config'
+    | '/admin-content'
     | '/admin-dashboard'
     | '/admin-dealer-detail'
     | '/admin-deliveries'
@@ -1224,6 +1235,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/admin-audit-logs/'
     | '/admin-config/'
+    | '/admin-content/'
     | '/admin-dashboard/'
     | '/admin-dealer-detail/'
     | '/admin-deliveries/'
@@ -1310,6 +1322,7 @@ export interface RootRouteChildren {
   AboutIndexRoute: typeof AboutIndexRoute
   AdminAuditLogsIndexRoute: typeof AdminAuditLogsIndexRoute
   AdminConfigIndexRoute: typeof AdminConfigIndexRoute
+  AdminContentIndexRoute: typeof AdminContentIndexRoute
   AdminDashboardIndexRoute: typeof AdminDashboardIndexRoute
   AdminDealerDetailIndexRoute: typeof AdminDealerDetailIndexRoute
   AdminDeliveriesIndexRoute: typeof AdminDeliveriesIndexRoute
@@ -1890,6 +1903,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDashboardIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-content/': {
+      id: '/admin-content/'
+      path: '/admin-content'
+      fullPath: '/admin-content/'
+      preLoaderRoute: typeof AdminContentIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-config/': {
       id: '/admin-config/'
       path: '/admin-config'
@@ -2181,6 +2201,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutIndexRoute: AboutIndexRoute,
   AdminAuditLogsIndexRoute: AdminAuditLogsIndexRoute,
   AdminConfigIndexRoute: AdminConfigIndexRoute,
+  AdminContentIndexRoute: AdminContentIndexRoute,
   AdminDashboardIndexRoute: AdminDashboardIndexRoute,
   AdminDealerDetailIndexRoute: AdminDealerDetailIndexRoute,
   AdminDeliveriesIndexRoute: AdminDeliveriesIndexRoute,
