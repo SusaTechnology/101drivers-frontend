@@ -224,6 +224,16 @@ export class PaymentPayoutEngine {
       const lockInAmount = Number(delivery.lockInBaseFee!.toFixed(2));
       const remainder = Number(Math.max(0, totalQuoted - lockInAmount).toFixed(2));
 
+      // `remainderCaptured` tracks whether the second PaymentIntent (PI #2)
+      // for the remainder was successfully created+captured. If it failed,
+      // we MUST NOT upgrade the driver payout to TRIP_COMPLETION (which
+      // would entitle the driver to the full quote) — the driver keeps
+      // only their original lock-in payout. We also MUST NOT fire
+      // initiateDriverTransfer, because the customer has only paid the
+      // lock-in amount, not the full quote — auto-transferring the
+      // remainder would be the platform paying out of pocket.
+      let remainderCaptured = false;
+
       if (
         remainder > 0 &&
         payment.paymentType === EnumPaymentPaymentType.PREPAID &&
@@ -279,6 +289,7 @@ export class PaymentPayoutEngine {
               },
             },
           });
+          remainderCaptured = true;
         } catch (err: any) {
           const errMsg = err?.message || "Unknown remainder capture error";
           this.logger.error(
@@ -297,6 +308,8 @@ export class PaymentPayoutEngine {
               message: `Remainder capture failed: ${errMsg}`,
             },
           });
+          // remainderCaptured stays false — fall through but skip payout
+          // upgrade + auto-transfer below.
         }
       } else if (
         payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
@@ -309,6 +322,25 @@ export class PaymentPayoutEngine {
           where: { id: payment.id },
           data: { amount: totalQuoted },
         });
+        remainderCaptured = true; // postpaid "capture" is just invoicing later
+      }
+
+      // If the remainder capture failed, leave the original lock-in
+      // DriverPayout (created at startTrip with type=LOCK_IN_FEE,
+      // status=ELIGIBLE, netAmount=baseFee × pct) untouched. The driver
+      // keeps their lock-in payout — nothing more. The customer was
+      // already charged the lock-in amount at start; the remainder was
+      // never collected. The completion itself still succeeds (status
+      // moves to COMPLETED) but no additional money moves. Admin can
+      // retry the remainder capture manually via the Stripe dashboard
+      // or by re-triggering completion.
+      if (!remainderCaptured) {
+        this.logger.warn(
+          `Delivery ${input.deliveryId} completed but remainder capture failed — ` +
+          `driver keeps lock-in payout only ($${lockInAmount.toFixed(2)} × ` +
+          `${delivery.lockInDriverSharePct ?? 60}%). Customer has not paid the remainder.`,
+        );
+        return;
       }
 
       // Update the existing lock-in DriverPayout to the full quoted amount
@@ -360,6 +392,7 @@ export class PaymentPayoutEngine {
       });
 
       // Auto-transfer to driver's Connect account if eligible.
+      // (Guarded by remainderCaptured — see comment above.)
       if (
         payoutStatus === EnumDriverPayoutStatus.ELIGIBLE &&
         this.stripeService &&
@@ -479,6 +512,12 @@ export class PaymentPayoutEngine {
   /**
    * Initiate a Stripe Connect transfer to a driver.
    * Updates the DriverPayout record with the transfer ID.
+   *
+   * Blocked when the delivery has an open dispute with `legalHold=true` —
+   * admin sets legal hold to freeze payouts while a dispute is investigated.
+   * The payout stays in its current status (typically ELIGIBLE) and is
+   * released manually via the dispute-resolution flow or by admin setting
+   * legalHold back to false, then re-triggering the payout (batch payout).
    */
   private async initiateDriverTransfer(
     deliveryId: string,
@@ -489,6 +528,26 @@ export class PaymentPayoutEngine {
       where: { deliveryId },
     });
     if (!payout) return;
+
+    // ── Legal hold check ────────────────────────────────────────────
+    // If there's an open dispute with legalHold=true on this delivery,
+    // do NOT transfer funds to the driver. Admin can clear the hold via
+    // DisputeAdminEngine.resolveDispute / .closeDispute, then manually
+    // trigger payout via the batch payout flow (requestFreeWithdrawal or
+    // admin weekly batch).
+    const dispute = await this.prisma.disputeCase.findUnique({
+      where: { deliveryId },
+      select: { id: true, legalHold: true, status: true },
+    });
+    if (dispute?.legalHold) {
+      this.logger.warn(
+        `Skipping auto-transfer for delivery ${deliveryId}: ` +
+        `dispute ${dispute.id} has legalHold=true (status=${dispute.status}). ` +
+        `Payout ${payout.id} stays at status=${payout.status}. ` +
+        `Admin can release the hold via dispute resolution, then trigger payout manually.`,
+      );
+      return;
+    }
 
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },

@@ -172,6 +172,49 @@ export class StripeWebhookController {
         where: { id: tip.id },
         data: { status: "CAPTURED" },
       });
+
+      // Tips are added to a delivery AFTER completion (see
+      // stripe-payment.controller.ts createTipPaymentIntent which requires
+      // delivery.status === COMPLETED). At completion time, handleCompletionTx
+      // in PaymentPayoutEngine looked up delivery.tip — but it didn't exist
+      // yet, so the DriverPayout.netAmount was created WITHOUT the tip.
+      //
+      // Now that the tip is captured, we retroactively add it to the
+      // driver's payout. The full tip amount goes to the driver (matches
+      // computeBreakdown which adds tipAmount directly to netAmount, not
+      // multiplied by driverSharePct).
+      //
+      // If the payout doesn't exist yet (e.g. postpaid delivery awaiting
+      // invoicing) we skip — the tip will be picked up when admin invoices
+      // the delivery (adminInvoicePostpaid calls computeBreakdown with the
+      // then-current tip amount).
+      try {
+        const payout = await this.prisma.driverPayout.findUnique({
+          where: { deliveryId },
+        });
+        if (payout && payout.status !== "CANCELLED") {
+          // Only add the tip to netAmount (driver keeps 100% of tips per
+          // computeBreakdown). grossAmount stays as the original quote.
+          const newNet = Number(
+            (Number(payout.netAmount) + Number(tip.amount)).toFixed(2),
+          );
+          await this.prisma.driverPayout.update({
+            where: { id: payout.id },
+            data: { netAmount: newNet },
+          });
+          this.logger.log(
+            `Tip $${Number(tip.amount).toFixed(2)} added to driver payout for ` +
+            `delivery ${deliveryId} — new netAmount=$${newNet.toFixed(2)}`,
+          );
+        }
+      } catch (payoutErr: any) {
+        // Don't fail the webhook over a payout update issue — the tip
+        // capture itself already succeeded. Admin can manually adjust.
+        this.logger.error(
+          `Failed to add tip to driver payout for delivery ${deliveryId}: ${payoutErr?.message}`,
+        );
+      }
+
       this.logger.log(`Tip captured for delivery ${deliveryId} (PI: ${pi.id})`);
       return;
     }
