@@ -6,12 +6,18 @@ import {
   EnumDeliveryStatusHistoryActorRole,
   EnumDeliveryStatusHistoryActorType,
   EnumDeliveryStatusHistoryToStatus,
+  EnumDriverPayoutStatus,
+  EnumDriverPayoutType,
   EnumDriverStatus,
+  EnumPaymentEventType,
+  EnumPaymentStatus,
+  EnumTrackingSessionStatus,
   Prisma,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
 import { TrackingGateway } from "../../gateways/tracking.gateway";
+import { StripeService } from "../../providers/stripe/stripe.service";
 
 @Injectable()
 export class AdminDeliveryEngine {
@@ -21,7 +27,9 @@ export class AdminDeliveryEngine {
     private readonly prisma: PrismaService,
     private readonly notificationEventEngine: NotificationEventEngine,
     @Optional() @Inject(forwardRef(() => TrackingGateway))
-    private readonly trackingGateway?: TrackingGateway
+    private readonly trackingGateway?: TrackingGateway,
+    @Optional() @Inject(StripeService)
+    private readonly stripeService?: StripeService,
   ) {}
 
   /**
@@ -225,6 +233,33 @@ async assignDriver(input: {
       select: {
         id: true,
         status: true,
+        customerId: true,
+        lockedInAt: true,
+        lockInBaseFee: true,
+        lockInDriverSharePct: true,
+        payment: {
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+            providerPaymentIntentId: true,
+          },
+        },
+        payout: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        assignments: {
+          where: { unassignedAt: null },
+          orderBy: { assignedAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            driverId: true,
+          },
+        },
       },
     });
 
@@ -240,64 +275,171 @@ async assignDriver(input: {
     }
 
     const beforeJson = delivery;
+    const now = new Date();
+    const activeAssignment = delivery.assignments?.[0] ?? null;
 
-    await this.prisma.deliveryRequest.update({
-      where: { id: input.deliveryId },
-      data: {
-        status: EnumDeliveryRequestStatus.CANCELLED,
-      },
-    });
+    const isLockedIn =
+      !!delivery.lockedInAt &&
+      !!delivery.lockInBaseFee &&
+      delivery.lockInBaseFee > 0;
+    const lockInAmount = isLockedIn
+      ? Number(delivery.lockInBaseFee!.toFixed(2))
+      : 0;
 
-    const activeAssignments = await this.prisma.deliveryAssignment.findMany({
-      where: {
-        deliveryId: input.deliveryId,
-        unassignedAt: null,
-      },
-      select: { id: true },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      // Unassign driver
+      if (activeAssignment) {
+        await tx.deliveryAssignment.update({
+          where: { id: activeAssignment.id },
+          data: {
+            unassignedAt: now,
+            reason: `Admin cancelled: ${input.reason}`,
+          },
+        });
+      }
 
-    for (const row of activeAssignments) {
-      await this.prisma.deliveryAssignment.update({
-        where: { id: row.id },
+      // Driver payout
+      if (isLockedIn) {
+        const driverSharePct = Number(delivery.lockInDriverSharePct ?? 60);
+        const driverNet = Number((lockInAmount * driverSharePct / 100).toFixed(2));
+        const platformFee = Number((lockInAmount - driverNet).toFixed(2));
+
+        if (delivery.payout?.id) {
+          await tx.driverPayout.update({
+            where: { id: delivery.payout.id },
+            data: {
+              status: EnumDriverPayoutStatus.ELIGIBLE,
+              failureMessage: null,
+              grossAmount: lockInAmount,
+              insuranceFee: 0,
+              platformFee,
+              netAmount: driverNet,
+              driverSharePct,
+              type: EnumDriverPayoutType.LOCK_IN_FEE,
+            },
+          });
+        } else if (activeAssignment) {
+          await tx.driverPayout.create({
+            data: {
+              deliveryId: delivery.id,
+              driverId: activeAssignment.driverId,
+              grossAmount: lockInAmount,
+              insuranceFee: 0,
+              platformFee,
+              netAmount: driverNet,
+              driverSharePct,
+              status: EnumDriverPayoutStatus.ELIGIBLE,
+              type: EnumDriverPayoutType.LOCK_IN_FEE,
+            },
+          });
+        }
+      } else if (delivery.payout?.id) {
+        await tx.driverPayout.updateMany({
+          where: {
+            id: delivery.payout.id,
+            status: { notIn: ["PAID", "CANCELLED"] as any },
+          },
+          data: {
+            status: "CANCELLED" as any,
+            failureMessage: "Delivery cancelled by admin",
+          },
+        });
+      }
+
+      // Payment
+      if (delivery.payment?.id) {
+        if (isLockedIn) {
+          await tx.payment.update({
+            where: { id: delivery.payment.id },
+            data: {
+              status: EnumPaymentStatus.CAPTURED,
+              capturedAt: now,
+              amount: lockInAmount,
+            },
+          });
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: delivery.payment.id,
+              type: EnumPaymentEventType.CAPTURE,
+              status: EnumPaymentStatus.CAPTURED,
+              amount: lockInAmount,
+              message: `Lock-in base fee retained on admin cancellation ($${lockInAmount.toFixed(2)})`,
+            },
+          });
+        } else if (delivery.payment.status === EnumPaymentStatus.AUTHORIZED) {
+          // Legacy: void the auth hold (was previously not done here — adding for consistency)
+          await tx.payment.update({
+            where: { id: delivery.payment.id },
+            data: {
+              status: EnumPaymentStatus.VOIDED,
+              voidedAt: now,
+            },
+          });
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: delivery.payment.id,
+              type: EnumPaymentEventType.VOID,
+              status: EnumPaymentStatus.VOIDED,
+              message: `Payment voided on admin cancel: ${input.reason}`,
+            },
+          });
+          if (delivery.payment.providerPaymentIntentId && this.stripeService) {
+            try {
+              await this.stripeService.cancelPaymentIntent(delivery.payment.providerPaymentIntentId);
+            } catch (err: any) {
+              this.logger.warn(`Admin cancel: failed to void Stripe PI: ${err.message}`);
+            }
+          }
+        }
+        // CAPTURED/PAID legacy: admin must use the manual refund endpoint
+        // (`/payments/stripe/refund/:paymentId`) — not done here automatically.
+      }
+
+      // Update delivery status
+      await tx.deliveryRequest.update({
+        where: { id: input.deliveryId },
         data: {
-          unassignedAt: new Date(),
+          status: EnumDeliveryRequestStatus.CANCELLED,
         },
       });
-    }
 
-    await this.prisma.deliveryStatusHistory.create({
-      data: {
-        deliveryId: input.deliveryId,
-        actorUserId: input.actorUserId ?? null,
-        actorRole: EnumDeliveryStatusHistoryActorRole.ADMIN,
-        actorType: EnumDeliveryStatusHistoryActorType.USER,
-        fromStatus: delivery.status as any,
-        toStatus: EnumDeliveryStatusHistoryToStatus.CANCELLED,
-        note: input.reason,
-      },
+      await tx.deliveryStatusHistory.create({
+        data: {
+          deliveryId: input.deliveryId,
+          actorUserId: input.actorUserId ?? null,
+          actorRole: EnumDeliveryStatusHistoryActorRole.ADMIN,
+          actorType: EnumDeliveryStatusHistoryActorType.USER,
+          fromStatus: delivery.status as any,
+          toStatus: EnumDeliveryStatusHistoryToStatus.CANCELLED,
+          note: isLockedIn
+            ? `${input.reason} (lock-in base fee $${lockInAmount.toFixed(2)} retained)`
+            : input.reason,
+        },
+      });
+
+      const afterDelivery = await tx.deliveryRequest.findUnique({
+        where: { id: input.deliveryId },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          action: EnumAdminAuditLogAction.DELIVERY_CANCEL,
+          actorUserId: input.actorUserId ?? null,
+          actorType: EnumAdminAuditLogActorType.USER,
+          deliveryId: input.deliveryId,
+          driverId: activeAssignment?.driverId ?? null,
+          reason: input.reason,
+          beforeJson: beforeJson ?? Prisma.JsonNull,
+          afterJson: afterDelivery ?? Prisma.JsonNull,
+        },
+      });
     });
 
-    const afterDelivery = await this.prisma.deliveryRequest.findUnique({
-      where: { id: input.deliveryId },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    await this.prisma.adminAuditLog.create({
-      data: {
-        action: EnumAdminAuditLogAction.DELIVERY_CANCEL,
-        actorUserId: input.actorUserId ?? null,
-        actorType: EnumAdminAuditLogActorType.USER,
-        deliveryId: input.deliveryId,
-        reason: input.reason,
-        beforeJson: beforeJson ?? Prisma.JsonNull,
-        afterJson: afterDelivery ?? Prisma.JsonNull,
-      },
-    });
-
-    this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.CANCELLED);
+    this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.CANCELLED, delivery.customerId);
   }
 
   async forceCancelDelivery(input: {
@@ -311,10 +453,15 @@ async assignDriver(input: {
         id: true,
         status: true,
         customerId: true,
+        lockedInAt: true,
+        lockInBaseFee: true,
+        lockInDriverSharePct: true,
         payment: {
           select: {
             id: true,
+            amount: true,
             status: true,
+            providerPaymentIntentId: true,
           },
         },
         payout: {
@@ -362,6 +509,14 @@ async assignDriver(input: {
     const activeDriverId = delivery.assignments?.[0]?.driverId ?? null;
     const now = new Date();
 
+    const isLockedIn =
+      !!delivery.lockedInAt &&
+      !!delivery.lockInBaseFee &&
+      delivery.lockInBaseFee > 0;
+    const lockInAmount = isLockedIn
+      ? Number(delivery.lockInBaseFee!.toFixed(2))
+      : 0;
+
     const beforeJson = {
       id: delivery.id,
       status: delivery.status,
@@ -388,12 +543,47 @@ async assignDriver(input: {
           where: { id: delivery.trackingSession.id },
           data: {
             stoppedAt: now,
-            status: "STOPPED" as any,
+            status: EnumTrackingSessionStatus.STOPPED,
           },
         });
       }
 
-      if (delivery.payout?.id) {
+      // Driver payout
+      if (isLockedIn) {
+        const driverSharePct = Number(delivery.lockInDriverSharePct ?? 60);
+        const driverNet = Number((lockInAmount * driverSharePct / 100).toFixed(2));
+        const platformFee = Number((lockInAmount - driverNet).toFixed(2));
+
+        if (delivery.payout?.id) {
+          await tx.driverPayout.update({
+            where: { id: delivery.payout.id },
+            data: {
+              status: EnumDriverPayoutStatus.ELIGIBLE,
+              failureMessage: null,
+              grossAmount: lockInAmount,
+              insuranceFee: 0,
+              platformFee,
+              netAmount: driverNet,
+              driverSharePct,
+              type: EnumDriverPayoutType.LOCK_IN_FEE,
+            },
+          });
+        } else if (activeDriverId) {
+          await tx.driverPayout.create({
+            data: {
+              deliveryId: delivery.id,
+              driverId: activeDriverId,
+              grossAmount: lockInAmount,
+              insuranceFee: 0,
+              platformFee,
+              netAmount: driverNet,
+              driverSharePct,
+              status: EnumDriverPayoutStatus.ELIGIBLE,
+              type: EnumDriverPayoutType.LOCK_IN_FEE,
+            },
+          });
+        }
+      } else if (delivery.payout?.id) {
         await tx.driverPayout.updateMany({
           where: {
             id: delivery.payout.id,
@@ -406,6 +596,54 @@ async assignDriver(input: {
             failureMessage: "Force-cancelled by admin",
           },
         });
+      }
+
+      // Payment
+      if (delivery.payment?.id) {
+        if (isLockedIn) {
+          await tx.payment.update({
+            where: { id: delivery.payment.id },
+            data: {
+              status: EnumPaymentStatus.CAPTURED,
+              capturedAt: now,
+              amount: lockInAmount,
+            },
+          });
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: delivery.payment.id,
+              type: EnumPaymentEventType.CAPTURE,
+              status: EnumPaymentStatus.CAPTURED,
+              amount: lockInAmount,
+              message: `Lock-in base fee retained on admin force-cancel ($${lockInAmount.toFixed(2)})`,
+            },
+          });
+        } else if (delivery.payment.status === EnumPaymentStatus.AUTHORIZED) {
+          // No lock-in: void the auth hold (was previously not done — adding for consistency)
+          await tx.payment.update({
+            where: { id: delivery.payment.id },
+            data: {
+              status: EnumPaymentStatus.VOIDED,
+              voidedAt: now,
+            },
+          });
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: delivery.payment.id,
+              type: EnumPaymentEventType.VOID,
+              status: EnumPaymentStatus.VOIDED,
+              message: `Payment voided on admin force-cancel: ${input.reason}`,
+            },
+          });
+          if (delivery.payment.providerPaymentIntentId && this.stripeService) {
+            try {
+              await this.stripeService.cancelPaymentIntent(delivery.payment.providerPaymentIntentId);
+            } catch (err: any) {
+              this.logger.warn(`Admin force-cancel: failed to void Stripe PI: ${err.message}`);
+            }
+          }
+        }
+        // CAPTURED/PAID legacy: admin must use manual refund endpoint.
       }
 
       if (delivery.dispute?.id) {
@@ -432,7 +670,9 @@ async assignDriver(input: {
           actorType: EnumDeliveryStatusHistoryActorType.USER,
           fromStatus: delivery.status as any,
           toStatus: EnumDeliveryStatusHistoryToStatus.CANCELLED,
-          note: `Force-cancelled by admin: ${input.reason}`,
+          note: isLockedIn
+            ? `Force-cancelled by admin: ${input.reason} (lock-in base fee $${lockInAmount.toFixed(2)} retained)`
+            : `Force-cancelled by admin: ${input.reason}`,
         },
       });
 

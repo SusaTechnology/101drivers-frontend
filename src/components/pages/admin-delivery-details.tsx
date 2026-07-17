@@ -1112,13 +1112,42 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                     {delivery.financialSummary?.paymentStatus || 'Pending'}
                   </Badge>
                 </div>
-                
+
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Payout Status</span>
                   <Badge variant="outline" className="text-[10px]">
                     {delivery.financialSummary?.payoutStatus || 'Pending'}
                   </Badge>
                 </div>
+
+                {delivery.lockedInAt && delivery.lockInBaseFee ? (
+                  <div className="mt-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                        Lock-in fee
+                      </span>
+                      <Badge className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300">
+                        Non-refundable
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Amount captured at start:</span>
+                        <strong>${delivery.lockInBaseFee.toFixed(2)}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Locked in at:</span>
+                        <span>{new Date(delivery.lockedInAt).toLocaleString()}</span>
+                      </div>
+                      {delivery.lockInDriverSharePct != null && (
+                        <div className="flex justify-between">
+                          <span>Driver share at lock-in:</span>
+                          <span>{delivery.lockInDriverSharePct}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
 
                 {/* Refund button — only for CAPTURED or PAID payments with a charge */}
                 {delivery.financialSummary?.paymentId &&
@@ -1414,6 +1443,20 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 </p>
               </div>
             )}
+            {delivery?.lockedInAt && delivery?.lockInBaseFee ? (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+                <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold">
+                  Lock-in fee active
+                </p>
+                <p className="text-sm text-amber-800 dark:text-amber-300 mt-1">
+                  This trip was started on{' '}
+                  {new Date(delivery.lockedInAt).toLocaleString()}. The base fee
+                  of <strong>${delivery.lockInBaseFee.toFixed(2)}</strong> was
+                  already captured at start and is non-refundable. The driver
+                  will keep their % share as a lock-in payout.
+                </p>
+              </div>
+            ) : null}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>

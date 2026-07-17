@@ -442,11 +442,19 @@ export default function DriverPickupChecklistPage() {
   const startTripMutation = useCreate<any, any>(
     `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/start-trip`,
     {
-      onSuccess: () => {
+      onSuccess: (data: any) => {
         if (deliveryId) clearPersistedState(deliveryId)
-        toast.success('Trip started!', {
-          description: 'You are now on route. Drive safe!',
-        })
+        const lockInCaptured = data?.lockInCaptured === true;
+        const lockInAmount = Number(data?.lockInAmount ?? 0);
+        if (lockInCaptured && lockInAmount > 0) {
+          toast.success('Trip started — base fee locked in!', {
+            description: `You're guaranteed a minimum payout of $${lockInAmount.toFixed(2)} (your % share). The customer has been charged this non-refundable base fee.`,
+          });
+        } else {
+          toast.success('Trip started!', {
+            description: 'You are now on route. Drive safe!',
+          });
+        }
         navigate({ to: '/driver-active', search: { jobId: deliveryId } as any })
       },
       onError: (error: any) => {

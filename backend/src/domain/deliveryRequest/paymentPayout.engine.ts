@@ -10,11 +10,13 @@ import {
   EnumAdminAuditLogAction,
   EnumAdminAuditLogActorType,
   EnumDriverPayoutStatus,
+  EnumDriverPayoutType,
   EnumInvoicePaymentTerms,
   EnumInvoiceStatus,
   EnumPaymentEventStatus,
   EnumPaymentEventType,
   EnumPaymentPaymentType,
+  EnumPaymentProvider,
   EnumPaymentStatus,
   Prisma,
 } from "@prisma/client";
@@ -125,6 +127,10 @@ export class PaymentPayoutEngine {
       select: {
         id: true,
         status: true,
+        lockedInAt: true,
+        lockInBaseFee: true,
+        lockInDriverSharePct: true,
+        lockInPaymentIntentId: true,
         payment: {
           select: {
             id: true,
@@ -133,6 +139,9 @@ export class PaymentPayoutEngine {
             provider: true,
             status: true,
             providerPaymentIntentId: true,
+            providerChargeId: true,
+            lockInAmount: true,
+            lockInChargeId: true,
             invoiceId: true,
           },
         },
@@ -140,6 +149,7 @@ export class PaymentPayoutEngine {
           select: {
             id: true,
             status: true,
+            type: true,
           },
         },
         tip: {
@@ -153,6 +163,14 @@ export class PaymentPayoutEngine {
             estimatedPrice: true,
             pricingSnapshot: true,
             feesBreakdown: true,
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            stripeCustomerId: true,
+            stripeDefaultPaymentMethodId: true,
+            postpaidEnabled: true,
           },
         },
         assignments: {
@@ -183,46 +201,218 @@ export class PaymentPayoutEngine {
       return;
     }
 
-    // ── PAYMENT CAPTURE ────────────────────────────────────────────────
-    // Capture authorized Stripe PaymentIntents for prepaid deliveries.
     const payment = delivery.payment;
-    if (payment) {
+    if (!payment) {
+      return;
+    }
+
+    // ── LOCK-IN BRANCH ────────────────────────────────────────────────
+    // If the trip was locked in at start (base fee already captured via
+    // partial capture on PI #1), we need to charge the REMAINDER on a new
+    // PaymentIntent (PI #2) here at completion. The original PI #1 is
+    // already in `succeeded` state — Stripe allows only one capture.
+    const isLockedIn =
+      !!delivery.lockedInAt &&
+      !!delivery.lockInBaseFee &&
+      delivery.lockInBaseFee > 0;
+
+    const totalQuoted = Number(
+      (delivery.quote?.estimatedPrice ?? payment.amount ?? 0).toFixed(2),
+    );
+
+    if (isLockedIn) {
+      const lockInAmount = Number(delivery.lockInBaseFee!.toFixed(2));
+      const remainder = Number(Math.max(0, totalQuoted - lockInAmount).toFixed(2));
+
       if (
+        remainder > 0 &&
         payment.paymentType === EnumPaymentPaymentType.PREPAID &&
-        payment.status === EnumPaymentStatus.AUTHORIZED &&
-        payment.providerPaymentIntentId &&
-        payment.provider === "STRIPE" &&
+        payment.provider === EnumPaymentProvider.STRIPE &&
         this.stripeService
       ) {
         try {
-          await this.captureWithRetry(payment.providerPaymentIntentId, input.deliveryId);
+          // Create + confirm a new PaymentIntent for the remainder.
+          // captureMethod: 'automatic' so it captures immediately.
+          const pi = await this.stripeService.createPaymentIntent({
+            amount: remainder,
+            deliveryId: input.deliveryId,
+            stripeCustomerId: delivery.customer?.stripeCustomerId || undefined,
+            paymentMethodId: delivery.customer?.stripeDefaultPaymentMethodId || undefined,
+            captureMethod: "automatic",
+            confirm: !!delivery.customer?.stripeDefaultPaymentMethodId,
+            metadata: {
+              deliveryId: input.deliveryId,
+              type: "completion-remainder",
+              lockInAmount: String(lockInAmount),
+            },
+          });
+
+          // Update Payment row: PI #2 becomes the "current" PI; lockIn*
+          // columns preserve PI #1 for audit.
           await tx.payment.update({
             where: { id: payment.id },
-            data: { status: EnumPaymentStatus.CAPTURED, capturedAt: new Date() },
+            data: {
+              providerPaymentIntentId: pi.paymentIntentId,
+              // charge ID will arrive via webhook (payment_intent.succeeded)
+              // — leave providerChargeId null for now if not in pi result.
+              status: EnumPaymentStatus.CAPTURED,
+              capturedAt: new Date(),
+              amount: totalQuoted,
+            },
           });
+
           await tx.paymentEvent.create({
             data: {
               paymentId: payment.id,
               type: EnumPaymentEventType.CAPTURE,
               status: EnumPaymentEventStatus.CAPTURED,
-              amount: payment.amount,
-              message: "Prepaid payment captured at delivery completion",
-              raw: { source: "delivery-complete", deliveryId: input.deliveryId },
+              amount: remainder,
+              providerRef: pi.paymentIntentId,
+              message: `Completion remainder captured on new PaymentIntent ($${remainder.toFixed(2)})`,
+              raw: {
+                source: "delivery-complete-lock-in",
+                deliveryId: input.deliveryId,
+                lockInAmount,
+                remainder,
+                pi1: delivery.lockInPaymentIntentId,
+                pi2: pi.paymentIntentId,
+              },
             },
           });
-        } catch (captureErr: any) {
-          const errMsg = captureErr?.message || "Unknown capture error";
-          this.logger.error(`Stripe capture failed for delivery ${input.deliveryId}: ${errMsg}`);
+        } catch (err: any) {
+          const errMsg = err?.message || "Unknown remainder capture error";
+          this.logger.error(
+            `Lock-in remainder capture failed for delivery ${input.deliveryId}: ${errMsg}`,
+          );
           await tx.payment.update({
             where: { id: payment.id },
-            data: { status: EnumPaymentStatus.FAILED },
+            data: { status: EnumPaymentStatus.FAILED, failureMessage: errMsg },
+          });
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: payment.id,
+              type: EnumPaymentEventType.FAIL,
+              status: EnumPaymentEventStatus.FAILED,
+              amount: remainder,
+              message: `Remainder capture failed: ${errMsg}`,
+            },
           });
         }
+      } else if (
+        payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
+        delivery.customer?.postpaidEnabled
+      ) {
+        // Postpaid lock-in: no Stripe call, just update the amount on the
+        // Payment row to reflect the full quoted price. It'll be invoiced
+        // later via adminInvoicePostpaid.
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: { amount: totalQuoted },
+        });
       }
+
+      // Update the existing lock-in DriverPayout to the full quoted amount
+      // and switch the type to TRIP_COMPLETION (audit trail).
+      const tipAmount =
+        delivery.tip &&
+        ["AUTHORIZED", "CAPTURED"].includes(delivery.tip.status)
+          ? Number((delivery.tip.amount ?? 0).toFixed(2))
+          : 0;
+
+      const breakdown = this.computeBreakdown({
+        amount: totalQuoted,
+        pricingSnapshot: delivery.quote?.pricingSnapshot ?? null,
+        feesBreakdown: delivery.quote?.feesBreakdown ?? null,
+        tipAmount,
+      });
+
+      const payoutStatus =
+        payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
+        payment.status !== EnumPaymentStatus.INVOICED &&
+        payment.status !== EnumPaymentStatus.PAID
+          ? EnumDriverPayoutStatus.PENDING
+          : EnumDriverPayoutStatus.ELIGIBLE;
+
+      await tx.driverPayout.upsert({
+        where: { deliveryId: input.deliveryId },
+        create: {
+          deliveryId: input.deliveryId,
+          driverId: activeAssignment.driverId,
+          grossAmount: breakdown.grossAmount,
+          insuranceFee: breakdown.insuranceFee,
+          platformFee: breakdown.platformFee,
+          netAmount: breakdown.netAmount,
+          driverSharePct: breakdown.driverSharePct,
+          status: payoutStatus,
+          type: EnumDriverPayoutType.TRIP_COMPLETION,
+        },
+        update: {
+          driverId: activeAssignment.driverId,
+          grossAmount: breakdown.grossAmount,
+          insuranceFee: breakdown.insuranceFee,
+          platformFee: breakdown.platformFee,
+          netAmount: breakdown.netAmount,
+          driverSharePct: breakdown.driverSharePct,
+          status: payoutStatus,
+          failureMessage: null,
+          type: EnumDriverPayoutType.TRIP_COMPLETION,
+        },
+      });
+
+      // Auto-transfer to driver's Connect account if eligible.
+      if (
+        payoutStatus === EnumDriverPayoutStatus.ELIGIBLE &&
+        this.stripeService &&
+        activeAssignment.driver.stripeConnectAccountId &&
+        activeAssignment.driver.stripeConnectOnboardingComplete
+      ) {
+        this.initiateDriverTransfer(
+          input.deliveryId,
+          activeAssignment.driverId,
+          breakdown.netAmount,
+        ).catch((err) =>
+          this.logger.error(
+            `Auto-transfer failed for delivery ${input.deliveryId}: ${err.message}`,
+          ),
+        );
+      }
+
+      return;
     }
 
-    if (!payment) {
-      return;
+    // ── LEGACY PAYMENT CAPTURE (no lock-in) ────────────────────────────
+    // Capture authorized Stripe PaymentIntents for prepaid deliveries.
+    if (
+      payment.paymentType === EnumPaymentPaymentType.PREPAID &&
+      payment.status === EnumPaymentStatus.AUTHORIZED &&
+      payment.providerPaymentIntentId &&
+      payment.provider === EnumPaymentProvider.STRIPE &&
+      this.stripeService
+    ) {
+      try {
+        await this.captureWithRetry(payment.providerPaymentIntentId, input.deliveryId);
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: { status: EnumPaymentStatus.CAPTURED, capturedAt: new Date() },
+        });
+        await tx.paymentEvent.create({
+          data: {
+            paymentId: payment.id,
+            type: EnumPaymentEventType.CAPTURE,
+            status: EnumPaymentEventStatus.CAPTURED,
+            amount: payment.amount,
+            message: "Prepaid payment captured at delivery completion",
+            raw: { source: "delivery-complete", deliveryId: input.deliveryId },
+          },
+        });
+      } catch (captureErr: any) {
+        const errMsg = captureErr?.message || "Unknown capture error";
+        this.logger.error(`Stripe capture failed for delivery ${input.deliveryId}: ${errMsg}`);
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: { status: EnumPaymentStatus.FAILED },
+        });
+      }
     }
 
     const tipAmount =

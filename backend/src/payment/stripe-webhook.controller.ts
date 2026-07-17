@@ -309,9 +309,16 @@ export class StripeWebhookController {
   }
 
   private async handleChargeRefunded(charge: any) {
-    // Find the payment by providerChargeId
+    // Find the payment by providerChargeId, with fallback to lockInChargeId
+    // (for two-PI lock-in deliveries, the lock-in charge may not match the
+    // current providerChargeId which points to PI #2's charge).
     const payment = await this.prisma.payment.findFirst({
-      where: { providerChargeId: charge.id },
+      where: {
+        OR: [
+          { providerChargeId: charge.id },
+          { lockInChargeId: charge.id },
+        ],
+      },
     });
     if (!payment) {
       this.logger.warn(`Refund for unknown charge: ${charge.id}`);
@@ -334,7 +341,7 @@ export class StripeWebhookController {
         type: "REFUND",
         status: "REFUNDED",
         amount: charge.amount_refunded / 100,
-        message: `Refund ${isFullRefund ? "full" : "partial"}`,
+        message: `Refund ${isFullRefund ? "full" : "partial"}${payment.lockInChargeId === charge.id ? " (on lock-in charge)" : ""}`,
         providerRef: charge.refunds?.data?.[0]?.id,
         raw: charge as any,
       },
@@ -398,15 +405,22 @@ export class StripeWebhookController {
       return;
     }
 
-    // Find payment by charge ID
+    // Find payment by charge ID (check both providerChargeId and lockInChargeId)
     const payment = await this.prisma.payment.findFirst({
-      where: { providerChargeId: chargeId },
+      where: {
+        OR: [
+          { providerChargeId: chargeId },
+          { lockInChargeId: chargeId },
+        ],
+      },
     });
 
     if (!payment) {
       this.logger.warn(`charge.dispute.created: no payment found for charge ${chargeId}`);
       return;
     }
+
+    const isOnLockInCharge = payment.lockInChargeId === chargeId;
 
     // Update payment to REFUNDED — Stripe reverses the funds when a dispute is opened
     await this.prisma.payment.update({
@@ -415,7 +429,7 @@ export class StripeWebhookController {
         status: "REFUNDED",
         refundedAt: new Date(),
         failureCode: "DISPUTE",
-        failureMessage: `Stripe dispute ${dispute.id}: ${dispute.reason || "Customer dispute"}`,
+        failureMessage: `Stripe dispute ${dispute.id}: ${dispute.reason || "Customer dispute"}${isOnLockInCharge ? " (on lock-in charge)" : ""}`,
       },
     });
 
@@ -426,7 +440,7 @@ export class StripeWebhookController {
         type: "REFUND",
         status: "REFUNDED",
         amount: dispute.amount / 100,
-        message: `Chargeback opened: ${dispute.reason || "dispute"}. Evidence deadline: ${dispute.evidence_details?.due_by || "unknown"}`,
+        message: `Chargeback opened: ${dispute.reason || "dispute"}. Evidence deadline: ${dispute.evidence_details?.due_by || "unknown"}${isOnLockInCharge ? " (on lock-in charge)" : ""}`,
         providerRef: dispute.id,
         raw: dispute as any,
       },

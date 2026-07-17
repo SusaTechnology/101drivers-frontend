@@ -319,6 +319,11 @@ model DeliveryRequest {
   isUrgent                Boolean                           @default(false)
   licensePlate            String
   notifications           NotificationEvent[]
+  lockInBaseFee           Float?
+  lockInChargeId          String?
+  lockInDriverSharePct    Float?
+  lockInPaymentIntentId   String?
+  lockedInAt              DateTime?
   payment                 Payment?
   payout                  DriverPayout?
   pickupAddress           String
@@ -509,6 +514,9 @@ model Payment {
   failureMessage          String?
   id                      String                 @id @default(cuid())
   invoiceId               String?
+  lockInAmount            Float?
+  lockInChargeId          String?
+  lockInPaymentIntentId   String?
   paidAt                  DateTime?
   paymentType             EnumPaymentPaymentType
   provider                EnumPaymentProvider    @default(STRIPE)
@@ -557,6 +565,7 @@ model DriverPayout {
   platformFee        Float
   providerTransferId String?
   status             EnumDriverPayoutStatus @default(PENDING)
+  type               EnumDriverPayoutType   @default(TRIP_COMPLETION)
   updatedAt          DateTime               @updatedAt
 
   @@index([driverId, status, createdAt])
@@ -984,6 +993,13 @@ enum EnumDriverPayoutStatus {
   PAID
   FAILED
   CANCELLED
+}
+
+enum EnumDriverPayoutType {
+  TRIP_COMPLETION
+  LOCK_IN_FEE
+  BONUS
+  ADJUSTMENT
 }
 
 enum EnumDisputeCaseStatus {

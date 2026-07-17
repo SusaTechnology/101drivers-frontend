@@ -394,6 +394,16 @@ export interface AdminDeliveryDetail extends DeliveryListItem {
   _count: DeliveryCounts;
   /** Actor role of whoever closed the delivery. null if not closed. */
   closedByActorRole?: string | null;
+  /** Timestamp when the lock-in base fee was captured at trip start. null if not locked in. */
+  lockedInAt?: string | null;
+  /** Amount of the lock-in base fee captured at trip start. null if not locked in. */
+  lockInBaseFee?: number | null;
+  /** Driver share percentage snapshot at lock-in time. */
+  lockInDriverSharePct?: number | null;
+  /** Stripe PaymentIntent ID used for the lock-in partial capture (PI #1). */
+  lockInPaymentIntentId?: string | null;
+  /** Stripe charge ID for the lock-in partial capture. */
+  lockInChargeId?: string | null;
 }
 
 // Query params for the list endpoint

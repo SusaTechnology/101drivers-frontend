@@ -341,6 +341,11 @@ model DeliveryRequest {
   licensePlate String?
 
   notifications           NotificationEvent[]
+  lockInBaseFee           Float?
+  lockInChargeId          String?
+  lockInDriverSharePct    Float?
+  lockInPaymentIntentId   String?
+  lockedInAt              DateTime?
   payment                 Payment?
   payout                  DriverPayout?
   pickupAddress           String
@@ -540,6 +545,9 @@ model Payment {
   id                      String                 @id @default(cuid())
   invoice                 Invoice?
   invoiceId               String?                @unique
+  lockInAmount            Float?
+  lockInChargeId          String?
+  lockInPaymentIntentId   String?
   paidAt                  DateTime?
   paymentType             EnumPaymentPaymentType
   provider                EnumPaymentProvider    @default(STRIPE)
@@ -590,6 +598,7 @@ model DriverPayout {
   referral           Referral?              @relation()
   batchItems         PayoutBatchItem[]
   status             EnumDriverPayoutStatus @default(PENDING)
+  type               EnumDriverPayoutType   @default(TRIP_COMPLETION)
   updatedAt          DateTime               @updatedAt
 
   @@index([driverId, status, createdAt])
@@ -1169,6 +1178,13 @@ enum EnumDriverPayoutStatus {
   PAID
   FAILED
   CANCELLED
+}
+
+enum EnumDriverPayoutType {
+  TRIP_COMPLETION
+  LOCK_IN_FEE
+  BONUS
+  ADJUSTMENT
 }
 
 enum EnumPayoutBatchType {

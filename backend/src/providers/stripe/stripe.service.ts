@@ -98,16 +98,33 @@ export class StripeService {
 
   /**
    * Capture a previously created PaymentIntent.
-   * Called when delivery is completed.
+   * Called when delivery is completed (full capture), or when a trip starts
+   * (partial capture of the lock-in base fee).
+   *
+   * Pass `amountToCapture` (in dollars) to do a partial capture. The
+   * remaining authorized amount is automatically released back to the
+   * customer's card by Stripe.
    */
   async capturePaymentIntent(
     paymentIntentId: string,
-    options?: { idempotencyKey?: string },
+    options?: {
+      idempotencyKey?: string;
+      /**
+       * Amount to capture, in dollars. Omit for full capture.
+       * When provided, only this amount is captured; the rest of the
+       * authorization is released.
+       */
+      amountToCapture?: number;
+    },
   ) {
     const requestOptions = options?.idempotencyKey
       ? { idempotencyKey: options.idempotencyKey }
       : {};
-    return this.stripe.paymentIntents.capture(paymentIntentId, {}, requestOptions);
+    const captureParams: Stripe.PaymentIntentCaptureParams = {};
+    if (options?.amountToCapture != null) {
+      captureParams.amount_to_capture = Math.round(options.amountToCapture * 100);
+    }
+    return this.stripe.paymentIntents.capture(paymentIntentId, captureParams, requestOptions);
   }
 
   /**

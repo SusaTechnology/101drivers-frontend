@@ -14,6 +14,7 @@ import {
   EnumDeliveryStatusHistoryFromStatus,
   EnumDeliveryStatusHistoryToStatus,
   EnumDriverPayoutStatus,
+  EnumDriverPayoutType,
   EnumPaymentEventType,
   EnumPaymentStatus,
   EnumTrackingSessionStatus,
@@ -87,18 +88,25 @@ export class DeliveryCancellationEngine {
           id: true,
           status: true,
           customerId: true,
+          lockedInAt: true,
+          lockInBaseFee: true,
+          lockInDriverSharePct: true,
+          lockInPaymentIntentId: true,
           payment: {
             select: {
               id: true,
               amount: true,
               status: true,
               providerPaymentIntentId: true,
+              lockInAmount: true,
+              lockInChargeId: true,
             },
           },
           payout: {
             select: {
               id: true,
               status: true,
+              type: true,
             },
           },
           trackingSession: {
@@ -133,6 +141,19 @@ export class DeliveryCancellationEngine {
       const now = new Date();
       const activeAssignment = delivery.assignments?.[0] ?? null;
 
+      // ── LOCK-IN DETECTION ────────────────────────────────────────────
+      // If the trip was locked in at start (base fee already captured), the
+      // customer is NOT refunded, and the driver KEEPS their lock-in payout.
+      // We do NOT void the auth hold either — the partial capture at start
+      // already released the remainder automatically.
+      const isLockedIn =
+        !!delivery.lockedInAt &&
+        !!delivery.lockInBaseFee &&
+        delivery.lockInBaseFee > 0;
+      const lockInAmount = isLockedIn
+        ? Number(delivery.lockInBaseFee!.toFixed(2))
+        : 0;
+
       if (activeAssignment) {
         await tx.deliveryAssignment.update({
           where: { id: activeAssignment.id },
@@ -153,7 +174,46 @@ export class DeliveryCancellationEngine {
         });
       }
 
-      if (delivery.payout?.id) {
+      // ── DRIVER PAYOUT ───────────────────────────────────────────────
+      if (isLockedIn) {
+        // Lock-in flow: driver KEEPS their lock-in payout (do not cancel it).
+        // If a payout row already exists (created at startTrip), ensure it's
+        // ELIGIBLE with the lock-in amounts. Otherwise create one now.
+        const driverSharePct = Number(delivery.lockInDriverSharePct ?? 60);
+        const driverNet = Number((lockInAmount * driverSharePct / 100).toFixed(2));
+        const platformFee = Number((lockInAmount - driverNet).toFixed(2));
+
+        if (delivery.payout?.id) {
+          await tx.driverPayout.update({
+            where: { id: delivery.payout.id },
+            data: {
+              status: EnumDriverPayoutStatus.ELIGIBLE,
+              failureMessage: null,
+              grossAmount: lockInAmount,
+              insuranceFee: 0,
+              platformFee,
+              netAmount: driverNet,
+              driverSharePct,
+              type: EnumDriverPayoutType.LOCK_IN_FEE,
+            },
+          });
+        } else if (activeAssignment) {
+          await tx.driverPayout.create({
+            data: {
+              deliveryId: delivery.id,
+              driverId: activeAssignment.driverId,
+              grossAmount: lockInAmount,
+              insuranceFee: 0,
+              platformFee,
+              netAmount: driverNet,
+              driverSharePct,
+              status: EnumDriverPayoutStatus.ELIGIBLE,
+              type: EnumDriverPayoutType.LOCK_IN_FEE,
+            },
+          });
+        }
+      } else if (delivery.payout?.id) {
+        // Legacy flow: cancel the payout, driver gets $0
         if (
           delivery.payout.status !== EnumDriverPayoutStatus.PAID &&
           delivery.payout.status !== EnumDriverPayoutStatus.CANCELLED
@@ -168,8 +228,32 @@ export class DeliveryCancellationEngine {
         }
       }
 
+      // ── CUSTOMER PAYMENT ────────────────────────────────────────────
       if (delivery.payment?.id) {
-        if (delivery.payment.status === EnumPaymentStatus.AUTHORIZED) {
+        if (isLockedIn) {
+          // Lock-in flow: base fee was already captured at start. Mark the
+          // Payment as CAPTURED for the lock-in amount only. No refund.
+          // No Stripe call — the partial capture already happened at start.
+          await tx.payment.update({
+            where: { id: delivery.payment.id },
+            data: {
+              status: EnumPaymentStatus.CAPTURED,
+              capturedAt: now,
+              amount: lockInAmount,
+            },
+          });
+
+          await tx.paymentEvent.create({
+            data: {
+              paymentId: delivery.payment.id,
+              type: EnumPaymentEventType.CAPTURE,
+              status: EnumPaymentStatus.CAPTURED,
+              amount: lockInAmount,
+              message: `Lock-in base fee retained on cancellation ($${lockInAmount.toFixed(2)}). No refund issued — trip was started.`,
+            },
+          });
+        } else if (delivery.payment.status === EnumPaymentStatus.AUTHORIZED) {
+          // Legacy: void the auth hold
           await tx.payment.update({
             where: { id: delivery.payment.id },
             data: {
@@ -187,7 +271,6 @@ export class DeliveryCancellationEngine {
             },
           });
 
-          // Cancel the Stripe PaymentIntent to release the auth hold immediately
           if (delivery.payment.providerPaymentIntentId && this.stripeService) {
             try {
               await this.stripeService.cancelPaymentIntent(delivery.payment.providerPaymentIntentId);
@@ -204,7 +287,7 @@ export class DeliveryCancellationEngine {
           delivery.payment.status === EnumPaymentStatus.CAPTURED ||
           delivery.payment.status === EnumPaymentStatus.PAID
         ) {
-          // Payment was already captured — issue a Stripe refund
+          // Legacy: full refund
           if (delivery.payment.providerPaymentIntentId && this.stripeService) {
             try {
               const pi = await this.stripeService.getPaymentIntent(delivery.payment.providerPaymentIntentId);
@@ -225,7 +308,6 @@ export class DeliveryCancellationEngine {
                 );
               }
             } catch (err: any) {
-              // Log but don't fail cancellation — Stripe refund can be retried manually
               this.logger.warn(
                 `Failed to refund captured payment ${delivery.payment.id} on delivery ${delivery.id}: ${err.message}. Admin manual refund may be needed.`,
               );
@@ -265,7 +347,10 @@ export class DeliveryCancellationEngine {
           actorUserId: input.actorUserId ?? null,
           actorRole: input.actorRole ?? null,
           actorType: EnumDeliveryStatusHistoryActorType.USER,
-          note: this.trimOrNull(input.note) ?? "Delivery cancelled",
+          note: isLockedIn
+            ? (this.trimOrNull(input.note) ??
+               `Delivery cancelled after start — lock-in base fee $${lockInAmount.toFixed(2)} retained (non-refundable)`)
+            : (this.trimOrNull(input.note) ?? "Delivery cancelled"),
           fromStatus:
             delivery.status as unknown as EnumDeliveryStatusHistoryFromStatus,
           toStatus:
@@ -277,6 +362,8 @@ export class DeliveryCancellationEngine {
         deliveryId: delivery.id,
         customerId: delivery.customerId,
         driverId: activeAssignment?.driverId ?? null,
+        lockInRetained: isLockedIn,
+        lockInAmount,
       };
     });
 
@@ -327,11 +414,11 @@ export class DeliveryCancellationEngine {
       );
     }
 
-    if (status === EnumDeliveryRequestStatus.ACTIVE) {
-      throw new BadRequestException(
-        "ACTIVE deliveries cannot be directly cancelled; use dispute/admin override flow"
-      );
-    }
+    // ACTIVE deliveries CAN be cancelled (the lock-in base fee captured at
+    // start is retained — customer is not refunded, driver keeps the lock-in
+    // payout). This is the intended behavior per the lock-in feature.
+    // Previously this path was blocked, which prevented legitimate
+    // post-start cancellations (e.g. car won't start, customer cancels).
   }
 
   private buildUnassignReason(note?: string | null): string {

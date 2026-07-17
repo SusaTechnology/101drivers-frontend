@@ -25,6 +25,16 @@ import { DriverJobFeedService } from "./driver-job-feed.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { DeliveryComplianceEngine } from "../domain/deliveryCompliance/deliveryCompliance.engine";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
+import { StripeService } from "../providers/stripe/stripe.service";
+import {
+  EnumDriverPayoutStatus,
+  EnumDriverPayoutType,
+  EnumPaymentEventType,
+  EnumPaymentEventStatus,
+  EnumPaymentPaymentType,
+  EnumPaymentProvider,
+  EnumPaymentStatus,
+} from "@prisma/client";
 import { Logger } from "@nestjs/common";
 
 type Tx = Prisma.TransactionClient;
@@ -48,6 +58,7 @@ export class DeliveryLifecycleService {
     private readonly deliveryComplianceEngine: DeliveryComplianceEngine,
     private readonly paymentPayoutEngine: PaymentPayoutEngine,
     private readonly configService: ConfigService,
+    @Optional() private readonly stripeService?: StripeService,
     @Optional() @Inject(forwardRef(() => TrackingGateway))
     private readonly trackingGateway?: TrackingGateway
   ) {
@@ -298,6 +309,15 @@ async startTrip(input: {
         status: true,
         trackingShareToken: true,
         trackingShareExpiresAt: true,
+        lockedInAt: true,
+        quote: {
+          select: {
+            id: true,
+            estimatedPrice: true,
+            pricingSnapshot: true,
+            feesBreakdown: true,
+          },
+        },
       },
     });
 
@@ -313,11 +333,24 @@ async startTrip(input: {
     // before the driver can start the trip.
     const payment = await tx.payment.findUnique({
       where: { deliveryId: input.deliveryId },
-      select: { paymentType: true, status: true },
+      select: {
+        id: true,
+        amount: true,
+        paymentType: true,
+        status: true,
+        provider: true,
+        providerPaymentIntentId: true,
+      },
     });
 
-    if (payment && payment.paymentType === "PREPAID") {
-      if (!["AUTHORIZED", "CAPTURED", "PAID", "INVOICED"].includes(payment.status)) {
+    if (payment && payment.paymentType === EnumPaymentPaymentType.PREPAID) {
+      const allowedStartStatuses: EnumPaymentStatus[] = [
+        EnumPaymentStatus.AUTHORIZED,
+        EnumPaymentStatus.CAPTURED,
+        EnumPaymentStatus.PAID,
+        EnumPaymentStatus.INVOICED,
+      ];
+      if (!allowedStartStatuses.includes(payment.status)) {
         throw new ConflictException(
           "Payment must be authorized before the driver can start. " +
           "The customer needs to complete payment on the delivery details page.",
@@ -428,12 +461,137 @@ async startTrip(input: {
     const trackingShareToken = this.generateTrackingToken();
     const trackingShareExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+    // ── Lock-in base fee capture ─────────────────────────────────────
+    // If the delivery has a quote with a non-zero baseFee in its pricing
+    // snapshot, partially capture that amount from the existing auth hold
+    // and create a lock-in DriverPayout (type=LOCK_IN_FEE). The driver is
+    // immediately eligible for their % share of this fee.
+    //
+    // Skip lock-in if:
+    //   - No quote / no snapshot (legacy deliveries)
+    //   - baseFee is 0 or null (e.g. FLAT_TIER pricing mode without a base)
+    //   - Already locked in (idempotent re-call safety)
+    //   - No Stripe service configured (test/dev environments)
+    const snapshot = (delivery.quote?.pricingSnapshot ?? {}) as Record<string, unknown>;
+    const fees = (delivery.quote?.feesBreakdown ?? {}) as Record<string, unknown>;
+    const baseFeeFromSnapshot = Number(snapshot.baseFee ?? 0);
+    const baseFeeFromFees = Number(fees.baseFee ?? 0);
+    const lockInFee = Number((baseFeeFromSnapshot || baseFeeFromFees || 0).toFixed(2));
+
+    let lockInCaptured = false;
+    if (
+      !delivery.lockedInAt &&
+      lockInFee > 0 &&
+      payment &&
+      payment.paymentType === EnumPaymentPaymentType.PREPAID &&
+      payment.provider === EnumPaymentProvider.STRIPE &&
+      payment.providerPaymentIntentId &&
+      this.stripeService
+    ) {
+      // Cap at the authorized amount — can't capture more than what's held
+      const cappedFee = Math.min(lockInFee, Number(payment.amount ?? lockInFee));
+
+      try {
+        const capture = await this.stripeService.capturePaymentIntent(
+          payment.providerPaymentIntentId,
+          {
+            amountToCapture: cappedFee,
+            idempotencyKey: `lockin-${input.deliveryId}`,
+          },
+        );
+
+        const chargeId =
+          typeof capture.latest_charge === "string"
+            ? capture.latest_charge
+            : capture.latest_charge?.id ?? null;
+
+        // Record the lock-in on the Payment row. We do NOT change payment.status
+        // here — it stays AUTHORIZED (the remainder is released by Stripe, but
+        // the row remains as the system of record for the lock-in charge).
+        // At completion, a new PaymentIntent will be created for the remainder.
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            lockInPaymentIntentId: payment.providerPaymentIntentId,
+            lockInChargeId: chargeId,
+            lockInAmount: cappedFee,
+          },
+        });
+
+        await tx.paymentEvent.create({
+          data: {
+            paymentId: payment.id,
+            type: EnumPaymentEventType.CAPTURE,
+            status: EnumPaymentEventStatus.CAPTURED,
+            amount: cappedFee,
+            providerRef: chargeId,
+            message: `Lock-in base fee captured at trip start ($${cappedFee.toFixed(2)})`,
+          },
+        });
+
+        // Create the lock-in DriverPayout (or upsert if a row somehow exists).
+        const driverSharePct = Number(snapshot.driverSharePct ?? 60);
+        const driverNet = Number((cappedFee * driverSharePct / 100).toFixed(2));
+        const platformFee = Number((cappedFee - driverNet).toFixed(2));
+
+        await tx.driverPayout.upsert({
+          where: { deliveryId: input.deliveryId },
+          create: {
+            deliveryId: input.deliveryId,
+            driverId: input.driverId,
+            grossAmount: cappedFee,
+            insuranceFee: 0,
+            platformFee,
+            netAmount: driverNet,
+            driverSharePct,
+            status: EnumDriverPayoutStatus.ELIGIBLE,
+            type: EnumDriverPayoutType.LOCK_IN_FEE,
+          },
+          update: {
+            driverId: input.driverId,
+            grossAmount: cappedFee,
+            insuranceFee: 0,
+            platformFee,
+            netAmount: driverNet,
+            driverSharePct,
+            status: EnumDriverPayoutStatus.ELIGIBLE,
+            failureMessage: null,
+            type: EnumDriverPayoutType.LOCK_IN_FEE,
+          },
+        });
+
+        lockInCaptured = true;
+        this.logger.log(
+          `Lock-in fee captured: deliveryId=${input.deliveryId} amount=$${cappedFee.toFixed(2)} ` +
+          `chargeId=${chargeId} driverPayout.net=$${driverNet.toFixed(2)}`,
+        );
+      } catch (err) {
+        // Lock-in capture failed — abort the start so the customer is never
+        // "started" without the lock-in being applied. Surface to driver.
+        this.logger.error(
+          `Lock-in capture failed for deliveryId=${input.deliveryId}: ${err}`,
+        );
+        throw new ConflictException(
+          "Unable to start trip: payment authorization could not be captured. " +
+          "Please ask the customer to refresh their payment method and try again.",
+        );
+      }
+    }
+
     await tx.deliveryRequest.update({
       where: { id: input.deliveryId },
       data: {
         status: EnumDeliveryRequestStatus.ACTIVE,
         trackingShareToken,
         trackingShareExpiresAt,
+        ...(lockInCaptured
+          ? {
+              lockedInAt: businessNow().toJSDate(),
+              lockInBaseFee: lockInFee,
+              lockInDriverSharePct: Number(snapshot.driverSharePct ?? 60),
+              lockInPaymentIntentId: payment?.providerPaymentIntentId ?? null,
+            }
+          : {}),
       },
     });
 
@@ -443,7 +601,9 @@ async startTrip(input: {
         actorUserId: input.actorUserId ?? null,
         actorRole: input.actorRole ?? null,
         actorType: EnumDeliveryStatusHistoryActorType.USER,
-        note: "Trip started",
+        note: lockInCaptured
+          ? `Trip started — base fee $${lockInFee.toFixed(2)} captured (non-refundable)`
+          : "Trip started",
         fromStatus: EnumDeliveryStatusHistoryFromStatus.BOOKED,
         toStatus: EnumDeliveryStatusHistoryToStatus.ACTIVE,
       },
@@ -453,6 +613,8 @@ async startTrip(input: {
       ok: true,
       trackingShareToken,
       trackingShareExpiresAt,
+      lockInCaptured,
+      lockInAmount: lockInCaptured ? lockInFee : 0,
     };
 }).then(async (result) => {
   await this.notificationEventEngine.notifyTripStarted({

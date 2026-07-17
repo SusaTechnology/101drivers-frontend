@@ -4,6 +4,7 @@ import { HttpStatus, Injectable } from "@nestjs/common";
 import {
   EnumDeliveryRequestStatus,
   EnumDriverPayoutStatus,
+  EnumDriverPayoutType,
   EnumDriverStatus,
   Prisma,
   PrismaClient,
@@ -38,7 +39,7 @@ export class DriverPayoutPolicyService {
     const delivery = await this.ensureDeliveryExists(client, deliveryId);
     const driver = await this.ensureDriverExists(client, driverId);
 
-    this.validateDeliveryAllowsPayout(delivery.status);
+    this.validateDeliveryAllowsPayout(delivery.status, row.type);
     this.validateDriverAllowsPayout(driver.status);
 
     this.ensurePercent(
@@ -96,6 +97,7 @@ export class DriverPayoutPolicyService {
         providerTransferId: true,
         failureMessage: true,
         status: true,
+        type: true,
         paidAt: true,
         failedAt: true,
         delivery: {
@@ -145,11 +147,12 @@ export class DriverPayoutPolicyService {
         existing!.failureMessage
       ),
       status: this.resolveUpdatedValue(data.status, existing!.status),
+      type: this.resolveUpdatedValue(data.type, existing!.type),
       paidAt: this.resolveUpdatedValue(data.paidAt, existing!.paidAt),
       failedAt: this.resolveUpdatedValue(data.failedAt, existing!.failedAt),
     };
 
-    this.validateDeliveryAllowsPayout(existing!.delivery.status);
+    this.validateDeliveryAllowsPayout(existing!.delivery.status, merged.type);
     this.validateDriverAllowsPayout(existing!.driver.status);
 
     this.ensurePercent(
@@ -275,7 +278,31 @@ export class DriverPayoutPolicyService {
     }
   }
 
-  private validateDeliveryAllowsPayout(status: EnumDeliveryRequestStatus): void {
+  private validateDeliveryAllowsPayout(
+    status: EnumDeliveryRequestStatus,
+    payoutType?: EnumDriverPayoutType | null,
+  ): void {
+    // Lock-in fee payouts can be created at ACTIVE status (when the driver
+    // starts the trip) and may persist into CANCELLED if the trip is later
+    // cancelled after start. They cannot exist for DRAFT/QUOTED/LISTED/BOOKED
+    // (lock-in capture only happens at trip start).
+    if (payoutType === EnumDriverPayoutType.LOCK_IN_FEE) {
+      const allowedForLockIn: EnumDeliveryRequestStatus[] = [
+        EnumDeliveryRequestStatus.ACTIVE,
+        EnumDeliveryRequestStatus.COMPLETED,
+        EnumDeliveryRequestStatus.CLOSED,
+        EnumDeliveryRequestStatus.DISPUTED,
+        EnumDeliveryRequestStatus.CANCELLED,
+      ];
+      if (!allowedForLockIn.includes(status)) {
+        throw new AppException(
+          `Lock-in fee payout is not allowed for delivery in status ${status}`,
+          ErrorCodes.BUSINESS_RULE_VIOLATION,
+        );
+      }
+      return;
+    }
+
     if (
       status !== EnumDeliveryRequestStatus.COMPLETED &&
       status !== EnumDeliveryRequestStatus.DISPUTED

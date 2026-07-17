@@ -871,7 +871,12 @@ export function PricingConfigForm({
                 />
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-                Fixed base fee applied to every delivery
+                Fixed base fee applied to every delivery. Also serves as the
+                non-refundable lock-in fee captured from the customer when the
+                driver starts the trip — the driver immediately earns their %
+                share. If the trip is cancelled after start, this fee is
+                retained (no refund). If 0 or null, no lock-in is applied
+                (legacy behavior).
               </p>
             </div>
 
