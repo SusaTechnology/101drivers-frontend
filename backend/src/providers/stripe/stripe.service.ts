@@ -120,11 +120,17 @@ export class StripeService {
     const requestOptions = options?.idempotencyKey
       ? { idempotencyKey: options.idempotencyKey }
       : {};
-    const captureParams: Stripe.PaymentIntentCaptureParams = {};
+    const captureParams: {
+      amount_to_capture?: number;
+    } = {};
     if (options?.amountToCapture != null) {
       captureParams.amount_to_capture = Math.round(options.amountToCapture * 100);
     }
-    return this.stripe.paymentIntents.capture(paymentIntentId, captureParams, requestOptions);
+    return this.stripe.paymentIntents.capture(
+      paymentIntentId,
+      captureParams,
+      requestOptions,
+    );
   }
 
   /**
