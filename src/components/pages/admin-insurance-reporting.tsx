@@ -29,8 +29,8 @@ import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   useInsuranceMileageReport,
   formatReportMiles,
-  downloadReport,
 } from '@/hooks/useAdminReports';
+import { getAccessToken } from '@/lib/tanstack/dataQuery';
 import { useCustomerLookup } from '@/hooks/useAdminDashboard';
 import { useDriverLookup } from '@/hooks/useAdminDeliveries';
 import type { InsuranceMileageReportParams } from '@/types/report';
@@ -130,15 +130,6 @@ export default function AdminInsuranceReportingPage() {
     refetch();
     toast.success('Report refreshed');
   }, [refetch]);
-
-  const handleExport = useCallback(async (format: string) => {
-    try {
-      await downloadReport('insurance-mileage', queryParams as unknown as Record<string, unknown>, format);
-      toast.success(`Report downloaded as ${format.toUpperCase()}`);
-    } catch {
-      toast.error(`Failed to download ${format.toUpperCase()} report`);
-    }
-  }, [queryParams]);
 
   const handleFiltersChange = useCallback(
     (updates: Partial<InsuranceReportFiltersState>) => {
@@ -304,7 +295,18 @@ export default function AdminInsuranceReportingPage() {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Admin Export Dialog — same as portal: columns + format + row count notice
+// Admin Export Dialog
+// ───────────────────────────────────────────────────────────────────────────
+// Reuses the SAME carrier-portal export endpoints so the admin and the
+// underwriter always get identical column sets and identical export output.
+//
+// Flow:
+//   1. Fetch the portal password via the admin-only endpoint
+//      GET /api/insurance-portal/password (JWT auth).
+//   2. Use that password to call the portal endpoints:
+//        GET /api/insurance-portal/columns  → column list for the dialog UI
+//        GET /api/insurance-portal/export   → CSV / XLSX / PDF blob
+//      Both portal endpoints accept X-Portal-Password — no JWT needed.
 // ════════════════════════════════════════════════════════════════════════
 
 function AdminExportDialog({ open, onOpenChange, pageFilters, totalRows }: any) {
@@ -314,16 +316,43 @@ function AdminExportDialog({ open, onOpenChange, pageFilters, totalRows }: any) 
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
   const [columnsLoading, setColumnsLoading] = useState(false)
 
+  const API_BASE = import.meta.env.VITE_API_URL
+
   useEffect(() => {
-    if (open && availableColumns.length === 0) {
-      setColumnsLoading(true)
-      fetch(`${import.meta.env.VITE_API_URL}/api/reports/columns/insurance-mileage`)
-        .then(r => { if (!r.ok) throw new Error(); return r.json() })
-        .then(data => { const cols = data.columns || []; setAvailableColumns(cols); setSelectedColumns(new Set(cols.map((c: any) => c.key))) })
-        .catch(() => toast.error('Failed to load columns'))
-        .finally(() => setColumnsLoading(false))
-    }
-  }, [open, availableColumns.length])
+    if (!open) return
+    if (availableColumns.length > 0) return
+
+    setColumnsLoading(true)
+    // Step 1: fetch the portal password using the admin's JWT.
+    fetch(`${API_BASE}/api/insurance-portal/password`, {
+      credentials: 'include',
+      headers: (() => {
+        const token = getAccessToken()
+        return token ? { Authorization: `Bearer ${token}` } : {}
+      })(),
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Failed to fetch portal password (${r.status})`)
+        return r.json()
+      })
+      .then(({ password, isSet }: { password: string; isSet: boolean }) => {
+        if (!isSet || !password) {
+          throw new Error('Insurance portal password is not set. Set it from Admin → Config first.')
+        }
+        // Step 2: fetch columns using the portal password.
+        return fetch(`${API_BASE}/api/insurance-portal/columns`, {
+          headers: { 'X-Portal-Password': password },
+        })
+      })
+      .then((r) => { if (!r.ok) throw new Error('Failed to load columns'); return r.json() })
+      .then((data) => {
+        const cols = data.columns || []
+        setAvailableColumns(cols)
+        setSelectedColumns(new Set(cols.map((c: any) => c.key)))
+      })
+      .catch((err) => toast.error('Failed to load columns', { description: err?.message || 'Please try again' }))
+      .finally(() => setColumnsLoading(false))
+  }, [open, availableColumns.length, API_BASE])
 
   const toggleColumn = (key: string) => {
     setSelectedColumns(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
@@ -336,6 +365,16 @@ function AdminExportDialog({ open, onOpenChange, pageFilters, totalRows }: any) 
     if (selectedColumns.size === 0) { toast.error('Select at least one column'); return }
     setIsExporting(true)
     try {
+      // Re-fetch the portal password (the dialog may have been open a while).
+      const token = getAccessToken()
+      const pwdRes = await fetch(`${API_BASE}/api/insurance-portal/password`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!pwdRes.ok) throw new Error('Failed to fetch portal password')
+      const { password } = await pwdRes.json()
+      if (!password) throw new Error('Insurance portal password is not set.')
+
       const params = new URLSearchParams()
       params.set('format', format)
       Object.entries(pageFilters).forEach(([k, v]: any) => {
@@ -343,12 +382,29 @@ function AdminExportDialog({ open, onOpenChange, pageFilters, totalRows }: any) 
       })
       params.set('columns', Array.from(selectedColumns).join(','))
 
-      const { downloadReport } = await import('@/hooks/useAdminReports')
-      await downloadReport('insurance-mileage', Object.fromEntries(params.entries()), format)
+      const response = await fetch(`${API_BASE}/api/insurance-portal/export?${params}`, {
+        headers: { 'X-Portal-Password': password },
+      })
+      if (!response.ok) throw new Error(`Export failed: ${response.status}`)
+
+      const blob = await response.blob()
+      const cd = response.headers.get('Content-Disposition')
+      let filename = `insurance-mileage-report.${format}`
+      if (cd) { const m = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/); if (m && m[1]) filename = m[1].replace(/['"]/g, '') }
+
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url; link.download = filename
+      document.body.appendChild(link); link.click()
+      document.body.removeChild(link); window.URL.revokeObjectURL(url)
+
       toast.success(`Report downloaded as ${format.toUpperCase()}`)
       onOpenChange(false)
-    } catch (error: any) { toast.error('Export failed', { description: error?.message || 'Please try again' }) }
-    finally { setIsExporting(false) }
+    } catch (error: any) {
+      toast.error('Export failed', { description: error?.message || 'Please try again' })
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   if (!open) return null

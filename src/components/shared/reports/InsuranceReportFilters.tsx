@@ -119,6 +119,7 @@ export function InsuranceReportFilters({
               <option value="COMPLETED">Completed</option>
               <option value="ACTIVE">Active</option>
               <option value="BOOKED">Booked</option>
+              <option value="CLOSED">Closed by Dealer</option>
               <option value="CANCELLED">Cancelled</option>
               <option value="EXPIRED">Expired</option>
             </select>
