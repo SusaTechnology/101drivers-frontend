@@ -48,7 +48,7 @@ export function InsuranceReportTable({
   const totalPages = data?.pagination?.totalPages ?? 1;
 
   return (
-    <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
+    <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-visible">
       <CardContent className="p-0">
         <DataTable
           columns={INSURANCE_REPORT_COLUMNS}

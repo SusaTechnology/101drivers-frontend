@@ -48,9 +48,10 @@ export function DataTable({
   emptyMessage = 'No data found.',
 }: DataTableProps) {
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
-    // Load saved column widths from localStorage
+    // Load saved column widths from localStorage. Versioned key — bump the
+    // suffix when column definitions change to invalidate stale widths.
     try {
-      const saved = localStorage.getItem('insurance-portal-column-widths')
+      const saved = localStorage.getItem('insurance-portal-column-widths-v2')
       return saved ? JSON.parse(saved) : {}
     } catch {
       return {}
@@ -64,7 +65,7 @@ export function DataTable({
     setColumnSizing((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater
       try {
-        localStorage.setItem('insurance-portal-column-widths', JSON.stringify(next))
+        localStorage.setItem('insurance-portal-column-widths-v2', JSON.stringify(next))
       } catch {}
       return next
     })
@@ -156,9 +157,23 @@ export function DataTable({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto" style={{ maxWidth: '100%' }}>
-        <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
+      {/* Table — horizontal scroll when columns overflow container.
+          tableLayout:auto lets the browser size columns by their declared
+          `size`, and they keep that width even if the total exceeds the
+          container (the wrapper scrolls instead of collapsing columns). */}
+      <div className="overflow-x-auto">
+        <table
+          className="text-xs whitespace-nowrap"
+          style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}
+        >
+          <colgroup>
+            {table.getHeaderGroups()[0]?.headers.map((header) => (
+              <col
+                key={header.id}
+                style={{ width: header.getSize() }}
+              />
+            ))}
+          </colgroup>
           <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -174,10 +189,6 @@ export function DataTable({
                         "px-3 py-3 text-left font-black uppercase tracking-wider text-slate-400 relative group select-none",
                         isSortable && "cursor-pointer hover:text-slate-600 dark:hover:text-slate-200"
                       )}
-                      style={{
-                        width: header.getSize() !== 150 ? header.getSize() : undefined,
-                        minWidth: 60,
-                      }}
                     >
                       <div className="flex items-center gap-1">
                         {flexRender(header.column.columnDef.header, header.getContext())}
@@ -223,12 +234,9 @@ export function DataTable({
                 {row.getVisibleCells().map((cell) => (
                   <td
                     key={cell.id}
-                    className="px-3 py-3 text-slate-600 dark:text-slate-400 overflow-hidden"
-                    style={{
-                      width: cell.column.getSize() !== 150 ? cell.column.getSize() : undefined,
-                    }}
+                    className="px-3 py-3 text-slate-600 dark:text-slate-400 align-top"
                   >
-                    <div className="truncate">
+                    <div className="whitespace-normal break-words">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </div>
                   </td>

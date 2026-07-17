@@ -200,7 +200,7 @@ export const INSURANCE_REPORT_COLUMNS: ColumnDef<any>[] = [
   {
     accessorKey: 'drivenMiles',
     header: 'Miles',
-    size: 70,
+    size: 90,
     meta: { label: 'Miles', sortable: true, sortKey: 'drivenMiles' },
     cell: ({ getValue }) => (
       <span className="font-bold tabular-nums">{formatReportMiles(getValue())}</span>
@@ -209,7 +209,7 @@ export const INSURANCE_REPORT_COLUMNS: ColumnDef<any>[] = [
   {
     accessorKey: 'drivenHours',
     header: 'Hours',
-    size: 60,
+    size: 80,
     meta: { label: 'Hours', sortable: true, sortKey: 'drivenHours' },
     cell: ({ getValue }) => (
       <span className="tabular-nums">{formatHours(getValue())}</span>
@@ -218,7 +218,7 @@ export const INSURANCE_REPORT_COLUMNS: ColumnDef<any>[] = [
   {
     accessorKey: 'paymentAmount',
     header: 'Payment',
-    size: 80,
+    size: 90,
     meta: { label: 'Payment', sortable: false },
     cell: ({ getValue }) => (
       <span className="tabular-nums">{formatMoney(getValue())}</span>
@@ -227,7 +227,7 @@ export const INSURANCE_REPORT_COLUMNS: ColumnDef<any>[] = [
   {
     accessorKey: 'payoutAmount',
     header: 'Payout',
-    size: 80,
+    size: 90,
     meta: { label: 'Payout', sortable: false },
     cell: ({ getValue }) => (
       <span className="tabular-nums">{formatMoney(getValue())}</span>
