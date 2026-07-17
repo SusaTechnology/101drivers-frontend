@@ -4,19 +4,37 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   Shield, Lock, Eye, EyeOff, Loader2, Download, RefreshCw,
-  ChevronLeft, ChevronRight, Truck, MapPin, Navigation, Clock,
-  Filter, DollarSign, User, Search, Info, X,
+  Truck, MapPin, Navigation, Clock,
+  DollarSign, Info, X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { formatReportDate, formatReportMiles } from '@/hooks/useAdminReports'
-import { DataTable } from '@/components/shared/DataTable'
-import type { ColumnDef } from '@tanstack/react-table'
+import { formatReportMiles } from '@/hooks/useAdminReports'
+import {
+  InsuranceReportFilters,
+  type InsuranceReportFiltersState,
+} from '@/components/shared/reports/InsuranceReportFilters'
+import { InsuranceReportTable } from '@/components/shared/reports/InsuranceReportTable'
 
 const API_BASE = import.meta.env.VITE_API_URL
+
+const DEFAULT_FILTERS: InsuranceReportFiltersState = {
+  dateFrom: '',
+  dateTo: '',
+  statusFilter: '',
+  serviceType: '',
+  customerId: '',
+  driverId: '',
+  minMiles: '',
+  maxMiles: '',
+  minPayment: '',
+  maxPayment: '',
+  pickupSearch: '',
+  sortBy: 'startedAt',
+  sortOrder: 'desc',
+}
 
 export default function InsurancePortalPage() {
   const [authenticated, setAuthenticated] = useState(false)
@@ -24,20 +42,8 @@ export default function InsurancePortalPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loggingIn, setLoggingIn] = useState(false)
 
-  // Report filters
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [serviceType, setServiceType] = useState('')
-  const [customerId, setCustomerId] = useState('')
-  const [driverId, setDriverId] = useState('')
-  const [customerSearch, setCustomerSearch] = useState('')
-  const [driverSearch, setDriverSearch] = useState('')
-  const [minMiles, setMinMiles] = useState('')
-  const [maxMiles, setMaxMiles] = useState('')
-  const [minPayment, setMinPayment] = useState('')
-  const [maxPayment, setMaxPayment] = useState('')
-  const [pickupSearch, setPickupSearch] = useState('')
+  // Report filters (single source of truth — passed to shared InsuranceReportFilters)
+  const [filters, setFilters] = useState<InsuranceReportFiltersState>(DEFAULT_FILTERS)
   const [driverList, setDriverList] = useState<Array<{ id: string; name: string }>>([])
   const [customerList, setCustomerList] = useState<Array<{ id: string; name: string; type: string }>>([])
   const [page, setPage] = useState(1)
@@ -131,22 +137,13 @@ export default function InsurancePortalPage() {
 
   return <ReportView
     onLogout={handleLogout}
-    dateFrom={dateFrom} setDateFrom={setDateFrom}
-    dateTo={dateTo} setDateTo={setDateTo}
-    statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-    serviceType={serviceType} setServiceType={setServiceType}
-    customerId={customerId} setCustomerId={setCustomerId}
-    driverId={driverId} setDriverId={setDriverId}
-    customerSearch={customerSearch} setCustomerSearch={setCustomerSearch}
-    driverSearch={driverSearch} setDriverSearch={setDriverSearch}
-    minMiles={minMiles} setMinMiles={setMinMiles}
-    maxMiles={maxMiles} setMaxMiles={setMaxMiles}
-    minPayment={minPayment} setMinPayment={setMinPayment}
-    maxPayment={maxPayment} setMaxPayment={setMaxPayment}
-    pickupSearch={pickupSearch} setPickupSearch={setPickupSearch}
-    page={page} setPage={setPage}
+    filters={filters}
+    setFilters={setFilters}
+    page={page}
+    setPage={setPage}
     pageSize={pageSize}
-    exportOpen={exportOpen} setExportOpen={setExportOpen}
+    exportOpen={exportOpen}
+    setExportOpen={setExportOpen}
     driverList={driverList}
     customerList={customerList}
   />
@@ -158,13 +155,7 @@ export default function InsurancePortalPage() {
 
 function ReportView(props: any) {
   const {
-    onLogout, dateFrom, setDateFrom, dateTo, setDateTo,
-    statusFilter, setStatusFilter, serviceType, setServiceType,
-    customerId, setCustomerId, driverId, setDriverId,
-    customerSearch, setCustomerSearch, driverSearch, setDriverSearch,
-    minMiles, setMinMiles, maxMiles, setMaxMiles,
-    minPayment, setMinPayment, maxPayment, setMaxPayment,
-    pickupSearch, setPickupSearch,
+    onLogout, filters, setFilters,
     page, setPage, pageSize, exportOpen, setExportOpen,
     driverList, customerList,
   } = props
@@ -173,91 +164,41 @@ function ReportView(props: any) {
   const [data, setData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [sortBy, setSortBy] = useState('startedAt')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const handleSortChange = (newSortBy: string, newSortOrder: 'asc' | 'desc') => {
-    setSortBy(newSortBy)
-    setSortOrder(newSortOrder)
+    setFilters((prev: InsuranceReportFiltersState) => ({
+      ...prev,
+      sortBy: newSortBy,
+      sortOrder: newSortOrder,
+    }))
     setPage(1)
   }
 
-  // Column definitions for TanStack Table
-  // Per-ride columns required by the insurance compliance spec:
-  // Driver ID, Ride ID, Start Time, End Time, Start Location, End Location, Miles.
-  // Mirrors the admin insurance-reporting page exactly so a carrier sees the
-  // same report inside or outside the admin portal.
-  const columns: ColumnDef<any>[] = useMemo(() => [
-    {
-      accessorKey: 'driverId',
-      header: 'Driver ID',
-      size: 140,
-      meta: { label: 'Driver ID', sortable: false },
-      cell: ({ row, getValue }) => (
-        <span className="font-mono">
-          {getValue() || (row.original.driverName ? row.original.driverName : '—')}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'deliveryId',
-      header: 'Ride ID',
-      size: 140,
-      meta: { label: 'Ride ID', sortable: false },
-      cell: ({ getValue }) => <span className="font-mono">{getValue() || '—'}</span>,
-    },
-    {
-      accessorKey: 'startedAt',
-      header: 'Start Time',
-      size: 150,
-      meta: { label: 'Start Time', sortable: true, sortKey: 'startedAt' },
-      cell: ({ getValue }) => <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>,
-    },
-    {
-      accessorKey: 'stoppedAt',
-      header: 'End Time',
-      size: 150,
-      meta: { label: 'End Time', sortable: true, sortKey: 'stoppedAt' },
-      cell: ({ getValue }) => <span>{getValue() ? formatReportDate(getValue()) : '—'}</span>,
-    },
-    {
-      accessorKey: 'pickupAddress',
-      header: 'Start Location',
-      size: 220,
-      meta: { label: 'Start Location', sortable: false },
-      cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
-    },
-    {
-      accessorKey: 'dropoffAddress',
-      header: 'End Location',
-      size: 220,
-      meta: { label: 'End Location', sortable: false },
-      cell: ({ getValue }) => <span>{getValue() || '—'}</span>,
-    },
-    {
-      accessorKey: 'drivenMiles',
-      header: 'Miles',
-      size: 80,
-      meta: { label: 'Miles', sortable: true, sortKey: 'drivenMiles' },
-      cell: ({ getValue }) => <span className="font-bold tabular-nums">{formatReportMiles(getValue())}</span>,
-    },
-  ], [])
+  const handleFiltersChange = (updates: Partial<InsuranceReportFiltersState>) => {
+    setFilters((prev: InsuranceReportFiltersState) => ({ ...prev, ...updates }))
+    setPage(1)
+  }
+
+  const handleReset = () => {
+    setFilters(DEFAULT_FILTERS)
+    setPage(1)
+  }
 
   const queryParams = useMemo(() => {
-    const params: Record<string, any> = { page, pageSize, sortBy, sortOrder }
-    if (dateFrom) params.from = dateFrom
-    if (dateTo) params.to = dateTo
-    if (statusFilter) params.status = statusFilter
-    if (serviceType) params.serviceType = serviceType
-    if (customerId) params.customerId = customerId
-    if (driverId) params.driverId = driverId
-    if (minMiles) params.minDrivenMiles = parseFloat(minMiles)
-    if (maxMiles) params.maxDrivenMiles = parseFloat(maxMiles)
-    if (minPayment) params.minPaymentAmount = parseFloat(minPayment)
-    if (maxPayment) params.maxPaymentAmount = parseFloat(maxPayment)
-    if (pickupSearch) params.pickupAddressSearch = pickupSearch
+    const params: Record<string, any> = { page, pageSize, sortBy: filters.sortBy, sortOrder: filters.sortOrder }
+    if (filters.dateFrom) params.from = filters.dateFrom
+    if (filters.dateTo) params.to = filters.dateTo
+    if (filters.statusFilter) params.status = filters.statusFilter
+    if (filters.serviceType) params.serviceType = filters.serviceType
+    if (filters.customerId) params.customerId = filters.customerId
+    if (filters.driverId) params.driverId = filters.driverId
+    if (filters.minMiles) params.minDrivenMiles = parseFloat(filters.minMiles)
+    if (filters.maxMiles) params.maxDrivenMiles = parseFloat(filters.maxMiles)
+    if (filters.minPayment) params.minPaymentAmount = parseFloat(filters.minPayment)
+    if (filters.maxPayment) params.maxPaymentAmount = parseFloat(filters.maxPayment)
+    if (filters.pickupSearch) params.pickupAddressSearch = filters.pickupSearch
     return params
-  }, [dateFrom, dateTo, statusFilter, serviceType, customerId, driverId, minMiles, maxMiles, minPayment, maxPayment, pickupSearch, page, pageSize])
+  }, [filters, page, pageSize])
 
   // Memoize the query string so it only changes when queryParams actually changes
   const queryString = useMemo(() => {
@@ -286,13 +227,6 @@ function ReportView(props: any) {
   useEffect(() => { fetchData() }, [fetchData])
 
   const handleRefresh = () => { fetchData(); toast.success('Report refreshed') }
-
-  const resetFilters = () => {
-    setDateFrom(''); setDateTo(''); setStatusFilter(''); setServiceType('')
-    setDriverId(''); setDriverSearch('')
-    setMinMiles(''); setMaxMiles('')
-    setPickupSearch(''); setSortBy('startedAt'); setSortOrder('desc'); setPage(1)
-  }
 
   const summary = data?.summary || {}
   const totalRows = data?.pagination?.totalRows ?? 0
@@ -344,95 +278,28 @@ function ReportView(props: any) {
           </div>
         )}
 
-        {/* Filters */}
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg mb-6">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
-                <Filter className="w-3.5 h-3.5" /> Filters
-              </span>
-              <button onClick={resetFilters} className="text-[11px] font-bold text-primary hover:underline">Reset All</button>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              <FilterField label="Date From">
-                <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} className="h-9 text-sm rounded-xl" />
-              </FilterField>
-              <FilterField label="Date To">
-                <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }} className="h-9 text-sm rounded-xl" />
-              </FilterField>
-              <FilterField label="Driver">
-                <SearchableSelect
-                  items={driverList}
-                  value={driverId}
-                  onChange={(id) => { setDriverId(id); setPage(1) }}
-                  placeholder="All Drivers"
-                />
-              </FilterField>
-              <FilterField label="Service Type">
-                <select value={serviceType} onChange={(e) => { setServiceType(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <option value="">All Services</option>
-                  <option value="HOME_DELIVERY">Home Delivery</option>
-                  <option value="BETWEEN_LOCATIONS">Between Locations</option>
-                  <option value="SERVICE_PICKUP_RETURN">Service Pickup/Return</option>
-                </select>
-              </FilterField>
-              <FilterField label="Status">
-                <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <option value="">All Statuses</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="BOOKED">Booked</option>
-                  <option value="CANCELLED">Cancelled</option>
-                  <option value="EXPIRED">Expired</option>
-                </select>
-              </FilterField>
-              <FilterField label="Min Miles">
-                <Input type="number" value={minMiles} onChange={(e) => { setMinMiles(e.target.value); setPage(1) }} placeholder="0" className="h-9 text-sm rounded-xl" />
-              </FilterField>
-              <FilterField label="Max Miles">
-                <Input type="number" value={maxMiles} onChange={(e) => { setMaxMiles(e.target.value); setPage(1) }} placeholder="Any" className="h-9 text-sm rounded-xl" />
-              </FilterField>
-              <FilterField label="Pickup Address">
-                <Input value={pickupSearch} onChange={(e) => { setPickupSearch(e.target.value); setPage(1) }} placeholder="e.g. Los Angeles" className="h-9 text-sm rounded-xl" />
-              </FilterField>
-              <FilterField label="Sort By">
-                <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <option value="startedAt">Start Time</option>
-                  <option value="stoppedAt">End Time</option>
-                  <option value="drivenMiles">Miles</option>
-                  <option value="createdAt">Created Date</option>
-                </select>
-              </FilterField>
-              <FilterField label="Order">
-                <select value={sortOrder} onChange={(e) => { setSortOrder(e.target.value as 'asc' | 'desc'); setPage(1) }} className="w-full h-9 px-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <option value="desc">Newest First</option>
-                  <option value="asc">Oldest First</option>
-                </select>
-              </FilterField>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Filters — shared component, identical to admin insurance-reporting page */}
+        <InsuranceReportFilters
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          onReset={handleReset}
+          customers={customerList}
+          drivers={driverList}
+        />
 
-        {/* Report Table — TanStack Table with resizable columns */}
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
-          <CardContent className="p-0">
-            <DataTable
-              columns={columns}
-              data={data?.displayRows || []}
-              isLoading={isLoading}
-              isError={isError}
-              page={page}
-              pageSize={pageSize}
-              totalRows={data?.pagination?.totalRows ?? 0}
-              totalPages={data?.pagination?.totalPages ?? 1}
-              onPageChange={setPage}
-              sortBy={sortBy}
-              sortOrder={sortOrder}
-              onSortChange={handleSortChange}
-              emptyMessage="No tracking sessions found for the selected filters."
-            />
-          </CardContent>
-        </Card>
+        {/* Report Table — shared component, identical column set as admin */}
+        <InsuranceReportTable
+          data={data}
+          isLoading={isLoading}
+          isError={isError}
+          page={page}
+          pageSize={pageSize}
+          sortBy={filters.sortBy}
+          sortOrder={filters.sortOrder}
+          onPageChange={setPage}
+          onSortChange={handleSortChange}
+          emptyMessage="No tracking sessions found for the selected filters."
+        />
       </main>
 
       {/* Export Dialog — no filters, just columns + format + row count notice */}
@@ -584,128 +451,5 @@ function SummaryCard({ label, value, icon }: { label: string; value: string; ico
         <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">{value}</div>
       </CardContent>
     </Card>
-  )
-}
-
-function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Label>
-      {children}
-    </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// SearchableSelect — type to filter, click to select
-// ════════════════════════════════════════════════════════════════════════
-
-function SearchableSelect({ items, value, onChange, placeholder }: {
-  items: Array<{ id: string; name: string }>
-  value: string
-  onChange: (id: string) => void
-  placeholder: string
-}) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-
-  // Find the selected item's name for display
-  const selectedItem = items.find((item) => item.id === value)
-  const displayValue = selectedItem ? selectedItem.name : ''
-
-  // Filter items by search text
-  const filtered = items.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase())
-  )
-
-  const handleSelect = (id: string) => {
-    onChange(id)
-    setOpen(false)
-    setSearch('')
-  }
-
-  const handleClear = () => {
-    onChange('')
-    setSearch('')
-  }
-
-  return (
-    <div className="relative">
-      <div
-        className="w-full h-9 px-3 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between cursor-pointer"
-        onClick={() => setOpen(!open)}
-      >
-        <span className={cn("truncate", displayValue ? "text-slate-900 dark:text-white font-semibold" : "text-slate-400")}>
-          {displayValue || placeholder}
-        </span>
-        <div className="flex items-center gap-1 shrink-0">
-          {value && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handleClear() }}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <ChevronRight className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", open && "rotate-90")} />
-        </div>
-      </div>
-
-      {open && (
-        <>
-          {/* Backdrop to close on outside click */}
-          <div className="fixed inset-0 z-10" onClick={() => { setOpen(false); setSearch('') }} />
-
-          {/* Dropdown panel */}
-          <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl max-h-[240px] overflow-hidden">
-            {/* Search input */}
-            <div className="p-2 border-b border-slate-100 dark:border-slate-800">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Type to search..."
-                  className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Options list */}
-            <div className="overflow-y-auto max-h-[180px]">
-              <button
-                type="button"
-                onClick={() => handleSelect('')}
-                className={cn(
-                  "w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition",
-                  !value ? "bg-primary/5 font-bold text-primary" : "text-slate-600 dark:text-slate-400"
-                )}
-              >
-                {placeholder}
-              </button>
-              {filtered.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleSelect(item.id)}
-                  className={cn(
-                    "w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition truncate",
-                    value === item.id ? "bg-primary/5 font-bold text-primary" : "text-slate-600 dark:text-slate-400"
-                  )}
-                >
-                  {item.name}
-                </button>
-              ))}
-              {filtered.length === 0 && (
-                <div className="px-3 py-4 text-xs text-center text-slate-400">No results found</div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
   )
 }

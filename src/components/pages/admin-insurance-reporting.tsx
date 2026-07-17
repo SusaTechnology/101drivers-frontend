@@ -1,5 +1,17 @@
 // components/pages/admin-insurance-reporting.tsx
-import React, { useState, useMemo, useCallback } from 'react';
+//
+// Admin internal view of the per-ride insurance & mileage report.
+//
+// Uses the SAME shared InsuranceReportFilters + InsuranceReportTable as the
+// password-gated carrier portal (insurance-portal.tsx) so what an underwriter
+// sees externally matches what an admin sees internally — same columns, same
+// filters, same sort options.
+//
+// This page additionally keeps its own summary KPI cards and period
+// aggregation table (which the portal does not show), per the dealer's
+// request: the admin summary section is required, the portal does not need
+// one beyond its six summary cards.
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   Card,
@@ -8,184 +20,109 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import { Navbar } from '../shared/layout/testNavbar';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
-import { useInsuranceMileageReport, formatReportDate, formatReportMiles } from '@/hooks/useAdminReports';
+import {
+  useInsuranceMileageReport,
+  formatReportMiles,
+  downloadReport,
+} from '@/hooks/useAdminReports';
 import { useCustomerLookup } from '@/hooks/useAdminDashboard';
 import { useDriverLookup } from '@/hooks/useAdminDeliveries';
-import type { InsuranceMileageReportParams, InsuranceMileageReportRow } from '@/types/report';
-import { DataTable } from '@/components/shared/DataTable';
-import type { ColumnDef } from '@tanstack/react-table';
-import type { CustomerLookupItem } from '@/types/dashboard';
-import type { DriverLookupItem } from '@/types/delivery';
+import type { InsuranceMileageReportParams } from '@/types/report';
 import {
-  Car,
+  InsuranceReportFilters,
+  type InsuranceReportFiltersState,
+} from '@/components/shared/reports/InsuranceReportFilters';
+import { InsuranceReportTable } from '@/components/shared/reports/InsuranceReportTable';
+import {
   RefreshCw,
   Download,
   Filter,
   ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
   AlertCircle,
   Calendar,
-  User,
-  Building2,
-  ArrowUpDown,
-  Check,
-  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-const GROUP_BY_OPTIONS = [
-  { value: 'week', label: 'By Week' },
-  { value: 'month', label: 'By Month' },
-];
-
-const SERVICE_TYPE_OPTIONS = [
-  { value: 'all', label: 'All Services' },
-  { value: 'HOME_DELIVERY', label: 'Home Delivery' },
-  { value: 'BETWEEN_LOCATIONS', label: 'Between Locations' },
-  { value: 'SERVICE_PICKUP_RETURN', label: 'Service Pickup/Return' },
-];
-
-const SORT_BY_OPTIONS = [
-  { value: 'startedAt', label: 'Started Date' },
-  { value: 'stoppedAt', label: 'Stopped Date' },
-  { value: 'drivenMiles', label: 'Miles Driven' },
-  { value: 'createdAt', label: 'Created Date' },
-];
-
-function formatDrivenHours(hours: number | null): string {
-  if (hours === null || hours === undefined) return '—';
-  if (hours < 1) {
-    const mins = Math.round(hours * 60);
-    return `${mins}m`;
-  }
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
 function formatDrivenHoursDecimal(hours: number): string {
-  return hours.toFixed(2);
+  return Number(hours).toFixed(2);
 }
 
-const SORT_ORDER_OPTIONS = [
-  { value: 'desc', label: 'Newest First' },
-  { value: 'asc', label: 'Oldest First' },
-];
+const DEFAULT_FILTERS: InsuranceReportFiltersState = {
+  dateFrom: '',
+  dateTo: '',
+  statusFilter: '',
+  serviceType: '',
+  customerId: '',
+  driverId: '',
+  minMiles: '',
+  maxMiles: '',
+  minPayment: '',
+  maxPayment: '',
+  pickupSearch: '',
+  sortBy: 'startedAt',
+  sortOrder: 'desc',
+};
 
 export default function AdminInsuranceReportingPage() {
   const { actionItems, signOut } = useAdminActions();
 
-  // Filter state
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [customerId, setCustomerId] = useState('');
-  const [driverId, setDriverId] = useState('');
-  const [groupBy, setGroupBy] = useState<'week' | 'month'>('month');
-  const [serviceType, setServiceType] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('');
+  // Filter state — shared shape with the carrier portal
+  const [filters, setFilters] = useState<InsuranceReportFiltersState>(DEFAULT_FILTERS);
   const [exportOpen, setExportOpen] = useState(false);
-  const [sortBy, setSortBy] = useState('startedAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [minDrivenHours, setMinDrivenHours] = useState('');
-  const [maxDrivenHours, setMaxDrivenHours] = useState('');
-  const [minMiles, setMinMiles] = useState('');
-  const [maxMiles, setMaxMiles] = useState('');
-  const [minPayment, setMinPayment] = useState('');
-  const [maxPayment, setMaxPayment] = useState('');
-  const [pickupSearch, setPickupSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
 
-  // Search state for dropdowns
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [isCustomerSelectOpen, setIsCustomerSelectOpen] = useState(false);
-  const [driverSearch, setDriverSearch] = useState('');
-  const [isDriverSelectOpen, setIsDriverSelectOpen] = useState(false);
-
   // Fetch customer and driver lookup lists for dropdowns
-  const { data: customers = [], isLoading: isLoadingCustomers } = useCustomerLookup();
-  const { data: drivers = [], isLoading: isLoadingDrivers } = useDriverLookup();
+  const { data: customers = [] } = useCustomerLookup();
+  const { data: drivers = [] } = useDriverLookup();
 
-  // Find selected customer and driver for display
-  const selectedCustomer = useMemo(() => {
-    if (customerId && customers.length > 0) {
-      return customers.find(c => c.id === customerId);
-    }
-    return null;
-  }, [customerId, customers]);
+  // Map the lookup lists into the simple {id, name} shape the shared
+  // SearchableSelect expects.
+  const customerItems = useMemo(
+    () => customers.map((c) => ({ id: c.id, name: c.name })),
+    [customers]
+  );
+  // Drivers dropdown: only approved drivers (matches the original admin page).
+  const driverItems = useMemo(
+    () =>
+      drivers
+        .filter((d) => d.status === 'APPROVED')
+        .map((d) => ({ id: d.id, name: d.name })),
+    [drivers]
+  );
 
-  const selectedDriver = useMemo(() => {
-    if (driverId && drivers.length > 0) {
-      return drivers.find(d => d.id === driverId);
-    }
-    return null;
-  }, [driverId, drivers]);
-
-  // Filter customers by search
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearch) return customers;
-    const search = customerSearch.toLowerCase();
-    return customers.filter(c => c.name.toLowerCase().includes(search));
-  }, [customers, customerSearch]);
-
-  // Filter drivers by search (only show approved drivers)
-  const filteredDrivers = useMemo(() => {
-    let result = drivers.filter(d => d.status === 'APPROVED');
-    if (driverSearch) {
-      const search = driverSearch.toLowerCase();
-      result = result.filter(d => d.name.toLowerCase().includes(search));
-    }
-    return result;
-  }, [drivers, driverSearch]);
-
-  // Build query params
+  // Build query params — groupBy is fixed to 'month' so the period
+  // aggregation table on this page keeps working. The shared filter card no
+  // longer exposes a Group By dropdown (it isn't part of the per-ride spec
+  // and the carrier portal never had one).
   const queryParams: InsuranceMileageReportParams = useMemo(() => {
-    const params: InsuranceMileageReportParams = { page, pageSize, groupBy, sortBy, sortOrder };
-    if (dateFrom) params.from = dateFrom;
-    if (dateTo) params.to = dateTo;
-    if (customerId.trim()) params.customerId = customerId.trim();
-    if (driverId.trim()) params.driverId = driverId.trim();
-    if (serviceType && serviceType !== 'all') params.serviceType = serviceType;
-    if (statusFilter) params.status = statusFilter;
-    if (minDrivenHours !== '') params.minDrivenHours = parseFloat(minDrivenHours);
-    if (maxDrivenHours !== '') params.maxDrivenHours = parseFloat(maxDrivenHours);
-    if (minMiles) (params as any).minDrivenMiles = parseFloat(minMiles);
-    if (maxMiles) (params as any).maxDrivenMiles = parseFloat(maxMiles);
-    if (minPayment) (params as any).minPaymentAmount = parseFloat(minPayment);
-    if (maxPayment) (params as any).maxPaymentAmount = parseFloat(maxPayment);
-    if (pickupSearch) (params as any).pickupAddressSearch = pickupSearch;
+    const params: InsuranceMileageReportParams = {
+      page,
+      pageSize,
+      groupBy: 'month',
+      sortBy: filters.sortBy,
+      sortOrder: filters.sortOrder,
+    };
+    if (filters.dateFrom) params.from = filters.dateFrom;
+    if (filters.dateTo) params.to = filters.dateTo;
+    if (filters.customerId.trim()) params.customerId = filters.customerId.trim();
+    if (filters.driverId.trim()) params.driverId = filters.driverId.trim();
+    if (filters.serviceType) params.serviceType = filters.serviceType;
+    if (filters.statusFilter) (params as any).status = filters.statusFilter;
+    if (filters.minMiles) (params as any).minDrivenMiles = parseFloat(filters.minMiles);
+    if (filters.maxMiles) (params as any).maxDrivenMiles = parseFloat(filters.maxMiles);
+    if (filters.minPayment) (params as any).minPaymentAmount = parseFloat(filters.minPayment);
+    if (filters.maxPayment) (params as any).maxPaymentAmount = parseFloat(filters.maxPayment);
+    if (filters.pickupSearch) (params as any).pickupAddressSearch = filters.pickupSearch;
     return params;
-  }, [dateFrom, dateTo, customerId, driverId, groupBy, serviceType, statusFilter, sortBy, sortOrder, minDrivenHours, maxDrivenHours, minMiles, maxMiles, minPayment, maxPayment, pickupSearch, page, pageSize]);
+  }, [filters, page, pageSize]);
 
   const { data, isLoading, isFetching, isError, refetch } = useInsuranceMileageReport(queryParams);
 
@@ -196,101 +133,30 @@ export default function AdminInsuranceReportingPage() {
 
   const handleExport = useCallback(async (format: string) => {
     try {
-      await downloadReport('insurance-mileage', queryParams, format);
+      await downloadReport('insurance-mileage', queryParams as unknown as Record<string, unknown>, format);
       toast.success(`Report downloaded as ${format.toUpperCase()}`);
     } catch {
       toast.error(`Failed to download ${format.toUpperCase()} report`);
     }
   }, [queryParams]);
 
-  const resetFilters = useCallback(() => {
-    setDateFrom('');
-    setDateTo('');
-    setCustomerId('');
-    setDriverId('');
-    setGroupBy('month');
-    setServiceType('all');
-    setStatusFilter('');
-    setSortBy('startedAt');
-    setSortOrder('desc');
-    setMinDrivenHours('');
-    setMaxDrivenHours('');
-    setMinMiles('');
-    setMaxMiles('');
-    setMinPayment('');
-    setMaxPayment('');
-    setPickupSearch('');
+  const handleFiltersChange = useCallback(
+    (updates: Partial<InsuranceReportFiltersState>) => {
+      setFilters((prev) => ({ ...prev, ...updates }));
+      setPage(1);
+    },
+    []
+  );
+
+  const handleReset = useCallback(() => {
+    setFilters(DEFAULT_FILTERS);
     setPage(1);
-    setCustomerSearch('');
-    setDriverSearch('');
   }, []);
 
   const handleSortChange = (newSortBy: string, newSortOrder: 'asc' | 'desc') => {
-    setSortBy(newSortBy);
-    setSortOrder(newSortOrder);
+    setFilters((prev) => ({ ...prev, sortBy: newSortBy, sortOrder: newSortOrder }));
     setPage(1);
   };
-
-  // Column definitions for TanStack Table
-  // Per-ride columns required by the insurance compliance spec:
-  // Driver ID, Ride ID, Start Time, End Time, Start Location, End Location, Miles.
-  // Both this admin page and the insurance-portal page render the exact same
-  // column set so the report a carrier sees is identical to what an admin sees.
-  const columns: ColumnDef<any>[] = useMemo(() => [
-    {
-      accessorKey: 'driverId',
-      header: 'Driver ID',
-      size: 140,
-      meta: { label: 'Driver ID', sortable: false },
-      cell: ({ row, getValue }) => (
-        <span className="text-xs font-mono">
-          {getValue() || (row.original.driverName ? row.original.driverName : '—')}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'deliveryId',
-      header: 'Ride ID',
-      size: 140,
-      meta: { label: 'Ride ID', sortable: false },
-      cell: ({ getValue }) => <span className="text-xs font-mono">{getValue() || '—'}</span>,
-    },
-    {
-      accessorKey: 'startedAt',
-      header: 'Start Time',
-      size: 150,
-      meta: { label: 'Start Time', sortable: true, sortKey: 'startedAt' },
-      cell: ({ getValue }) => <span className="text-xs">{getValue() ? formatReportDate(getValue()) : '—'}</span>,
-    },
-    {
-      accessorKey: 'stoppedAt',
-      header: 'End Time',
-      size: 150,
-      meta: { label: 'End Time', sortable: true, sortKey: 'stoppedAt' },
-      cell: ({ getValue }) => <span className="text-xs">{getValue() ? formatReportDate(getValue()) : '—'}</span>,
-    },
-    {
-      accessorKey: 'pickupAddress',
-      header: 'Start Location',
-      size: 220,
-      meta: { label: 'Start Location', sortable: false },
-      cell: ({ getValue }) => <span className="text-xs">{getValue() || '—'}</span>,
-    },
-    {
-      accessorKey: 'dropoffAddress',
-      header: 'End Location',
-      size: 220,
-      meta: { label: 'End Location', sortable: false },
-      cell: ({ getValue }) => <span className="text-xs">{getValue() || '—'}</span>,
-    },
-    {
-      accessorKey: 'drivenMiles',
-      header: 'Miles',
-      size: 80,
-      meta: { label: 'Miles', sortable: true, sortKey: 'drivenMiles' },
-      cell: ({ getValue }) => <span className="text-xs font-bold tabular-nums">{formatReportMiles(getValue())}</span>,
-    },
-  ], []);
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
@@ -402,226 +268,28 @@ export default function AdminInsuranceReportingPage() {
           </section>
         )}
 
-        {/* Filters Section */}
-        <section className="mb-6">
-          <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
-            <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-primary" />
-                <CardTitle className="text-base font-black">Filters</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {/* Date From */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">From</Label>
-                  <Input 
-                    type="date" 
-                    value={dateFrom} 
-                    onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} 
-                    className="mt-1.5 rounded-xl h-9 text-sm" 
-                  />
-                </div>
-                {/* Date To */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">To</Label>
-                  <Input 
-                    type="date" 
-                    value={dateTo} 
-                    onChange={(e) => { setDateTo(e.target.value); setPage(1); }} 
-                    className="mt-1.5 rounded-xl h-9 text-sm" 
-                  />
-                </div>
-                
-                {/* Driver Select */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                    <User className="w-3 h-3" />
-                    Driver
-                  </Label>
-                  <Popover open={isDriverSelectOpen} onOpenChange={setIsDriverSelectOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={isDriverSelectOpen}
-                        className="w-full mt-1.5 rounded-xl h-9 justify-between font-normal text-sm"
-                      >
-                        {selectedDriver ? (
-                          <span className="flex items-center gap-2 truncate">
-                            <User className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{selectedDriver.name}</span>
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">Select driver...</span>
-                        )}
-                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-0" align="start">
-                      <Command shouldFilter={false}>
-                        <CommandInput
-                          placeholder="Search driver..."
-                          value={driverSearch}
-                          onValueChange={setDriverSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {isLoadingDrivers ? 'Loading...' : 'No driver found.'}
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {filteredDrivers.slice(0, 50).map((driver) => (
-                              <CommandItem
-                                key={driver.id}
-                                value={driver.id}
-                                onSelect={() => {
-                                  setDriverId(driver.id === driverId ? '' : driver.id);
-                                  setDriverSearch('');
-                                  setIsDriverSelectOpen(false);
-                                  setPage(1);
-                                }}
-                                className="flex items-center gap-2"
-                              >
-                                <Check
-                                  className={cn(
-                                    'h-4 w-4',
-                                    driverId === driver.id ? 'opacity-100' : 'opacity-0'
-                                  )}
-                                />
-                                <User className="w-3 h-3 text-muted-foreground" />
-                                <span className="truncate">{driver.name}</span>
-                              </CommandItem>
-                            ))}
-                            {filteredDrivers.length > 50 && (
-                              <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
-                                Showing 50 of {filteredDrivers.length} drivers. Refine your search.
-                              </div>
-                            )}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                {/* Service Type */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Service</Label>
-                  <Select value={serviceType} onValueChange={(v) => { setServiceType(v); setPage(1); }}>
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SERVICE_TYPE_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                
-                {/* Min Miles */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Min Miles</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={minMiles}
-                    onChange={(e) => { setMinMiles(e.target.value); setPage(1); }}
-                    className="mt-1.5 rounded-xl h-9 text-sm"
-                  />
-                </div>
-                {/* Max Miles */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Miles</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="Any"
-                    value={maxMiles}
-                    onChange={(e) => { setMaxMiles(e.target.value); setPage(1); }}
-                    className="mt-1.5 rounded-xl h-9 text-sm"
-                  />
-                </div>
-                
-                
-                {/* Pickup Address Search */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pickup Address</Label>
-                  <Input
-                    type="text"
-                    placeholder="e.g. Los Angeles"
-                    value={pickupSearch}
-                    onChange={(e) => { setPickupSearch(e.target.value); setPage(1); }}
-                    className="mt-1.5 rounded-xl h-9 text-sm"
-                  />
-                </div>
-                {/* Status Filter */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</Label>
-                  <Select value={statusFilter || 'all'} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1); }}>
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="COMPLETED">Completed</SelectItem>
-                      <SelectItem value="ACTIVE">Active</SelectItem>
-                      <SelectItem value="BOOKED">Booked</SelectItem>
-                      <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                      <SelectItem value="EXPIRED">Expired</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {/* Sort By */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                    <ArrowUpDown className="w-3 h-3" />
-                    Sort By
-                  </Label>
-                  <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SORT_BY_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {/* Sort Order */}
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Order</Label>
-                  <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SORT_ORDER_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <Button variant="outline" size="sm" onClick={resetFilters} className="rounded-xl">Reset Filters</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
+        {/* Filters — shared component, identical to carrier portal */}
+        <InsuranceReportFilters
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          onReset={handleReset}
+          customers={customerItems}
+          drivers={driverItems}
+        />
 
-        {/* Data Table — TanStack Table with resizable columns */}
-        <section>
-          <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
-            <CardContent className="p-0">
-              <DataTable
-                columns={columns}
-                data={data?.displayRows || data?.rows || []}
-                isLoading={isLoading}
-                isError={isError}
-                page={page}
-                pageSize={pageSize}
-                totalRows={data?.pagination?.totalRows ?? 0}
-                totalPages={data?.pagination?.totalPages ?? 1}
-                onPageChange={setPage}
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSortChange={handleSortChange}
-                emptyMessage="No mileage data found. Try adjusting your filters."
-              />
-            </CardContent>
-          </Card>
-        </section>
+        {/* Data Table — shared component, identical column set as carrier portal */}
+        <InsuranceReportTable
+          data={data}
+          isLoading={isLoading}
+          isError={isError}
+          page={page}
+          pageSize={pageSize}
+          sortBy={filters.sortBy}
+          sortOrder={filters.sortOrder}
+          onPageChange={setPage}
+          onSortChange={handleSortChange}
+          emptyMessage="No mileage data found. Try adjusting your filters."
+        />
       </main>
 
       {/* Export Dialog — uses page filters, no redundant filter inputs */}
