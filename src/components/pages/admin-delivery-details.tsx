@@ -242,7 +242,15 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     
     deliveryActions.forceCancel.mutate(payload, {
       onSuccess: () => {
-        toast.success('Delivery cancelled successfully');
+        if (delivery?.lockedInAt && delivery?.lockInBaseFee) {
+          const driverSharePct = delivery.lockInDriverSharePct ?? 60;
+          const driverNet = ((delivery.lockInBaseFee * driverSharePct) / 100).toFixed(2);
+          toast.success('Delivery force-cancelled', {
+            description: `Base fee $${delivery.lockInBaseFee.toFixed(2)} retained — driver keeps $${driverNet} (${driverSharePct}% share). Customer and driver have been emailed.`,
+          });
+        } else {
+          toast.success('Delivery cancelled successfully');
+        }
         setForceCancelOpen(false);
         setForceCancelReason('');
         refetch();
@@ -1418,7 +1426,9 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               Force Cancel Delivery
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will cancel the delivery, void any payment, and cancel the driver payout.
+              {delivery?.lockedInAt && delivery?.lockInBaseFee
+                ? `This action cannot be undone. The delivery will be cancelled. The base fee of $${delivery.lockInBaseFee.toFixed(2)} was already captured when the driver started the trip — it is non-refundable and the driver will keep their % share.`
+                : 'This action cannot be undone. This will cancel the delivery, void any payment authorization, and cancel the driver payout.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4 py-4">

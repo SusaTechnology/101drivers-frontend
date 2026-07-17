@@ -45,7 +45,16 @@ export class DeliveryCancellationEngine {
    * Emit socket events after a status change (fire-and-forget).
    * Mirrors the pattern in DeliveryLifecycleService.emitStatusChanged.
    */
-  private emitStatusChanged(deliveryId: string, status: string, customerId?: string | null): void {
+  private emitStatusChanged(
+    deliveryId: string,
+    status: string,
+    customerId?: string | null,
+    lockIn?: {
+      retained: boolean;
+      amount?: number | null;
+      driverSharePct?: number | null;
+    },
+  ): void {
     if (!this.trackingGateway) return;
     const gateway = this.trackingGateway;
     this.prisma.deliveryRequest
@@ -64,6 +73,9 @@ export class DeliveryCancellationEngine {
             status,
             dealerId: row.customer?.id ?? customerId ?? undefined,
             shareToken: row.trackingShareToken ?? undefined,
+            lockInRetained: lockIn?.retained,
+            lockInAmount: lockIn?.amount,
+            lockInDriverSharePct: lockIn?.driverSharePct,
           });
           if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
             gateway.emitFeedUpdate({ deliveryId, status });
@@ -364,6 +376,7 @@ export class DeliveryCancellationEngine {
         driverId: activeAssignment?.driverId ?? null,
         lockInRetained: isLockedIn,
         lockInAmount,
+        lockInDriverSharePct: delivery.lockInDriverSharePct ?? null,
       };
     });
 
@@ -371,9 +384,21 @@ export class DeliveryCancellationEngine {
       deliveryId: result.deliveryId,
       actorUserId: input.actorUserId ?? null,
       driverId: result.driverId,
+      lockInRetained: result.lockInRetained,
+      lockInAmount: result.lockInAmount,
+      lockInDriverSharePct: result.lockInDriverSharePct,
     });
 
-    this.emitStatusChanged(result.deliveryId, EnumDeliveryRequestStatus.CANCELLED, result.customerId);
+    this.emitStatusChanged(
+      result.deliveryId,
+      EnumDeliveryRequestStatus.CANCELLED,
+      result.customerId,
+      {
+        retained: result.lockInRetained,
+        amount: result.lockInAmount,
+        driverSharePct: result.lockInDriverSharePct,
+      },
+    );
 
     return result;
   }

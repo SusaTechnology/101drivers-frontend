@@ -1121,6 +1121,35 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
       
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
 
+        {/* Lock-in fee retained banner — shown when a delivery was cancelled
+            AFTER the driver started the trip. The base fee has been charged
+            and is non-refundable. */}
+        {deliveryData?.status === 'CANCELLED' && deliveryData?.lockedInAt && deliveryData?.lockInBaseFee ? (
+          <div className="mb-6 p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border-2 border-amber-300 dark:border-amber-700">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-extrabold text-amber-800 dark:text-amber-300">
+                  Base fee of ${deliveryData.lockInBaseFee.toFixed(2)} charged
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+                  This delivery was cancelled after the driver had already started the trip.
+                  The non-refundable base fee of <strong>${deliveryData.lockInBaseFee.toFixed(2)}</strong>
+                  {' '}was captured from your card at that moment and is final — it will not be refunded.
+                  The driver is compensated for arriving and starting the trip.
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                  Locked in at{' '}
+                  <strong>{new Date(deliveryData.lockedInAt).toLocaleString()}</strong>.
+                  {' '}If you believe this is in error, please contact our operations team.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {/* Payment Required Banner — prominent, dismissible reminder */}
         {showPayButton && (
           <div

@@ -255,12 +255,26 @@ export class TrackingGateway
     status: string;
     shareToken?: string;
     dealerId?: string;
+    /** Optional lock-in context — included in the payload so the driver
+     *  UI can show "your $X payout is secured" when a trip is cancelled
+     *  after start. Forward-compatible: undefined on non-lock-in paths. */
+    lockInRetained?: boolean;
+    lockInAmount?: number | null;
+    lockInDriverSharePct?: number | null;
   }) {
     if (!this.server) {
       this.logger.warn("emitStatusChange: server not initialized, skipping");
       return;
     }
-    const payload = { deliveryId: data.deliveryId, status: data.status };
+    const payload: Record<string, unknown> = {
+      deliveryId: data.deliveryId,
+      status: data.status,
+    };
+    if (data.lockInRetained) {
+      payload.lockInRetained = true;
+      payload.lockInAmount = data.lockInAmount ?? null;
+      payload.lockInDriverSharePct = data.lockInDriverSharePct ?? null;
+    }
 
     this.server.to(`delivery:${data.deliveryId}`).emit("delivery:status-changed", payload);
 

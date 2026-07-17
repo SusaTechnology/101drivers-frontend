@@ -36,7 +36,16 @@ export class AdminDeliveryEngine {
    * Emit socket events after a status change (fire-and-forget).
    * Mirrors the pattern in DeliveryLifecycleService.emitStatusChanged.
    */
-  private emitStatusChanged(deliveryId: string, status: string, customerId?: string | null): void {
+  private emitStatusChanged(
+    deliveryId: string,
+    status: string,
+    customerId?: string | null,
+    lockIn?: {
+      retained: boolean;
+      amount?: number | null;
+      driverSharePct?: number | null;
+    },
+  ): void {
     if (!this.trackingGateway) return;
     const gateway = this.trackingGateway;
     this.prisma.deliveryRequest
@@ -55,6 +64,9 @@ export class AdminDeliveryEngine {
             status,
             dealerId: row.customer?.id ?? customerId ?? undefined,
             shareToken: row.trackingShareToken ?? undefined,
+            lockInRetained: lockIn?.retained,
+            lockInAmount: lockIn?.amount,
+            lockInDriverSharePct: lockIn?.driverSharePct,
           });
           if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
             gateway.emitFeedUpdate({ deliveryId, status });
@@ -439,7 +451,30 @@ async assignDriver(input: {
       });
     });
 
-    this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.CANCELLED, delivery.customerId);
+    // Path B previously did NOT send any cancellation notification — only
+    // Path A (customer) and Path C (force-cancel) did. Admins cancelling
+    // a delivery silently left both customer and driver in the dark. This
+    // reuses the same notifyDeliveryCancelled path as Path A so the
+    // customer + driver get the lock-in-aware email when applicable.
+    await this.notificationEventEngine.notifyDeliveryCancelled({
+      deliveryId: input.deliveryId,
+      actorUserId: input.actorUserId ?? null,
+      driverId: activeAssignment?.driverId ?? null,
+      lockInRetained: isLockedIn,
+      lockInAmount,
+      lockInDriverSharePct: delivery.lockInDriverSharePct ?? null,
+    });
+
+    this.emitStatusChanged(
+      input.deliveryId,
+      EnumDeliveryRequestStatus.CANCELLED,
+      delivery.customerId,
+      {
+        retained: isLockedIn,
+        amount: lockInAmount,
+        driverSharePct: delivery.lockInDriverSharePct ?? null,
+      },
+    );
   }
 
   async forceCancelDelivery(input: {
@@ -703,9 +738,21 @@ async assignDriver(input: {
       actorUserId: input.actorUserId ?? null,
       driverId: activeDriverId,
       reason: input.reason,
+      lockInRetained: isLockedIn,
+      lockInAmount,
+      lockInDriverSharePct: delivery.lockInDriverSharePct ?? null,
     });
 
-    this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.CANCELLED, delivery.customerId);
+    this.emitStatusChanged(
+      input.deliveryId,
+      EnumDeliveryRequestStatus.CANCELLED,
+      delivery.customerId,
+      {
+        retained: isLockedIn,
+        amount: lockInAmount,
+        driverSharePct: delivery.lockInDriverSharePct ?? null,
+      },
+    );
   }
 
   async openDispute(input: {

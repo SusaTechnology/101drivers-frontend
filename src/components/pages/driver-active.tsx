@@ -723,8 +723,26 @@ const DROPOFF_REF_IMAGES = [
         title = 'Delivery completed'
         description = 'This delivery has been marked as completed.'
       } else if (status === 'CANCELLED') {
-        title = 'Delivery cancelled'
-        description = 'The customer or admin cancelled this delivery.'
+        // Lock-in aware messaging: if the trip was started and the base
+        // fee was captured before the cancellation, the driver still
+        // gets their % share of the base fee — let them know.
+        if (data?.lockInRetained && data?.lockInAmount) {
+          const lockInAmount = Number(data.lockInAmount)
+          const driverSharePct = Number(data.lockInDriverSharePct ?? 60)
+          const driverNet = ((lockInAmount * driverSharePct) / 100).toFixed(2)
+          title = 'Delivery cancelled — your payout is secured'
+          description =
+            `The delivery was cancelled, but because you had already started the trip, ` +
+            `your $${driverNet} lock-in payout (${driverSharePct}% of the $${lockInAmount.toFixed(2)} base fee) is locked in. ` +
+            `It will be included in your next payout. Check your email for details.`
+          toast.success(title, { description })
+        } else {
+          title = 'Delivery cancelled'
+          description = 'The customer or admin cancelled this delivery.'
+          toast.info(title, { description })
+        }
+        activeDeliveryQuery.refetch()
+        return
       } else if (status === 'DISPUTED') {
         title = 'Delivery disputed'
         description = 'A dispute has been opened on this delivery.'

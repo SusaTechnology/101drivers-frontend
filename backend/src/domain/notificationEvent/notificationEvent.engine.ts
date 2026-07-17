@@ -1500,6 +1500,12 @@ async notifyTripCompleted(input: {
     deliveryId: string;
     actorUserId?: string | null;
     driverId?: string | null;
+    /** True when the trip was started (lock-in captured) before cancel. */
+    lockInRetained?: boolean;
+    /** The lock-in base fee amount charged (in dollars), if retained. */
+    lockInAmount?: number | null;
+    /** Driver's share % at the time of lock-in. */
+    lockInDriverSharePct?: number | null;
   }) {
     const delivery = await this.prisma.deliveryRequest.findUnique({
       where: { id: input.deliveryId },
@@ -1550,6 +1556,11 @@ async notifyTripCompleted(input: {
       throw new Error("Delivery not found");
     }
 
+    const lockInRetained = !!input.lockInRetained && !!input.lockInAmount && input.lockInAmount > 0;
+    const lockInAmount = Number(input.lockInAmount ?? 0);
+    const driverSharePct = Number(input.lockInDriverSharePct ?? 60);
+    const driverNet = Number((lockInAmount * driverSharePct / 100).toFixed(2));
+
     const customerEmail =
       delivery.customer?.user?.email ??
       delivery.customer?.contactEmail ??
@@ -1561,6 +1572,24 @@ async notifyTripCompleted(input: {
       "Customer";
 
     if (customerEmail) {
+      const bodyLines = [
+        `Hi ${customerName},`,
+        "",
+        "Your delivery has been cancelled.",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Status: ${delivery.status}`,
+      ];
+
+      if (lockInRetained) {
+        bodyLines.push(
+          "",
+          "Important — base fee charged",
+          `Because the driver had already started this trip, the non-refundable base fee of $${lockInAmount.toFixed(2)} has been charged to your card. This charge is final and will not be refunded. The driver is compensated for arriving and starting the trip.`,
+          "If you believe this is in error, please contact our operations team.",
+        );
+      }
+
       await this.queueAndSend({
         actorUserId: input.actorUserId ?? null,
         customerId: delivery.customerId,
@@ -1568,20 +1597,19 @@ async notifyTripCompleted(input: {
         driverId: input.driverId ?? null,
         channel: EnumNotificationEventChannel.EMAIL,
         type: EnumNotificationEventType.DELIVERY_CANCELLED,
-        templateCode: "delivery-cancelled-customer",
+        templateCode: lockInRetained
+          ? "delivery-cancelled-lock-in-customer"
+          : "delivery-cancelled-customer",
         toEmail: customerEmail,
-        subject: "Your delivery has been cancelled",
-        body: [
-          `Hi ${customerName},`,
-          "",
-          "Your delivery has been cancelled.",
-          `Pickup: ${delivery.pickupAddress}`,
-          `Drop-off: ${delivery.dropoffAddress}`,
-          `Status: ${delivery.status}`,
-        ].join("\n"),
+        subject: lockInRetained
+          ? `Your delivery has been cancelled — base fee of $${lockInAmount.toFixed(2)} charged`
+          : "Your delivery has been cancelled",
+        body: bodyLines.join("\n"),
         payload: {
           deliveryId: delivery.id,
           status: delivery.status,
+          lockInRetained,
+          lockInAmount: lockInRetained ? lockInAmount : null,
         },
       });
     }
@@ -1591,6 +1619,24 @@ async notifyTripCompleted(input: {
     const driverName = assignedDriver?.user?.fullName ?? "Driver";
 
     if (driverEmail) {
+      const bodyLines = [
+        `Hi ${driverName},`,
+        "",
+        "The delivery you were assigned to has been cancelled.",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Status: ${delivery.status}`,
+      ];
+
+      if (lockInRetained) {
+        bodyLines.push(
+          "",
+          "Good news — your lock-in payout is secured",
+          `Because you had already started this trip, the base fee of $${lockInAmount.toFixed(2)} was captured from the customer. Your share (${driverSharePct}% = $${driverNet.toFixed(2)}) is locked in and will be included in your next payout.`,
+          "No further action is needed from you for this delivery.",
+        );
+      }
+
       await this.queueAndSend({
         actorUserId: input.actorUserId ?? null,
         customerId: delivery.customerId,
@@ -1598,20 +1644,20 @@ async notifyTripCompleted(input: {
         driverId: assignedDriver?.id ?? input.driverId ?? null,
         channel: EnumNotificationEventChannel.EMAIL,
         type: EnumNotificationEventType.DELIVERY_CANCELLED,
-        templateCode: "delivery-cancelled-driver",
+        templateCode: lockInRetained
+          ? "delivery-cancelled-lock-in-driver"
+          : "delivery-cancelled-driver",
         toEmail: driverEmail,
-        subject: "A booked delivery was cancelled",
-        body: [
-          `Hi ${driverName},`,
-          "",
-          "The delivery you were assigned to has been cancelled.",
-          `Pickup: ${delivery.pickupAddress}`,
-          `Drop-off: ${delivery.dropoffAddress}`,
-          `Status: ${delivery.status}`,
-        ].join("\n"),
+        subject: lockInRetained
+          ? `Delivery cancelled — your $${driverNet.toFixed(2)} lock-in payout is secured`
+          : "A booked delivery was cancelled",
+        body: bodyLines.join("\n"),
         payload: {
           deliveryId: delivery.id,
           status: delivery.status,
+          lockInRetained,
+          lockInAmount: lockInRetained ? lockInAmount : null,
+          driverNet: lockInRetained ? driverNet : null,
         },
       });
     }
@@ -1924,6 +1970,12 @@ async notifyDeliveryForceCancelled(input: {
   actorUserId?: string | null;
   driverId?: string | null;
   reason?: string | null;
+  /** True when the trip was started (lock-in captured) before force-cancel. */
+  lockInRetained?: boolean;
+  /** The lock-in base fee amount charged (in dollars), if retained. */
+  lockInAmount?: number | null;
+  /** Driver's share % at the time of lock-in. */
+  lockInDriverSharePct?: number | null;
 }) {
   const delivery = await this.prisma.deliveryRequest.findUnique({
     where: { id: input.deliveryId },
@@ -1974,6 +2026,11 @@ async notifyDeliveryForceCancelled(input: {
     throw new Error("Delivery not found");
   }
 
+  const lockInRetained = !!input.lockInRetained && !!input.lockInAmount && input.lockInAmount > 0;
+  const lockInAmount = Number(input.lockInAmount ?? 0);
+  const driverSharePct = Number(input.lockInDriverSharePct ?? 60);
+  const driverNet = Number((lockInAmount * driverSharePct / 100).toFixed(2));
+
   const customerEmail =
     delivery.customer?.user?.email ??
     delivery.customer?.contactEmail ??
@@ -1986,6 +2043,25 @@ async notifyDeliveryForceCancelled(input: {
     "Customer";
 
   if (customerEmail) {
+    const bodyLines = [
+      `Hi ${customerName},`,
+      "",
+      "Your delivery has been cancelled by Operations/Admin.",
+      input.reason ? `Reason: ${input.reason}` : "",
+      `Pickup: ${delivery.pickupAddress}`,
+      `Drop-off: ${delivery.dropoffAddress}`,
+      `Status: ${delivery.status}`,
+    ].filter(Boolean);
+
+    if (lockInRetained) {
+      bodyLines.push(
+        "",
+        "Important — base fee charged",
+        `Because the driver had already started this trip, the non-refundable base fee of $${lockInAmount.toFixed(2)} has been charged to your card. This charge is final and will not be refunded, even though the delivery was cancelled by our team.`,
+        "If you have questions about this charge, please reply to this email or contact our operations team.",
+      );
+    }
+
     await this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
       customerId: delivery.customerId,
@@ -1993,24 +2069,20 @@ async notifyDeliveryForceCancelled(input: {
       driverId: input.driverId ?? null,
       channel: EnumNotificationEventChannel.EMAIL,
       type: EnumNotificationEventType.DELIVERY_CANCELLED,
-      templateCode: "delivery-force-cancelled-customer",
+      templateCode: lockInRetained
+        ? "delivery-force-cancelled-lock-in-customer"
+        : "delivery-force-cancelled-customer",
       toEmail: customerEmail,
-      subject: "Your delivery has been cancelled",
-      body: [
-        `Hi ${customerName},`,
-        "",
-        "Your delivery has been cancelled by Operations/Admin.",
-        input.reason ? `Reason: ${input.reason}` : "",
-        `Pickup: ${delivery.pickupAddress}`,
-        `Drop-off: ${delivery.dropoffAddress}`,
-        `Status: ${delivery.status}`,
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      subject: lockInRetained
+        ? `Your delivery has been cancelled — base fee of $${lockInAmount.toFixed(2)} charged`
+        : "Your delivery has been cancelled",
+      body: bodyLines.join("\n"),
       payload: {
         deliveryId: delivery.id,
         status: delivery.status,
         reason: input.reason ?? null,
+        lockInRetained,
+        lockInAmount: lockInRetained ? lockInAmount : null,
       },
     });
   }
@@ -2020,6 +2092,25 @@ async notifyDeliveryForceCancelled(input: {
   const driverName = assignedDriver?.user?.fullName ?? "Driver";
 
   if (driverEmail) {
+    const bodyLines = [
+      `Hi ${driverName},`,
+      "",
+      "A delivery assigned to you has been cancelled by Operations/Admin.",
+      input.reason ? `Reason: ${input.reason}` : "",
+      `Pickup: ${delivery.pickupAddress}`,
+      `Drop-off: ${delivery.dropoffAddress}`,
+      `Status: ${delivery.status}`,
+    ].filter(Boolean);
+
+    if (lockInRetained) {
+      bodyLines.push(
+        "",
+        "Good news — your lock-in payout is secured",
+        `Because you had already started this trip, the base fee of $${lockInAmount.toFixed(2)} was captured from the customer. Your share (${driverSharePct}% = $${driverNet.toFixed(2)}) is locked in and will be included in your next payout, regardless of the admin cancellation.`,
+        "No further action is needed from you for this delivery.",
+      );
+    }
+
     await this.queueAndSend({
       actorUserId: input.actorUserId ?? null,
       customerId: delivery.customerId,
@@ -2027,24 +2118,21 @@ async notifyDeliveryForceCancelled(input: {
       driverId: assignedDriver?.id ?? input.driverId ?? null,
       channel: EnumNotificationEventChannel.EMAIL,
       type: EnumNotificationEventType.DELIVERY_CANCELLED,
-      templateCode: "delivery-force-cancelled-driver",
+      templateCode: lockInRetained
+        ? "delivery-force-cancelled-lock-in-driver"
+        : "delivery-force-cancelled-driver",
       toEmail: driverEmail,
-      subject: "A delivery was cancelled by admin",
-      body: [
-        `Hi ${driverName},`,
-        "",
-        "A delivery assigned to you has been cancelled by Operations/Admin.",
-        input.reason ? `Reason: ${input.reason}` : "",
-        `Pickup: ${delivery.pickupAddress}`,
-        `Drop-off: ${delivery.dropoffAddress}`,
-        `Status: ${delivery.status}`,
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      subject: lockInRetained
+        ? `Delivery cancelled by admin — your $${driverNet.toFixed(2)} lock-in payout is secured`
+        : "A delivery was cancelled by admin",
+      body: bodyLines.join("\n"),
       payload: {
         deliveryId: delivery.id,
         status: delivery.status,
         reason: input.reason ?? null,
+        lockInRetained,
+        lockInAmount: lockInRetained ? lockInAmount : null,
+        driverNet: lockInRetained ? driverNet : null,
       },
     });
   }
