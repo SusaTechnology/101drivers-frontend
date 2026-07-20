@@ -54,6 +54,12 @@ export class DeliveryLifecycleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly driverJobFeedService: DriverJobFeedService,
+    // forwardRef is required because NotificationEventEngine now imports
+    // TrackingGateway (for real-time bell push), and TrackingGateway imports
+    // DeliveryLifecycleService back. The TS-level circular import would
+    // otherwise leave NotificationEventEngine as `undefined` in this file's
+    // design:paramtypes metadata, breaking Nest's DI resolution at index [2].
+    @Inject(forwardRef(() => NotificationEventEngine))
     private readonly notificationEventEngine: NotificationEventEngine,
     private readonly deliveryComplianceEngine: DeliveryComplianceEngine,
     private readonly paymentPayoutEngine: PaymentPayoutEngine,
