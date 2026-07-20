@@ -253,6 +253,8 @@ export class DeliveryRequestControllerBase {
         vehicleMake: true,
         vehicleModel: true,
         vinVerificationCode: true,
+        vehicleStandardsConfirmed: true,
+        vehicleStandardsConfirmedAt: true,
       },
     });
   }
@@ -388,6 +390,8 @@ export class DeliveryRequestControllerBase {
         vehicleMake: true,
         vehicleModel: true,
         vinVerificationCode: true,
+        vehicleStandardsConfirmed: true,
+        vehicleStandardsConfirmedAt: true,
       },
     });
   }
@@ -522,6 +526,8 @@ export class DeliveryRequestControllerBase {
         vehicleMake: true,
         vehicleModel: true,
         vinVerificationCode: true,
+        vehicleStandardsConfirmed: true,
+        vehicleStandardsConfirmedAt: true,
       },
     });
     if (result === null) {
@@ -731,6 +737,8 @@ export class DeliveryRequestControllerBase {
           vehicleMake: true,
           vehicleModel: true,
           vinVerificationCode: true,
+        vehicleStandardsConfirmed: true,
+        vehicleStandardsConfirmedAt: true,
         },
       });
     } catch (error) {
@@ -873,6 +881,8 @@ export class DeliveryRequestControllerBase {
           vehicleMake: true,
           vehicleModel: true,
           vinVerificationCode: true,
+        vehicleStandardsConfirmed: true,
+        vehicleStandardsConfirmedAt: true,
         },
       });
     } catch (error) {
@@ -1621,6 +1631,8 @@ export class DeliveryRequestControllerBase {
         vehicleMake: true,
         vehicleModel: true,
         vinVerificationCode: true,
+        vehicleStandardsConfirmed: true,
+        vehicleStandardsConfirmedAt: true,
       },
     });
     if (results === null) {

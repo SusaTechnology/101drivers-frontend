@@ -28,6 +28,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { VehicleStandardsAttestation } from "@/components/shared/VehicleStandardsAttestation";
 import {
   ArrowLeft,
   MapPin,
@@ -134,6 +135,14 @@ const deliverySchema = z.object({
   modelOther: z.string().optional(),
   color: z.string().min(1, "Color is required"),
   colorOther: z.string().optional(),
+  // Vehicle standards attestation (insurance requirement).
+  // Use z.literal(true) so the form CANNOT be submitted with the box unchecked.
+  // On edit, if the delivery was created before the feature shipped, the user
+  // must check the box at least once to save changes — this captures the
+  // attestation retroactively.
+  vehicleStandardsConfirmed: z.literal(true, {
+    message: "You must confirm the vehicle meets insurance standards",
+  }),
   instructions: z.string().optional(),
   contactName: z.string().min(1, "Contact name is required").optional(),
   contactEmail: z.string().email("Valid email is required").optional(),
@@ -526,6 +535,7 @@ export default function EditDeliveryPage() {
       enableRecipient: true,
       dealerAuthorized: false,
       status: "DRAFT",
+      vehicleStandardsConfirmed: false as unknown as true, // unchecked by default; will be set from delivery data on load
     },
   });
 
@@ -596,6 +606,11 @@ export default function EditDeliveryPage() {
       if (deliveryData.vehicleModel) setValue('model', deliveryData.vehicleModel);
       if (deliveryData.vehicleColor) setValue('color', deliveryData.vehicleColor);
       if (deliveryData.transmission) setValue('transmission', deliveryData.transmission);
+      // Restore attestation state from saved delivery.
+      // If the delivery was created before this feature shipped, the field
+      // will be null/undefined — leave the box unchecked so the user must
+      // attest on next save (retroactive capture).
+      setValue('vehicleStandardsConfirmed', (deliveryData as any).vehicleStandardsConfirmed === true ? true as any : false as any);
 
       // Recipient
       if (deliveryData.recipientName) setValue('recipientName', deliveryData.recipientName);
@@ -643,6 +658,7 @@ export default function EditDeliveryPage() {
   const color = watch("color");
   const licensePlate = watch("licensePlate");
   const vinVerification = watch("vinVerification");
+  const vehicleStandardsConfirmed = watch("vehicleStandardsConfirmed");
   const recipientName = watch("recipientName");
   const recipientPhone = watch("recipientPhone");
   const recipientEmail = watch("recipientEmail");
@@ -1129,12 +1145,16 @@ export default function EditDeliveryPage() {
     if (!licensePlate || !finalMake || !finalModel || !finalColor) return false;
     if (!vinVerification || !/^\d{4}$/.test(vinVerification)) return false;
 
+    // Vehicle standards attestation must be checked (insurance requirement).
+    // On edit, if the delivery pre-dates the feature, the user must attest now.
+    if (vehicleStandardsConfirmed !== true) return false;
+
     if (!recipientName || recipientName.trim().length < 1) return false;
     if (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) return false;
     if (!recipientEmail || recipientEmail.trim().length < 1) return false;
 
     return true;
-  }, [quoteId, pickupCoords, dropoffCoords, validatedWindows, licensePlate, make, model, color, vinVerification, recipientName, recipientPhone, recipientEmail]);
+  }, [quoteId, pickupCoords, dropoffCoords, validatedWindows, licensePlate, make, model, color, vinVerification, vehicleStandardsConfirmed, recipientName, recipientPhone, recipientEmail]);
 
   // Build payload for update
   const buildPayload = (data: DeliveryFormData) => {
@@ -1165,6 +1185,7 @@ export default function EditDeliveryPage() {
       vehicleMake: finalMake,
       vehicleModel: finalModel,
       vehicleColor: finalColor,
+      vehicleStandardsConfirmed: data.vehicleStandardsConfirmed === true,
       recipientName: data.recipientName,
       recipientEmail: data.recipientEmail,
       recipientPhone: data.recipientPhone,
@@ -2227,6 +2248,25 @@ export default function EditDeliveryPage() {
                         </Button>
                       </div>
                     )}
+
+                    {/* Vehicle Standards Attestation — insurance requirement */}
+                    <VehicleStandardsAttestation
+                      checked={vehicleStandardsConfirmed === true}
+                      onChange={(v) =>
+                        setValue("vehicleStandardsConfirmed", v as true, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        })
+                      }
+                      showError={
+                        showValidationErrors && vehicleStandardsConfirmed !== true
+                      }
+                      helperText={
+                        deliveryData?.vehicleStandardsConfirmed === true
+                          ? `Already confirmed${deliveryData?.vehicleStandardsConfirmedAt ? " on " + new Date(deliveryData.vehicleStandardsConfirmedAt).toLocaleString() : ""}. Re-confirm to keep the attestation on this delivery.`
+                          : "Required for insurance coverage. If this delivery was created before the attestation feature shipped, you must check the box now to save any edits."
+                      }
+                    />
                   </CardContent>
                 </Card>
               )}

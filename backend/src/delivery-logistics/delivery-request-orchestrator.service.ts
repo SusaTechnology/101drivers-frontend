@@ -59,6 +59,7 @@ export type CreateDeliveryDraftFromQuoteInput = {
   recipientPhone?: string | null;
   isUrgent?: boolean;
   afterHours?: boolean;
+  vehicleStandardsConfirmed?: boolean | null;
 };
 
 export type CreateIndividualDeliveryDraftFromQuoteInput = {
@@ -90,6 +91,7 @@ export type CreateIndividualDeliveryDraftFromQuoteInput = {
 
   isUrgent?: boolean;
   afterHours?: boolean;
+  vehicleStandardsConfirmed?: boolean | null;
 };
 
 export type SchedulePreviewInput = {
@@ -145,6 +147,7 @@ export type CreateDeliveryFromQuoteInput = {
   recipientPhone?: string | null;
   isUrgent?: boolean;
   afterHours?: boolean;
+  vehicleStandardsConfirmed?: boolean | null;
 };
 
 export type CreateIndividualDeliveryFromQuoteInput = {
@@ -178,6 +181,7 @@ export type CreateIndividualDeliveryFromQuoteInput = {
 
   isUrgent?: boolean;
   afterHours?: boolean;
+  vehicleStandardsConfirmed?: boolean | null;
 };
 
 type IndividualCustomerShape = {
@@ -323,6 +327,14 @@ export class DeliveryRequestOrchestratorService {
         vehicleMake: input.vehicleMake?.trim() || null,
         vehicleModel: input.vehicleModel?.trim() || null,
         vinVerificationCode: input.vinVerificationCode?.trim() || null,
+
+        // Vehicle standards attestation — optional for drafts, the attestation
+        // is captured (or re-confirmed) when the draft is promoted to a real
+        // delivery. We persist it here so the user doesn't have to re-check
+        // the box if they already did.
+        vehicleStandardsConfirmed: input.vehicleStandardsConfirmed === true,
+        vehicleStandardsConfirmedAt:
+          input.vehicleStandardsConfirmed === true ? new Date() : null,
 
         recipientName: input.recipientName?.trim() || null,
         recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
@@ -480,6 +492,14 @@ export class DeliveryRequestOrchestratorService {
         vehicleMake: vehicle.vehicleMake,
         vehicleModel: vehicle.vehicleModel,
         vinVerificationCode: input.vinVerificationCode?.trim() || null,
+
+        // Vehicle standards attestation — optional for drafts, the attestation
+        // is captured (or re-confirmed) when the draft is promoted to a real
+        // delivery. We persist it here so the user doesn't have to re-check
+        // the box if they already did.
+        vehicleStandardsConfirmed: input.vehicleStandardsConfirmed === true,
+        vehicleStandardsConfirmedAt:
+          input.vehicleStandardsConfirmed === true ? new Date() : null,
 
         recipientName: input.recipientName?.trim() || null,
         recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
@@ -757,6 +777,14 @@ private async createIndividualDeliveryForResolvedCustomer(
       vehicleMake: resolvedVehicle.vehicleMake,
       vehicleModel: resolvedVehicle.vehicleModel,
       vinVerificationCode: input.vinVerificationCode.trim(),
+
+      // Vehicle standards attestation — REQUIRED for new deliveries (the
+      // frontend blocks submission if the box is unchecked, but we don't
+      // hard-fail here to avoid breaking legacy programmatic callers).
+      // Stamp both the flag and the timestamp so insurers get an audit trail.
+      vehicleStandardsConfirmed: input.vehicleStandardsConfirmed === true,
+      vehicleStandardsConfirmedAt:
+        input.vehicleStandardsConfirmed === true ? new Date() : null,
 
       recipientName: input.recipientName?.trim() || null,
       recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
@@ -1510,6 +1538,14 @@ private async resolveIndividualCustomerForCreate(
         vehicleMake: input.vehicleMake?.trim() || null,
         vehicleModel: input.vehicleModel?.trim() || null,
         vinVerificationCode: input.vinVerificationCode.trim(),
+
+        // Vehicle standards attestation — REQUIRED for new deliveries (the
+        // frontend blocks submission if the box is unchecked, but we don't
+        // hard-fail here to avoid breaking legacy programmatic callers).
+        // Stamp both the flag and the timestamp so insurers get an audit trail.
+        vehicleStandardsConfirmed: input.vehicleStandardsConfirmed === true,
+        vehicleStandardsConfirmedAt:
+          input.vehicleStandardsConfirmed === true ? new Date() : null,
 
         recipientName: input.recipientName?.trim() || null,
         recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,

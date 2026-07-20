@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Label } from '@/components/ui/label'
+import { VehicleStandardsAttestationBadge } from '@/components/shared/VehicleStandardsAttestation'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1689,6 +1690,20 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                           </div>
                         </CardContent>
                       </Card>
+                    </div>
+                    {/* Insurance attestation row — shows confirmed/not-captured status */}
+                    <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+                      <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                        Insurance: Vehicle Standards Attestation
+                      </div>
+                      <VehicleStandardsAttestationBadge
+                        confirmed={deliveryData.vehicleStandardsConfirmed}
+                        confirmedAt={deliveryData.vehicleStandardsConfirmedAt}
+                        size="md"
+                      />
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                        Customer attests the vehicle is under 12 years old, under 120k miles, and under $75k value.
+                      </p>
                     </div>
                   </CardContent>
                 </Card>

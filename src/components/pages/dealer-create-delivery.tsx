@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { VehicleStandardsAttestation } from "@/components/shared/VehicleStandardsAttestation";
 import {
   ArrowLeft,
   MapPin,
@@ -131,6 +132,12 @@ const deliverySchema = z.object({
   modelOther: z.string().optional(),
   color: z.string().min(1, "Color is required"),
   colorOther: z.string().optional(),
+  // Vehicle standards attestation (insurance requirement).
+  // Use z.literal(true) so the form CANNOT be submitted with the box unchecked —
+  // Zod rejects false / undefined at validation time.
+  vehicleStandardsConfirmed: z.literal(true, {
+    message: "You must confirm the vehicle meets insurance standards",
+  }),
   instructions: z.string().optional(),
   contactName: z.string().min(1, "Contact name is required").optional(),
   contactEmail: z.string().email("Valid email is required").optional(),
@@ -522,6 +529,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
           setValue('model', data.model || '');
           setValue('color', data.color || '');
           setValue('transmission', data.transmission || 'Automatic');
+          setValue('vehicleStandardsConfirmed', (data as any).vehicleStandardsConfirmed === true ? true as any : false as any);
           
           if (data.makeOther) setValue('makeOther', data.makeOther);
           if (data.modelOther) setValue('modelOther', data.modelOther);
@@ -779,6 +787,8 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
         if (draft.vehicleModel) setValue('model', draft.vehicleModel);
         if (draft.vehicleColor) setValue('color', draft.vehicleColor);
         if (draft.transmission) setValue('transmission', draft.transmission);
+        // Restore attestation state from draft (saved as boolean)
+        setValue('vehicleStandardsConfirmed', (draft as any).vehicleStandardsConfirmed === true ? true as any : false as any);
 
         // Recipient (always enabled)
         if (draft.recipientBusinessName) setValue('recipientBusinessName', draft.recipientBusinessName);
@@ -964,6 +974,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       color: data.color,
       colorOther: data.colorOther,
       transmission: data.transmission || "Automatic",
+      vehicleStandardsConfirmed: data.vehicleStandardsConfirmed === true,
 
       // Recipient (always required)
       recipientBusinessName: data.recipientBusinessName,
@@ -1053,6 +1064,9 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       vehicleMake: data.make === "Other" ? data.makeOther : data.make,
       vehicleModel: data.model === "Other" ? data.modelOther : data.model,
       vehicleColor: data.color === "Other" ? data.colorOther : data.color,
+      // Preserve attestation state in draft so user doesn't have to re-check
+      // when they come back to promote the draft to a real delivery.
+      vehicleStandardsConfirmed: data.vehicleStandardsConfirmed === true,
       transmission: data.transmission,
       recipientBusinessName: data.recipientBusinessName,
       recipientName: data.recipientName,
@@ -1128,6 +1142,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       enableRecipient: true, // Always enabled
       dealerAuthorized: false,
       status: "DRAFT",
+      vehicleStandardsConfirmed: false as unknown as true, // start unchecked; Zod literal(true) blocks submission until checked
     },
   });
 
@@ -1298,6 +1313,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const color = watch("color");
   const licensePlate = watch("licensePlate");
   const vinVerification = watch("vinVerification");
+  const vehicleStandardsConfirmed = watch("vehicleStandardsConfirmed");
   const recipientName = watch("recipientName");
   const recipientPhone = watch("recipientPhone");
   const recipientEmail = watch("recipientEmail");
@@ -1329,13 +1345,16 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     // VIN verification must be 4 digits
     if (!vinVerification || !/^\d{4}$/.test(vinVerification)) return false;
 
+    // Vehicle standards attestation must be checked (insurance requirement)
+    if (vehicleStandardsConfirmed !== true) return false;
+
     // Recipient is required - must have name, phone, and email
     if (!recipientName || recipientName.trim().length < 1) return false;
     if (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) return false;
     if (!recipientEmail || recipientEmail.trim().length < 1) return false;
 
     return true;
-  }, [quoteId, pickupCoords, dropoffCoords, pickupState, dropoffState, validatedWindows, licensePlate, make, model, color, vinVerification, recipientName, recipientPhone, recipientEmail]);
+  }, [quoteId, pickupCoords, dropoffCoords, pickupState, dropoffState, validatedWindows, licensePlate, make, model, color, vinVerification, vehicleStandardsConfirmed, recipientName, recipientPhone, recipientEmail]);
 
   // Clear validation error state once form becomes valid
   useEffect(() => {
@@ -1875,6 +1894,7 @@ const handleQuotePreview = () => {
       vehicleMake: finalMake,
       vehicleModel: finalModel,
       vehicleColor: finalColor,
+      vehicleStandardsConfirmed: data.vehicleStandardsConfirmed === true,
       // specialInstructions: data.instructions,
       recipientBusinessName: data.recipientBusinessName,
       recipientName: data.recipientName,
@@ -2959,6 +2979,20 @@ const handleQuotePreview = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Vehicle Standards Attestation — insurance requirement */}
+                <VehicleStandardsAttestation
+                  checked={vehicleStandardsConfirmed === true}
+                  onChange={(v) =>
+                    setValue("vehicleStandardsConfirmed", v as true, {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    })
+                  }
+                  showError={
+                    showValidationErrors && vehicleStandardsConfirmed !== true
+                  }
+                />
 
               </CardContent>
             </Card>

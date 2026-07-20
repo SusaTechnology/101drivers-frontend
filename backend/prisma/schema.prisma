@@ -386,6 +386,15 @@ model DeliveryRequest {
   vehicleMake         String?
   vehicleModel        String?
   vinVerificationCode String?
+
+  // Vehicle standards attestation (insurance requirement)
+  // Customer must confirm at delivery-creation time that the vehicle is
+  // under 12 years old, under 120k miles, and under $75k value. Both
+  // columns are nullable so legacy rows (pre-feature) are treated as
+  // "attestation not captured" rather than false.
+  vehicleStandardsConfirmed   Boolean?
+  vehicleStandardsConfirmedAt DateTime?
+
   pickupPin          String?
 
 

@@ -359,6 +359,10 @@ model DeliveryRequest {
   vehicleModel            String?
   vinVerificationCode     String
 
+  // Vehicle standards attestation (insurance requirement)
+  vehicleStandardsConfirmed   Boolean?
+  vehicleStandardsConfirmedAt DateTime?
+
   @@index([status, createdAt])
   @@index([customerId, createdAt])
   @@index([isUrgent, status])

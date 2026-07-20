@@ -130,6 +130,7 @@ async createDeliveryDraftFromQuote(
     recipientPhone: body.recipientPhone ?? null,
     afterHours: body.afterHours === true,
     isUrgent: body.isUrgent === true,
+    vehicleStandardsConfirmed: body.vehicleStandardsConfirmed === true,
   });
 }
 @common.Get("/lookup/minimal")
@@ -518,6 +519,7 @@ async createQuotePreview(
       recipientPhone: body.recipientPhone ?? null,
       isUrgent: body.isUrgent === true,
       afterHours: body.afterHours === true,
+      vehicleStandardsConfirmed: body.vehicleStandardsConfirmed === true,
     });
   }
 

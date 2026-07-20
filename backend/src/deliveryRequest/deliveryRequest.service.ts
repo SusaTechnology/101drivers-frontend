@@ -205,6 +205,11 @@ async createQuotePreview(input: CreateQuotePreviewInput): Promise<any> {
 
         afterHours: input.afterHours === true,
         isUrgent: input.isUrgent === true,
+
+        // Forward the vehicle standards attestation flag through to the
+        // orchestrator, which stamps both the flag and the timestamp.
+        vehicleStandardsConfirmed:
+          input.vehicleStandardsConfirmed === true ? true : null,
       });
 
     if (result.action !== "CREATED") {

@@ -557,6 +557,28 @@ class DeliveryRequestOrderByInput {
     nullable: true,
   })
   vinVerificationCode?: SortOrder;
+
+  @ApiProperty({
+    required: false,
+    enum: ["asc", "desc"],
+  })
+  @IsOptional()
+  @IsEnum(SortOrder)
+  @Field(() => SortOrder, {
+    nullable: true,
+  })
+  vehicleStandardsConfirmed?: SortOrder;
+
+  @ApiProperty({
+    required: false,
+    enum: ["asc", "desc"],
+  })
+  @IsOptional()
+  @IsEnum(SortOrder)
+  @Field(() => SortOrder, {
+    nullable: true,
+  })
+  vehicleStandardsConfirmedAt?: SortOrder;
 }
 
 export { DeliveryRequestOrderByInput as DeliveryRequestOrderByInput };

@@ -109,6 +109,8 @@ async createIndividualDeliveryDraftFromQuote(
 
       afterHours: body.afterHours === true,
       isUrgent: body.isUrgent === true,
+
+      vehicleStandardsConfirmed: body.vehicleStandardsConfirmed === true,
     });
   }
 

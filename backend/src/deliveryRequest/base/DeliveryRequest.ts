@@ -658,6 +658,32 @@ class DeliveryRequest {
     nullable: true,
   })
   vinVerificationCode!: string | null;
+
+  @ApiProperty({
+    required: false,
+    type: Boolean,
+    description:
+      "Customer attestation that the vehicle is under 12 years old, under 120k miles, and under $75k value. Null for deliveries created before this feature shipped.",
+  })
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, {
+    nullable: true,
+  })
+  vehicleStandardsConfirmed?: boolean | null;
+
+  @ApiProperty({
+    required: false,
+    type: String,
+    format: "date-time",
+    description: "When the customer attested to the vehicle standards.",
+  })
+  @IsDate()
+  @IsOptional()
+  @Field(() => Date, {
+    nullable: true,
+  })
+  vehicleStandardsConfirmedAt?: Date | null;
 }
 
 export { DeliveryRequest as DeliveryRequest };

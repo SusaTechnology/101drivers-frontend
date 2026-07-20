@@ -363,6 +363,10 @@ export interface AdminDeliveryDetail extends DeliveryListItem {
   vehicleMake?: string | null;
   vehicleModel?: string | null;
   vinVerificationCode: string;
+  // Vehicle standards attestation (insurance requirement).
+  // Null for deliveries created before the feature shipped.
+  vehicleStandardsConfirmed?: boolean | null;
+  vehicleStandardsConfirmedAt?: string | null;
   recipientName?: string | null;
   recipientEmail?: string | null;
   recipientPhone?: string | null;

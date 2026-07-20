@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { VehicleStandardsAttestationBadge } from '@/components/shared/VehicleStandardsAttestation';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -653,6 +654,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                             <span className="text-amber-600">Pending</span>
                           )}
                         </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                        <p className="text-[10px] text-slate-400 mb-1">Standards Attestation</p>
+                        <VehicleStandardsAttestationBadge
+                          confirmed={delivery.vehicleStandardsConfirmed}
+                          confirmedAt={delivery.vehicleStandardsConfirmedAt}
+                        />
                       </div>
                     </div>
                   </div>

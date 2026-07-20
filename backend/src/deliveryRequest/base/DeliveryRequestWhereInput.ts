@@ -714,6 +714,17 @@ class DeliveryRequestWhereInput {
     nullable: true,
   })
   vinVerificationCode?: StringNullableFilter;
+
+  @ApiProperty({
+    required: false,
+    type: BooleanFilter,
+  })
+  @Type(() => BooleanFilter)
+  @IsOptional()
+  @Field(() => BooleanFilter, {
+    nullable: true,
+  })
+  vehicleStandardsConfirmed?: BooleanFilter;
 }
 
 export { DeliveryRequestWhereInput as DeliveryRequestWhereInput };

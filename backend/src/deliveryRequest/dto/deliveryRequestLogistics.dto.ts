@@ -233,6 +233,16 @@ export class CreateIndividualDeliveryFromQuoteBody {
   @IsOptional()
   @IsBoolean()
   isUrgent?: boolean;
+
+  @swagger.ApiProperty({
+    required: false,
+    type: Boolean,
+    description:
+      "Customer attestation that the vehicle is under 12 years old, under 120k miles, and under $75k value. Required for new deliveries created on or after the feature ship date; legacy drafts may omit it.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  vehicleStandardsConfirmed?: boolean;
 }
 
 export class QuotePreviewBody {
@@ -364,6 +374,14 @@ export class CreateDeliveryFromQuoteBody {
     default: false,
   })
   afterHours?: boolean;
+
+  @swagger.ApiProperty({
+    required: false,
+    type: Boolean,
+    description:
+      "Customer attestation that the vehicle is under 12 years old, under 120k miles, and under $75k value. Required for new deliveries created on or after the feature ship date; legacy drafts may omit it.",
+  })
+  vehicleStandardsConfirmed?: boolean;
 }
 
 export class BookDeliveryBody {
@@ -1430,6 +1448,16 @@ export class CreateDeliveryDraftFromQuoteBody {
   @IsOptional()
   @IsBoolean()
   isUrgent?: boolean;
+
+  @ApiProperty({
+    required: false,
+    type: Boolean,
+    description:
+      "Customer attestation that the vehicle is under 12 years old, under 120k miles, and under $75k value. Optional for drafts (the attestation is captured when the draft is promoted to a real delivery).",
+  })
+  @IsOptional()
+  @IsBoolean()
+  vehicleStandardsConfirmed?: boolean;
 }
 
 export class CreateIndividualDeliveryDraftFromQuoteBody {
@@ -1612,6 +1640,16 @@ export class CreateIndividualDeliveryDraftFromQuoteBody {
   @IsOptional()
   @IsBoolean()
   isUrgent?: boolean;
+
+  @ApiProperty({
+    required: false,
+    type: Boolean,
+    description:
+      "Customer attestation that the vehicle is under 12 years old, under 120k miles, and under $75k value. Optional for drafts.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  vehicleStandardsConfirmed?: boolean;
 }
 
 
