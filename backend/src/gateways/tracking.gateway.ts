@@ -22,15 +22,17 @@ type AuthenticatedSocket = Socket & {
  *
  * Rooms:
  *   delivery:<deliveryId>   — anyone tracking a specific delivery
- *   public:<trackingToken> — unauthenticated tracking link viewers
- *   dealer:<dealerId>      — dealer dashboard receives status + new delivery events
+ *   public:<trackingToken>  — unauthenticated tracking link viewers
+ *   dealer:<dealerId>       — dealer dashboard receives status + new delivery events
  *   driver-feed             — all drivers viewing the gig board
+ *   user:<userId>           — per-user room for personal notifications (bell dropdown)
  *
  * Events emitted (server → client):
  *   delivery:location-update  { deliveryId, lat, lng, recordedAt, drivenMiles }
- *   delivery:status-changed   { deliveryId, status }
+ *   delivery:status-changed   { deliveryId, status, lockInRetained?, lockInAmount?, lockInDriverSharePct? }
  *   delivery:feed-update      { deliveryId, status, bookedByDriverId }
  *   delivery:created          { delivery (summary object) }
+ *   notification:created      { id, type, subject, body, deliveryId?, customerId?, driverId?, createdAt, payload? }
  */
 @WebSocketGateway({
   cors: {
@@ -144,6 +146,34 @@ export class TrackingGateway
   handleLeaveDriverFeed(@ConnectedSocket() client: Socket) {
     client.leave("driver-feed");
     return { left: "driver-feed" };
+  }
+
+  /** Authenticated: user joins their own personal notification room.
+   *  Used by the NotificationBell dropdown to receive `notification:created`
+   *  events in real time (instead of polling the REST inbox endpoint). */
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage("join:user")
+  handleJoinUser(@ConnectedSocket() client: Socket) {
+    const userId = (client as AuthenticatedSocket).user?.sub;
+    if (!userId) {
+      return { joined: null, reason: "no_user_id" };
+    }
+    const room = `user:${userId}`;
+    client.join(room);
+    this.logger.debug(`User ${userId} joined ${room}`);
+    return { joined: room };
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage("leave:user")
+  handleLeaveUser(@ConnectedSocket() client: Socket) {
+    const userId = (client as AuthenticatedSocket).user?.sub;
+    if (!userId) {
+      return { left: null };
+    }
+    const room = `user:${userId}`;
+    client.leave(room);
+    return { left: room };
   }
 
   // ── Driver GPS location streaming ──
@@ -318,5 +348,60 @@ export class TrackingGateway
       deliveryId: data.deliveryId,
       ...data.delivery,
     });
+  }
+
+  /**
+   * Push a `notification:created` event to a specific user's room so their
+   * NotificationBell dropdown updates in real time without polling.
+   *
+   * Called from NotificationEventEngine.queueAndSend after the row is
+   * persisted. Recipient resolution:
+   *   - If actorUserId is set, push to that user (admin self-notification)
+   *   - If customerId is set, push to the customer's user (via customer.user.id)
+   *   - If driverId is set, push to the driver's user (via driver.user.id)
+   *
+   * The frontend NotificationBell listens on `notification:created` and
+   * invalidates its inbox query, triggering a refetch.
+   *
+   * Note: the room join is opt-in — the frontend must explicitly emit
+   * `join:user` after auth. If no socket is in the room, the event is
+   * silently dropped (Socket.IO behavior), which is fine: the user will
+   * still see the notification on the next poll.
+   */
+  async emitNotificationCreated(data: {
+    userId: string;
+    notification: {
+      id: string;
+      type: string;
+      subject: string | null;
+      body: string | null;
+      deliveryId?: string | null;
+      customerId?: string | null;
+      driverId?: string | null;
+      templateCode?: string | null;
+      createdAt: Date;
+      payload?: any;
+    };
+  }) {
+    if (!this.server) {
+      this.logger.warn("emitNotificationCreated: server not initialized, skipping");
+      return;
+    }
+    const room = `user:${data.userId}`;
+    this.server.to(room).emit("notification:created", {
+      id: data.notification.id,
+      type: data.notification.type,
+      subject: data.notification.subject,
+      body: data.notification.body,
+      deliveryId: data.notification.deliveryId ?? null,
+      customerId: data.notification.customerId ?? null,
+      driverId: data.notification.driverId ?? null,
+      templateCode: data.notification.templateCode ?? null,
+      createdAt: data.notification.createdAt.toISOString(),
+      payload: data.notification.payload ?? null,
+    });
+    this.logger.debug(
+      `emitNotificationCreated -> room=${room} type=${data.notification.type} subject="${data.notification.subject ?? ""}"`
+    );
   }
 }

@@ -78,8 +78,21 @@ export class DeliveryLifecycleService {
   /**
    * Emit socket events after a status change (fire-and-forget).
    * Single query with Prisma include to fetch dealerId + shareToken for room targeting.
+   *
+   * Optional lockIn context is forwarded to the gateway payload so the
+   * driver/dealer UI can show "lock-in secured" or "base fee charged" badges
+   * in real time when a trip starts or is cancelled after start.
    */
-  private emitStatusChanged(deliveryId: string, status: string): void {
+  private emitStatusChanged(
+    deliveryId: string,
+    status: string,
+    _unused?: undefined,
+    lockIn?: {
+      retained: boolean;
+      amount?: number;
+      driverSharePct?: number | null;
+    }
+  ): void {
     if (!this.trackingGateway) return;
     const gateway = this.trackingGateway;
     this.prisma.deliveryRequest
@@ -98,6 +111,9 @@ export class DeliveryLifecycleService {
             status,
             dealerId: row.customer?.id ?? undefined,
             shareToken: row.trackingShareToken ?? undefined,
+            lockInRetained: lockIn?.retained ? true : undefined,
+            lockInAmount: lockIn?.amount ?? null,
+            lockInDriverSharePct: lockIn?.driverSharePct ?? null,
           });
           if (["LISTED", "BOOKED", "CANCELLED", "EXPIRED"].includes(status)) {
             gateway.emitFeedUpdate({ deliveryId, status });
@@ -624,7 +640,35 @@ async startTrip(input: {
     trackingUrl: this.buildPublicTrackingUrl(result.trackingShareToken),
     expiresAt: result.trackingShareExpiresAt,
   });
-  this.emitStatusChanged(input.deliveryId, "ACTIVE");
+
+  // If the lock-in base fee was captured at trip start, send the customer
+  // a separate notification explaining the partial charge. Previously the
+  // customer only learned about the base fee if they later cancelled —
+  // leading to "surprise statement" complaints. This upfront notification
+  // closes that gap. Best-effort: failures are logged but do not fail startTrip.
+  if (result.lockInCaptured && result.lockInAmount > 0) {
+    try {
+      await this.notificationEventEngine.notifyLockInCaptured({
+        deliveryId: input.deliveryId,
+        driverId: input.driverId,
+        actorUserId: input.actorUserId ?? null,
+        lockInAmount: result.lockInAmount,
+        driverSharePct: null,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `notifyLockInCaptured failed for delivery ${input.deliveryId} (non-fatal): ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  }
+
+  this.emitStatusChanged(input.deliveryId, "ACTIVE", undefined, result.lockInCaptured ? {
+    retained: result.lockInCaptured,
+    amount: result.lockInAmount,
+    driverSharePct: undefined, // unknown at this layer; only set on cancel paths
+  } : undefined);
 
   return result;
 });

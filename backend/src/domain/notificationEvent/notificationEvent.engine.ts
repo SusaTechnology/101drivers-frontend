@@ -1,5 +1,5 @@
 // src/domain/notificationEvent/notificationEvent.engine.ts
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional, Inject, forwardRef } from "@nestjs/common";
 import {
   EnumNotificationEventChannel,
   EnumNotificationEventStatus,
@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { MailService } from "../../common/mail/mail.service";
+import { TrackingGateway } from "../../gateways/tracking.gateway";
 
 type Tx = Prisma.TransactionClient;
 
@@ -37,7 +38,9 @@ export class NotificationEventEngine {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
+    @Optional() @Inject(forwardRef(() => TrackingGateway))
+    private readonly trackingGateway?: TrackingGateway
   ) {}
 
   async queueAndSend(input: QueueNotificationInput) {
@@ -59,6 +62,18 @@ export class NotificationEventEngine {
       },
     });
 
+    // Fire-and-forget: push `notification:created` to all relevant user rooms
+    // so the NotificationBell dropdowns update in real time. We do this BEFORE
+    // deliver() so the bell updates even if SMTP is slow / unconfigured.
+    // Errors are swallowed on purpose — socket push is best-effort.
+    this.broadcastNotificationCreated(created).catch((err) => {
+      this.logger.debug(
+        `broadcastNotificationCreated failed (non-fatal): ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    });
+
     try {
       await this.deliver(created.id);
 
@@ -74,6 +89,87 @@ export class NotificationEventEngine {
 
       return this.prisma.notificationEvent.findUniqueOrThrow({
         where: { id: created.id },
+      });
+    }
+  }
+
+  /**
+   * Resolve all user IDs who should see this notification in their bell and
+   * push a `notification:created` socket event to each user's room.
+   *
+   * Recipients:
+   *   1. actorUserId (the user who triggered the action — e.g. admin who cancelled)
+   *   2. customer.user.id (the customer the notification is about)
+   *   3. driver.user.id (the driver the notification is about)
+   *
+   * The bell's REST query already includes actorUserId; the customer/driver
+   * visibility is added in NotificationEventService.getMyNotificationEvents
+   * via an OR clause on customer.userId / driver.userId.
+   */
+  private async broadcastNotificationCreated(event: {
+    id: string;
+    actorUserId: string | null;
+    customerId: string | null;
+    driverId: string | null;
+    deliveryId: string | null;
+    type: EnumNotificationEventType;
+    subject: string | null;
+    body: string | null;
+    templateCode: string | null;
+    createdAt: Date;
+    payload?: Prisma.JsonValue | null;
+  }) {
+    if (!this.trackingGateway) {
+      return;
+    }
+
+    const userIds = new Set<string>();
+
+    if (event.actorUserId) {
+      userIds.add(event.actorUserId);
+    }
+
+    if (event.customerId) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: event.customerId },
+        select: { userId: true },
+      });
+      if (customer?.userId) {
+        userIds.add(customer.userId);
+      }
+    }
+
+    if (event.driverId) {
+      const driver = await this.prisma.driver.findUnique({
+        where: { id: event.driverId },
+        select: { userId: true },
+      });
+      if (driver?.userId) {
+        userIds.add(driver.userId);
+      }
+    }
+
+    if (userIds.size === 0) {
+      return;
+    }
+
+    const notificationPayload = {
+      id: event.id,
+      type: event.type,
+      subject: event.subject,
+      body: event.body,
+      deliveryId: event.deliveryId,
+      customerId: event.customerId,
+      driverId: event.driverId,
+      templateCode: event.templateCode,
+      createdAt: event.createdAt,
+      payload: event.payload ?? null,
+    };
+
+    for (const userId of userIds) {
+      await this.trackingGateway.emitNotificationCreated({
+        userId,
+        notification: notificationPayload,
       });
     }
   }
@@ -574,6 +670,132 @@ async notifyTripStarted(input: {
       },
     });
   }
+
+  return true;
+}
+
+/**
+ * Notify the customer that their card was partially captured at trip start
+ * (the non-refundable base fee). This closes the "surprise statement" gap —
+ * previously the customer only learned about the base fee if they later
+ * cancelled. Now they get an upfront email + in-app notification the moment
+ * the driver starts the trip.
+ *
+ * Skips silently if no customer email is available.
+ */
+async notifyLockInCaptured(input: {
+  deliveryId: string;
+  actorUserId?: string | null;
+  driverId?: string | null;
+  /** The base fee amount captured (in dollars). */
+  lockInAmount: number;
+  /** Driver's share % at the time of lock-in. */
+  driverSharePct?: number | null;
+}) {
+  const delivery = await this.prisma.deliveryRequest.findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      status: true,
+      customerId: true,
+      pickupAddress: true,
+      dropoffAddress: true,
+      customer: {
+        select: {
+          id: true,
+          contactEmail: true,
+          contactName: true,
+          user: {
+            select: {
+              email: true,
+              fullName: true,
+            },
+          },
+        },
+      },
+      assignments: {
+        where: {
+          ...(input.driverId ? { driverId: input.driverId } : {}),
+        },
+        orderBy: { assignedAt: "desc" },
+        take: 1,
+        select: {
+          driver: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  fullName: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!delivery) {
+    throw new Error("Delivery not found");
+  }
+
+  const customerEmail =
+    delivery.customer?.user?.email ??
+    delivery.customer?.contactEmail ??
+    null;
+
+  const customerName =
+    delivery.customer?.user?.fullName ??
+    delivery.customer?.contactName ??
+    "Customer";
+
+  const driverName =
+    delivery.assignments?.[0]?.driver?.user?.fullName ?? "your driver";
+
+  if (!customerEmail) {
+    this.logger.debug(
+      `notifyLockInCaptured: no customer email for delivery ${input.deliveryId}, skipping email`
+    );
+    return false;
+  }
+
+  const lockInAmount = Number(input.lockInAmount ?? 0);
+  if (lockInAmount <= 0) {
+    return false;
+  }
+
+  const bodyLines = [
+    `Hi ${customerName},`,
+    "",
+    `${driverName} has started your delivery. The trip is now in progress.`,
+    `Pickup: ${delivery.pickupAddress}`,
+    `Drop-off: ${delivery.dropoffAddress}`,
+    "",
+    "Base fee captured",
+    `A non-refundable base fee of $${lockInAmount.toFixed(2)} has been charged to your card. This compensates the driver for arriving and starting the trip.`,
+    "The remaining balance will be charged when the delivery is completed. If the trip is cancelled after this point, the base fee is non-refundable.",
+    "You can track your driver's progress in real time from your dashboard.",
+  ];
+
+  await this.queueAndSend({
+    actorUserId: input.actorUserId ?? null,
+    customerId: delivery.customerId,
+    deliveryId: delivery.id,
+    driverId: input.driverId ?? null,
+    channel: EnumNotificationEventChannel.EMAIL,
+    type: EnumNotificationEventType.PAYMENT_CAPTURED,
+    templateCode: "lock-in-captured-customer",
+    toEmail: customerEmail,
+    subject: `Your driver has started — base fee of $${lockInAmount.toFixed(2)} captured`,
+    body: bodyLines.join("\n"),
+    payload: {
+      deliveryId: delivery.id,
+      status: delivery.status,
+      lockInCaptured: true,
+      lockInAmount,
+      driverSharePct: input.driverSharePct ?? null,
+    },
+  });
 
   return true;
 }
@@ -2664,6 +2886,163 @@ async notifyTrackingAvailableAfterBooking(input: {
       ].join("\n"),
     });
   }
+
+  return true;
+}
+
+/**
+ * Admin-facing self-notification when a lock-in trip is cancelled.
+ *
+ * This gives the admin who cancelled immediate in-app feedback that:
+ *   - The lock-in fee was retained ($X)
+ *   - The driver's share was secured ($Y = Z% of $X)
+ *   - Both customer and driver were notified via email
+ *
+ * Without this, the admin only sees customer/driver-facing email subjects
+ * in their bell (e.g. "Your delivery has been cancelled — base fee charged")
+ * which is confusing because they didn't cancel THEIR OWN delivery.
+ *
+ * Created with actorUserId = admin's id and toEmail = admin's email, so
+ * it shows up in the admin's bell only (not the customer's or driver's).
+ */
+async notifyAdminLockInRetainedOnCancel(input: {
+  deliveryId: string;
+  actorUserId: string;
+  /** "admin-cancel" for Path B, "admin-force-cancel" for Path C */
+  trigger: "admin-cancel" | "admin-force-cancel";
+  /** Reason the admin provided (optional for Path B, required for Path C). */
+  reason?: string | null;
+  driverId?: string | null;
+  lockInRetained: boolean;
+  lockInAmount: number;
+  lockInDriverSharePct?: number | null;
+}) {
+  // Look up the admin's email so we can address the notification to them.
+  const admin = await this.prisma.user.findUnique({
+    where: { id: input.actorUserId },
+    select: {
+      id: true,
+      email: true,
+      fullName: true,
+      username: true,
+    },
+  });
+
+  if (!admin?.email) {
+    this.logger.debug(
+      `notifyAdminLockInRetainedOnCancel: admin ${input.actorUserId} has no email, skipping`
+    );
+    return false;
+  }
+
+  const delivery = await this.prisma.deliveryRequest.findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      status: true,
+      pickupAddress: true,
+      dropoffAddress: true,
+      customerId: true,
+      customer: {
+        select: {
+          id: true,
+          businessName: true,
+          contactName: true,
+        },
+      },
+      assignments: {
+        where: input.driverId ? { driverId: input.driverId } : {},
+        orderBy: { assignedAt: "desc" },
+        take: 1,
+        select: {
+          driver: {
+            select: {
+              id: true,
+              user: { select: { fullName: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!delivery) {
+    this.logger.debug(
+      `notifyAdminLockInRetainedOnCancel: delivery ${input.deliveryId} not found, skipping`
+    );
+    return false;
+  }
+
+  const customerLabel =
+    delivery.customer?.businessName ??
+    delivery.customer?.contactName ??
+    "Customer";
+
+  const driverLabel =
+    delivery.assignments?.[0]?.driver?.user?.fullName ?? "Driver";
+
+  const lockInAmount = Number(input.lockInAmount ?? 0);
+  const driverSharePct = Number(input.lockInDriverSharePct ?? 60);
+  const driverNet = Number((lockInAmount * driverSharePct / 100).toFixed(2));
+
+  const actionLabel =
+    input.trigger === "admin-force-cancel"
+      ? "force-cancelled"
+      : "cancelled";
+
+  const subject = input.lockInRetained
+    ? `Lock-in retained: delivery ${actionLabel} — $${lockInAmount.toFixed(2)} charged, customer + driver notified`
+    : `Delivery ${actionLabel} — no lock-in fee (trip had not started)`;
+
+  const bodyLines = [
+    `Hi ${admin.fullName || admin.username || "admin"},`,
+    "",
+    `You ${actionLabel} delivery ${delivery.id}.`,
+    `Pickup: ${delivery.pickupAddress}`,
+    `Drop-off: ${delivery.dropoffAddress}`,
+    `Customer: ${customerLabel}`,
+    `Driver: ${driverLabel}`,
+    input.reason ? `Reason: ${input.reason}` : null,
+    "",
+    input.lockInRetained
+      ? "Lock-in outcome"
+      : "Payment outcome",
+    input.lockInRetained
+      ? `Because the driver had already started this trip, the non-refundable base fee of $${lockInAmount.toFixed(2)} was charged to the customer. The driver's share (${driverSharePct}% = $${driverNet.toFixed(2)}) is secured and will be paid in their next payout.`
+      : "The trip had not started yet, so no lock-in fee was charged. Any prior authorization hold will be released within 1-2 business days.",
+    "",
+    "Notifications sent",
+    input.lockInRetained
+      ? "Customer and driver were both emailed with the lock-in details. Both notifications also appear in their in-app bell."
+      : "Customer and driver were both emailed about the cancellation. Both notifications also appear in their in-app bell.",
+    "An AdminAuditLog row was written for this action — view it in the Audit Logs page.",
+  ].filter((line): line is string => line !== null);
+
+  await this.queueAndSend({
+    actorUserId: input.actorUserId,
+    customerId: delivery.customerId,
+    deliveryId: delivery.id,
+    driverId: input.driverId ?? null,
+    channel: EnumNotificationEventChannel.EMAIL,
+    type: EnumNotificationEventType.DELIVERY_CANCELLED,
+    templateCode: input.lockInRetained
+      ? "admin-lock-in-retained-confirmation"
+      : "admin-cancel-confirmation",
+    toEmail: admin.email,
+    subject,
+    body: bodyLines.join("\n"),
+    payload: {
+      deliveryId: delivery.id,
+      status: delivery.status,
+      trigger: input.trigger,
+      reason: input.reason ?? null,
+      lockInRetained: input.lockInRetained,
+      lockInAmount: input.lockInRetained ? lockInAmount : null,
+      driverNet: input.lockInRetained ? driverNet : null,
+      customerNotified: true,
+      driverNotified: true,
+    },
+  });
 
   return true;
 }

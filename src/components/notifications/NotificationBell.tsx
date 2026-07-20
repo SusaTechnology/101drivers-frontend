@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Bell, CheckCircle, Clock, Calendar, FileText, X, Truck, DollarSign, AlertCircle, AlertTriangle, Info, MessageSquare, XCircle, MailCheck, Archive, ExternalLink, ArchiveX, ArrowRight, Navigation as NavigationIcon, MapPin, Flag, Send, Check } from 'lucide-react'
+import { Bell, CheckCircle, Clock, Calendar, FileText, X, Truck, DollarSign, AlertCircle, AlertTriangle, Info, MessageSquare, XCircle, MailCheck, Archive, ExternalLink, ArchiveX, ArrowRight, Navigation as NavigationIcon, MapPin, Flag, Send, Check, Lock, ShieldCheck, UserPlus, UserCheck, CreditCard, Car, Store, RefreshCw, CalendarCheck, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -12,6 +12,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useDataQuery, useCreate, authFetch, getUser } from '@/lib/tanstack/dataQuery'
+import { useSocketEvent } from '@/hooks/useSocket'
+import { socketJoinUser, socketLeaveUser } from '@/lib/socket'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import {
@@ -24,6 +26,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   NOTIFICATION_TYPE_STYLES,
+  getNotificationStyle,
   type NotificationEventItem,
   type NotificationInboxResponse,
   type NotificationEventType,
@@ -142,32 +145,42 @@ function SendTrackingButton({ trackingUrl, recipientPhone }: { trackingUrl: stri
   )
 }
 
-// Icon mapping
-const getNotificationIcon = (type: NotificationEventType) => {
+// Icon mapping — uses the centralized getNotificationStyle helper so lock-in
+// template codes (e.g. 'delivery-cancelled-lock-in-driver') get the right icon.
+const getNotificationIcon = (type: NotificationEventType, templateCode?: string | null) => {
+  const style = getNotificationStyle({ type, templateCode })
   const iconMap: Record<string, React.ElementType> = {
-    DELIVERY_STATUS_CHANGED: Truck,
-    DELIVERY_ASSIGNED: Truck,
-    DELIVERY_COMPLETED: CheckCircle,
-    DELIVERY_CANCELLED: XCircle,
-    TRACKING_STARTED: NavigationIcon,
-    PAYMENT_RECEIVED: DollarSign,
-    PAYMENT_FAILED: AlertCircle,
-    SCHEDULE_CHANGED: Calendar,
-    COMPLIANCE_REQUEST: FileText,
-    COMPLIANCE_REMINDER: AlertTriangle,
-    SUPPORT_REQUEST_CREATED: Bell,
-    SUPPORT_REQUEST_UPDATED: MessageSquare,
-    DISPUTE_CREATED: AlertTriangle,
-    DISPUTE_RESOLVED: CheckCircle,
-    SYSTEM_ALERT: Bell,
-    GENERAL: Info,
+    Truck,
+    UserPlus,
+    UserCheck,
+    RefreshCw,
+    Calendar,
+    CalendarCheck,
+    CalendarClock,
+    CheckCircle,
+    XCircle,
+    MapPin,
+    CreditCard,
+    DollarSign,
+    AlertCircle,
+    AlertTriangle,
+    Headphones: Bell, // approximated — no Headphones icon imported
+    MessageSquare,
+    Info,
+    Bell,
+    FileText,
+    Car,
+    Store,
+    Lock,
+    ShieldCheck,
+    'MapPinOff': MapPin, // approximated
   }
-  return iconMap[type] || Info
+  return iconMap[style.icon] || Info
 }
 
 // Color mapping
-const getNotificationColor = (type: NotificationEventType) => {
-  const style = NOTIFICATION_TYPE_STYLES[type] || NOTIFICATION_TYPE_STYLES.GENERAL
+const getNotificationColor = (type: NotificationEventType, templateCode?: string | null) => {
+  const style = getNotificationStyle({ type, templateCode })
   switch (style.color) {
     case 'blue': return { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', badge: 'blue' }
     case 'green':
@@ -203,6 +216,27 @@ export default function NotificationBell({ className, userType }: NotificationBe
 
   const notifications = inboxData?.items || []
   const unreadCount = inboxData?.unreadCount || 0
+
+  // ── Real-time notification push ────────────────────────────────────
+  // Join the user's personal notification room so the backend can push
+  // `notification:created` events to us. We leave on unmount.
+  //
+  // We also listen on `notification:created` and invalidate the inbox query
+  // so the bell dropdown refetches immediately. The push is best-effort —
+  // if the socket isn't connected, the bell still polls the REST endpoint.
+  useEffect(() => {
+    socketJoinUser()
+    return () => {
+      socketLeaveUser()
+    }
+  }, [])
+
+  useSocketEvent<any>('notification:created', (_data) => {
+    // Refetch the inbox so the new notification shows up at the top of the
+    // list with the correct unread count. We don't manually prepend because
+    // the server is the source of truth for ordering + dedup.
+    refetch()
+  })
 
   // Mark all as read mutation
   const markAllReadMutation = useCreate<undefined, MarkAllReadResponse>(
@@ -466,10 +500,10 @@ export default function NotificationBell({ className, userType }: NotificationBe
           {!isLoading &&
             !error &&
             notifications.map((notification) => {
-              const Icon = getNotificationIcon(notification.type)
-              const colorStyle = getNotificationColor(notification.type)
+              const Icon = getNotificationIcon(notification.type, notification.templateCode)
+              const colorStyle = getNotificationColor(notification.type, notification.templateCode)
               const isExpanded = expandedItems.has(notification.id)
-              const style = NOTIFICATION_TYPE_STYLES[notification.type] || NOTIFICATION_TYPE_STYLES.GENERAL
+              const style = getNotificationStyle(notification)
 
               const isArchiving = archivingIds.has(notification.id)
 
@@ -586,9 +620,9 @@ export default function NotificationBell({ className, userType }: NotificationBe
     <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
       <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col overflow-hidden p-0">
         {selectedNotification && (() => {
-          const Icon = getNotificationIcon(selectedNotification.type)
-          const colorStyle = getNotificationColor(selectedNotification.type)
-          const style = NOTIFICATION_TYPE_STYLES[selectedNotification.type] || NOTIFICATION_TYPE_STYLES.GENERAL
+          const Icon = getNotificationIcon(selectedNotification.type, selectedNotification.templateCode)
+          const colorStyle = getNotificationColor(selectedNotification.type, selectedNotification.templateCode)
+          const style = getNotificationStyle(selectedNotification)
           const hasAction = hasNotificationAction(selectedNotification)
           const isTracking = selectedNotification.type === 'TRACKING_STARTED'
 

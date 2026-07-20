@@ -275,3 +275,44 @@ export function socketLeaveDriverFeed(): void {
     socket.emit('leave:driver-feed');
   }
 }
+
+/**
+ * Join the user's personal notification room (authenticated).
+ *
+ * This is what makes the NotificationBell dropdown update in real time when
+ * a new notification is created for the user (as actor, customer, or driver).
+ * The backend emits `notification:created` to `user:<userId>` rooms.
+ *
+ * No-op if the socket isn't connected yet — `rejoinAllRooms()` handles it
+ * automatically on the next `connect` event.
+ */
+export function socketJoinUser(): void {
+  if (!socket) return;
+  // No payload — the backend resolves the user from the JWT on the socket.
+  trackRoom('user:self', 'join:user');
+  if (socket.connected) {
+    socket.emit('join:user', (ack: any) => {
+      if (socket?.connected && !ack?.joined) {
+        console.warn('[Socket] Failed to join user notification room — auth may be expired');
+      }
+    });
+  } else {
+    socket.once('connect', () => {
+      socket!.emit('join:user', (ack: any) => {
+        if (socket?.connected && !ack?.joined) {
+          console.warn('[Socket] Failed to join user notification room — auth may be expired');
+        }
+      });
+    });
+  }
+}
+
+/**
+ * Leave the user's personal notification room.
+ */
+export function socketLeaveUser(): void {
+  untrackRoom('user:self');
+  if (socket?.connected) {
+    socket.emit('leave:user');
+  }
+}

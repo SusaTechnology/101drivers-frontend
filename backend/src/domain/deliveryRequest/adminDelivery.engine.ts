@@ -465,6 +465,31 @@ async assignDriver(input: {
       lockInDriverSharePct: delivery.lockInDriverSharePct ?? null,
     });
 
+    // Admin self-confirmation: gives the cancelling admin a clear in-app + email
+    // receipt ("lock-in retained $X, customer + driver notified"). Without this,
+    // the admin's bell only shows the customer/driver-facing email subjects,
+    // which is confusing.
+    if (input.actorUserId) {
+      try {
+        await this.notificationEventEngine.notifyAdminLockInRetainedOnCancel({
+          deliveryId: input.deliveryId,
+          actorUserId: input.actorUserId,
+          trigger: "admin-cancel",
+          reason: input.reason ?? null,
+          driverId: activeAssignment?.driverId ?? null,
+          lockInRetained: isLockedIn,
+          lockInAmount,
+          lockInDriverSharePct: delivery.lockInDriverSharePct ?? null,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `notifyAdminLockInRetainedOnCancel failed (non-fatal): ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      }
+    }
+
     this.emitStatusChanged(
       input.deliveryId,
       EnumDeliveryRequestStatus.CANCELLED,
@@ -742,6 +767,28 @@ async assignDriver(input: {
       lockInAmount,
       lockInDriverSharePct: delivery.lockInDriverSharePct ?? null,
     });
+
+    // Admin self-confirmation for force-cancel (mirrors Path B).
+    if (input.actorUserId) {
+      try {
+        await this.notificationEventEngine.notifyAdminLockInRetainedOnCancel({
+          deliveryId: input.deliveryId,
+          actorUserId: input.actorUserId,
+          trigger: "admin-force-cancel",
+          reason: input.reason,
+          driverId: activeDriverId,
+          lockInRetained: isLockedIn,
+          lockInAmount,
+          lockInDriverSharePct: delivery.lockInDriverSharePct ?? null,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `notifyAdminLockInRetainedOnCancel failed (non-fatal): ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      }
+    }
 
     this.emitStatusChanged(
       input.deliveryId,

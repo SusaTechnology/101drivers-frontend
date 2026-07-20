@@ -105,8 +105,24 @@ export class NotificationEventService extends NotificationEventServiceBase {
     take?: number;
     skip?: number;
   }): Promise<{ items: any[]; count: number; unreadCount: number }> {
+    // Visibility: a user sees notifications where they are
+    //   (a) the actor (they triggered it — e.g. admin cancelled a delivery), OR
+    //   (b) the customer the notification is about (customer.userId = me), OR
+    //   (c) the driver the notification is about (driver.userId = me).
+    // Previously this only filtered by actorUserId, which meant customers and
+    // drivers never saw cancel/payment notifications in their bell — only the
+    // admin who triggered the action did. The email was sent, but the in-app
+    // bell was silent for the recipient.
+    const baseVisible: Prisma.NotificationEventWhereInput = {
+      OR: [
+        { actorUserId: input.actorUserId },
+        { customer: { userId: input.actorUserId } },
+        { driver: { userId: input.actorUserId } },
+      ],
+    };
+
     const where: Prisma.NotificationEventWhereInput = {
-      actorUserId: input.actorUserId,
+      ...baseVisible,
       ...(input.unreadOnly ? { isRead: false } : {}),
       ...(input.includeArchived ? {} : { archivedAt: null }),
     };
@@ -121,7 +137,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       this.prisma.notificationEvent.count({ where }),
       this.prisma.notificationEvent.count({
         where: {
-          actorUserId: input.actorUserId,
+          ...baseVisible,
           isRead: false,
           archivedAt: null,
         },
@@ -141,6 +157,8 @@ export class NotificationEventService extends NotificationEventServiceBase {
       select: {
         id: true,
         actorUserId: true,
+        customerId: true,
+        driverId: true,
         openedAt: true,
         readAt: true,
         isRead: true,
@@ -151,7 +169,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       throw new NotFoundException("NotificationEvent not found");
     }
 
-    this.ensureActorOwnsNotification(row.actorUserId, input.actorUserId);
+    await this.ensureCanAccessNotification(row, input.actorUserId);
 
     const now = new Date();
 
@@ -181,6 +199,8 @@ export class NotificationEventService extends NotificationEventServiceBase {
       select: {
         id: true,
         actorUserId: true,
+        customerId: true,
+        driverId: true,
       },
     });
 
@@ -188,7 +208,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       throw new NotFoundException("NotificationEvent not found");
     }
 
-    this.ensureActorOwnsNotification(row.actorUserId, input.actorUserId);
+    await this.ensureCanAccessNotification(row, input.actorUserId);
 
     const read = input.read !== false;
     const now = new Date();
@@ -207,9 +227,15 @@ export class NotificationEventService extends NotificationEventServiceBase {
   }): Promise<{ updatedCount: number }> {
     const now = new Date();
 
+    // Mark all visible-to-me unread notifications as read (matches the
+    // getMyNotificationEvents visibility rules — actor OR customer.user OR driver.user).
     const result = await this.prisma.notificationEvent.updateMany({
       where: {
-        actorUserId: input.actorUserId,
+        OR: [
+          { actorUserId: input.actorUserId },
+          { customer: { userId: input.actorUserId } },
+          { driver: { userId: input.actorUserId } },
+        ],
         isRead: false,
         archivedAt: null,
       },
@@ -232,6 +258,8 @@ export class NotificationEventService extends NotificationEventServiceBase {
       select: {
         id: true,
         actorUserId: true,
+        customerId: true,
+        driverId: true,
       },
     });
 
@@ -239,7 +267,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       throw new NotFoundException("NotificationEvent not found");
     }
 
-    this.ensureActorOwnsNotification(row.actorUserId, input.actorUserId);
+    await this.ensureCanAccessNotification(row, input.actorUserId);
 
     const archived = input.archived !== false;
 
@@ -260,6 +288,8 @@ export class NotificationEventService extends NotificationEventServiceBase {
       select: {
         id: true,
         actorUserId: true,
+        customerId: true,
+        driverId: true,
         clickedAt: true,
       },
     });
@@ -268,7 +298,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       throw new NotFoundException("NotificationEvent not found");
     }
 
-    this.ensureActorOwnsNotification(row.actorUserId, input.actorUserId);
+    await this.ensureCanAccessNotification(row, input.actorUserId);
 
     return this.updateNotificationEvent({
       where: { id: input.notificationEventId },
@@ -276,6 +306,48 @@ export class NotificationEventService extends NotificationEventServiceBase {
         clickedAt: row.clickedAt ?? new Date(),
       },
     });
+  }
+
+  /**
+   * Ownership/visibility check that matches the bell's inbox query:
+   * a user may access a notification if they are the actor (they triggered
+   * it) OR the customer the notification is about OR the driver the
+   * notification is about. Resolves customer.userId / driver.userId via
+   * Prisma relation lookups.
+   */
+  private async ensureCanAccessNotification(
+    row: {
+      actorUserId: string | null;
+      customerId: string | null;
+      driverId: string | null;
+    },
+    actorUserId: string
+  ): Promise<void> {
+    if (row.actorUserId && row.actorUserId === actorUserId) {
+      return;
+    }
+
+    if (row.customerId) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: row.customerId },
+        select: { userId: true },
+      });
+      if (customer?.userId === actorUserId) {
+        return;
+      }
+    }
+
+    if (row.driverId) {
+      const driver = await this.prisma.driver.findUnique({
+        where: { id: row.driverId },
+        select: { userId: true },
+      });
+      if (driver?.userId === actorUserId) {
+        return;
+      }
+    }
+
+    throw new ForbiddenException("You are not allowed to access this notification");
   }
 
   private ensureActorOwnsNotification(
