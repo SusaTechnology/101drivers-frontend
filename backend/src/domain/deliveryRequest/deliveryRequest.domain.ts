@@ -52,6 +52,12 @@ export class DeliveryRequestDomain extends BaseDomain<
     vehicleModel: true,
     vinVerificationCode: true,
 
+    // Vehicle standards attestation — must be explicitly selected here or
+    // Prisma returns `undefined` for both fields, which the frontend badge
+    // interprets as "Not captured" even though the DB stored `true`.
+    vehicleStandardsConfirmed: true,
+    vehicleStandardsConfirmedAt: true,
+
     recipientName: true,
     recipientEmail: true,
     recipientPhone: true,
