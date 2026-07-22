@@ -1689,3 +1689,24 @@ export class VerifyPickupPinResponseBody {
   @swagger.ApiProperty()
   valid!: boolean;
 }
+
+// ── VIN Verification (pickup checklist Step 5) ──
+// Mirrors VerifyPickupPinBody but for the last-4 VIN digits stored on the
+// delivery request as `vinVerificationCode`. Used by the driver pickup
+// checklist page to give instant inline feedback before the full
+// /pickup-compliance payload is submitted.
+
+export class VerifyVinBody {
+  @swagger.ApiProperty({
+    required: true,
+    description: "The last 4 digits of the VIN to verify",
+  })
+  @IsString()
+  @IsNotEmpty()
+  vin!: string;
+}
+
+export class VerifyVinResponseBody {
+  @swagger.ApiProperty()
+  valid!: boolean;
+}

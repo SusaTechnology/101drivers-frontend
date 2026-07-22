@@ -1575,6 +1575,26 @@ async getTrackingLink(input: {
     return { valid: delivery.pickupPin === input.pin };
   }
 
+  /**
+   * Verify the last 4 digits of the VIN against the delivery's
+   * vinVerificationCode. Returns true if it matches, false otherwise.
+   * Used by the driver pickup checklist for instant inline feedback
+   * BEFORE the full /pickup-compliance payload is submitted.
+   */
+  async verifyVin(input: {
+    deliveryId: string;
+    vin: string;
+  }): Promise<{ valid: boolean }> {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: { id: true, vinVerificationCode: true },
+    });
+    if (!delivery || !delivery.vinVerificationCode) {
+      return { valid: false };
+    }
+    return { valid: delivery.vinVerificationCode === input.vin };
+  }
+
   private haversineMiles(
     lat1: number,
     lng1: number,

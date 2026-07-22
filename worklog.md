@@ -597,3 +597,46 @@ Stage Summary:
   3. Mixed: VIN entered partway through → driver completes remaining steps → readiness effect fires → auto-submit
 - The change is local to handleVinChange + a new useEffect; no backend, schema, or routing changes required
 - File edited: /home/z/my-project/repo/src/components/pages/driver-pickup-checklist.tsx
+
+---
+Task ID: pickup-checklist-verify-vin-endpoint
+Agent: Main Agent
+Task: Add dedicated /verify-vin endpoint so the driver pickup-checklist page can show inline right/wrong feedback under the VIN input, WITHOUT breaking the existing pickup-compliance / start-trip flow. Driver must still be able to enter VIN before photos/dashboard/odometer and have the whole thing auto-submit when everything is ready.
+
+Work Log:
+- Backend: added VerifyVinBody + VerifyVinResponseBody DTOs (mirrors VerifyPickupPinBody) in backend/src/deliveryRequest/dto/deliveryRequestLogistics.dto.ts
+- Backend: added verifyVin() to DeliveryLifecycleService — does findUnique on delivery.vinVerificationCode, returns { valid: boolean } (mirrors verifyPickupPin)
+- Backend: added verifyVin() passthrough in DeliveryRequestService
+- Backend: added POST /api/deliveryRequests/:id/verify-vin route in DeliveryRequestController, same ACL as verify-pin (resource: DeliveryRequest, action: update, possession: any)
+- Frontend: added new state `vinValidated` (separate from `vinVerified` — vinVerified means pickup-compliance submitted successfully; vinValidated means /verify-vin returned valid:true). Persisted to localStorage via PersistedState type update.
+- Frontend: added verifyVinMutation + handleVerifyVin — calls /verify-vin, on valid:true sets vinValidated=true + green toast; on valid:false clears vinValue + red toast + sets vinError; on error sets vinError
+- Frontend: rewired handleVinChange — on 4th digit now calls /verify-vin (was: used to fire handleSubmitAll → /pickup-compliance directly). Any edit to VIN digits resets vinValidated to false so the driver must re-reach 4 digits to re-verify
+- Frontend: updated readiness useEffect — now gates on vinValidated (not just vinValue.length === 4). Auto-fires handleSubmitAll only after VIN is validated AND all other prereqs (greeted / photos / dashboard / odometer) are ready. This preserves the "enter VIN in any order" behavior from the previous commit
+- Frontend: updated VIN input UI:
+  * Label color: green when validated, amber when verifying, red otherwise
+  * Input border: green when validated, amber when verifying, slate otherwise
+  * Right-side indicator: spinner while verifying, green check when validated, N/4 count otherwise
+  * Helper text below input: 4 states — amber "Verifying VIN..." / green "VIN verified — last 4 digits match." / red with vinError / neutral "Enter the last 4 digits of the VIN. They will be verified automatically."
+  * Input is disabled while verifying to prevent race conditions
+  * Auto-save indicator only shows when vinValidated is true (i.e. we're actually submitting pickup-compliance, not still validating VIN)
+- Verification:
+  * Frontend tsc --noEmit: 0 errors in driver-pickup-checklist.tsx
+  * Backend tsc --noEmit: 0 errors in any of the 4 changed backend files
+  * vite build: succeeds, driver-pickup-checklist bundle produced (49.62 kB)
+
+Stage Summary:
+- New endpoint: POST /api/deliveryRequests/:id/verify-vin { vin: string } → { valid: boolean }
+- Driver gets instant inline feedback on the VIN itself (green check / red "did not match" / amber "verifying..."), independent of step ordering
+- The pickup-compliance flow is untouched — it still fires when VIN is validated AND all other prereqs are ready. Start Trip button behavior unchanged.
+- Three ordering paths all still work:
+  1. VIN last: prereqs done → VIN 4th digit → /verify-vin returns valid → readiness effect fires /pickup-compliance → Start enabled
+  2. VIN first: VIN 4th digit → /verify-vin returns valid → driver completes other steps → readiness effect fires /pickup-compliance → Start enabled
+  3. VIN partway: same as #2
+- Wrong VIN: /verify-vin returns valid:false → input cleared, red helper "VIN digits did not match. Please re-enter.", driver can re-type
+- Network error: red helper with error message, VIN preserved so driver can retry
+- Files changed:
+  * backend/src/deliveryRequest/dto/deliveryRequestLogistics.dto.ts (+21)
+  * backend/src/delivery-logistics/delivery-lifecycle.service.ts (+20)
+  * backend/src/deliveryRequest/deliveryRequest.service.ts (+10)
+  * backend/src/deliveryRequest/deliveryRequest.controller.ts (+19)
+  * src/components/pages/driver-pickup-checklist.tsx (+178 / -43)

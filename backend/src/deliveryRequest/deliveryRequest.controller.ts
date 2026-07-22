@@ -73,6 +73,7 @@ import {
   ApproveComplianceAdminBody,
   CheckPickupProximityBody,
   VerifyPickupPinBody,
+  VerifyVinBody,
 } from "./dto/deliveryRequestLogistics.dto";
 import { SupportRequestWhereUniqueInput } from "src/supportRequest/base/SupportRequestWhereUniqueInput";
 import { SupportRequestFindManyArgs } from "src/supportRequest/base/SupportRequestFindManyArgs";
@@ -774,6 +775,24 @@ async verifyPickupPin(
   return this.service.verifyPickupPin({
     deliveryId: params.id,
     pin: body.pin,
+  });
+}
+
+@common.Post(":id/verify-vin")
+@swagger.ApiOkResponse({ type: Object })
+@swagger.ApiBadRequestResponse({ description: "Invalid VIN" })
+@nestAccessControl.UseRoles({
+  resource: "DeliveryRequest",
+  action: "update",
+  possession: "any",
+})
+async verifyVin(
+  @common.Param() params: DeliveryRequestWhereUniqueInput,
+  @common.Body() body: VerifyVinBody
+): Promise<{ valid: boolean }> {
+  return this.service.verifyVin({
+    deliveryId: params.id,
+    vin: body.vin,
   });
 }
 

@@ -91,6 +91,7 @@ type PersistedState = {
   dashboardPhotoUrl: string | null
   odometerValue: string
   vinVerified: boolean
+  vinValidated: boolean
   vinValue: string
   step1Timestamp: string | null
 }
@@ -303,6 +304,14 @@ export default function DriverPickupChecklistPage() {
   const [vinValue, setVinValue] = useState(saved?.vinValue ?? '')
   const [vinError, setVinError] = useState<string | null>(null)
   const [vinVerified, setVinVerified] = useState(saved?.vinVerified ?? false)
+  // NEW: tracks whether the VIN digits have been validated against the
+  // backend's stored vinVerificationCode via POST /verify-vin. This is
+  // independent from `vinVerified` (which means "pickup-compliance has
+  // been successfully submitted"). The two are intentionally separate so
+  // the driver gets instant inline feedback on the VIN itself, without
+  // having to wait for the full pickup-compliance submit.
+  const [vinValidated, setVinValidated] = useState<boolean>(saved?.vinValidated ?? false)
+  const [vinVerifying, setVinVerifying] = useState(false)
 
   // ── Step 6: Customer PIN (optional) ──
   const [pinValue, setPinValue] = useState('')
@@ -327,10 +336,11 @@ export default function DriverPickupChecklistPage() {
       dashboardPhotoUrl,
       odometerValue,
       vinVerified,
+      vinValidated,
       vinValue,
       step1Timestamp: greeted ? saved?.step1Timestamp ?? new Date().toISOString() : null,
     })
-  }, [greeted, photosSaved, uploadedPhotos, dashboardSaved, dashboardPhotoUrl, odometerValue, vinVerified, vinValue, deliveryId])
+  }, [greeted, photosSaved, uploadedPhotos, dashboardSaved, dashboardPhotoUrl, odometerValue, vinVerified, vinValidated, vinValue, deliveryId])
 
   // Theme handling
   useEffect(() => {
@@ -573,9 +583,12 @@ const handleUploadDashboardPhoto = async () => {
   }
 
   // VIN input handler — numbers only, max 4 digits, strips spaces on paste.
-  // The VIN may be entered BEFORE earlier steps (greeted / photos / dashboard /
-  // odometer) are complete. When that happens we save the digits silently and
-  // let the readiness effect below auto-submit once everything else is done.
+  // On the 4th digit we call the dedicated /verify-vin endpoint to give the
+  // driver instant inline feedback (green check / red "did not match") below
+  // the input. The VIN can be entered BEFORE the earlier steps (greeted /
+  // photos / dashboard / odometer) are complete — validation is independent
+  // of step ordering. Once VIN is validated AND all other prereqs are ready,
+  // the readiness effect below auto-fires handleSubmitAll → /pickup-compliance.
   const handleVinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[\s\-]/g, '') // strip spaces and dashes
     const digitsOnly = raw.replace(/\D/g, '').slice(0, 4) // keep only digits, max 4
@@ -584,27 +597,14 @@ const handleUploadDashboardPhoto = async () => {
     if (raw.length > 0 && digitsOnly.length === 0) {
       setVinError('Numbers only')
     }
-    // Auto-submit on 4th digit ONLY if all prerequisites are already done.
-    // If prereqs are still missing, the VIN is saved silently and the
-    // readiness effect below will auto-submit once the remaining steps complete.
-    if (digitsOnly.length === 4 && !vinVerified && !saveProgressMutation.isPending) {
-      const allPrereqsReady =
-        greeted &&
-        photosSaved &&
-        uploadedPhotos.length === 6 &&
-        dashboardSaved &&
-        !!odometerValue &&
-        !isNaN(Number(odometerValue))
-      if (allPrereqsReady) {
-        setTimeout(() => handleSubmitAll(digitsOnly), 300)
-      } else {
-        // VIN captured early — let the driver know it's saved; the checklist
-        // will auto-submit when the remaining steps are done.
-        toast.info('VIN saved', {
-          description: 'Complete the remaining steps and the checklist will auto-submit.',
-          duration: 4000,
-        })
-      }
+    // Any edit to the VIN invalidates a prior validation — driver must
+    // re-reach 4 digits to re-verify.
+    if (digitsOnly.length !== 4) {
+      setVinValidated(false)
+    }
+    // Auto-verify on 4th digit (same pattern as PIN auto-verify)
+    if (digitsOnly.length === 4 && !vinVerified && !vinValidated && !verifyVinLock.current) {
+      setTimeout(() => handleVerifyVin(digitsOnly), 150)
     }
   }
 
@@ -655,14 +655,17 @@ const handleUploadDashboardPhoto = async () => {
     saveProgressMutation.mutate(payload)
   }
 
-  // Readiness auto-submit: if the driver entered the VIN before finishing
-  // earlier steps (greeted / photos / dashboard / odometer), wait until
-  // everything is ready, then fire the submit automatically. This makes
-  // step 5 reachable in any order — the driver no longer has to redo the
-  // VIN entry if they typed it first.
+  // Readiness auto-submit: if the driver entered & validated the VIN before
+  // finishing earlier steps (greeted / photos / dashboard / odometer), wait
+  // until everything is ready, then fire the pickup-compliance submit
+  // automatically. The VIN must be `vinValidated` (i.e. /verify-vin returned
+  // valid:true) — we don't fire /pickup-compliance with an unvalidated VIN.
+  // This makes step 5 reachable in any order — the driver no longer has to
+  // redo the VIN entry if they typed it first.
   const autoSubmitLockRef = useRef(false)
   useEffect(() => {
     if (vinVerified) return
+    if (!vinValidated) return
     if (saveProgressMutation.isPending) return
     if (autoSubmitLockRef.current) return
     if (!/^\d{4}$/.test(vinValue)) return
@@ -680,6 +683,7 @@ const handleUploadDashboardPhoto = async () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     vinVerified,
+    vinValidated,
     saveProgressMutation.isPending,
     vinValue,
     greeted,
@@ -819,6 +823,55 @@ const handleUploadDashboardPhoto = async () => {
     verifyPinLock.current = true
     setPinVerifying(true)
     verifyPinMutation.mutate({ pin })
+  }
+
+  // ── VIN verification ──
+  // Calls the dedicated /verify-vin endpoint on the 4th digit so the driver
+  // gets instant inline feedback (green check / red "did not match") WITHOUT
+  // having to submit the full pickup-compliance payload first. This is
+  // independent of the readiness auto-submit effect below — when VIN is
+  // validated AND all other prereqs are ready, the readiness effect fires
+  // handleSubmitAll → /pickup-compliance.
+  const verifyVinLock = useRef(false)
+  const verifyVinMutation = useCreate<{ valid: boolean }, { vin: string }>(
+    `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/verify-vin`,
+    {
+      onSuccess: (data) => {
+        if (data?.valid) {
+          setVinValidated(true)
+          setVinError(null)
+          toast.success('VIN verified', { description: 'Last 4 digits match.' })
+        } else {
+          setVinValidated(false)
+          setVinError('VIN digits did not match. Please re-enter.')
+          setVinValue('') // clear so driver can re-type → auto-retry on 4th digit
+          toast.error('VIN incorrect', {
+            description: 'The last 4 digits you entered do not match. Please check and try again.',
+            duration: 6000,
+          })
+        }
+        setVinVerifying(false)
+        verifyVinLock.current = false
+      },
+      onError: (error: any) => {
+        setVinValidated(false)
+        setVinError(error?.message || 'Failed to verify VIN')
+        setVinVerifying(false)
+        verifyVinLock.current = false
+      },
+    }
+  )
+
+  const handleVerifyVin = (vinOverride?: string) => {
+    const vin = vinOverride ?? vinValue
+    if (!/^\d{4}$/.test(vin)) {
+      setVinError('VIN must be 4 digits')
+      return
+    }
+    if (!deliveryId || verifyVinLock.current) return
+    verifyVinLock.current = true
+    setVinVerifying(true)
+    verifyVinMutation.mutate({ vin })
   }
 
   // Status helper
@@ -1735,7 +1788,11 @@ const handleUploadDashboardPhoto = async () => {
                           <div className="space-y-2">
                             <label className={cn(
                               "text-[10px] font-black uppercase tracking-[0.3em] transition",
-                              vinValue.length === 4 && !vinError ? "text-green-600 dark:text-green-400" : "text-red-500"
+                              vinValidated
+                                ? "text-green-600 dark:text-green-400"
+                                : vinVerifying
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : "text-red-500"
                             )}>VIN last-4 digits</label>
                             <div className="relative">
                               <Input
@@ -1744,31 +1801,66 @@ const handleUploadDashboardPhoto = async () => {
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                                 maxLength={4}
+                                disabled={vinVerifying}
                                 className={cn(
                                   "h-14 rounded-2xl border dark:bg-slate-800/40 text-lg font-black tracking-[0.3em] text-center pr-12 transition",
                                   vinError
                                     ? "border-red-400 dark:border-red-500"
-                                    : vinValue.length === 4
+                                    : vinValidated
                                       ? "border-green-400 dark:border-green-500"
-                                      : "border-slate-200 dark:border-slate-700"
+                                      : vinVerifying
+                                        ? "border-amber-400 dark:border-amber-500"
+                                        : vinValue.length === 4
+                                          ? "border-slate-400 dark:border-slate-500"
+                                          : "border-slate-200 dark:border-slate-700"
                                 )}
                                 placeholder="e.g. 1234"
                               />
-                              <span className={cn(
-                                "absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold tabular-nums transition",
-                                vinValue.length === 4 && !vinError ? "text-green-600 dark:text-green-400" : "text-red-500"
-                              )}>
-                                {vinValue.length}/4
-                              </span>
+                              {/* Right-side indicator: spinner while verifying,
+                                  green check when validated, count otherwise */}
+                              {vinVerifying ? (
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2">
+                                  <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                                </span>
+                              ) : vinValidated ? (
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 rounded-full bg-green-500">
+                                  <Check className="w-3 h-3 text-white" />
+                                </span>
+                              ) : (
+                                <span className={cn(
+                                  "absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold tabular-nums transition",
+                                  vinValue.length === 4 && !vinError ? "text-amber-600 dark:text-amber-400" : "text-slate-400"
+                                )}>
+                                  {vinValue.length}/4
+                                </span>
+                              )}
                             </div>
-                            {vinError && (
-                              <p className="text-[11px] font-bold text-red-500 mt-1">{vinError}</p>
+                            {/* Inline helper — shows verification status below the input */}
+                            {vinVerifying ? (
+                              <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1.5">
+                                <span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin inline-block" />
+                                Verifying VIN...
+                              </p>
+                            ) : vinValidated ? (
+                              <p className="text-[11px] font-bold text-green-600 dark:text-green-400 mt-1 flex items-center gap-1.5">
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                VIN verified — last 4 digits match.
+                              </p>
+                            ) : vinError ? (
+                              <p className="text-[11px] font-bold text-red-500 mt-1 flex items-center gap-1.5">
+                                <XCircle className="w-3.5 h-3.5" />
+                                {vinError}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-slate-400 mt-1">
+                                Enter the last 4 digits of the VIN. They will be verified automatically.
+                              </p>
                             )}
                           </div>
                         </div>
 
-                        {/* Auto-save indicator — shows while submitting after 4th digit */}
-                        {saveProgressMutation.isPending && vinValue.length === 4 && (
+                        {/* Auto-save indicator — shows while submitting pickup-compliance after VIN validation */}
+                        {saveProgressMutation.isPending && vinValidated && (
                           <div className="mt-4 flex items-center justify-center gap-2 py-3">
                             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             <span className="text-sm font-bold text-primary">Saving checklist...</span>

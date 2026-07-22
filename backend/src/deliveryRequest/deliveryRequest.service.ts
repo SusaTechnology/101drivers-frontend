@@ -343,6 +343,16 @@ async verifyPickupPin(input: {
   });
 }
 
+async verifyVin(input: {
+  deliveryId: string;
+  vin: string;
+}): Promise<{ valid: boolean }> {
+  return this.lifecycleService.verifyVin({
+    deliveryId: input.deliveryId,
+    vin: input.vin,
+  });
+}
+
 async completeTrip(input: {
   deliveryId: string;
   driverId: string;
