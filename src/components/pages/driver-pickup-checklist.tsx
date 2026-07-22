@@ -1874,7 +1874,7 @@ const handleUploadDashboardPhoto = async () => {
                             { label: 'Staff greeted', done: greeted },
                             { label: 'Vehicle photos uploaded', done: photosSaved },
                             { label: 'Dashboard photo uploaded', done: dashboardSaved },
-                            { label: 'VIN verified', done: vinVerified },
+                            { label: 'VIN verified', done: vinValidated },
                           ].map((item, i) => (
                             <div key={i} className="flex items-center gap-2">
                               {item.done ? (
