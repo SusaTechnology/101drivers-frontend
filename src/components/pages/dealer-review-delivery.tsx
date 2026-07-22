@@ -83,6 +83,13 @@ interface ReviewDeliveryData {
   color: string;
   colorOther?: string;
   transmission: string;
+  // Dealers must attest the vehicle meets 101drivers' standards before a
+  // delivery can be created. This flag is checked on dealer-create-delivery
+  // (Zod literal(true) blocks the submit button) and forwarded here so the
+  // review page sends it to /create-from-quote. Without it the backend
+  // defaults vehicleStandardsConfirmed=false and the delivery is rejected
+  // (or created in an invalid state).
+  vehicleStandardsConfirmed?: boolean;
 
   // Recipient
   recipientName?: string;
@@ -391,6 +398,11 @@ export default function ReviewDeliveryPage() {
         vehicleModel: finalModel,
         vehicleColor: finalColor,
         transmission: reviewData.transmission,
+        // Forward the dealer's vehicle-standards attestation. The create page
+        // enforces this with a Zod literal(true) check before letting the user
+        // reach the review page, but we still guard here in case a stale
+        // sessionStorage entry is loaded — never send false silently.
+        vehicleStandardsConfirmed: reviewData.vehicleStandardsConfirmed === true,
         recipientName: reviewData.recipientName,
         recipientEmail: reviewData.recipientEmail,
         recipientPhone: reviewData.recipientPhone,
@@ -488,6 +500,17 @@ export default function ReviewDeliveryPage() {
   };
 
   const handleSubmit = () => {
+    // Safety net: the create page blocks submit until the dealer checks the
+    // vehicle-standards attestation, but stale sessionStorage (e.g. from
+    // before this fix shipped) could land us here without it. Never send
+    // /create-from-quote without a true attestation — the backend would
+    // create the delivery in an invalid state.
+    if (reviewData?.vehicleStandardsConfirmed !== true) {
+      toast.error("Vehicle standards not confirmed", {
+        description: "Please go back and confirm the vehicle meets 101drivers' standards before requesting delivery.",
+      });
+      return;
+    }
     submitDelivery.mutate();
   };
 
@@ -546,6 +569,9 @@ export default function ReviewDeliveryPage() {
         vehicleModel: finalModel,
         vehicleColor: finalColor,
         transmission: reviewData.transmission,
+        // Forward the dealer's vehicle-standards attestation to the draft too,
+        // so it survives a save-draft → resume → create flow.
+        vehicleStandardsConfirmed: reviewData.vehicleStandardsConfirmed === true,
         recipientName: reviewData.recipientName,
         recipientEmail: reviewData.recipientEmail,
         recipientPhone: reviewData.recipientPhone,
@@ -1181,9 +1207,9 @@ export default function ReviewDeliveryPage() {
                     Go Back & Edit
                   </Button>
                   <Button
-                    className="flex-1 py-4 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold text-lg"
+                    className="flex-1 py-4 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleSubmit}
-                    disabled={submitDelivery.isPending}
+                    disabled={submitDelivery.isPending || reviewData?.vehicleStandardsConfirmed !== true}
                   >
                     {submitDelivery.isPending ? (
                       <>
