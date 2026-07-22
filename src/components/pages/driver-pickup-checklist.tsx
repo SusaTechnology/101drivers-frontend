@@ -572,7 +572,10 @@ const handleUploadDashboardPhoto = async () => {
     e.target.value = ''
   }
 
-  // VIN input handler — numbers only, max 4 digits, strips spaces on paste
+  // VIN input handler — numbers only, max 4 digits, strips spaces on paste.
+  // The VIN may be entered BEFORE earlier steps (greeted / photos / dashboard /
+  // odometer) are complete. When that happens we save the digits silently and
+  // let the readiness effect below auto-submit once everything else is done.
   const handleVinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[\s\-]/g, '') // strip spaces and dashes
     const digitsOnly = raw.replace(/\D/g, '').slice(0, 4) // keep only digits, max 4
@@ -580,12 +583,28 @@ const handleUploadDashboardPhoto = async () => {
     setVinError(null)
     if (raw.length > 0 && digitsOnly.length === 0) {
       setVinError('Numbers only')
-    } else if (raw.replace(/\D/g, '').length > 0 && raw.replace(/\D/g, '').length < 4 && raw.length >= 4) {
-      // User typed 4+ chars but fewer than 4 were digits — only show if they stopped typing non-digits
     }
-    // Auto-submit on 4th digit (same pattern as PIN auto-verify)
+    // Auto-submit on 4th digit ONLY if all prerequisites are already done.
+    // If prereqs are still missing, the VIN is saved silently and the
+    // readiness effect below will auto-submit once the remaining steps complete.
     if (digitsOnly.length === 4 && !vinVerified && !saveProgressMutation.isPending) {
-      setTimeout(() => handleSubmitAll(digitsOnly), 300)
+      const allPrereqsReady =
+        greeted &&
+        photosSaved &&
+        uploadedPhotos.length === 6 &&
+        dashboardSaved &&
+        !!odometerValue &&
+        !isNaN(Number(odometerValue))
+      if (allPrereqsReady) {
+        setTimeout(() => handleSubmitAll(digitsOnly), 300)
+      } else {
+        // VIN captured early — let the driver know it's saved; the checklist
+        // will auto-submit when the remaining steps are done.
+        toast.info('VIN saved', {
+          description: 'Complete the remaining steps and the checklist will auto-submit.',
+          duration: 4000,
+        })
+      }
     }
   }
 
@@ -635,6 +654,40 @@ const handleUploadDashboardPhoto = async () => {
 
     saveProgressMutation.mutate(payload)
   }
+
+  // Readiness auto-submit: if the driver entered the VIN before finishing
+  // earlier steps (greeted / photos / dashboard / odometer), wait until
+  // everything is ready, then fire the submit automatically. This makes
+  // step 5 reachable in any order — the driver no longer has to redo the
+  // VIN entry if they typed it first.
+  const autoSubmitLockRef = useRef(false)
+  useEffect(() => {
+    if (vinVerified) return
+    if (saveProgressMutation.isPending) return
+    if (autoSubmitLockRef.current) return
+    if (!/^\d{4}$/.test(vinValue)) return
+    if (!greeted) return
+    if (!photosSaved || uploadedPhotos.length !== 6) return
+    if (!dashboardSaved) return
+    if (!odometerValue || isNaN(Number(odometerValue))) return
+    autoSubmitLockRef.current = true
+    const t = setTimeout(() => {
+      handleSubmitAll(vinValue)
+      // release the lock shortly after so a failed submit can be retried
+      setTimeout(() => { autoSubmitLockRef.current = false }, 2000)
+    }, 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    vinVerified,
+    saveProgressMutation.isPending,
+    vinValue,
+    greeted,
+    photosSaved,
+    uploadedPhotos,
+    dashboardSaved,
+    odometerValue,
+  ])
 
   // GPS check
   const checkLocationPermission = async (): Promise<boolean> => {

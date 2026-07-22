@@ -574,3 +574,26 @@ Stage Summary:
 - No schema change, no migration, no base file regeneration needed
 - Verified: backend tsc clean, frontend tsc clean, vite build succeeds
 - Phase 1 + 2 + 3 together fully satisfy the customer's request: consolidated dashboard photo at pickup AND drop-off, dealer/admin visibility, full driver instructions
+
+---
+Task ID: pickup-checklist-vin-ordering
+Agent: Main Agent
+Task: Allow driver to enter VIN (step 5) before completing earlier pickup-checklist steps (greeted / 6 photos / dashboard / odometer). Previously the 4th VIN digit would auto-fire handleSubmitAll even when prerequisites were missing, surfacing a hard error and making it look like the VIN field was broken.
+
+Work Log:
+- Cloned https://github.com/SusaTechnology/101drivers-frontend into /home/z/my-project/repo
+- Read /home/z/my-project/repo/src/components/pages/driver-pickup-checklist.tsx (1871 lines)
+- Identified root cause in handleVinChange (line ~590 old): the auto-submit on the 4th VIN digit fired unconditionally — handleSubmitAll then hit one of its early-return guards (greeted / photosSaved / dashboardSaved / odometer) and showed a red toast + setVinError, which the driver perceived as "VIN entry broken when entered before pictures"
+- Patched handleVinChange: now only auto-submits on the 4th digit if ALL prerequisites are already ready. If not, the VIN digits are stored silently and a friendly toast.info('VIN saved', ...) tells the driver the checklist will auto-submit once the remaining steps are done
+- Added a new readiness useEffect (after handleSubmitAll): watches vinValue, greeted, photosSaved, uploadedPhotos, dashboardSaved, odometerValue, vinVerified, saveProgressMutation.isPending. When all prerequisites + 4-digit VIN are ready AND not already verified AND not currently submitting, it auto-fires handleSubmitAll(vinValue) after a 300ms debounce. Uses an autoSubmitLockRef to prevent double-fires (React StrictMode / rapid state changes) and releases the lock 2s after firing so a failed submit can be retried
+- handleSubmitAll itself is unchanged — its early-return guards remain as belt-and-suspenders safety, but the auto-submit paths now never call it with missing prerequisites
+- All imports (useRef, useEffect, toast) were already in scope — no new imports needed
+
+Stage Summary:
+- Driver can now enter the VIN at ANY point in the flow (before photos, before dashboard, before odometer) without seeing error toasts or being blocked
+- Three ordering paths all auto-submit successfully:
+  1. Happy path: prerequisites done first → VIN 4th digit → auto-submit (unchanged behavior)
+  2. VIN first: VIN 4th digit → toast "VIN saved" → driver completes other steps → readiness effect fires → auto-submit
+  3. Mixed: VIN entered partway through → driver completes remaining steps → readiness effect fires → auto-submit
+- The change is local to handleVinChange + a new useEffect; no backend, schema, or routing changes required
+- File edited: /home/z/my-project/repo/src/components/pages/driver-pickup-checklist.tsx
