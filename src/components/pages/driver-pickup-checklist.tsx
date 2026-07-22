@@ -465,6 +465,7 @@ export default function DriverPickupChecklistPage() {
     }
   )
 
+
   // ── Handlers ──
 
   const toggleTheme = () => {
@@ -1503,7 +1504,13 @@ const handleUploadDashboardPhoto = async () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
+                        <div className="flex items-start justify-between gap-4">
                         <h2 className="text-lg font-black text-slate-900 dark:text-white">Dashboard/ Touchscreen Photo &amp; Reading</h2>
+                       <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
+                        <Speed className="w-3.5 h-3.5 text-primary mr-1" />
+                        Required
+                      </Badge>
+                       </div>
                         <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                           Capture a clear photo of the dashboard or touchscreen that clearly shows the fuel gauge or battery charge level. The vehicle must have at least half tank or half charge.
                         </p>
@@ -1511,10 +1518,7 @@ const handleUploadDashboardPhoto = async () => {
                           For Teslas and other EVs, the touchscreen counts as the dashboard — make sure the battery charge level is clearly visible.
                         </p>
                       </div>
-                      <Badge variant="outline" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-extrabold">
-                        <Speed className="w-3.5 h-3.5 text-primary mr-1" />
-                        Required
-                      </Badge>
+                      
                     </div>
 
                     {!dashboardSaved ? (
