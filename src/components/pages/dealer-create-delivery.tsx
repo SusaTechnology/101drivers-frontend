@@ -1356,6 +1356,50 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     return true;
   }, [quoteId, pickupCoords, dropoffCoords, pickupState, dropoffState, validatedWindows, licensePlate, make, model, color, vinVerification, vehicleStandardsConfirmed, recipientName, recipientPhone, recipientEmail]);
 
+  // ── "Why is the Continue button disabled?" ──
+  // Mirror of isFormValidForSubmission that returns a human-readable list of
+  // every missing/invalid required field. Shown in an amber panel directly
+  // under the button so the dealer knows EXACTLY what to fix — including the
+  // vehicle-standards attestation checkbox, which the previous red panel
+  // omitted entirely.
+  const makeOther = watch("makeOther");
+  const modelOther = watch("modelOther");
+  const colorOther = watch("colorOther");
+  const missingRequiredFields: string[] = useMemo(() => {
+    const missing: string[] = [];
+    if (!quoteId) {
+      missing.push("Calculate a quote (enter pickup & drop-off addresses, then tap Get Quote)");
+    } else {
+      if (!pickupCoords) missing.push("Pickup address (select from autocomplete)");
+      if (!dropoffCoords) missing.push("Drop-off address (select from autocomplete)");
+      const pState = normalizeStateCode(pickupState);
+      const dState = normalizeStateCode(dropoffState);
+      if (pState && pState !== 'CA') missing.push("Pickup address must be in California");
+      if (dState && dState !== 'CA') missing.push("Drop-off address must be in California");
+      if (!validatedWindows || !validatedWindows.pickupWindowStart) missing.push("Pickup time window (select a date & slot)");
+      if (!validatedWindows || !validatedWindows.dropoffWindowStart) missing.push("Drop-off time window (select a date & slot)");
+    }
+    if (!licensePlate?.trim()) missing.push("License plate");
+    const finalMake = make === "Other" ? makeOther : make;
+    const finalModel = model === "Other" ? modelOther : model;
+    const finalColor = color === "Other" ? colorOther : color;
+    if (!finalMake?.trim()) missing.push("Vehicle make" + (make === "Other" ? " (enter the make in the box)" : ""));
+    if (!finalModel?.trim()) missing.push("Vehicle model" + (model === "Other" ? " (enter the model in the box)" : ""));
+    if (!finalColor?.trim()) missing.push("Vehicle color" + (color === "Other" ? " (enter the color in the box)" : ""));
+    if (!transmission?.trim()) missing.push("Transmission type");
+    if (!vinVerification || !/^\d{4}$/.test(vinVerification)) {
+      missing.push("VIN last 4 digits (exactly 4 numbers)");
+    }
+    if (vehicleStandardsConfirmed !== true) {
+      missing.push("Confirm the vehicle meets 101drivers standards (attestation checkbox)");
+    }
+    if (!recipientName || recipientName.trim().length < 1) missing.push("Recipient name");
+    if (!recipientEmail || recipientEmail.trim().length < 1) missing.push("Recipient email");
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) missing.push("Recipient email (valid format)");
+    if (!recipientPhone || recipientPhone.replace(/\D/g, '').length < 10) missing.push("Recipient phone (10 digits)");
+    return missing;
+  }, [quoteId, pickupCoords, dropoffCoords, pickupState, dropoffState, validatedWindows, licensePlate, make, model, color, makeOther, modelOther, colorOther, transmission, vinVerification, vehicleStandardsConfirmed, recipientName, recipientEmail, recipientPhone]);
+
   // Clear validation error state once form becomes valid
   useEffect(() => {
     if (isFormValidForSubmission && showValidationErrors) {
@@ -3320,10 +3364,32 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                {!showValidationErrors && !isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && (
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 text-center">
-                    Please complete all required fields: addresses, pickup or arrival time, vehicle details, and recipient information.
-                  </p>
+                {/* "Why is the Continue button disabled?" helper.
+                    Always visible whenever the Continue button is greyed out
+                    (not just after a click attempt), listing every specific
+                    missing/invalid field. Replaces the old generic
+                    "Please complete all required fields" one-liner with a
+                    concrete checklist — including the vehicle-standards
+                    attestation checkbox that the panel above omits. */}
+                {!showValidationErrors && !isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && missingRequiredFields.length > 0 && (
+                  <div className="mt-4 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-extrabold text-amber-800 dark:text-amber-200">
+                          Complete these before continuing:
+                        </p>
+                        <ul className="mt-1.5 space-y-1">
+                          {missingRequiredFields.map((field, i) => (
+                            <li key={i} className="text-[12px] font-semibold text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+                              <span className="text-amber-500 mt-0.5">•</span>
+                              <span>{field}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* Save as Draft button - shown after quote is calculated */}
