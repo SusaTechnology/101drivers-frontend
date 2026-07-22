@@ -499,6 +499,52 @@ export default function ReviewDeliveryPage() {
     toast.success("Field updated");
   };
 
+  // ── Required-field validation for the "Request Delivery" button ──
+  // The create page (dealer-create-delivery) enforces these via Zod before
+  // letting the user reach the review page, but the review page allows inline
+  // editing of every field, so a user can clear a required field here and
+  // the button must reflect that — and tell them WHY it's disabled.
+  //
+  // We compute a list of missing/invalid fields so the UI can show them
+  // under the button instead of silently greying it out.
+  const missingRequiredFields: string[] = reviewData ? (() => {
+    const missing: string[] = [];
+    if (!reviewData.quoteId) missing.push("Quote (go back and calculate a quote)");
+    if (!reviewData.serviceType) missing.push("Service type");
+    if (!reviewData.pickupAddress?.trim()) missing.push("Pickup address");
+    if (!reviewData.dropoffAddress?.trim()) missing.push("Drop-off address");
+    if (reviewData.pickupLat == null || reviewData.pickupLng == null) missing.push("Pickup location on map");
+    if (reviewData.dropoffLat == null || reviewData.dropoffLng == null) missing.push("Drop-off location on map");
+    if (!reviewData.pickupWindowStart || !reviewData.pickupWindowEnd) missing.push("Pickup time window");
+    if (!reviewData.dropoffWindowStart || !reviewData.dropoffWindowEnd) missing.push("Drop-off time window");
+    if (!reviewData.licensePlate?.trim()) missing.push("License plate");
+    // VIN last-4 digits must be exactly 4 numeric chars (matches create-page Zod)
+    if (!/^\d{4}$/.test(reviewData.vinVerification ?? "")) missing.push("VIN last 4 digits");
+    // Resolve "Other" → make/model/color other-field, same as the payload builder
+    const finalMake = reviewData.make === "Other" ? reviewData.makeOther : reviewData.make;
+    const finalModel = reviewData.model === "Other" ? reviewData.modelOther : reviewData.model;
+    const finalColor = reviewData.color === "Other" ? reviewData.colorOther : reviewData.color;
+    if (!finalMake?.trim()) missing.push("Vehicle make");
+    if (!finalModel?.trim()) missing.push("Vehicle model");
+    if (!finalColor?.trim()) missing.push("Vehicle color");
+    if (!reviewData.transmission?.trim()) missing.push("Transmission type");
+    if (!reviewData.recipientName?.trim()) missing.push("Recipient name");
+    // Basic email format check (matches typical dealer-create-delivery expectation)
+    if (!reviewData.recipientEmail?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reviewData.recipientEmail)) {
+      missing.push("Recipient email");
+    }
+    if (!reviewData.recipientPhone?.trim() || reviewData.recipientPhone.replace(/\D/g, "").length < 10) {
+      missing.push("Recipient phone");
+    }
+    // The attestation checkbox — same requirement the create page enforces
+    if (reviewData.vehicleStandardsConfirmed !== true) {
+      missing.push("Confirm vehicle meets 101drivers standards");
+    }
+    return missing;
+  })() : [];
+
+  const isRequestDisabled = submitDelivery.isPending || missingRequiredFields.length > 0;
+
   const handleSubmit = () => {
     // Safety net: the create page blocks submit until the dealer checks the
     // vehicle-standards attestation, but stale sessionStorage (e.g. from
@@ -508,6 +554,14 @@ export default function ReviewDeliveryPage() {
     if (reviewData?.vehicleStandardsConfirmed !== true) {
       toast.error("Vehicle standards not confirmed", {
         description: "Please go back and confirm the vehicle meets 101drivers' standards before requesting delivery.",
+      });
+      return;
+    }
+    // Also guard against any other missing required field — the button should
+    // already be disabled, but this catches programmatic submits.
+    if (missingRequiredFields.length > 0) {
+      toast.error("Required fields missing", {
+        description: missingRequiredFields.slice(0, 3).join(", ") + (missingRequiredFields.length > 3 ? ` (+${missingRequiredFields.length - 3} more)` : ""),
       });
       return;
     }
@@ -1209,7 +1263,7 @@ export default function ReviewDeliveryPage() {
                   <Button
                     className="flex-1 py-4 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handleSubmit}
-                    disabled={submitDelivery.isPending || reviewData?.vehicleStandardsConfirmed !== true}
+                    disabled={isRequestDisabled}
                   >
                     {submitDelivery.isPending ? (
                       <>
@@ -1224,6 +1278,34 @@ export default function ReviewDeliveryPage() {
                     )}
                   </Button>
                 </div>
+
+                {/* "Why is the button disabled?" helper.
+                    When the Request Delivery button is greyed out we show the
+                    specific missing/invalid fields here so the dealer knows
+                    exactly what to fix — instead of leaving them to guess. */}
+                {!submitDelivery.isPending && missingRequiredFields.length > 0 && (
+                  <div className="mt-1 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10 p-4">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-extrabold text-amber-800 dark:text-amber-200">
+                          Complete these before requesting delivery:
+                        </p>
+                        <ul className="mt-1.5 space-y-1">
+                          {missingRequiredFields.map((field, i) => (
+                            <li key={i} className="text-[12px] font-semibold text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+                              <span className="text-amber-500 mt-0.5">•</span>
+                              <span>{field}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-2">
+                          Tap <strong>Go Back &amp; Edit</strong> to fix these on the create page, or edit a field inline above.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 
                 {/* Save as Draft button */}
                 <Button
