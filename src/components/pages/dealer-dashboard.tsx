@@ -155,6 +155,15 @@ export default function DealerDashboard() {
   const [showFilters, setShowFilters] = useState(false)
   const [dateFrom, setDateFrom] = useState<Date | undefined>()
   const [dateTo, setDateTo] = useState<Date | undefined>()
+  // Controlled open-state for the inner From / To date-picker popovers.
+  // Without this the calendar popover stays open after a date is picked
+  // (Radix uncontrolled Popover has no idea the user is "done"), which
+  // forces the dealer to tap outside to dismiss it. We close it on select.
+  // Also: on tablets/iPads the calendar popover can render too tall (collides
+  // with the top of the viewport and Radix flips it / clips it). Controlling
+  // open state lets us also pass explicit collision props below.
+  const [showFromCalendar, setShowFromCalendar] = useState(false)
+  const [showToCalendar, setShowToCalendar] = useState(false)
   const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false)
   const [notificationSettings, setNotificationSettings] = useState({
     pushEnabled: true,
@@ -565,32 +574,108 @@ export default function DealerDashboard() {
             </div>
             <Popover open={showFilters} onOpenChange={setShowFilters}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("h-12 px-4 rounded-2xl", (dateFrom || dateTo) && "border-lime-500 bg-lime-50 dark:bg-lime-950/30")}><Filter className="h-5 w-5" />{(dateFrom || dateTo) && <Badge className="ml-2 bg-lime-500 text-slate-950">Active</Badge>}</Button>
+                <Button variant="outline" className={cn("h-12 px-4 rounded-2xl", (dateFrom || dateTo) && "border-lime-500 bg-lime-50 dark:bg-lime-950/30")}><Filter className="h-5 w-5" />{(dateFrom || dateTo) && <Badge className="ml-2 bg-lime-500 text-slate-950">Filtered</Badge>}</Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80 p-4 rounded-2xl" align="end">
+              <PopoverContent
+                className="w-80 p-4 rounded-2xl"
+                align="end"
+                // Keep the filter panel away from the viewport edges so it
+                // never flips too high / off-screen on tablets & iPads.
+                sideOffset={8}
+                collisionPadding={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                avoidCollisions
+              >
                 <div className="space-y-4">
                   <div className="font-black text-slate-900 dark:text-white">Date Range</div>
                   <div className="space-y-2">
                     <div className="text-sm font-bold text-slate-500">From</div>
-                    <Popover>
+                    <Popover open={showFromCalendar} onOpenChange={setShowFromCalendar}>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="w-full justify-start rounded-xl h-11"><CalendarIcon className="h-4 w-4 mr-2" />{dateFrom ? formatDateLong(dateFrom.toISOString()) : 'Select date'}</Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus /></PopoverContent>
+                      <PopoverContent
+                        className="w-auto p-0"
+                        align="start"
+                        // Tablet/iPad fix: the calendar's intrinsic height plus
+                        // Radix's default 4px sideOffset can push the popover
+                        // above the viewport, where Radix then either clips it
+                        // or flips it to a weird position. Pin it with a larger
+                        // sideOffset, allow collisions to reposition, and give
+                        // it generous padding so it always lands inside the
+                        // viewport. sticky="always" keeps it attached to the
+                        // trigger while scrolling so it doesn't drift away.
+                        sideOffset={8}
+                        collisionPadding={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                        avoidCollisions
+                        sticky="always"
+                      >
+                        <div className="max-h-[70vh] overflow-auto">
+                          <Calendar
+                            mode="single"
+                            selected={dateFrom}
+                            onSelect={(d) => {
+                              setDateFrom(d)
+                              // Close the calendar immediately after picking
+                              // so the dealer doesn't have to tap outside.
+                              // Tiny delay so the click that selected the
+                              // date doesn't re-open the trigger.
+                              setTimeout(() => setShowFromCalendar(false), 80)
+                            }}
+                            initialFocus
+                          />
+                        </div>
+                      </PopoverContent>
                     </Popover>
                   </div>
                   <div className="space-y-2">
                     <div className="text-sm font-bold text-slate-500">To</div>
-                    <Popover>
+                    <Popover open={showToCalendar} onOpenChange={setShowToCalendar}>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="w-full justify-start rounded-xl h-11"><CalendarIcon className="h-4 w-4 mr-2" />{dateTo ? formatDateLong(dateTo.toISOString()) : 'Select date'}</Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus /></PopoverContent>
+                      <PopoverContent
+                        className="w-auto p-0"
+                        align="start"
+                        sideOffset={8}
+                        collisionPadding={{ top: 16, bottom: 16, left: 16, right: 16 }}
+                        avoidCollisions
+                        sticky="always"
+                      >
+                        <div className="max-h-[70vh] overflow-auto">
+                          <Calendar
+                            mode="single"
+                            selected={dateTo}
+                            onSelect={(d) => {
+                              setDateTo(d)
+                              setTimeout(() => setShowToCalendar(false), 80)
+                            }}
+                            initialFocus
+                          />
+                        </div>
+                      </PopoverContent>
                     </Popover>
                   </div>
                   <div className="flex gap-2 pt-2">
                     <Button variant="outline" onClick={clearDateFilters} className="flex-1 rounded-xl">Clear</Button>
-                    <Button onClick={() => setShowFilters(false)} className="flex-1 rounded-xl bg-lime-500 text-slate-950">Apply</Button>
+                    <Button
+                      onClick={() => {
+                        setShowFilters(false)
+                        // Give the dealer clear feedback that the filter was
+                        // applied — otherwise the green "Filtered" badge on
+                        // the filter chip looks identical to a stuck/pressed
+                        // state and they can't tell if anything happened.
+                        if (dateFrom || dateTo) {
+                          toast.success('Filter applied', {
+                            description: `Showing deliveries ${dateFrom ? `from ${formatDateLong(dateFrom.toISOString())}` : ''}${dateFrom && dateTo ? ' to ' : ''}${dateTo ? `to ${formatDateLong(dateTo.toISOString())}` : ''}.`,
+                          })
+                        } else {
+                          toast.info('No filter selected', {
+                            description: 'Pick a From and/or To date, then Apply.',
+                          })
+                        }
+                      }}
+                      className="flex-1 rounded-xl bg-lime-500 text-slate-950"
+                    >Apply</Button>
                   </div>
                 </div>
               </PopoverContent>
