@@ -388,18 +388,43 @@ export class StripePaymentController {
     try {
       const methods = await this.stripeService.listPaymentMethods(customer.stripeCustomerId);
 
+      // ── Auto-recover missing default ────────────────────────────────
+      // If the DB has no default payment method but Stripe has cards attached,
+      // pick the most recent one and persist it as the default. This handles
+      // the case where the SetupIntent webhook didn't fire (misconfigured
+      // webhook secret, network blip, etc.) — the card was successfully saved
+      // to Stripe but our DB never learned which one is the default.
+      let effectiveDefault = customer.stripeDefaultPaymentMethodId;
+      if (!effectiveDefault && methods.length > 0) {
+        effectiveDefault = methods[0].id;
+        try {
+          await this.prisma.customer.update({
+            where: { id: customerId },
+            data: { stripeDefaultPaymentMethodId: effectiveDefault },
+          });
+          this.logger.log(
+            `Auto-set default payment method ${effectiveDefault} for customer ${customerId} (was null, recovered from Stripe)`,
+          );
+        } catch (persistErr: any) {
+          this.logger.warn(
+            `Failed to persist auto-default ${effectiveDefault} for customer ${customerId}: ${persistErr.message}`,
+          );
+          // Continue anyway — return the recovered default so the UI shows it.
+        }
+      }
+
       const cards = methods.map((m) => ({
         id: m.id,
         brand: (m.card as any)?.brand || "unknown",
         last4: (m.card as any)?.last4 || "****",
         expMonth: (m.card as any)?.exp_month,
         expYear: (m.card as any)?.exp_year,
-        isDefault: m.id === customer.stripeDefaultPaymentMethodId,
+        isDefault: m.id === effectiveDefault,
       }));
 
       return {
         cards,
-        defaultPaymentMethodId: customer.stripeDefaultPaymentMethodId,
+        defaultPaymentMethodId: effectiveDefault,
       };
     } catch (err: any) {
       this.logger.error(`Failed to list payment methods: ${err.message}`);
