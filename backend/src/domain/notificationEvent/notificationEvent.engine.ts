@@ -5,6 +5,7 @@ import {
   EnumNotificationEventStatus,
   EnumNotificationEventType,
   EnumScheduleChangeRequestRequestedByRole,
+  EnumUserRoles,
   Prisma,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -3306,4 +3307,252 @@ async notifyAdminLockInRetainedOnCancel(input: {
 
   return true;
 }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Driver payout INITIATED notification.
+  //
+  // Fires the moment the Stripe transfer API call returns successfully
+  // (inside PaymentPayoutEngine.initiateDriverTransfer), NOT waiting for
+  // the transfer.paid webhook. Reason: standard Stripe Connect transfers
+  // take 1-2 business days to settle into the driver's Connect balance,
+  // and the driver wants immediate confirmation that their trip payout
+  // is on the way. The transfer.paid webhook still fires later and
+  // triggers notifyDriverPayoutPaid for the "funds have landed" email.
+  // ─────────────────────────────────────────────────────────────────
+  async notifyDriverPayoutInitiated(input: {
+    deliveryId: string;
+    driverId: string;
+    amount: number;
+    transferId: string;
+    payoutType?: "LOCK_IN_FEE" | "TRIP_COMPLETION";
+  }) {
+    const [delivery, driver] = await Promise.all([
+      this.prisma.deliveryRequest.findUnique({
+        where: { id: input.deliveryId },
+        select: {
+          id: true,
+          pickupAddress: true,
+          dropoffAddress: true,
+        },
+      }),
+      this.prisma.driver.findUnique({
+        where: { id: input.driverId },
+        select: {
+          id: true,
+          user: { select: { email: true, fullName: true } },
+        },
+      }),
+    ]);
+
+    if (!delivery || !driver) {
+      this.logger.warn(
+        `notifyDriverPayoutInitiated: delivery ${input.deliveryId} or driver ${input.driverId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail = driver.user?.email;
+    if (!toEmail) {
+      this.logger.warn(
+        `notifyDriverPayoutInitiated: driver ${input.driverId} has no email, skipping`,
+      );
+      return null;
+    }
+
+    const displayName = driver.user?.fullName || "Driver";
+    const amountStr = `$${Number(input.amount).toFixed(2)}`;
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const payoutLabel =
+      input.payoutType === "LOCK_IN_FEE"
+        ? "lock-in fee (trip started)"
+        : "trip completion payout";
+
+    return this.queueAndSend({
+      driverId: driver.id,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DRIVER_PAYOUT_INITIATED,
+      templateCode: "driver-payout-initiated",
+      toEmail,
+      subject: `Payout on its way — ${amountStr} for delivery #${deliveryRef}`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `Your ${payoutLabel} of ${amountStr} for delivery #${deliveryRef} has been initiated.`,
+        "",
+        "The funds are now moving to your Stripe Connect account balance. You'll receive another email when the transfer settles (usually 1-2 business days for standard transfers, minutes for instant).",
+        "",
+        "Once the funds land in your Connect balance, you can pull them to your bank account from your driver wallet page.",
+        "",
+        "---",
+        "Payout Details",
+        `Delivery: #${deliveryRef}`,
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Amount: ${amountStr}`,
+        `Type: ${payoutLabel}`,
+        `Stripe Transfer ID: ${input.transferId}`,
+        `Initiated at: ${new Date().toISOString()}`,
+        "---",
+        "",
+        "Thank you for driving with 101 Drivers!",
+      ].join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        driverId: driver.id,
+        amount: input.amount,
+        transferId: input.transferId,
+        payoutType: input.payoutType ?? "TRIP_COMPLETION",
+      },
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Admin commission received notification.
+  //
+  // Fires from the transfer.paid webhook handler (handleTransferPaid in
+  // stripe-webhook.controller.ts). At that point:
+  //   • The customer's full payment was captured (lock-in at trip start,
+  //     remainder at completion).
+  //   • The driver's transfer has settled into their Connect balance.
+  //   • The platform's commission (gross - driverNet) is now realized
+  //     in the platform's Stripe balance.
+  //
+  // This is the most Stripe-confirmed moment to notify the admin that
+  // "your cut for this delivery is in the bank." Firing earlier (e.g.,
+  // at transfer creation) would be premature — the transfer could still
+  // fail and the commission would never materialize.
+  // ─────────────────────────────────────────────────────────────────
+  async notifyAdminCommissionReceived(input: {
+    deliveryId: string;
+    driverId: string;
+    /** Gross amount captured from the customer (lock-in + remainder, or full). */
+    grossAmount: number;
+    /** Net amount transferred to the driver. */
+    driverNetAmount: number;
+    /** Platform commission = grossAmount - driverNetAmount. */
+    commissionAmount: number;
+    transferId: string;
+  }) {
+    const [delivery, driver] = await Promise.all([
+      this.prisma.deliveryRequest.findUnique({
+        where: { id: input.deliveryId },
+        select: {
+          id: true,
+          pickupAddress: true,
+          dropoffAddress: true,
+          customerId: true,
+          customer: {
+            select: {
+              id: true,
+              businessName: true,
+              contactName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.driver.findUnique({
+        where: { id: input.driverId },
+        select: {
+          id: true,
+          user: { select: { fullName: true } },
+        },
+      }),
+    ]);
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyAdminCommissionReceived: delivery ${input.deliveryId} not found, skipping`,
+      );
+      return null;
+    }
+
+    // Look up all admin users (role = ADMIN) and notify each one.
+    // Most installations have a single admin, but the schema supports many
+    // (e.g., finance team, ops lead) — better to over-notify than to miss
+    // the person who needs to reconcile.
+    const admins = await this.prisma.user.findMany({
+      where: { roles: EnumUserRoles.ADMIN },
+      select: { id: true, email: true, fullName: true, username: true },
+    });
+
+    if (admins.length === 0) {
+      this.logger.warn(
+        `notifyAdminCommissionReceived: no admin users found in DB, skipping (delivery ${input.deliveryId})`,
+      );
+      return null;
+    }
+
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const customerLabel =
+      delivery.customer?.businessName ??
+      delivery.customer?.contactName ??
+      "Customer";
+    const driverLabel = driver?.user?.fullName ?? "Driver";
+
+    const grossStr = `$${Number(input.grossAmount).toFixed(2)}`;
+    const driverStr = `$${Number(input.driverNetAmount).toFixed(2)}`;
+    const commissionStr = `$${Number(input.commissionAmount).toFixed(2)}`;
+
+    const sendPromises = admins.map((admin) => {
+      const adminName = admin.fullName || admin.username || "admin";
+      return this.queueAndSend({
+        actorUserId: admin.id,
+        customerId: delivery.customerId,
+        deliveryId: delivery.id,
+        driverId: input.driverId,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.ADMIN_COMMISSION_RECEIVED,
+        templateCode: "admin-commission-received",
+        toEmail: admin.email,
+        subject: `Commission received — ${commissionStr} for delivery #${deliveryRef}`,
+        body: [
+          `Hi ${adminName},`,
+          "",
+          `Platform commission for delivery #${deliveryRef} has been received and is now in the platform Stripe balance.`,
+          "",
+          "The driver's transfer has settled (Stripe confirmed via the transfer.paid webhook), so all money movement for this delivery is now final.",
+          "",
+          "---",
+          "Money Movement Summary",
+          `Delivery: #${deliveryRef}`,
+          `Customer: ${customerLabel}`,
+          `Driver: ${driverLabel}`,
+          `Pickup: ${delivery.pickupAddress}`,
+          `Drop-off: ${delivery.dropoffAddress}`,
+          "",
+          `Customer paid (gross):     ${grossStr}`,
+          `Driver payout (net):       ${driverStr}`,
+          `Platform commission:       ${commissionStr}`,
+          "",
+          `Stripe Transfer ID: ${input.transferId}`,
+          `Settled at: ${new Date().toISOString()}`,
+          "---",
+          "",
+          "This is an automated notification triggered by the Stripe transfer.paid webhook. No manual action required.",
+        ].join("\n"),
+        payload: {
+          deliveryId: delivery.id,
+          driverId: input.driverId,
+          grossAmount: input.grossAmount,
+          driverNetAmount: input.driverNetAmount,
+          commissionAmount: input.commissionAmount,
+          transferId: input.transferId,
+        },
+      }).catch((err: any) => {
+        // One admin's notification failing should not block the others.
+        this.logger.error(
+          `Failed to send commission notification to admin ${admin.id} (${admin.email}): ${err.message}`,
+        );
+        return null;
+      });
+    });
+
+    const results = await Promise.all(sendPromises);
+    const sent = results.filter((r) => r !== null).length;
+    this.logger.log(
+      `notifyAdminCommissionReceived: sent to ${sent}/${admins.length} admin(s) for delivery ${input.deliveryId} (commission ${commissionStr})`,
+    );
+    return results[0];
+  }
 }

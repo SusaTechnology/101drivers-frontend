@@ -446,6 +446,37 @@ export class StripeWebhookController {
         );
       }
     }
+
+    // Notify admin(s) that the platform commission has been received.
+    // At this point:
+    //   • The customer's full payment was captured (lock-in at trip start
+    //     + remainder at completion).
+    //   • The driver's transfer has settled into their Connect balance
+    //     (Stripe confirmed via this very transfer.paid webhook).
+    //   • The platform's commission (grossAmount - netAmount = platformFee,
+    //     already stored on the DriverPayout row) is now realized in the
+    //     platform's Stripe balance.
+    //
+    // This is the most Stripe-confirmed moment to notify the admin —
+    // firing earlier (e.g., at transfer creation) would be premature
+    // because the transfer could still fail and the commission would
+    // never materialize.
+    if (this.notificationEngine) {
+      try {
+        await this.notificationEngine.notifyAdminCommissionReceived({
+          deliveryId: payout.deliveryId,
+          driverId: payout.driverId,
+          grossAmount: Number(payout.grossAmount ?? 0),
+          driverNetAmount: Number(payout.netAmount ?? 0),
+          commissionAmount: Number(payout.platformFee ?? 0),
+          transferId: transfer.id,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `Failed to send admin commission-received notification for payout ${payoutId}: ${err.message}`,
+        );
+      }
+    }
   }
 
   private async handleTransferFailed(transfer: any) {

@@ -22,6 +22,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { StripeService } from "../../providers/stripe/stripe.service";
+import { NotificationEventEngine } from "../../domain/notificationEvent/notificationEvent.engine";
 
 type Tx = Prisma.TransactionClient;
 
@@ -33,6 +34,8 @@ export class PaymentPayoutEngine {
     private readonly prisma: PrismaService,
     @Optional() @Inject(StripeService)
     private readonly stripeService?: StripeService,
+    @Optional() @Inject(NotificationEventEngine)
+    private readonly notificationEngine?: NotificationEventEngine,
   ) {}
 
   async getDeliveryFinancialSummary(deliveryId: string) {
@@ -580,6 +583,32 @@ export class PaymentPayoutEngine {
       });
 
       this.logger.log(`Transfer ${transfer.id} initiated for delivery ${deliveryId} → driver ${driverId} ($${amount})`);
+
+      // Notify the driver that their payout is on the way. This fires
+      // IMMEDIATELY after the Stripe transfer API call returns — not
+      // waiting for the transfer.paid webhook (which can take 1-2
+      // business days for standard transfers). The driver gets an
+      // immediate "payout initiated" email now, and a "payout landed"
+      // email later when the webhook fires.
+      if (this.notificationEngine) {
+        try {
+          await this.notificationEngine.notifyDriverPayoutInitiated({
+            deliveryId,
+            driverId,
+            amount,
+            transferId: transfer.id,
+            payoutType: payout.type === EnumDriverPayoutType.LOCK_IN_FEE
+              ? "LOCK_IN_FEE"
+              : "TRIP_COMPLETION",
+          });
+        } catch (err: any) {
+          // Non-fatal — the transfer itself succeeded. Don't fail the
+          // completion flow over a notification issue.
+          this.logger.error(
+            `notifyDriverPayoutInitiated failed for delivery ${deliveryId} (non-fatal): ${err.message}`,
+          );
+        }
+      }
     } catch (err: any) {
       this.logger.error(`Transfer initiation failed for delivery ${deliveryId}: ${err.message}`);
       // Don't update status — webhook will handle it if transfer eventually succeeds/fails
