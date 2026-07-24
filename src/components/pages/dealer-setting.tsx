@@ -1,6 +1,6 @@
 // DealerSettings.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import {
   Card,
@@ -164,6 +164,30 @@ function extractAddressComponents(place: google.maps.places.PlaceResult) {
 export default function DealerSettings() {
   const user = getUser()
   const customerId = user?.profileId
+
+  // Navigate hook for the "Resume failed delivery" banner
+  const navigate = useNavigate()
+
+  // Track whether there's a pending failed delivery (form data preserved in
+  // sessionStorage after a charge failure). When the dealer comes to settings
+  // to update their card, this banner lets them jump straight back to the
+  // review page with all the original form data pre-filled.
+  const [hasPendingFailedDelivery, setHasPendingFailedDelivery] = useState(false)
+
+  useEffect(() => {
+    const checkPendingDelivery = () => {
+      try {
+        const data = sessionStorage.getItem('reviewDeliveryData')
+        setHasPendingFailedDelivery(!!data)
+      } catch {
+        setHasPendingFailedDelivery(false)
+      }
+    }
+    checkPendingDelivery()
+    // Re-check on focus (in case dealer saved card in another tab)
+    window.addEventListener('focus', checkPendingDelivery)
+    return () => window.removeEventListener('focus', checkPendingDelivery)
+  }, [])
 
   // --- All hooks must be called unconditionally at the top ---
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -794,6 +818,35 @@ const confirmDelete = () => {
       </header>
 
       <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-8 lg:py-10">
+        {/* Resume failed delivery banner — shown when sessionStorage has a
+            pending reviewDeliveryData (set by the dealer-review-delivery page
+            when a charge failed). The dealer updates their card below, then
+            clicks this banner to navigate back to the review page with all
+            the original form data pre-filled. */}
+        {hasPendingFailedDelivery && (
+          <div className="mb-6 rounded-2xl border-2 border-amber-300 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-950/20 p-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                <CreditCard className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="font-extrabold text-slate-900 dark:text-white">
+                  Resume your pending delivery
+                </p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Update your payment method below, then return to your delivery to retry the charge.
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => navigate({ to: '/dealer-review-delivery' })}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl"
+            >
+              Resume delivery
+            </Button>
+          </div>
+        )}
+
         {/* Page header */}
         <section className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6">
           <div className="space-y-3">

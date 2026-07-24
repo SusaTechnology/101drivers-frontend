@@ -1606,6 +1606,266 @@ async notifyTripCompleted(input: {
     });
   }
 
+  /**
+   * Notify driver that their payout has landed in their Stripe Connect account.
+   * Triggered by the `transfer.paid` webhook when Stripe confirms the transfer
+   * from the platform balance → driver's Connect account balance.
+   *
+   * This is the moment the driver actually "has" the money (in their Connect
+   * balance — they still need to pull it to their bank via instant/standard payout).
+   */
+  async notifyDriverPayoutPaid(input: {
+    deliveryId: string;
+    driverId: string;
+    amount: number;
+    payoutType: "LOCK_IN_FEE" | "TRIP_COMPLETION";
+    transferId: string;
+  }) {
+    const [delivery, driver] = await Promise.all([
+      this.prisma.deliveryRequest.findUnique({
+        where: { id: input.deliveryId },
+        select: {
+          id: true,
+          pickupAddress: true,
+          dropoffAddress: true,
+        },
+      }),
+      this.prisma.driver.findUnique({
+        where: { id: input.driverId },
+        select: {
+          id: true,
+          user: { select: { email: true, fullName: true } },
+        },
+      }),
+    ]);
+
+    if (!delivery || !driver) {
+      this.logger.warn(
+        `notifyDriverPayoutPaid: delivery ${input.deliveryId} or driver ${input.driverId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail = driver.user?.email;
+    if (!toEmail) {
+      this.logger.warn(
+        `notifyDriverPayoutPaid: driver ${input.driverId} has no email, skipping`,
+      );
+      return null;
+    }
+
+    const displayName = driver.user?.fullName || "Driver";
+    const amountStr = `$${Number(input.amount).toFixed(2)}`;
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const payoutLabel =
+      input.payoutType === "LOCK_IN_FEE"
+        ? "lock-in fee (trip started)"
+        : "trip completion payout";
+
+    return this.queueAndSend({
+      driverId: driver.id,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DRIVER_PAYOUT_PAID,
+      templateCode: "driver-payout-paid",
+      toEmail,
+      subject: `Payout received — ${amountStr} for delivery #${deliveryRef}`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `Good news — your ${payoutLabel} of ${amountStr} has been transferred to your Stripe Connect account.`,
+        "",
+        "The funds are now in your Connect balance. You can pull them to your bank account from your driver wallet page (instant payout arrives in minutes, standard payout takes 1-2 business days).",
+        "",
+        "---",
+        "Payout Details",
+        `Delivery: #${deliveryRef}`,
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Amount: ${amountStr}`,
+        `Type: ${payoutLabel}`,
+        `Stripe Transfer ID: ${input.transferId}`,
+        `Date: ${new Date().toISOString()}`,
+        "---",
+        "",
+        "Thank you for driving with 101 Drivers!",
+      ].join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        driverId: driver.id,
+        amount: input.amount,
+        transferId: input.transferId,
+        payoutType: input.payoutType,
+      },
+    });
+  }
+
+  /**
+   * Notify driver that a payout transfer failed.
+   * Triggered by the `transfer.failed` webhook.
+   */
+  async notifyDriverPayoutFailed(input: {
+    deliveryId: string;
+    driverId: string;
+    amount: number;
+    transferId: string;
+    failureReason?: string;
+  }) {
+    const [delivery, driver] = await Promise.all([
+      this.prisma.deliveryRequest.findUnique({
+        where: { id: input.deliveryId },
+        select: { id: true, pickupAddress: true, dropoffAddress: true },
+      }),
+      this.prisma.driver.findUnique({
+        where: { id: input.driverId },
+        select: {
+          id: true,
+          user: { select: { email: true, fullName: true } },
+        },
+      }),
+    ]);
+
+    if (!delivery || !driver) {
+      this.logger.warn(
+        `notifyDriverPayoutFailed: delivery ${input.deliveryId} or driver ${input.driverId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail = driver.user?.email;
+    if (!toEmail) return null;
+
+    const displayName = driver.user?.fullName || "Driver";
+    const amountStr = `$${Number(input.amount).toFixed(2)}`;
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+
+    return this.queueAndSend({
+      driverId: driver.id,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DRIVER_PAYOUT_FAILED,
+      templateCode: "driver-payout-failed",
+      toEmail,
+      subject: `Payout failed — ${amountStr} for delivery #${deliveryRef}`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `A payout of ${amountStr} for delivery #${deliveryRef} could not be completed.`,
+        "",
+        `Reason: ${input.failureReason || "Unknown error"}`,
+        "",
+        "Our team has been notified and will reach out within 1 business day to resolve this. If you have questions, please contact support.",
+        "",
+        "---",
+        "Payout Details",
+        `Delivery: #${deliveryRef}`,
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Amount: ${amountStr}`,
+        `Stripe Transfer ID: ${input.transferId}`,
+        "---",
+      ].join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        driverId: driver.id,
+        amount: input.amount,
+        transferId: input.transferId,
+        failureReason: input.failureReason,
+      },
+    });
+  }
+
+  /**
+   * Notify customer that their payment failed asynchronously.
+   * Triggered by the `payment_intent.payment_failed` webhook — this fires
+   * when Stripe rejects a charge after the initial creation (e.g., fraud
+   * check fails, card reported stolen between auth and capture).
+   *
+   * Note: most failures happen synchronously during create-from-quote and
+   * are surfaced via BadRequestException. This notification covers the rare
+   * async failure case.
+   */
+  async notifyPaymentFailed(input: {
+    deliveryId: string;
+    amount: number;
+    failureReason?: string;
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        customer: {
+          select: {
+            id: true,
+            contactEmail: true,
+            contactName: true,
+            businessName: true,
+            user: { select: { email: true, fullName: true } },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyPaymentFailed: delivery ${input.deliveryId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail =
+      delivery.customer?.user?.email ??
+      delivery.customer?.contactEmail ??
+      null;
+    if (!toEmail) return null;
+
+    const displayName =
+      delivery.customer?.user?.fullName ??
+      delivery.customer?.contactName ??
+      delivery.customer?.businessName ??
+      "Customer";
+
+    const amountStr = `$${Number(input.amount).toFixed(2)}`;
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const reason = input.failureReason || "Your bank declined the charge.";
+
+    return this.queueAndSend({
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.PAYMENT_FAILED,
+      templateCode: "payment-failed",
+      toEmail,
+      subject: `Payment failed — delivery #${deliveryRef}`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `We were unable to charge your card for ${amountStr} for delivery #${deliveryRef}.`,
+        "",
+        `Reason: ${reason}`,
+        "",
+        "To reschedule this delivery, please update your payment method in the app and try again. If you believe this is an error, please contact your bank or our support team.",
+        "",
+        "---",
+        "Delivery Details",
+        `Delivery: #${deliveryRef}`,
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Amount: ${amountStr}`,
+        "---",
+      ].join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        amount: input.amount,
+        failureReason: reason,
+      },
+    });
+  }
+
   private async notifyStatusChangeInternal(input: {
     deliveryId: string;
     actorUserId?: string | null;

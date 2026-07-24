@@ -307,6 +307,21 @@ export class StripeWebhookController {
     });
 
     this.logger.warn(`Payment failed for delivery ${deliveryId}: ${pi.last_payment_error?.message}`);
+
+    // Notify the customer that their payment failed asynchronously
+    if (this.notificationEngine) {
+      try {
+        await this.notificationEngine.notifyPaymentFailed({
+          deliveryId,
+          amount: pi.amount / 100,
+          failureReason: pi.last_payment_error?.message,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `Failed to send payment-failed notification for delivery ${deliveryId}: ${err.message}`,
+        );
+      }
+    }
   }
 
   private async handlePaymentIntentCanceled(pi: any) {
@@ -400,27 +415,67 @@ export class StripeWebhookController {
   private async handleTransferPaid(transfer: any) {
     // Update payout record when transfer completes
     const payoutId = transfer.metadata?.payoutId;
-    if (payoutId) {
-      await this.prisma.driverPayout.update({
-        where: { id: payoutId },
-        data: {
-          status: "PAID",
-          paidAt: new Date(),
-          providerTransferId: transfer.id,
-        },
-      });
-      this.logger.log(`Payout ${payoutId} paid via transfer ${transfer.id}`);
+    if (!payoutId) {
+      this.logger.log(`Transfer ${transfer.id} paid — no payoutId in metadata, skipping DB update`);
+      return;
+    }
+
+    const payout = await this.prisma.driverPayout.update({
+      where: { id: payoutId },
+      data: {
+        status: "PAID",
+        paidAt: new Date(),
+        providerTransferId: transfer.id,
+      },
+    });
+    this.logger.log(`Payout ${payoutId} paid via transfer ${transfer.id}`);
+
+    // Notify the driver that their payout has landed
+    if (this.notificationEngine) {
+      try {
+        await this.notificationEngine.notifyDriverPayoutPaid({
+          deliveryId: payout.deliveryId,
+          driverId: payout.driverId,
+          amount: payout.netAmount,
+          payoutType: payout.type === "LOCK_IN_FEE" ? "LOCK_IN_FEE" : "TRIP_COMPLETION",
+          transferId: transfer.id,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `Failed to send driver payout-paid notification for payout ${payoutId}: ${err.message}`,
+        );
+      }
     }
   }
 
   private async handleTransferFailed(transfer: any) {
     const payoutId = transfer.metadata?.payoutId;
-    if (payoutId) {
-      await this.prisma.driverPayout.update({
-        where: { id: payoutId },
-        data: { status: "FAILED" },
-      });
-      this.logger.warn(`Payout ${payoutId} failed via transfer ${transfer.id}`);
+    if (!payoutId) {
+      this.logger.warn(`Transfer ${transfer.id} failed — no payoutId in metadata`);
+      return;
+    }
+
+    const payout = await this.prisma.driverPayout.update({
+      where: { id: payoutId },
+      data: { status: "FAILED", failureMessage: transfer.failure_message || "Transfer failed" },
+    });
+    this.logger.warn(`Payout ${payoutId} failed via transfer ${transfer.id}`);
+
+    // Notify the driver that their payout failed
+    if (this.notificationEngine) {
+      try {
+        await this.notificationEngine.notifyDriverPayoutFailed({
+          deliveryId: payout.deliveryId,
+          driverId: payout.driverId,
+          amount: payout.netAmount,
+          transferId: transfer.id,
+          failureReason: transfer.failure_message || "Stripe returned a transfer failure",
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `Failed to send driver payout-failed notification for payout ${payoutId}: ${err.message}`,
+        );
+      }
     }
   }
 

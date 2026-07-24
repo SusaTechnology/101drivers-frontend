@@ -27,6 +27,8 @@ export enum EnumNotificationEventType {
   PaymentAuthorized = "PAYMENT_AUTHORIZED",
   PaymentCaptured = "PAYMENT_CAPTURED",
   PaymentFailed = "PAYMENT_FAILED",
+  DriverPayoutPaid = "DRIVER_PAYOUT_PAID",
+  DriverPayoutFailed = "DRIVER_PAYOUT_FAILED",
   DisputeOpened = "DISPUTE_OPENED",
   DisputeUpdated = "DISPUTE_UPDATED",
   ScheduleChangeRequested = "SCHEDULE_CHANGE_REQUESTED",

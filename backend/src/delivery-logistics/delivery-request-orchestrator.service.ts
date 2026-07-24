@@ -487,6 +487,47 @@ export class DeliveryRequestOrchestratorService {
     return `Payment failed: ${msg}`;
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Called when a charge fails AFTER the delivery row has been created.
+  // Marks the delivery as CANCELLED with reason "Payment failed: <message>"
+  // so it does NOT appear in the driver feed (drivers only see LISTED).
+  // The dealer can retry by creating a new delivery with the same form data.
+  //
+  // Also writes a DeliveryStatusHistory row for the audit trail.
+  // ─────────────────────────────────────────────────────────────────
+  private async cancelDeliveryOnPaymentFailure(
+    deliveryId: string,
+    failureMessage: string,
+    actorUserId?: string | null,
+  ): Promise<void> {
+    try {
+      await this.prisma.deliveryRequest.update({
+        where: { id: deliveryId },
+        data: {
+          status: EnumDeliveryRequestStatus.CANCELLED,
+        },
+      });
+
+      await this.prisma.deliveryStatusHistory.create({
+        data: {
+          deliveryId,
+          actorUserId: actorUserId ?? null,
+          actorRole: null,
+          actorType: EnumDeliveryStatusHistoryActorType.SYSTEM,
+          fromStatus: EnumDeliveryStatusHistoryToStatus.LISTED,
+          toStatus: EnumDeliveryStatusHistoryToStatus.CANCELLED,
+          note: `Payment failed: ${failureMessage}`,
+        },
+      });
+    } catch (err: any) {
+      // Best-effort — don't shadow the original payment error
+      // eslint-disable-next-line no-console
+      console.error(
+        `Failed to cancel delivery ${deliveryId} after payment failure: ${err.message}`,
+      );
+    }
+  }
+
   async createDeliveryDraftFromQuote(input: CreateDeliveryDraftFromQuoteInput) {
     const customer = await this.prisma.customer.findUnique({
       where: { id: input.customerId },
@@ -1099,9 +1140,16 @@ private async createIndividualDeliveryForResolvedCustomer(
     paymentIntentId = result.paymentIntentId;
     clientSecret = result.clientSecret;
     piStatus = result.status;
-  } catch (err) {
+  } catch (err: any) {
     // Helper already wrote a FAILED PaymentEvent with the friendly message.
-    // Re-throw so the API layer surfaces it to the customer.
+    // Mark the delivery as CANCELLED so it doesn't pollute the driver feed
+    // (drivers only see LISTED). Then re-throw so the API layer surfaces
+    // the error to the customer — the frontend shows a retry dialog.
+    await this.cancelDeliveryOnPaymentFailure(
+      delivery.id,
+      err?.message || 'Unknown error',
+      customer.userId ?? null,
+    );
     throw err;
   }
 
@@ -1853,18 +1901,30 @@ private async resolveIndividualCustomerForCreate(
     // For PREPAID business customers, actually charge the saved card via Stripe.
     // Throws a user-facing BadRequestException on failure — no silent fallback.
     if (paymentType === EnumPaymentPaymentType.PREPAID) {
-      const chargeResult = await this.attemptStripePrepaidCharge({
-        paymentId: payment.id,
-        amount: quote.estimatedPrice,
-        deliveryId: delivery.id,
-        paymentType,
-        customer: {
-          id: customer.id,
-          stripeCustomerId: customer.stripeCustomerId,
-          stripeDefaultPaymentMethodId: customer.stripeDefaultPaymentMethodId,
-        },
-        customerEmail: customer.contactEmail || customer.user?.email || null,
-      });
+      let chargeResult: { paymentIntentId: string; clientSecret: string; status: string };
+      try {
+        chargeResult = await this.attemptStripePrepaidCharge({
+          paymentId: payment.id,
+          amount: quote.estimatedPrice,
+          deliveryId: delivery.id,
+          paymentType,
+          customer: {
+            id: customer.id,
+            stripeCustomerId: customer.stripeCustomerId,
+            stripeDefaultPaymentMethodId: customer.stripeDefaultPaymentMethodId,
+          },
+          customerEmail: customer.contactEmail || customer.user?.email || null,
+        });
+      } catch (err: any) {
+        // Mark the delivery as CANCELLED so it doesn't pollute the driver feed,
+        // then re-throw so the API layer surfaces the error to the dealer.
+        await this.cancelDeliveryOnPaymentFailure(
+          delivery.id,
+          err?.message || 'Unknown error',
+          input.createdByUserId ?? null,
+        );
+        throw err;
+      }
 
       await this.prisma.paymentEvent.create({
         data: {

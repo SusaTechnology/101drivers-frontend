@@ -47,6 +47,7 @@ import { getUser, authFetch, useDataQuery } from "@/lib/tanstack/dataQuery";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import StripePaymentDialog from '@/components/stripe/StripePaymentDialog';
+import PaymentFailureDialog from '@/components/stripe/PaymentFailureDialog';
 
 // Types for review data
 interface ReviewDeliveryData {
@@ -178,6 +179,15 @@ export default function ReviewDeliveryPage() {
   // Payment dialog state (shown after successful delivery creation for prepaid)
   const [pendingPaymentDeliveryId, setPendingPaymentDeliveryId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  // Payment failure dialog state (shown when charge fails — replaces the old toast)
+  // Retry button re-submits the create-from-quote mutation with the same payload.
+  // Update card button navigates to /dealer-setting — sessionStorage preserves
+  // the form data so the dealer can resume the same delivery after updating.
+  const [paymentFailure, setPaymentFailure] = useState<{ open: boolean; reason: string; code?: string }>({
+    open: false,
+    reason: '',
+  });
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
@@ -440,6 +450,10 @@ export default function ReviewDeliveryPage() {
       // Clear session storage
       sessionStorage.removeItem("reviewDeliveryData");
 
+      // Close the payment failure dialog if it was open from a previous
+      // failed attempt — this retry succeeded.
+      setPaymentFailure({ open: false, reason: '' });
+
       const newDeliveryId = data?.id || data?.deliveryRequest?.id;
 
       // Check if payment already has a Stripe PaymentIntent (previously authorized)
@@ -470,12 +484,51 @@ export default function ReviewDeliveryPage() {
     onError: (error: any) => {
       const errorMessage = error?.message || "Failed to create delivery";
       const errorDetails = error?.response?.data?.details || error?.details;
-      toast.error("Failed to request delivery", {
-        description: errorDetails || errorMessage,
-      });
+      const fullMessage = errorDetails || errorMessage;
       console.error("Delivery creation failed:", error);
+
+      // Detect whether this is a payment failure (vs. a validation error like
+      // "VIN must be 4 digits"). Payment failures come from the Stripe charge
+      // helper and have specific phrases baked in by translateStripeError().
+      // For payment failures we show a dialog with Retry + Update card buttons
+      // instead of a transient toast.
+      const isPaymentFailure = [
+        'card was declined',
+        'card has expired',
+        'insufficient funds',
+        'security code',
+        'lost or stolen',
+        'bank declined',
+        'payment method',
+        'payment processing',
+        'payment could not',
+        '3D Secure',
+        'Stripe',
+        'payment processor',
+        'No saved payment',
+        'No Stripe customer',
+      ].some((phrase) => fullMessage.toLowerCase().includes(phrase.toLowerCase()));
+
+      if (isPaymentFailure) {
+        setPaymentFailure({ open: true, reason: fullMessage });
+      } else {
+        // Non-payment error (validation, schedule, etc.) — toast is fine.
+        toast.error("Failed to request delivery", {
+          description: fullMessage,
+        });
+      }
     },
   });
+
+  // Handler the failure dialog calls when dealer clicks "Retry payment".
+  // Re-submits the same create-from-quote mutation; the form data is already
+  // in `reviewData` so the same payload is sent. If it fails again, the
+  // mutation's onError fires and updates `paymentFailure.reason` with the
+  // new error — the dialog stays open. On success, onSuccess fires and we
+  // close the dialog.
+  const handlePaymentRetry = async () => {
+    submitDelivery.mutate();
+  };
 
   const handleEditField = (field: string) => {
     setEditField(field);
@@ -1362,6 +1415,17 @@ export default function ReviewDeliveryPage() {
         }}
       />
     )}
+
+    {/* Payment Failure Dialog — shown when the charge fails at delivery creation.
+        Two buttons: Retry (re-submits the create-from-quote form on this page) and
+        Update card (navigates to /dealer-setting; sessionStorage preserves the
+        form data so the dealer can resume the same delivery after updating). */}
+    <PaymentFailureDialog
+      open={paymentFailure.open}
+      reason={paymentFailure.reason}
+      code={paymentFailure.code}
+      onRetry={handlePaymentRetry}
+    />
     </div>
   );
 }
