@@ -84,7 +84,10 @@ export class StripeService {
         ...(params.confirm
           ? { confirm: true }
           : {}),
-        automatic_payment_methods: { enabled: true },
+        // We only charge saved cards off-session (no redirect-based methods
+        // like iDEAL/Bancontact). Tell Stripe explicitly so it does not
+        // require a `return_url` when `confirm: true`.
+        automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       },
       { idempotencyKey },
     );
