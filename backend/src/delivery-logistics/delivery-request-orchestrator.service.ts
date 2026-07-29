@@ -36,6 +36,7 @@ import { PricingEngineService } from "./pricing-engine.service";
 import { EmailVerificationService } from "../auth/email-verification/email-verification.service";
 import { PasswordService } from "../auth/password.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { StripeService } from "../providers/stripe/stripe.service";
 import { businessIsPastCutoff, businessIsSameDay, businessHourOf, businessNow } from "./business-time";
 
 export type CreateDeliveryDraftFromQuoteInput = {
@@ -241,12 +242,20 @@ export class DeliveryRequestOrchestratorService {
     private readonly emailVerificationService: EmailVerificationService,
     private readonly passwordService: PasswordService,
     private readonly notificationEventEngine: NotificationEventEngine,
-    @Optional() @Inject("STRIPE_SERVICE") private readonly stripeService?: any,
+    @Optional() @Inject(StripeService) private readonly stripeService?: StripeService,
     @Optional() @Inject(forwardRef(() => TrackingGateway)) private readonly trackingGateway?: TrackingGateway,
   ) {
     const logger = new Logger(DeliveryRequestOrchestratorService.name);
     logger.log(
       `TrackingGateway ${this.trackingGateway ? 'INJECTED' : 'NOT INJECTED (undefined)'}`
+    );
+    // Critical: if StripeService is not injected, every prepaid delivery will
+    // throw "Payment processing is not available on the server" from
+    // attemptStripePrepaidCharge. Log it loudly at startup so we never again
+    // ship with a broken DI token (the previous bug was @Inject("STRIPE_SERVICE")
+    // — a string token that was never registered anywhere).
+    logger.log(
+      `StripeService ${this.stripeService ? 'INJECTED' : 'NOT INJECTED (undefined) — prepaid charges will FAIL'}`
     );
   }
 
@@ -357,7 +366,10 @@ export class DeliveryRequestOrchestratorService {
         deliveryId: params.deliveryId,
         customerEmail: params.customerEmail || undefined,
         stripeCustomerId,
-        paymentMethodId,
+        // By this point paymentMethodId is guaranteed to be a string (the
+        // null/empty cases above throw early). Coerce to satisfy the
+        // `string | undefined` signature in createPaymentIntent.
+        paymentMethodId: paymentMethodId ?? undefined,
         // Saved card → confirm immediately, hold funds (manual capture).
         // Driver start-trip will partial-capture the lock-in fee;
         // completion will create a 2nd PI for the remainder.
@@ -528,6 +540,54 @@ export class DeliveryRequestOrchestratorService {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Frees up the quoteId unique constraint so the dealer can retry delivery
+  // creation with the same quote after a previous attempt failed.
+  //
+  // Background: `quoteId` is `@unique` in the Prisma schema. When a charge
+  // fails, `cancelDeliveryOnPaymentFailure` marks the delivery CANCELLED
+  // but leaves `quoteId` intact (for audit). On retry, the new
+  // `deliveryRequest.create({ quoteId })` hits a unique constraint violation:
+  //   "Another record with the requested (quoteId) already exists" (409)
+  //
+  // This helper finds any CANCELLED delivery that still holds the quoteId
+  // and nulls out its quoteId. The CANCELLED row stays in the DB for the
+  // audit trail — it just no longer blocks new deliveries from using the
+  // same quote. The quote itself is unaffected (its `id` is unchanged).
+  //
+  // Safe to call before any `deliveryRequest.create` that takes a quoteId.
+  // No-op if no CANCELLED delivery holds the quoteId.
+  // ─────────────────────────────────────────────────────────────────
+  private async releaseCancelledQuoteId(quoteId: string): Promise<void> {
+    try {
+      const cancelledWithQuote = await this.prisma.deliveryRequest.findFirst({
+        where: {
+          quoteId,
+          status: EnumDeliveryRequestStatus.CANCELLED,
+        },
+        select: { id: true },
+      });
+
+      if (cancelledWithQuote) {
+        await this.prisma.deliveryRequest.update({
+          where: { id: cancelledWithQuote.id },
+          data: { quoteId: null },
+        });
+        const logger = new Logger(DeliveryRequestOrchestratorService.name);
+        logger.log(
+          `Released quoteId ${quoteId} from CANCELLED delivery ${cancelledWithQuote.id} so dealer can retry`,
+        );
+      }
+    } catch (err: any) {
+      // Non-fatal — if this fails, the create below will throw a clearer
+      // unique-constraint error. Log so we can diagnose.
+      // eslint-disable-next-line no-console
+      console.error(
+        `Failed to release quoteId ${quoteId} from prior CANCELLED delivery: ${err.message}`,
+      );
+    }
+  }
+
   async createDeliveryDraftFromQuote(input: CreateDeliveryDraftFromQuoteInput) {
     const customer = await this.prisma.customer.findUnique({
       where: { id: input.customerId },
@@ -565,6 +625,10 @@ export class DeliveryRequestOrchestratorService {
     if (!quote) {
       throw new NotFoundException("Quote not found");
     }
+
+    // Release any CANCELLED delivery that still holds this quoteId (from a
+    // previous failed attempt) so the draft create below doesn't 409.
+    await this.releaseCancelledQuoteId(input.quoteId);
 
     const delivery = await this.prisma.deliveryRequest.create({
       data: {
@@ -725,6 +789,10 @@ export class DeliveryRequestOrchestratorService {
         "customerId is required for individual draft creation"
       );
     }
+
+    // Release any CANCELLED delivery that still holds this quoteId (from a
+    // previous failed attempt) so the draft create below doesn't 409.
+    await this.releaseCancelledQuoteId(input.quoteId);
 
     const delivery = await this.prisma.deliveryRequest.create({
       data: {
@@ -1012,6 +1080,12 @@ private async createIndividualDeliveryForResolvedCustomer(
         schedule.dropoffWindowEnd
       ));
 
+  // If a previous attempt at this quote failed (charge declined, etc.),
+  // the CANCELLED row from that attempt still holds the quoteId unique
+  // constraint. Release it before creating the new delivery, otherwise
+  // the create below will throw a 409 "Another record with the requested
+  // (quoteId) already exists" and the dealer's retry button won't work.
+  await this.releaseCancelledQuoteId(input.quoteId);
 
   const delivery = await this.prisma.deliveryRequest.create({
     data: {
@@ -1780,6 +1854,13 @@ private async resolveIndividualCustomerForCreate(
           input.pickupWindowStart,
           input.dropoffWindowEnd
         ));
+
+    // If a previous attempt at this quote failed (charge declined, etc.),
+    // the CANCELLED row from that attempt still holds the quoteId unique
+    // constraint. Release it before creating the new delivery, otherwise
+    // the create below will throw a 409 "Another record with the requested
+    // (quoteId) already exists" and the dealer's retry button won't work.
+    await this.releaseCancelledQuoteId(input.quoteId);
 
     const delivery = await this.prisma.deliveryRequest.create({
       data: {
