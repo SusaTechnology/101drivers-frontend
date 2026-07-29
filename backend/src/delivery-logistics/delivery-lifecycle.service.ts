@@ -501,6 +501,8 @@ async startTrip(input: {
     const lockInFee = Number((baseFeeFromSnapshot || baseFeeFromFees || 0).toFixed(2));
 
     let lockInCaptured = false;
+
+    // ── PREPAID lock-in: capture base fee from the authorized PI ──
     if (
       !delivery.lockedInAt &&
       lockInFee > 0 &&
@@ -598,6 +600,79 @@ async startTrip(input: {
           "Please ask the customer to refresh their payment method and try again.",
         );
       }
+    }
+    // ── POSTPAID lock-in: platform-funded, no Stripe call ──
+    // The dealer owes the platform for the full quote (tracked via Invoice
+    // at completion). The driver gets paid identically to prepaid — the
+    // platform funds the lock-in payout from its own balance and recoups
+    // when the dealer pays the invoice. No money is collected from the
+    // customer at this stage.
+    else if (
+      !delivery.lockedInAt &&
+      lockInFee > 0 &&
+      payment &&
+      payment.paymentType === EnumPaymentPaymentType.POSTPAID
+    ) {
+      const cappedFee = Math.min(lockInFee, Number(payment.amount ?? lockInFee));
+
+      // Record the lock-in amount on the Payment row. No Stripe charge IDs
+      // because no Stripe call was made — this is a platform-funded lock-in.
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          lockInAmount: cappedFee,
+        },
+      });
+
+      await tx.paymentEvent.create({
+        data: {
+          paymentId: payment.id,
+          type: EnumPaymentEventType.CAPTURE,
+          status: EnumPaymentEventStatus.CAPTURED,
+          amount: cappedFee,
+          message:
+            `Postpaid lock-in base fee recorded at trip start ($${cappedFee.toFixed(2)}) — ` +
+            `platform-funded, dealer owes via invoice`,
+        },
+      });
+
+      // Create the lock-in DriverPayout with ELIGIBLE status — identical
+      // to prepaid so the driver sees no difference.
+      const driverSharePct = Number(snapshot.driverSharePct ?? 60);
+      const driverNet = Number((cappedFee * driverSharePct / 100).toFixed(2));
+      const platformFee = Number((cappedFee - driverNet).toFixed(2));
+
+      await tx.driverPayout.upsert({
+        where: { deliveryId: input.deliveryId },
+        create: {
+          deliveryId: input.deliveryId,
+          driverId: input.driverId,
+          grossAmount: cappedFee,
+          insuranceFee: 0,
+          platformFee,
+          netAmount: driverNet,
+          driverSharePct,
+          status: EnumDriverPayoutStatus.ELIGIBLE,
+          type: EnumDriverPayoutType.LOCK_IN_FEE,
+        },
+        update: {
+          driverId: input.driverId,
+          grossAmount: cappedFee,
+          insuranceFee: 0,
+          platformFee,
+          netAmount: driverNet,
+          driverSharePct,
+          status: EnumDriverPayoutStatus.ELIGIBLE,
+          failureMessage: null,
+          type: EnumDriverPayoutType.LOCK_IN_FEE,
+        },
+      });
+
+      lockInCaptured = true;
+      this.logger.log(
+        `Postpaid lock-in fee recorded: deliveryId=${input.deliveryId} amount=$${cappedFee.toFixed(2)} ` +
+        `driverPayout.net=$${driverNet.toFixed(2)} (platform-funded, dealer invoiced)`,
+      );
     }
 
     await tx.deliveryRequest.update({
