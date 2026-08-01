@@ -866,79 +866,90 @@ export default function DriverJobDetailsPage() {
 
             {/* ── Confirm Accept Dialog ── */}
             <AlertDialog open={showConfirmAccept} onOpenChange={(open) => { if (!bookMutation.isPending) setShowConfirmAccept(open) }}>
-              <AlertDialogContent className="max-w-[440px] rounded-2xl">
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="text-xl font-black">Confirm</AlertDialogTitle>
-                  <AlertDialogDescription className="sr-only">
+              <AlertDialogContent className="max-w-[440px] rounded-2xl overflow-hidden p-0">
+                <AlertDialogHeader className="sr-only">
+                  <AlertDialogTitle>Confirm</AlertDialogTitle>
+                  <AlertDialogDescription>
                     Review and confirm this delivery acceptance.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
 
-                {/* Trip Summary */}
-                <div className="mt-2 space-y-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
-                  {/* Pickup location */}
-                  <div className="flex items-start gap-2">
-                    <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                {/* Title — centered, bold */}
+                <div className="px-6 pt-6 pb-4 text-center">
+                  <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white">Confirm</h2>
+                </div>
+
+                <div className="px-6 pb-6 space-y-0">
+                  {/* Pickup / Drop-off — side by side */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup</p>
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate mt-1">
                         <AddressLink address={getShortAddress(job.pickupAddress)} />
                       </p>
                     </div>
-                  </div>
-                  {/* Dropoff location */}
-                  <div className="flex items-start gap-2">
-                    <MapPin className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drop-off</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drop-off</p>
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate mt-1">
                         <AddressLink address={getShortAddress(job.dropoffAddress)} />
                       </p>
                     </div>
                   </div>
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 gap-3 text-center pt-1 border-t border-slate-200 dark:border-slate-700">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Payout</p>
-                      <p className="text-base font-black text-primary mt-0.5">{formatCurrency(payout)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Distance</p>
-                      <p className="text-base font-black text-slate-900 dark:text-white mt-0.5">{miles ? `${miles} mi` : '\u2014'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drive Time</p>
-                      <p className="text-base font-black text-slate-900 dark:text-white mt-0.5">{driveTime}</p>
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{window}</p>
-                  </div>
-                </div>
 
-                {/* No-cancellation warning */}
-                <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 p-3.5">
-                  <TriangleAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200 leading-relaxed">
-                  Once confirmed, this delivery is <span className="underline">locked </span> in and cannot be cancelled from the app. <span className="underline">Contact Support</span> if you cannot complete it.                  </p>
-                </div>
+                  {/* Divider */}
+                  <div className="border-t border-slate-200 dark:border-slate-700 my-4" />
 
-                {/* Buttons — stacked: Confirm on top, Go Back below */}
-                <div className="flex flex-col gap-2 mt-3">
-                  <Button
-                    onClick={handleBook}
-                    disabled={bookMutation.isPending}
-                    className="w-full rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-black font-extrabold py-3.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {bookMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
-                    {bookMutation.isPending ? 'Confirming…' : 'Confirm'}
-                  </Button>
-                  <AlertDialogCancel
-                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold py-3.5"
-                    onClick={() => setShowConfirmAccept(false)}
-                  >
-                    Go Back
-                  </AlertDialogCancel>
+                  {/* Stats — inline, bullet-separated */}
+                  <div className="flex items-baseline justify-center gap-2 flex-wrap">
+                    <span className="text-lg font-black text-primary">{formatCurrency(payout)}</span>
+                    <span className="text-slate-300 dark:text-slate-600 font-bold">·</span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white">
+                      {miles ? `${miles} mi` : '—'}
+                    </span>
+                    <span className="text-slate-300 dark:text-slate-600 font-bold">·</span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white">{driveTime}</span>
+                  </div>
+
+                  {/* Pickup window text */}
+                  <p className="text-center text-xs font-bold text-slate-500 dark:text-slate-400 mt-2">{window}</p>
+
+                  {/* Divider */}
+                  <div className="border-t border-slate-200 dark:border-slate-700 my-4" />
+
+                  {/* No-cancellation warning */}
+                  <div className="flex items-start gap-2.5">
+                    <TriangleAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs font-bold text-amber-900 dark:text-amber-200 leading-relaxed">
+                      Once confirmed, this delivery is <span className="underline">locked</span> in and cannot be cancelled from the app. <span className="underline">Contact Support</span> if you cannot complete it.
+                    </p>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-slate-200 dark:border-slate-700 my-4" />
+
+                  {/* Buttons — stacked: Confirm on top, Go Back below */}
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      onClick={handleBook}
+                      disabled={bookMutation.isPending}
+                      className="w-full rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-white font-extrabold py-3.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {bookMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+                      {bookMutation.isPending ? 'Confirming…' : 'Confirm'}
+                    </Button>
+                    <AlertDialogCancel
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold py-3.5"
+                      onClick={() => setShowConfirmAccept(false)}
+                    >
+                      Go Back
+                    </AlertDialogCancel>
+                  </div>
                 </div>
               </AlertDialogContent>
             </AlertDialog>
