@@ -1840,20 +1840,47 @@ const DROPOFF_REF_IMAGES = [
 </div>
 
               <div className="mt-4 flex flex-col gap-3">
+                {/* Success banner — shown after all 6 dropoff photos upload successfully */}
+                {dropoffPhotosSaved && (
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-green-50 dark:bg-green-900/20 border-2 border-green-300 dark:border-green-700">
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-extrabold text-green-900 dark:text-green-100">
+                        6 photos uploaded
+                      </p>
+                      <p className="text-[11px] text-green-700 dark:text-green-300 leading-tight">
+                        Drop-off evidence saved. You can finish the delivery below.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <Button
                   onClick={handleUploadDropoffPhotos}
-                  disabled={isUploading || dropoffPhotoSlots.filter(s => s.file !== null).length < 6}
+                  disabled={isUploading || dropoffPhotosSaved || dropoffPhotoSlots.filter(s => s.file !== null).length < 6}
                   className={cn(
                     "w-full rounded-2xl py-3 font-extrabold flex items-center justify-center gap-2 transition",
                     isUploading
                       ? "text-slate-500 dark:text-slate-400 cursor-wait"
-                      : dropoffPhotoSlots.filter(s => s.file !== null).length >= 6
-                        ? "lime-btn hover:opacity-90"
-                        : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                      : dropoffPhotosSaved
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed border-2 border-slate-200 dark:border-slate-700"
+                        : dropoffPhotoSlots.filter(s => s.file !== null).length >= 6
+                          ? "lime-btn hover:opacity-90"
+                          : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                   )}
                 >
-                  <CloudUpload className="w-4 h-4" />
-                  {isUploading ? 'Uploading...' : dropoffPhotosSaved ? 'Photos Uploaded ✓' : 'Upload Photos'}
+                  {dropoffPhotosSaved ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <CloudUpload className="w-4 h-4" />
+                  )}
+                  {isUploading
+                    ? 'Uploading...'
+                    : dropoffPhotosSaved
+                      ? 'Photos Uploaded ✓'
+                      : 'Upload Photos'}
                 </Button>
 
                 {/* Drop-off Dashboard Photo */}
