@@ -361,11 +361,12 @@ export class PaymentPayoutEngine {
         tipAmount,
       });
 
-      // Driver is always ELIGIBLE at completion — for prepaid, the customer
-      // has paid; for postpaid, the platform funds the driver payout from its
-      // own balance and recoups via the dealer invoice. The driver sees no
-      // difference between prepaid and postpaid.
-      const payoutStatus = EnumDriverPayoutStatus.ELIGIBLE;
+      const payoutStatus =
+        payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
+        payment.status !== EnumPaymentStatus.INVOICED &&
+        payment.status !== EnumPaymentStatus.PAID
+          ? EnumDriverPayoutStatus.PENDING
+          : EnumDriverPayoutStatus.ELIGIBLE;
 
       await tx.driverPayout.upsert({
         where: { deliveryId: input.deliveryId },
@@ -466,11 +467,12 @@ export class PaymentPayoutEngine {
       tipAmount,
     });
 
-    // Driver is always ELIGIBLE at completion — for prepaid, the customer
-    // has paid; for postpaid, the platform funds the driver payout from its
-    // own balance and recoups via the dealer invoice. The driver sees no
-    // difference between prepaid and postpaid.
-    const payoutStatus = EnumDriverPayoutStatus.ELIGIBLE;
+    const payoutStatus =
+      payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
+      payment.status !== EnumPaymentStatus.INVOICED &&
+      payment.status !== EnumPaymentStatus.PAID
+        ? EnumDriverPayoutStatus.PENDING
+        : EnumDriverPayoutStatus.ELIGIBLE;
 
     await tx.driverPayout.upsert({
       where: { deliveryId: input.deliveryId },
@@ -776,7 +778,6 @@ export class PaymentPayoutEngine {
         payout: {
           select: {
             id: true,
-            status: true,
           },
         },
       },
@@ -822,15 +823,7 @@ export class PaymentPayoutEngine {
         },
       });
 
-      // With platform-funded postpaid payouts, the driver transfer already
-      // fires at completion (payout goes straight to ELIGIBLE → PAID via
-      // initiateDriverTransfer). By the time admin marks the invoice paid,
-      // the payout may already be PAID — don't downgrade it. Only upgrade
-      // if it's still PENDING (legacy deliveries or edge cases).
-      if (
-        delivery.payout?.id &&
-        delivery.payout.status === EnumDriverPayoutStatus.PENDING
-      ) {
+      if (delivery.payout?.id) {
         await tx.driverPayout.update({
           where: { id: delivery.payout.id },
           data: {
