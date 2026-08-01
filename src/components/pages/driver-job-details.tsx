@@ -876,15 +876,28 @@ export default function DriverJobDetailsPage() {
 
                 {/* Trip Summary */}
                 <div className="mt-2 space-y-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
-                  <div className="flex items-center gap-2">
-                    <Route className="w-4 h-4 text-primary shrink-0" />
-                    <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                      <AddressLink address={getShortAddress(job.pickupAddress)} />
-                      <span className="mx-1 text-slate-400">&rarr;</span>
-                      <AddressLink address={getShortAddress(job.dropoffAddress)} />
-                    </span>
+                  {/* Pickup location */}
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                        <AddressLink address={getShortAddress(job.pickupAddress)} />
+                      </p>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 text-center">
+                  {/* Dropoff location */}
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Drop-off</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                        <AddressLink address={getShortAddress(job.dropoffAddress)} />
+                      </p>
+                    </div>
+                  </div>
+                  {/* Stats */}
+                  <div className="grid grid-cols-3 gap-3 text-center pt-1 border-t border-slate-200 dark:border-slate-700">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Payout</p>
                       <p className="text-base font-black text-primary mt-0.5">{formatCurrency(payout)}</p>
@@ -910,21 +923,22 @@ export default function DriverJobDetailsPage() {
                   Once confirmed, this delivery is <span className="underline">locked </span> in and cannot be cancelled from the app. <span className="underline">Contact Support</span> if you cannot complete it.                  </p>
                 </div>
 
-                <div className="flex flex-row gap-3 mt-2">
-                  <AlertDialogCancel
-                    className="flex-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
-                    onClick={() => setShowConfirmAccept(false)}
-                  >
-                    Go Back
-                  </AlertDialogCancel>
+                {/* Buttons — stacked: Confirm on top, Go Back below */}
+                <div className="flex flex-col gap-2 mt-3">
                   <Button
                     onClick={handleBook}
                     disabled={bookMutation.isPending}
-                    className="flex-1 rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-black font-extrabold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full rounded-2xl bg-[#34C759] hover:bg-[#2db84e] text-black font-extrabold py-3.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {bookMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
                     {bookMutation.isPending ? 'Confirming…' : 'Confirm'}
                   </Button>
+                  <AlertDialogCancel
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold py-3.5"
+                    onClick={() => setShowConfirmAccept(false)}
+                  >
+                    Go Back
+                  </AlertDialogCancel>
                 </div>
               </AlertDialogContent>
             </AlertDialog>
