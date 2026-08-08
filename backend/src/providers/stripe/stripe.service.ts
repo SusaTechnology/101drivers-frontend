@@ -232,7 +232,15 @@ export class StripeService {
     reason?: string;
     metadata?: Record<string, string>;
   }) {
-    const idempotencyKey = `refund-${params.chargeId}-${Date.now()}`;
+    // Stable idempotency key:
+    //  - Full refund of charge X  -> `refund-{chargeId}`
+    //  - Partial refund of $Y      -> `refund-{chargeId}-{Y}`
+    // Reissuing the same refund (e.g. after a network timeout) MUST reuse
+    // the same key so Stripe dedupes it. Including Date.now() here would
+    // break that protection and could double-refund the customer.
+    const idempotencyKey = `refund-${params.chargeId}${
+      params.amount ? `-${params.amount}` : ''
+    }`;
     return this.stripe.refunds.create(
       {
         charge: params.chargeId,
@@ -257,7 +265,12 @@ export class StripeService {
     transferGroup?: string; // e.g., delivery ID for reconciliation
     metadata?: Record<string, string>;
   }) {
-    const idempotencyKey = `transfer-${params.destinationAccountId}-${params.transferGroup || 'none'}-${Date.now()}`;
+    // Stable idempotency key — a given (destination, transferGroup) pair
+    // maps to at most one transfer. Reissuing the same transfer (e.g.
+    // after a network timeout) MUST reuse the same key so Stripe dedupes
+    // it. Including Date.now() here would defeat that protection and
+    // could double-pay the driver.
+    const idempotencyKey = `transfer-${params.destinationAccountId}-${params.transferGroup || 'none'}`;
     return this.stripe.transfers.create(
       {
         amount: Math.round(params.amount * 100), // cents
@@ -281,7 +294,11 @@ export class StripeService {
     method?: 'instant' | 'standard'; // 'instant' = minutes, 'standard' = 1-2 days
     metadata?: Record<string, string>;
   }) {
-    const idempotencyKey = `payout-${params.destinationAccountId}-${Date.now()}`;
+    // Stable idempotency key — a given (destination, amount) pair maps to
+    // at most one payout. Reissuing the same payout MUST reuse the same key
+    // so Stripe dedupes it. Including Date.now() here would defeat that
+    // protection and could double-pay the driver.
+    const idempotencyKey = `payout-${params.destinationAccountId}-${params.amount}`;
     const payoutMethod = params.method || 'instant';
     return this.stripe.payouts.create(
       {
