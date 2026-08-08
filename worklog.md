@@ -640,3 +640,36 @@ Stage Summary:
   * backend/src/deliveryRequest/deliveryRequest.service.ts (+10)
   * backend/src/deliveryRequest/deliveryRequest.controller.ts (+19)
   * src/components/pages/driver-pickup-checklist.tsx (+178 / -43)
+
+---
+Task ID: draft-quoteid-409-fix
+Agent: main
+Task: Fix 409 "Another record with the requested (quoteId) already exists" on POST /deliveryRequests/create-from-quote when promoting a saved DRAFT to a real delivery.
+
+Work Log:
+- Investigated the create-from-quote flow end-to-end (controller → service → orchestrator).
+- Found two sibling helpers in delivery-request-orchestrator.service.ts:
+  * `releaseCancelledQuoteId(quoteId)` — only releases CANCELLED rows (status hardcoded)
+  * `releasePriorQuoteId(quoteId, customerId)` — releases CANCELLED + DRAFT rows, scoped to customer
+- Root cause: `createDeliveryFromAcceptedQuote` (the dealer-facing create-from-quote path, orchestrator L1923) called `releaseCancelledQuoteId` — which silently skipped DRAFT rows. So when a dealer saved a DRAFT with a quoteId attached and later tried to promote it, the DRAFT row still held the quoteId and the new `deliveryRequest.create({ quoteId })` hit the `@unique` constraint → 409.
+- Same bug pattern existed in two individual-customer flows:
+  * `createIndividualDeliveryDraftFromQuote` (orchestrator L851)
+  * `createIndividualDeliveryForResolvedCustomer` (orchestrator L1145)
+- Applied fix at all 3 call sites: replaced `releaseCancelledQuoteId(input.quoteId)` with `releasePriorQuoteId(input.quoteId, <customerId>)` where <customerId> is the in-scope customer variable:
+  * L857 (individual draft): `resolvedCustomerId`
+  * L1153 (individual real delivery): `customer.id`
+  * L1936 (dealer real delivery): `input.customerId`
+- Removed the now-dead `releaseCancelledQuoteId` function (its sole purpose was subsumed by `releasePriorQuoteId`).
+- Updated JSDoc on `releasePriorQuoteId` to clearly explain the DRAFT case and the audit-trail policy.
+- Verified TypeScript compiles cleanly (no new errors introduced; pre-existing unrelated errors about `isDefault` on PricingConfig and missing modules `./upload/upload.module` / `@nestjs/platform-socket.io` remain unchanged).
+
+Stage Summary:
+- Bug class: quoteId @unique constraint violation when promoting a DRAFT to a real delivery.
+- Fix scope: 3 call sites + 1 function removal, all in delivery-request-orchestrator.service.ts. No schema changes, no migrations, no frontend changes.
+- Self-healing: dealers currently stuck on the 409 don't need a SQL cleanup — after deploy, their next "Review & Request" click will automatically release the stuck DRAFT's quoteId (via releasePriorQuoteId), create the new LISTED row, then the frontend's onSuccess handler will delete the DRAFT row.
+- Answered user's three earlier questions:
+  1. Draft tab EXISTS in dealer-dashboard (linked from both desktop sidebar L469 and mobile bottom nav L860 in dealer-dashboard.tsx; routes to /dealer-drafts).
+  2. Drafts are fetched by `where[status]=DRAFT&where[customer][id]=<dealerId>` — NOT by pickup/dropoff addresses. No collision risk.
+  3. Draft → delivery promotion already goes through full validation + payment: `createDeliveryFromAcceptedQuote` validates VIN, schedule windows, scheduling policy, route metrics, same-day cutoff, requires ops confirmation, and attempts Stripe charge (cancelling the delivery on payment failure). The 409 was the only thing blocking this flow.
+- Files changed:
+  * backend/src/delivery-logistics/delivery-request-orchestrator.service.ts (-66 / +46)

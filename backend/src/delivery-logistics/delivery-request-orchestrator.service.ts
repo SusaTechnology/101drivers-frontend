@@ -552,68 +552,29 @@ export class DeliveryRequestOrchestratorService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // Frees up the quoteId unique constraint so the dealer can retry delivery
-  // creation with the same quote after a previous attempt failed.
-  //
-  // Background: `quoteId` is `@unique` in the Prisma schema. When a charge
-  // fails, `cancelDeliveryOnPaymentFailure` marks the delivery CANCELLED
-  // but leaves `quoteId` intact (for audit). On retry, the new
-  // `deliveryRequest.create({ quoteId })` hits a unique constraint violation:
-  //   "Another record with the requested (quoteId) already exists" (409)
-  //
-  // This helper finds any CANCELLED delivery that still holds the quoteId
-  // and nulls out its quoteId. The CANCELLED row stays in the DB for the
-  // audit trail — it just no longer blocks new deliveries from using the
-  // same quote. The quote itself is unaffected (its `id` is unchanged).
-  //
-  // Safe to call before any `deliveryRequest.create` that takes a quoteId.
-  // No-op if no CANCELLED delivery holds the quoteId.
-  // ─────────────────────────────────────────────────────────────────
-  private async releaseCancelledQuoteId(quoteId: string): Promise<void> {
-    try {
-      const cancelledWithQuote = await this.prisma.deliveryRequest.findFirst({
-        where: {
-          quoteId,
-          status: EnumDeliveryRequestStatus.CANCELLED,
-        },
-        select: { id: true },
-      });
-
-      if (cancelledWithQuote) {
-        await this.prisma.deliveryRequest.update({
-          where: { id: cancelledWithQuote.id },
-          data: { quoteId: null },
-        });
-        const logger = new Logger(DeliveryRequestOrchestratorService.name);
-        logger.log(
-          `Released quoteId ${quoteId} from CANCELLED delivery ${cancelledWithQuote.id} so dealer can retry`,
-        );
-      }
-    } catch (err: any) {
-      // Non-fatal — if this fails, the create below will throw a clearer
-      // unique-constraint error. Log so we can diagnose.
-      // eslint-disable-next-line no-console
-      console.error(
-        `Failed to release quoteId ${quoteId} from prior CANCELLED delivery: ${err.message}`,
-      );
-    }
-  }
-
   /**
    * Release any prior DeliveryRequest (CANCELLED *or* DRAFT) that still holds
-   * the given quoteId, so a new draft/schedule create doesn't 409 on the
-   * quoteId unique constraint.
+   * the given quoteId, so a new draft/real-delivery create doesn't 409 on
+   * the quoteId `@unique` constraint.
    *
-   * This is broader than `releaseCancelledQuoteId` — it also catches the case
-   * where a dealer previously saved a DRAFT with this quoteId and is now
-   * creating a new one (e.g., they re-calculated the quote or started over).
-   * The old DRAFT is kept (status=DRAFT, quoteId=null) so the dealer can still
-   * find it in their drafts list if they want, but it's no longer blocking
-   * the quoteId.
+   * Background: `quoteId` is `@unique` in the Prisma schema. When a dealer
+   * saves a DRAFT after calculating a quote, the DRAFT row holds that
+   * quoteId. When they later promote the draft to a real delivery (or save
+   * a new draft with the same quote), the new `deliveryRequest.create({
+   * quoteId })` would hit:
+   *   "Another record with the requested (quoteId) already exists" (409)
    *
-   * Only releases rows owned by the same customer to avoid cross-customer
-   * interference (shouldn't happen given quoteId uniqueness, but defensive).
+   * This helper finds any CANCELLED or DRAFT delivery that still holds the
+   * quoteId (owned by the same customer, defensively) and nulls out its
+   * quoteId. The old row stays in the DB:
+   *   - CANCELLED rows: kept for the audit trail
+   *   - DRAFT rows: kept so the dealer can still find them in their drafts
+   *     list (the frontend's onSuccess handler deletes them after the real
+   *     delivery is created)
+   * The quote itself is unaffected (its `id` is unchanged).
+   *
+   * Safe to call before any `deliveryRequest.create` that takes a quoteId.
+   * No-op if no CANCELLED/DRAFT delivery holds the quoteId.
    */
   private async releasePriorQuoteId(
     quoteId: string,
@@ -887,9 +848,13 @@ export class DeliveryRequestOrchestratorService {
       );
     }
 
-    // Release any CANCELLED delivery that still holds this quoteId (from a
-    // previous failed attempt) so the draft create below doesn't 409.
-    await this.releaseCancelledQuoteId(input.quoteId);
+    // Release any CANCELLED *or* DRAFT delivery that still holds this quoteId
+    // (from a previous failed attempt OR from a previously-saved draft) so
+    // the draft create below doesn't 409 on the @unique constraint.
+    //
+    // We use releasePriorQuoteId (not just CANCELLED) because a dealer may
+    // have already saved a DRAFT with this quoteId and is now re-saving it.
+    await this.releasePriorQuoteId(input.quoteId, resolvedCustomerId);
 
     const delivery = await this.prisma.deliveryRequest.create({
       data: {
@@ -1177,12 +1142,15 @@ private async createIndividualDeliveryForResolvedCustomer(
         schedule.dropoffWindowEnd
       ));
 
-  // If a previous attempt at this quote failed (charge declined, etc.),
-  // the CANCELLED row from that attempt still holds the quoteId unique
-  // constraint. Release it before creating the new delivery, otherwise
-  // the create below will throw a 409 "Another record with the requested
-  // (quoteId) already exists" and the dealer's retry button won't work.
-  await this.releaseCancelledQuoteId(input.quoteId);
+  // Release any CANCELLED *or* DRAFT delivery that still holds this quoteId
+  // before creating the new delivery, otherwise the create below will throw
+  // a 409 "Another record with the requested (quoteId) already exists" and
+  // the dealer's retry button won't work.
+  //
+  // We use releasePriorQuoteId (not just CANCELLED) because the individual
+  // customer may have previously saved a DRAFT with this quoteId and is now
+  // promoting it to a real delivery.
+  await this.releasePriorQuoteId(input.quoteId, customer.id);
 
   const delivery = await this.prisma.deliveryRequest.create({
     data: {
@@ -1952,12 +1920,20 @@ private async resolveIndividualCustomerForCreate(
           input.dropoffWindowEnd
         ));
 
-    // If a previous attempt at this quote failed (charge declined, etc.),
-    // the CANCELLED row from that attempt still holds the quoteId unique
-    // constraint. Release it before creating the new delivery, otherwise
-    // the create below will throw a 409 "Another record with the requested
-    // (quoteId) already exists" and the dealer's retry button won't work.
-    await this.releaseCancelledQuoteId(input.quoteId);
+    // Release any CANCELLED *or* DRAFT delivery that still holds this quoteId
+    // before creating the new delivery, otherwise the create below will throw
+    // a 409 "Another record with the requested (quoteId) already exists" and
+    // the dealer's retry button won't work.
+    //
+    // CRITICAL: this is the dealer-facing create-from-quote path. The most
+    // common cause of a stuck quoteId here is a previously-saved DRAFT that
+    // still holds the quoteId (the dealer saved a draft after calculating a
+    // quote, then came back to promote it).
+    //
+    // releasePriorQuoteId handles both CANCELLED and DRAFT, scoped to the
+    // same customer. The old row's quoteId is nulled; the row itself stays
+    // (CANCELLED for audit, DRAFT for the dealer to delete via onSuccess).
+    await this.releasePriorQuoteId(input.quoteId, input.customerId);
 
     const delivery = await this.prisma.deliveryRequest.create({
       data: {
