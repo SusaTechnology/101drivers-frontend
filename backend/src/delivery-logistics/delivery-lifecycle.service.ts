@@ -137,6 +137,7 @@ export class DeliveryLifecycleService {
   > = {
     [EnumDeliveryRequestStatus.DRAFT]: [
       EnumDeliveryRequestStatus.QUOTED,
+      EnumDeliveryRequestStatus.LISTED,
       EnumDeliveryRequestStatus.CANCELLED,
       EnumDeliveryRequestStatus.EXPIRED,
     ],

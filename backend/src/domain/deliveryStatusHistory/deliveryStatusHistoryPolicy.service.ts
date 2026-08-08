@@ -251,7 +251,7 @@ export class DeliveryStatusHistoryPolicyService {
       EnumDeliveryStatusHistoryFromStatus,
       EnumDeliveryStatusHistoryToStatus[]
     > = {
-      DRAFT: ["QUOTED", "CANCELLED", "EXPIRED", "DRAFT"],
+      DRAFT: ["QUOTED", "LISTED", "CANCELLED", "EXPIRED", "DRAFT"],
       QUOTED: ["LISTED", "BOOKED", "CANCELLED", "EXPIRED", "QUOTED"],
       LISTED: ["BOOKED", "CANCELLED", "EXPIRED", "LISTED"],
       BOOKED: ["ACTIVE", "CANCELLED", "DISPUTED", "BOOKED"],

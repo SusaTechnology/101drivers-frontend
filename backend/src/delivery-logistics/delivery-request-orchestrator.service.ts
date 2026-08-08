@@ -164,6 +164,36 @@ export type CreateDeliveryFromQuoteInput = {
   vehicleStandardsConfirmed?: boolean | null;
 };
 
+/**
+ * Input for promoting an existing DRAFT DeliveryRequest to a real LISTED
+ * delivery in-place (UPDATE rather than create-new-and-delete-draft).
+ *
+ * Mirrors `CreateDeliveryFromQuoteInput` but with `customerId`, `quoteId`,
+ * and `serviceType` omitted because they come from the existing DRAFT row
+ * itself (not from the request body).
+ */
+export type PromoteDraftToDeliveryInput = {
+  draftId: string;
+  createdByUserId?: string | null;
+  createdByRole?: EnumDeliveryRequestCreatedByRole | null;
+  customerChose?: EnumDeliveryRequestCustomerChose | null;
+  pickupWindowStart: Date;
+  pickupWindowEnd: Date;
+  dropoffWindowStart: Date;
+  dropoffWindowEnd: Date;
+  licensePlate: string;
+  vehicleColor: string;
+  vehicleMake?: string | null;
+  vehicleModel?: string | null;
+  vinVerificationCode: string;
+  recipientName?: string | null;
+  recipientEmail?: string | null;
+  recipientPhone?: string | null;
+  isUrgent?: boolean;
+  afterHours?: boolean;
+  vehicleStandardsConfirmed?: boolean | null;
+};
+
 export type CreateIndividualDeliveryFromQuoteInput = {
   customerId?: string | null;
   customerEmail?: string | null;
@@ -2185,7 +2215,410 @@ private async resolveIndividualCustomerForCreate(
     return delivery;
   }
 
-  private assertScheduleWindows(input: CreateDeliveryFromQuoteInput) {
+  /**
+   * Promote an existing DRAFT DeliveryRequest to a real LISTED delivery
+   * **in-place** (UPDATE) — instead of the old "create new LISTED row, then
+   * delete the DRAFT" pattern that caused:
+   *   - 409 "quoteId already exists" on create
+   *   - 409 "STILL_IN_USE" on the subsequent DELETE (blocked by the
+   *     DeliveryStatusHistory row that every draft has)
+   *   - Orphaned DRAFT rows with quoteId=null sitting in the DB
+   *   - A race window where two rows with the same quoteId briefly coexist
+   *
+   * This method mirrors `createDeliveryFromAcceptedQuote` step-by-step:
+   *   1. Load + validate the existing DRAFT (must be status=DRAFT, must have
+   *      a quoteId).
+   *   2. Load the customer + quote (same as create-from-quote).
+   *   3. Validate VIN, schedule windows, scheduling policy, route metrics,
+   *      same-day cutoff — same as create-from-quote.
+   *   4. **UPDATE** the DRAFT row → status=LISTED + all the same fields
+   *      that create-from-quote would set. (No `releasePriorQuoteId` call
+   *      needed — the quoteId stays on the same row.)
+   *   5. INSERT DeliveryStatusHistory (DRAFT → LISTED).
+   *   6. INSERT DeliveryCompliance (1:1).
+   *   7. INSERT TrackingSession (1:1).
+   *   8. INSERT Payment (1:1) + PaymentEvent.
+   *   9. Charge Stripe (PREPAID) — on failure, `cancelDeliveryOnPaymentFailure`
+   *      transitions the row LISTED → CANCELLED (same as create-from-quote).
+   *  10. Emit notifications + WebSocket events.
+   *
+   * Audit trail: `null → DRAFT → LISTED` (richer than create-from-quote's
+   * `null → LISTED`). The row's `id` and `createdAt` are preserved, so the
+   * full draft lifecycle is visible.
+   *
+   * No `releasePriorQuoteId` call is needed — the quoteId stays attached to
+   * the same row, just with status flipped. This eliminates the entire
+   * quoteId-release failure mode for this path.
+   */
+  async promoteDraftToDelivery(input: PromoteDraftToDeliveryInput) {
+    // ─── Step 1: Load + validate the existing DRAFT ───────────────────
+    const draft = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.draftId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        quoteId: true,
+        serviceType: true,
+        createdByUserId: true,
+        createdByRole: true,
+      },
+    });
+
+    if (!draft) {
+      throw new NotFoundException("Draft not found");
+    }
+
+    if (draft.status !== EnumDeliveryRequestStatus.DRAFT) {
+      throw new BadRequestException(
+        `Cannot promote a delivery with status ${draft.status}. Only DRAFT deliveries can be promoted.`,
+      );
+    }
+
+    if (!draft.quoteId) {
+      throw new BadRequestException(
+        "Cannot promote a draft without a quoteId. Please calculate a quote first.",
+      );
+    }
+
+    // ─── Step 2: Load the customer + quote (same as create-from-quote) ─
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: draft.customerId },
+      select: {
+        id: true,
+        customerType: true,
+        postpaidEnabled: true,
+        // Needed by the Stripe charge helper:
+        stripeCustomerId: true,
+        stripeDefaultPaymentMethodId: true,
+        contactEmail: true,
+        user: { select: { email: true } },
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException("Customer not found");
+    }
+
+    const quote = await this.prisma.quote.findUnique({
+      where: { id: draft.quoteId },
+      select: {
+        id: true,
+        estimatedPrice: true,
+        pickupAddress: true,
+        pickupLat: true,
+        pickupLng: true,
+        pickupPlaceId: true,
+        pickupState: true,
+        dropoffAddress: true,
+        dropoffLat: true,
+        dropoffLng: true,
+        dropoffPlaceId: true,
+        dropoffState: true,
+        serviceType: true,
+      },
+    });
+
+    if (!quote) {
+      throw new NotFoundException("Quote not found");
+    }
+
+    // ─── Step 3: Validate VIN + schedule + policy + route + cutoff ────
+    if (!/^\d{4}$/.test(input.vinVerificationCode)) {
+      throw new BadRequestException(
+        "VIN verification code must be exactly 4 numeric digits"
+      );
+    }
+
+    this.assertScheduleWindows(input);
+
+    const policyCustomerType =
+      customer.customerType === EnumCustomerCustomerType.BUSINESS
+        ? EnumSchedulingPolicyCustomerType.BUSINESS
+        : EnumSchedulingPolicyCustomerType.PRIVATE;
+
+    const policyServiceType = this.mapDeliveryServiceTypeToSchedulingServiceType(
+      draft.serviceType,
+    );
+
+    const policy =
+      (await this.prisma.schedulingPolicy.findFirst({
+        where: {
+          active: true,
+          customerType: policyCustomerType,
+          serviceType: policyServiceType,
+        },
+        orderBy: { createdAt: "desc" },
+      })) ??
+      (await this.prisma.schedulingPolicy.findFirst({
+        where: {
+          active: true,
+          customerType: policyCustomerType,
+          serviceType: null,
+        },
+        orderBy: { createdAt: "desc" },
+      }));
+
+    const routeMetrics =
+      quote.pickupLat != null &&
+      quote.pickupLng != null &&
+      quote.dropoffLat != null &&
+      quote.dropoffLng != null
+        ? await this.mapsService.computeRouteMetrics({
+            originLat: quote.pickupLat,
+            originLng: quote.pickupLng,
+            destinationLat: quote.dropoffLat,
+            destinationLng: quote.dropoffLng,
+          })
+        : null;
+
+    const bufferMinutes = policy?.bufferMinutes ?? 30;
+
+    const sameDayEligible = this.isSameDayEligible(
+      input.pickupWindowStart,
+      input.dropoffWindowEnd,
+      routeMetrics?.durationMinutes ?? 0,
+      bufferMinutes,
+      policy?.maxSameDayMiles ?? null,
+      routeMetrics?.distanceMiles ?? null
+    );
+
+    // Hard-block same-day delivery creation after cutoff.
+    const isSameDay = this.isSameCalendarDay(
+      input.pickupWindowStart,
+      input.dropoffWindowEnd
+    );
+    const isPickupToday = input.pickupWindowStart
+      ? businessIsSameDay(input.pickupWindowStart, new Date())
+      : false;
+    if (isSameDay && isPickupToday) {
+      const cutoffResult = this.enforceSameDayCutoff(policy);
+      if (cutoffResult === 'blocked') {
+        throw new BadRequestException(
+          'Cutoff time has passed. No more same-day deliveries can be created today. Please choose a next-day delivery window.',
+        );
+      }
+    }
+
+    const requiresOpsConfirmation =
+      policy?.requiresOpsConfirmation === true ||
+      (input.afterHours === true && policy?.afterHoursEnabled !== true) ||
+      (sameDayEligible === false &&
+        this.isSameCalendarDay(
+          input.pickupWindowStart,
+          input.dropoffWindowEnd
+        ));
+
+    // ─── Step 4: UPDATE the DRAFT row → LISTED (in-place promotion) ───
+    // NO releasePriorQuoteId call — the quoteId stays on this same row.
+    const delivery = await this.prisma.deliveryRequest.update({
+      where: { id: draft.id },
+      data: {
+        // Keep customerId, quoteId, serviceType, createdByUserId, createdByRole
+        // from the draft — they don't change during promotion.
+        customerChose: input.customerChose ?? null,
+
+        // Re-derive addresses from the quote (in case the dealer re-calculated
+        // the quote between draft-save and promotion).
+        pickupAddress: quote.pickupAddress,
+        pickupLat: quote.pickupLat ?? null,
+        pickupLng: quote.pickupLng ?? null,
+        pickupPlaceId: quote.pickupPlaceId ?? null,
+        pickupState: quote.pickupState ?? null,
+
+        dropoffAddress: quote.dropoffAddress,
+        dropoffLat: quote.dropoffLat ?? null,
+        dropoffLng: quote.dropoffLng ?? null,
+        dropoffPlaceId: quote.dropoffPlaceId ?? null,
+        dropoffState: quote.dropoffState ?? null,
+
+        pickupWindowStart: input.pickupWindowStart,
+        pickupWindowEnd: input.pickupWindowEnd,
+        dropoffWindowStart: input.dropoffWindowStart,
+        dropoffWindowEnd: input.dropoffWindowEnd,
+
+        etaMinutes: routeMetrics?.durationMinutes ?? null,
+        bufferMinutes,
+        sameDayEligible,
+        requiresOpsConfirmation,
+        afterHours: input.afterHours === true,
+
+        status: EnumDeliveryRequestStatus.LISTED,
+
+        licensePlate: input.licensePlate.trim(),
+        vehicleColor: input.vehicleColor.trim(),
+        vehicleMake: input.vehicleMake?.trim() || null,
+        vehicleModel: input.vehicleModel?.trim() || null,
+        vinVerificationCode: input.vinVerificationCode.trim(),
+
+        vehicleStandardsConfirmed: input.vehicleStandardsConfirmed === true,
+        vehicleStandardsConfirmedAt:
+          input.vehicleStandardsConfirmed === true ? new Date() : null,
+
+        recipientName: input.recipientName?.trim() || null,
+        recipientEmail: input.recipientEmail?.trim().toLowerCase() || null,
+        recipientPhone: input.recipientPhone?.trim() || null,
+
+        isUrgent: input.isUrgent === true,
+        pickupPin: this.generateIndividualPin(),
+      },
+      select: {
+        id: true,
+        status: true,
+        quoteId: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        etaMinutes: true,
+        sameDayEligible: true,
+        requiresOpsConfirmation: true,
+        pickupWindowStart: true,
+        pickupWindowEnd: true,
+        createdAt: true,
+      },
+    });
+
+    // ─── Step 5: DeliveryStatusHistory (DRAFT → LISTED) ───────────────
+    await this.prisma.deliveryStatusHistory.create({
+      data: {
+        deliveryId: delivery.id,
+        actorUserId: input.createdByUserId ?? null,
+        actorRole: input.createdByRole ?? null,
+        actorType: EnumDeliveryStatusHistoryActorType.USER,
+        fromStatus: EnumDeliveryStatusHistoryToStatus.DRAFT,
+        toStatus: EnumDeliveryStatusHistoryToStatus.LISTED,
+        note: "Draft promoted to listed delivery on marketplace",
+      },
+    });
+
+    // ─── Step 6: DeliveryCompliance (1:1) ─────────────────────────────
+    await this.prisma.deliveryCompliance.create({
+      data: {
+        deliveryId: delivery.id,
+        vinVerificationCode: input.vinVerificationCode.trim(),
+      },
+    });
+
+    // ─── Step 7: TrackingSession (1:1) ────────────────────────────────
+    await this.prisma.trackingSession.create({
+      data: {
+        deliveryId: delivery.id,
+      },
+    });
+
+    // ─── Step 8: Payment + PaymentEvent ───────────────────────────────
+    const paymentType =
+      customer.customerType === EnumCustomerCustomerType.BUSINESS &&
+      customer.postpaidEnabled === true
+        ? EnumPaymentPaymentType.POSTPAID
+        : EnumPaymentPaymentType.PREPAID;
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        deliveryId: delivery.id,
+        amount: quote.estimatedPrice,
+        paymentType,
+        provider: EnumPaymentProvider.MANUAL,
+        status: EnumPaymentStatus.AUTHORIZED,
+        authorizedAt: businessNow().toJSDate(),
+      },
+    });
+
+    // ─── Step 9: Stripe charge (PREPAID only) ─────────────────────────
+    // On failure, cancelDeliveryOnPaymentFailure flips the row LISTED → CANCELLED
+    // and writes a DeliveryStatusHistory (LISTED → CANCELLED). The audit trail
+    // therefore shows null → DRAFT → LISTED → CANCELLED for a failed promotion.
+    if (paymentType === EnumPaymentPaymentType.PREPAID) {
+      let chargeResult: { paymentIntentId: string; clientSecret: string; status: string };
+      try {
+        chargeResult = await this.attemptStripePrepaidCharge({
+          paymentId: payment.id,
+          amount: quote.estimatedPrice,
+          deliveryId: delivery.id,
+          paymentType,
+          customer: {
+            id: customer.id,
+            stripeCustomerId: customer.stripeCustomerId,
+            stripeDefaultPaymentMethodId: customer.stripeDefaultPaymentMethodId,
+          },
+          customerEmail: customer.contactEmail || customer.user?.email || null,
+        });
+      } catch (err: any) {
+        await this.cancelDeliveryOnPaymentFailure(
+          delivery.id,
+          err?.message || 'Unknown error',
+          input.createdByUserId ?? null,
+        );
+        throw err;
+      }
+
+      await this.prisma.paymentEvent.create({
+        data: {
+          paymentId: payment.id,
+          type: EnumPaymentEventType.AUTHORIZE,
+          status: EnumPaymentEventStatus.AUTHORIZED,
+          amount: quote.estimatedPrice,
+          message: "Prepaid payment authorized via Stripe at draft promotion",
+          raw: {
+            source: "business-promote-draft",
+            deliveryId: delivery.id,
+            customerId: customer.id,
+            paymentType,
+            paymentIntentId: chargeResult.paymentIntentId,
+            piStatus: chargeResult.status,
+          },
+        },
+      });
+    } else {
+      // POSTPAID — no charge now.
+      await this.prisma.paymentEvent.create({
+        data: {
+          paymentId: payment.id,
+          type: EnumPaymentEventType.AUTHORIZE,
+          status: EnumPaymentEventStatus.AUTHORIZED,
+          amount: quote.estimatedPrice,
+          message: "Postpaid delivery created — payment will be invoiced",
+          raw: {
+            source: "business-promote-draft",
+            deliveryId: delivery.id,
+            customerId: customer.id,
+            paymentType,
+          },
+        },
+      });
+    }
+
+    // ─── Step 10: Notifications + WebSocket ───────────────────────────
+    await this.notificationEventEngine.notifyDeliveryReleased({
+      deliveryId: delivery.id,
+      actorUserId: input.createdByUserId ?? null,
+    });
+
+    if (this.trackingGateway) {
+      this.trackingGateway.emitNewDelivery({
+        deliveryId: delivery.id,
+        dealerId: customer.id,
+        delivery: {
+          id: delivery.id,
+          status: delivery.status,
+          pickupAddress: delivery.pickupAddress,
+          dropoffAddress: delivery.dropoffAddress,
+          pickupWindowStart: delivery.pickupWindowStart?.toISOString() ?? null,
+          pickupWindowEnd: delivery.pickupWindowEnd?.toISOString() ?? null,
+          createdAt: delivery.createdAt?.toISOString() ?? new Date().toISOString(),
+        },
+      });
+      this.trackingGateway.emitFeedUpdate({
+        deliveryId: delivery.id,
+        status: delivery.status,
+      });
+    }
+
+    return delivery;
+  }
+
+  private assertScheduleWindows(
+    input: Pick<CreateDeliveryFromQuoteInput, "pickupWindowStart" | "pickupWindowEnd" | "dropoffWindowStart" | "dropoffWindowEnd">,
+  ) {
     if (input.pickupWindowStart >= input.pickupWindowEnd) {
       throw new BadRequestException("Pickup window start must be before end");
     }

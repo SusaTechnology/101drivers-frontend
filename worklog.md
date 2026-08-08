@@ -707,3 +707,95 @@ Stage Summary:
 - Safety: if a row in an ACTIVE status is found holding the quoteId, the dealer now gets a clear error message ("This quote is already attached to an active delivery...") instead of a cryptic 409. This is intentional — silently nulling an active delivery's quoteId would corrupt the audit trail and mask a real bug.
 - Files changed:
   * backend/src/delivery-logistics/delivery-request-orchestrator.service.ts (+50 / -32)
+
+---
+Task ID: draft-in-place-promotion
+Agent: main
+Task: Replace the create-new-and-delete-draft pattern with in-place promotion (UPDATE DRAFT → LISTED) to eliminate the STILL_IN_USE 409 on the DELETE call. Every step from create-from-quote (including payment) must be replicated.
+
+Work Log:
+- User reported: after the v2 fix unblocked the create-from-quote 409, a NEW 409 surfaced on the DELETE step: "DeliveryRequest cannot be deleted because related records exist" / STILL_IN_USE / 409.
+- Root cause: every saved DRAFT has at least one DeliveryStatusHistory row (the `null → DRAFT` entry written at draft-save time). The `DeliveryRequestPolicyService.beforeDelete` blocks DELETE whenever any related record exists — including that single history row. So the DELETE was guaranteed to fail for every draft.
+- User proposed: instead of create-new-and-delete-draft, just UPDATE the DRAFT row's status DRAFT → LISTED in-place. After analysis (sub-agent confirmed feasibility), I implemented this approach.
+
+Changes applied:
+
+### Backend — new promote endpoint + orchestrator method
+
+**`backend/src/delivery-logistics/delivery-request-orchestrator.service.ts`**
+- Added new export type `PromoteDraftToDeliveryInput` — mirrors `CreateDeliveryFromQuoteInput` but omits `customerId`, `quoteId`, `serviceType` (those come from the existing DRAFT row).
+- Added new public method `promoteDraftToDelivery(input)` (~350 LOC) that mirrors `createDeliveryFromAcceptedQuote` step-by-step:
+  1. Load + validate the existing DRAFT (must be status=DRAFT, must have a quoteId).
+  2. Load the customer + quote (same as create-from-quote).
+  3. Validate VIN (4 digits), schedule windows, scheduling policy, route metrics, same-day cutoff — identical to create-from-quote.
+  4. **UPDATE** the DRAFT row → status=LISTED + all the same fields create-from-quote would set. (NO `releasePriorQuoteId` call — the quoteId stays on the same row, eliminating that entire failure mode.)
+  5. INSERT DeliveryStatusHistory (fromStatus=DRAFT, toStatus=LISTED) — gives the richer audit trail `null → DRAFT → LISTED`.
+  6. INSERT DeliveryCompliance (1:1, vinVerificationCode).
+  7. INSERT TrackingSession (1:1).
+  8. INSERT Payment (1:1, status=AUTHORIZED, provider=MANUAL initially).
+  9. Charge Stripe (PREPAID only) — on failure, calls `cancelDeliveryOnPaymentFailure` (row goes LISTED → CANCELLED, audit trail shows `null → DRAFT → LISTED → CANCELLED`). On success, INSERT PaymentEvent with Stripe metadata.
+  10. For POSTPAID: INSERT PaymentEvent "Postpaid delivery created — payment will be invoiced".
+  11. Emit notifications + WebSocket events (notifyDeliveryReleased, emitNewDelivery, emitFeedUpdate).
+- Refactored `assertScheduleWindows` to accept a structural `Pick<...>` type instead of `CreateDeliveryFromQuoteInput`, so the promote method can reuse it.
+
+**`backend/src/deliveryRequest/dto/deliveryRequestLogistics.dto.ts`**
+- Added new `PromoteDraftBody` class — mirrors `CreateDeliveryFromQuoteBody` minus `customerId`/`quoteId`/`serviceType`. Includes class-validator decorators (`@IsString`, `@IsDateString`, `@IsEnum`, etc.) for input validation.
+
+**`backend/src/deliveryRequest/deliveryRequest.controller.ts`**
+- Imported `PromoteDraftBody`.
+- Added new endpoint `POST /deliveryRequests/:id/promote` — uses `@UseRoles({ action: "update" })` (not "create"), passes `:id` from URL as `draftId`, fills `createdByUserId`/`createdByRole` from authenticated user.
+
+**`backend/src/deliveryRequest/deliveryRequest.service.ts`**
+- Imported `PromoteDraftToDeliveryInput`.
+- Added `promoteDraftToDelivery(input)` passthrough that trims strings (same as `createDeliveryFromAcceptedQuote`) and delegates to the orchestrator.
+
+### Backend — state machine updates
+
+**`backend/src/delivery-logistics/delivery-lifecycle.service.ts`**
+- Added `LISTED` to DRAFT's allowed transitions (was: `[QUOTED, CANCELLED, EXPIRED]`, now: `[QUOTED, LISTED, CANCELLED, EXPIRED]`). The orchestrator bypasses this validator today via raw Prisma calls, but documenting intent protects against future refactors.
+
+**`backend/src/domain/deliveryStatusHistory/deliveryStatusHistoryPolicy.service.ts`**
+- Added `"LISTED"` to DRAFT's allowed transitions array (was: `["QUOTED", "CANCELLED", "EXPIRED", "DRAFT"]`, now: `["QUOTED", "LISTED", "CANCELLED", "EXPIRED", "DRAFT"]`).
+
+### Frontend — route to /promote when draftId present
+
+**`src/components/pages/dealer-create-delivery.tsx`**
+- Cleaned up `createDelivery` mutation: removed the `if (draftId) { try { DELETE } catch {...} }` block from `onSuccess` — no longer needed because the promote path UPDATEs the draft in-place, so there's nothing to delete.
+- Added new `promoteDraftMutation` (using `useMutation` + `authFetch` directly, because `useCreate` takes a fixed URL but the promote URL depends on `draftId`). Hits `POST /api/deliveryRequests/${draftId}/promote`.
+- Updated `onSubmit` to route to three paths:
+  1. `draftId && status==='DRAFT'` → `promoteDraftMutation.mutate(strippedPayload)` (NEW)
+  2. `draftId && status==='LISTED'/'QUOTED'` → `updateDeliveryMutation.mutate(updatePayload)` (unchanged)
+  3. no draftId → `createDelivery.mutate(payload)` (unchanged, falls back to create-from-quote)
+- For the promote path, strips `customerId`/`quoteId`/`serviceType`/`status`/addresses/`sameDayEligible`/`requiresOpsConfirmation` from the payload (those come from the draft row itself).
+- Updated 3 button-disabling checks to include `promoteDraftMutation.isPending` alongside `createDelivery.isPending` and `updateDeliveryMutation.isPending`.
+
+**`src/components/pages/dealer-review-delivery.tsx`**
+- Updated `submitDelivery` mutationFn to branch on `reviewData.draftId`:
+  - If `draftId` present → POST `/api/deliveryRequests/${draftId}/promote` (NEW) with a stripped payload.
+  - Else → POST `/api/deliveryRequests/create-from-quote` (unchanged).
+- Removed the "Step 2: Delete draft if editing one" try/catch DELETE block — no longer needed.
+- Removed the now-unused `deliveryId` local variable (the `onSuccess` handler re-derives `newDeliveryId` from `data`).
+
+### What's preserved (NOT touched)
+
+- `createDeliveryFromAcceptedQuote` orchestrator method — still used by the no-draft direct-create path (dealer creates a delivery without ever saving a draft).
+- `releasePriorQuoteId` helper — still used by `createDeliveryFromAcceptedQuote` and the individual-customer flows. The new promote path simply doesn't call it (no quoteId release needed for in-place UPDATE).
+- `createDeliveryDraftFromQuote` (draft-save flow) — unchanged.
+- `cancelDeliveryOnPaymentFailure` — unchanged. Called by both create-from-quote and promote-draft paths on Stripe failure.
+
+Stage Summary:
+- Bug class: STILL_IN_USE 409 on DELETE DRAFT after create-from-quote succeeded.
+- Architecture change: replaced "create new LISTED row, then DELETE DRAFT" with "UPDATE DRAFT row to LISTED in-place".
+- Audit trail: now richer — `null → DRAFT → LISTED` (was: `null → LISTED` + orphaned DRAFT with `quoteId=null`).
+- Payment parity: the promote method replicates EVERY step of create-from-quote — quote lookup, VIN validation, schedule windows, scheduling policy, route metrics, same-day cutoff, DeliveryCompliance, TrackingSession, Payment row, Stripe charge (PREPAID) or PaymentEvent (POSTPAID), cancelDeliveryOnPaymentFailure on failure, notifications, WebSocket emits.
+- Eliminates: STILL_IN_USE 409 (no DELETE), quoteId-release race (no second row created), orphaned DRAFT rows (no orphans), frontend delete-after-create complexity (removed).
+- TypeScript: backend compiles cleanly (no new errors). Frontend compiles cleanly (no new errors — 4 pre-existing dealer-review-delivery errors about TanStack Router search params are unchanged).
+- Files changed:
+  * backend/src/delivery-logistics/delivery-request-orchestrator.service.ts (+360 / -3)
+  * backend/src/deliveryRequest/dto/deliveryRequestLogistics.dto.ts (+147)
+  * backend/src/deliveryRequest/deliveryRequest.controller.ts (+43)
+  * backend/src/deliveryRequest/deliveryRequest.service.ts (+21)
+  * backend/src/delivery-logistics/delivery-lifecycle.service.ts (+1)
+  * backend/src/domain/deliveryStatusHistory/deliveryStatusHistoryPolicy.service.ts (+1)
+  * src/components/pages/dealer-create-delivery.tsx (+55 / -10)
+  * src/components/pages/dealer-review-delivery.tsx (+45 / -22)

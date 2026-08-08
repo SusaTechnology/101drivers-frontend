@@ -421,28 +421,59 @@ export default function ReviewDeliveryPage() {
 
       console.log('Submitting payload:', JSON.stringify(payload, null, 2));
 
-      // Step 1: Create the delivery
-      const delivery = await authFetch(
-        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }
-      );
+      let delivery: any;
 
-      const deliveryId = delivery?.id || delivery?.deliveryRequest?.id;
-
-      // Step 2: Delete draft if editing one
       if (reviewData.draftId) {
-        try {
-          await authFetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${reviewData.draftId}`, {
-            method: 'DELETE',
-          });
-        } catch (e) {
-          console.error('Failed to delete draft after submission:', e);
-        }
+        // In-place promotion: hit POST /deliveryRequests/:id/promote which
+        // UPDATEs the existing DRAFT row to status=LISTED (no create-new,
+        // no delete-draft, no quoteId-release race). The backend mirrors
+        // create-from-quote step-by-step (validation, payment, side-effect
+        // rows, notifications) but operates on the existing row.
+        //
+        // Strip fields that come from the draft row itself — the promote
+        // endpoint reads customerId/quoteId/serviceType/addresses from the
+        // existing DRAFT, so we don't send them.
+        const {
+          quoteId: _qid,
+          customerId: _cid,
+          serviceType: _st,
+          pickupAddress: _pa,
+          pickupLat: _plat,
+          pickupLng: _plng,
+          pickupPlaceId: _ppid,
+          pickupState: _pstate,
+          dropoffAddress: _da,
+          dropoffLat: _dlat,
+          dropoffLng: _dlng,
+          dropoffPlaceId: _dpid,
+          dropoffState: _dstate,
+          paymentType: _pt,
+          transmission: _tx,
+          ...promotePayload
+        } = payload;
+
+        delivery = await authFetch(
+          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${reviewData.draftId}/promote`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(promotePayload),
+          }
+        );
+      } else {
+        // No prior draft — create a brand-new delivery from the quote.
+        delivery = await authFetch(
+          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }
+        );
       }
+
+      // No draft cleanup needed — the promote path UPDATEs the draft in-place,
+      // so there's nothing to delete afterwards.
 
       return delivery;
     },

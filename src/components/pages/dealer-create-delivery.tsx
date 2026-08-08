@@ -420,16 +420,6 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   // Mutation for creating delivery
   const createDelivery = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`, {
     onSuccess: async (data: any) => {
-      // If editing a draft, delete it after successful submission
-      if (draftId) {
-        try {
-          await authFetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`, {
-            method: 'DELETE',
-          });
-        } catch (e) {
-          console.error('Failed to delete draft after submission:', e);
-        }
-      }
       toast.success("Delivery requested!", {
         description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
       });
@@ -450,6 +440,48 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       });
     },
     successMessage: undefined, // Using custom toast above
+  });
+
+  // Mutation for promoting an existing DRAFT to a real LISTED delivery in-place.
+  // Hits POST /api/deliveryRequests/:id/promote — the backend UPDATEs the
+  // existing DRAFT row to status=LISTED (instead of creating a new row and
+  // deleting the draft, which caused 409 errors on both the create and the
+  // delete). The URL depends on draftId, so we use useMutation + authFetch
+  // directly instead of useCreate (which takes a fixed URL).
+  const promoteDraftMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      if (!draftId) {
+        throw new Error("Cannot promote draft: no draftId in route");
+      }
+      return authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}/promote`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+    },
+    onSuccess: () => {
+      toast.success("Delivery requested!", {
+        description: "Your delivery is now visible to drivers. You will be notified when a driver books it."
+      });
+      navigate({ to: "/dealer-dashboard" });
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.message || "Failed to promote draft";
+      const errorDetails = error?.response?.data?.details || error?.details;
+
+      toast.error("Failed to create delivery", {
+        description: errorDetails || errorMessage,
+      });
+
+      console.error("Draft promotion failed:", {
+        message: errorMessage,
+        details: errorDetails,
+        error: error,
+      });
+    },
   });
 
   // Query client for invalidating queries
@@ -1989,14 +2021,43 @@ const handleQuotePreview = () => {
 
     const payload = buildPayload(data);
 
-    // Check if we're editing an existing LISTED/QUOTED delivery
-    // If so, use PATCH to update (keep status) instead of POST (create new)
-    if (draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED')) {
-      // Remove status from payload - we want to keep the existing status
+    // Three submission paths:
+    //   1. draftId + status=DRAFT → POST /deliveryRequests/:id/promote
+    //      (in-place UPDATE of the draft row to LISTED — no create, no delete,
+    //      no quoteId-release race. The backend handles payment + side-effect
+    //      rows exactly like create-from-quote.)
+    //   2. draftId + status=LISTED/QUOTED → PATCH /deliveryRequests/:id
+    //      (update an existing real delivery in-place)
+    //   3. no draftId → POST /deliveryRequests/create-from-quote
+    //      (create a brand-new delivery with no prior draft)
+    if (draftId && originalDeliveryStatus === 'DRAFT') {
+      // Promote in-place: strip fields that come from the draft row itself.
+      const {
+        customerId: _cid,
+        quoteId: _qid,
+        serviceType: _st,
+        status: _s,
+        pickupAddress: _pa,
+        pickupLat: _plat,
+        pickupLng: _plng,
+        pickupPlaceId: _ppid,
+        pickupState: _pstate,
+        dropoffAddress: _da,
+        dropoffLat: _dlat,
+        dropoffLng: _dlng,
+        dropoffPlaceId: _dpid,
+        dropoffState: _dstate,
+        sameDayEligible: _sde,
+        requiresOpsConfirmation: _roc,
+        ...promotePayload
+      } = payload;
+      promoteDraftMutation.mutate(promotePayload);
+    } else if (draftId && (originalDeliveryStatus === 'LISTED' || originalDeliveryStatus === 'QUOTED')) {
+      // PATCH existing LISTED/QUOTED delivery — keep status, update fields.
       const { status, ...updatePayload } = payload;
       updateDeliveryMutation.mutate(updatePayload);
     } else {
-      // Create new delivery (or replace draft with new delivery)
+      // No draft — create a brand-new delivery from the quote.
       createDelivery.mutate(payload);
     }
   };
@@ -3329,11 +3390,11 @@ const handleQuotePreview = () => {
                   type="button"
                   className="w-full py-6 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleGoToReview}
-                  disabled={createDelivery.isPending || updateDeliveryMutation.isPending || !isFormValidForSubmission}
+                  disabled={createDelivery.isPending || updateDeliveryMutation.isPending || promoteDraftMutation.isPending || !isFormValidForSubmission}
                 >
-                  {(createDelivery.isPending || updateDeliveryMutation.isPending) ? (
+                  {(createDelivery.isPending || updateDeliveryMutation.isPending || promoteDraftMutation.isPending) ? (
                     <>
-                      {updateDeliveryMutation.isPending ? 'Updating...' : 'Creating...'}
+                      {updateDeliveryMutation.isPending ? 'Updating...' : promoteDraftMutation.isPending ? 'Promoting...' : 'Creating...'}
                       <RefreshCw className="ml-2 h-5 w-5 animate-spin" />
                     </>
                   ) : (
@@ -3346,7 +3407,7 @@ const handleQuotePreview = () => {
                   )}
                 </Button>
 
-                {showValidationErrors && !isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && (
+                {showValidationErrors && !isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && !promoteDraftMutation.isPending && (
                   <div className="mt-4 p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border-2 border-red-300 dark:border-red-900/30">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
@@ -3375,7 +3436,7 @@ const handleQuotePreview = () => {
                     "Please complete all required fields" one-liner with a
                     concrete checklist — including the vehicle-standards
                     attestation checkbox that the panel above omits. */}
-                {!showValidationErrors && !isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && missingRequiredFields.length > 0 && (
+                {!showValidationErrors && !isFormValidForSubmission && !createDelivery.isPending && !updateDeliveryMutation.isPending && !promoteDraftMutation.isPending && missingRequiredFields.length > 0 && (
                   <div className="mt-4 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10">
                     <div className="flex items-start gap-2.5">
                       <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />

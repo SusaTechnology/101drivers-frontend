@@ -45,6 +45,7 @@ import {
   CompleteTripBody,
   CreateDeliveryFromQuoteBody,
   CreateDeliveryDraftFromQuoteBody,
+  PromoteDraftBody,
   QuotePreviewBody,
   DriverLocationPingBody,
   CreateTrackingLinkBody,
@@ -515,6 +516,45 @@ async createQuotePreview(
       customerId: body.customerId,
       quoteId: body.quoteId,
       serviceType: body.serviceType,
+      createdByUserId: body.createdByUserId ?? authenticatedUser?.id ?? null,
+      createdByRole: body.createdByRole ?? EnumDeliveryRequestCreatedByRole.BusinessCustomer,
+      customerChose: body.customerChose ?? null,
+      pickupWindowStart: new Date(body.pickupWindowStart),
+      pickupWindowEnd: new Date(body.pickupWindowEnd),
+      dropoffWindowStart: new Date(body.dropoffWindowStart),
+      dropoffWindowEnd: new Date(body.dropoffWindowEnd),
+      licensePlate: body.licensePlate,
+      vehicleColor: body.vehicleColor,
+      vehicleMake: body.vehicleMake ?? null,
+      vehicleModel: body.vehicleModel ?? null,
+      vinVerificationCode: body.vinVerificationCode,
+      recipientName: body.recipientName ?? null,
+      recipientEmail: body.recipientEmail ?? null,
+      recipientPhone: body.recipientPhone ?? null,
+      isUrgent: body.isUrgent === true,
+      afterHours: body.afterHours === true,
+      vehicleStandardsConfirmed: body.vehicleStandardsConfirmed === true,
+    });
+  }
+
+  @common.Post(":id/promote")
+  @swagger.ApiOkResponse({ type: DeliveryRequest })
+  @nestAccessControl.UseRoles({
+    resource: "DeliveryRequest",
+    action: "update",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
+  async promoteDraftToDelivery(
+    @common.Param("id") id: string,
+    @common.Body() body: PromoteDraftBody,
+    @common.Req() request: Request
+  ): Promise<DeliveryRequest> {
+    const authenticatedUser = request.user as any;
+    return this.service.promoteDraftToDelivery({
+      draftId: id,
       createdByUserId: body.createdByUserId ?? authenticatedUser?.id ?? null,
       createdByRole: body.createdByRole ?? EnumDeliveryRequestCreatedByRole.BusinessCustomer,
       customerChose: body.customerChose ?? null,

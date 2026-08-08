@@ -37,6 +37,7 @@ import {
   CreateIndividualDeliveryFromQuoteResult,
   CreateQuotePreviewInput,
   DeliveryRequestOrchestratorService,
+  PromoteDraftToDeliveryInput,
   SchedulePreviewInput,
   SchedulePreviewResult,
 
@@ -166,6 +167,24 @@ async createQuotePreview(input: CreateQuotePreviewInput): Promise<any> {
     });
 
     return this.domain.findUnique({ id: created.id });
+  }
+
+  async promoteDraftToDelivery(
+    input: PromoteDraftToDeliveryInput
+  ): Promise<any> {
+    const promoted = await this.orchestrator.promoteDraftToDelivery({
+      ...input,
+      licensePlate: this.trimRequiredString(input.licensePlate),
+      vehicleColor: this.trimRequiredString(input.vehicleColor),
+      vehicleMake: this.trimOptionalString(input.vehicleMake) ?? null,
+      vehicleModel: this.trimOptionalString(input.vehicleModel) ?? null,
+      vinVerificationCode: this.trimRequiredString(input.vinVerificationCode),
+      recipientName: this.trimOptionalString(input.recipientName) ?? null,
+      recipientEmail: this.normalizeOptionalEmail(input.recipientEmail) ?? null,
+      recipientPhone: this.trimOptionalString(input.recipientPhone) ?? null,
+    });
+
+    return this.domain.findUnique({ id: promoted.id });
   }
 
   async createIndividualDeliveryFromAcceptedQuote(

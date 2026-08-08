@@ -384,6 +384,153 @@ export class CreateDeliveryFromQuoteBody {
   vehicleStandardsConfirmed?: boolean;
 }
 
+/**
+ * Body for `POST /deliveryRequests/:id/promote` — promote an existing DRAFT
+ * delivery to a real LISTED delivery in-place (UPDATE rather than
+ * create-new-and-delete-draft).
+ *
+ * Mirrors `CreateDeliveryFromQuoteBody` but omits `customerId`, `quoteId`,
+ * and `serviceType` because they come from the existing DRAFT row itself.
+ */
+export class PromoteDraftBody {
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  createdByUserId?: string | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    enum: EnumDeliveryRequestCreatedByRole,
+  })
+  @IsOptional()
+  @IsEnum(EnumDeliveryRequestCreatedByRole)
+  createdByRole?: EnumDeliveryRequestCreatedByRole | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    enum: EnumDeliveryRequestCustomerChose,
+  })
+  @IsOptional()
+  @IsEnum(EnumDeliveryRequestCustomerChose)
+  customerChose?: EnumDeliveryRequestCustomerChose | null;
+
+  @swagger.ApiProperty({
+    type: String,
+    format: "date-time",
+  })
+  @IsDateString()
+  pickupWindowStart!: Date;
+
+  @swagger.ApiProperty({
+    type: String,
+    format: "date-time",
+  })
+  @IsDateString()
+  pickupWindowEnd!: Date;
+
+  @swagger.ApiProperty({
+    type: String,
+    format: "date-time",
+  })
+  @IsDateString()
+  dropoffWindowStart!: Date;
+
+  @swagger.ApiProperty({
+    type: String,
+    format: "date-time",
+  })
+  @IsDateString()
+  dropoffWindowEnd!: Date;
+
+  @swagger.ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  licensePlate!: string;
+
+  @swagger.ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  vehicleColor!: string;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  vehicleMake?: string | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  vehicleModel?: string | null;
+
+  @swagger.ApiProperty({
+    description: "Exactly 4 numeric digits",
+  })
+  @IsString()
+  @IsNotEmpty()
+  vinVerificationCode!: string;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  recipientName?: string | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsEmail()
+  recipientEmail?: string | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  recipientPhone?: string | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isUrgent?: boolean;
+
+  @swagger.ApiProperty({
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  afterHours?: boolean;
+
+  @swagger.ApiProperty({
+    required: false,
+    type: Boolean,
+    description:
+      "Customer attestation that the vehicle is under 12 years old, under 120k miles, and under $75k value. Required for new deliveries created on or after the feature ship date; legacy drafts may omit it.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  vehicleStandardsConfirmed?: boolean;
+}
+
 export class BookDeliveryBody {
   @ApiProperty({
     type: String,
