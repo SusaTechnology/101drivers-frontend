@@ -268,6 +268,70 @@ export class AssignCustomerPricingBody {
   actorUserId?: string | null;
 }
 
+export class BulkAssignPricingBody {
+  @swagger.ApiProperty({
+    description:
+      "PricingConfig ID to assign to every customer in the batch. Required — " +
+      "the bulk endpoint always sets a config (use the single-customer " +
+      "endpoint with pricingConfigId:null to disconnect).",
+  })
+  @IsString()
+  pricingConfigId!: string;
+
+  @swagger.ApiProperty({
+    type: [String],
+    description:
+      "Customer IDs to assign the pricing config to. The endpoint iterates " +
+      "over each, calling the same assignPricing logic as the single-customer " +
+      "endpoint. Failures are collected per-customer and returned — the " +
+      "operation does NOT abort on the first failure (skip-and-report).",
+  })
+  @IsArray()
+  @IsString({ each: true })
+  customerIds!: string[];
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    enum: EnumCustomerPricingModeOverride,
+    description:
+      "Optional override applied to ALL customers in the batch. Leave null " +
+      "to use each customer's existing override (or the config's default mode).",
+  })
+  @IsOptional()
+  @IsEnum(EnumCustomerPricingModeOverride)
+  pricingModeOverride?: EnumCustomerPricingModeOverride | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "Optional postpaid flag applied to ALL customers. Leave null to use " +
+      "each customer's existing postpaid setting. Note: postpaid=true only " +
+      "works for APPROVED BUSINESS customers — others will fail per-customer.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  postpaidEnabled?: boolean | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description: "Note applied to every customer's audit log entry in the batch.",
+  })
+  @IsOptional()
+  @IsString()
+  note?: string | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+}
+
 export class SetDefaultPricingConfigBody {
   @swagger.ApiProperty({
     required: false,
