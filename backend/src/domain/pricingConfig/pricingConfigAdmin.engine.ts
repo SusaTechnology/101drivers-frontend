@@ -51,6 +51,7 @@ export class PricingConfigAdminEngine {
             name: this.trimOptional(body.name),
             description: this.trimOptional(body.description),
             active: body.active ?? true,
+            isDefault: body.activateAsDefault === true,
             pricingMode: body.pricingMode,
             baseFee: this.toNumber(body.baseFee),
             flatMiles: this.toNullableNumber(body.flatMiles),
@@ -72,6 +73,7 @@ export class PricingConfigAdminEngine {
             name: this.trimOptional(body.name),
             description: this.trimOptional(body.description),
             active: body.active ?? true,
+            isDefault: body.activateAsDefault === true ? true : undefined,
             pricingMode: body.pricingMode,
             baseFee: this.toNumber(body.baseFee),
             flatMiles: this.toNullableNumber(body.flatMiles),
@@ -125,18 +127,26 @@ export class PricingConfigAdminEngine {
       }
 
       if (body.activateAsDefault === true) {
+        // Atomically set isDefault=false on every OTHER PricingConfig,
+        // then isDefault=true on this one. Previously this code set
+        // active=false on all others — that conflated "default" with
+        // "active" and quietly deactivated every other config in the
+        // system when an admin picked a new default. Now `active` and
+        // `isDefault` are independent: an admin can have multiple
+        // active configs while exactly one of them is the default.
         await tx.pricingConfig.updateMany({
           where: {
             id: { not: pricingConfigId },
+            isDefault: true,
           },
           data: {
-            active: false,
+            isDefault: false,
           },
         });
 
         await tx.pricingConfig.update({
           where: { id: pricingConfigId },
-          data: { active: true },
+          data: { isDefault: true },
         });
       }
 
@@ -166,6 +176,81 @@ export class PricingConfigAdminEngine {
       });
 
       return pricingConfigId;
+    });
+  }
+
+  /**
+   * Mark a PricingConfig as the system-wide default.
+   *
+   * Atomically unsets isDefault on every OTHER PricingConfig, then sets
+   * isDefault=true on the target. `active` is NOT modified — default and
+   * active are independent flags (a config can be inactive-default during
+   * a migration, or active-non-default while still being available for
+   * explicit assignment).
+   *
+   * Writes an AdminAuditLog entry capturing the before/after state.
+   */
+  async setDefault(input: {
+    id: string;
+    actorUserId?: string | null;
+  }): Promise<void> {
+    return this.prisma.$transaction(async (tx) => {
+      const target = await tx.pricingConfig.findUnique({
+        where: { id: input.id },
+        select: {
+          id: true,
+          name: true,
+          active: true,
+          isDefault: true,
+        },
+      });
+
+      if (!target) {
+        throw new NotFoundException(
+          `PricingConfig not found: ${input.id}`,
+        );
+      }
+
+      const previousDefaults = await tx.pricingConfig.findMany({
+        where: {
+          id: { not: input.id },
+          isDefault: true,
+        },
+        select: { id: true, name: true },
+      });
+
+      // Unset every other default. Scoped to isDefault:true so we don't
+      // touch rows that are already false (avoids unnecessary writes).
+      await tx.pricingConfig.updateMany({
+        where: {
+          id: { not: input.id },
+          isDefault: true,
+        },
+        data: { isDefault: false },
+      });
+
+      // Promote the target.
+      await tx.pricingConfig.update({
+        where: { id: input.id },
+        data: { isDefault: true },
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          action: EnumAdminAuditLogAction.PRICING_UPDATE,
+          actorUserId: input.actorUserId ?? null,
+          actorType: EnumAdminAuditLogActorType.USER,
+          reason: `PricingConfig "${target.name ?? input.id}" set as default`,
+          beforeJson: {
+            target: { id: target.id, name: target.name, isDefault: target.isDefault },
+            previousDefaults,
+          } as any,
+          afterJson: {
+            target: { id: target.id, name: target.name, isDefault: true },
+            unset: previousDefaults,
+          } as any,
+        },
+      });
     });
   }
 

@@ -46,6 +46,7 @@ type ResolvedPricingContext = {
   config: {
     id: string;
     active: boolean;
+    isDefault: boolean;
     baseFee: number;
     insuranceFee: number;
     driverSharePct: number;
@@ -295,6 +296,7 @@ export class PricingEngineService {
           select: {
             id: true,
             active: true,
+            isDefault: true,
             baseFee: true,
             insuranceFee: true,
             driverSharePct: true,
@@ -361,12 +363,16 @@ export class PricingEngineService {
   }
 
   private async loadLatestActivePricingConfig(): Promise<ResolvedPricingContext["config"]> {
-    const config = await this.prisma.pricingConfig.findFirst({
-      where: { active: true },
-      orderBy: { createdAt: "desc" },
+    // Look up the default active config first. Falls back to the legacy
+    // "most recently created active config" behavior if no row is marked
+    // isDefault (e.g. installations that predate the isDefault column,
+    // or fresh databases where no admin has picked one yet).
+    let config = await this.prisma.pricingConfig.findFirst({
+      where: { active: true, isDefault: true },
       select: {
         id: true,
         active: true,
+        isDefault: true,
         baseFee: true,
         insuranceFee: true,
         driverSharePct: true,
@@ -399,6 +405,51 @@ export class PricingEngineService {
         },
       },
     });
+
+    if (!config) {
+      // Legacy fallback — no row marked isDefault. Use the most recently
+      // created active config so existing installations keep working
+      // until an admin explicitly picks a default via the UI.
+      config = await this.prisma.pricingConfig.findFirst({
+        where: { active: true },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          active: true,
+          isDefault: true,
+          baseFee: true,
+          insuranceFee: true,
+          driverSharePct: true,
+          feePassThrough: true,
+          flatMiles: true,
+          perMileRate: true,
+          pricingMode: true,
+          transactionFeeFixed: true,
+          transactionFeePct: true,
+          tiers: {
+            select: {
+              id: true,
+              minMiles: true,
+              maxMiles: true,
+              flatPrice: true,
+            },
+            orderBy: { minMiles: "asc" },
+          },
+          categoryRules: {
+            select: {
+              id: true,
+              category: true,
+              minMiles: true,
+              maxMiles: true,
+              baseFee: true,
+              flatPrice: true,
+              perMileRate: true,
+            },
+            orderBy: [{ category: "asc" }, { minMiles: "asc" }],
+          },
+        },
+      });
+    }
 
     if (!config) {
       throw new NotFoundException("No active pricing configuration found");

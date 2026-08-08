@@ -200,6 +200,7 @@ model PricingConfig {
   flatMiles           Float?
   id                  String                       @id @default(cuid())
   insuranceFee        Float
+  isDefault           Boolean                      @default(false)
   name                String?
   perMileRate         Float?
   pricingMode         EnumPricingConfigPricingMode
@@ -207,6 +208,8 @@ model PricingConfig {
   transactionFeeFixed Float?
   transactionFeePct   Float?
   updatedAt           DateTime                     @updatedAt
+
+  @@index([isDefault])
 }
 
 model PricingTier {

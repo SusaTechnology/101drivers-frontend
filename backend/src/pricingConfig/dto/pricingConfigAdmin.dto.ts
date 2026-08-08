@@ -265,3 +265,16 @@ export class AssignCustomerPricingBody {
   @IsString()
   actorUserId?: string | null;
 }
+
+export class SetDefaultPricingConfigBody {
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "Admin user ID triggering the change, for the audit log. " +
+      "Optional — the controller falls back to null if absent.",
+  })
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+}

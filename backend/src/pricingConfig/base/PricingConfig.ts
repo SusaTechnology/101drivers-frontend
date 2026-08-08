@@ -134,6 +134,19 @@ class PricingConfig {
   insuranceFee!: number;
 
   @ApiProperty({
+    required: true,
+    type: Boolean,
+    description:
+      "True if this is the system-wide default config used when a customer " +
+      "has no explicit pricingConfigId. At most one PricingConfig should " +
+      "have isDefault=true at any time; the admin-save / set-default " +
+      "endpoints enforce this by atomically unsetting others.",
+  })
+  @IsBoolean()
+  @Field(() => Boolean)
+  isDefault!: boolean;
+
+  @ApiProperty({
     required: false,
     type: String,
   })

@@ -166,4 +166,16 @@ async adminSavePricingConfig(input: {
 
   return this.domain.findUnique({ id: pricingConfigId });
 }
+
+async setDefaultPricingConfig(input: {
+  id: string;
+  actorUserId?: string | null;
+}): Promise<any> {
+  await this.pricingConfigAdminEngine.setDefault({
+    id: input.id,
+    actorUserId: input.actorUserId ?? null,
+  });
+
+  return this.domain.findUnique({ id: input.id });
+}
 }
