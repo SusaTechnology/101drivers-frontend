@@ -51,6 +51,11 @@ import type {
   PricingTier,
 } from '@/types/pricing';
 import { DEFAULT_PRICING_CONFIG, DEFAULT_TIER, DEFAULT_CATEGORY_RULES } from '@/types/pricing';
+import {
+  calculatePricing,
+  type PricingCalcConfig,
+  type PricingCalcResult,
+} from '@/lib/pricing/calculate';
 
 // Validation schema using Zod with conditional validation
 const createPricingConfigSchema = (pricingMode: PricingMode) => {
@@ -218,6 +223,15 @@ export function PricingConfigForm({
   const watchedTransactionFeePct = watch('transactionFeePct');
   const watchedDriverSharePct = watch('driverSharePct');
   const watchedPerMileRate = watch('perMileRate');
+  const watchedFlatMiles = watch('flatMiles');
+  const watchedTransactionFeeFixed = watch('transactionFeeFixed');
+  const watchedFeePassThrough = watch('feePassThrough');
+  const watchedTiers = watch('tiers') as PricingTier[] | undefined;
+  const watchedCategoryRules = watch('categoryRules') as CategoryRule[] | undefined;
+
+  // Editable preview distance — admin can type any value to see how the
+  // current (unsaved) form state would price it. Defaults to 50 miles.
+  const [previewDistance, setPreviewDistance] = React.useState<number>(50);
 
   // Handle pricing mode change
   const handlePricingModeChange = (newMode: PricingMode) => {
@@ -260,37 +274,66 @@ export function PricingConfigForm({
     });
   };
 
-  // Calculate preview values
-  const calculatePreview = () => {
-    const baseFee = watchedBaseFee || 0;
-    const insuranceFee = watchedInsuranceFee || 0;
-    const transactionFeePct = watchedTransactionFeePct || 0;
-    const driverSharePct = watchedDriverSharePct || 0;
-    const perMileRate = watchedPerMileRate || 0;
-    const flatMiles = watch('flatMiles') ?? 0;
-
-    // Example quote: 50 miles
-    const exampleMiles = 50;
-    // PER_MILE now honors flatMiles: billableMiles = max(0, miles - flatMiles)
-    const billableMiles = Math.max(0, exampleMiles - (flatMiles || 0));
-    const transportationCost = pricingMode === 'PER_MILE' ? billableMiles * perMileRate : 200;
-    const transactionFee = transportationCost * (transactionFeePct / 100) + (watch('transactionFeeFixed') || 0);
-    const totalFees = baseFee + insuranceFee + transactionFee;
-    const driverShare = transportationCost * (driverSharePct / 100);
-
-    return {
-      exampleMiles,
-      billableMiles: pricingMode === 'PER_MILE' ? billableMiles : exampleMiles,
-      flatMilesAllowance: flatMiles || 0,
-      transportationCost,
-      transactionFee,
-      totalFees,
-      driverShare,
-      dealerTotal: transportationCost + totalFees,
-    };
+  // Build a PricingCalcConfig from the current (unsaved) form state.
+  // The synthetic id 'preview' is used in create mode — the math doesn't
+  // depend on the id, but the shared utility requires one for the snapshot.
+  const previewConfig: PricingCalcConfig = {
+    id: initialData?.id || 'preview',
+    pricingMode,
+    baseFee: watchedBaseFee ?? 0,
+    flatMiles: watchedFlatMiles ?? null,
+    perMileRate: watchedPerMileRate ?? null,
+    insuranceFee: watchedInsuranceFee ?? 0,
+    transactionFeePct: watchedTransactionFeePct ?? null,
+    transactionFeeFixed: watchedTransactionFeeFixed ?? null,
+    feePassThrough: watchedFeePassThrough ?? true,
+    driverSharePct: watchedDriverSharePct ?? 60,
+    tiers: (watchedTiers ?? []).map((t) => ({
+      id: t.id,
+      minMiles: t.minMiles,
+      maxMiles: t.maxMiles ?? null,
+      flatPrice: t.flatPrice,
+    })),
+    categoryRules: (watchedCategoryRules ?? []).map((r) => ({
+      id: r.id,
+      category: r.category,
+      minMiles: r.minMiles,
+      maxMiles: r.maxMiles ?? null,
+      baseFee: r.baseFee ?? null,
+      flatPrice: r.flatPrice ?? null,
+      perMileRate: r.perMileRate ?? null,
+    })),
   };
 
-  const preview = calculatePreview();
+  // Calculate the preview using the shared utility. May return null when
+  // the form state is incomplete (e.g. PER_MILE without perMileRate, or
+  // FLAT_TIER with no matching tier for the preview distance). The UI
+  // shows a friendly message instead of crashing.
+  const preview: PricingCalcResult | null = React.useMemo(() => {
+    if (previewDistance == null || previewDistance < 0) return null;
+    try {
+      return calculatePricing({
+        config: previewConfig,
+        distanceMiles: previewDistance,
+      });
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    previewDistance,
+    pricingMode,
+    watchedBaseFee,
+    watchedFlatMiles,
+    watchedPerMileRate,
+    watchedInsuranceFee,
+    watchedTransactionFeePct,
+    watchedTransactionFeeFixed,
+    watchedFeePassThrough,
+    watchedDriverSharePct,
+    watchedTiers,
+    watchedCategoryRules,
+  ]);
 
   // Handle form submission
   const onFormSubmit = async (data: FormSchemaType) => {
@@ -988,55 +1031,142 @@ export function PricingConfigForm({
         </CardContent>
       </Card>
 
-      {/* Quote Preview */}
+      {/* Quote Preview — uses shared calculatePricing utility (item 15) */}
       <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
         <CardHeader className="border-b border-slate-100 dark:border-slate-800">
           <CardTitle className="text-xl font-black">Quote Preview</CardTitle>
           <CardDescription className="text-sm mt-1">
-            See how fees are calculated for a sample quote
+            Live preview using the same math as the backend quote engine. Edit the distance to see how the current (unsaved) config prices it.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 sm:p-7">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5">
-            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-4">
-              Example: {preview.exampleMiles} miles
+            {/* Editable distance input */}
+            <div className="flex items-center gap-3 mb-4">
+              <Label
+                htmlFor="preview-distance"
+                className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400"
+              >
+                Distance
+              </Label>
+              <Input
+                id="preview-distance"
+                type="number"
+                min={0}
+                step={0.1}
+                value={previewDistance}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPreviewDistance(v === '' ? 0 : Number(v));
+                }}
+                className="w-28 h-8 text-sm font-bold"
+              />
+              <span className="text-xs text-slate-500">miles</span>
+              {preview?.mileageCategory && (
+                <Badge className="ml-auto bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800 text-[10px] font-bold">
+                  Cat {preview.mileageCategory}
+                </Badge>
+              )}
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Transportation{' '}
-                  {pricingMode === 'PER_MILE' && (
-                    preview.flatMilesAllowance > 0
-                      ? `(max(0, ${preview.exampleMiles} − ${preview.flatMilesAllowance}) mi × $${watchedPerMileRate || 0}/mi)`
-                      : `(${preview.exampleMiles} mi × $${watchedPerMileRate || 0}/mi)`
+
+            {preview ? (
+              <div className="space-y-3">
+                {/* Transportation / Tier / Category line — mode-aware */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">
+                    {pricingMode === 'PER_MILE' && (
+                      <>
+                        Transportation{' '}
+                        {preview.feesBreakdown.flatMilesAllowance &&
+                        preview.feesBreakdown.flatMilesAllowance > 0
+                          ? `(max(0, ${previewDistance} − ${preview.feesBreakdown.flatMilesAllowance}) mi × $${watchedPerMileRate ?? 0}/mi)`
+                          : `(${previewDistance} mi × $${watchedPerMileRate ?? 0}/mi)`}
+                      </>
+                    )}
+                    {pricingMode === 'FLAT_TIER' && (
+                      <>Flat tier (matched)</>
+                    )}
+                    {pricingMode === 'CATEGORY_ABC' && (
+                      <>
+                        Category {preview.mileageCategory}{' '}
+                        <span className="text-xs text-slate-400">
+                          ({preview.feesBreakdown.distanceCharge > 0
+                            ? `base + ${previewDistance} mi × rate`
+                            : 'flat price'})
+                        </span>
+                      </>
+                    )}
+                  </span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    ${(preview.feesBreakdown.baseFare + preview.feesBreakdown.distanceCharge).toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Show base fee + distance charge separately when they're both non-zero */}
+                {pricingMode === 'CATEGORY_ABC' &&
+                  preview.feesBreakdown.distanceCharge > 0 && (
+                    <div className="flex items-center justify-between pl-4 text-xs text-slate-500">
+                      <span>
+                        ↳ base ${preview.feesBreakdown.baseFare.toFixed(2)} +{' '}
+                        distance ${preview.feesBreakdown.distanceCharge.toFixed(2)}
+                      </span>
+                      <span></span>
+                    </div>
                   )}
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">
+                    Insurance Fee
+                  </span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    ${preview.feesBreakdown.insuranceFee.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600 dark:text-slate-400">
+                    Transaction Fee ({watchedTransactionFeePct ?? 0}% + ${watchedTransactionFeeFixed ?? 0})
+                    {!preview.feesBreakdown.feePassThrough && (
+                      <span className="ml-1 text-[10px] text-amber-600">(pass-through off)</span>
+                    )}
+                  </span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    ${preview.feesBreakdown.transactionFee.toFixed(2)}
+                  </span>
+                </div>
+
+                <Separator className="my-2" />
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-slate-900 dark:text-white uppercase">
+                    Dealer Total
+                  </span>
+                  <span className="text-xl font-black text-primary">
+                    ${preview.estimatedPrice.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-slate-500">
+                  <span className="text-sm">
+                    Driver Share ({watchedDriverSharePct ?? 0}%)
+                  </span>
+                  <span className="font-bold">
+                    ${preview.estimatedDriverPayout.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 py-4">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>
+                  Fill in the required fields for{' '}
+                  <strong>{pricingMode}</strong> mode to see the preview
+                  {pricingMode === 'PER_MILE' && ' (perMileRate is required)'}
+                  {pricingMode === 'FLAT_TIER' && ' (need a tier matching the distance)'}
+                  {pricingMode === 'CATEGORY_ABC' && ' (need a rule for this category)'}
                 </span>
-                <span className="font-bold text-slate-900 dark:text-white">${preview.transportationCost.toFixed(2)}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Base Fee</span>
-                <span className="font-bold text-slate-900 dark:text-white">${watchedBaseFee?.toFixed(2) || '0.00'}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">Insurance Fee</span>
-                <span className="font-bold text-slate-900 dark:text-white">${watchedInsuranceFee?.toFixed(2) || '0.00'}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Transaction Fee ({watchedTransactionFeePct || 0}% + ${watch('transactionFeeFixed') || 0})
-                </span>
-                <span className="font-bold text-slate-900 dark:text-white">${preview.transactionFee.toFixed(2)}</span>
-              </div>
-              <Separator className="my-2" />
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-black text-slate-900 dark:text-white uppercase">Dealer Total</span>
-                <span className="text-xl font-black text-primary">${preview.dealerTotal.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-500">
-                <span className="text-sm">Driver Share ({watchedDriverSharePct || 0}%)</span>
-                <span className="font-bold">${preview.driverShare.toFixed(2)}</span>
-              </div>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>
