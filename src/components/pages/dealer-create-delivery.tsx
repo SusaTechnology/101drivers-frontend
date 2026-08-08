@@ -2032,9 +2032,14 @@ const handleQuotePreview = () => {
     //      (create a brand-new delivery with no prior draft)
     if (draftId && originalDeliveryStatus === 'DRAFT') {
       // Promote in-place: strip fields that come from the draft row itself.
+      // KEEP `quoteId` — it's needed when the draft was saved WITHOUT a quote
+      // (allowed by the save-as-draft flow). The backend resolves the
+      // effective quoteId as `input.quoteId || draft.quoteId`, so passing it
+      // here is always safe: if the draft already has the same quoteId, the
+      // backend just re-sets it (no-op). If the draft has no quoteId (or a
+      // stale one because the dealer re-calculated), the backend uses ours.
       const {
         customerId: _cid,
-        quoteId: _qid,
         serviceType: _st,
         status: _s,
         pickupAddress: _pa,

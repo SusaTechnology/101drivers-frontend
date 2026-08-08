@@ -555,6 +555,11 @@ async createQuotePreview(
     const authenticatedUser = request.user as any;
     return this.service.promoteDraftToDelivery({
       draftId: id,
+      // Pass through the frontend-supplied quoteId. The orchestrator resolves
+      // the effective quoteId (input.quoteId || draft.quoteId) so that drafts
+      // saved without a quote can still be promoted after the dealer calculates
+      // one in the editor.
+      quoteId: body.quoteId ?? null,
       createdByUserId: body.createdByUserId ?? authenticatedUser?.id ?? null,
       createdByRole: body.createdByRole ?? EnumDeliveryRequestCreatedByRole.BusinessCustomer,
       customerChose: body.customerChose ?? null,

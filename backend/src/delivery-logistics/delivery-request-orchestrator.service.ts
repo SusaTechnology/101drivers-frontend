@@ -168,12 +168,22 @@ export type CreateDeliveryFromQuoteInput = {
  * Input for promoting an existing DRAFT DeliveryRequest to a real LISTED
  * delivery in-place (UPDATE rather than create-new-and-delete-draft).
  *
- * Mirrors `CreateDeliveryFromQuoteInput` but with `customerId`, `quoteId`,
- * and `serviceType` omitted because they come from the existing DRAFT row
+ * Mirrors `CreateDeliveryFromQuoteInput` but with `customerId` and
+ * `serviceType` omitted because they come from the existing DRAFT row
  * itself (not from the request body).
+ *
+ * `quoteId` is OPTIONAL and resolves as `input.quoteId || draft.quoteId`:
+ *   - If the DRAFT was saved without a quote (save-as-draft flow allows
+ *     this), the dealer must calculate one before promoting — the
+ *     frontend passes it here.
+ *   - If the DRAFT already has a quoteId, `input.quoteId` takes
+ *     precedence when set (handles dealer re-calculating the quote
+ *     between draft-save and promotion).
+ *   - If both are null, the orchestrator throws BadRequest.
  */
 export type PromoteDraftToDeliveryInput = {
   draftId: string;
+  quoteId?: string | null;
   createdByUserId?: string | null;
   createdByRole?: EnumDeliveryRequestCreatedByRole | null;
   customerChose?: EnumDeliveryRequestCustomerChose | null;
@@ -2275,9 +2285,16 @@ private async resolveIndividualCustomerForCreate(
       );
     }
 
-    if (!draft.quoteId) {
+    // Resolve the effective quoteId. Input.quoteId takes precedence over
+    // draft.quoteId (handles the case where the dealer re-calculated the
+    // quote after the draft was last saved). If neither is set, the draft
+    // was saved without a quote AND the dealer didn't calculate one before
+    // promoting — reject with a clear message.
+    const effectiveQuoteId = input.quoteId ?? draft.quoteId ?? null;
+
+    if (!effectiveQuoteId) {
       throw new BadRequestException(
-        "Cannot promote a draft without a quoteId. Please calculate a quote first.",
+        "Cannot promote a draft without a quoteId. Please calculate a quote before promoting the draft.",
       );
     }
 
@@ -2301,7 +2318,7 @@ private async resolveIndividualCustomerForCreate(
     }
 
     const quote = await this.prisma.quote.findUnique({
-      where: { id: draft.quoteId },
+      where: { id: effectiveQuoteId },
       select: {
         id: true,
         estimatedPrice: true,
@@ -2411,10 +2428,17 @@ private async resolveIndividualCustomerForCreate(
 
     // ─── Step 4: UPDATE the DRAFT row → LISTED (in-place promotion) ───
     // NO releasePriorQuoteId call — the quoteId stays on this same row.
+    // We DO set quoteId explicitly to `effectiveQuoteId` so that the row is
+    // updated atomically when the dealer calculated a fresh quote in the
+    // editor (input.quoteId) and the draft row still had the old/null quoteId.
     const delivery = await this.prisma.deliveryRequest.update({
       where: { id: draft.id },
       data: {
-        // Keep customerId, quoteId, serviceType, createdByUserId, createdByRole
+        // Persist the resolved quoteId (covers draft-without-quote → promote
+        // with newly-calculated quote, and re-calculated quote scenarios).
+        quoteId: effectiveQuoteId,
+
+        // Keep customerId, serviceType, createdByUserId, createdByRole
         // from the draft — they don't change during promotion.
         customerChose: input.customerChose ?? null,
 

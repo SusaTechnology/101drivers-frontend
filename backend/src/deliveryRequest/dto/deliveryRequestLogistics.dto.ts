@@ -389,10 +389,26 @@ export class CreateDeliveryFromQuoteBody {
  * delivery to a real LISTED delivery in-place (UPDATE rather than
  * create-new-and-delete-draft).
  *
- * Mirrors `CreateDeliveryFromQuoteBody` but omits `customerId`, `quoteId`,
- * and `serviceType` because they come from the existing DRAFT row itself.
+ * `customerId` and `serviceType` are omitted because they come from the
+ * existing DRAFT row itself. `quoteId` is OPTIONAL: if the DRAFT was saved
+ * without a quote (allowed by the save-as-draft flow), the dealer must
+ * calculate one before promoting — the frontend passes it here so the
+ * backend can attach it to the row during the same UPDATE that flips
+ * status DRAFT→LISTED. If the DRAFT already has a quoteId, `input.quoteId`
+ * takes precedence (handles the case where the dealer re-calculated the
+ * quote after the draft was last saved).
  */
 export class PromoteDraftBody {
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "Optional quoteId. Required when the DRAFT has no quoteId attached (e.g. drafts saved before a quote was calculated). Ignored if the DRAFT already has a quoteId AND this field matches it. Takes precedence over the DRAFT's stored quoteId when both are set and differ (e.g. dealer re-calculated the quote).",
+  })
+  @IsOptional()
+  @IsString()
+  quoteId?: string | null;
+
   @swagger.ApiProperty({
     required: false,
     nullable: true,
