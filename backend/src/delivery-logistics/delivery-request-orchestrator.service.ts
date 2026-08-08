@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   Optional,
@@ -553,66 +554,102 @@ export class DeliveryRequestOrchestratorService {
   }
 
   /**
-   * Release any prior DeliveryRequest (CANCELLED *or* DRAFT) that still holds
-   * the given quoteId, so a new draft/real-delivery create doesn't 409 on
-   * the quoteId `@unique` constraint.
+   * Statuses whose quoteId MUST NOT be silently nulled, because the row is
+   * still "live" in the delivery lifecycle. If we find a row in one of these
+   * statuses holding the quoteId, we throw a clear ConflictException so the
+   * dealer/support can investigate instead of getting a cryptic 409.
    *
-   * Background: `quoteId` is `@unique` in the Prisma schema. When a dealer
-   * saves a DRAFT after calculating a quote, the DRAFT row holds that
-   * quoteId. When they later promote the draft to a real delivery (or save
-   * a new draft with the same quote), the new `deliveryRequest.create({
-   * quoteId })` would hit:
+   * Any status NOT in this list (DRAFT, CANCELLED, EXPIRED, CLOSED) is
+   * considered "abandoned" and safe to release.
+   */
+  private static readonly QUOTE_LOCKED_STATUSES: EnumDeliveryRequestStatus[] = [
+    EnumDeliveryRequestStatus.LISTED,
+    EnumDeliveryRequestStatus.QUOTED,
+    EnumDeliveryRequestStatus.BOOKED,
+    EnumDeliveryRequestStatus.ACTIVE,
+    EnumDeliveryRequestStatus.COMPLETED,
+    EnumDeliveryRequestStatus.DISPUTED,
+  ];
+
+  /**
+   * Release any prior DeliveryRequest that still holds the given quoteId,
+   * so a new draft/real-delivery create doesn't 409 on the quoteId `@unique`
+   * constraint.
+   *
+   * Background: `quoteId` is `@unique` in the Prisma schema — the uniqueness
+   * is GLOBAL across all customers. When a dealer saves a DRAFT after
+   * calculating a quote, the DRAFT row holds that quoteId. When they later
+   * promote the draft to a real delivery (or save a new draft with the same
+   * quote), the new `deliveryRequest.create({ quoteId })` would hit:
    *   "Another record with the requested (quoteId) already exists" (409)
    *
-   * This helper finds any CANCELLED or DRAFT delivery that still holds the
-   * quoteId (owned by the same customer, defensively) and nulls out its
-   * quoteId. The old row stays in the DB:
-   *   - CANCELLED rows: kept for the audit trail
-   *   - DRAFT rows: kept so the dealer can still find them in their drafts
-   *     list (the frontend's onSuccess handler deletes them after the real
-   *     delivery is created)
-   * The quote itself is unaffected (its `id` is unchanged).
+   * This helper finds any prior delivery that still holds the quoteId and
+   * either:
+   *   - **Releases** it (nulls quoteId) if its status is in
+   *     QUOTE_RELEASEABLE_STATUSES (DRAFT, CANCELLED, EXPIRED, CLOSED).
+   *     The old row stays in the DB for audit / drafts-list visibility.
+   *   - **Throws** a ConflictException if its status is in
+   *     QUOTE_LOCKED_STATUSES (LISTED, QUOTED, BOOKED, ACTIVE, COMPLETED,
+   *     DISPUTED). Nilling quoteId on an active delivery would corrupt the
+   *     audit trail and is almost certainly a bug or a race.
+   *
+   * The `customerId` parameter is kept for backwards compatibility with
+   * call sites but is NOT used for filtering — the @unique constraint is
+   * global, so the release must be global too. (The quoteId is a cuid, so
+   * cross-customer "theft" is effectively impossible.)
    *
    * Safe to call before any `deliveryRequest.create` that takes a quoteId.
-   * No-op if no CANCELLED/DRAFT delivery holds the quoteId.
+   * No-op if no prior delivery holds the quoteId.
+   *
+   * Throws:
+   *   - ConflictException if a LOCKED-status row holds the quoteId.
+   *   - Any Prisma error from findFirst/update (does NOT swallow — a swallowed
+   *     release would result in a misleading 409 downstream).
    */
   private async releasePriorQuoteId(
     quoteId: string,
     customerId: string,
   ): Promise<void> {
-    try {
-      const priorWithQuote = await this.prisma.deliveryRequest.findFirst({
-        where: {
-          quoteId,
-          status: {
-            in: [
-              EnumDeliveryRequestStatus.CANCELLED,
-              EnumDeliveryRequestStatus.DRAFT,
-            ],
-          },
-          customerId,
-        },
-        select: { id: true, status: true },
-      });
+    // Find ANY row holding this quoteId, regardless of customer (because
+    // @unique is global) and regardless of status (we'll branch on status
+    // below).
+    const priorWithQuote = await this.prisma.deliveryRequest.findFirst({
+      where: { quoteId },
+      select: { id: true, status: true, customerId: true },
+    });
 
-      if (priorWithQuote) {
-        await this.prisma.deliveryRequest.update({
-          where: { id: priorWithQuote.id },
-          data: { quoteId: null },
-        });
-        const logger = new Logger(DeliveryRequestOrchestratorService.name);
-        logger.log(
-          `Released quoteId ${quoteId} from ${priorWithQuote.status} delivery ${priorWithQuote.id} (customer ${customerId}) so dealer can re-save`,
-        );
-      }
-    } catch (err: any) {
-      // Non-fatal — if this fails, the create below will throw a clearer
-      // unique-constraint error. Log so we can diagnose.
-      // eslint-disable-next-line no-console
-      console.error(
-        `Failed to release quoteId ${quoteId} from prior delivery: ${err.message}`,
+    if (!priorWithQuote) {
+      return;
+    }
+
+    const logger = new Logger(DeliveryRequestOrchestratorService.name);
+
+    // If the prior row is in an active lifecycle state, do NOT silently null
+    // its quoteId — that would corrupt the audit trail and mask a real bug
+    // (most likely a race where two creates are running concurrently, or a
+    // stuck LISTED delivery that should have been cleaned up).
+    if (
+      DeliveryRequestOrchestratorService.QUOTE_LOCKED_STATUSES.includes(
+        priorWithQuote.status,
+      )
+    ) {
+      logger.error(
+        `quoteId ${quoteId} is held by ${priorWithQuote.status} delivery ${priorWithQuote.id} (customer ${priorWithQuote.customerId}) — refusing to release. Caller customerId=${customerId}`,
+      );
+      throw new ConflictException(
+        `This quote is already attached to an active delivery (id=${priorWithQuote.id}, status=${priorWithQuote.status}). Please refresh your drafts list and try again, or contact support if the issue persists.`,
       );
     }
+
+    // Otherwise the prior row is in a releasable status (DRAFT, CANCELLED,
+    // EXPIRED, CLOSED) — null its quoteId so the new create can proceed.
+    await this.prisma.deliveryRequest.update({
+      where: { id: priorWithQuote.id },
+      data: { quoteId: null },
+    });
+    logger.log(
+      `Released quoteId ${quoteId} from ${priorWithQuote.status} delivery ${priorWithQuote.id} (customer ${priorWithQuote.customerId}) so caller ${customerId} can proceed`,
+    );
   }
 
   async createDeliveryDraftFromQuote(input: CreateDeliveryDraftFromQuoteInput) {

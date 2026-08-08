@@ -673,3 +673,37 @@ Stage Summary:
   3. Draft → delivery promotion already goes through full validation + payment: `createDeliveryFromAcceptedQuote` validates VIN, schedule windows, scheduling policy, route metrics, same-day cutoff, requires ops confirmation, and attempts Stripe charge (cancelling the delivery on payment failure). The 409 was the only thing blocking this flow.
 - Files changed:
   * backend/src/delivery-logistics/delivery-request-orchestrator.service.ts (-66 / +46)
+
+---
+Task ID: draft-quoteid-409-fix-v2
+Agent: main
+Task: Fix 409 "Another record with the requested (quoteId) already exists" on POST /deliveryRequests/create-from-quote that STILL occurs after the v1 fix when a dealer edits a draft and clicks the submit button.
+
+Work Log:
+- User reported the same 409 error re-occurring on /deliveryRequests/create-from-quote after the v1 fix was pushed.
+- Investigation (sub-agent) revealed three holes in the v1 `releasePriorQuoteId` helper:
+  * Hole A: scoped to `customerId` filter, but `quoteId @unique` is GLOBAL → if the prior DRAFT's customer differs from the caller's customer, the release silently finds nothing and the create 409s.
+  * Hole B: only releases DRAFT/CANCELLED rows → misses EXPIRED/CLOSED rows that have effectively abandoned the quote.
+  * Hole C: try/catch swallows ALL errors silently (just console.error) → if findFirst/update fails (DB blip, deadlock), the create 409s and the real root cause is hidden.
+- Additional finding: if a prior row exists in an ACTIVE status (LISTED, QUOTED, BOOKED, ACTIVE, COMPLETED, DISPUTED), silently nulling its quoteId would corrupt the audit trail — needs to be a clear error, not a silent release.
+- Also clarified frontend behavior: there is NO "Save" button that hits /create-from-quote. The user is clicking "Request Delivery" on /dealer-review-delivery (which they colloquially call "Save"). The "Save as Draft" button hits either POST /create-draft-from-quote or PATCH /deliveryRequests/{id} — neither of which was the user's reported endpoint.
+
+Changes applied to `backend/src/delivery-logistics/delivery-request-orchestrator.service.ts`:
+- Added `ConflictException` to NestJS imports.
+- Added `QUOTE_LOCKED_STATUSES: EnumDeliveryRequestStatus[]` static constant listing active lifecycle statuses (LISTED, QUOTED, BOOKED, ACTIVE, COMPLETED, DISPUTED) whose quoteId MUST NOT be silently nulled.
+- Rewrote `releasePriorQuoteId`:
+  * Removed the `customerId` filter from `findFirst` (the @unique constraint is global, so the release must be global too — quoteId is a cuid, so cross-customer "theft" is effectively impossible).
+  * Removed the status whitelist from `findFirst` (now finds ANY row holding the quoteId, then branches on status).
+  * If the prior row is in a LOCKED status → throw a clear `ConflictException` with a dealer-friendly message instead of silently nulling.
+  * Otherwise (DRAFT, CANCELLED, EXPIRED, CLOSED) → null the quoteId so the new create can proceed.
+  * Removed the try/catch — errors now propagate so the caller sees a real error instead of a misleading 409 downstream.
+- Updated JSDoc to document the new behavior, the LOCKED vs RELEASEABLE distinction, and the fact that `customerId` is now informational-only (kept for backwards compat with call sites).
+- TypeScript compiles cleanly (no new errors).
+
+Stage Summary:
+- Bug class: quoteId @unique constraint violation, with three failure modes that the v1 fix missed.
+- Fix scope: 1 file, `releasePriorQuoteId` helper rewritten + 1 new static constant + 1 new import. All 3 existing call sites (L857, L1153, L1936 — now shifted by added lines) automatically benefit, no call-site changes needed.
+- Self-healing: still applies — DRAFT/EXPIRED/CLOSED rows are auto-released on next attempt.
+- Safety: if a row in an ACTIVE status is found holding the quoteId, the dealer now gets a clear error message ("This quote is already attached to an active delivery...") instead of a cryptic 409. This is intentional — silently nulling an active delivery's quoteId would corrupt the audit trail and mask a real bug.
+- Files changed:
+  * backend/src/delivery-logistics/delivery-request-orchestrator.service.ts (+50 / -32)
