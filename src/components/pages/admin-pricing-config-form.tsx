@@ -121,14 +121,24 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
       console.log('Submitting pricing config payload:', {
         id: payloadWithActor.id,
         name: payloadWithActor.name,
+        pricingMode: payloadWithActor.pricingMode,
         isUpdate: !!payloadWithActor.id,
       });
 
-      // Call the mutation
-      saveMutation.mutate(payloadWithActor);
+      // Use mutateAsync so we actually wait for the backend response.
+      // The previous fire-and-forget mutate() returned immediately and any
+      // backend validation error was only surfaced via the onError callback,
+      // which made the Save button feel broken.
+      await saveMutation.mutateAsync(payloadWithActor);
+      // success toast + setIsSubmitting(false) handled by onSuccess above
     } catch (error: any) {
       setIsSubmitting(false);
-      toast.error(`Failed to save: ${error.message}`);
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Unknown error while saving pricing config';
+      toast.error(`Failed to save: ${message}`);
+      console.error('Pricing config save failed:', error);
     }
   };
 
@@ -244,7 +254,14 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
 
         {/* Form */}
         <section className="mt-8">
+          {/* key forces a full remount of PricingConfigForm when pricingMode
+              changes. RHF's useForm captures the zodResolver at first render
+              and does NOT pick up a new schema when currentSchema changes —
+              this is a documented RHF gotcha that causes silent validation
+              failures in edit mode when switching modes. Keying by mode is
+              the simplest reliable fix. */}
           <PricingConfigForm
+            key={initialData?.pricingMode || 'PER_MILE'}
             initialData={initialData}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
@@ -261,9 +278,9 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
             </AlertTitle>
             <AlertDescription className="text-amber-900/80 dark:text-amber-200/80 text-xs mt-1">
               <ul className="list-disc list-inside space-y-1 mt-2">
-                <li><strong>PER_MILE:</strong> Requires perMileRate. <strong>flatMiles</strong> is optional (default 0 = charge from mile 0). tiers and categoryRules must be empty. Formula: <code className="font-mono">baseFee + max(0, miles − flatMiles) × perMileRate</code></li>
-                <li><strong>FLAT_TIER:</strong> Requires tiers array, categoryRules must be empty, perMileRate null, flatMiles null</li>
-                <li><strong>CATEGORY_ABC:</strong> Requires categoryRules array, tiers must be empty, perMileRate null, flatMiles null</li>
+                <li><strong>ABC (Progressive Tiered):</strong> Requires <code>categoryRules</code> with per-mile rates for each mileage band. <code>tiers</code>, <code>perMileRate</code>, and <code>flatMiles</code> must be empty/null. Formula: <code className="font-mono">baseFee + Σ(band_miles × band_rate)</code>. With defaults: 15 mi → $80, 25 mi → $100, 50 mi → $145, 100 mi → $232.50.</li>
+                <li><strong>Flat (with extra mileage):</strong> Schema name <code>PER_MILE</code>. Requires <code>perMileRate</code>; <code>flatMiles</code> optional (default 0). <code>tiers</code> and <code>categoryRules</code> must be empty. Formula: <code className="font-mono">baseFee + max(0, miles − flatMiles) × perMileRate</code>. With defaults: 15 mi → $101, 25 mi → $101, 50 mi → $146, 100 mi → $236.</li>
+                <li><strong>FLAT_TIER:</strong> DEPRECATED — hidden from the UI. Existing legacy configs will be calculated using the Flat (PER_MILE) formula. Please migrate them to one of the two supported modes.</li>
               </ul>
             </AlertDescription>
           </Alert>

@@ -126,14 +126,20 @@ export interface PricingConfigResponse {
   message?: string;
 }
 
-// Default values for form - PER_MILE mode
+// Default values for form - PER_MILE mode (a.k.a. "Flat with extra mileage" in UI).
+// Math: baseFee + max(0, miles - flatMiles) * perMileRate
+// Example: $101 base covers first 25 mi, then $1.80/mi.
+//   15 mi  -> $101
+//   25 mi  -> $101
+//   50 mi  -> $146
+//   100 mi -> $236
 export const DEFAULT_PRICING_CONFIG: PricingConfigFormData = {
   name: '',
   description: '',
   pricingMode: 'PER_MILE',
   baseFee: 101,
-  flatMiles: 50,
-  perMileRate: 2,
+  flatMiles: 25,
+  perMileRate: 1.8,
   insuranceFee: 8,
   transactionFeePct: 2.9,
   transactionFeeFixed: 3,
@@ -145,37 +151,40 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigFormData = {
   categoryRules: [],
 };
 
-// Default tier for FLAT_TIER mode
+// Default tier for FLAT_TIER mode (DEPRECATED — kept here only so the form
+// doesn't crash if a legacy config is loaded; admin UI no longer offers this).
 export const DEFAULT_TIER: PricingTier = {
   minMiles: 0,
   maxMiles: 25,
   flatPrice: 120,
 };
 
-// Default category rules for CATEGORY_ABC mode
+// Default category rules for CATEGORY_ABC mode (progressive tiered).
+// Math: baseFee + Σ(band_miles × band_rate)
+// Example with baseFee=50: 15 mi -> $80, 25 mi -> $100, 50 mi -> $145, 100 mi -> $232.50.
 export const DEFAULT_CATEGORY_RULES: CategoryRule[] = [
   {
     category: 'A',
     minMiles: 0,
     maxMiles: 25,
-    baseFee: 40,
-    perMileRate: 3.5,
+    baseFee: null,
+    perMileRate: 2.0,
     flatPrice: null,
   },
   {
     category: 'B',
-    minMiles: 25.01,
-    maxMiles: 75,
-    baseFee: 55,
-    perMileRate: 4.25,
+    minMiles: 25,
+    maxMiles: 50,
+    baseFee: null,
+    perMileRate: 1.8,
     flatPrice: null,
   },
   {
     category: 'C',
-    minMiles: 75.01,
+    minMiles: 50,
     maxMiles: null,
-    baseFee: 70,
-    perMileRate: 5.25,
+    baseFee: null,
+    perMileRate: 1.75,
     flatPrice: null,
   },
 ];

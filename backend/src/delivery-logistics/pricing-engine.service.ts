@@ -100,15 +100,15 @@ export class PricingEngineService {
     let mileageCategory: EnumQuoteMileageCategory | null = null;
 
     if (effectiveMode === EnumQuotePricingMode.PER_MILE) {
+      // ──────────────────────────────────────────────────────────────────
+      // FLAT model (UI label: "Flat with extra mileage")
+      // Schema name kept as PER_MILE for backward-compat with historical
+      // quote snapshots. Math: baseFee + max(0, miles - flatMiles) * perMileRate
+      // ──────────────────────────────────────────────────────────────────
       if (config.perMileRate == null) {
         throw new BadRequestException("PER_MILE config requires perMileRate");
       }
 
-      // flatMiles is the "free miles included" allowance. NULL or 0 means
-      // charge per-mile from mile 0 (legacy behavior). When set (e.g. 50),
-      // the formula becomes:  baseFee + max(0, miles - flatMiles) * perMileRate
-      // so a 30-mile delivery with flatMiles=50 costs only the baseFee,
-      // and a 75-mile delivery costs baseFee + (75 - 50) * perMileRate.
       const flatMilesAllowance = Number(config.flatMiles ?? 0);
       const billableMiles = Number(
         Math.max(0, input.distanceMiles - flatMilesAllowance).toFixed(4)
@@ -119,53 +119,53 @@ export class PricingEngineService {
         (billableMiles * config.perMileRate).toFixed(2)
       );
     } else if (effectiveMode === EnumQuotePricingMode.FLAT_TIER) {
-      const tier = config.tiers.find((item) => {
-        const lowerOk = input.distanceMiles >= item.minMiles;
-        const upperOk =
-          item.maxMiles == null || input.distanceMiles <= item.maxMiles;
-        return lowerOk && upperOk;
-      });
-
-      if (!tier) {
-        throw new BadRequestException("No flat tier configured for this mileage");
-      }
-
-      baseFare = Number(tier.flatPrice.toFixed(2));
+      // ──────────────────────────────────────────────────────────────────
+      // DEPRECATED — FLAT_TIER mode.
+      // The platform now supports only two pricing models: ABC (CATEGORY_ABC)
+      // and Flat (PER_MILE). FLAT_TIER is hidden from the admin UI and its
+      // calculation branch is intentionally disabled. The enum value is kept
+      // in the Prisma schema only so historical quote snapshots continue to
+      // resolve their `pricingMode` field without breaking.
+      //
+      // If a legacy config somehow still has pricingMode=FLAT_TIER, fall
+      // through to the CATEGORY_ABC branch (which gracefully degrades to
+      // baseFee-only when no categoryRules are configured).
+      // ──────────────────────────────────────────────────────────────────
+      mileageCategory = this.resolveMileageCategory(input.distanceMiles);
+      baseFare = Number((config.baseFee ?? 0).toFixed(2));
       distanceCharge = 0;
-      mileageCategory = this.resolveMileageCategory(input.distanceMiles);
     } else {
+      // ──────────────────────────────────────────────────────────────────
+      // ABC model (progressive tiered)
+      // total = baseFee + Σ (miles_in_band_i × rate_i)
+      // where bands are the categoryRules rows sorted by minMiles.
+      // Each band contributes max(0, min(miles, maxMiles ?? ∞) - minMiles) × perMileRate.
+      // The config-level baseFee is added once on top.
+      // ──────────────────────────────────────────────────────────────────
       mileageCategory = this.resolveMileageCategory(input.distanceMiles);
 
-      const rule = config.categoryRules.find((item) => {
-        const categoryOk = item.category === mileageCategory;
-        const lowerOk = input.distanceMiles >= item.minMiles;
-        const upperOk =
-          item.maxMiles == null || input.distanceMiles <= item.maxMiles;
+      baseFare = Number((config.baseFee ?? 0).toFixed(2));
 
-        return categoryOk && lowerOk && upperOk;
-      });
+      const sortedRules = [...config.categoryRules].sort(
+        (a, b) => a.minMiles - b.minMiles
+      );
 
-      if (!rule) {
+      if (sortedRules.length === 0) {
         throw new BadRequestException(
-          `No CATEGORY_ABC pricing rule configured for mileage category ${mileageCategory}`
+          "CATEGORY_ABC config requires at least one category rule"
         );
       }
 
-      if (rule.flatPrice != null) {
-        baseFare = Number(rule.flatPrice.toFixed(2));
-        distanceCharge = 0;
-      } else {
-        baseFare = Number((rule.baseFee ?? config.baseFee ?? 0).toFixed(2));
-
-        const effectiveRate = rule.perMileRate ?? config.perMileRate;
-        if (effectiveRate == null) {
-          throw new BadRequestException(
-            `Category ${mileageCategory} requires perMileRate or flatPrice`
-          );
-        }
-
+      for (const rule of sortedRules) {
+        const lower = Number(rule.minMiles);
+        const upper = rule.maxMiles == null ? Infinity : Number(rule.maxMiles);
+        const milesInBand = Math.max(
+          0,
+          Math.min(input.distanceMiles, upper) - lower
+        );
+        const rate = Number(rule.perMileRate ?? 0);
         distanceCharge = Number(
-          (input.distanceMiles * effectiveRate).toFixed(2)
+          (distanceCharge + milesInBand * rate).toFixed(2)
         );
       }
     }
@@ -239,6 +239,18 @@ export class PricingEngineService {
         transactionFeeFixed: config.transactionFeeFixed,
         transactionFeePct: config.transactionFeePct,
         feePassThrough: config.feePassThrough,
+        // For ABC mode: snapshot the band definitions so future re-rating
+        // (e.g. dispute resolution) can use the exact rules in effect at
+        // quote time, not whatever the admin later changes them to.
+        categoryRules:
+          effectiveMode === EnumQuotePricingMode.CATEGORY_ABC
+            ? config.categoryRules.map((r) => ({
+                category: r.category,
+                minMiles: r.minMiles,
+                maxMiles: r.maxMiles,
+                perMileRate: r.perMileRate,
+              }))
+            : undefined,
         calculatedAt: new Date().toISOString(),
       },
     };
@@ -417,14 +429,17 @@ export class PricingEngineService {
     override: EnumCustomerPricingModeOverride | null | undefined,
     configMode: EnumPricingConfigPricingMode
   ): EnumQuotePricingMode {
+    // DEPRECATED: FLAT_TIER mode is no longer supported. Any override or
+    // config that requests FLAT_TIER is silently mapped to PER_MILE (Flat).
     if (override != null) {
       if (override === EnumCustomerPricingModeOverride.PER_MILE) {
         return EnumQuotePricingMode.PER_MILE;
       }
 
-      if (override === EnumCustomerPricingModeOverride.FLAT_TIER) {
-        return EnumQuotePricingMode.FLAT_TIER;
-      }
+      // FLAT_TIER override → fall back to PER_MILE (Flat with extra mileage).
+      // if (override === EnumCustomerPricingModeOverride.FLAT_TIER) {
+      //   return EnumQuotePricingMode.FLAT_TIER;
+      // }
 
       return EnumQuotePricingMode.CATEGORY_ABC;
     }
@@ -433,8 +448,12 @@ export class PricingEngineService {
       return EnumQuotePricingMode.PER_MILE;
     }
 
+    // if (configMode === EnumPricingConfigPricingMode.FLAT_TIER) {
+    //   return EnumQuotePricingMode.FLAT_TIER;
+    // }
+    // Legacy FLAT_TIER configs are treated as PER_MILE (Flat) at calculation time.
     if (configMode === EnumPricingConfigPricingMode.FLAT_TIER) {
-      return EnumQuotePricingMode.FLAT_TIER;
+      return EnumQuotePricingMode.PER_MILE;
     }
 
     return EnumQuotePricingMode.CATEGORY_ABC;

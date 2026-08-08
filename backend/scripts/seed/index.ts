@@ -717,7 +717,7 @@ async function seedDemoDeliveries(refs: DemoRefs) {
     isUrgent: false,
     price: 95,
     distanceMiles: 12,
-    pricingMode: EnumQuotePricingMode.FLAT_TIER,
+    pricingMode: EnumQuotePricingMode.PER_MILE, // was FLAT_TIER (deprecated, now maps to PER_MILE)
     mileageCategory: EnumQuoteMileageCategory.A,
     trackingToken: "demo-listed-token",
   });
@@ -890,7 +890,7 @@ async function seedDemoDeliveries(refs: DemoRefs) {
     isUrgent: false,
     price: 80,
     distanceMiles: 6,
-    pricingMode: EnumQuotePricingMode.FLAT_TIER,
+    pricingMode: EnumQuotePricingMode.PER_MILE, // was FLAT_TIER (deprecated, now maps to PER_MILE)
     mileageCategory: EnumQuoteMileageCategory.A,
     trackingToken: "demo-cancelled-token",
   });
@@ -1308,22 +1308,36 @@ async function ensureDriverPreferences(
 }
 
 async function ensurePricingConfiguration() {
+  // ────────────────────────────────────────────────────────────────────
+  // ABC (Progressive Tiered) — DEFAULT pricing config.
+  //   Formula: baseFee + Σ(band_miles × band_rate)
+  //   With these seed values:
+  //     15 mi  -> 50 + 30 + 0   + 0    = $80
+  //     25 mi  -> 50 + 50 + 0   + 0    = $100
+  //     50 mi  -> 50 + 50 + 45  + 0    = $145
+  //     100 mi -> 50 + 50 + 45  + 87.5 = $232.50
+  // ────────────────────────────────────────────────────────────────────
   const existing = await prisma.pricingConfig.findFirst({
-    where: { name: "Demo Default Pricing" },
+    where: { name: "ABC Pricing" },
   });
 
   const pricingConfig = existing
     ? await prisma.pricingConfig.update({
         where: { id: existing.id },
         data: {
-          name: "Demo Default Pricing",
-          description: "Default pricing for demo environment",
+          name: "ABC Pricing",
+          description:
+            "Progressive tiered: $50 base + A(0-25 @ $2.00) + B(25-50 @ $1.80) + C(50+ @ $1.75).",
           active: true,
-          baseFee: 45,
+          isDefault: true,
+          baseFee: 50,
           insuranceFee: 8,
-          driverSharePct: 70,
+          driverSharePct: 60,
           feePassThrough: true,
-          perMileRate: 4.5,
+          // ABC mode does not use perMileRate or flatMiles at the config level —
+          // each band carries its own perMileRate.
+          perMileRate: null,
+          flatMiles: null,
           pricingMode: EnumPricingConfigPricingMode.CATEGORY_ABC,
           transactionFeeFixed: 3,
           transactionFeePct: 2.9,
@@ -1331,130 +1345,104 @@ async function ensurePricingConfiguration() {
       })
     : await prisma.pricingConfig.create({
         data: {
-          name: "Demo Default Pricing",
-          description: "Default pricing for demo environment",
+          name: "ABC Pricing",
+          description:
+            "Progressive tiered: $50 base + A(0-25 @ $2.00) + B(25-50 @ $1.80) + C(50+ @ $1.75).",
           active: true,
-          baseFee: 45,
+          isDefault: true,
+          baseFee: 50,
           insuranceFee: 8,
-          driverSharePct: 70,
+          driverSharePct: 60,
           feePassThrough: true,
-          perMileRate: 4.5,
+          perMileRate: null,
+          flatMiles: null,
           pricingMode: EnumPricingConfigPricingMode.CATEGORY_ABC,
           transactionFeeFixed: 3,
           transactionFeePct: 2.9,
         },
       });
 
-  const tierRows = [
-    { minMiles: 0, maxMiles: 10, flatPrice: 80 },
-    { minMiles: 10.01, maxMiles: 25, flatPrice: 120 },
-    { minMiles: 25.01, maxMiles: 50, flatPrice: 180 },
-  ];
+  // Ensure only this ABC config is marked as default.
+  await prisma.pricingConfig.updateMany({
+    where: { id: { not: pricingConfig.id } },
+    data: { isDefault: false },
+  });
 
-  for (const tier of tierRows) {
-    const existingTier = await prisma.pricingTier.findFirst({
-      where: {
-        pricingConfigId: pricingConfig.id,
-        minMiles: tier.minMiles,
-      },
-    });
-
-    if (existingTier) {
-      await prisma.pricingTier.update({
-        where: { id: existingTier.id },
-        data: tier,
-      });
-    } else {
-      await prisma.pricingTier.create({
-        data: {
-          pricingConfigId: pricingConfig.id,
-          ...tier,
-        },
-      });
-    }
-  }
-
+  // 3 ABC bands (category rules). Per-rule baseFee/flatPrice are no longer
+  // used by the new engine — only perMileRate drives the band charge.
   const categoryRules = [
     {
       category: EnumPricingCategoryRuleCategory.A,
       minMiles: 0,
       maxMiles: 25,
-      flatPrice: 95,
+      flatPrice: null,
       baseFee: null,
-      perMileRate: null,
+      perMileRate: 2.0,
     },
     {
       category: EnumPricingCategoryRuleCategory.B,
-      minMiles: 25.01,
-      maxMiles: 75,
+      minMiles: 25,
+      maxMiles: 50,
       flatPrice: null,
-      baseFee: 55,
-      perMileRate: 4.25,
+      baseFee: null,
+      perMileRate: 1.8,
     },
     {
       category: EnumPricingCategoryRuleCategory.C,
-      minMiles: 75.01,
+      minMiles: 50,
       maxMiles: null,
       flatPrice: null,
-      baseFee: 70,
-      perMileRate: 4.75,
+      baseFee: null,
+      perMileRate: 1.75,
     },
   ];
 
+  // Replace all existing rules for this config with the new bands.
+  await prisma.pricingCategoryRule.deleteMany({
+    where: { pricingConfigId: pricingConfig.id },
+  });
   for (const rule of categoryRules) {
-    const existingRule = await prisma.pricingCategoryRule.findFirst({
-      where: {
+    await prisma.pricingCategoryRule.create({
+      data: {
         pricingConfigId: pricingConfig.id,
         category: rule.category,
+        minMiles: rule.minMiles,
+        maxMiles: rule.maxMiles,
+        flatPrice: rule.flatPrice,
+        baseFee: rule.baseFee,
+        perMileRate: rule.perMileRate,
       },
     });
-
-    if (existingRule) {
-      await prisma.pricingCategoryRule.update({
-        where: { id: existingRule.id },
-        data: {
-          minMiles: rule.minMiles,
-          maxMiles: rule.maxMiles,
-          flatPrice: rule.flatPrice,
-          baseFee: rule.baseFee,
-          perMileRate: rule.perMileRate,
-        },
-      });
-    } else {
-      await prisma.pricingCategoryRule.create({
-        data: {
-          pricingConfigId: pricingConfig.id,
-          category: rule.category,
-          minMiles: rule.minMiles,
-          maxMiles: rule.maxMiles,
-          flatPrice: rule.flatPrice,
-          baseFee: rule.baseFee,
-          perMileRate: rule.perMileRate,
-        },
-      });
-    }
   }
+
+  // Also remove any leftover tiers from the previous FLAT_TIER-style demo config.
+  await prisma.pricingTier.deleteMany({
+    where: { pricingConfigId: pricingConfig.id },
+  });
 
   return pricingConfig;
 }
 
-// Postpaid dealer pricing config: $101 flat fee covers the first 50 miles,
-// then $2 per additional mile. Spec: price = 101 + max(0, miles - 50) * 2.
-// All three values (baseFee, flatMiles, perMileRate) are admin-editable.
+// Flat (with extra mileage) pricing config: $101 flat fee covers the first 25
+// miles, then $1.80 per additional mile. Schema name is PER_MILE for
+// backward-compat with historical quote snapshots. This is the second of the
+// two supported pricing models (the first being ABC above).
+//   Formula: baseFee + max(0, miles - flatMiles) * perMileRate
+//   Examples: 15 mi -> $101, 25 mi -> $101, 50 mi -> $146, 100 mi -> $236.
 async function ensurePostpaidDealerPricingConfiguration() {
   const existing = await prisma.pricingConfig.findFirst({
-    where: { name: "Postpaid Dealer Default Pricing" },
+    where: { name: "Flat Pricing" },
   });
 
   const data = {
-    name: "Postpaid Dealer Default Pricing",
+    name: "Flat Pricing",
     description:
-      "$101 flat fee covers the first 50 miles, then $2 per additional mile. " +
-      "Attach this config to postpaid dealer (Customer) records.",
+      "Flat with extra mileage: $101 covers first 25 mi, then $1.80/mi.",
     active: true,
+    isDefault: false, // ABC config above is the default.
     baseFee: 101,
-    flatMiles: 50,
-    perMileRate: 2,
+    flatMiles: 25,
+    perMileRate: 1.8,
     pricingMode: EnumPricingConfigPricingMode.PER_MILE,
     insuranceFee: 8,
     driverSharePct: 60,

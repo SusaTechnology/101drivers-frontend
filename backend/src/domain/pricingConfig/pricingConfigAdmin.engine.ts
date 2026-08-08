@@ -261,6 +261,11 @@ export class PricingConfigAdminEngine {
       }
 
       if (mode === EnumPricingConfigPricingMode.CATEGORY_ABC) {
+        // For the new progressive-tiered ABC formula, each band only needs
+        // `perMileRate` (and `minMiles`/`maxMiles` for the band range).
+        // Per-rule `baseFee` and `flatPrice` are no longer used by the engine
+        // but kept in the schema for backward-compat with legacy rows.
+        const hasPerMileRate = rule.perMileRate != null;
         const hasAnyValue =
           rule.baseFee != null ||
           rule.perMileRate != null ||
@@ -269,6 +274,12 @@ export class PricingConfigAdminEngine {
         if (!hasAnyValue) {
           throw new BadRequestException(
             `At least one pricing value is required for category ${rule.category}`
+          );
+        }
+
+        if (!hasPerMileRate) {
+          throw new BadRequestException(
+            `Category ${rule.category} requires perMileRate (the new ABC formula bands each mileage tier by perMileRate)`
           );
         }
       }

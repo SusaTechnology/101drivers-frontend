@@ -51,6 +51,7 @@ import type {
   PricingTier,
 } from '@/types/pricing';
 import { DEFAULT_PRICING_CONFIG, DEFAULT_TIER, DEFAULT_CATEGORY_RULES } from '@/types/pricing';
+import { calculatePricing } from '@/lib/pricing/calculate';
 
 // Validation schema using Zod with conditional validation
 const createPricingConfigSchema = (pricingMode: PricingMode) => {
@@ -69,7 +70,9 @@ const createPricingConfigSchema = (pricingMode: PricingMode) => {
     driverSharePct: z.number().min(0).max(100),
     active: z.boolean(),
     activateAsDefault: z.boolean(),
-    // Conditional validation based on pricing mode
+    // Conditional validation based on pricing mode.
+    // NOTE: FLAT_TIER mode is DEPRECATED — hidden from the UI but kept in the
+    // schema for backward-compat with legacy configs that may be loaded in edit mode.
     tiers: pricingMode === 'FLAT_TIER'
       ? z.array(z.object({
           id: z.string().optional(),
@@ -84,7 +87,9 @@ const createPricingConfigSchema = (pricingMode: PricingMode) => {
           category: z.enum(['A', 'B', 'C']),
           minMiles: z.number().min(0),
           maxMiles: z.number().nullable(),
-          baseFee: z.number().min(0),
+          // Per-rule baseFee/flatPrice are no longer used by the new ABC
+          // progressive-tiered formula but kept nullable for backward-compat.
+          baseFee: z.number().nullable(),
           perMileRate: z.number().nullable(),
           flatPrice: z.number().nullable(),
         })).min(1, 'At least one category rule is required')
@@ -242,10 +247,13 @@ export function PricingConfigForm({
         appendTier(DEFAULT_TIER);
       }
     } else if (newMode === 'PER_MILE') {
+      // Flat (with extra mileage) — schema name is PER_MILE for backward-compat.
+      // Defaults: $101 base fee covers first 25 mi, then $1.80/mi.
       setValue('tiers', []);
       setValue('categoryRules', []);
-      setValue('perMileRate', 2);
-      setValue('flatMiles', 50);
+      setValue('perMileRate', 1.8);
+      setValue('flatMiles', 25);
+      setValue('baseFee', 101);
     }
   };
 
@@ -260,33 +268,67 @@ export function PricingConfigForm({
     });
   };
 
-  // Calculate preview values
+  // Calculate preview values using the shared pricing utility so the form
+  // preview matches the backend engine math exactly for both ABC and Flat.
   const calculatePreview = () => {
-    const baseFee = watchedBaseFee || 0;
-    const insuranceFee = watchedInsuranceFee || 0;
-    const transactionFeePct = watchedTransactionFeePct || 0;
-    const driverSharePct = watchedDriverSharePct || 0;
-    const perMileRate = watchedPerMileRate || 0;
-    const flatMiles = watch('flatMiles') ?? 0;
+    const baseFee = Number(watchedBaseFee) || 0;
+    const insuranceFee = Number(watchedInsuranceFee) || 0;
+    const transactionFeePct = Number(watchedTransactionFeePct) || 0;
+    const transactionFeeFixed = Number(watch('transactionFeeFixed')) || 0;
+    const driverSharePct = Number(watchedDriverSharePct) || 0;
+    const perMileRate = watchedPerMileRate ?? null;
+    const flatMiles = watch('flatMiles') ?? null;
 
     // Example quote: 50 miles
     const exampleMiles = 50;
-    // PER_MILE now honors flatMiles: billableMiles = max(0, miles - flatMiles)
-    const billableMiles = Math.max(0, exampleMiles - (flatMiles || 0));
-    const transportationCost = pricingMode === 'PER_MILE' ? billableMiles * perMileRate : 200;
-    const transactionFee = transportationCost * (transactionFeePct / 100) + (watch('transactionFeeFixed') || 0);
+
+    const watchedCategoryRules = (watch('categoryRules') as unknown as CategoryRule[] | undefined) ?? [];
+    const watchedTiers = (watch('tiers') as unknown as PricingTier[] | undefined) ?? [];
+
+    // Skip calculation if mode-specific required fields are missing.
+    if (pricingMode === 'PER_MILE' && perMileRate == null) {
+      return null;
+    }
+    if (pricingMode === 'CATEGORY_ABC' && (!watchedCategoryRules || watchedCategoryRules.length === 0)) {
+      return null;
+    }
+    if (pricingMode === 'FLAT_TIER' && (!watchedTiers || watchedTiers.length === 0)) {
+      return null;
+    }
+
+    const result = calculatePricing(
+      {
+        pricingMode,
+        baseFee,
+        flatMiles,
+        perMileRate: perMileRate ?? undefined,
+        categoryRules: pricingMode === 'CATEGORY_ABC' ? watchedCategoryRules : undefined,
+        distanceMiles: exampleMiles,
+      },
+      {
+        insuranceFee,
+        transactionFeeFixed,
+        transactionFeePct,
+        feePassThrough: watch('feePassThrough') === true,
+      },
+    );
+
+    const transportationCost = result.baseFare + result.distanceCharge;
+    const transactionFee =
+      transportationCost * (transactionFeePct / 100) + transactionFeeFixed;
     const totalFees = baseFee + insuranceFee + transactionFee;
     const driverShare = transportationCost * (driverSharePct / 100);
 
     return {
       exampleMiles,
-      billableMiles: pricingMode === 'PER_MILE' ? billableMiles : exampleMiles,
+      billableMiles: result.billedMiles,
       flatMilesAllowance: flatMiles || 0,
       transportationCost,
       transactionFee,
       totalFees,
       driverShare,
-      dealerTotal: transportationCost + totalFees,
+      dealerTotal: result.total,
+      bands: result.bands,
     };
   };
 
@@ -296,8 +338,20 @@ export function PricingConfigForm({
   const onFormSubmit = async (data: FormSchemaType) => {
     try {
       const submitData: PricingConfigFormData = {
-        ...data,
+        id: data.id,
+        name: data.name,
         description: data.description || '',
+        pricingMode: data.pricingMode,
+        baseFee: data.baseFee,
+        flatMiles: data.flatMiles,
+        perMileRate: data.perMileRate,
+        insuranceFee: data.insuranceFee,
+        transactionFeePct: data.transactionFeePct,
+        transactionFeeFixed: data.transactionFeeFixed,
+        feePassThrough: data.feePassThrough,
+        driverSharePct: data.driverSharePct,
+        active: data.active,
+        activateAsDefault: data.activateAsDefault,
         tiers: pricingMode === 'FLAT_TIER' ? (data.tiers as PricingTier[]) : [],
         categoryRules: pricingMode === 'CATEGORY_ABC' ? (data.categoryRules as CategoryRule[]) : [],
       };
@@ -317,7 +371,22 @@ export function PricingConfigForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
+    <form
+      onSubmit={handleSubmit(onFormSubmit, (validationErrors) => {
+        // Surface Zod validation failures as a toast so silent Save-button
+        // failures (the classic "button does nothing" symptom) become loud.
+        console.error('PricingConfigForm validation errors:', validationErrors);
+        const fieldNames = Object.keys(validationErrors);
+        const firstError = fieldNames.length > 0
+          ? (validationErrors as Record<string, { message?: string } | undefined>)[fieldNames[0]]?.message
+          : undefined;
+        toast.error(
+          `Cannot save: ${firstError || 'form has validation errors'}. ` +
+          `Fields with issues: ${fieldNames.join(', ')}.`
+        );
+      })}
+      className="space-y-6"
+    >
       {/* Hidden ID field for edit mode */}
       <input type="hidden" {...register('id')} />
       
@@ -370,22 +439,19 @@ export function PricingConfigForm({
                       <SelectValue placeholder="Select pricing mode" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="PER_MILE">
-                        <div className="flex items-center gap-2">
-                          <Calculator className="w-4 h-4 text-primary" />
-                          Per Mile
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="FLAT_TIER">
-                        <div className="flex items-center gap-2">
-                          <Layers className="w-4 h-4 text-primary" />
-                          Flat Tier
-                        </div>
-                      </SelectItem>
+                      {/* Two supported models: ABC (progressive tiered) and
+                          Flat (flat fee + extra mileage, schema name PER_MILE).
+                          FLAT_TIER is DEPRECATED and intentionally hidden. */}
                       <SelectItem value="CATEGORY_ABC">
                         <div className="flex items-center gap-2">
                           <Tag className="w-4 h-4 text-primary" />
-                          Category A/B/C
+                          ABC (Progressive Tiered)
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="PER_MILE">
+                        <div className="flex items-center gap-2">
+                          <Calculator className="w-4 h-4 text-primary" />
+                          Flat (with extra mileage)
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -414,10 +480,13 @@ export function PricingConfigForm({
               <div className="flex items-start gap-3">
                 <Tag className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Category A/B/C Pricing</div>
+                  <div className="font-bold text-slate-900 dark:text-white">ABC (Progressive Tiered) Pricing</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Define pricing rules for vehicle categories A, B, and C based on mileage ranges.
-                    Each category can have its own base fee and per-mile rate.
+                    Base fee plus mileage banded by category rules. Each band has its own per-mile rate and contributes
+                    only the miles that fall inside its range. Formula:
+                    <code className="font-mono text-[11px] ml-1">baseFee + Σ(band_miles × band_rate)</code>.
+                    With defaults (baseFee=$50, A: 0–25 @ $2.00, B: 25–50 @ $1.80, C: 50+ @ $1.75):
+                    15 mi → $80, 25 mi → $100, 50 mi → $145, 100 mi → $232.50.
                   </p>
                 </div>
               </div>
@@ -426,10 +495,9 @@ export function PricingConfigForm({
               <div className="flex items-start gap-3">
                 <Layers className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Flat Tier Pricing</div>
+                  <div className="font-bold text-slate-900 dark:text-white">Flat Tier Pricing (DEPRECATED)</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Define mileage-based tiers with flat prices. The price is determined by the distance range.
-                    Maximum miles can be null for unlimited upper bound.
+                    This mode is no longer supported. Please switch to ABC or Flat (with extra mileage).
                   </p>
                 </div>
               </div>
@@ -438,9 +506,12 @@ export function PricingConfigForm({
               <div className="flex items-start gap-3">
                 <Calculator className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Per Mile Pricing</div>
+                  <div className="font-bold text-slate-900 dark:text-white">Flat (with extra mileage)</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                    Flat fee plus per-mile charge. With <strong>flatMiles</strong> set, the flat fee covers the first N miles and the per-mile rate applies only to miles beyond that. Formula: <code className="font-mono text-[11px]">baseFee + max(0, miles − flatMiles) × perMileRate</code>.
+                    Flat fee covers the first <strong>flatMiles</strong> miles, then a per-mile rate applies.
+                    Formula: <code className="font-mono text-[11px]">baseFee + max(0, miles − flatMiles) × perMileRate</code>.
+                    With defaults (baseFee=$101, flatMiles=25, perMileRate=$1.80):
+                    15 mi → $101, 25 mi → $101, 50 mi → $146, 100 mi → $236.
                   </p>
                 </div>
               </div>
@@ -993,15 +1064,56 @@ export function PricingConfigForm({
         <CardHeader className="border-b border-slate-100 dark:border-slate-800">
           <CardTitle className="text-xl font-black">Quote Preview</CardTitle>
           <CardDescription className="text-sm mt-1">
-            See how fees are calculated for a sample quote
+            See how fees are calculated for a sample quote (50 miles)
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 sm:p-7">
+          {!preview ? (
+            <div className="bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-200 dark:border-amber-900/30 p-4 text-sm text-amber-900 dark:text-amber-200">
+              Fill in the required fields for this pricing mode to see a live preview.
+              {pricingMode === 'PER_MILE' && ' (perMileRate is required.)'}
+              {pricingMode === 'CATEGORY_ABC' && ' (At least one category rule with perMileRate is required.)'}
+            </div>
+          ) : (
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5">
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-4">
               Example: {preview.exampleMiles} miles
             </div>
             <div className="space-y-3">
+              {/* Per-band breakdown for ABC mode */}
+              {pricingMode === 'CATEGORY_ABC' && preview.bands && preview.bands.length > 0 && (
+                <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-3 mb-2">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                    ABC Band Breakdown
+                  </div>
+                  {preview.bands.map((band, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs py-1">
+                      <span className="text-slate-600 dark:text-slate-400">{band.label}</span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">
+                        {band.milesInBand.toFixed(2)} mi × ${band.perMileRate.toFixed(2)} = ${band.amount.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Flat-mode extra-mileage breakdown */}
+              {pricingMode === 'PER_MILE' && preview.bands && preview.bands.length > 0 && (
+                <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-3 mb-2">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                    Flat Breakdown
+                  </div>
+                  {preview.bands.map((band, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs py-1">
+                      <span className="text-slate-600 dark:text-slate-400">{band.label}</span>
+                      {band.amount > 0 && (
+                        <span className="font-mono text-slate-700 dark:text-slate-300">
+                          ${band.amount.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-600 dark:text-slate-400">
                   Transportation{' '}
@@ -1010,6 +1122,7 @@ export function PricingConfigForm({
                       ? `(max(0, ${preview.exampleMiles} − ${preview.flatMilesAllowance}) mi × $${watchedPerMileRate || 0}/mi)`
                       : `(${preview.exampleMiles} mi × $${watchedPerMileRate || 0}/mi)`
                   )}
+                  {pricingMode === 'CATEGORY_ABC' && '(Σ band charges above)'}
                 </span>
                 <span className="font-bold text-slate-900 dark:text-white">${preview.transportationCost.toFixed(2)}</span>
               </div>
@@ -1038,6 +1151,7 @@ export function PricingConfigForm({
               </div>
             </div>
           </div>
+          )}
         </CardContent>
       </Card>
 
