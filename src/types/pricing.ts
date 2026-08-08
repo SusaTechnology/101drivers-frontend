@@ -196,7 +196,12 @@ export function configToFormData(config: PricingConfig): PricingConfigFormData {
     feePassThrough: config.feePassThrough,
     driverSharePct: config.driverSharePct,
     active: config.active,
-    activateAsDefault: false,
+    // Reflect the current isDefault state so the checkbox accurately
+    // shows whether this config is the system default. When checked +
+    // saved, the backend re-promotes (idempotent). When unchecked +
+    // saved, the backend uses `undefined` (don't touch) — to demote
+    // this config, set a DIFFERENT config as default instead.
+    activateAsDefault: config.isDefault === true,
     tiers: config.tiers || [],
     categoryRules: config.categoryRules || [],
   };

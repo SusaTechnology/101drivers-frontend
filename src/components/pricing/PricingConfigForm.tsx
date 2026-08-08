@@ -525,7 +525,9 @@ export function PricingConfigForm({
                     Set as Default
                   </Label>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Make this the default config
+                    {watch('activateAsDefault')
+                      ? 'This is the system default. Saving keeps it as default; other configs are demoted automatically.'
+                      : 'When checked, this config becomes the system default. To demote the current default, set a different config as default instead.'}
                   </p>
                 </div>
               </div>
