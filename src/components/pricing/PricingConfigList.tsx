@@ -26,6 +26,7 @@ import {
   Route,
   FileText,
   CircleDot,
+  Copy,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,7 @@ import {
 import {
   useSetDefaultPricingConfig,
   useTogglePricingConfigStatus,
+  useSavePricingConfig,
 } from '@/hooks/pricing/usePricingConfigs';
 import type { PricingConfig, PricingMode, PricingCustomer, PricingTier, CategoryRule } from '@/types/pricing';
 
@@ -440,6 +442,19 @@ export function PricingConfigList({
     },
   });
 
+  // Duplicate mutation — calls admin-save with id:null (forces create)
+  // and a modified name. activateAsDefault is forced to false so the
+  // duplicate never silently becomes the system default — the admin can
+  // promote it explicitly via the "Set as Default" button after review.
+  const duplicateMutation = useSavePricingConfig({
+    onSuccess: () => {
+      toast.success('Configuration duplicated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to duplicate: ${error?.message || 'Unknown error'}`);
+    },
+  });
+
   // Fetch customers
   const {
     data: customersData,
@@ -504,6 +519,39 @@ export function PricingConfigList({
     const user = getUser();
     setDefaultMutation.mutate({
       id: configId,
+      actorUserId: user?.id || 'admin_user',
+    });
+  };
+
+  // Handle duplicate — copy all fields from the source config, force
+  // id:null (create new), append " (Copy)" to the name, force
+  // activateAsDefault:false so the duplicate doesn't silently become
+  // the system default. The admin can promote it explicitly after
+  // reviewing the duplicated values.
+  const handleDuplicate = (config: PricingConfig) => {
+    const user = getUser();
+    const baseName = config.name?.trim() || 'Untitled';
+    // Truncate to avoid name-length issues if the original is already long
+    const truncated = baseName.length > 60 ? baseName.slice(0, 60) : baseName;
+    const newName = `${truncated} (Copy)`;
+
+    duplicateMutation.mutate({
+      id: null,
+      name: newName,
+      description: config.description || '',
+      pricingMode: config.pricingMode,
+      baseFee: config.baseFee,
+      flatMiles: config.flatMiles,
+      perMileRate: config.perMileRate,
+      insuranceFee: config.insuranceFee,
+      transactionFeePct: config.transactionFeePct,
+      transactionFeeFixed: config.transactionFeeFixed,
+      feePassThrough: config.feePassThrough,
+      driverSharePct: config.driverSharePct,
+      active: config.active,
+      activateAsDefault: false,
+      tiers: config.tiers || [],
+      categoryRules: config.categoryRules || [],
       actorUserId: user?.id || 'admin_user',
     });
   };
@@ -832,6 +880,16 @@ export function PricingConfigList({
                         >
                           <Crown className="w-4 h-4" />
                           {selectedConfig.isDefault ? 'Default' : 'Set as Default'}
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          onClick={() => handleDuplicate(selectedConfig)}
+                          disabled={duplicateMutation.isPending}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
+                        >
+                          <Copy className="w-4 h-4" />
+                          {duplicateMutation.isPending ? 'Duplicating...' : 'Duplicate'}
                         </Button>
 
                         <AlertDialog>
