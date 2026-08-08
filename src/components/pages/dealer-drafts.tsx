@@ -62,7 +62,13 @@ export default function DealerDrafts() {
           credentials: 'include',
         }
       );
-      if (!response.ok) throw new Error('Failed to fetch drafts');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const msg = Array.isArray(errorData?.message)
+          ? errorData.message.join('; ')
+          : errorData?.message || `Failed to fetch drafts (status ${response.status})`;
+        throw new Error(msg);
+      }
       return response.json();
     },
     enabled: !!customerId,
@@ -84,7 +90,13 @@ export default function DealerDrafts() {
           credentials: 'include',
         }
       );
-      if (!response.ok) throw new Error('Failed to delete draft');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const msg = Array.isArray(errorData?.message)
+          ? errorData.message.join('; ')
+          : errorData?.message || `Failed to delete draft (status ${response.status})`;
+        throw new Error(msg);
+      }
       return response.json();
     },
     onSuccess: () => {

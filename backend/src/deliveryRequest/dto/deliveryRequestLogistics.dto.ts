@@ -1292,10 +1292,66 @@ export class CreateDeliveryDraftFromQuoteBody {
   @IsNotEmpty()
   customerId!: string;
 
-  @ApiProperty()
+  // quoteId is OPTIONAL — dealers can save a draft before calculating a quote.
+  // When omitted, address fields (pickupAddress, dropoffAddress, etc.) must be
+  // provided directly in the payload.
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  quoteId!: string;
+  quoteId?: string | null;
+
+  // ── Address fields (used when quoteId is NOT provided) ──
+  // When quoteId IS provided, these are ignored and the quote's address
+  // fields are used instead (existing behavior).
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  pickupAddress?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  pickupLat?: number | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  pickupLng?: number | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  pickupPlaceId?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  pickupState?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  dropoffAddress?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  dropoffLat?: number | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  dropoffLng?: number | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  dropoffPlaceId?: string | null;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsString()
+  dropoffState?: string | null;
 
   @ApiProperty({
     enum: EnumDeliveryRequestServiceType,

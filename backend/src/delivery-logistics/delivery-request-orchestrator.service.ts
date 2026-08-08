@@ -41,7 +41,8 @@ import { businessIsPastCutoff, businessIsSameDay, businessHourOf, businessNow } 
 
 export type CreateDeliveryDraftFromQuoteInput = {
   customerId: string;
-  quoteId: string;
+  // quoteId is OPTIONAL — when omitted, address fields below are used directly.
+  quoteId?: string | null;
   serviceType: EnumDeliveryRequestServiceType;
   createdByUserId?: string | null;
   createdByRole?: EnumDeliveryRequestCreatedByRole | null;
@@ -61,6 +62,17 @@ export type CreateDeliveryDraftFromQuoteInput = {
   isUrgent?: boolean;
   afterHours?: boolean;
   vehicleStandardsConfirmed?: boolean | null;
+  // ── Address fields (used when quoteId is NOT provided) ──
+  pickupAddress?: string | null;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  pickupPlaceId?: string | null;
+  pickupState?: string | null;
+  dropoffAddress?: string | null;
+  dropoffLat?: number | null;
+  dropoffLng?: number | null;
+  dropoffPlaceId?: string | null;
+  dropoffState?: string | null;
 };
 
 export type CreateIndividualDeliveryDraftFromQuoteInput = {
@@ -588,6 +600,60 @@ export class DeliveryRequestOrchestratorService {
     }
   }
 
+  /**
+   * Release any prior DeliveryRequest (CANCELLED *or* DRAFT) that still holds
+   * the given quoteId, so a new draft/schedule create doesn't 409 on the
+   * quoteId unique constraint.
+   *
+   * This is broader than `releaseCancelledQuoteId` — it also catches the case
+   * where a dealer previously saved a DRAFT with this quoteId and is now
+   * creating a new one (e.g., they re-calculated the quote or started over).
+   * The old DRAFT is kept (status=DRAFT, quoteId=null) so the dealer can still
+   * find it in their drafts list if they want, but it's no longer blocking
+   * the quoteId.
+   *
+   * Only releases rows owned by the same customer to avoid cross-customer
+   * interference (shouldn't happen given quoteId uniqueness, but defensive).
+   */
+  private async releasePriorQuoteId(
+    quoteId: string,
+    customerId: string,
+  ): Promise<void> {
+    try {
+      const priorWithQuote = await this.prisma.deliveryRequest.findFirst({
+        where: {
+          quoteId,
+          status: {
+            in: [
+              EnumDeliveryRequestStatus.CANCELLED,
+              EnumDeliveryRequestStatus.DRAFT,
+            ],
+          },
+          customerId,
+        },
+        select: { id: true, status: true },
+      });
+
+      if (priorWithQuote) {
+        await this.prisma.deliveryRequest.update({
+          where: { id: priorWithQuote.id },
+          data: { quoteId: null },
+        });
+        const logger = new Logger(DeliveryRequestOrchestratorService.name);
+        logger.log(
+          `Released quoteId ${quoteId} from ${priorWithQuote.status} delivery ${priorWithQuote.id} (customer ${customerId}) so dealer can re-save`,
+        );
+      }
+    } catch (err: any) {
+      // Non-fatal — if this fails, the create below will throw a clearer
+      // unique-constraint error. Log so we can diagnose.
+      // eslint-disable-next-line no-console
+      console.error(
+        `Failed to release quoteId ${quoteId} from prior delivery: ${err.message}`,
+      );
+    }
+  }
+
   async createDeliveryDraftFromQuote(input: CreateDeliveryDraftFromQuoteInput) {
     const customer = await this.prisma.customer.findUnique({
       where: { id: input.customerId },
@@ -604,51 +670,80 @@ export class DeliveryRequestOrchestratorService {
       throw new NotFoundException("Customer not found");
     }
 
-    const quote = await this.prisma.quote.findUnique({
-      where: { id: input.quoteId },
-      select: {
-        id: true,
-        pickupAddress: true,
-        pickupLat: true,
-        pickupLng: true,
-        pickupPlaceId: true,
-        pickupState: true,
-        dropoffAddress: true,
-        dropoffLat: true,
-        dropoffLng: true,
-        dropoffPlaceId: true,
-        dropoffState: true,
-        serviceType: true,
-      },
-    });
+    // ── Resolve address fields ──
+    // If quoteId is provided, fetch the quote and use its address fields
+    // (existing behavior). If quoteId is NOT provided, use the address fields
+    // from the payload directly — this lets dealers save a draft before
+    // calculating a quote.
+    let quoteData: {
+      pickupAddress: string | null;
+      pickupLat: number | null;
+      pickupLng: number | null;
+      pickupPlaceId: string | null;
+      pickupState: string | null;
+      dropoffAddress: string | null;
+      dropoffLat: number | null;
+      dropoffLng: number | null;
+      dropoffPlaceId: string | null;
+      dropoffState: string | null;
+    } | null = null;
 
-    if (!quote) {
-      throw new NotFoundException("Quote not found");
+    if (input.quoteId) {
+      const quote = await this.prisma.quote.findUnique({
+        where: { id: input.quoteId },
+        select: {
+          id: true,
+          pickupAddress: true,
+          pickupLat: true,
+          pickupLng: true,
+          pickupPlaceId: true,
+          pickupState: true,
+          dropoffAddress: true,
+          dropoffLat: true,
+          dropoffLng: true,
+          dropoffPlaceId: true,
+          dropoffState: true,
+          serviceType: true,
+        },
+      });
+
+      if (!quote) {
+        throw new NotFoundException("Quote not found");
+      }
+      quoteData = quote;
     }
 
-    // Release any CANCELLED delivery that still holds this quoteId (from a
-    // previous failed attempt) so the draft create below doesn't 409.
-    await this.releaseCancelledQuoteId(input.quoteId);
+    // Release any CANCELLED or prior DRAFT delivery that still holds this
+    // quoteId (from a previous failed attempt or an earlier draft) so the
+    // create below doesn't 409 on the unique constraint.
+    if (input.quoteId) {
+      await this.releasePriorQuoteId(input.quoteId, input.customerId);
+    }
 
     const delivery = await this.prisma.deliveryRequest.create({
       data: {
         customerId: input.customerId,
-        quoteId: input.quoteId,
+        quoteId: input.quoteId ?? null,
         createdByUserId: input.createdByUserId ?? customer.userId ?? null,
         createdByRole: input.createdByRole ?? null,
         customerChose: input.customerChose ?? null,
 
-        pickupAddress: quote.pickupAddress,
-        pickupLat: quote.pickupLat ?? null,
-        pickupLng: quote.pickupLng ?? null,
-        pickupPlaceId: quote.pickupPlaceId ?? null,
-        pickupState: quote.pickupState ?? null,
+        // Use quote address if available, otherwise fall back to payload fields.
+        // pickupAddress / dropoffAddress are non-nullable in the Prisma schema
+        // (String, not String?), so we use "" as the fallback when neither the
+        // quote nor the payload provides a value. The dealer can fill in the
+        // real address later when editing the draft.
+        pickupAddress: quoteData?.pickupAddress ?? input.pickupAddress ?? "",
+        pickupLat: quoteData?.pickupLat ?? input.pickupLat ?? null,
+        pickupLng: quoteData?.pickupLng ?? input.pickupLng ?? null,
+        pickupPlaceId: quoteData?.pickupPlaceId ?? input.pickupPlaceId ?? null,
+        pickupState: quoteData?.pickupState ?? input.pickupState ?? null,
 
-        dropoffAddress: quote.dropoffAddress,
-        dropoffLat: quote.dropoffLat ?? null,
-        dropoffLng: quote.dropoffLng ?? null,
-        dropoffPlaceId: quote.dropoffPlaceId ?? null,
-        dropoffState: quote.dropoffState ?? null,
+        dropoffAddress: quoteData?.dropoffAddress ?? input.dropoffAddress ?? "",
+        dropoffLat: quoteData?.dropoffLat ?? input.dropoffLat ?? null,
+        dropoffLng: quoteData?.dropoffLng ?? input.dropoffLng ?? null,
+        dropoffPlaceId: quoteData?.dropoffPlaceId ?? input.dropoffPlaceId ?? null,
+        dropoffState: quoteData?.dropoffState ?? input.dropoffState ?? null,
 
         pickupWindowStart: input.pickupWindowStart ?? null,
         pickupWindowEnd: input.pickupWindowEnd ?? null,
@@ -698,7 +793,9 @@ export class DeliveryRequestOrchestratorService {
         actorType: EnumDeliveryStatusHistoryActorType.USER,
         fromStatus: null,
         toStatus: EnumDeliveryStatusHistoryToStatus.DRAFT,
-        note: "Delivery draft created from quote",
+        note: input.quoteId
+          ? "Delivery draft created from quote"
+          : "Delivery draft created (no quote yet)",
       },
     });
 

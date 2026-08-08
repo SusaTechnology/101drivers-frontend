@@ -1017,10 +1017,12 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
   // Handler for saving as draft
   const handleSaveAsDraft = async () => {
-    // Minimum requirement: quote must be calculated
-    if (!quoteId) {
-      toast.error("Quote required", {
-        description: "Please calculate a quote before saving as draft.",
+    // No quote required — dealers can save a draft at any point with whatever
+    // fields they've filled in. The only hard requirement is that they're
+    // logged in as a customer (customerId is derived from the auth context).
+    if (!customer?.profileId) {
+      toast.error("Cannot save draft", {
+        description: "No customer profile found. Please log in and try again.",
       });
       return;
     }
@@ -1049,8 +1051,10 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
 
     const payload: any = {
       customerId: customer?.profileId,
-      quoteId,
-      serviceType: data.serviceType,
+      // quoteId may be null if the dealer hasn't calculated a quote yet —
+      // the backend handles this by using the address fields from the payload.
+      quoteId: quoteId || null,
+      serviceType: data.serviceType || "HOME_DELIVERY",
       // Schedule (optional for draft) - use validatedWindows from new flow
       pickupWindowStart: validatedWindows?.pickupWindowStart,
       pickupWindowEnd: validatedWindows?.pickupWindowEnd,
@@ -3392,35 +3396,34 @@ const handleQuotePreview = () => {
                   </div>
                 )}
 
-                {/* Save as Draft button - shown after quote is calculated */}
-                {hasCalculated && (
-                  <div className="mt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full py-4 rounded-2xl font-extrabold"
-                      onClick={handleSaveAsDraft}
-                      disabled={saveDraftMutation.isPending || updateDraftMutation.isPending}
-                    >
-                      {(saveDraftMutation.isPending || updateDraftMutation.isPending) ? (
-                        <>
-                          <span className="animate-spin mr-2">⏳</span>
-                          {draftId ? 'Updating Draft...' : 'Saving Draft...'}
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="mr-2 h-4 w-4" />
-                          {draftId ? 'Update Draft' : 'Save as Draft'}
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-[11px] text-slate-500 mt-2 text-center">
-                      {draftId 
-                        ? 'Save your changes to this draft. You can continue editing later.'
-                        : 'Save your progress and continue later. Drafts are stored in the Drafts folder.'}
-                    </p>
-                  </div>
-                )}
+                {/* Save as Draft button — always visible so dealers can save
+                    partial progress at any time, even before calculating a quote. */}
+                <div className="mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full py-4 rounded-2xl font-extrabold"
+                    onClick={handleSaveAsDraft}
+                    disabled={saveDraftMutation.isPending || updateDraftMutation.isPending}
+                  >
+                    {(saveDraftMutation.isPending || updateDraftMutation.isPending) ? (
+                      <>
+                        <span className="animate-spin mr-2">⏳</span>
+                        {draftId ? 'Updating Draft...' : 'Saving Draft...'}
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="mr-2 h-4 w-4" />
+                        {draftId ? 'Update Draft' : 'Save as Draft'}
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-[11px] text-slate-500 mt-2 text-center">
+                    {draftId 
+                      ? 'Save your changes to this draft. You can continue editing later.'
+                      : 'Save your progress and continue later. No quote or payment needed — drafts are private to you.'}
+                  </p>
+                </div>
 
                 {Object.keys(errors).length > 0 && (
                   <div className="mt-4 p-4 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">

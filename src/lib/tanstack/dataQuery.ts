@@ -368,9 +368,15 @@ async function parseError(response: Response): Promise<Error> {
     return new Error(`Request failed with status ${response.status}`);
   }
 
-  // Handle structured error response
+  // Handle structured error response.
+  // NestJS BadRequestException("string") → { message: "string" }
+  // NestJS ValidationPipe errors       → { message: ["field must be X", ...] }
+  // We join array messages with "; " so they're readable in toasts.
   if (errorData?.message) {
-    return new Error(errorData.message);
+    const msg = Array.isArray(errorData.message)
+      ? errorData.message.join("; ")
+      : String(errorData.message);
+    return new Error(msg);
   }
 
   if (errorData?.errors) {

@@ -289,7 +289,13 @@ export default function EditDraftPage() {
           body: JSON.stringify(payload),
         }
       );
-      if (!response.ok) throw new Error('Failed to update draft');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const msg = Array.isArray(errorData?.message)
+          ? errorData.message.join('; ')
+          : errorData?.message || `Failed to update draft (status ${response.status})`;
+        throw new Error(msg);
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -316,7 +322,13 @@ export default function EditDraftPage() {
           body: JSON.stringify(payload),
         }
       );
-      if (!response.ok) throw new Error('Failed to submit for quote');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const msg = Array.isArray(errorData?.message)
+          ? errorData.message.join('; ')
+          : errorData?.message || `Failed to submit for quote (status ${response.status})`;
+        throw new Error(msg);
+      }
       return response.json();
     },
     onSuccess: () => {

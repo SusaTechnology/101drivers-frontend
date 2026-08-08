@@ -112,7 +112,7 @@ async createDeliveryDraftFromQuote(
 ): Promise<DeliveryRequest> {
   return this.service.createDeliveryDraftFromQuote({
     customerId: body.customerId,
-    quoteId: body.quoteId,
+    quoteId: body.quoteId ?? null,
     serviceType: body.serviceType,
     createdByUserId: body.createdByUserId ?? null,
     createdByRole: body.createdByRole ?? null,
@@ -132,6 +132,18 @@ async createDeliveryDraftFromQuote(
     afterHours: body.afterHours === true,
     isUrgent: body.isUrgent === true,
     vehicleStandardsConfirmed: body.vehicleStandardsConfirmed === true,
+    // Address fields — used when quoteId is NOT provided (dealer saves draft
+    // before calculating a quote). Ignored when quoteId IS provided.
+    pickupAddress: body.pickupAddress ?? null,
+    pickupLat: body.pickupLat ?? null,
+    pickupLng: body.pickupLng ?? null,
+    pickupPlaceId: body.pickupPlaceId ?? null,
+    pickupState: body.pickupState ?? null,
+    dropoffAddress: body.dropoffAddress ?? null,
+    dropoffLat: body.dropoffLat ?? null,
+    dropoffLng: body.dropoffLng ?? null,
+    dropoffPlaceId: body.dropoffPlaceId ?? null,
+    dropoffState: body.dropoffState ?? null,
   });
 }
 @common.Get("/lookup/minimal")
