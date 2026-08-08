@@ -236,8 +236,9 @@ INSERT INTO "PricingCategoryRule" (
 SELECT
   gen_random_uuid()::text,  -- cast to text: id column is String@cuid(), not native uuid
   pc.id,
-  'A', 0.00, 25.00,
-  NULL, 2.00, NULL,
+  'A'::"EnumPricingCategoryRuleCategory",  -- cast: UNION ALL infers text otherwise
+  0.00::float8, 25.00::float8,
+  NULL::float8, 2.00::float8, NULL::float8,
   NOW(), NOW()
 FROM "PricingConfig" pc
 WHERE pc."pricingMode" = 'CATEGORY_ABC'
@@ -245,8 +246,9 @@ UNION ALL
 SELECT
   gen_random_uuid()::text,
   pc.id,
-  'B', 25.00, 50.00,
-  NULL, 1.80, NULL,
+  'B'::"EnumPricingCategoryRuleCategory",
+  25.00::float8, 50.00::float8,
+  NULL::float8, 1.80::float8, NULL::float8,
   NOW(), NOW()
 FROM "PricingConfig" pc
 WHERE pc."pricingMode" = 'CATEGORY_ABC'
@@ -254,8 +256,9 @@ UNION ALL
 SELECT
   gen_random_uuid()::text,
   pc.id,
-  'C', 50.00, NULL,
-  NULL, 1.75, NULL,
+  'C'::"EnumPricingCategoryRuleCategory",
+  50.00::float8, NULL::float8,
+  NULL::float8, 1.75::float8, NULL::float8,
   NOW(), NOW()
 FROM "PricingConfig" pc
 WHERE pc."pricingMode" = 'CATEGORY_ABC';
