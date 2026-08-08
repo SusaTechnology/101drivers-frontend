@@ -1,13 +1,41 @@
 // Quick sanity check for the shared pricing utility.
 // Run: npx tsx /home/z/my-project/repo/src/lib/pricing/calculate.test.ts
 
-import { calculatePricing } from './calculate';
+import { calculatePricing, type PricingCalcConfig } from './calculate';
 
-const abcBands = [
-  { minMiles: 0, maxMiles: 25, perMileRate: 2.0 },
-  { minMiles: 25, maxMiles: 50, perMileRate: 1.8 },
-  { minMiles: 50, maxMiles: null, perMileRate: 1.75 },
-];
+const abcConfig: PricingCalcConfig = {
+  id: 'abc-test',
+  pricingMode: 'CATEGORY_ABC',
+  baseFee: 50,
+  flatMiles: null,
+  perMileRate: null,
+  insuranceFee: 0,
+  transactionFeePct: null,
+  transactionFeeFixed: null,
+  feePassThrough: false,
+  driverSharePct: 60,
+  tiers: [],
+  categoryRules: [
+    { category: 'A', minMiles: 0, maxMiles: 25, baseFee: null, flatPrice: null, perMileRate: 2.0 },
+    { category: 'B', minMiles: 25, maxMiles: 50, baseFee: null, flatPrice: null, perMileRate: 1.8 },
+    { category: 'C', minMiles: 50, maxMiles: null, baseFee: null, flatPrice: null, perMileRate: 1.75 },
+  ],
+};
+
+const flatConfig: PricingCalcConfig = {
+  id: 'flat-test',
+  pricingMode: 'PER_MILE',
+  baseFee: 101,
+  flatMiles: 25,
+  perMileRate: 1.8,
+  insuranceFee: 0,
+  transactionFeePct: null,
+  transactionFeeFixed: null,
+  feePassThrough: false,
+  driverSharePct: 60,
+  tiers: [],
+  categoryRules: [],
+};
 
 const cases: Array<{ mode: 'ABC' | 'Flat'; miles: number; expected: number }> = [
   { mode: 'ABC', miles: 15, expected: 80 },
@@ -22,27 +50,16 @@ const cases: Array<{ mode: 'ABC' | 'Flat'; miles: number; expected: number }> = 
 
 let allPassed = true;
 for (const c of cases) {
-  const r =
-    c.mode === 'ABC'
-      ? calculatePricing({
-          pricingMode: 'CATEGORY_ABC',
-          baseFee: 50,
-          categoryRules: abcBands,
-          distanceMiles: c.miles,
-        })
-      : calculatePricing({
-          pricingMode: 'PER_MILE',
-          baseFee: 101,
-          flatMiles: 25,
-          perMileRate: 1.8,
-          distanceMiles: c.miles,
-        });
+  const r = calculatePricing({
+    config: c.mode === 'ABC' ? abcConfig : flatConfig,
+    distanceMiles: c.miles,
+  });
 
-  const ok = r.total === c.expected;
+  const ok = r.estimatedPrice === c.expected;
   if (!ok) allPassed = false;
   console.log(
-    `${ok ? '✓' : '✗'} ${c.mode} @ ${c.miles} mi -> got $${r.total}, expected $${c.expected}` +
-      (ok ? '' : ` [base=$${r.baseFare} dist=$${r.distanceCharge}]`),
+    `${ok ? '✓' : '✗'} ${c.mode} @ ${c.miles} mi -> got $${r.estimatedPrice}, expected $${c.expected}` +
+      (ok ? '' : ` [base=$${r.feesBreakdown.baseFare} dist=$${r.feesBreakdown.distanceCharge}]`),
   );
 }
 

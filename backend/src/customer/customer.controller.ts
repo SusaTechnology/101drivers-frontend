@@ -40,7 +40,7 @@ import {
   SuspendCustomerBody,
   UnsuspendCustomerBody,
 } from "./dto/customerApproval.dto";
-import { AssignCustomerPricingBody } from "../pricingConfig/dto/pricingConfigAdmin.dto";
+import { AssignCustomerPricingBody, BulkAssignPricingBody } from "../pricingConfig/dto/pricingConfigAdmin.dto";
 
 @swagger.ApiTags("customers")
 @common.Controller("customers")
@@ -94,6 +94,58 @@ async adminAssignPricing(
     customerId: params.id,
     pricingConfigId:
       body.pricingConfigId !== undefined ? body.pricingConfigId : undefined,
+    pricingModeOverride:
+      body.pricingModeOverride !== undefined
+        ? body.pricingModeOverride
+        : undefined,
+    postpaidEnabled:
+      body.postpaidEnabled !== undefined ? body.postpaidEnabled : undefined,
+    actorUserId: body.actorUserId ?? null,
+    note: body.note ?? null,
+  });
+}
+
+@common.Post("/bulk-assign-pricing")
+@swagger.ApiOkResponse({
+  schema: {
+    type: "object",
+    properties: {
+      assigned: { type: "number" },
+      failed: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            customerId: { type: "string" },
+            error: { type: "string" },
+          },
+        },
+      },
+    },
+  },
+})
+@swagger.ApiOperation({
+  summary:
+    "Bulk-assign a pricing config to many customers. Iterates over " +
+    "customerIds, calling the same assignPricing logic as the single-customer " +
+    "endpoint. Failures are collected per-customer and returned — the " +
+    "operation does NOT abort on the first failure (skip-and-report). " +
+    "Each successful assignment writes its own AdminAuditLog entry.",
+})
+@nestAccessControl.UseRoles({
+  resource: "Customer",
+  action: "update",
+  possession: "any",
+})
+async adminBulkAssignPricing(
+  @common.Body() body: BulkAssignPricingBody
+): Promise<{
+  assigned: number;
+  failed: Array<{ customerId: string; error: string }>;
+}> {
+  return this.service.adminBulkAssignPricing({
+    pricingConfigId: body.pricingConfigId,
+    customerIds: body.customerIds,
     pricingModeOverride:
       body.pricingModeOverride !== undefined
         ? body.pricingModeOverride

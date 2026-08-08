@@ -338,6 +338,31 @@ export class CustomerService extends CustomerServiceBase {
 
     return this.domain.findUnique({ id: input.customerId });
   }
+
+  /**
+   * Bulk-assign wrapper — delegates to CustomerPricingEngine.bulkAssignPricing.
+   * See that method for the skip-and-report contract.
+   */
+  async adminBulkAssignPricing(input: {
+    pricingConfigId: string;
+    customerIds: string[];
+    pricingModeOverride?: any;
+    postpaidEnabled?: boolean | null;
+    actorUserId?: string | null;
+    note?: string | null;
+  }): Promise<{
+    assigned: number;
+    failed: Array<{ customerId: string; error: string }>;
+  }> {
+    return this.customerPricingEngine.bulkAssignPricing({
+      pricingConfigId: input.pricingConfigId,
+      customerIds: input.customerIds,
+      pricingModeOverride: input.pricingModeOverride ?? undefined,
+      postpaidEnabled: input.postpaidEnabled ?? undefined,
+      actorUserId: input.actorUserId ?? null,
+      note: input.note ?? null,
+    });
+  }
     async customerLookupList(): Promise<
     { id: string; name: string | null; customerType: EnumCustomerCustomerType }[]
   > {

@@ -616,6 +616,27 @@ async getAdminUserDetail(id: string): Promise<any> {
           postpaidEnabled: true,
           pricingConfigId: true,
           pricingModeOverride: true,
+          // Include the full pricingConfig relation so the admin-user-detail
+          // page can render the "Pricing & Billing" card (item 6) without a
+          // separate fetch. Selects only the fields the UI needs — keeps the
+          // payload small while avoiding an N+1 round trip.
+          pricingConfig: {
+            select: {
+              id: true,
+              name: true,
+              pricingMode: true,
+              baseFee: true,
+              perMileRate: true,
+              flatMiles: true,
+              insuranceFee: true,
+              transactionFeePct: true,
+              transactionFeeFixed: true,
+              feePassThrough: true,
+              driverSharePct: true,
+              active: true,
+              isDefault: true,
+            },
+          },
           suspendedAt: true,
           suspensionReason: true,
           userId: true,

@@ -246,6 +246,10 @@ export class PaymentPayoutEngine {
         try {
           // Create + confirm a new PaymentIntent for the remainder.
           // captureMethod: 'automatic' so it captures immediately.
+          // NOTE: when the customer has no saved card, `confirm` is false
+          // and Stripe returns the PI in `requires_payment_method` state —
+          // the funds are NOT captured. We must verify the PI's status below
+          // before treating the remainder as captured.
           const pi = await this.stripeService.createPaymentIntent({
             amount: remainder,
             deliveryId: input.deliveryId,
@@ -260,39 +264,95 @@ export class PaymentPayoutEngine {
             },
           });
 
-          // Update Payment row: PI #2 becomes the "current" PI; lockIn*
-          // columns preserve PI #1 for audit.
-          await tx.payment.update({
-            where: { id: payment.id },
-            data: {
-              providerPaymentIntentId: pi.paymentIntentId,
-              // charge ID will arrive via webhook (payment_intent.succeeded)
-              // — leave providerChargeId null for now if not in pi result.
-              status: EnumPaymentStatus.CAPTURED,
-              capturedAt: new Date(),
-              amount: totalQuoted,
-            },
-          });
+          // Re-fetch the PI to learn its true status and the resulting
+          // charge ID. createPaymentIntent only returns id/clientSecret/
+          // status — we need latest_charge to populate providerChargeId
+          // without racing the webhook (see audit Issue 5).
+          const refreshedPi = await this.stripeService.getPaymentIntent(
+            pi.paymentIntentId,
+          );
+          const piStatus = refreshedPi.status;
+          const chargeId =
+            typeof refreshedPi.latest_charge === "string"
+              ? refreshedPi.latest_charge
+              : (refreshedPi.latest_charge as any)?.id ?? null;
 
-          await tx.paymentEvent.create({
-            data: {
-              paymentId: payment.id,
-              type: EnumPaymentEventType.CAPTURE,
-              status: EnumPaymentEventStatus.CAPTURED,
-              amount: remainder,
-              providerRef: pi.paymentIntentId,
-              message: `Completion remainder captured on new PaymentIntent ($${remainder.toFixed(2)})`,
-              raw: {
-                source: "delivery-complete-lock-in",
-                deliveryId: input.deliveryId,
-                lockInAmount,
-                remainder,
-                pi1: delivery.lockInPaymentIntentId,
-                pi2: pi.paymentIntentId,
+          if (piStatus !== "succeeded") {
+            // PI was created but not captured (e.g. no saved card, requires
+            // customer action, SCA challenge). Do NOT mark remainderCaptured
+            // — fall through to the "skip payout upgrade" branch so the
+            // driver keeps only the lock-in payout and the platform does
+            // NOT auto-transfer money it never received.
+            this.logger.warn(
+              `Remainder PI ${pi.paymentIntentId} for delivery ${input.deliveryId} ` +
+                `has status="${piStatus}" — not captured. Driver keeps lock-in payout only.`,
+            );
+            await tx.payment.update({
+              where: { id: payment.id },
+              data: {
+                providerPaymentIntentId: pi.paymentIntentId,
+                status: EnumPaymentStatus.AUTHORIZED,
+                failureMessage: `Remainder PI ${pi.paymentIntentId} status=${piStatus} — needs customer action`,
               },
-            },
-          });
-          remainderCaptured = true;
+            });
+            await tx.paymentEvent.create({
+              data: {
+                paymentId: payment.id,
+                type: EnumPaymentEventType.FAIL,
+                status: EnumPaymentEventStatus.FAILED,
+                amount: remainder,
+                providerRef: pi.paymentIntentId,
+                message: `Remainder PI created but not captured (status=${piStatus}). Customer must complete payment.`,
+                raw: {
+                  source: "delivery-complete-lock-in",
+                  deliveryId: input.deliveryId,
+                  lockInAmount,
+                  remainder,
+                  pi1: delivery.lockInPaymentIntentId,
+                  pi2: pi.paymentIntentId,
+                  piStatus,
+                },
+              },
+            });
+            // remainderCaptured stays false — fall through to the
+            // "skip payout upgrade + skip auto-transfer" branch below.
+          } else {
+            // Update Payment row: PI #2 becomes the "current" PI; lockIn*
+            // columns preserve PI #1 for audit. Set providerChargeId here
+            // so refunds work without waiting for the webhook.
+            await tx.payment.update({
+              where: { id: payment.id },
+              data: {
+                providerPaymentIntentId: pi.paymentIntentId,
+                providerChargeId: chargeId,
+                status: EnumPaymentStatus.CAPTURED,
+                capturedAt: new Date(),
+                amount: totalQuoted,
+                failureMessage: null,
+              },
+            });
+
+            await tx.paymentEvent.create({
+              data: {
+                paymentId: payment.id,
+                type: EnumPaymentEventType.CAPTURE,
+                status: EnumPaymentEventStatus.CAPTURED,
+                amount: remainder,
+                providerRef: pi.paymentIntentId,
+                message: `Completion remainder captured on new PaymentIntent ($${remainder.toFixed(2)})`,
+                raw: {
+                  source: "delivery-complete-lock-in",
+                  deliveryId: input.deliveryId,
+                  lockInAmount,
+                  remainder,
+                  pi1: delivery.lockInPaymentIntentId,
+                  pi2: pi.paymentIntentId,
+                  chargeId,
+                },
+              },
+            });
+            remainderCaptured = true;
+          }
         } catch (err: any) {
           const errMsg = err?.message || "Unknown remainder capture error";
           this.logger.error(
@@ -1563,7 +1623,11 @@ export class PaymentPayoutEngine {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await this.stripeService!.capturePaymentIntent(paymentIntentId, {
-          idempotencyKey: `capture-${paymentIntentId}-${Date.now()}`,
+          // Stable idempotency key — a PaymentIntent can only be captured
+          // once, so any retry of the SAME PI must reuse the SAME key.
+          // Including Date.now() here would defeat Stripe's dedupe and
+          // could allow double-capture under adverse network conditions.
+          idempotencyKey: `capture-${paymentIntentId}`,
         });
         this.logger.log(
           `Captured Stripe PI ${paymentIntentId} for delivery ${deliveryId}` +

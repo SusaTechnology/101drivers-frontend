@@ -94,6 +94,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from '@/lib/theme';
 import { PhotoDialog, usePhotoUpload, downloadImageAsFile } from '@/components/ui/photo-dialog';
 import { useAdminActions } from '@/hooks/useAdminActions';
+import { CustomerPricingCard } from '@/components/admin/CustomerPricingCard';
 import {
   useAdminUserDetail,
   useApproveCustomer,
@@ -1552,6 +1553,14 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                       )}
                     </CardContent>
                   </Card>
+                )}
+
+                {/* Pricing & Billing card (items 6-9) */}
+                {user.customer && (
+                  <CustomerPricingCard
+                    customer={user.customer}
+                    onPricingChanged={refetch}
+                  />
                 )}
 
                 {/* Driver Info */}

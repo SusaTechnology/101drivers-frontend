@@ -26,6 +26,7 @@ import {
   Route,
   FileText,
   CircleDot,
+  Copy,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,9 @@ import {
 import {
   useSetDefaultPricingConfig,
   useTogglePricingConfigStatus,
+  useSavePricingConfig,
+  useBulkAssignPricingConfig,
+  type BulkAssignPricingResponse,
 } from '@/hooks/pricing/usePricingConfigs';
 import type { PricingConfig, PricingMode, PricingCustomer, PricingTier, CategoryRule } from '@/types/pricing';
 
@@ -415,6 +419,14 @@ export function PricingConfigList({
   const [postpaidEnabled, setPostpaidEnabled] = useState<boolean>(true);
   const [note, setNote] = useState<string>('');
 
+  // State for BULK assignment modal (Item 14)
+  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false);
+  const [bulkSelectedCustomerIds, setBulkSelectedCustomerIds] = useState<string[]>([]);
+  const [bulkPricingModeOverride, setBulkPricingModeOverride] = useState<string>('null');
+  const [bulkPostpaidEnabled, setBulkPostpaidEnabled] = useState<boolean | null>(null);
+  const [bulkNote, setBulkNote] = useState<string>('');
+  const [bulkResult, setBulkResult] = useState<BulkAssignPricingResponse | null>(null);
+
   // State for view customers modal
   const [viewCustomersModalOpen, setViewCustomersModalOpen] = useState(false);
   const [viewingConfigCustomers, setViewingConfigCustomers] = useState<PricingCustomer[]>([]);
@@ -437,6 +449,19 @@ export function PricingConfigList({
     },
     onError: (error: any) => {
       toast.error(`Failed to update status: ${error?.message || 'Unknown error'}`);
+    },
+  });
+
+  // Duplicate mutation — calls admin-save with id:null (forces create)
+  // and a modified name. activateAsDefault is forced to false so the
+  // duplicate never silently becomes the system default — the admin can
+  // promote it explicitly via the "Set as Default" button after review.
+  const duplicateMutation = useSavePricingConfig({
+    onSuccess: () => {
+      toast.success('Configuration duplicated successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to duplicate: ${error?.message || 'Unknown error'}`);
     },
   });
 
@@ -474,6 +499,23 @@ export function PricingConfigList({
     invalidateQueryKey: [['data', `${API_BASE_URL}/api/customers`]],
   });
 
+  // Mutation for BULK assignment (Item 14)
+  const bulkAssignMutation = useBulkAssignPricingConfig({
+    onSuccess: (data) => {
+      setBulkResult(data);
+      if (data.failed.length === 0) {
+        toast.success(`Assigned to ${data.assigned} customer${data.assigned === 1 ? '' : 's'}`);
+      } else if (data.assigned === 0) {
+        toast.error(`All ${data.failed.length} customer(s) failed — see details`);
+      } else {
+        toast.warning(`Assigned to ${data.assigned}, ${data.failed.length} failed — see details`);
+      }
+    },
+    onError: (error: any) => {
+      toast.error(`Bulk assign failed: ${error?.message || 'Unknown error'}`);
+    },
+  });
+
   const handleAssign = (configId: string, configName: string) => {
     setSelectedConfigId(configId);
     setSelectedConfigName(configName);
@@ -499,11 +541,93 @@ export function PricingConfigList({
     });
   };
 
+  // Open the BULK assign modal — resets state + loads the selected config
+  const handleBulkAssign = (configId: string, configName: string) => {
+    setSelectedConfigId(configId);
+    setSelectedConfigName(configName);
+    setBulkSelectedCustomerIds([]);
+    setBulkPricingModeOverride('null');
+    setBulkPostpaidEnabled(null);
+    setBulkNote('');
+    setBulkResult(null);
+    setBulkAssignModalOpen(true);
+  };
+
+  // Toggle a customer in the bulk selection
+  const toggleBulkCustomer = (customerId: string) => {
+    setBulkSelectedCustomerIds((prev) =>
+      prev.includes(customerId)
+        ? prev.filter((id) => id !== customerId)
+        : [...prev, customerId]
+    );
+  };
+
+  // Submit the bulk assign — calls the bulk endpoint with all selected IDs
+  const submitBulkAssign = () => {
+    if (!selectedConfigId) {
+      toast.error('No config selected');
+      return;
+    }
+    if (bulkSelectedCustomerIds.length === 0) {
+      toast.error('Please select at least one customer');
+      return;
+    }
+    const user = getUser();
+    bulkAssignMutation.mutate({
+      pricingConfigId: selectedConfigId,
+      customerIds: bulkSelectedCustomerIds,
+      pricingModeOverride: bulkPricingModeOverride === 'null' ? null : bulkPricingModeOverride,
+      postpaidEnabled: bulkPostpaidEnabled,
+      note: bulkNote.trim() || null,
+      actorUserId: user?.id || 'admin_user',
+    });
+  };
+
+  // Close bulk modal + reset state
+  const closeBulkAssign = () => {
+    setBulkAssignModalOpen(false);
+    setBulkSelectedCustomerIds([]);
+    setBulkResult(null);
+  };
+
   // Handle set as default
   const handleSetDefault = (configId: string) => {
     const user = getUser();
     setDefaultMutation.mutate({
       id: configId,
+      actorUserId: user?.id || 'admin_user',
+    });
+  };
+
+  // Handle duplicate — copy all fields from the source config, force
+  // id:null (create new), append " (Copy)" to the name, force
+  // activateAsDefault:false so the duplicate doesn't silently become
+  // the system default. The admin can promote it explicitly after
+  // reviewing the duplicated values.
+  const handleDuplicate = (config: PricingConfig) => {
+    const user = getUser();
+    const baseName = config.name?.trim() || 'Untitled';
+    // Truncate to avoid name-length issues if the original is already long
+    const truncated = baseName.length > 60 ? baseName.slice(0, 60) : baseName;
+    const newName = `${truncated} (Copy)`;
+
+    duplicateMutation.mutate({
+      id: null,
+      name: newName,
+      description: config.description || '',
+      pricingMode: config.pricingMode,
+      baseFee: config.baseFee,
+      flatMiles: config.flatMiles,
+      perMileRate: config.perMileRate,
+      insuranceFee: config.insuranceFee,
+      transactionFeePct: config.transactionFeePct,
+      transactionFeeFixed: config.transactionFeeFixed,
+      feePassThrough: config.feePassThrough,
+      driverSharePct: config.driverSharePct,
+      active: config.active,
+      activateAsDefault: false,
+      tiers: config.tiers || [],
+      categoryRules: config.categoryRules || [],
       actorUserId: user?.id || 'admin_user',
     });
   };
@@ -826,12 +950,31 @@ export function PricingConfigList({
 
                         <Button
                           variant="outline"
+                          onClick={() => handleBulkAssign(selectedConfig.id, selectedConfig.name)}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
+                        >
+                          <Users className="w-4 h-4" />
+                          Bulk Assign
+                        </Button>
+
+                        <Button
+                          variant="outline"
                           onClick={() => handleSetDefault(selectedConfig.id)}
                           disabled={selectedConfig.isDefault || setDefaultMutation.isPending}
                           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
                         >
                           <Crown className="w-4 h-4" />
                           {selectedConfig.isDefault ? 'Default' : 'Set as Default'}
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          onClick={() => handleDuplicate(selectedConfig)}
+                          disabled={duplicateMutation.isPending}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
+                        >
+                          <Copy className="w-4 h-4" />
+                          {duplicateMutation.isPending ? 'Duplicating...' : 'Duplicate'}
                         </Button>
 
                         <AlertDialog>
@@ -1063,6 +1206,196 @@ export function PricingConfigList({
             <Button variant="outline" onClick={() => setViewCustomersModalOpen(false)}>
               Close
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Bulk Assign Modal (Item 14) ===== */}
+      <Dialog open={bulkAssignModalOpen} onOpenChange={(open) => { if (!open) closeBulkAssign(); }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Bulk Assign Pricing Configuration</DialogTitle>
+            <DialogDescription>
+              Assign &ldquo;{selectedConfigName}&rdquo; to multiple business customers at once.
+              {' '}{bulkSelectedCustomerIds.length} selected.
+            </DialogDescription>
+          </DialogHeader>
+
+          {bulkResult ? (
+            // ── Results view ───────────────────────────────────────────
+            <div className="py-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30">
+                  <div className="text-2xl font-black text-green-700 dark:text-green-400">{bulkResult.assigned}</div>
+                  <div className="text-xs text-green-700 dark:text-green-400 font-bold uppercase tracking-wider">Assigned</div>
+                </div>
+                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30">
+                  <div className="text-2xl font-black text-red-700 dark:text-red-400">{bulkResult.failed.length}</div>
+                  <div className="text-xs text-red-700 dark:text-red-400 font-bold uppercase tracking-wider">Failed</div>
+                </div>
+              </div>
+
+              {bulkResult.failed.length > 0 && (
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Failures:</div>
+                  {bulkResult.failed.map((f) => {
+                    const cust = businessCustomers.find((c) => c.id === f.customerId);
+                    return (
+                      <div
+                        key={f.customerId}
+                        className="p-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-xs"
+                      >
+                        <div className="font-semibold text-red-800 dark:text-red-300">
+                          {cust?.businessName || cust?.user?.fullName || f.customerId}
+                        </div>
+                        <div className="text-red-600 dark:text-red-400">{f.error}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Each successful assignment wrote its own audit log entry. Failed customers were not modified.
+              </div>
+            </div>
+          ) : (
+            // ── Selection view ────────────────────────────────────────
+            <div className="py-4 space-y-4">
+              {/* Customer multi-select via checkboxes */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Select Customers</label>
+                  {businessCustomers.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        if (bulkSelectedCustomerIds.length === businessCustomers.length) {
+                          setBulkSelectedCustomerIds([]);
+                        } else {
+                          setBulkSelectedCustomerIds(businessCustomers.map((c) => c.id));
+                        }
+                      }}
+                    >
+                      {bulkSelectedCustomerIds.length === businessCustomers.length ? 'Clear all' : 'Select all'}
+                    </Button>
+                  )}
+                </div>
+                {customersLoading ? (
+                  <Skeleton className="h-32 w-full" />
+                ) : businessCustomers.length === 0 ? (
+                  <p className="text-sm text-slate-500 py-4 text-center">No business customers found</p>
+                ) : (
+                  <div className="max-h-[240px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+                    {businessCustomers.map((customer) => {
+                      const isSelected = bulkSelectedCustomerIds.includes(customer.id);
+                      const currentConfigName = getCustomerCurrentConfig(customer.id)?.name;
+                      return (
+                        <label
+                          key={customer.id}
+                          className={cn(
+                            "flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900",
+                            isSelected && "bg-primary/5"
+                          )}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleBulkCustomer(customer.id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-slate-900 dark:text-white truncate">
+                              {customer.businessName || customer.user.fullName}
+                            </div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                              {customer.user.email}
+                              {currentConfigName && (
+                                <span className="ml-2 text-amber-600 dark:text-amber-400">
+                                  Current: {currentConfigName}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Pricing Mode Override */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Pricing Mode Override (applies to all)</label>
+                <Select value={bulkPricingModeOverride} onValueChange={setBulkPricingModeOverride}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="No override (use config's default mode)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="null">No override</SelectItem>
+                    <SelectItem value="PER_MILE">Per Mile</SelectItem>
+                    <SelectItem value="FLAT_TIER">Flat Tier</SelectItem>
+                    <SelectItem value="CATEGORY_ABC">Category A/B/C</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Postpaid — tri-state: null = leave existing, true = enable, false = disable */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Postpaid (applies to all)</label>
+                <Select
+                  value={bulkPostpaidEnabled === null ? 'leave' : bulkPostpaidEnabled ? 'enable' : 'disable'}
+                  onValueChange={(v) => {
+                    setBulkPostpaidEnabled(
+                      v === 'leave' ? null : v === 'enable'
+                    );
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="leave">Leave existing per customer</SelectItem>
+                    <SelectItem value="enable">Enable for all (APPROVED BUSINESS only)</SelectItem>
+                    <SelectItem value="disable">Disable for all</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500">
+                  Enabling postpaid for unapproved customers will fail per-customer (skip-and-report).
+                </p>
+              </div>
+
+              {/* Note */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Note (optional, applies to all)</label>
+                <Textarea
+                  value={bulkNote}
+                  onChange={(e) => setBulkNote(e.target.value)}
+                  placeholder="Add a note about this bulk assignment..."
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            {bulkResult ? (
+              <Button onClick={closeBulkAssign}>Close</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={closeBulkAssign}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={submitBulkAssign}
+                  disabled={bulkSelectedCustomerIds.length === 0 || bulkAssignMutation.isPending}
+                >
+                  {bulkAssignMutation.isPending
+                    ? 'Assigning...'
+                    : `Assign to ${bulkSelectedCustomerIds.length} customer${bulkSelectedCustomerIds.length === 1 ? '' : 's'}`}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

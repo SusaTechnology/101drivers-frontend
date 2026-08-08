@@ -125,5 +125,37 @@ export function useSetDefaultPricingConfig(options?: {
   });
 }
 
+// Response shape for the bulk-assign endpoint
+export interface BulkAssignPricingResponse {
+  assigned: number;
+  failed: Array<{ customerId: string; error: string }>;
+}
+
+// Hook to bulk-assign a pricing config to multiple customers
+// Calls POST /api/customers/bulk-assign-pricing with the configId + customerIds[]
+export function useBulkAssignPricingConfig(options?: {
+  onSuccess?: (data: BulkAssignPricingResponse) => void;
+  onError?: (error: unknown) => void;
+}) {
+  return useDataMutation<BulkAssignPricingResponse, {
+    pricingConfigId: string;
+    customerIds: string[];
+    pricingModeOverride?: string | null;
+    postpaidEnabled?: boolean | null;
+    note?: string | null;
+    actorUserId: string;
+  }>({
+    apiEndPoint: `${API_BASE_URL}/api/customers/bulk-assign-pricing`,
+    method: 'POST',
+    onSuccess: options?.onSuccess,
+    onError: options?.onError,
+    invalidateQueryKey: [
+      PRICING_CONFIGS_QUERY_KEY,
+      ['data', `${API_BASE_URL}/api/customers`],
+    ],
+    onSuccessInvalidate: true,
+  });
+}
+
 // Export transform function for direct use
 export { transformToPayload };

@@ -205,6 +205,11 @@ export interface AdminUserCustomerDetail {
   contactEmail: string | null;
   contactPhone: string | null;
   postpaidEnabled: boolean;
+  // Pricing fields — included by the admin-detail endpoint so the
+  // "Pricing & Billing" card can render without a separate fetch.
+  pricingConfigId: string | null;
+  pricingModeOverride: string | null;
+  pricingConfig: AdminUserCustomerPricingConfig | null;
   suspendedAt: string | null;
   suspensionReason: string | null;
   approvedAt: string | null;
@@ -216,6 +221,28 @@ export interface AdminUserCustomerDetail {
     deliveries: number;
     quotes: number;
   };
+}
+
+/**
+ * Pricing config summary returned by the admin-detail endpoint.
+ * Subset of the full PricingConfig type — only the fields the UI needs
+ * for the read-only "Pricing & Billing" card. For the full config
+ * (with tiers + categoryRules), fetch via /api/pricingConfigs/:id.
+ */
+export interface AdminUserCustomerPricingConfig {
+  id: string;
+  name: string | null;
+  pricingMode: 'PER_MILE' | 'FLAT_TIER' | 'CATEGORY_ABC';
+  baseFee: number;
+  perMileRate: number | null;
+  flatMiles: number | null;
+  insuranceFee: number;
+  transactionFeePct: number | null;
+  transactionFeeFixed: number | null;
+  feePassThrough: boolean;
+  driverSharePct: number;
+  active: boolean;
+  isDefault: boolean;
 }
 
 export interface AdminUserDriverDetail {
