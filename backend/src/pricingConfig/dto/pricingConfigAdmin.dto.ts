@@ -14,6 +14,8 @@ import {
   EnumPricingCategoryRuleCategory,
   EnumPricingConfigPricingMode,
   EnumCustomerPricingModeOverride,
+  EnumQuoteMileageCategory,
+  EnumQuoteServiceType,
 } from "@prisma/client";
 
 export class PricingTierInputDto {
@@ -277,4 +279,47 @@ export class SetDefaultPricingConfigBody {
   @IsOptional()
   @IsString()
   actorUserId?: string | null;
+}
+
+export class PreviewQuoteBody {
+  @swagger.ApiProperty({
+    description:
+      "ID of the saved PricingConfig to preview against. The config must " +
+      "already exist (use admin-save first if you're previewing unsaved form state).",
+  })
+  @IsString()
+  pricingConfigId!: string;
+
+  @swagger.ApiProperty({
+    description: "Distance in miles. Must be >= 0.",
+    minimum: 0,
+  })
+  @IsNumber()
+  @Min(0)
+  distanceMiles!: number;
+
+  @swagger.ApiProperty({
+    enum: EnumQuoteServiceType,
+    description:
+      "Service type for the preview. Currently used for snapshot/audit " +
+      "purposes only — it does not affect the price math (no service-type " +
+      "surcharges exist yet). Required so the snapshot matches what a real " +
+      "Quote row would store.",
+  })
+  @IsEnum(EnumQuoteServiceType)
+  serviceType!: EnumQuoteServiceType;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    enum: EnumQuoteMileageCategory,
+    description:
+      "Force a specific mileage category (A/B/C) regardless of distance. " +
+      "Only affects CATEGORY_ABC configs. Lets an admin preview " +
+      "'what would category C cost at 50 miles?' without changing the " +
+      "distance input. Ignored for PER_MILE / FLAT_TIER modes.",
+  })
+  @IsOptional()
+  @IsEnum(EnumQuoteMileageCategory)
+  categoryOverride?: EnumQuoteMileageCategory | null;
 }

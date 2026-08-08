@@ -89,10 +89,142 @@ export class PricingEngineService {
     const pricingContext = await this.resolvePricingContext(
       input.customerId ?? null
     );
-    const config = pricingContext.config;
+
+    return this.computeQuoteFromConfig({
+      config: pricingContext.config,
+      distanceMiles: input.distanceMiles,
+      serviceType: input.serviceType,
+      customerPricingModeOverride: pricingContext.customerPricingModeOverride,
+    });
+  }
+
+  /**
+   * Preview a quote against a SAVED PricingConfig by id.
+   *
+   * Used by the admin "Preview Quote" dialog (Item 9) and the
+   * admin-pricing-config-form "Rate Preview" panel (Item 10) when an
+   * admin wants to see what a delivery of N miles would cost under a
+   * specific config — without creating a Quote row.
+   *
+   * Option A contract: takes a configId (not inline config fields), so
+   * the admin must save the config first. This matches the existing
+   * pricing-engine code path and avoids duplicating validation logic.
+   *
+   * `categoryOverride` lets the admin force a specific mileage category
+   * (A/B/C) regardless of distance — useful for previewing the upper
+   * end of a category band. When omitted, the category is resolved
+   * from distanceMiles using the standard ≤25/≤75/else boundaries.
+   */
+  async previewQuote(input: {
+    pricingConfigId: string;
+    distanceMiles: number;
+    serviceType: EnumQuoteServiceType;
+    categoryOverride?: EnumQuoteMileageCategory | null;
+  }): Promise<QuoteCalculationResult> {
+    if (input.distanceMiles < 0) {
+      throw new BadRequestException("Distance miles must be >= 0");
+    }
+
+    const config = await this.loadPricingConfigById(input.pricingConfigId);
+
+    // categoryOverride is honored in the CATEGORY_ABC branch of
+    // computeQuoteFromConfig — when supplied, it replaces the distance-derived
+    // mileage category (≤25/≤75/else → A/B/C). This lets an admin preview
+    // "what would category C cost at 50 miles?" without changing the distance.
+    // It has no effect in PER_MILE or FLAT_TIER modes (those don't consult
+    // the category for pricing — though FLAT_TIER still records it for display).
+
+    return this.computeQuoteFromConfig({
+      config,
+      distanceMiles: input.distanceMiles,
+      serviceType: input.serviceType,
+      customerPricingModeOverride: null,
+      categoryOverride: input.categoryOverride ?? null,
+    });
+  }
+
+  /**
+   * Load a PricingConfig by id with the same select shape used by
+   * resolvePricingContext / loadLatestActivePricingConfig — so the
+   * preview path produces results identical to a real quote.
+   */
+  private async loadPricingConfigById(
+    id: string
+  ): Promise<ResolvedPricingContext["config"]> {
+    const config = await this.prisma.pricingConfig.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        active: true,
+        isDefault: true,
+        baseFee: true,
+        insuranceFee: true,
+        driverSharePct: true,
+        feePassThrough: true,
+        flatMiles: true,
+        perMileRate: true,
+        pricingMode: true,
+        transactionFeeFixed: true,
+        transactionFeePct: true,
+        tiers: {
+          select: {
+            id: true,
+            minMiles: true,
+            maxMiles: true,
+            flatPrice: true,
+          },
+          orderBy: { minMiles: "asc" },
+        },
+        categoryRules: {
+          select: {
+            id: true,
+            category: true,
+            minMiles: true,
+            maxMiles: true,
+            baseFee: true,
+            flatPrice: true,
+            perMileRate: true,
+          },
+          orderBy: [{ category: "asc" }, { minMiles: "asc" }],
+        },
+      },
+    });
+
+    if (!config) {
+      throw new NotFoundException(
+        `PricingConfig not found: ${id}`
+      );
+    }
+
+    return {
+      ...config,
+      categoryRules: config.categoryRules.map((rule) => ({
+        ...rule,
+        category: rule.category as EnumQuoteMileageCategory,
+      })),
+    };
+  }
+
+  /**
+   * Pure pricing math — extracted from calculateQuote so previewQuote
+   * can reuse it without duplicating ~100 lines of formula code.
+   *
+   * Takes a fully-resolved config (with tiers + categoryRules already
+   * loaded) and produces the same QuoteCalculationResult shape that
+   * calculateQuote returns. Behavior is identical to the pre-refactor
+   * inline math.
+   */
+  private async computeQuoteFromConfig(input: {
+    config: ResolvedPricingContext["config"];
+    distanceMiles: number;
+    serviceType: EnumQuoteServiceType;
+    customerPricingModeOverride: EnumCustomerPricingModeOverride | null;
+    categoryOverride?: EnumQuoteMileageCategory | null;
+  }): Promise<QuoteCalculationResult> {
+    const { config, distanceMiles } = input;
 
     const effectiveMode = this.resolveEffectiveMode(
-      pricingContext.customerPricingModeOverride,
+      input.customerPricingModeOverride,
       config.pricingMode
     );
 
@@ -112,7 +244,7 @@ export class PricingEngineService {
       // and a 75-mile delivery costs baseFee + (75 - 50) * perMileRate.
       const flatMilesAllowance = Number(config.flatMiles ?? 0);
       const billableMiles = Number(
-        Math.max(0, input.distanceMiles - flatMilesAllowance).toFixed(4)
+        Math.max(0, distanceMiles - flatMilesAllowance).toFixed(4)
       );
 
       baseFare = Number((config.baseFee ?? 0).toFixed(2));
@@ -121,9 +253,9 @@ export class PricingEngineService {
       );
     } else if (effectiveMode === EnumQuotePricingMode.FLAT_TIER) {
       const tier = config.tiers.find((item) => {
-        const lowerOk = input.distanceMiles >= item.minMiles;
+        const lowerOk = distanceMiles >= item.minMiles;
         const upperOk =
-          item.maxMiles == null || input.distanceMiles <= item.maxMiles;
+          item.maxMiles == null || distanceMiles <= item.maxMiles;
         return lowerOk && upperOk;
       });
 
@@ -133,15 +265,28 @@ export class PricingEngineService {
 
       baseFare = Number(tier.flatPrice.toFixed(2));
       distanceCharge = 0;
-      mileageCategory = this.resolveMileageCategory(input.distanceMiles);
+      mileageCategory = this.resolveMileageCategory(distanceMiles);
     } else {
-      mileageCategory = this.resolveMileageCategory(input.distanceMiles);
+      // CATEGORY_ABC — use categoryOverride if supplied, else derive from distance.
+      mileageCategory =
+        input.categoryOverride ?? this.resolveMileageCategory(distanceMiles);
 
       const rule = config.categoryRules.find((item) => {
         const categoryOk = item.category === mileageCategory;
-        const lowerOk = input.distanceMiles >= item.minMiles;
+
+        // When an admin forces a category via categoryOverride, skip the
+        // distance-range check. This lets them preview "what would category
+        // C cost at 10 miles?" even if the C rule is normally scoped to
+        // 75+ miles. Without this, the override would just produce
+        // "no rule found" errors for any distance outside the rule's range
+        // — which defeats the purpose of the override.
+        if (input.categoryOverride != null) {
+          return categoryOk;
+        }
+
+        const lowerOk = distanceMiles >= item.minMiles;
         const upperOk =
-          item.maxMiles == null || input.distanceMiles <= item.maxMiles;
+          item.maxMiles == null || distanceMiles <= item.maxMiles;
 
         return categoryOk && lowerOk && upperOk;
       });
@@ -166,7 +311,7 @@ export class PricingEngineService {
         }
 
         distanceCharge = Number(
-          (input.distanceMiles * effectiveRate).toFixed(2)
+          (distanceMiles * effectiveRate).toFixed(2)
         );
       }
     }
@@ -218,7 +363,7 @@ export class PricingEngineService {
           ? {
               flatMilesAllowance: Number((config.flatMiles ?? 0).toFixed(2)),
               billedMiles: Number(
-                Math.max(0, input.distanceMiles - (config.flatMiles ?? 0)).toFixed(2)
+                Math.max(0, distanceMiles - (config.flatMiles ?? 0)).toFixed(2)
               ),
             }
           : {}),
@@ -226,11 +371,11 @@ export class PricingEngineService {
       pricingSnapshot: {
         pricingConfigId: config.id,
         serviceType: input.serviceType,
-        distanceMiles: Number(input.distanceMiles.toFixed(2)),
+        distanceMiles: Number(distanceMiles.toFixed(2)),
         pricingMode: config.pricingMode,
         effectiveMode,
         customerPricingModeOverride:
-          pricingContext.customerPricingModeOverride ?? null,
+          input.customerPricingModeOverride ?? null,
         mileageCategory,
         driverSharePct: config.driverSharePct,
         baseFee: config.baseFee,

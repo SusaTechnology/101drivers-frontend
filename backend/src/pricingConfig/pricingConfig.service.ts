@@ -14,6 +14,7 @@ import { PricingConfigServiceBase } from "./base/pricingConfig.service.base";
 import { PricingConfigDomain } from "../domain/pricingConfig/pricingConfig.domain";
 import { PricingConfigPolicyService } from "../domain/pricingConfig/pricingConfigPolicy.service";
 import { PricingConfigAdminEngine } from "../domain/pricingConfig/pricingConfigAdmin.engine";
+import { PricingEngineService } from "../delivery-logistics/pricing-engine.service";
 import { SavePricingConfigBody } from "./dto/pricingConfigAdmin.dto";
 
 
@@ -23,7 +24,8 @@ constructor(
   protected readonly prisma: PrismaService,
   private readonly domain: PricingConfigDomain,
   private readonly policy: PricingConfigPolicyService,
-  private readonly pricingConfigAdminEngine: PricingConfigAdminEngine
+  private readonly pricingConfigAdminEngine: PricingConfigAdminEngine,
+  private readonly pricingEngineService: PricingEngineService
 ) {
   super(prisma);
 }
@@ -177,5 +179,26 @@ async setDefaultPricingConfig(input: {
   });
 
   return this.domain.findUnique({ id: input.id });
+}
+
+/**
+ * Preview a quote against a saved PricingConfig — see
+ * PricingEngineService.previewQuote for the contract.
+ *
+ * Delegates directly to the pricing engine; no DB writes, no audit
+ * log entry (it's a pure read for admin UI preview purposes).
+ */
+async previewQuote(input: {
+  pricingConfigId: string;
+  distanceMiles: number;
+  serviceType: any;
+  categoryOverride?: any;
+}): Promise<any> {
+  return this.pricingEngineService.previewQuote({
+    pricingConfigId: input.pricingConfigId,
+    distanceMiles: input.distanceMiles,
+    serviceType: input.serviceType,
+    categoryOverride: input.categoryOverride ?? null,
+  });
 }
 }
