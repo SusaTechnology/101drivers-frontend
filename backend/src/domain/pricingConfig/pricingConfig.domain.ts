@@ -24,6 +24,11 @@ export class PricingConfigDomain extends BaseDomain<
     name: true,
     description: true,
     active: true,
+    // isDefault MUST be selected so the frontend can render the
+    // "Is Default" badge / disable the "Set as Default" button.
+    // Previously omitted — caused `isDefault` to be missing from
+    // every API response (list, get-by-id, set-default, admin-save).
+    isDefault: true,
     pricingMode: true,
     baseFee: true,
     perMileRate: true,

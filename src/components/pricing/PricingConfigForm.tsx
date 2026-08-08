@@ -65,8 +65,12 @@ const createPricingConfigSchema = (pricingMode: PricingMode) => {
     description: z.string().optional(),
     pricingMode: z.enum(['CATEGORY_ABC', 'FLAT_TIER', 'PER_MILE']),
     baseFee: z.number().min(0, 'Base fee must be 0 or greater'),
-    flatMiles: z.number().nullable(),
-    perMileRate: z.number().nullable(),
+    // .nullish() accepts number | null | undefined.
+    // When pricingMode is CATEGORY_ABC, the flatMiles/perMileRate inputs are
+    // not rendered, so RHF leaves them as undefined — nullable() would reject
+    // that and block the save with "expected number, received undefined".
+    flatMiles: z.number().nullish(),
+    perMileRate: z.number().nullish(),
     insuranceFee: z.number().min(0, 'Insurance fee must be 0 or greater'),
     transactionFeePct: z.number().min(0, 'Transaction fee % must be 0 or greater').max(100),
     transactionFeeFixed: z.number().min(0, 'Transaction fee fixed must be 0 or greater'),
@@ -389,8 +393,9 @@ export function PricingConfigForm({
           ? (validationErrors as Record<string, { message?: string } | undefined>)[fieldNames[0]]?.message
           : undefined;
         toast.error(
-          `Cannot save: ${firstError || 'form has validation errors'}. ` +
-          `Fields with issues: ${fieldNames.join(', ')}.`
+          `Cannot save — please fix the ${fieldNames.length === 1 ? 'field' : 'fields'} highlighted in red` +
+          (firstError ? ` (${firstError})` : '') +
+          `. Fields with issues: ${fieldNames.join(', ')}.`
         );
       })}
       className="space-y-6"
@@ -621,10 +626,17 @@ export function PricingConfigForm({
                       step="0.01"
                       min="0"
                       {...register('flatMiles', { valueAsNumber: true })}
-                      className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                      aria-invalid={!!errors.flatMiles}
+                      className={cn(
+                        "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                        errors.flatMiles ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                      )}
                       placeholder="50"
                     />
                   </div>
+                  {errors.flatMiles && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">⚠ {errors.flatMiles.message}</p>
+                  )}
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
                     Leave empty or 0 to charge per-mile from mile 0 (legacy behavior).
                   </p>
@@ -642,10 +654,17 @@ export function PricingConfigForm({
                       step="0.01"
                       min="0"
                       {...register('perMileRate', { valueAsNumber: true })}
-                      className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                      aria-invalid={!!errors.perMileRate}
+                      className={cn(
+                        "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                        errors.perMileRate ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                      )}
                       placeholder="2.00"
                     />
                   </div>
+                  {errors.perMileRate && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">⚠ {errors.perMileRate.message}</p>
+                  )}
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
                     Applied to miles beyond the free allowance.
                   </p>
@@ -751,8 +770,15 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`categoryRules.${ruleIndex}.minMiles` as const, { valueAsNumber: true })}
-                          className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 text-sm"
+                          aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.minMiles}
+                          className={cn(
+                            "w-full h-11 rounded-2xl border px-4 text-sm",
+                            (errors.categoryRules as any)?.[ruleIndex]?.minMiles ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                          )}
                         />
+                        {(errors.categoryRules as any)?.[ruleIndex]?.minMiles && (
+                          <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.categoryRules as any)?.[ruleIndex]?.minMiles?.message}</p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
@@ -762,9 +788,16 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`categoryRules.${ruleIndex}.maxMiles` as const, { valueAsNumber: true })}
-                          className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 text-sm"
+                          aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.maxMiles}
+                          className={cn(
+                            "w-full h-11 rounded-2xl border px-4 text-sm",
+                            (errors.categoryRules as any)?.[ruleIndex]?.maxMiles ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                          )}
                           placeholder="null"
                         />
+                        {(errors.categoryRules as any)?.[ruleIndex]?.maxMiles && (
+                          <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.categoryRules as any)?.[ruleIndex]?.maxMiles?.message}</p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
@@ -776,9 +809,16 @@ export function PricingConfigForm({
                             type="number"
                             step="0.01"
                             {...register(`categoryRules.${ruleIndex}.baseFee` as const, { valueAsNumber: true })}
-                            className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                            aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.baseFee}
+                            className={cn(
+                              "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                              (errors.categoryRules as any)?.[ruleIndex]?.baseFee ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                            )}
                           />
                         </div>
+                        {(errors.categoryRules as any)?.[ruleIndex]?.baseFee && (
+                          <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.categoryRules as any)?.[ruleIndex]?.baseFee?.message}</p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
@@ -790,9 +830,16 @@ export function PricingConfigForm({
                             type="number"
                             step="0.01"
                             {...register(`categoryRules.${ruleIndex}.perMileRate` as const, { valueAsNumber: true })}
-                            className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                            aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.perMileRate}
+                            className={cn(
+                              "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                              (errors.categoryRules as any)?.[ruleIndex]?.perMileRate ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                            )}
                           />
                         </div>
+                        {(errors.categoryRules as any)?.[ruleIndex]?.perMileRate && (
+                          <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.categoryRules as any)?.[ruleIndex]?.perMileRate?.message}</p>
+                        )}
                       </div>
                     </div>
                     <input
@@ -867,9 +914,16 @@ export function PricingConfigForm({
                         type="number"
                         step="0.01"
                         {...register(`tiers.${index}.minMiles` as const, { valueAsNumber: true })}
-                        className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 text-sm"
+                        aria-invalid={!!(errors.tiers as any)?.[index]?.minMiles}
+                        className={cn(
+                          "w-full h-11 rounded-2xl border px-4 text-sm",
+                          (errors.tiers as any)?.[index]?.minMiles ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                        )}
                         placeholder="0"
                       />
+                      {(errors.tiers as any)?.[index]?.minMiles && (
+                        <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.tiers as any)?.[index]?.minMiles?.message}</p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
@@ -879,9 +933,16 @@ export function PricingConfigForm({
                         type="number"
                         step="0.01"
                         {...register(`tiers.${index}.maxMiles` as const, { valueAsNumber: true })}
-                        className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 px-4 text-sm"
+                        aria-invalid={!!(errors.tiers as any)?.[index]?.maxMiles}
+                        className={cn(
+                          "w-full h-11 rounded-2xl border px-4 text-sm",
+                          (errors.tiers as any)?.[index]?.maxMiles ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                        )}
                         placeholder="null"
                       />
+                      {(errors.tiers as any)?.[index]?.maxMiles && (
+                        <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.tiers as any)?.[index]?.maxMiles?.message}</p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
@@ -893,10 +954,17 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`tiers.${index}.flatPrice` as const, { valueAsNumber: true })}
-                          className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                          aria-invalid={!!(errors.tiers as any)?.[index]?.flatPrice}
+                          className={cn(
+                            "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                            (errors.tiers as any)?.[index]?.flatPrice ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                          )}
                           placeholder="120.00"
                         />
                       </div>
+                      {(errors.tiers as any)?.[index]?.flatPrice && (
+                        <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.tiers as any)?.[index]?.flatPrice?.message}</p>
+                      )}
                     </div>
                     {/* Hidden ID field for existing tiers */}
                     <input
@@ -948,9 +1016,16 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('baseFee', { valueAsNumber: true })}
-                  className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                  aria-invalid={!!errors.baseFee}
+                  className={cn(
+                    "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                    errors.baseFee ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                  )}
                 />
               </div>
+              {errors.baseFee && (
+                <p className="text-xs text-red-500 mt-1 font-medium">⚠ {errors.baseFee.message}</p>
+              )}
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
                 Fixed base fee applied to every delivery. Also serves as the
                 non-refundable lock-in fee captured from the customer when the
@@ -973,9 +1048,16 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('insuranceFee', { valueAsNumber: true })}
-                  className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                  aria-invalid={!!errors.insuranceFee}
+                  className={cn(
+                    "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                    errors.insuranceFee ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                  )}
                 />
               </div>
+              {errors.insuranceFee && (
+                <p className="text-xs text-red-500 mt-1 font-medium">⚠ {errors.insuranceFee.message}</p>
+              )}
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
                 Insurance fee per delivery
               </p>
@@ -993,9 +1075,16 @@ export function PricingConfigForm({
                   type="number"
                   step="0.1"
                   {...register('transactionFeePct', { valueAsNumber: true })}
-                  className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                  aria-invalid={!!errors.transactionFeePct}
+                  className={cn(
+                    "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                    errors.transactionFeePct ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                  )}
                 />
               </div>
+              {errors.transactionFeePct && (
+                <p className="text-xs text-red-500 mt-1 font-medium">⚠ {errors.transactionFeePct.message}</p>
+              )}
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
                 Percentage-based transaction fee
               </p>
@@ -1013,9 +1102,16 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('transactionFeeFixed', { valueAsNumber: true })}
-                  className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                  aria-invalid={!!errors.transactionFeeFixed}
+                  className={cn(
+                    "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                    errors.transactionFeeFixed ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                  )}
                 />
               </div>
+              {errors.transactionFeeFixed && (
+                <p className="text-xs text-red-500 mt-1 font-medium">⚠ {errors.transactionFeeFixed.message}</p>
+              )}
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
                 Fixed portion of transaction fee
               </p>
@@ -1033,9 +1129,16 @@ export function PricingConfigForm({
                   type="number"
                   step="0.1"
                   {...register('driverSharePct', { valueAsNumber: true })}
-                  className="w-full h-11 rounded-2xl border border-slate-200 dark:border-slate-700 pl-10 pr-4 text-sm"
+                  aria-invalid={!!errors.driverSharePct}
+                  className={cn(
+                    "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
+                    errors.driverSharePct ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
+                  )}
                 />
               </div>
+              {errors.driverSharePct && (
+                <p className="text-xs text-red-500 mt-1 font-medium">⚠ {errors.driverSharePct.message}</p>
+              )}
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
                 Percentage of transportation cost going to driver
               </p>

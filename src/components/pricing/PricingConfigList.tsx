@@ -957,15 +957,22 @@ export function PricingConfigList({
                           Bulk Assign
                         </Button>
 
-                        <Button
-                          variant="outline"
-                          onClick={() => handleSetDefault(selectedConfig.id)}
-                          disabled={selectedConfig.isDefault || setDefaultMutation.isPending}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
-                        >
-                          <Crown className="w-4 h-4" />
-                          {selectedConfig.isDefault ? 'Default' : 'Set as Default'}
-                        </Button>
+                        {selectedConfig.isDefault ? (
+                          <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border-2 border-green-500 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20">
+                            <Crown className="w-4 h-4 text-green-600 dark:text-green-400 fill-green-500" />
+                            Is Default
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            onClick={() => handleSetDefault(selectedConfig.id)}
+                            disabled={setDefaultMutation.isPending}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
+                          >
+                            <Crown className="w-4 h-4" />
+                            Set as Default
+                          </Button>
+                        )}
 
                         <Button
                           variant="outline"
