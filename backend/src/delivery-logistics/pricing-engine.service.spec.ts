@@ -1,14 +1,20 @@
 /**
  * Unit tests for PricingEngineService.previewQuote (Item 5 — Preview Quote endpoint).
  *
- * Verifies:
- *  - Throws NotFoundException when the target PricingConfig doesn't exist.
- *  - Returns the same math as calculateQuote for PER_MILE / FLAT_TIER / CATEGORY_ABC.
- *  - Honors categoryOverride in CATEGORY_ABC mode.
- *  - Throws BadRequestException on negative distance.
- *  - Throws BadRequestException when PER_MILE config has null perMileRate.
- *  - Throws BadRequestException when FLAT_TIER has no matching tier.
- *  - Throws BadRequestException when CATEGORY_ABC has no matching rule.
+ * Verifies the TWO supported pricing models:
+ *   1. ABC (CATEGORY_ABC) — progressive tiered (tax-bracket style):
+ *        total = baseFee + Σ(band_miles × band_rate)
+ *      where bands are categoryRules sorted by minMiles. Each band contributes
+ *      max(0, min(miles, maxMiles ?? ∞) − minMiles) × perMileRate.
+ *      With seed (baseFee=50, A:0-25@$2, B:25-50@$1.80, C:50+@$1.75):
+ *        15 mi → $80, 25 mi → $100, 50 mi → $145, 100 mi → $232.50
+ *   2. Flat (PER_MILE) — flat fee + extra mileage:
+ *        total = baseFee + max(0, miles − flatMiles) × perMileRate
+ *
+ * DEPRECATED: FLAT_TIER mode is hidden from UI and its calc branch is
+ * commented out. resolveEffectiveMode maps any FLAT_TIER config/override
+ * to PER_MILE so legacy snapshots still resolve. The legacy tests below
+ * verify that fallback behavior.
  */
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { PricingEngineService } from "./pricing-engine.service";
@@ -56,11 +62,15 @@ const makeFlatTierConfig = () => ({
   categoryRules: [],
 });
 
+// ABC config uses the SEED values confirmed by the product spec:
+//   baseFee=50, A:0-25 @ $2.00, B:25-50 @ $1.80, C:50+ @ $1.75
+// Per-rule baseFee/flatPrice are intentionally null — the progressive
+// tiered formula uses ONLY config.baseFee + Σ(band miles × band rate).
 const makeCategoryAbcConfig = () => ({
   id: CONFIG_ID,
   active: true,
   isDefault: false,
-  baseFee: 100,
+  baseFee: 50,
   insuranceFee: 8,
   driverSharePct: 60,
   feePassThrough: true,
@@ -76,26 +86,26 @@ const makeCategoryAbcConfig = () => ({
       category: "A",
       minMiles: 0,
       maxMiles: 25,
-      baseFee: 40,
-      perMileRate: 3.5,
+      baseFee: null,
+      perMileRate: 2.0,
       flatPrice: null,
     },
     {
       id: "r2",
       category: "B",
-      minMiles: 25.01,
-      maxMiles: 75,
-      baseFee: 55,
-      perMileRate: 4.25,
+      minMiles: 25,
+      maxMiles: 50,
+      baseFee: null,
+      perMileRate: 1.8,
       flatPrice: null,
     },
     {
       id: "r3",
       category: "C",
-      minMiles: 75.01,
+      minMiles: 50,
       maxMiles: null,
-      baseFee: 70,
-      perMileRate: 5.25,
+      baseFee: null,
+      perMileRate: 1.75,
       flatPrice: null,
     },
   ],
@@ -198,32 +208,39 @@ describe("PricingEngineService.previewQuote", () => {
     });
   });
 
-  describe("FLAT_TIER", () => {
-    it("30mi falls in 25.01-75 tier → flatPrice 180", async () => {
-      const prisma = makeMockPrisma(makeFlatTierConfig());
+  describe("FLAT_TIER (DEPRECATED)", () => {
+    it("legacy FLAT_TIER config with perMileRate is silently treated as PER_MILE (Flat)", async () => {
+      // resolveEffectiveMode maps FLAT_TIER → PER_MILE, so the math is
+      // baseFee + max(0, miles − flatMiles) × perMileRate.
+      // We synthesize a legacy FLAT_TIER config that happens to have a
+      // perMileRate set, so it should resolve cleanly under PER_MILE math.
+      const legacy: any = makeFlatTierConfig();
+      legacy.flatMiles = 25;
+      legacy.perMileRate = 1.8;
+      legacy.baseFee = 101;
+      const prisma = makeMockPrisma(legacy);
       service = new PricingEngineService(prisma);
 
-      // baseFare = 180, distanceCharge = 0, subTotal = 188
-      // transactionFee = 3 + 188 * 0.029 = 3 + 5.45 = 8.45
-      // estimatedPrice = 188 + 8.45 = 196.45
-      // mileageCategory at 30mi = B
+      // 50 mi, flatMiles=25 → billedMiles = 25, distanceCharge = 25 × 1.8 = 45
+      // subTotal = 101 + 45 + 8 = 154
+      // transactionFee = 3 + 154 × 0.029 = 3 + 4.47 = 7.47
+      // estimatedPrice = 154 + 7.47 = 161.47
       const result = await service.previewQuote({
         pricingConfigId: CONFIG_ID,
-        distanceMiles: 30,
+        distanceMiles: 50,
         serviceType: "STANDARD" as any,
       });
 
-      expect(result.pricingMode).toBe("FLAT_TIER");
-      expect(result.mileageCategory).toBe("B");
-      expect(result.feesBreakdown.baseFare).toBe(180);
-      expect(result.feesBreakdown.distanceCharge).toBe(0);
-      expect(result.estimatedPrice).toBe(196.45);
+      // pricingMode in the result reflects the EFFECTIVE mode (PER_MILE),
+      // not the legacy schema mode — so downstream code never sees FLAT_TIER.
+      expect(result.pricingMode).toBe("PER_MILE");
+      expect(result.feesBreakdown.billedMiles).toBe(25);
+      expect(result.feesBreakdown.distanceCharge).toBe(45);
+      expect(result.estimatedPrice).toBe(161.47);
     });
 
-    it("throws when no tier matches the distance", async () => {
-      const cfg = makeFlatTierConfig();
-      cfg.tiers = [{ id: "x", minMiles: 100, maxMiles: 200, flatPrice: 500 }];
-      const prisma = makeMockPrisma(cfg);
+    it("legacy FLAT_TIER config with null perMileRate throws (would-be PER_MILE requires perMileRate)", async () => {
+      const prisma = makeMockPrisma(makeFlatTierConfig());
       service = new PricingEngineService(prisma);
 
       await expect(
@@ -236,15 +253,16 @@ describe("PricingEngineService.previewQuote", () => {
     });
   });
 
-  describe("CATEGORY_ABC", () => {
-    it("15mi → category A, baseFee 40, perMileRate 3.5", async () => {
+  describe("CATEGORY_ABC (progressive tiered)", () => {
+    it("15mi → only band A applies: 50 + 15×2 = 80 (+fees)", async () => {
       const prisma = makeMockPrisma(makeCategoryAbcConfig());
       service = new PricingEngineService(prisma);
 
-      // baseFare = 40, distanceCharge = 15 * 3.5 = 52.5
-      // subTotal = 40 + 52.5 + 8 = 100.5
-      // transactionFee = 3 + 100.5 * 0.029 = 3 + 2.91 = 5.91
-      // estimatedPrice = 100.5 + 5.91 = 106.41
+      // baseFare = 50, distanceCharge = 15 × 2.0 = 30
+      // subTotal = 50 + 30 + 8 = 88
+      // transactionFee = 3 + 88 × 0.029 = 3 + 2.552 = 5.55
+      // estimatedPrice = 88 + 5.55 = 93.55
+      // driverShare = 93.55 × 0.6 = 56.13, payout = 56.13 − 8 = 48.13
       const result = await service.previewQuote({
         pricingConfigId: CONFIG_ID,
         distanceMiles: 15,
@@ -253,15 +271,40 @@ describe("PricingEngineService.previewQuote", () => {
 
       expect(result.pricingMode).toBe("CATEGORY_ABC");
       expect(result.mileageCategory).toBe("A");
-      expect(result.feesBreakdown.baseFare).toBe(40);
-      expect(result.feesBreakdown.distanceCharge).toBe(52.5);
-      expect(result.estimatedPrice).toBe(106.41);
+      expect(result.feesBreakdown.baseFare).toBe(50);
+      expect(result.feesBreakdown.distanceCharge).toBe(30);
+      expect(result.estimatedPrice).toBe(93.55);
+      expect(result.estimatedDriverPayout).toBe(48.13);
     });
 
-    it("50mi → category B", async () => {
+    it("25mi → band A full: 50 + 25×2 = 100 (+fees)", async () => {
       const prisma = makeMockPrisma(makeCategoryAbcConfig());
       service = new PricingEngineService(prisma);
 
+      // baseFare = 50, distanceCharge = 25 × 2.0 = 50
+      // subTotal = 50 + 50 + 8 = 108
+      // transactionFee = 3 + 108 × 0.029 = 3 + 3.132 = 6.13
+      // estimatedPrice = 108 + 6.13 = 114.13
+      const result = await service.previewQuote({
+        pricingConfigId: CONFIG_ID,
+        distanceMiles: 25,
+        serviceType: "STANDARD" as any,
+      });
+
+      expect(result.mileageCategory).toBe("A");
+      expect(result.feesBreakdown.baseFare).toBe(50);
+      expect(result.feesBreakdown.distanceCharge).toBe(50);
+      expect(result.estimatedPrice).toBe(114.13);
+    });
+
+    it("50mi → bands A + B: 50 + 25×2 + 25×1.8 = 145 (+fees)", async () => {
+      const prisma = makeMockPrisma(makeCategoryAbcConfig());
+      service = new PricingEngineService(prisma);
+
+      // distanceCharge = 25×2.0 + 25×1.8 = 50 + 45 = 95
+      // subTotal = 50 + 95 + 8 = 153
+      // transactionFee = 3 + 153 × 0.029 = 3 + 4.437 = 7.44
+      // estimatedPrice = 153 + 7.44 = 160.44
       const result = await service.previewQuote({
         pricingConfigId: CONFIG_ID,
         distanceMiles: 50,
@@ -269,13 +312,19 @@ describe("PricingEngineService.previewQuote", () => {
       });
 
       expect(result.mileageCategory).toBe("B");
-      expect(result.feesBreakdown.baseFare).toBe(55);
+      expect(result.feesBreakdown.baseFare).toBe(50);
+      expect(result.feesBreakdown.distanceCharge).toBe(95);
+      expect(result.estimatedPrice).toBe(160.44);
     });
 
-    it("100mi → category C", async () => {
+    it("100mi → bands A + B + C: 50 + 50 + 45 + 87.5 = 232.50 (+fees)", async () => {
       const prisma = makeMockPrisma(makeCategoryAbcConfig());
       service = new PricingEngineService(prisma);
 
+      // distanceCharge = 25×2.0 + 25×1.8 + 50×1.75 = 50 + 45 + 87.5 = 182.5
+      // subTotal = 50 + 182.5 + 8 = 240.5
+      // transactionFee = 3 + 240.5 × 0.029 = 3 + 6.9745 = 9.97
+      // estimatedPrice = 240.5 + 9.97 = 250.47
       const result = await service.previewQuote({
         pricingConfigId: CONFIG_ID,
         distanceMiles: 100,
@@ -283,19 +332,22 @@ describe("PricingEngineService.previewQuote", () => {
       });
 
       expect(result.mileageCategory).toBe("C");
-      expect(result.feesBreakdown.baseFare).toBe(70);
+      expect(result.feesBreakdown.baseFare).toBe(50);
+      expect(result.feesBreakdown.distanceCharge).toBe(182.5);
+      expect(result.estimatedPrice).toBe(250.47);
     });
 
-    it("categoryOverride='C' forces category C even at 10mi", async () => {
+    it("categoryOverride='C' is display-only — math stays progressive (10mi still uses band A)", async () => {
+      // The new progressive tiered math is purely distance-based; the
+      // override only affects which category is REPORTED in the result's
+      // mileageCategory field (used for UI display).
       const prisma = makeMockPrisma(makeCategoryAbcConfig());
       service = new PricingEngineService(prisma);
 
-      // Without override, 10mi → category A (baseFee 40, rate 3.5).
-      // With override='C', the math uses category C rule (baseFee 70, rate 5.25):
-      //   baseFare = 70, distanceCharge = 10 * 5.25 = 52.5
-      //   subTotal = 70 + 52.5 + 8 = 130.5
-      //   transactionFee = 3 + 130.5 * 0.029 = 3 + 3.78 = 6.78
-      //   estimatedPrice = 130.5 + 6.78 = 137.28
+      // 10mi with override='C': math still uses band A only (10 × 2.0 = 20).
+      // baseFare = 50, distanceCharge = 20, subTotal = 50 + 20 + 8 = 78
+      // transactionFee = 3 + 78 × 0.029 = 3 + 2.262 = 5.26
+      // estimatedPrice = 78 + 5.26 = 83.26
       const result = await service.previewQuote({
         pricingConfigId: CONFIG_ID,
         distanceMiles: 10,
@@ -303,18 +355,15 @@ describe("PricingEngineService.previewQuote", () => {
         categoryOverride: "C" as any,
       });
 
-      expect(result.mileageCategory).toBe("C");
-      expect(result.feesBreakdown.baseFare).toBe(70);
-      expect(result.feesBreakdown.distanceCharge).toBe(52.5);
-      expect(result.estimatedPrice).toBe(137.28);
+      expect(result.mileageCategory).toBe("C"); // override honored for display
+      expect(result.feesBreakdown.baseFare).toBe(50); // config baseFee, not per-rule
+      expect(result.feesBreakdown.distanceCharge).toBe(20); // 10 × 2.0
+      expect(result.estimatedPrice).toBe(83.26);
     });
 
-    it("throws when no rule matches the resolved category", async () => {
+    it("throws when categoryRules is empty", async () => {
       const cfg = makeCategoryAbcConfig();
-      // Remove category C rule, then preview at 100mi
-      cfg.categoryRules = cfg.categoryRules.filter(
-        (r: any) => r.category !== "C"
-      );
+      cfg.categoryRules = [];
       const prisma = makeMockPrisma(cfg);
       service = new PricingEngineService(prisma);
 
