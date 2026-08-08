@@ -132,7 +132,7 @@ SELECT
     (SELECT id FROM "PricingConfig"
       WHERE "pricingMode" = 'CATEGORY_ABC'
       ORDER BY "createdAt" ASC LIMIT 1),
-    gen_random_uuid()
+    gen_random_uuid()::text  -- cast to text: id column is String@cuid(), not native uuid
   ),
   'ABC Pricing',
   'Progressive tiered: $50 base + A(0-25 @ $2.00) + B(25-50 @ $1.80) + C(50+ @ $1.75). 15mi->$80, 25mi->$100, 50mi->$145, 100mi->$232.50.',
@@ -180,7 +180,7 @@ SELECT
     (SELECT id FROM "PricingConfig"
       WHERE "pricingMode" = 'PER_MILE'
       ORDER BY "createdAt" ASC LIMIT 1),
-    gen_random_uuid()
+    gen_random_uuid()::text  -- cast to text: id column is String@cuid(), not native uuid
   ),
   'Flat Pricing',
   'Flat with extra mileage: $101 covers first 25 mi, then $1.80/mi. 15mi->$101, 25mi->$101, 50mi->$146, 100mi->$236.',
@@ -234,7 +234,7 @@ INSERT INTO "PricingCategoryRule" (
   "createdAt", "updatedAt"
 )
 SELECT
-  gen_random_uuid(),
+  gen_random_uuid()::text,  -- cast to text: id column is String@cuid(), not native uuid
   pc.id,
   'A', 0.00, 25.00,
   NULL, 2.00, NULL,
@@ -243,7 +243,7 @@ FROM "PricingConfig" pc
 WHERE pc."pricingMode" = 'CATEGORY_ABC'
 UNION ALL
 SELECT
-  gen_random_uuid(),
+  gen_random_uuid()::text,
   pc.id,
   'B', 25.00, 50.00,
   NULL, 1.80, NULL,
@@ -252,7 +252,7 @@ FROM "PricingConfig" pc
 WHERE pc."pricingMode" = 'CATEGORY_ABC'
 UNION ALL
 SELECT
-  gen_random_uuid(),
+  gen_random_uuid()::text,
   pc.id,
   'C', 50.00, NULL,
   NULL, 1.75, NULL,
