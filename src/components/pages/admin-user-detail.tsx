@@ -50,6 +50,7 @@ import {
   CalendarDays,
   Home,
   CreditCard,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -108,6 +109,7 @@ import {
   useInviteDriver,
   useResendInviteDriver,
   useAdminUpdateUser,
+  useDeleteUser,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
 import {
@@ -321,9 +323,10 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const { actionItems, signOut: adminSignOut } = useAdminActions();
   const actorUserId = getActorUserId();
 
-  // Dialog state
+  // Dialog state — 'delete-user' is used for orphaned User rows (no
+  // Customer/Driver attached) so admin can clean up failed signups in-place.
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver'>('approve-customer');
+  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver' | 'delete-user'>('approve-customer');
 
   // Edit mode state
   const [editMode, setEditMode] = useState<'none' | 'user' | 'customer' | 'driver'>('none');
@@ -370,6 +373,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const suspendDriverMutation = useSuspendDriver();
   const unsuspendDriverMutation = useUnsuspendDriver();
   const adminUpdateUserMutation = useAdminUpdateUser();
+  const deleteUserMutation = useDeleteUser();
 
   // ==================== FORMS ====================
 
@@ -773,6 +777,33 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           refetch();
         },
         onError: () => toast.error('Failed to update driver profile'),
+      }
+    );
+  };
+
+  // Delete an orphaned User row (no Customer/Driver attached). Used by the
+  // "Signup Incomplete" card's Delete button. The backend's
+  // UserPolicyService.beforeDelete blocks deletion if any related records
+  // exist, so this is safe — it will only succeed for genuine orphans.
+  // On success, navigate back to the admin users list (this detail page is
+  // no longer valid once the row is gone).
+  const handleDeleteUser = () => {
+    if (!user) return;
+    deleteUserMutation.mutate(
+      { pathParams: { id: user.id } },
+      {
+        onSuccess: () => {
+          toast.success('User deleted', {
+            description: 'The orphaned signup row has been removed. The dealer can now retry with the same email.',
+          });
+          closeDialog();
+          navigate({ to: '/admin-users' });
+        },
+        onError: (error: any) => {
+          toast.error('Failed to delete user', {
+            description: error?.message || 'The user may have related records that block deletion. Remove those first.',
+          });
+        },
       }
     );
   };
@@ -1563,6 +1594,108 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   />
                 )}
 
+                {/* Signup Incomplete card — shown when the user is a
+                    BUSINESS_CUSTOMER or PRIVATE_CUSTOMER with NO Customer row
+                    attached. This is the orphaned-User-row state from a failed
+                    signup (the old "PENDING" badge in the admin list was
+                    misleading — the signup actually FAILED, it wasn't awaiting
+                    approval). Shows whatever info we DO have (email, phone from
+                    user.phone — which the recent backend fix now populates from
+                    contactPhone at signup time) and a Delete button so admin
+                    can clean up the orphan in-place. */}
+                {!user.customer && !user.driver && (user.roles === 'BUSINESS_CUSTOMER' || user.roles === 'PRIVATE_CUSTOMER') && (
+                  <Card className="border-rose-200 dark:border-rose-900/50 shadow-lg overflow-hidden">
+                    <CardHeader className="border-b border-rose-100 dark:border-rose-900/30 bg-rose-50/50 dark:bg-rose-950/20">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <AlertTriangle className="w-5 h-5 text-rose-500" />
+                          <div>
+                            <CardTitle className="text-xl font-black text-rose-700 dark:text-rose-300">Signup Incomplete</CardTitle>
+                            <CardDescription className="text-sm mt-1 text-rose-600/80 dark:text-rose-400/80">
+                              No customer profile attached — likely a failed signup
+                            </CardDescription>
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-6 sm:p-7 space-y-4">
+                      <Alert className="border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20">
+                        <AlertTriangle className="w-4 h-4 text-rose-500" />
+                        <AlertDescription className="text-sm text-rose-800 dark:text-rose-200">
+                          This user row was created but the matching Customer record
+                          was never written — typically because the signup failed
+                          partway through (e.g. a duplicate business name triggered
+                          a unique-constraint violation after the User row was
+                          already saved). The dealer cannot retry with the same
+                          email until this row is deleted.
+                        </AlertDescription>
+                      </Alert>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-xs font-bold text-slate-500">Email</Label>
+                          <div className="text-sm font-medium flex items-center gap-2 mt-1">
+                            <Mail className="w-4 h-4 text-slate-400" />
+                            {user.email || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-bold text-slate-500">Phone</Label>
+                          <div className="text-sm font-medium flex items-center gap-2 mt-1">
+                            <Phone className="w-4 h-4 text-slate-400" />
+                            {(() => {
+                              // user.phone is now populated at signup time
+                              // (commit e478bfd) from contactPhone, so this
+                              // should usually be present for recently-created
+                              // orphans. Older orphans (created before the fix)
+                              // may still have user.phone=null — show em dash.
+                              const displayPhone =
+                                user.phone ||
+                                user.driver?.phone ||
+                                user.customer?.businessPhone ||
+                                user.customer?.contactPhone ||
+                                user.customer?.phone ||
+                                '';
+                              return displayPhone || '—';
+                            })()}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-bold text-slate-500">Full Name</Label>
+                          <div className="text-sm font-medium mt-1">
+                            {user.fullName || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-bold text-slate-500">Signed Up</Label>
+                          <div className="text-sm font-medium flex items-center gap-2 mt-1">
+                            <Calendar className="w-4 h-4 text-slate-400" />
+                            {user.createdAt ? formatDateTime(user.createdAt) : '—'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <Button
+                          onClick={() => openDialog('delete-user')}
+                          variant="destructive"
+                          className="w-full rounded-xl"
+                          disabled={deleteUserMutation.isPending}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          {deleteUserMutation.isPending ? 'Deleting...' : 'Delete Orphaned User'}
+                        </Button>
+                        <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                          Deletes the User row so the dealer can re-sign-up with
+                          the same email. Safe — the backend blocks deletion if
+                          any related records (Customer, Driver, deliveries, etc.)
+                          exist on this User.
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Driver Info */}
                 {user.driver && (
                   <Card className="border-slate-200 dark:border-slate-800 shadow-lg overflow-hidden">
@@ -1904,8 +2037,13 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   </Card>
                 )}
 
-                {/* No Customer/Driver */}
-                {!user.customer && !user.driver && (
+                {/* No Customer/Driver — generic fallback for ADMIN users or
+                    any role that legitimately has no profile. For orphaned
+                    BUSINESS_CUSTOMER/PRIVATE_CUSTOMER users (failed signups),
+                    the "Signup Incomplete" card above renders instead with a
+                    Delete action — so we exclude those roles here to avoid
+                    showing two cards at once. */}
+                {!user.customer && !user.driver && user.roles !== 'BUSINESS_CUSTOMER' && user.roles !== 'PRIVATE_CUSTOMER' && (
                   <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
                     <CardContent className="p-6 text-center">
                       <User className="w-10 h-10 text-slate-300 mx-auto mb-3" />
@@ -1994,6 +2132,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
               {dialogAction === 'reject-driver' && 'Reject Driver'}
               {dialogAction === 'suspend-driver' && 'Suspend Driver'}
               {dialogAction === 'unsuspend-driver' && 'Unsuspend Driver'}
+              {dialogAction === 'delete-user' && 'Delete Orphaned User'}
             </DialogTitle>
             <DialogDescription>
               {dialogAction === 'approve-customer' && `Approve ${user?.fullName} as a customer? They will be able to create deliveries.`}
@@ -2006,6 +2145,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
               {dialogAction === 'reject-driver' && `Reject ${user?.fullName}'s driver application?`}
               {dialogAction === 'suspend-driver' && `Suspend ${user?.fullName}'s driver account? They will not be able to accept deliveries.`}
               {dialogAction === 'unsuspend-driver' && `Restore ${user?.fullName}'s driver account? They will be able to accept deliveries again.`}
+              {dialogAction === 'delete-user' && `Permanently delete ${user?.email}? This removes the User row so the dealer can re-sign-up with the same email.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -2244,6 +2384,37 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   disabled={unsuspendDriverMutation.isPending}
                 >
                   {unsuspendDriverMutation.isPending ? 'Restoring...' : 'Restore Driver'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Delete Orphaned User Confirmation — only orphaned users (no
+              Customer/Driver attached) reach this dialog via the
+              "Signup Incomplete" card's Delete button. The backend's
+              UserPolicyService.beforeDelete double-checks and blocks deletion
+              if any related records exist, so this is safe even if the UI
+              state is stale. */}
+          {dialogAction === 'delete-user' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/20 rounded-xl">
+                <div className="text-sm text-rose-700 dark:text-rose-300">
+                  This will permanently delete the User row for <strong>{user?.email}</strong>.
+                  The dealer will be able to sign up again with the same email afterwards.
+                  This action cannot be undone.
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeDialog} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleDeleteUser}
+                  variant="destructive"
+                  className="rounded-xl"
+                  disabled={deleteUserMutation.isPending}
+                >
+                  {deleteUserMutation.isPending ? 'Deleting...' : 'Delete User'}
                 </Button>
               </DialogFooter>
             </div>

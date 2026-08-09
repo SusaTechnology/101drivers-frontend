@@ -276,6 +276,28 @@ function DriverStatusBadge({ status }: { status: DriverStatus }) {
   );
 }
 
+// Special badge for orphaned business/private customer signups — users whose
+// role is BUSINESS_CUSTOMER or PRIVATE_CUSTOMER but who have NO Customer row
+// attached. Previously the list fell through to <CustomerStatusBadge
+// status="PENDING" /> for these rows, which was misleading: the signup
+// actually FAILED (the Customer row was never created), and the User row is
+// just an orphan blocking the dealer from retrying with the same email.
+//
+// The rose/amber color + AlertCircle icon + "Incomplete Signup" label make
+// the failed-signup state visually distinct from a genuine pending-approval
+// customer (which has a Customer row with approvalStatus=PENDING).
+function IncompleteSignupBadge() {
+  return (
+    <Badge
+      className="text-[10px] font-bold border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900"
+      title="User row was created but the Customer record is missing — likely a failed signup. The dealer cannot retry with this email until this row is deleted."
+    >
+      <AlertCircle className="w-3 h-3 mr-1" />
+      Incomplete Signup
+    </Badge>
+  );
+}
+
 // ==================== SKELETON LOADERS ====================
 
 function SummarySkeleton() {
@@ -1014,7 +1036,13 @@ export default function AdminUsersPage() {
                           ) : user.driver ? (
                             <DriverStatusBadge status={user.driver.status} />
                           ) : (user.roles === 'BUSINESS_CUSTOMER' || user.roles === 'PRIVATE_CUSTOMER') ? (
-                            <CustomerStatusBadge status="PENDING" />
+                            // Orphaned signup — User row exists but no Customer
+                            // record. Previously this showed a misleading
+                            // "PENDING" badge (the hardcoded fallback). The
+                            // signup actually FAILED — show "Incomplete Signup"
+                            // instead so admin knows this row is garbage and
+                            // can be deleted.
+                            <IncompleteSignupBadge />
                           ) : (
                             <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
                           )}

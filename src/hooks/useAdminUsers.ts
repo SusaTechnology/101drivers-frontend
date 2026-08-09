@@ -285,3 +285,24 @@ export function useResendInviteDriver() {
     invalidateQueryKey: [['admin-users'], ['admin-users-summary'], ['admin-user-detail']],
   });
 }
+
+// ==================== DELETE USER ====================
+
+/**
+ * Hook for deleting a User row.
+ *
+ * Calls DELETE /api/users/:id. The backend's UserPolicyService.beforeDelete
+ * blocks deletion when the user has any related records (Customer, Driver,
+ * deliveries, assignments, audit logs, etc.). Orphaned users from failed
+ * business signups (no Customer row, no other activity) pass the policy
+ * check and can be deleted cleanly.
+ *
+ * Caller must pass { pathParams: { id: userId } } as the mutation variable.
+ */
+export function useDeleteUser() {
+  return useDataMutation<{ id: string }, { pathParams: { id: string } }>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id`,
+    method: 'DELETE',
+    invalidateQueryKey: [['admin-users'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}
