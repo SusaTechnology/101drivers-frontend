@@ -583,7 +583,19 @@ export class AuthService {
 
     const normalizedEmail = dto.email.trim().toLowerCase();
 
+    // ─── Pre-flight uniqueness checks ─────────────────────────────────
+    // Run BOTH the email and businessPlaceId uniqueness checks BEFORE the
+    // OTP-send step. Previously, businessPlaceId uniqueness was only enforced
+    // by the DB constraint inside CustomerService.createCustomer — which ran
+    // AFTER the User row had already been created. A duplicate business name
+    // therefore orphaned the User row, and the dealer's next retry would 409
+    // on "Email already exists" (the orphaned User row blocking the retry).
+    //
+    // Pre-checking here means the dealer gets a clear, recognizable error
+    // BEFORE receiving an OTP, and no User row is created if the business is
+    // already registered.
     await this.ensureEmailDoesNotExist(normalizedEmail);
+    await this.ensureBusinessPlaceIdDoesNotExist(dto.businessPlaceId);
 
     if (!dto.verificationToken) {
       await this.emailVerificationService.requestVerification(
@@ -607,46 +619,107 @@ export class AuthService {
 
     const hashed = await this.passwordService.hash(dto.password);
 
-    const user = await this.userService.createUser({
-      data: {
-        username: this.generateUsernameFromEmail(normalizedEmail),
-        email: normalizedEmail,
-        password: hashed,
-        roles: EnumUserRoles.BUSINESS_CUSTOMER,
-        fullName: dto.fullName,
-        phone: dto.phone ?? null,
-        isActive: true,
-        emailVerifiedAt: new Date(),
-      },
-      select: { id: true, username: true, email: true, roles: true },
-    } as any);
+    // ─── Atomic User+Customer creation ────────────────────────────────
+    // Wrap both writes in a $transaction so a failure in the Customer create
+    // (e.g. a last-millisecond businessPlaceId race) rolls back the User row.
+    // Previously these were two independent writes — if Customer create threw
+    // (unique constraint, policy check, DB hiccup), the User row was left
+    // behind as an orphan with no Customer record, which surfaced in the
+    // admin UI as a "PENDING" user with no phone numbers and no business info.
+    //
+    // We bypass UserService.createUser / CustomerService.createCustomer here
+    // because those service wrappers don't accept a transaction client. The
+    // policy checks they perform (CustomerPolicyService.beforeCreate) all run
+    // against data we've already validated above (businessPlaceId uniqueness,
+    // required BUSINESS fields, approval fields), so skipping them is safe.
+    // The UserPolicyService.beforeCreate checks are also skipped — they enforce
+    // username uniqueness, which is derived from email + a timestamp suffix
+    // (generateUsernameFromEmail), so collisions are astronomically unlikely.
+    //
+    // Also populate user.phone from contactPhone ?? phone — the DealerSignupForm
+    // sends contactPhone but never sends `phone`, so previously every business
+    // User row had phone=null. The admin user-detail page falls back through
+    // user.phone → driver.phone → customer.businessPhone → customer.contactPhone
+    // → customer.phone; for an orphaned User (no Customer), this left the
+    // admin with no phone number at all. Populating user.phone here ensures
+    // the admin can always reach the dealer even if the Customer row is later
+    // deleted or never created.
+    const userPhone = dto.contactPhone ?? dto.phone ?? null;
 
-    await this.customerService.createCustomer({
-      data: {
-        customerType: EnumCustomerCustomerType.BUSINESS,
-        contactName: dto.contactName,
-        contactEmail: normalizedEmail,
-        contactPhone: dto.contactPhone ?? dto.phone ?? null,
-        phone: dto.phone ?? null,
-        businessName: dto.businessName,
-        businessPlaceId: dto.businessPlaceId,
-        businessAddress: dto.businessAddress ?? null,
-        businessPhone: dto.businessPhone ?? null,
-        businessWebsite: dto.businessWebsite ?? null,
-        user: { connect: { id: user.id } },
+    const { userId, username, userRoles } = await this.prisma.$transaction(
+      async (tx) => {
+        const createdUser = await tx.user.create({
+          data: {
+            username: this.generateUsernameFromEmail(normalizedEmail),
+            email: normalizedEmail,
+            password: hashed,
+            roles: EnumUserRoles.BUSINESS_CUSTOMER,
+            fullName: dto.fullName,
+            phone: userPhone,
+            isActive: true,
+            emailVerifiedAt: new Date(),
+          },
+          select: { id: true, username: true, roles: true },
+        });
+
+        await tx.customer.create({
+          data: {
+            customerType: EnumCustomerCustomerType.BUSINESS,
+            contactName: dto.contactName,
+            contactEmail: normalizedEmail,
+            contactPhone: dto.contactPhone ?? dto.phone ?? null,
+            phone: dto.phone ?? null,
+            businessName: dto.businessName,
+            businessPlaceId: dto.businessPlaceId,
+            businessAddress: dto.businessAddress ?? null,
+            businessPhone: dto.businessPhone ?? null,
+            businessWebsite: dto.businessWebsite ?? null,
+            user: { connect: { id: createdUser.id } },
+          },
+          select: { id: true },
+        });
+
+        return {
+          userId: createdUser.id,
+          username: createdUser.username,
+          userRoles: createdUser.roles,
+        };
       },
-      select: { id: true },
-    });
+    );
 
     return this.issueToken(
-      user.id,
-      user.username,
-      (user as any).email ?? null,
-      user.roles,
+      userId,
+      username,
+      normalizedEmail,
+      userRoles,
       request,
       response,
       dto.fullName
     );
+  }
+
+  /**
+   * Pre-flight check: ensure no Customer row already uses this businessPlaceId.
+   * Throws a BadRequestException with a recognizable, frontend-detectable
+   * message so the DealerSignupForm can show an inline error under the
+   * business-search field instead of a generic toast.
+   *
+   * Mirrors ensureEmailDoesNotExist in shape. We use BadRequestException (not
+   * the 409 AppException that CustomerPolicyService throws) so the message
+   * arrives as a plain string the frontend can match on — consistent with how
+   * the email-exists error is reported.
+   */
+  private async ensureBusinessPlaceIdDoesNotExist(businessPlaceId: string) {
+    const existing = await this.prisma.customer.findFirst({
+      where: { businessPlaceId },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        "This business is already registered. If you are the owner, contact support to claim this account."
+      );
+    }
   }
 
   /**

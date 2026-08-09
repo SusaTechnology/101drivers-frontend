@@ -106,6 +106,59 @@ type DealerSignupFormData = z.infer<typeof dealerSignupSchema>;
 // localStorage key for persisting signup draft
 const DEALER_SIGNUP_DRAFT_KEY = "dealerSignupDraft";
 
+// ─── Signup error classifier ──────────────────────────────────────────
+// The backend's signupBusinessCustomer endpoint throws BadRequestException
+// with specific message strings for the two pre-flight uniqueness checks
+// (email + businessPlaceId). We classify them here so all three signup
+// mutations (send-OTP, verify-OTP, resend-code) can route them to the right
+// UI affordance:
+//   - "email-exists"      → toast with "Log In" action button
+//   - "business-exists"   → toast with "Contact support" guidance + clear
+//                           the selected business so the dealer is forced
+//                           to pick a different one (the previous selection
+//                           is what caused the conflict)
+//   - anything else       → generic error toast
+//
+// Pre-flight checks run BEFORE the OTP-send step, so the dealer hits these
+// errors on the very first "Send code" click — no OTP is sent, no User row
+// is created. But the same classifier also covers the rare race where a
+// business was registered between the OTP-send and the verify-OTP step.
+type SignupErrorKind = "email-exists" | "business-exists" | "other";
+
+function classifySignupError(message: string): SignupErrorKind {
+  const lower = message.toLowerCase();
+  // Email-already-exists — message is "Email already exists" (from
+  // AuthService.ensureEmailDoesNotExist). Match the same phrases the
+  // previous version matched, for backwards compat.
+  if (
+    lower.includes("email") &&
+    (lower.includes("already") ||
+      lower.includes("exists") ||
+      lower.includes("registered"))
+  ) {
+    return "email-exists";
+  }
+  // Business-already-registered — message is "This business is already
+  // registered. If you are the owner, contact support to claim this
+  // account." (from AuthService.ensureBusinessPlaceIdDoesNotExist).
+  // Match on "business" + "registered" / "already" / "claim".
+  if (
+    lower.includes("business") &&
+    (lower.includes("already") ||
+      lower.includes("registered") ||
+      lower.includes("claim"))
+  ) {
+    return "business-exists";
+  }
+  // Also recognize the backend's older CustomerPolicyService message
+  // ("businessPlaceId already exists") just in case it ever leaks through
+  // (e.g. via a different code path that doesn't go through the pre-check).
+  if (lower.includes("businessplaceid") && lower.includes("already")) {
+    return "business-exists";
+  }
+  return "other";
+}
+
 interface Business {
   id?: string;
   name: string;
@@ -244,14 +297,9 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     },
     onError: (error) => {
       const errorMessage = error.message || "Please try again later.";
-      
-      // Check if error is related to email already existing
-      const isEmailExistsError = errorMessage.toLowerCase().includes("email") && 
-        (errorMessage.toLowerCase().includes("already") || 
-         errorMessage.toLowerCase().includes("exists") ||
-         errorMessage.toLowerCase().includes("registered"));
-      
-      if (isEmailExistsError) {
+      const kind = classifySignupError(errorMessage);
+
+      if (kind === "email-exists") {
         toast.error("Email already registered", {
           description: "This email is already associated with an account. Please sign in instead.",
           action: {
@@ -259,6 +307,16 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
             onClick: () => { window.location.href = '/auth/dealer-signin'; },
           },
           duration: 8000,
+        });
+      } else if (kind === "business-exists") {
+        // Clear the selected business so the dealer is forced to re-search.
+        // The previous selection is what caused the conflict — keeping it
+        // selected would just lead to the same error on retry.
+        clearBusinessSelection();
+        toast.error("Business already registered", {
+          description:
+            "This business is already registered with 101drivers. If you are the owner, contact support to claim the account. Otherwise, pick a different business from the directory.",
+          duration: 10000,
         });
       } else {
         toast.error("Failed to send code", {
@@ -290,9 +348,36 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       setRegistrationComplete(true);
     },
     onError: (error) => {
-      toast.error("Verification failed", {
-        description: error.message || "Invalid code or server error.",
-      });
+      const errorMessage = error.message || "Invalid code or server error.";
+      const kind = classifySignupError(errorMessage);
+
+      if (kind === "email-exists") {
+        toast.error("Email already registered", {
+          description: "This email is already associated with an account. Please sign in instead.",
+          action: {
+            label: "Log In",
+            onClick: () => { window.location.href = '/auth/dealer-signin'; },
+          },
+          duration: 8000,
+        });
+      } else if (kind === "business-exists") {
+        // Rare race: business was registered between OTP-send and verify-OTP.
+        // Reset back to the business-search step so the dealer can re-pick.
+        clearBusinessSelection();
+        setOtpSent(false);
+        setOtpValue("");
+        setOtpVerified(false);
+        setOtpAttempted(false);
+        toast.error("Business already registered", {
+          description:
+            "This business was just registered by someone else. If you are the owner, contact support to claim the account. Otherwise, pick a different business.",
+          duration: 10000,
+        });
+      } else {
+        toast.error("Verification failed", {
+          description: errorMessage,
+        });
+      }
     },
     successMessage: "Signup submitted successfully",
     errorMessage: "Failed to submit signup",
@@ -316,9 +401,30 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       setOtpValue("");
     },
     onError: (error) => {
-      toast.error("Failed to resend code", {
-        description: error.message || "Please try again later.",
-      });
+      const errorMessage = error.message || "Please try again later.";
+      const kind = classifySignupError(errorMessage);
+
+      if (kind === "email-exists") {
+        toast.error("Email already registered", {
+          description: "This email is already associated with an account. Please sign in instead.",
+          action: {
+            label: "Log In",
+            onClick: () => { window.location.href = '/auth/dealer-signin'; },
+          },
+          duration: 8000,
+        });
+      } else if (kind === "business-exists") {
+        clearBusinessSelection();
+        toast.error("Business already registered", {
+          description:
+            "This business is already registered with 101drivers. If you are the owner, contact support to claim the account. Otherwise, pick a different business from the directory.",
+          duration: 10000,
+        });
+      } else {
+        toast.error("Failed to resend code", {
+          description: errorMessage,
+        });
+      }
     },
     successMessage: "Code resent successfully",
     errorMessage: "Failed to resend code",
