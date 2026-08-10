@@ -21,6 +21,8 @@ export class ContentController {
   private static readonly VALID_KEYS = new Set([
     "agreement",
     "customer-agreement",
+    "customer-privacy",
+    "customer-terms",
     "privacy",
     "terms",
     "help-driver",

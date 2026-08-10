@@ -119,9 +119,102 @@ const CUSTOMER_AGREEMENT_HTML = `<h2>Customer Agreement</h2>
 <p>This Customer Agreement ("Agreement") governs the use of the 101 Drivers platform by customers and dealers (collectively, "Customer"). By checking the agreement box during signup, the Customer acknowledges that they have read, understood, and agree to be bound by the terms and conditions below.</p>
 <div class="blockquote"><p><strong>Placeholder content.</strong> An administrator must publish the full Customer Agreement via this editor before it is shown to customers. The text above will appear as a fallback until replaced.</p></div>`
 
+// Placeholder content for the Customer Terms of Service.
+// Distinct from the driver-facing Terms of Service (TERMS_HTML above).
+const CUSTOMER_TERMS_HTML = `<h2>Customer Terms of Service</h2>
+<p><em>Effective date: To be set by administrator.</em></p>
+<p>These Customer Terms of Service ("Terms") govern the use of the 101 Drivers platform by customers and dealers ("Customer") for booking and managing vehicle delivery services. By creating an account or submitting a Delivery Request, the Customer agrees to be bound by these Terms.</p>
+<h3>1. Acceptance of Terms</h3>
+<p>By accessing or using the 101 Drivers platform, the Customer agrees to these Terms, the Customer Agreement, and the Customer Privacy Policy. If the Customer does not agree to any of these terms, they must not use the platform.</p>
+<h3>2. Account Registration</h3>
+<p>The Customer must provide accurate and complete information during registration and keep that information current. The Customer is responsible for safeguarding their account credentials and for all activity that occurs under their account.</p>
+<h3>3. Delivery Requests &amp; Quotes</h3>
+<p>Quotes are estimates based on the information provided at the time of the request. The actual charge may differ if the Customer modifies the request after the Quote is generated. Submitting a Delivery Request does not guarantee a Driver will accept it, and estimated pickup and drop-off times are not guaranteed commitments.</p>
+<h3>4. Payment &amp; Billing</h3>
+<p>By submitting a Delivery Request, the Customer authorizes the Company to charge the saved payment method for the full amount of the Quote. If the charge fails, the Delivery Request will be cancelled automatically. Business Customers on postpaid invoicing are billed according to the terms separately agreed with the Company.</p>
+<h3>5. Customer Responsibilities</h3>
+<ul>
+<li>Provide accurate pickup and drop-off addresses</li>
+<li>Ensure the vehicle is accessible at the scheduled pickup time</li>
+<li>Provide the pickup authorization PIN to the Driver</li>
+<li>Ensure the recipient or an authorized representative is available at drop-off</li>
+<li>Ensure the vehicle meets the Platform's published vehicle standards</li>
+</ul>
+<h3>6. Cancellation &amp; Refunds</h3>
+<p>The Customer may cancel a Delivery Request before a Driver has been assigned at no charge. Once a Driver has accepted, cancellation may be subject to a fee. Refunds are processed back to the original payment method and may take several business days to appear.</p>
+<h3>7. Insurance</h3>
+<p>Every Delivery Request includes an insurance fee that covers the vehicle during transit, subject to the coverage limits and exclusions published by the Company.</p>
+<h3>8. Limitation of Liability</h3>
+<p>To the maximum extent permitted by law, the Company's total liability for any claim is limited to the amount the Customer paid for the Delivery Request giving rise to the claim.</p>
+<h3>9. Governing Law</h3>
+<p>These Terms shall be governed by the laws of the State of California. Any disputes shall be resolved in the courts located in the State of California.</p>
+<h3>10. Contact</h3>
+<p>For any questions about these Terms, contact: <a href="mailto:support@101drivers.com">support@101drivers.com</a></p>
+<div class="blockquote"><p><strong>Placeholder content.</strong> These Customer Terms of Service are provided as a starting point. An administrator must review and refine them with legal counsel before publishing. These Terms are distinct from the driver-facing Terms of Service.</p></div>`
+
+// Placeholder content for the Customer Privacy Policy.
+// Distinct from the driver-facing Privacy Policy (PRIVACY_HTML above).
+const CUSTOMER_PRIVACY_HTML = `<h2>Customer Privacy Policy</h2>
+<p><em>Last updated: To be set by administrator.</em></p>
+<p>This Customer Privacy Policy describes how 101 Drivers, Inc. ("Company") collects, uses, and shares personal information of customers and dealers ("Customer") who use the 101 Drivers platform to book and manage vehicle delivery services.</p>
+<h3>1. Information We Collect</h3>
+<ul>
+<li><strong>Account Information:</strong> Name, email, phone, password (hashed), account preferences.</li>
+<li><strong>Business Information:</strong> For business customers, business name, address, contact info, monthly delivery volume.</li>
+<li><strong>Payment Information:</strong> Stripe customer ID, saved payment method identifiers (we do not store full card numbers).</li>
+<li><strong>Vehicle Information:</strong> License plate, make, model, color, VIN last-4, vehicle standards attestation.</li>
+<li><strong>Recipient Information:</strong> Recipient name, email, phone for delivery coordination.</li>
+<li><strong>Delivery Information:</strong> Pickup/drop-off addresses, scheduled times, delivery status, compliance evidence.</li>
+<li><strong>Location Information:</strong> Precise device location during active delivery coordination.</li>
+</ul>
+<h3>2. How We Use Your Information</h3>
+<ul>
+<li>Register and authenticate Customer accounts</li>
+<li>Process Delivery Requests, Quotes, and payments</li>
+<li>Coordinate pickup and drop-off with Drivers</li>
+<li>Provide real-time tracking and delivery status updates</li>
+<li>Investigate and resolve disputes, claims, and insurance incidents</li>
+<li>Detect and prevent fraud, abuse, and prohibited conduct</li>
+<li>Provide customer support and improve the Platform</li>
+<li>Send service notifications (email-first; SMS optional)</li>
+</ul>
+<h3>3. How We Share Your Information</h3>
+<ul>
+<li><strong>Drivers:</strong> Pickup/drop-off addresses, vehicle info, recipient contact info, pickup PIN — only after a Driver accepts the Delivery Request.</li>
+<li><strong>Payment Processors:</strong> Stripe and other processors to charge saved payment methods and process refunds.</li>
+<li><strong>Insurance Partners:</strong> Coverage and claims information in the event of an insurance incident.</li>
+<li><strong>Service Providers:</strong> Infrastructure, analytics, and communications providers that support the Platform.</li>
+<li><strong>Legal Authorities:</strong> When required by law or to protect rights, property, or safety.</li>
+</ul>
+<p>We do not sell Customer personal information to third parties for money.</p>
+<h3>4. Data Retention</h3>
+<p>We retain Customer information for as long as the account is active, and for a reasonable period thereafter to comply with legal obligations, resolve disputes, and enforce agreements. Delivery records and compliance evidence may be retained longer as required by insurance, tax, or regulatory requirements.</p>
+<h3>5. Security</h3>
+<p>We take reasonable measures to protect Customer information, including encryption in transit and at rest, access controls, and regular security reviews. However, no method of transmission over the Internet or electronic storage is 100% secure.</p>
+<h3>6. Customer Rights</h3>
+<ul>
+<li><strong>Access:</strong> Request a copy of the personal information we hold about you.</li>
+<li><strong>Correction:</strong> Request correction of inaccurate or incomplete information.</li>
+<li><strong>Deletion:</strong> Request deletion of your personal information, subject to legal retention obligations.</li>
+<li><strong>Opt-Out:</strong> Unsubscribe from promotional emails and text messages at any time.</li>
+<li><strong>Data Portability:</strong> Receive your personal information in a structured, machine-readable format.</li>
+</ul>
+<p>To exercise any of these rights, contact <a href="mailto:support@101drivers.com">support@101drivers.com</a>.</p>
+<h3>7. Cookies</h3>
+<p>The Platform uses cookies and similar technologies for authentication, session management, and analytics. Customers can control cookies through their browser settings.</p>
+<h3>8. Children's Privacy</h3>
+<p>The Platform is not directed to children under 18, and we do not knowingly collect personal information from children.</p>
+<h3>9. Changes to This Policy</h3>
+<p>We may update this Privacy Policy from time to time. We will notify Customers of material changes by email or by posting a notice on the Platform.</p>
+<h3>10. Contact Us</h3>
+<p>For any questions or concerns about this Privacy Policy, contact: <a href="mailto:support@101drivers.com">support@101drivers.com</a></p>
+<div class="blockquote"><p><strong>Placeholder content.</strong> This Customer Privacy Policy is provided as a starting point. An administrator must review and refine it with legal counsel before publishing. This Privacy Policy is distinct from the driver-facing Privacy Policy.</p></div>`
+
 const CONTENT_SECTIONS = [
   { key: 'agreement', label: 'Independent Driver Agreement', icon: Handshake, type: 'richtext', importHtml: AGREEMENT_HTML },
   { key: 'customer-agreement', label: 'Customer Agreement', icon: Handshake, type: 'richtext', importHtml: CUSTOMER_AGREEMENT_HTML },
+  { key: 'customer-terms', label: 'Customer Terms of Service', icon: FileText, type: 'richtext', importHtml: CUSTOMER_TERMS_HTML },
+  { key: 'customer-privacy', label: 'Customer Privacy Policy', icon: Shield, type: 'richtext', importHtml: CUSTOMER_PRIVACY_HTML },
   { key: 'terms', label: 'Terms of Service', icon: FileText, type: 'richtext', importHtml: TERMS_HTML },
   { key: 'privacy', label: 'Privacy Policy', icon: Shield, type: 'richtext', importHtml: PRIVACY_HTML },
   { key: 'help-driver', label: 'Driver Help FAQs', icon: HelpCircle, type: 'faq', importHtml: null },

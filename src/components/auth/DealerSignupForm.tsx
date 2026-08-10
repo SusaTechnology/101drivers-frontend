@@ -223,10 +223,11 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   const [autocompleteService, setAutocompleteService] = useState<google.maps.places.AutocompleteService | null>(null);
   const [placesService, setPlacesService] = useState<google.maps.places.PlacesService | null>(null);
 
-  // Policy sheet (Customer Agreement / Terms / Privacy) — opened inline so
-  // the dealer doesn't lose their partially-filled signup form.
+  // Policy sheet (Customer Agreement / Customer Terms / Customer Privacy) —
+  // opened inline so the dealer doesn't lose their partially-filled signup form.
+  // These are the CUSTOMER versions, distinct from the driver-facing ones.
   const [openPolicySheet, setOpenPolicySheet] = useState<
-    "customer-agreement" | "terms" | "privacy" | null
+    "customer-agreement" | "customer-terms" | "customer-privacy" | null
   >(null);
 
   // Load Google Maps API only if isLoaded is not provided externally
@@ -1553,7 +1554,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       type="button"
       onClick={(e) => {
         e.preventDefault();
-        setOpenPolicySheet("terms");
+        setOpenPolicySheet("customer-terms");
       }}
       className="font-extrabold hover:text-primary underline inline"
     >
@@ -1564,7 +1565,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       type="button"
       onClick={(e) => {
         e.preventDefault();
-        setOpenPolicySheet("privacy");
+        setOpenPolicySheet("customer-privacy");
       }}
       className="font-extrabold hover:text-primary underline inline"
     >

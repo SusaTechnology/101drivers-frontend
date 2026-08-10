@@ -15,7 +15,13 @@ import {
 interface PolicySheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  type: "agreement" | "customer-agreement" | "terms" | "privacy";
+  type:
+    | "agreement"
+    | "customer-agreement"
+    | "customer-terms"
+    | "customer-privacy"
+    | "terms"
+    | "privacy";
   onCloseAction?: () => void;
   closeLabel?: string;
   fromSignUp: boolean;
@@ -116,6 +122,10 @@ export default function PolicySheet({
       ? "Independent Driver Agreement"
       : type === "customer-agreement"
       ? "Customer Agreement"
+      : type === "customer-terms"
+      ? "Customer Terms of Service"
+      : type === "customer-privacy"
+      ? "Customer Privacy Policy"
       : type === "terms"
       ? "Terms of Service"
       : "Privacy Policy";
@@ -124,6 +134,10 @@ export default function PolicySheet({
       ? "Effective: April 1, 2026"
       : type === "customer-agreement"
       ? "Effective date: set by administrator"
+      : type === "customer-terms"
+      ? "Effective date: set by administrator"
+      : type === "customer-privacy"
+      ? "Last updated: set by administrator"
       : type === "terms"
       ? "Effective date: March 2026"
       : "Last updated: March 2026";
@@ -238,6 +252,78 @@ export default function PolicySheet({
                       understand and accept all of the terms outlined in this
                       Agreement once it is published, and that the platform may
                       update the published content from time to time.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {type === "customer-terms" && (
+                <>
+                  <p>
+                    These Customer Terms of Service ("Terms") govern the use
+                    of the 101 Drivers platform by customers and dealers
+                    ("Customer") for booking and managing vehicle delivery
+                    services. By creating an account or submitting a Delivery
+                    Request, the Customer agrees to be bound by these Terms.
+                  </p>
+
+                  <div className="flex items-center gap-2 mt-6 mb-2">
+                    <Info className="h-4 w-4 text-lime-500" />
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">
+                      Placeholder Content
+                    </h3>
+                  </div>
+                  <p>
+                    The full Customer Terms of Service has not been published
+                    yet. An administrator must publish it via the Content
+                    Management page (Admin → Content → Customer Terms of
+                    Service) using the WYSIWYG editor. Once published, the saved
+                    content will replace this placeholder automatically.
+                  </p>
+
+                  <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 flex gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0" />
+                    <p className="text-[11px] leading-normal font-medium">
+                      These Terms are distinct from the driver-facing Terms
+                      of Service. The Customer version only applies to
+                      customers and dealers using the platform to book
+                      deliveries.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {type === "customer-privacy" && (
+                <>
+                  <p>
+                    This Customer Privacy Policy describes how 101 Drivers,
+                    Inc. ("Company") collects, uses, and shares personal
+                    information of customers and dealers ("Customer") who use
+                    the 101 Drivers platform to book and manage vehicle
+                    delivery services.
+                  </p>
+
+                  <div className="flex items-center gap-2 mt-6 mb-2">
+                    <Info className="h-4 w-4 text-lime-500" />
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">
+                      Placeholder Content
+                    </h3>
+                  </div>
+                  <p>
+                    The full Customer Privacy Policy has not been published
+                    yet. An administrator must publish it via the Content
+                    Management page (Admin → Content → Customer Privacy
+                    Policy) using the WYSIWYG editor. Once published, the
+                    saved content will replace this placeholder automatically.
+                  </p>
+
+                  <div className="mt-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 flex gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0" />
+                    <p className="text-[11px] leading-normal font-medium">
+                      This Privacy Policy is distinct from the driver-facing
+                      Privacy Policy. The Customer version only applies to
+                      customers and dealers using the platform to book
+                      deliveries.
                     </p>
                   </div>
                 </>
