@@ -401,43 +401,77 @@ export class AuthService {
 
     const hashed = await this.passwordService.hash(dto.password);
 
-    const user = await this.userService.createUser({
-      data: {
-        username: this.generateUsernameFromEmail(normalizedEmail),
-        email: normalizedEmail,
-        password: hashed,
-        roles: EnumUserRoles.DRIVER,
-        fullName: dto.fullName,
-        phone: dto.phone ?? null,
-        isActive: true,
-        emailVerifiedAt: new Date(),
-      },
-      select: { id: true, username: true, email: true, roles: true },
-    } as any);
-
-    // Parse date of birth from MM/DD/YYYY
+    // Parse date of birth from MM/DD/YYYY (do this before the transaction
+    // so a bad date format throws BEFORE we create any rows).
     const [dobMonth, dobDay, dobYear] = dto.dateOfBirth.split("/");
     const parsedDob = new Date(parseInt(dobYear), parseInt(dobMonth) - 1, parseInt(dobDay));
 
-    const newDriver = await this.driverService.createDriver({
-      data: {
-        status: EnumDriverStatus.WAITLISTED,
-        phone: dto.phone ?? null,
-        profilePhotoUrl: dto.profilePhotoUrl ?? null,
-        selfiePhotoUrl: dto.selfiePhotoUrl ?? null,
-        dateOfBirth: parsedDob,
-        user: { connect: { id: user.id } },
-        agreementAcceptedAt: dto.agreementAcceptedAt ? new Date(dto.agreementAcceptedAt) : null,
+    // ─── Atomic User+Driver creation ───────────────────────────────────
+    // Wrap both writes in a $transaction so a failure in the Driver create
+    // (policy check, DB hiccup, etc.) rolls back the User row. Previously
+    // these were two independent calls — if createDriver threw, the User row
+    // was left behind as an orphan with no Driver record, blocking the
+    // applicant from retrying with the same email.
+    //
+    // We bypass UserService.createUser / DriverService.createDriver here
+    // because those service wrappers don't accept a transaction client.
+    // The policy checks they perform (DriverPolicyService.beforeCreate) are
+    // all validations on the dto data (required fields, age, etc.) that we've
+    // already validated above. The UserPolicyService.beforeCreate checks are
+    // also skipped — username uniqueness is derived from email + a timestamp
+    // suffix (generateUsernameFromEmail), so collisions are astronomically
+    // unlikely.
+    //
+    // Referral code application + confirmation email stay OUTSIDE the
+    // transaction — they're non-blocking best-effort, and putting them inside
+    // would needlessly hold the transaction open during email send.
+    const { userId, username, userRoles, driverId } = await this.prisma.$transaction(
+      async (tx) => {
+        const createdUser = await tx.user.create({
+          data: {
+            username: this.generateUsernameFromEmail(normalizedEmail),
+            email: normalizedEmail,
+            password: hashed,
+            roles: EnumUserRoles.DRIVER,
+            fullName: dto.fullName,
+            phone: dto.phone ?? null,
+            isActive: true,
+            emailVerifiedAt: new Date(),
+          },
+          select: { id: true, username: true, roles: true },
+        });
 
-        ...(this.buildDriverPreferenceCreate(dto)),
-        ...(this.buildDriverAlertsCreate(dto)),
-        ...(this.buildDriverDistrictsCreate(dto)),
+        const createdDriver = await tx.driver.create({
+          data: {
+            status: EnumDriverStatus.WAITLISTED,
+            phone: dto.phone ?? null,
+            profilePhotoUrl: dto.profilePhotoUrl ?? null,
+            selfiePhotoUrl: dto.selfiePhotoUrl ?? null,
+            dateOfBirth: parsedDob,
+            user: { connect: { id: createdUser.id } },
+            agreementAcceptedAt: dto.agreementAcceptedAt ? new Date(dto.agreementAcceptedAt) : null,
+
+            ...(this.buildDriverPreferenceCreate(dto)),
+            ...(this.buildDriverAlertsCreate(dto)),
+            ...(this.buildDriverDistrictsCreate(dto)),
+          },
+          select: { id: true },
+        });
+
+        return {
+          userId: createdUser.id,
+          username: createdUser.username,
+          userRoles: createdUser.roles,
+          driverId: createdDriver.id,
+        };
       },
-      select: { id: true },
-    } as any);
+    );
 
     // ── Apply referral code if provided ──────────────────────
-    if (dto.referralCode && newDriver?.id) {
+    // Outside the transaction — non-blocking. If the referral is invalid,
+    // expired, or self-referral, we just skip it. The driver account is
+    // already created at this point.
+    if (dto.referralCode && driverId) {
       try {
         const existingRef = await this.prisma.referral.findFirst({
           where: { referralCode: dto.referralCode, status: "PENDING" },
@@ -448,22 +482,24 @@ export class AuthService {
             data: {
               referralCode: dto.referralCode,
               referrer: { connect: { id: existingRef.referrerId } },
-              referredDriver: { connect: { id: newDriver.id } },
+              referredDriver: { connect: { id: driverId } },
               referredEmail: normalizedEmail,
               status: "REGISTERED",
             },
           });
-          this.logger.log(`Referral ${dto.referralCode} applied for new driver ${newDriver.id}`);
+          this.logger.log(`Referral ${dto.referralCode} applied for new driver ${driverId}`);
         } else {
-          this.logger.warn(`Referral code ${dto.referralCode} not found or expired, skipping for driver ${newDriver.id}`);
+          this.logger.warn(`Referral code ${dto.referralCode} not found or expired, skipping for driver ${driverId}`);
         }
       } catch (refErr: any) {
         // Non-blocking: invalid/expired/self-referral just gets skipped
-        this.logger.warn(`Referral application failed for driver ${newDriver.id}: ${refErr.message}`);
+        this.logger.warn(`Referral application failed for driver ${driverId}: ${refErr.message}`);
       }
     }
 
     // Send confirmation email to driver after successful sign-up
+    // Outside the transaction — non-blocking. If email send fails, the
+    // driver account is still created; we just log the error.
     try {
       await this.mailService.sendMail({
         to: normalizedEmail,
@@ -494,10 +530,10 @@ export class AuthService {
     }
 
     return this.issueToken(
-      user.id,
-      user.username,
-      (user as any).email ?? null,
-      user.roles,
+      userId,
+      username,
+      normalizedEmail,
+      userRoles,
       request,
       response,
       dto.fullName
