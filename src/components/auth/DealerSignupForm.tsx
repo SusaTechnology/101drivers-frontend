@@ -55,6 +55,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
+import PolicySheet from "@/components/shared/PolicySheet";
 
 // Props
 interface DealerSignupFormProps {
@@ -221,6 +222,12 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   // Services for Places API
   const [autocompleteService, setAutocompleteService] = useState<google.maps.places.AutocompleteService | null>(null);
   const [placesService, setPlacesService] = useState<google.maps.places.PlacesService | null>(null);
+
+  // Policy sheet (Customer Agreement / Terms / Privacy) — opened inline so
+  // the dealer doesn't lose their partially-filled signup form.
+  const [openPolicySheet, setOpenPolicySheet] = useState<
+    "customer-agreement" | "terms" | "privacy" | null
+  >(null);
 
   // Load Google Maps API only if isLoaded is not provided externally
   const internalLoader = useJsApiLoader({
@@ -1531,21 +1538,38 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
     )}
   >
     I agree to receive email notifications and accept the{" "}
-    <Link
-      to="/terms"
-      className="font-extrabold hover:text-primary underline"
-      target="_blank"
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        setOpenPolicySheet("customer-agreement");
+      }}
+      className="font-extrabold hover:text-primary underline inline"
+    >
+      Customer Agreement
+    </button>
+    ,{" "}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        setOpenPolicySheet("terms");
+      }}
+      className="font-extrabold hover:text-primary underline inline"
     >
       Terms of Service
-    </Link>{" "}
-    and{" "}
-    <Link
-      to="/privacy"
-      className="font-extrabold hover:text-primary underline"
-      target="_blank"
+    </button>
+    , and{" "}
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        setOpenPolicySheet("privacy");
+      }}
+      className="font-extrabold hover:text-primary underline inline"
     >
       Privacy Policy
-    </Link>
+    </button>
     .
   </Label>
 </div>
@@ -1717,6 +1741,18 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
             </Card>
           </section>
         )}
+
+        {/* Inline policy sheet — opens when a dealer clicks Customer Agreement /
+            Terms of Service / Privacy Policy in the checkbox label. Renders
+            above the form so the dealer keeps their entered data. */}
+        <PolicySheet
+          open={!!openPolicySheet}
+          onOpenChange={(open) => {
+            if (!open) setOpenPolicySheet(null);
+          }}
+          type={openPolicySheet ?? "customer-agreement"}
+          fromSignUp
+        />
     </div>
   );
 }

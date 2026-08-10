@@ -111,8 +111,17 @@ const PRIVACY_HTML = `<h2>Privacy Policy</h2>
 <h3>Contact Us</h3>
 <p>For any questions or concerns about your privacy, contact us at: <a href="mailto:driver@101drivers.com">driver@101drivers.com</a></p>`
 
+// Placeholder content for the Customer Agreement.
+// Admins are expected to replace this with the actual dealer/customer-facing
+// agreement via the WYSIWYG editor on first use.
+const CUSTOMER_AGREEMENT_HTML = `<h2>Customer Agreement</h2>
+<p><em>Effective date: To be set by administrator.</em></p>
+<p>This Customer Agreement ("Agreement") governs the use of the 101 Drivers platform by customers and dealers (collectively, "Customer"). By checking the agreement box during signup, the Customer acknowledges that they have read, understood, and agree to be bound by the terms and conditions below.</p>
+<div class="blockquote"><p><strong>Placeholder content.</strong> An administrator must publish the full Customer Agreement via this editor before it is shown to customers. The text above will appear as a fallback until replaced.</p></div>`
+
 const CONTENT_SECTIONS = [
   { key: 'agreement', label: 'Independent Driver Agreement', icon: Handshake, type: 'richtext', importHtml: AGREEMENT_HTML },
+  { key: 'customer-agreement', label: 'Customer Agreement', icon: Handshake, type: 'richtext', importHtml: CUSTOMER_AGREEMENT_HTML },
   { key: 'terms', label: 'Terms of Service', icon: FileText, type: 'richtext', importHtml: TERMS_HTML },
   { key: 'privacy', label: 'Privacy Policy', icon: Shield, type: 'richtext', importHtml: PRIVACY_HTML },
   { key: 'help-driver', label: 'Driver Help FAQs', icon: HelpCircle, type: 'faq', importHtml: null },

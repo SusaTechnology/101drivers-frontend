@@ -20,6 +20,7 @@ import { PrismaService } from "../prisma/prisma.service";
 export class ContentController {
   private static readonly VALID_KEYS = new Set([
     "agreement",
+    "customer-agreement",
     "privacy",
     "terms",
     "help-driver",
