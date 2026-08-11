@@ -298,8 +298,19 @@ export class PricingEngineService {
         );
       }
 
+      // Track the previous band's upper bound so we can use it as the next
+      // band's lower bound (ensures contiguity — see comment in loop body).
+      let prevUpper = 0;
       for (const rule of sortedRules) {
-        const lower = Number(rule.minMiles);
+        // Use the PREVIOUS band's maxMiles as this band's lower bound so the
+        // bands are always contiguous. This avoids the $0.02 gap that occurs
+        // when admins enter minMiles=25.01 / 75.01 (the 0.01 anti-overlap
+        // offset) — without this fix, those 0.01 miles at each boundary
+        // would fall through the cracks and never be billed.
+        // Example: 100mi with A(0-25@$2), B(25.01-75@$1.80), C(75.01-@$1.75)
+        //   buggy (rule.minMiles): A=25mi + B=49.99mi + C=24.99mi = 99.98mi
+        //   fixed (prevUpper):     A=25mi + B=50mi    + C=25mi    = 100mi
+        const lower = prevUpper;
         const upper = rule.maxMiles == null ? Infinity : Number(rule.maxMiles);
         const milesInBand = Math.max(
           0,
@@ -309,6 +320,7 @@ export class PricingEngineService {
         distanceCharge = Number(
           (distanceCharge + milesInBand * rate).toFixed(2)
         );
+        prevUpper = upper;
       }
     }
 
