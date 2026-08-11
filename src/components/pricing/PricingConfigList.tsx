@@ -77,7 +77,6 @@ import {
   type BulkAssignPricingResponse,
 } from '@/hooks/pricing/usePricingConfigs';
 import type { PricingConfig, PricingMode, PricingCustomer, PricingTier, CategoryRule } from '@/types/pricing';
-import { calculatePricing, type PricingCalcConfig } from '@/lib/pricing/calculate';
 
 // Types for customers (simplified)
 interface Customer {
@@ -225,36 +224,24 @@ function FinancialSection({ config }: { config: PricingConfig }) {
 // ---------- Mode-Specific Section (full detail per type) ----------
 function ModeSpecificSection({ config }: { config: PricingConfig }) {
   if (config.pricingMode === 'PER_MILE') {
-    // Use the shared calculatePricing() utility — same math as the backend
-    // quote engine. This honors flatMiles (free miles allowance) so the
-    // displayed total matches what a real quote would charge.
+    // Flat (PER_MILE) pricing — the formula is:
+    //   price = flat_fee + max(0, miles − flat_miles) × per_mile_rate
     //
-    // The MATH is 100% driven by the config values from the database
-    // (baseFee, flatMiles, perMileRate, insuranceFee, transactionFeePct,
-    // transactionFeeFixed, feePassThrough). No hardcoded rates or formulas —
-    // only the sample distance (50mi) is fixed, purely for illustration.
-    const sampleMiles = 50;
-    const calcConfig: PricingCalcConfig = {
-      id: config.id,
-      pricingMode: config.pricingMode,
-      baseFee: config.baseFee,
-      flatMiles: config.flatMiles,
-      perMileRate: config.perMileRate,
-      insuranceFee: config.insuranceFee,
-      transactionFeePct: config.transactionFeePct,
-      transactionFeeFixed: config.transactionFeeFixed,
-      feePassThrough: config.feePassThrough,
-      driverSharePct: config.driverSharePct,
-      tiers: config.tiers || [],
-      categoryRules: config.categoryRules || [],
-    };
-    let sampleTotal: number | null = null;
-    try {
-      const r = calculatePricing({ config: calcConfig, distanceMiles: sampleMiles });
-      sampleTotal = r.estimatedPrice;
-    } catch {
-      sampleTotal = null;
-    }
+    // This green "example" card shows ONLY the flat pricing math, using
+    // values straight from the database config (baseFee, flatMiles,
+    // perMileRate). It does NOT include insurance/transaction fees —
+    // those are itemized separately in the FinancialSection above and in
+    // the edit page's Quote Preview. The sample distance (75mi) is the
+    // only fixed value, purely for illustration.
+    const sampleMiles = 75;
+    const baseFee = config.baseFee ?? 0;
+    const flatMiles = config.flatMiles ?? 0;
+    const perMileRate = config.perMileRate ?? 0;
+    const hasPerMileRate = config.perMileRate != null;
+    const overageMiles = Math.max(0, sampleMiles - flatMiles);
+    const overageCharge = overageMiles * perMileRate;
+    const exampleTotal = baseFee + overageCharge;
+    const hasFlatMiles = config.flatMiles != null && config.flatMiles > 0;
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-2 mb-4">
@@ -263,32 +250,58 @@ function ModeSpecificSection({ config }: { config: PricingConfig }) {
           </div>
           <h4 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">Per-Mile Pricing</h4>
         </div>
-        <div className="rounded-2xl bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-900/30 p-6 text-center">
-          <Route className="w-8 h-8 text-teal-500 mx-auto mb-2" />
-          <div className="text-4xl font-black text-teal-700 dark:text-teal-300">${config.perMileRate?.toFixed(2) ?? '—'}</div>
-          <div className="text-sm text-teal-600 dark:text-teal-400 font-bold mt-1">per mile</div>
-          <div className="mt-4 pt-4 border-t border-teal-200 dark:border-teal-900/30 grid grid-cols-2 gap-4">
+        <div className="rounded-2xl bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-900/30 p-6">
+          <div className="text-center">
+            <Route className="w-8 h-8 text-teal-500 mx-auto mb-2" />
+            <div className="text-4xl font-black text-teal-700 dark:text-teal-300">
+              ${perMileRate.toFixed(2)}
+            </div>
+            <div className="text-sm text-teal-600 dark:text-teal-400 font-bold mt-1">per mile</div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-teal-200 dark:border-teal-900/30 grid grid-cols-2 gap-4 text-center">
             <div>
-              <div className="text-xs text-teal-500/70">Base Fee</div>
-              <div className="text-lg font-bold text-teal-800 dark:text-teal-200">${config.baseFee.toFixed(2)}</div>
+              <div className="text-xs text-teal-500/70">Flat Fee</div>
+              <div className="text-lg font-bold text-teal-800 dark:text-teal-200">${baseFee.toFixed(2)}</div>
+              <div className="text-[10px] text-teal-500/70 mt-0.5">
+                {hasFlatMiles ? `covers first ${flatMiles} mi` : 'from mile 0'}
+              </div>
             </div>
             <div>
-              <div className="text-xs text-teal-500/70">Insurance Fee</div>
-              <div className="text-lg font-bold text-teal-800 dark:text-teal-200">${config.insuranceFee.toFixed(2)}</div>
+              <div className="text-xs text-teal-500/70">Per-Mile Rate</div>
+              <div className="text-lg font-bold text-teal-800 dark:text-teal-200">${perMileRate.toFixed(2)}/mi</div>
+              <div className="text-[10px] text-teal-500/70 mt-0.5">
+                {hasFlatMiles ? `after ${flatMiles} mi` : 'every mile'}
+              </div>
             </div>
           </div>
-          {config.flatMiles != null && config.flatMiles > 0 && (
-            <div className="mt-3 text-xs text-teal-600 dark:text-teal-400">
-              First <strong>{config.flatMiles} mi</strong> covered by base fee, then ${config.perMileRate?.toFixed(2) ?? '0.00'}/mi
+
+          {/* Formula + worked example — flat pricing math only (no insurance/transaction). */}
+          <div className="mt-4 pt-4 border-t border-teal-200 dark:border-teal-900/30">
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-teal-500/70 mb-2">Formula</div>
+            <code className="block text-[11px] text-teal-700 dark:text-teal-300 font-mono leading-relaxed bg-white/60 dark:bg-slate-900/40 rounded-lg px-3 py-2 break-all">
+              price = flat_fee + max(0, miles − flat_miles) × per_mile_rate
+            </code>
+
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-teal-500/70 mt-3 mb-2">
+              Example ({sampleMiles} mi)
             </div>
-          )}
-          <div className="text-xs text-teal-500/70 mt-3">
-            Total for {sampleMiles} mi example:{' '}
-            {sampleTotal != null ? (
-              <strong className="text-teal-700 dark:text-teal-300">${sampleTotal.toFixed(2)}</strong>
+            {hasPerMileRate ? (
+              <div className="text-[11px] text-teal-700 dark:text-teal-300 font-mono leading-relaxed bg-white/60 dark:bg-slate-900/40 rounded-lg px-3 py-2 break-all">
+                ${baseFee.toFixed(2)} + max(0, {sampleMiles} − {flatMiles}) × ${perMileRate.toFixed(2)}
+                <br />
+                = ${baseFee.toFixed(2)} + {overageMiles} × ${perMileRate.toFixed(2)}
+                <br />
+                = <strong className="text-teal-800 dark:text-teal-200 text-sm">${exampleTotal.toFixed(2)}</strong>
+              </div>
             ) : (
-              <span className="text-amber-600">— set perMileRate to calculate</span>
+              <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+                Set per-mile rate to see example calculation.
+              </div>
             )}
+            <p className="text-[10px] text-teal-500/70 mt-2 leading-relaxed">
+              Insurance, transaction fees, and driver share are itemized in the edit page Quote Preview.
+            </p>
           </div>
         </div>
       </div>
