@@ -1212,48 +1212,98 @@ export function PricingConfigForm({
 
             {preview ? (
               <div className="space-y-3">
-                {/* Transportation / Tier / Category line — mode-aware */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">
-                    {pricingMode === 'PER_MILE' && (
-                      <>
-                        Transportation{' '}
-                        {preview.feesBreakdown.flatMilesAllowance &&
-                        preview.feesBreakdown.flatMilesAllowance > 0
-                          ? `(max(0, ${previewDistance} − ${preview.feesBreakdown.flatMilesAllowance}) mi × $${watchedPerMileRate ?? 0}/mi)`
-                          : `(${previewDistance} mi × $${watchedPerMileRate ?? 0}/mi)`}
-                      </>
-                    )}
-                    {pricingMode === 'FLAT_TIER' && (
-                      <>Flat tier (matched)</>
-                    )}
-                    {pricingMode === 'CATEGORY_ABC' && (
-                      <>
-                        Category {preview.mileageCategory}{' '}
-                        <span className="text-xs text-slate-400">
-                          ({preview.feesBreakdown.distanceCharge > 0
-                            ? `base + ${previewDistance} mi × rate`
-                            : 'flat price'})
-                        </span>
-                      </>
-                    )}
-                  </span>
-                  <span className="font-bold text-slate-900 dark:text-white">
-                    ${(preview.feesBreakdown.baseFare + preview.feesBreakdown.distanceCharge).toFixed(2)}
-                  </span>
-                </div>
-
-                {/* Show base fee + distance charge separately when they're both non-zero */}
+                {/* ──────────────────────────────────────────────────────────── */}
+                {/* CATEGORY_ABC: progressive tiered breakdown — render every band */}
+                {/* (including bands with 0 miles, dimmed) so the admin can see    */}
+                {/* the full structure of the calculation.                         */}
+                {/* ──────────────────────────────────────────────────────────── */}
                 {pricingMode === 'CATEGORY_ABC' &&
-                  preview.feesBreakdown.distanceCharge > 0 && (
-                    <div className="flex items-center justify-between pl-4 text-xs text-slate-500">
-                      <span>
-                        ↳ base ${preview.feesBreakdown.baseFare.toFixed(2)} +{' '}
-                        distance ${preview.feesBreakdown.distanceCharge.toFixed(2)}
-                      </span>
-                      <span></span>
+                  preview.feesBreakdown.bands &&
+                  preview.feesBreakdown.bands.length > 0 && (
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-4 space-y-2">
+                      <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400 mb-2">
+                        Progressive Tiered Breakdown
+                      </div>
+                      {preview.feesBreakdown.bands.map((band, idx) => {
+                        const isLast =
+                          idx === preview.feesBreakdown.bands!.length - 1;
+                        const isFirst = idx === 0;
+                        const prefix = isFirst
+                          ? 'First'
+                          : isLast
+                          ? 'Final'
+                          : 'Next';
+                        const bandUpperLabel =
+                          band.upperBound == null
+                            ? `${band.lowerBound}+`
+                            : `${band.lowerBound}-${band.upperBound}`;
+                        const isZero = band.milesInBand <= 0;
+                        return (
+                          <div
+                            key={`${band.category}-${idx}`}
+                            className={cn(
+                              'flex items-center justify-between text-xs',
+                              isZero && 'opacity-40'
+                            )}
+                          >
+                            <span className="text-slate-700 dark:text-slate-300">
+                              <span className="font-bold mr-1">{prefix}</span>
+                              {band.milesInBand} mi{' '}
+                              <span className="text-slate-400">
+                                ({bandUpperLabel})
+                              </span>
+                              <span className="mx-1 text-slate-400">·</span>
+                              <span className="text-slate-500">
+                                {band.milesInBand} × ${band.perMileRate.toFixed(2)}
+                              </span>
+                            </span>
+                            <span className="font-bold text-slate-900 dark:text-white tabular-nums">
+                              ${band.amount.toFixed(2)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {/* Subtotal row */}
+                      <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-200 dark:border-slate-800 text-xs">
+                        <span className="font-bold text-slate-700 dark:text-slate-300">
+                          Distance subtotal
+                        </span>
+                        <span className="font-black text-slate-900 dark:text-white tabular-nums">
+                          ${preview.feesBreakdown.distanceCharge.toFixed(2)}
+                        </span>
+                      </div>
+                      {/* Base fee row */}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-700 dark:text-slate-300">
+                          Base fee
+                        </span>
+                        <span className="font-bold text-slate-900 dark:text-white tabular-nums">
+                          ${preview.feesBreakdown.baseFare.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
                   )}
+
+                {/* Transportation line — mode-aware (only shown for non-ABC modes) */}
+                {pricingMode !== 'CATEGORY_ABC' && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                      {pricingMode === 'PER_MILE' && (
+                        <>
+                          Transportation{' '}
+                          {preview.feesBreakdown.flatMilesAllowance &&
+                          preview.feesBreakdown.flatMilesAllowance > 0
+                            ? `(max(0, ${previewDistance} − ${preview.feesBreakdown.flatMilesAllowance}) mi × $${watchedPerMileRate ?? 0}/mi)`
+                            : `(${previewDistance} mi × $${watchedPerMileRate ?? 0}/mi)`}
+                        </>
+                      )}
+                      {pricingMode === 'FLAT_TIER' && <>Flat tier (matched)</>}
+                    </span>
+                    <span className="font-bold text-slate-900 dark:text-white">
+                      ${(preview.feesBreakdown.baseFare + preview.feesBreakdown.distanceCharge).toFixed(2)}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-600 dark:text-slate-400">

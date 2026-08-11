@@ -140,9 +140,30 @@ export interface PricingCalcResult {
     total: number;
     flatMilesAllowance?: number;
     billedMiles?: number;
-    /** Per-band breakdown for ABC mode (informational, for UI display). */
+    /**
+     * Per-band breakdown for ABC mode (informational, for UI display).
+     *
+     * One entry per categoryRule row (sorted by minMiles) — including bands
+     * with 0 miles in them. The UI uses this to render the progressive
+     * tiered breakdown like:
+     *   First  25 mi (0-25):  25 × $2.00 = $50.00
+     *   Next   50 mi (25-75): 50 × $1.80 = $90.00
+     *   Final  25 mi (75+):   25 × $1.75 = $43.75
+     *
+     * Fields:
+     * - category: A/B/C (or whatever the rule's category is)
+     * - lowerBound: previous band's maxMiles (or 0 for the first band)
+     * - upperBound: this band's maxMiles (null = open-ended, e.g. category C)
+     * - milesInBand: actual miles in this band for the trip distance (0 if trip didn't reach this band)
+     * - perMileRate: this band's per-mile rate
+     * - amount: milesInBand × perMileRate (rounded to 2 decimals)
+     * - label: pre-formatted string label for convenience
+     */
     bands?: Array<{
       label: string;
+      category: MileageCategory;
+      lowerBound: number;
+      upperBound: number | null;
       milesInBand: number;
       perMileRate: number;
       amount: number;
@@ -305,6 +326,9 @@ export function calculatePricing(input: PricingCalcInput): PricingCalcResult {
 
       bands.push({
         label: `Band ${rule.category} (${lower}–${rule.maxMiles ?? '∞'} mi @ $${rate.toFixed(2)}/mi)`,
+        category: rule.category,
+        lowerBound: lower,
+        upperBound: rule.maxMiles == null ? null : Number(rule.maxMiles),
         milesInBand: r2(milesInBand),
         perMileRate: rate,
         amount,

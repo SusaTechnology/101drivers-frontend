@@ -106,4 +106,47 @@ for (const c of cases) {
 }
 
 console.log(allPassed ? '\nALL PASS' : '\nSOME FAILED');
-process.exit(allPassed ? 0 : 1);
+
+// ─────────────────────────────────────────────────────────────────────
+// Verify the bands[] array shape for ABC mode — the form's Quote Preview
+// panel renders this directly, so the shape must remain stable.
+// ─────────────────────────────────────────────────────────────────────
+console.log('\n=== bands[] shape verification (100mi, ABC-gaps config) ===');
+const bandsTest = calculatePricing({
+  config: abcConfigWithGaps,
+  distanceMiles: 100,
+});
+const bands = bandsTest.feesBreakdown.bands ?? [];
+console.log(`  bands.length = ${bands.length} (expected 3)`);
+console.log(`  total       = $${bandsTest.estimatedPrice.toFixed(2)} (expected $233.75)`);
+for (const b of bands) {
+  console.log(
+    `  Band ${b.category}: ${b.milesInBand} mi × $${b.perMileRate.toFixed(2)} = $${b.amount.toFixed(2)}  ` +
+    `(lower=${b.lowerBound}, upper=${b.upperBound ?? 'null'})`
+  );
+}
+
+// Hard assertions on the band shape — fail loudly if anyone changes the math
+const expectedBands = [
+  { category: 'A', milesInBand: 25,   rate: 2.0,  amount: 50.00,  lower: 0,  upper: 25 },
+  { category: 'B', milesInBand: 50,   rate: 1.8,  amount: 90.00,  lower: 25, upper: 75 },
+  { category: 'C', milesInBand: 25,   rate: 1.75, amount: 43.75,  lower: 75, upper: null },
+];
+let bandsPass = bands.length === expectedBands.length;
+for (let i = 0; i < expectedBands.length; i++) {
+  const got = bands[i];
+  const want = expectedBands[i];
+  const match =
+    got.category === want.category &&
+    got.milesInBand === want.milesInBand &&
+    got.perMileRate === want.rate &&
+    got.amount === want.amount &&
+    got.lowerBound === want.lower &&
+    got.upperBound === want.upper;
+  if (!match) {
+    bandsPass = false;
+    console.log(`  ✗ Band ${want.category} mismatch: got ${JSON.stringify(got)}`);
+  }
+}
+console.log(bandsPass ? '\nBANDS SHAPE: PASS' : '\nBANDS SHAPE: FAIL');
+process.exit(allPassed && bandsPass ? 0 : 1);
