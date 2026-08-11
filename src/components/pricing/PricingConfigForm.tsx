@@ -1,6 +1,6 @@
 // components/pricing/PricingConfigForm.tsx
 import React from 'react';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
@@ -225,7 +225,18 @@ export function PricingConfigForm({
     }
   }, [initialData, reset, replaceTiers, replaceCategoryRules]);
 
-  // Watch form values for calculations
+  // Watch form values for calculations.
+  //
+  // IMPORTANT: We use `useWatch` (not `watch`) for the array/nested fields
+  // (`categoryRules`, `tiers`) because `useWatch` is reliably reactive to
+  // nested field changes — when the admin edits `categoryRules.1.maxMiles`
+  // in an input, `useWatch` returns a new array reference and triggers the
+  // preview `useMemo` to recompute. Plain `watch('categoryRules')` can return
+  // the same array reference after a nested mutation, which would silently
+  // break the live preview.
+  //
+  // Scalar fields (baseFee, insuranceFee, etc.) are fine with `watch` since
+  // their value IS the reference.
   const watchedBaseFee = watch('baseFee');
   const watchedInsuranceFee = watch('insuranceFee');
   const watchedTransactionFeePct = watch('transactionFeePct');
@@ -234,8 +245,9 @@ export function PricingConfigForm({
   const watchedFlatMiles = watch('flatMiles');
   const watchedTransactionFeeFixed = watch('transactionFeeFixed');
   const watchedFeePassThrough = watch('feePassThrough');
-  const watchedTiers = watch('tiers') as PricingTier[] | undefined;
-  const watchedCategoryRules = watch('categoryRules') as CategoryRule[] | undefined;
+  // useWatch for nested arrays — guaranteed to re-render on nested changes.
+  const watchedTiers = useWatch({ control, name: 'tiers' }) as PricingTier[] | undefined;
+  const watchedCategoryRules = useWatch({ control, name: 'categoryRules' }) as CategoryRule[] | undefined;
 
   // Editable preview distance — admin can type any value to see how the
   // current (unsaved) form state would price it. Defaults to 50 miles.
@@ -320,6 +332,14 @@ export function PricingConfigForm({
   // the form state is incomplete (e.g. PER_MILE without perMileRate, or
   // FLAT_TIER with no matching tier for the preview distance). The UI
   // shows a friendly message instead of crashing.
+  // Stable string signature of all categoryRules + tiers fields — used as an
+  // extra useMemo dep so any nested change (e.g. editing maxMiles on rule B)
+  // is guaranteed to trigger preview recomputation, even if RHF returns a
+  // stable array reference. This is the "belt-and-suspenders" reactivity
+  // guarantee on top of useWatch.
+  const categoryRulesSig = JSON.stringify(watchedCategoryRules ?? []);
+  const tiersSig = JSON.stringify(watchedTiers ?? []);
+
   const preview: PricingCalcResult | null = React.useMemo(() => {
     if (previewDistance == null || previewDistance < 0) return null;
     try {
@@ -342,8 +362,10 @@ export function PricingConfigForm({
     watchedTransactionFeeFixed,
     watchedFeePassThrough,
     watchedDriverSharePct,
-    watchedTiers,
-    watchedCategoryRules,
+    // Signatures capture ANY nested change in the arrays — the actual array
+    // references may or may not change, but the signature always will.
+    categoryRulesSig,
+    tiersSig,
   ]);
 
   // Handle form submission
@@ -1175,9 +1197,15 @@ export function PricingConfigForm({
       {/* Quote Preview — uses shared calculatePricing utility (item 15) */}
       <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
         <CardHeader className="border-b border-slate-100 dark:border-slate-800">
-          <CardTitle className="text-xl font-black">Quote Preview</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-xl font-black">Quote Preview</CardTitle>
+            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
+              Live
+            </Badge>
+          </div>
           <CardDescription className="text-sm mt-1">
-            Live preview using the same math as the backend quote engine. Edit the distance to see how the current (unsaved) config prices it.
+            Live preview using the same math as the backend quote engine. Edit any field above (base fee, category A/B/C rates, max miles, etc.) or the distance below — the preview recalculates instantly from the unsaved form values.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 sm:p-7">
