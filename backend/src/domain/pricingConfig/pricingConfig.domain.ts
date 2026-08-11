@@ -31,6 +31,15 @@ export class PricingConfigDomain extends BaseDomain<
     isDefault: true,
     pricingMode: true,
     baseFee: true,
+    // flatMiles MUST be selected so the frontend can render the
+    // "First N mi covered by base fee" hint on the list page and
+    // populate the flatMiles input on the edit page. Without this,
+    // the API response omits flatMiles entirely — the frontend then
+    // can't tell whether the value is 0 (charge from mile 0) or
+    // simply missing from the payload. This was the root cause of
+    // the list page showing the wrong example total and the edit
+    // page initially loading with an empty flatMiles field.
+    flatMiles: true,
     perMileRate: true,
     insuranceFee: true,
     transactionFeePct: true,
