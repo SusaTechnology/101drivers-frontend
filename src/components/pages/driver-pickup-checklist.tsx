@@ -35,6 +35,7 @@ import {
   Clock,
   Phone,
   MessageSquare,
+  Video,
 } from 'lucide-react'
 import { AddressLink } from '@/components/shared/AddressLink'
 import {
@@ -191,6 +192,11 @@ export default function DriverPickupChecklistPage() {
 
   // Early-start confirmation dialog — shown when driver taps Start Trip before the scheduled window
   const [showEarlyStartDialog, setShowEarlyStartDialog] = useState(false)
+
+  // Dashcam check dialog — ALWAYS shown first when driver taps Start, before
+  // any other confirmation (early-start, GPS, etc.). Reminds the driver to
+  // plug in and turn on their dashcam before beginning the trip.
+  const [showDashcamDialog, setShowDashcamDialog] = useState(false)
 
   // First-pickup-of-day check: if driver has other BOOKED/ACTIVE deliveries besides this one,
   // they've already done or are doing a gig today. If this is their ONLY delivery and it's
@@ -752,7 +758,28 @@ const handleUploadDashboardPhoto = async () => {
     //   return
     // }
 
-    // If before the scheduled window, show confirmation dialog instead of starting immediately
+    // ──────────────────────────────────────────────────────────────
+    // Pop-up sequence when driver taps Start:
+    //   1. Dashcam Check (always — first pop-up)
+    //   2. Early Start Confirmation (only if before pickup window)
+    //   3. Actually start the trip via mutation
+    // ──────────────────────────────────────────────────────────────
+
+    // STEP 1: Always show the Dashcam Check pop-up first. The driver must
+    // acknowledge it (tap "Confirmed") before anything else happens.
+    // After confirming, proceedStep2AfterDashcam() runs the next step
+    // (early-start check or actual trip start).
+    setShowDashcamDialog(true)
+  }
+
+  // Step 2 — called after the driver confirms the Dashcam Check pop-up.
+  // Decides whether to show the Early Start confirmation (if before window)
+  // or to start the trip immediately.
+  const proceedAfterDashcamCheck = () => {
+    setShowDashcamDialog(false)
+
+    // If before the scheduled window, show the Early Start confirmation
+    // as the SECOND pop-up. Otherwise, start the trip now.
     if (delivery?.pickupWindowStart && new Date(delivery.pickupWindowStart) > new Date()) {
       setShowEarlyStartDialog(true)
       return
@@ -1932,7 +1959,33 @@ const handleUploadDashboardPhoto = async () => {
         </div>
       </nav>
 
-      {/* Early Start Confirmation Dialog */}
+      {/* Dashcam Check Dialog — always shown FIRST when driver taps Start */}
+      <AlertDialog open={showDashcamDialog} onOpenChange={setShowDashcamDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <Video className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <AlertDialogTitle className="text-lg font-black">Dashcam Check</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Before you start delivery, make sure your dashcam is plugged in and turned on.
+              Keep it active throughout the trip.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={proceedAfterDashcamCheck}
+              className="lime-btn font-extrabold rounded-xl w-full sm:w-auto"
+            >
+              Confirmed
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Early Start Confirmation Dialog — shown SECOND, after Dashcam Check */}
       <AlertDialog open={showEarlyStartDialog} onOpenChange={setShowEarlyStartDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
