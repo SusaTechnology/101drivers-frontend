@@ -258,7 +258,17 @@ export function PricingConfigForm({
     setPricingMode(newMode);
     setValue('pricingMode', newMode);
 
-    // Reset arrays based on mode
+    // Reset arrays based on mode.
+    //
+    // IMPORTANT: We only set field defaults when the current value is null /
+    // undefined — we NEVER clobber existing values. This way:
+    //   - On the edit page, DB values loaded via initialData are preserved
+    //     even if the admin accidentally re-selects the same mode.
+    //   - On the create page, the admin gets sensible defaults to start from.
+    //   - Switching modes (e.g. ABC → PER_MILE) still clears the unused
+    //     arrays (tiers / categoryRules) and nulls the unused scalar fields,
+    //     but doesn't overwrite the destination mode's fields if they
+    //     already have values.
     if (newMode === 'CATEGORY_ABC') {
       setValue('tiers', []);
       setValue('perMileRate', null);
@@ -277,12 +287,19 @@ export function PricingConfigForm({
       }
     } else if (newMode === 'PER_MILE') {
       // Flat (with extra mileage) — schema name is PER_MILE for backward-compat.
-      // Defaults: $101 base fee covers first 25 mi, then $1.80/mi.
+      // Only set defaults for fields that are currently null/undefined — don't
+      // clobber values that came from the DB or were already edited by the admin.
       setValue('tiers', []);
       setValue('categoryRules', []);
-      setValue('perMileRate', 1.8);
-      setValue('flatMiles', 25);
-      setValue('baseFee', 101);
+      if (watchedPerMileRate == null) {
+        setValue('perMileRate', 1.8);
+      }
+      if (watchedFlatMiles == null) {
+        setValue('flatMiles', 25);
+      }
+      // Note: baseFee is NOT overwritten — it's shared across all modes and
+      // the admin may have already set it. On the create page it comes from
+      // DEFAULT_PRICING_CONFIG; on the edit page it comes from the DB.
     }
   };
 
@@ -653,7 +670,7 @@ export function PricingConfigForm({
                         "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
                         errors.flatMiles ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
                       )}
-                      placeholder="50"
+                      placeholder="25"
                     />
                   </div>
                   {errors.flatMiles && (
@@ -681,7 +698,7 @@ export function PricingConfigForm({
                         "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
                         errors.perMileRate ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
                       )}
-                      placeholder="2.00"
+                      placeholder="1.80"
                     />
                   </div>
                   {errors.perMileRate && (
@@ -693,32 +710,11 @@ export function PricingConfigForm({
                 </div>
               </div>
 
-              {/* Live example breakdown */}
-              {(() => {
-                const exampleMiles = 75;
-                const flatMilesVal = (watch('flatMiles') as number | null | undefined) ?? 0;
-                const perMileRateVal = (watch('perMileRate') as number | null | undefined) ?? 0;
-                const baseFeeVal = (watch('baseFee') as number | null | undefined) ?? 0;
-                const billable = Math.max(0, exampleMiles - (flatMilesVal || 0));
-                const overageCharge = billable * perMileRateVal;
-                const total = (baseFeeVal || 0) + overageCharge;
-                return (
-                  <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">
-                      Live example · {exampleMiles} miles
-                    </div>
-                    <div className="font-mono text-xs text-slate-700 dark:text-slate-300 space-y-1">
-                      <div>flat_fee        = ${baseFeeVal.toFixed(2)}</div>
-                      <div>billable_miles  = max(0, {exampleMiles} − {flatMilesVal || 0}) = <strong>{billable.toFixed(2)} mi</strong></div>
-                      <div>overage_charge  = {billable.toFixed(2)} × ${perMileRateVal.toFixed(2)}/mi = <strong>${overageCharge.toFixed(2)}</strong></div>
-                      <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 text-sm">
-                        <span className="text-slate-500 dark:text-slate-400">total = </span>
-                        <strong className="text-slate-900 dark:text-white">${baseFeeVal.toFixed(2)} + ${overageCharge.toFixed(2)} = ${total.toFixed(2)}</strong>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Note: The full live Quote Preview (with editable distance,
+                  insurance, transaction fees, and the complete breakdown)
+                  is rendered below in the "Quote Preview" card. It uses the
+                  shared calculatePricing() utility — same math as the
+                  backend — and reacts to every input field via useWatch. */}
             </div>
           </CardContent>
         </Card>
