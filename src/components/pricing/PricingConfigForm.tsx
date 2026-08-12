@@ -107,47 +107,6 @@ const createPricingConfigSchema = (pricingMode: PricingMode) => {
 
 type FormSchemaType = z.infer<ReturnType<typeof createPricingConfigSchema>>;
 
-// ──────────────────────────────────────────────────────────────────────────
-// Number input helpers
-//
-// RHF's `valueAsNumber: true` converts the empty string to `NaN`. This causes
-// two problems:
-//
-//   1. The `type="number"` input may display "0" (browser-dependent) after
-//      the user clears the field. When the user then types without selecting
-//      first, digits are appended to "0" → "01" → "010" — confusing.
-//
-//   2. `NaN` propagates through the preview calculation: `NaN ?? 0` returns
-//      `NaN` (not `0`), because `??` only catches `null`/`undefined`.
-//      The preview then shows `$NaN` until the user types a valid number.
-//
-// Fix:
-//   - `selectAllOnFocusIfZeroOrEmpty` — added as `onFocus` on every number
-//     input. When the input's current value is "0", "", or "NaN", the entire
-//     text is selected on focus so the first keystroke REPLACES the stale
-//     "0" instead of appending to it. For non-zero values, the cursor
-//     behaves normally (no select-all) so the user can edit individual digits.
-//
-//   - `nn` / `n` — used in `previewConfig` to coerce `NaN` to `0` (for
-//     required fields) or `null` (for nullable fields) before passing to
-//     `calculatePricing`. This ensures the preview always shows real numbers.
-// ──────────────────────────────────────────────────────────────────────────
-
-const selectAllOnFocusIfZeroOrEmpty = (e: React.FocusEvent<HTMLInputElement>) => {
-  const v = e.target.value;
-  if (v === '0' || v === '' || v === 'NaN') {
-    e.target.select();
-  }
-};
-
-// Coerce to non-nullable number: NaN/null/undefined → 0, else the number.
-const nn = (v: unknown): number =>
-  typeof v === 'number' && !isNaN(v) ? v : 0;
-
-// Coerce to nullable number: NaN/null/undefined → null, else the number.
-const n = (v: unknown): number | null =>
-  typeof v === 'number' && !isNaN(v) ? v : null;
-
 interface PricingConfigFormProps {
   initialData?: Partial<PricingConfigFormData>;
   onSubmit: (data: PricingConfigFormData) => Promise<void>;
@@ -299,17 +258,7 @@ export function PricingConfigForm({
     setPricingMode(newMode);
     setValue('pricingMode', newMode);
 
-    // Reset arrays based on mode.
-    //
-    // IMPORTANT: We only set field defaults when the current value is null /
-    // undefined — we NEVER clobber existing values. This way:
-    //   - On the edit page, DB values loaded via initialData are preserved
-    //     even if the admin accidentally re-selects the same mode.
-    //   - On the create page, the admin gets sensible defaults to start from.
-    //   - Switching modes (e.g. ABC → PER_MILE) still clears the unused
-    //     arrays (tiers / categoryRules) and nulls the unused scalar fields,
-    //     but doesn't overwrite the destination mode's fields if they
-    //     already have values.
+    // Reset arrays based on mode
     if (newMode === 'CATEGORY_ABC') {
       setValue('tiers', []);
       setValue('perMileRate', null);
@@ -328,19 +277,12 @@ export function PricingConfigForm({
       }
     } else if (newMode === 'PER_MILE') {
       // Flat (with extra mileage) — schema name is PER_MILE for backward-compat.
-      // Only set defaults for fields that are currently null/undefined — don't
-      // clobber values that came from the DB or were already edited by the admin.
+      // Defaults: $101 base fee covers first 25 mi, then $1.80/mi.
       setValue('tiers', []);
       setValue('categoryRules', []);
-      if (watchedPerMileRate == null) {
-        setValue('perMileRate', 1.8);
-      }
-      if (watchedFlatMiles == null) {
-        setValue('flatMiles', 25);
-      }
-      // Note: baseFee is NOT overwritten — it's shared across all modes and
-      // the admin may have already set it. On the create page it comes from
-      // DEFAULT_PRICING_CONFIG; on the edit page it comes from the DB.
+      setValue('perMileRate', 1.8);
+      setValue('flatMiles', 25);
+      setValue('baseFee', 101);
     }
   };
 
@@ -361,14 +303,14 @@ export function PricingConfigForm({
   const previewConfig: PricingCalcConfig = {
     id: initialData?.id || 'preview',
     pricingMode,
-    baseFee: nn(watchedBaseFee),
-    flatMiles: n(watchedFlatMiles),
-    perMileRate: n(watchedPerMileRate),
-    insuranceFee: nn(watchedInsuranceFee),
-    transactionFeePct: n(watchedTransactionFeePct),
-    transactionFeeFixed: n(watchedTransactionFeeFixed),
+    baseFee: watchedBaseFee ?? 0,
+    flatMiles: watchedFlatMiles ?? null,
+    perMileRate: watchedPerMileRate ?? null,
+    insuranceFee: watchedInsuranceFee ?? 0,
+    transactionFeePct: watchedTransactionFeePct ?? null,
+    transactionFeeFixed: watchedTransactionFeeFixed ?? null,
     feePassThrough: watchedFeePassThrough ?? true,
-    driverSharePct: nn(watchedDriverSharePct) || 60,
+    driverSharePct: watchedDriverSharePct ?? 60,
     tiers: (watchedTiers ?? []).map((t) => ({
       id: t.id,
       minMiles: t.minMiles,
@@ -706,13 +648,12 @@ export function PricingConfigForm({
                       step="0.01"
                       min="0"
                       {...register('flatMiles', { valueAsNumber: true })}
-                      onFocus={selectAllOnFocusIfZeroOrEmpty}
                       aria-invalid={!!errors.flatMiles}
                       className={cn(
                         "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
                         errors.flatMiles ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
                       )}
-                      placeholder="25"
+                      placeholder="50"
                     />
                   </div>
                   {errors.flatMiles && (
@@ -735,13 +676,12 @@ export function PricingConfigForm({
                       step="0.01"
                       min="0"
                       {...register('perMileRate', { valueAsNumber: true })}
-                      onFocus={selectAllOnFocusIfZeroOrEmpty}
                       aria-invalid={!!errors.perMileRate}
                       className={cn(
                         "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
                         errors.perMileRate ? "border-red-500 ring-2 ring-red-100 dark:ring-red-900/30" : "border-slate-200 dark:border-slate-700"
                       )}
-                      placeholder="1.80"
+                      placeholder="2.00"
                     />
                   </div>
                   {errors.perMileRate && (
@@ -753,11 +693,32 @@ export function PricingConfigForm({
                 </div>
               </div>
 
-              {/* Note: The full live Quote Preview (with editable distance,
-                  insurance, transaction fees, and the complete breakdown)
-                  is rendered below in the "Quote Preview" card. It uses the
-                  shared calculatePricing() utility — same math as the
-                  backend — and reacts to every input field via useWatch. */}
+              {/* Live example breakdown */}
+              {(() => {
+                const exampleMiles = 75;
+                const flatMilesVal = (watch('flatMiles') as number | null | undefined) ?? 0;
+                const perMileRateVal = (watch('perMileRate') as number | null | undefined) ?? 0;
+                const baseFeeVal = (watch('baseFee') as number | null | undefined) ?? 0;
+                const billable = Math.max(0, exampleMiles - (flatMilesVal || 0));
+                const overageCharge = billable * perMileRateVal;
+                const total = (baseFeeVal || 0) + overageCharge;
+                return (
+                  <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">
+                      Live example · {exampleMiles} miles
+                    </div>
+                    <div className="font-mono text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                      <div>flat_fee        = ${baseFeeVal.toFixed(2)}</div>
+                      <div>billable_miles  = max(0, {exampleMiles} − {flatMilesVal || 0}) = <strong>{billable.toFixed(2)} mi</strong></div>
+                      <div>overage_charge  = {billable.toFixed(2)} × ${perMileRateVal.toFixed(2)}/mi = <strong>${overageCharge.toFixed(2)}</strong></div>
+                      <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 text-sm">
+                        <span className="text-slate-500 dark:text-slate-400">total = </span>
+                        <strong className="text-slate-900 dark:text-white">${baseFeeVal.toFixed(2)} + ${overageCharge.toFixed(2)} = ${total.toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </CardContent>
         </Card>
@@ -831,7 +792,6 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`categoryRules.${ruleIndex}.minMiles` as const, { valueAsNumber: true })}
-                          onFocus={selectAllOnFocusIfZeroOrEmpty}
                           aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.minMiles}
                           className={cn(
                             "w-full h-11 rounded-2xl border px-4 text-sm",
@@ -850,7 +810,6 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`categoryRules.${ruleIndex}.maxMiles` as const, { valueAsNumber: true })}
-                          onFocus={selectAllOnFocusIfZeroOrEmpty}
                           aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.maxMiles}
                           className={cn(
                             "w-full h-11 rounded-2xl border px-4 text-sm",
@@ -872,7 +831,6 @@ export function PricingConfigForm({
                             type="number"
                             step="0.01"
                             {...register(`categoryRules.${ruleIndex}.baseFee` as const, { valueAsNumber: true })}
-                            onFocus={selectAllOnFocusIfZeroOrEmpty}
                             aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.baseFee}
                             className={cn(
                               "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -894,7 +852,6 @@ export function PricingConfigForm({
                             type="number"
                             step="0.01"
                             {...register(`categoryRules.${ruleIndex}.perMileRate` as const, { valueAsNumber: true })}
-                            onFocus={selectAllOnFocusIfZeroOrEmpty}
                             aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.perMileRate}
                             className={cn(
                               "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -979,7 +936,6 @@ export function PricingConfigForm({
                         type="number"
                         step="0.01"
                         {...register(`tiers.${index}.minMiles` as const, { valueAsNumber: true })}
-                        onFocus={selectAllOnFocusIfZeroOrEmpty}
                         aria-invalid={!!(errors.tiers as any)?.[index]?.minMiles}
                         className={cn(
                           "w-full h-11 rounded-2xl border px-4 text-sm",
@@ -999,7 +955,6 @@ export function PricingConfigForm({
                         type="number"
                         step="0.01"
                         {...register(`tiers.${index}.maxMiles` as const, { valueAsNumber: true })}
-                        onFocus={selectAllOnFocusIfZeroOrEmpty}
                         aria-invalid={!!(errors.tiers as any)?.[index]?.maxMiles}
                         className={cn(
                           "w-full h-11 rounded-2xl border px-4 text-sm",
@@ -1021,7 +976,6 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`tiers.${index}.flatPrice` as const, { valueAsNumber: true })}
-                          onFocus={selectAllOnFocusIfZeroOrEmpty}
                           aria-invalid={!!(errors.tiers as any)?.[index]?.flatPrice}
                           className={cn(
                             "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1084,7 +1038,6 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('baseFee', { valueAsNumber: true })}
-                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.baseFee}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1117,7 +1070,6 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('insuranceFee', { valueAsNumber: true })}
-                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.insuranceFee}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1145,7 +1097,6 @@ export function PricingConfigForm({
                   type="number"
                   step="0.1"
                   {...register('transactionFeePct', { valueAsNumber: true })}
-                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.transactionFeePct}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1173,7 +1124,6 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('transactionFeeFixed', { valueAsNumber: true })}
-                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.transactionFeeFixed}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1201,7 +1151,6 @@ export function PricingConfigForm({
                   type="number"
                   step="0.1"
                   {...register('driverSharePct', { valueAsNumber: true })}
-                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.driverSharePct}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1308,10 +1257,10 @@ export function PricingConfigForm({
                           idx === preview.feesBreakdown.bands!.length - 1;
                         const isFirst = idx === 0;
                         const prefix = isFirst
-                          ? 'First'
+                          ? 'First (A)'
                           : isLast
-                          ? 'Final'
-                          : 'Next';
+                          ? 'Final (C)'
+                          : 'Next (B)';
                         const bandUpperLabel =
                           band.upperBound == null
                             ? `${band.lowerBound}+`
