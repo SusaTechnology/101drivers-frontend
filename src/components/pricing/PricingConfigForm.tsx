@@ -107,6 +107,47 @@ const createPricingConfigSchema = (pricingMode: PricingMode) => {
 
 type FormSchemaType = z.infer<ReturnType<typeof createPricingConfigSchema>>;
 
+// ──────────────────────────────────────────────────────────────────────────
+// Number input helpers
+//
+// RHF's `valueAsNumber: true` converts the empty string to `NaN`. This causes
+// two problems:
+//
+//   1. The `type="number"` input may display "0" (browser-dependent) after
+//      the user clears the field. When the user then types without selecting
+//      first, digits are appended to "0" → "01" → "010" — confusing.
+//
+//   2. `NaN` propagates through the preview calculation: `NaN ?? 0` returns
+//      `NaN` (not `0`), because `??` only catches `null`/`undefined`.
+//      The preview then shows `$NaN` until the user types a valid number.
+//
+// Fix:
+//   - `selectAllOnFocusIfZeroOrEmpty` — added as `onFocus` on every number
+//     input. When the input's current value is "0", "", or "NaN", the entire
+//     text is selected on focus so the first keystroke REPLACES the stale
+//     "0" instead of appending to it. For non-zero values, the cursor
+//     behaves normally (no select-all) so the user can edit individual digits.
+//
+//   - `nn` / `n` — used in `previewConfig` to coerce `NaN` to `0` (for
+//     required fields) or `null` (for nullable fields) before passing to
+//     `calculatePricing`. This ensures the preview always shows real numbers.
+// ──────────────────────────────────────────────────────────────────────────
+
+const selectAllOnFocusIfZeroOrEmpty = (e: React.FocusEvent<HTMLInputElement>) => {
+  const v = e.target.value;
+  if (v === '0' || v === '' || v === 'NaN') {
+    e.target.select();
+  }
+};
+
+// Coerce to non-nullable number: NaN/null/undefined → 0, else the number.
+const nn = (v: unknown): number =>
+  typeof v === 'number' && !isNaN(v) ? v : 0;
+
+// Coerce to nullable number: NaN/null/undefined → null, else the number.
+const n = (v: unknown): number | null =>
+  typeof v === 'number' && !isNaN(v) ? v : null;
+
 interface PricingConfigFormProps {
   initialData?: Partial<PricingConfigFormData>;
   onSubmit: (data: PricingConfigFormData) => Promise<void>;
@@ -320,14 +361,14 @@ export function PricingConfigForm({
   const previewConfig: PricingCalcConfig = {
     id: initialData?.id || 'preview',
     pricingMode,
-    baseFee: watchedBaseFee ?? 0,
-    flatMiles: watchedFlatMiles ?? null,
-    perMileRate: watchedPerMileRate ?? null,
-    insuranceFee: watchedInsuranceFee ?? 0,
-    transactionFeePct: watchedTransactionFeePct ?? null,
-    transactionFeeFixed: watchedTransactionFeeFixed ?? null,
+    baseFee: nn(watchedBaseFee),
+    flatMiles: n(watchedFlatMiles),
+    perMileRate: n(watchedPerMileRate),
+    insuranceFee: nn(watchedInsuranceFee),
+    transactionFeePct: n(watchedTransactionFeePct),
+    transactionFeeFixed: n(watchedTransactionFeeFixed),
     feePassThrough: watchedFeePassThrough ?? true,
-    driverSharePct: watchedDriverSharePct ?? 60,
+    driverSharePct: nn(watchedDriverSharePct) || 60,
     tiers: (watchedTiers ?? []).map((t) => ({
       id: t.id,
       minMiles: t.minMiles,
@@ -665,6 +706,7 @@ export function PricingConfigForm({
                       step="0.01"
                       min="0"
                       {...register('flatMiles', { valueAsNumber: true })}
+                      onFocus={selectAllOnFocusIfZeroOrEmpty}
                       aria-invalid={!!errors.flatMiles}
                       className={cn(
                         "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -693,6 +735,7 @@ export function PricingConfigForm({
                       step="0.01"
                       min="0"
                       {...register('perMileRate', { valueAsNumber: true })}
+                      onFocus={selectAllOnFocusIfZeroOrEmpty}
                       aria-invalid={!!errors.perMileRate}
                       className={cn(
                         "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -788,6 +831,7 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`categoryRules.${ruleIndex}.minMiles` as const, { valueAsNumber: true })}
+                          onFocus={selectAllOnFocusIfZeroOrEmpty}
                           aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.minMiles}
                           className={cn(
                             "w-full h-11 rounded-2xl border px-4 text-sm",
@@ -806,6 +850,7 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`categoryRules.${ruleIndex}.maxMiles` as const, { valueAsNumber: true })}
+                          onFocus={selectAllOnFocusIfZeroOrEmpty}
                           aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.maxMiles}
                           className={cn(
                             "w-full h-11 rounded-2xl border px-4 text-sm",
@@ -827,6 +872,7 @@ export function PricingConfigForm({
                             type="number"
                             step="0.01"
                             {...register(`categoryRules.${ruleIndex}.baseFee` as const, { valueAsNumber: true })}
+                            onFocus={selectAllOnFocusIfZeroOrEmpty}
                             aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.baseFee}
                             className={cn(
                               "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -848,6 +894,7 @@ export function PricingConfigForm({
                             type="number"
                             step="0.01"
                             {...register(`categoryRules.${ruleIndex}.perMileRate` as const, { valueAsNumber: true })}
+                            onFocus={selectAllOnFocusIfZeroOrEmpty}
                             aria-invalid={!!(errors.categoryRules as any)?.[ruleIndex]?.perMileRate}
                             className={cn(
                               "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -932,6 +979,7 @@ export function PricingConfigForm({
                         type="number"
                         step="0.01"
                         {...register(`tiers.${index}.minMiles` as const, { valueAsNumber: true })}
+                        onFocus={selectAllOnFocusIfZeroOrEmpty}
                         aria-invalid={!!(errors.tiers as any)?.[index]?.minMiles}
                         className={cn(
                           "w-full h-11 rounded-2xl border px-4 text-sm",
@@ -951,6 +999,7 @@ export function PricingConfigForm({
                         type="number"
                         step="0.01"
                         {...register(`tiers.${index}.maxMiles` as const, { valueAsNumber: true })}
+                        onFocus={selectAllOnFocusIfZeroOrEmpty}
                         aria-invalid={!!(errors.tiers as any)?.[index]?.maxMiles}
                         className={cn(
                           "w-full h-11 rounded-2xl border px-4 text-sm",
@@ -972,6 +1021,7 @@ export function PricingConfigForm({
                           type="number"
                           step="0.01"
                           {...register(`tiers.${index}.flatPrice` as const, { valueAsNumber: true })}
+                          onFocus={selectAllOnFocusIfZeroOrEmpty}
                           aria-invalid={!!(errors.tiers as any)?.[index]?.flatPrice}
                           className={cn(
                             "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1034,6 +1084,7 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('baseFee', { valueAsNumber: true })}
+                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.baseFee}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1066,6 +1117,7 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('insuranceFee', { valueAsNumber: true })}
+                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.insuranceFee}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1093,6 +1145,7 @@ export function PricingConfigForm({
                   type="number"
                   step="0.1"
                   {...register('transactionFeePct', { valueAsNumber: true })}
+                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.transactionFeePct}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1120,6 +1173,7 @@ export function PricingConfigForm({
                   type="number"
                   step="0.01"
                   {...register('transactionFeeFixed', { valueAsNumber: true })}
+                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.transactionFeeFixed}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
@@ -1147,6 +1201,7 @@ export function PricingConfigForm({
                   type="number"
                   step="0.1"
                   {...register('driverSharePct', { valueAsNumber: true })}
+                  onFocus={selectAllOnFocusIfZeroOrEmpty}
                   aria-invalid={!!errors.driverSharePct}
                   className={cn(
                     "w-full h-11 rounded-2xl border pl-10 pr-4 text-sm",
