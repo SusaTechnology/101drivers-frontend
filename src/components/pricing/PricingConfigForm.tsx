@@ -251,7 +251,17 @@ export function PricingConfigForm({
 
   // Editable preview distance — admin can type any value to see how the
   // current (unsaved) form state would price it. Defaults to 50 miles.
-  const [previewDistance, setPreviewDistance] = React.useState<number>(50);
+  //
+  // WHY A STRING STATE: a controlled <input type="number"> with a numeric
+  // value prop will NOT strip leading zeros the user types (e.g. clearing
+  // the field shows "0", then typing "1" makes the DOM show "01" because
+  // Number("01") === 1 and React sees no meaningful change to re-sync).
+  // Storing the raw string lets us normalize it ourselves in onChange —
+  // we strip leading zeros ("01" → "1", "010" → "10") while preserving
+  // "0" and "0.5". The numeric value used by the calculator is derived.
+  const [previewDistanceStr, setPreviewDistanceStr] = React.useState<string>('50');
+  const previewDistance: number =
+    previewDistanceStr === '' ? 0 : Number(previewDistanceStr) || 0;
 
   // Handle pricing mode change
   const handlePricingModeChange = (newMode: PricingMode) => {
@@ -1223,10 +1233,21 @@ export function PricingConfigForm({
                 type="number"
                 min={0}
                 step={0.1}
-                value={previewDistance}
+                value={previewDistanceStr}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setPreviewDistance(v === '' ? 0 : Number(v));
+                  if (v === '') {
+                    // Cleared → show "0" (matches the previous behavior the
+                    // user confirmed they want to keep).
+                    setPreviewDistanceStr('0');
+                    return;
+                  }
+                  // Strip leading zeros: "01" → "1", "010" → "10", "00" → "0".
+                  // The lookahead (?=\d) ensures we only strip a zero when
+                  // another digit follows it, so "0" alone and "0.5" are
+                  // preserved unchanged.
+                  const stripped = v.replace(/^0+(?=\d)/, '');
+                  setPreviewDistanceStr(stripped);
                 }}
                 className="w-28 h-8 text-sm font-bold"
               />
