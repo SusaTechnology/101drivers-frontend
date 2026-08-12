@@ -572,9 +572,11 @@ export class DeliveryRequestControllerBase {
               }
             : undefined,
 
-          customer: {
-            connect: data.customer,
-          },
+          customer: data.customer
+            ? {
+                connect: data.customer,
+              }
+            : undefined,
 
           dispute: data.dispute
             ? {

@@ -2485,7 +2485,10 @@ export default function EditDeliveryPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className={cn(
+                    "grid gap-3",
+                    deliveryData?.status === 'LISTED' ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"
+                  )}>
                     <Button
                       type="submit"
                       className="py-6 rounded-2xl bg-lime-500 hover:bg-lime-600 text-slate-950 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2503,26 +2506,37 @@ export default function EditDeliveryPage() {
                         </>
                       )}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="py-6 rounded-2xl border-slate-200 dark:border-slate-700 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={saveAsDraft.isPending}
-                      onClick={handleSaveAsDraft}
-                    >
-                      {saveAsDraft.isPending ? (
-                        <>
-                          Saving...
-                          <RefreshCw className="ml-2 h-5 w-5 animate-spin" />
-                        </>
-                      ) : (
-                        "Save as Draft"
-                      )}
-                    </Button>
+                    {/* "Save as Draft" is hidden when the delivery is already
+                        LISTED — a listed delivery is publicly visible to
+                        drivers, and silently reverting it to a draft would
+                        pull it off the board without warning. Drafts are
+                        still reachable from the Drafts tab for QUOTED /
+                        EXPIRED deliveries (where Save-as-Draft makes sense
+                        as a "park it for later" action). */}
+                    {deliveryData?.status !== 'LISTED' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="py-6 rounded-2xl border-slate-200 dark:border-slate-700 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={saveAsDraft.isPending}
+                        onClick={handleSaveAsDraft}
+                      >
+                        {saveAsDraft.isPending ? (
+                          <>
+                            Saving...
+                            <RefreshCw className="ml-2 h-5 w-5 animate-spin" />
+                          </>
+                        ) : (
+                          "Save as Draft"
+                        )}
+                      </Button>
+                    )}
                   </div>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center sm:text-right">
-                    Saves changes and moves this delivery to the Drafts tab (you can delete it from there later)
-                  </p>
+                  {deliveryData?.status !== 'LISTED' && (
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center sm:text-right">
+                      Saves changes and moves this delivery to the Drafts tab (you can delete it from there later)
+                    </p>
+                  )}
 
                   {!isFormValidForSubmission && !updateDelivery.isPending && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-3 text-center">

@@ -418,14 +418,24 @@ export default function EditDraftPage() {
       pickupAddress: data.pickupAddress,
       pickupLat: pickupCoords?.lat,
       pickupLng: pickupCoords?.lng,
+      pickupPlaceId: pickupPlaceId || undefined,
+      pickupState: pickupState || undefined,
       dropoffAddress: data.dropoffAddress,
       dropoffLat: dropoffCoords?.lat,
       dropoffLng: dropoffCoords?.lng,
+      dropoffPlaceId: dropoffPlaceId || undefined,
+      dropoffState: dropoffState || undefined,
       pickupWindowStart: data.pickupDate && data.pickupWindow
         ? combineDateAndTimeToISO(data.pickupDate, parseWindowTimes(data.pickupWindow).start)
         : undefined,
       pickupWindowEnd: data.pickupDate && data.pickupWindow
         ? combineDateAndTimeToISO(data.pickupDate, parseWindowTimes(data.pickupWindow).end)
+        : undefined,
+      dropoffWindowStart: data.dropoffDate && data.dropoffWindow
+        ? combineDateAndTimeToISO(data.dropoffDate, parseWindowTimes(data.dropoffWindow).start)
+        : undefined,
+      dropoffWindowEnd: data.dropoffDate && data.dropoffWindow
+        ? combineDateAndTimeToISO(data.dropoffDate, parseWindowTimes(data.dropoffWindow).end)
         : undefined,
       licensePlate: data.licensePlate || undefined,
       vinVerificationCode: data.vinVerification || undefined,
@@ -435,6 +445,7 @@ export default function EditDraftPage() {
       recipientName: data.enableRecipient ? data.recipientName : undefined,
       recipientEmail: data.enableRecipient ? data.recipientEmail : undefined,
       recipientPhone: data.enableRecipient ? data.recipientPhone : undefined,
+      afterHours: data.afterHours || false,
     };
     updateDraftMutation.mutate(payload);
   };
