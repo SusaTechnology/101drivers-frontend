@@ -64,6 +64,10 @@ import { isInPickupZone } from "@/lib/geo-utils";
 import { getUser, useDataQuery, usePatch, useCreate, authFetch } from "@/lib/tanstack/dataQuery";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import PricingEditErrorDialog, { type PricingEditErrorCode } from "@/components/stripe/PricingEditErrorDialog";
+import PriceDifferenceConfirmDialog, {
+  type PriceDifferencePreview,
+} from "@/components/stripe/PriceDifferenceConfirmDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO } from "date-fns";
@@ -318,6 +322,45 @@ export default function EditDeliveryPage() {
   const [hasCalculated, setHasCalculated] = useState(false);
   const [quoteId, setQuoteId] = useState<string | null>(null);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+  // Pricing-edit error dialog state. The dialog is shown when the
+  // /edit-pricing endpoint returns a PricingEditException. The retry handler
+  // re-invokes the same call.
+  const [pricingEditError, setPricingEditError] = useState<{
+    open: boolean;
+    code?: PricingEditErrorCode | string;
+    message: string;
+  }>({ open: false, message: '' });
+  // Stash the last-submitted form data + quoteId so the retry handler can
+  // re-invoke the edit-pricing call without re-running react-hook-form's
+  // handleSubmit. Set right before we fire the fetch.
+  const lastEditPricingPayloadRef = useRef<{
+    quoteId: string;
+    reason: string;
+  } | null>(null);
+
+  // ── Price-difference confirmation dialog state ───────────────────────────
+  // Before we fire the actual /edit-pricing call, we call /edit-pricing/preview
+  // to compute the delta and show the dealer a confirmation dialog with the
+  // exact "additional $X.XX will be charged" or "$X.XX will be released"
+  // message. The dealer must click "Confirm & update" before we proceed.
+  //
+  // This is separate from the PricingEditErrorDialog (which fires AFTER the
+  // edit-pricing call returns an error). The confirm dialog is dismissable;
+  // the error dialog is not.
+  const [priceDiffPreview, setPriceDiffPreview] =
+    useState<PriceDifferencePreview | null>(null);
+  const [priceDiffOpen, setPriceDiffOpen] = useState(false);
+  const [priceDiffLoading, setPriceDiffLoading] = useState(false);
+  const [priceDiffConfirming, setPriceDiffConfirming] = useState(false);
+  // Stash the form data + quoteId captured at preview time so the confirm
+  // handler can proceed to the actual edit-pricing call (and the PATCH
+  // afterward) without re-running react-hook-form's handleSubmit.
+  const pendingEditRef = useRef<{
+    quoteId: string;
+    reason: string;
+    formData: DeliveryFormData;
+  } | null>(null);
+
   const [quoteData, setQuoteData] = useState({
     miles: 0,
     total: 0,
@@ -1195,6 +1238,88 @@ export default function EditDeliveryPage() {
     };
   };
 
+  /**
+   * Fire the POST /edit-pricing call. Extracted as a standalone function so
+   * the PricingEditErrorDialog's retry button can re-invoke it without
+   * re-running react-hook-form's handleSubmit.
+   *
+   * Returns the parsed JSON response on success, throws on HTTP error.
+   * The thrown error has `.code` and `.details` attached from the backend's
+   * PricingEditException so the dialog can switch on them.
+   */
+  const submitPricingEdit = async (params: { qId: string; reason: string }) => {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    const res = await authFetch(
+      `${apiUrl}/api/deliveryRequests/${deliveryId}/edit-pricing`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          newQuoteId: params.qId,
+          reason: params.reason,
+          actorRole: 'DEALER',
+          reactivateIfExpired: isExpired,
+        }),
+      },
+    );
+    if (!res.ok) {
+      // Parse the structured error. The backend's PricingEditException
+      // returns { statusCode, code, message, details }.
+      let errBody: any = null;
+      try {
+        errBody = await res.json();
+      } catch {
+        // response had no JSON body
+      }
+      const err: any = new Error(
+        errBody?.message || `Pricing edit failed (HTTP ${res.status})`,
+      );
+      err.code = errBody?.code;
+      err.details = errBody?.details;
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  };
+
+  /**
+   * Fire the POST /edit-pricing/preview call. Read-only — does NOT modify
+   * the delivery or Stripe. Returns the parsed preview so the
+   * PriceDifferenceConfirmDialog can render the charge/release message.
+   */
+  const fetchPricingEditPreview = async (
+    qId: string,
+  ): Promise<PriceDifferencePreview> => {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    const res = await authFetch(
+      `${apiUrl}/api/deliveryRequests/${deliveryId}/edit-pricing/preview`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          newQuoteId: qId,
+          reactivateIfExpired: isExpired,
+        }),
+      },
+    );
+    if (!res.ok) {
+      let errBody: any = null;
+      try {
+        errBody = await res.json();
+      } catch {
+        // no JSON body
+      }
+      const err: any = new Error(
+        errBody?.message || `Preview failed (HTTP ${res.status})`,
+      );
+      err.code = errBody?.code;
+      err.details = errBody?.details;
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  };
+
   const onSubmit = async (data: DeliveryFormData) => {
     if (!pickupCoords || !dropoffCoords) {
       toast.error("Missing location data", {
@@ -1231,37 +1356,179 @@ export default function EditDeliveryPage() {
       }
     }
 
-    const payload = buildPayload(data);
-    updateDelivery.mutate(payload, {
-      onSuccess: async () => {
-        // If the delivery was expired, auto-revive it to QUOTED so the dealer can re-list
-        if (isExpired) {
-          try {
-            const apiUrl = import.meta.env.VITE_API_URL;
-            await authFetch(
-              `${apiUrl}/api/deliveryRequests/${deliveryId}/transition-status`,
-              {
-                method: 'POST',
-                body: JSON.stringify({
-                  toStatus: 'QUOTED',
-                  note: 'Delivery revived by dealer after adjusting schedule',
-                }),
-              },
-            );
-            toast.success('Delivery reactivated', {
-              description: 'The delivery has been reactivated successfully. You can now list it.',
-            });
-            // Invalidate cached delivery data so the details page fetches fresh status
-            queryClient.invalidateQueries({ queryKey: [`${apiUrl}/api/deliveryRequests/${deliveryId}`] });
-            queryClient.invalidateQueries({ queryKey: [`${apiUrl}/api/deliveryRequests`] });
-            navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } });
-          } catch (error: any) {
-            const description = error?.message || 'Delivery updated but could not be reactivated. Please contact support.';
-            console.error('Failed to revive expired delivery:', error);
-            toast.error('Revive failed', { description });
-          }
+    // Reason for the audit trail. Auto-generated since the dealer doesn't
+    // provide one explicitly on this page.
+    const editReason = `Dealer edited delivery (addresses/quote recalculated) from edit-delivery page. Service type: ${data.serviceType}.`;
+
+    // ── Step 1: Preview the pricing edit BEFORE committing. ─────────────────
+    // We call /edit-pricing/preview (read-only) to get the price delta +
+    // user-facing "additional $X will be charged" / "$X will be released"
+    // message. The dealer must confirm in the dialog before we fire the
+    // actual /edit-pricing call (which touches Stripe).
+    //
+    // Even when the price is unchanged, we still show the dialog so the
+    // dealer knows their card won't be touched. The dialog is dismissable
+    // (dealer can cancel and tweak the form).
+    pendingEditRef.current = { quoteId, reason: editReason, formData: data };
+    setPriceDiffOpen(true);
+    setPriceDiffLoading(true);
+    setPriceDiffPreview(null);
+    try {
+      const preview = await fetchPricingEditPreview(quoteId);
+      setPriceDiffPreview(preview);
+    } catch (err: any) {
+      // Preview failed — close the dialog and surface the error.
+      // If it's a structured PricingEditException (e.g. INVALID_STATUS),
+      // show the PricingEditErrorDialog so the dealer gets the standard
+      // retry / support buttons.
+      setPriceDiffOpen(false);
+      if (err?.code) {
+        setPricingEditError({
+          open: true,
+          code: err.code,
+          message: err.message || 'An error occurred while previewing the pricing edit.',
+        });
+      } else {
+        toast.error("Couldn't preview the price difference", {
+          description: err?.message || "Please try again or contact support.",
+        });
+      }
+      console.error('Pricing edit preview failed:', err);
+      return;
+    } finally {
+      setPriceDiffLoading(false);
+    }
+    // The dealer now sees the dialog. When they click "Confirm & update",
+    // handlePriceDiffConfirm (below) fires the actual /edit-pricing call.
+  };
+
+  /**
+   * Confirm handler for the PriceDifferenceConfirmDialog. Fires the actual
+   * /edit-pricing call (which touches Stripe + DB), then PATCHes the
+   * non-pricing fields. Mirrors the original onSubmit flow but pulls the
+   * stashed quoteId/reason/formData from pendingEditRef so we don't need
+   * to re-run react-hook-form's handleSubmit.
+   */
+  const handlePriceDiffConfirm = async () => {
+    const pending = pendingEditRef.current;
+    if (!pending) {
+      // Should never happen — the ref is set in onSubmit before we open
+      // the dialog. Bail safely.
+      setPriceDiffOpen(false);
+      return;
+    }
+
+    // Also stash into lastEditPricingPayloadRef so the PricingEditErrorDialog
+    // retry handler can re-invoke the edit-pricing call without re-running
+    // the preview (the dealer already confirmed).
+    lastEditPricingPayloadRef.current = {
+      quoteId: pending.quoteId,
+      reason: pending.reason,
+    };
+
+    setPriceDiffConfirming(true);
+    try {
+      // ── Step 1: Call /edit-pricing. ──────────────────────────────────────
+      // This must happen BEFORE the PATCH because the engine needs to see
+      // the OLD quote to compute the price delta. If PATCH ran first, it
+      // would overwrite the quote and the engine would see oldPrice ===
+      // newPrice and skip Stripe reconciliation entirely.
+      try {
+        await submitPricingEdit({
+          qId: pending.quoteId,
+          reason: pending.reason,
+        });
+      } catch (err: any) {
+        // If this is a structured PricingEditException, show the error dialog.
+        if (err?.code) {
+          setPricingEditError({
+            open: true,
+            code: err.code,
+            message: err.message || 'An error occurred while updating the delivery pricing.',
+          });
+        } else {
+          toast.error("Failed to update delivery pricing", {
+            description: err?.message || "Please try again or contact support.",
+          });
         }
-      },
+        console.error('Pricing edit failed:', err);
+        // Keep the confirm dialog closed — the error dialog is now open.
+        // The dealer can retry from the error dialog, which re-invokes
+        // submitPricingEdit directly (not this handler) so we don't loop.
+        setPriceDiffOpen(false);
+        return;
+      }
+
+      // ── Step 2: PATCH the non-pricing fields. ───────────────────────────
+      // The engine already updated the quote + addresses. The PATCH now
+      // updates schedule, vehicle, recipient, etc. Address fields in the
+      // payload are idempotent (they match what the engine just set).
+      const payload = buildPayload(pending.formData);
+      updateDelivery.mutate(payload, {
+        onSuccess: async () => {
+          const apiUrl = import.meta.env.VITE_API_URL;
+          queryClient.invalidateQueries({ queryKey: [`${apiUrl}/api/deliveryRequests/${deliveryId}`] });
+          queryClient.invalidateQueries({ queryKey: [`${apiUrl}/api/deliveryRequests`] });
+
+          // Close both dialogs.
+          setPriceDiffOpen(false);
+          setPricingEditError({ open: false, message: '' });
+
+          toast.success(isExpired ? "Delivery reactivated and updated" : "Delivery updated successfully", {
+            description: isExpired
+              ? "The delivery has been reactivated with the new pricing. You can now view it in your delivery details."
+              : "Your changes have been saved.",
+          });
+          navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } });
+        },
+        onError: (error: any) => {
+          // The pricing edit SUCCEEDED but the PATCH failed. This is a weird
+          // state — the delivery's pricing was updated but the schedule/vehicle
+          // fields were not. Show a toast (not the pricing dialog) since this
+          // isn't a PricingEditException.
+          const errorMessage = error?.message || "Failed to update delivery details (pricing was updated)";
+          toast.error("Delivery details update failed", {
+            description: errorMessage + " Please retry or contact support.",
+          });
+          console.error('Delivery PATCH failed after pricing edit succeeded:', error);
+          // Close the confirm dialog — the pricing edit is committed, but
+          // the dealer needs to retry the PATCH manually.
+          setPriceDiffOpen(false);
+        },
+      });
+    } finally {
+      setPriceDiffConfirming(false);
+    }
+  };
+
+  /**
+   * Cancel handler for the PriceDifferenceConfirmDialog. Just closes the
+   * dialog and clears the pending edit. The delivery is untouched.
+   */
+  const handlePriceDiffCancel = () => {
+    setPriceDiffOpen(false);
+    setPriceDiffPreview(null);
+    pendingEditRef.current = null;
+  };
+
+  // Retry handler for the PricingEditErrorDialog. Re-invokes the pricing edit
+  // with the same quote + reason. If it succeeds, the dialog's parent (this
+  // component) will close the dialog and proceed to the PATCH step.
+  const handlePricingEditRetry = async () => {
+    const payload = lastEditPricingPayloadRef.current;
+    if (!payload) {
+      // Should never happen — the ref is set before we open the dialog.
+      setPricingEditError({ open: false, message: '' });
+      return;
+    }
+    await submitPricingEdit({ qId: payload.quoteId, reason: payload.reason });
+    // If we get here, the retry succeeded. Close the dialog and proceed to PATCH.
+    // We can't easily call the react-hook-form handleSubmit from here, so we
+    // just close the dialog and let the dealer click "Update" again to run
+    // the PATCH step. This is a minor UX tradeoff for safety.
+    setPricingEditError({ open: false, message: '' });
+    toast.success("Pricing updated", {
+      description: "Please click 'Update Delivery' again to save the remaining details.",
     });
   };
 
@@ -2591,6 +2858,32 @@ export default function EditDeliveryPage() {
       </main>
 
       <Footer />
+
+      {/* Pricing-edit error dialog — shown when /edit-pricing returns a
+          PricingEditException. Non-dismissable; dealer must pick Retry,
+          Update Card, or Contact Support. */}
+      <PricingEditErrorDialog
+        open={pricingEditError.open}
+        code={pricingEditError.code}
+        message={pricingEditError.message}
+        deliveryId={deliveryId}
+        onRetry={handlePricingEditRetry}
+      />
+
+      {/* Price-difference confirmation dialog — shown BEFORE the actual
+          /edit-pricing call. Displays the price delta in plain English
+          ("additional $X.XX will be charged" / "$X.XX will be released")
+          with the breakdown (old → new) and an address-diff summary. The
+          dealer must click "Confirm & update" before we touch Stripe.
+          Dismissable — dealer can cancel and tweak the form. */}
+      <PriceDifferenceConfirmDialog
+        open={priceDiffOpen}
+        preview={priceDiffPreview}
+        loading={priceDiffLoading}
+        confirming={priceDiffConfirming}
+        onConfirm={handlePriceDiffConfirm}
+        onCancel={handlePriceDiffCancel}
+      />
     </div>
   );
 }

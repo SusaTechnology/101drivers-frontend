@@ -11,6 +11,7 @@ import { GatewayModule } from "../gateways/gateway.module";
 import { DeliveryCancellationEngine } from "src/domain/deliveryRequest/deliveryCancellation.engine";
 import { AdminDeliveryEngine } from "src/domain/deliveryRequest/adminDelivery.engine";
 import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.engine";
+import { DeliveryPricingEditEngine } from "src/domain/deliveryRequest/deliveryPricingEdit.engine";
 import { DeliveryRequestPublicController } from "./deliveryRequest.public.controller";
 import { SchedulingPolicyEngineModule } from "../domain/schedulingPolicy/schedulingPolicy.module";
 
@@ -31,7 +32,8 @@ import { SchedulingPolicyEngineModule } from "../domain/schedulingPolicy/schedul
     DeliveryCancellationEngine,
     AdminDeliveryEngine,
     PaymentPayoutEngine,
+    DeliveryPricingEditEngine,
   ],
-  exports: [DeliveryRequestService],
+  exports: [DeliveryRequestService, DeliveryPricingEditEngine],
 })
 export class DeliveryRequestModule {}

@@ -75,10 +75,17 @@ import {
   CheckPickupProximityBody,
   VerifyPickupPinBody,
   VerifyVinBody,
+  EditDeliveryPricingBody,
+  EditDeliveryPricingResponseDto,
+  PreviewEditDeliveryPricingBody,
+  PreviewEditDeliveryPricingResponseDto,
 } from "./dto/deliveryRequestLogistics.dto";
 import { SupportRequestWhereUniqueInput } from "src/supportRequest/base/SupportRequestWhereUniqueInput";
 import { SupportRequestFindManyArgs } from "src/supportRequest/base/SupportRequestFindManyArgs";
 import { SupportRequest } from "src/supportRequest/base/SupportRequest";
+import { DeliveryPricingEditEngine } from "src/domain/deliveryRequest/deliveryPricingEdit.engine";
+import { PrismaService } from "../prisma/prisma.service";
+import { EnumDeliveryRequestStatus, EnumUserRoles, EnumDeliveryStatusHistoryActorRole } from "@prisma/client";
 
 
 @swagger.ApiTags("deliveryRequests")
@@ -88,6 +95,8 @@ import { SupportRequest } from "src/supportRequest/base/SupportRequest";
 export class DeliveryRequestController extends DeliveryRequestControllerBase {
   constructor(
     protected readonly service: DeliveryRequestService,
+    private readonly pricingEditEngine: DeliveryPricingEditEngine,
+    private readonly prisma: PrismaService,
     @nestAccessControl.InjectRolesBuilder()
     protected readonly rolesBuilder: nestAccessControl.RolesBuilder
   ) {
@@ -578,6 +587,127 @@ async createQuotePreview(
       isUrgent: body.isUrgent === true,
       afterHours: body.afterHours === true,
       vehicleStandardsConfirmed: body.vehicleStandardsConfirmed === true,
+    });
+  }
+
+  /**
+   * POST /api/deliveryRequests/:id/edit-pricing/preview
+   *
+   * Read-only companion to /edit-pricing. Computes the price delta, determines
+   * whether the actual edit would trigger a Stripe reauthorization, and
+   * returns a user-facing headline + body the frontend can render in a
+   * confirmation dialog.
+   *
+   * NEVER throws PricingEditException for non-editable statuses — returns
+   * `editable: false` + `notEditableReason` instead, so the frontend can
+   * render the dialog with a disabled submit button (better UX than a hard
+   * error — the dealer sees the price delta + the reason on the same screen).
+   *
+   * Like /edit-pricing, this endpoint is SEPARATE from the generic PATCH /:id
+   * flow — it does not modify the DB or Stripe in any way.
+   */
+  @common.Post(":id/edit-pricing/preview")
+  @swagger.ApiOkResponse({ type: PreviewEditDeliveryPricingResponseDto })
+  @swagger.ApiBadRequestResponse({ schema: { type: "object", properties: { message: { type: "string" }, statusCode: { type: "number" } } } })
+  @swagger.ApiForbiddenResponse({ type: errors.ForbiddenException })
+  @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "DeliveryRequest",
+    action: "read",
+    possession: "any",
+  })
+  async previewDeliveryPricingEdit(
+    @common.Param("id") id: string,
+    @common.Body() body: PreviewEditDeliveryPricingBody,
+    @common.Req() request: Request,
+  ): Promise<PreviewEditDeliveryPricingResponseDto> {
+    const authenticatedUser = request.user as any;
+    // Derive actorRole from the authenticated session, NOT the request body.
+    // The body field is accepted for OpenAPI documentation but ignored —
+    // a dealer cannot spoof the ADMIN role by passing it in the body.
+    const sessionRole: EnumDeliveryStatusHistoryActorRole | null =
+      authenticatedUser?.roles === EnumUserRoles.ADMIN
+        ? EnumDeliveryStatusHistoryActorRole.ADMIN
+        : authenticatedUser?.roles === EnumUserRoles.DRIVER
+          ? EnumDeliveryStatusHistoryActorRole.DRIVER
+          : authenticatedUser?.roles === EnumUserRoles.PRIVATE_CUSTOMER
+            ? EnumDeliveryStatusHistoryActorRole.PRIVATE_CUSTOMER
+            : EnumDeliveryStatusHistoryActorRole.BUSINESS_CUSTOMER;
+    return this.pricingEditEngine.previewPricingEdit({
+      deliveryId: id,
+      newQuoteId: body.newQuoteId,
+      actorRole: sessionRole,
+      reactivateIfExpired: body.reactivateIfExpired ?? true,
+    });
+  }
+
+  /**
+   * POST /api/deliveryRequests/:id/edit-pricing
+   *
+   * Allows a dealer to edit the pricing/addresses of a delivery that is in
+   * DRAFT, QUOTED, LISTED, or EXPIRED status. Other statuses (BOOKED, ACTIVE,
+   * COMPLETED, CLOSED, CANCELLED, DISPUTED) are blocked for dealers.
+   *
+   * Admins (session role = ADMIN) may additionally edit terminal-state
+   * deliveries (COMPLETED, CLOSED, CANCELLED, DISPUTED) through this same
+   * endpoint. The engine records the admin's role in the audit trail.
+   *
+   * BOOKED and ACTIVE are NEVER editable through this endpoint — a driver has
+   * already accepted the trip and money is committed. Admins must use the
+   * cancellation/refund flow instead.
+   *
+   * The caller must first generate a new quote via
+   * POST /api/deliveryRequests/quote-preview with the new addresses, then
+   * pass that quote's id in the body. The frontend SHOULD also call
+   * POST /api/deliveryRequests/:id/edit-pricing/preview first to show the
+   * dealer a price-difference confirmation dialog before committing.
+   *
+   * Stripe reconciliation is handled automatically by DeliveryPricingEditEngine:
+   *  - PREPAID + price changed on LISTED/EXPIRED → new PI created first, then
+   *    old PI cancelled (safe order: if new PI fails, old PI stays intact).
+   *  - POSTPAID → just updates Payment.amount in DB (no Stripe call).
+   *  - Price unchanged → no Stripe call (addresses may still be updated).
+   *  - EXPIRED → reactivates the delivery (EXPIRED → QUOTED → LISTED) by default.
+   *
+   * This is a SEPARATE code path from the generic PATCH /:id endpoint, so the
+   * existing update flow is completely untouched.
+   */
+  @common.Post(":id/edit-pricing")
+  @swagger.ApiOkResponse({ type: EditDeliveryPricingResponseDto })
+  @swagger.ApiBadRequestResponse({ schema: { type: "object", properties: { message: { type: "string" }, statusCode: { type: "number" } } } })
+  @swagger.ApiForbiddenResponse({ type: errors.ForbiddenException })
+  @swagger.ApiNotFoundResponse({ type: errors.NotFoundException })
+  @nestAccessControl.UseRoles({
+    resource: "DeliveryRequest",
+    action: "update",
+    possession: "any",
+  })
+  async editDeliveryPricing(
+    @common.Param("id") id: string,
+    @common.Body() body: EditDeliveryPricingBody,
+    @common.Req() request: Request,
+  ): Promise<EditDeliveryPricingResponseDto> {
+    const authenticatedUser = request.user as any;
+    // Derive actorRole from the authenticated session, NOT the request body.
+    // The body field is documented in the DTO for OpenAPI but ignored here —
+    // a dealer cannot escalate to ADMIN by passing it in the body. This is
+    // important because admin-role edits are allowed on terminal-state
+    // deliveries (CANCELLED/DISPUTED/CLOSED/COMPLETED) that dealers can't touch.
+    const sessionRole: EnumDeliveryStatusHistoryActorRole =
+      authenticatedUser?.roles === EnumUserRoles.ADMIN
+        ? EnumDeliveryStatusHistoryActorRole.ADMIN
+        : authenticatedUser?.roles === EnumUserRoles.DRIVER
+          ? EnumDeliveryStatusHistoryActorRole.DRIVER
+          : authenticatedUser?.roles === EnumUserRoles.PRIVATE_CUSTOMER
+            ? EnumDeliveryStatusHistoryActorRole.PRIVATE_CUSTOMER
+            : EnumDeliveryStatusHistoryActorRole.BUSINESS_CUSTOMER;
+    return this.pricingEditEngine.editPricing({
+      deliveryId: id,
+      newQuoteId: body.newQuoteId,
+      reason: body.reason,
+      actorUserId: authenticatedUser?.id ?? null,
+      actorRole: sessionRole,
+      reactivateIfExpired: body.reactivateIfExpired ?? true,
     });
   }
 
@@ -1531,8 +1661,32 @@ async schedulePreview(
   })
   async updateDeliveryRequest(
     @common.Param() params: DeliveryRequestWhereUniqueInput,
-    @common.Body() data: DeliveryRequestUpdateInput
+    @common.Body() data: DeliveryRequestUpdateInput,
+    @common.Req() request?: Request,
   ): Promise<DeliveryRequest | null> {
+    // ── PRICING-EDIT LOCKDOWN ────────────────────────────────────────────
+    // If a dealer tries to change quote / pricing / pickup-or-dropoff
+    // addresses on a delivery that is in a dealer-editable status
+    // (DRAFT/QUOTED/LISTED/EXPIRED), we REJECT the PATCH and tell them to
+    // use POST /:id/edit-pricing instead. The edit-pricing engine is the
+    // only code path that does proper Stripe reconciliation (cancel old PI,
+    // create new PI) — bypassing it via PATCH would leave Stripe with the
+    // old auth hold while the DB shows the new price, which is exactly the
+    // bug this whole subsystem was built to prevent.
+    //
+    // Admins (role=ADMIN) are exempt — they can PATCH whatever they want
+    // (e.g. to fix a manually-intervened delivery).
+    //
+    // `request` is declared optional so the override signature stays
+    // compatible with the base class. NestJS always injects it at runtime.
+    if (request) {
+      await this.guardPricingFieldsForDealerEditableStatuses(
+        params.id,
+        data as any,
+        request,
+      );
+    }
+
     try {
       // Strip fields the frontend may send that are NOT valid Prisma
       // DeliveryRequestUpdateInput keys. Without this, the `...data` spread
@@ -3099,5 +3253,132 @@ async schedulePreview(
       data,
       select: { id: true },
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // PATCH /:id lockdown — prevent bypassing the pricing-edit engine.
+  //
+  // The DeliveryPricingEditEngine (POST /:id/edit-pricing) is the ONLY
+  // code path that does proper Stripe reconciliation when a dealer changes
+  // pricing or addresses on a delivery. If a dealer could just PATCH the
+  // `quoteId` / `pickupAddress` / `dropoffAddress` / pickup-dropoff coords
+  // directly, the DB would show the new price while Stripe still holds the
+  // OLD auth — exactly the bug the engine was built to prevent.
+  //
+  // This guard runs at the TOP of PATCH /:id and rejects any attempt to
+  // change those fields while the delivery is in a dealer-editable status
+  // (DRAFT/QUOTED/LISTED/EXPIRED). The dealer must use /edit-pricing instead.
+  //
+  // Admins (role=ADMIN) are exempt — they may need to PATCH pricing fields
+  // directly when fixing a manually-intervened delivery.
+  //
+  // Non-editable statuses (BOOKED/ACTIVE/COMPLETED/CLOSED/CANCELLED/DISPUTED)
+  // don't need this guard because pricing edits aren't allowed there at all,
+  // and the PATCH endpoint's own role-based access control + business logic
+  // already prevents quote/address changes on locked deliveries.
+  // ─────────────────────────────────────────────────────────────────
+  private async guardPricingFieldsForDealerEditableStatuses(
+    deliveryId: string,
+    data: any,
+    request: Request,
+  ): Promise<void> {
+    // Resolve the actor's role from the auth payload.
+    const user = (request as any).user as any;
+    const actorRoles: EnumUserRoles[] = Array.isArray(user?.roles)
+      ? user.roles
+      : user?.roles
+        ? [user.roles]
+        : [];
+    const isAdmin = actorRoles.includes(EnumUserRoles.ADMIN);
+    if (isAdmin) {
+      // Admins can PATCH pricing fields directly when fixing things manually.
+      return;
+    }
+
+    // Check whether the PATCH body touches any pricing-edit-controlled field.
+    // We check both the scalar form (quoteId) and the relation form (quote: { connect }).
+    const touchedFields = this.detectPricingFieldChanges(data);
+    if (touchedFields.length === 0) {
+      return; // PATCH only touches non-pricing fields (schedule, vehicle, etc.) — fine.
+    }
+
+    // Load the delivery's current status to decide if the lockdown applies.
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: { id: true, status: true },
+    });
+    if (!delivery) {
+      // Let the downstream handler return the 404 — not our problem here.
+      return;
+    }
+
+    const dealerEditableStatuses: EnumDeliveryRequestStatus[] = [
+      EnumDeliveryRequestStatus.DRAFT,
+      EnumDeliveryRequestStatus.QUOTED,
+      EnumDeliveryRequestStatus.LISTED,
+      EnumDeliveryRequestStatus.EXPIRED,
+    ];
+    if (!dealerEditableStatuses.includes(delivery.status)) {
+      // Status is not dealer-editable (e.g. BOOKED/ACTIVE/COMPLETED) — the
+      // PATCH endpoint's own logic + role-based access control will reject
+      // inappropriate changes. No need to enforce the lockdown here.
+      return;
+    }
+
+    // Reject — the dealer must use POST /:id/edit-pricing instead.
+    throw new common.BadRequestException({
+      code: "PRICING_EDIT_VIA_PATCH_BLOCKED",
+      message:
+        `Pricing and address fields (${touchedFields.join(", ")}) cannot be ` +
+          "changed via PATCH on a delivery in " + delivery.status + " status. " +
+          "Please use POST /api/deliveryRequests/" + deliveryId + "/edit-pricing " +
+          "instead — that endpoint handles Stripe reconciliation correctly.",
+      details: {
+        deliveryId,
+        status: delivery.status,
+        blockedFields: touchedFields,
+        correctEndpoint: `POST /api/deliveryRequests/${deliveryId}/edit-pricing`,
+      },
+    });
+  }
+
+  /**
+   * Inspect the PATCH body and return the list of pricing-edit-controlled
+   * fields it touches. Returns an empty array if the PATCH only changes
+   * non-pricing fields (schedule, vehicle, recipient, etc.).
+   *
+   * Controlled fields:
+   *   - quoteId / quote (relation form)
+   *   - pickupAddress / pickupLat / pickupLng / pickupPlaceId / pickupState
+   *   - dropoffAddress / dropoffLat / dropoffLng / dropoffPlaceId / dropoffState
+   */
+  private detectPricingFieldChanges(data: any): string[] {
+    if (!data || typeof data !== "object") {
+      return [];
+    }
+    const touched: string[] = [];
+    const controlledScalarFields = [
+      "quoteId",
+      "pickupAddress",
+      "pickupLat",
+      "pickupLng",
+      "pickupPlaceId",
+      "pickupState",
+      "dropoffAddress",
+      "dropoffLat",
+      "dropoffLng",
+      "dropoffPlaceId",
+      "dropoffState",
+    ];
+    for (const field of controlledScalarFields) {
+      if (data[field] !== undefined) {
+        touched.push(field);
+      }
+    }
+    // Also detect the relation form: `quote: { connect: {...} }` or `{ disconnect: true }`.
+    if (data.quote !== undefined) {
+      touched.push("quote");
+    }
+    return touched;
   }
 }

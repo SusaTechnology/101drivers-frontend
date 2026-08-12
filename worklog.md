@@ -799,3 +799,28 @@ Stage Summary:
   * backend/src/domain/deliveryStatusHistory/deliveryStatusHistoryPolicy.service.ts (+1)
   * src/components/pages/dealer-create-delivery.tsx (+55 / -10)
   * src/components/pages/dealer-review-delivery.tsx (+45 / -22)
+
+---
+Task ID: pricing-edit-push-final
+Agent: Main Agent
+Task: Finalize DeliveryPricingEditEngine — add price-difference confirmation dialog, admin override, security fix, admin narrative card on notification bell
+
+Work Log:
+- Backend: Added `previewPricingEdit()` method to `DeliveryPricingEditEngine` (read-only, no side effects). Computes price delta + builds user-facing headline/body with explicit bracket notation ("new price − old price = $X.XX") per dealer spec. Mirrors `editPricing`'s status/Stripe-action logic.
+- Backend: Added `PreviewEditDeliveryPricingBody` + `PreviewEditDeliveryPricingResponseDto` DTOs and `POST /:id/edit-pricing/preview` controller endpoint. Uses `action: "read"` ACL (dealers can preview, doesn't need update permission).
+- Backend: Extracted `checkEditable(status, isAdmin)` pure helper. Refactored `assertDealerCanEdit` to accept `actorRole` param. ADMIN can now override `ADMIN_ONLY_STATUSES` (CANCELLED/DISPUTED/CLOSED/COMPLETED). BOOKED/ACTIVE remain NEVER editable (driver has accepted).
+- Backend SECURITY FIX: Controller `editDeliveryPricing` and `previewDeliveryPricingEdit` now derive `actorRole` from `request.user.roles` (session), NOT the request body. Prevents dealers from spoofing ADMIN role to edit terminal-state deliveries.
+- Backend: Enriched `notifyAdminCompensationFailed` and `notifyAdminPricingEditSystemFailure` payloads with structured `failureSteps[]` + `adminAction[]` + `failureType` + `oldPaymentIntentId` + `oldPrice` + `newPrice` + `stripeDashboardUrl` so the frontend can render a visual timeline.
+- Frontend: Created reusable `PriceDifferenceConfirmDialog.tsx` — shows old → new price breakdown, delta in brackets ("Additional charge: new price − old price = $X.XX" / "Release: old price − new price = $X.XX"), address diff, Stripe-action badges, admin-override badge, not-editable warning. Dismissable (dealer can cancel). Driven entirely by backend preview response so messaging stays consistent.
+- Frontend: Wired `PriceDifferenceConfirmDialog` into `dealer-edit-delivery.tsx`. New flow: validate form → call `/edit-pricing/preview` → open dialog → on Confirm → call `/edit-pricing` then PATCH. Stashed pending edit in `pendingEditRef` so confirm handler doesn't need to re-run react-hook-form's handleSubmit. Preview-failure path falls through to `PricingEditErrorDialog`.
+- Frontend: Created reusable `PricingEditNarrativeCard.tsx` — renders step-by-step incident trace for admin: dealer name + role + email, "what the dealer tried" (price/address/reason), "what the system did, step by step" (timeline with ✓/✗ icons), PaymentIntent ids with copy-to-clipboard, "This needs you" action checklist with clickable Stripe dashboard link, closing note. Severity-aware (critical = rose, warning = amber).
+- Frontend: Injected `PricingEditNarrativeCard` into `NotificationBell.tsx` dialog. When `selectedNotification.payload.failureSteps` exists, renders the structured card instead of the raw email body. Non-pricing notifications fall through unchanged.
+- TypeScript: Verified no new errors in modified files. Pre-existing errors (userType, TanStack router search-param typing, PricingConfig schema) unchanged.
+
+Stage Summary:
+- Dealer editing a priced delivery now sees a confirmation dialog explaining the charge/release BEFORE the actual edit commits. The phrasing matches the dealer spec verbatim ("additional price (new price − old price = $X.XX)" / "difference (old price − new price = $X.XX) will be released").
+- Admins can now edit terminal-state deliveries (CANCELLED/DISPUTED/CLOSED/COMPLETED) through the same engine — uniform Stripe reconciliation + audit trail + narrative notifications.
+- Dealers can no longer spoof the ADMIN role via the request body — actorRole is derived from the authenticated session.
+- Admin notifications for pricing-edit failures now render as a structured step-by-step timeline in the notification bell (dealer name → what they tried → system steps with ✓/✗ → PI ids → "this needs you" action list with Stripe dashboard link), not just a wall of pre-wrapped text.
+- All components are reusable: `PriceDifferenceConfirmDialog` and `PricingEditNarrativeCard` have no caller-specific logic and can be dropped into any future page (admin edit, mobile app, ops dashboard).
+- Existing create/update flows remain untouched — the engine is still a separate code path, and the PATCH /:id lockdown still routes dealers to /edit-pricing.

@@ -595,7 +595,75 @@ async completeTrip(input: {
 
     this.normalizeUpdateStringField(normalized, "trackingShareToken", true);
 
+    // Convert scalar foreign-key fields to relation { connect: { id } } form.
+    // Prisma's update operation does NOT accept scalar FK fields (e.g.
+    // `customerId`, `quoteId`) on models that define relations via
+    // @relation(fields: [...]) — it only accepts the nested relation object
+    // form (e.g. `customer: { connect: { id } }`).
+    //
+    // This is a DEFENSE-IN-DEPTH measure at the service layer. Callers that
+    // already strip/convert these fields (e.g. the overridden REST controller)
+    // are unaffected because the scalar FKs won't be present. Callers that
+    // pass scalar FKs directly (base REST controller, base GraphQL resolver,
+    // or internal service calls) are protected here.
+    //
+    // Note: the policy hook (beforeUpdate) runs AFTER this normalization and
+    // reads `data.customer.connect.id` via resolveIncomingRelationId, so it
+    // still validates relation changes correctly.
+    this.normalizeUpdateRelationField(normalized, "customerId", "customer", false);
+    this.normalizeUpdateRelationField(normalized, "createdByUserId", "createdBy", true);
+    this.normalizeUpdateRelationField(normalized, "quoteId", "quote", true);
+    this.normalizeUpdateRelationField(normalized, "resubmittedFromId", "resubmittedFrom", true);
+
     return normalized;
+  }
+
+  /**
+   * Converts a scalar foreign-key field (e.g. `customerId`) to the relation
+   * connect form (e.g. `customer: { connect: { id } }`) that Prisma's update
+   * accepts.
+   *
+   * Rules (designed to be a no-op for any path that already works):
+   *  - If the scalar is absent (undefined): do nothing.
+   *  - If the relation object is already present: just strip the scalar
+   *    (relation form takes precedence — it's more explicit).
+   *  - If the scalar is a non-empty string: convert to { connect: { id } }.
+   *  - If the scalar is null and the relation is optional: convert to
+   *    { disconnect: true } (semantically identical to Prisma's null).
+   *  - Otherwise (empty string, etc.): just strip the scalar.
+   */
+  private normalizeUpdateRelationField(
+    data: any,
+    scalarField: string,
+    relationField: string,
+    isOptional: boolean
+  ): void {
+    const scalarValue = data[scalarField];
+
+    // Scalar absent — nothing to do.
+    if (scalarValue === undefined) {
+      return;
+    }
+
+    // Relation object already provided — it takes precedence. Just strip the
+    // scalar so Prisma doesn't reject it.
+    if (data[relationField] !== undefined) {
+      delete data[scalarField];
+      return;
+    }
+
+    if (typeof scalarValue === "string" && scalarValue.trim().length > 0) {
+      // Non-empty string → connect.
+      data[relationField] = { connect: { id: scalarValue.trim() } };
+      delete data[scalarField];
+    } else if (scalarValue === null && isOptional) {
+      // null on optional relation → disconnect (same semantics as Prisma's null).
+      data[relationField] = { disconnect: true };
+      delete data[scalarField];
+    } else {
+      // Empty string or other falsy — just strip it.
+      delete data[scalarField];
+    }
   }
 
   private trimRequiredString(value: unknown): string {

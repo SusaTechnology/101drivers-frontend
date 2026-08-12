@@ -2,6 +2,30 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Stripe from "stripe";
 
+/**
+ * Outcome of a best-effort PaymentIntent cancellation.
+ *  - ok               → PI was cancelled (or was already cancelled)
+ *  - alreadyTerminal  → PI is in a terminal state that can't be cancelled
+ *                       (succeeded, captured, etc.) — caller should treat as
+ *                       "no action needed" if cancelling an auth hold.
+ *  - failed           → transient or unknown Stripe error. `retryable=true`
+ *                       means the caller should retry (network blip, rate
+ *                       limit, Stripe 5xx). `retryable=false` means the
+ *                       error is permanent for this PI id (invalid id,
+ *                       permissions, etc.) and retrying won't help.
+ */
+export type CancelPaymentIntentResult =
+  | { ok: true; status: string }
+  | { ok: false; alreadyTerminal: true; status: string; message: string }
+  | {
+      ok: false;
+      alreadyTerminal: false;
+      retryable: boolean;
+      message: string;
+      code?: string;
+      statusCode?: number;
+    };
+
 @Injectable()
 export class StripeService {
   private readonly logger = new Logger(StripeService.name);
@@ -57,11 +81,27 @@ export class StripeService {
      *  - false (default) — creates the PI without confirming; frontend handles confirmation.
      */
     confirm?: boolean;
+    /**
+     * Stable idempotency key. If provided, overrides the default time-based key.
+     *
+     * Use this when the caller can derive a deterministic key from business
+     * identifiers — e.g. `pi-${deliveryId}-${quoteId}` for pricing edits (so a
+     * retry of the SAME edit with the SAME quote gets deduped by Stripe rather
+     * than creating a duplicate PI).
+     *
+     * If omitted, the call uses `pi-${deliveryId}-${captureMethod}-${minute}`,
+     * which only dedupes within a 60-second window. This is fine for one-shot
+     * listing flows where the orchestrator doesn't retry, but NOT safe for
+     * flows that may retry after >60s.
+     */
+    idempotencyKey?: string;
   }): Promise<{ paymentIntentId: string; clientSecret: string; status?: string }> {
     // Stripe expects amount in cents
     const amountCents = Math.round(params.amount * 100);
 
-    const idempotencyKey = `pi-${params.deliveryId}-${params.captureMethod || 'auto'}-${Math.floor(Date.now() / 60000)}`;
+    const idempotencyKey =
+      params.idempotencyKey ||
+      `pi-${params.deliveryId}-${params.captureMethod || 'auto'}-${Math.floor(Date.now() / 60000)}`;
 
     const paymentIntent = await this.stripe.paymentIntents.create(
       {
@@ -138,9 +178,97 @@ export class StripeService {
 
   /**
    * Cancel (void) a PaymentIntent.
+   *
+   * NOTE: This is the legacy bare-call signature. It throws raw Stripe errors
+   * and does not classify terminal-state vs transient errors. New code should
+   * prefer `cancelPaymentIntentSafe()` which returns a discriminated union.
    */
   async cancelPaymentIntent(paymentIntentId: string) {
     return this.stripe.paymentIntents.cancel(paymentIntentId);
+  }
+
+  /**
+   * Cancel a PaymentIntent with idempotency + error classification.
+   *
+   * Pass a stable `idempotencyKey` (e.g. `cancel-${piId}`) so retries of the
+   * SAME cancellation request don't double-count against your Stripe rate
+   * limit and don't trigger duplicate Stripe webhook events.
+   *
+   * `cancellationReason` is forwarded to Stripe ('automatic' | 'duplicate' |
+   * 'fraudulent' | 'abandoned' | 'requested_by_customer'); the default is
+   * 'automatic' which is what the bare `cancelPaymentIntent` call uses.
+   *
+   * This method NEVER throws — it always returns a `CancelPaymentIntentResult`
+   * so callers can pattern-match without try/catch duplication.
+   */
+  async cancelPaymentIntentSafe(
+    paymentIntentId: string,
+    options?: {
+      idempotencyKey?: string;
+      cancellationReason?: "automatic" | "duplicate" | "fraudulent" | "abandoned" | "requested_by_customer";
+    },
+  ): Promise<CancelPaymentIntentResult> {
+    // Build request options + cancel params as plain objects. Stripe's SDK
+    // accepts any structurally-compatible shape; using `Stripe.RequestOptions`
+    // directly here would tie us to specific SDK version exports.
+    //
+    // We use conditional spread so the property is OMITTED entirely when not
+    // set, rather than present-but-undefined (which Stripe's strict types reject).
+    const requestOptions = options?.idempotencyKey
+      ? { idempotencyKey: options.idempotencyKey }
+      : undefined;
+
+    const cancelParams: { cancellation_reason?: "automatic" | "duplicate" | "fraudulent" | "abandoned" | "requested_by_customer" } = {};
+    if (options?.cancellationReason) {
+      cancelParams.cancellation_reason = options.cancellationReason;
+    }
+
+    try {
+      // Cast to `any` because Stripe's `PaymentIntentCancelParams` type has
+      // strict optional-property rules that conflict with our conditional-build
+      // pattern. The shape we send is correct.
+      const pi = await this.stripe.paymentIntents.cancel(
+        paymentIntentId,
+        cancelParams as any,
+        requestOptions,
+      );
+      return { ok: true, status: pi.status };
+    } catch (err: any) {
+      // Stripe throws `invalid_request_error` (or code `payment_intent_unexpected_state`)
+      // when the PI is already in a terminal state — succeeded, canceled, or
+      // charge captured. We can't cancel those, but there's also nothing to do.
+      const isAlreadyTerminal =
+        err?.type === "invalid_request_error" ||
+        err?.code === "payment_intent_unexpected_state" ||
+        err?.code === "resource_missing";
+
+      if (isAlreadyTerminal) {
+        return {
+          ok: false,
+          alreadyTerminal: true,
+          status: err?.code || "unknown_terminal",
+          message: err?.message || "PaymentIntent is already in a terminal state",
+        };
+      }
+
+      // Transient errors: caller should retry with backoff.
+      const isRetryable =
+        err?.code === "connection_error" ||
+        err?.code === "rate_limit" ||
+        err?.statusCode === 500 ||
+        err?.statusCode === 502 ||
+        err?.statusCode === 503 ||
+        err?.statusCode === 504;
+
+      return {
+        ok: false,
+        alreadyTerminal: false,
+        retryable: isRetryable,
+        message: err?.message || "Unknown Stripe error",
+        code: err?.code,
+        statusCode: err?.statusCode,
+      };
+    }
   }
 
   /**

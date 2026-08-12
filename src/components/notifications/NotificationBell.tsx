@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import PricingEditNarrativeCard from '@/components/notifications/PricingEditNarrativeCard'
 import {
   NOTIFICATION_TYPE_STYLES,
   getNotificationStyle,
@@ -779,9 +780,20 @@ export default function NotificationBell({ className, userType }: NotificationBe
               </DialogHeader>
 
               <div className="px-6 py-4 overflow-y-auto overscroll-contain flex-1 min-h-0">
-                <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">
-                  {selectedNotification.body}
-                </DialogDescription>
+                {/* If this is a pricing-edit incident notification, render the
+                    structured step-by-step narrative card INSTEAD of the raw
+                    email body. The card renders nothing if the payload lacks
+                    `failureSteps`, so non-pricing notifications fall through
+                    to the standard body text below. */}
+                {selectedNotification.payload?.failureSteps ? (
+                  <PricingEditNarrativeCard
+                    payload={selectedNotification.payload as any}
+                  />
+                ) : (
+                  <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">
+                    {selectedNotification.body}
+                  </DialogDescription>
+                )}
 
                 <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
                   <span>{formatTime(selectedNotification.createdAt)}</span>

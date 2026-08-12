@@ -3555,4 +3555,709 @@ async notifyAdminLockInRetainedOnCancel(input: {
     );
     return results[0];
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Admin alert: COMPENSATION FAILED during a pricing edit.
+  //
+  // This is the worst-case scenario in the pricing edit flow:
+  //   1. Dealer tried to edit pricing/addresses on a delivery
+  //   2. We created a NEW Stripe PaymentIntent (auth hold on the customer's card)
+  //   3. The DB transaction to record it failed
+  //   4. We tried to CANCEL the new PI as compensation — and the cancel ALSO failed
+  //
+  // The customer now has a phantom authorization hold on their card with no
+  // matching row in our DB. An admin MUST manually cancel the PI in the Stripe
+  // dashboard to release the customer's funds.
+  //
+  // The notification body is a STEP-BY-STEP NARRATIVE so the admin can see
+  // exactly what the dealer tried, what the system did at each step, where it
+  // failed, and what they need to do. Mirrors the pattern of
+  // notifyAdminCommissionReceived but with a much richer body.
+  // ─────────────────────────────────────────────────────────────────
+  async notifyAdminCompensationFailed(input: {
+    deliveryId: string;
+    /** The orphaned PaymentIntent id (starts with "pi_"). Admin needs this
+     *  to look it up in the Stripe dashboard. */
+    orphanedPaymentIntentId: string;
+    /** The amount (in dollars) of the orphaned auth hold. */
+    amount: number;
+    /** The DB error that caused the original transaction to fail. */
+    dbError?: string;
+    /** The Stripe error that caused compensation to fail (cancel call). */
+    stripeError?: string;
+    /** What triggered the edit (audit trail). */
+    reason?: string;
+    /** Richer context for the step-by-step narrative. All optional so older
+     *  callers (which only pass the basic fields) still work. */
+    narrative?: PricingEditNarrativeContext;
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        customerId: true,
+        status: true,
+        customer: {
+          select: {
+            id: true,
+            businessName: true,
+            contactName: true,
+            user: {
+              select: { id: true, email: true, fullName: true, username: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyAdminCompensationFailed: delivery ${input.deliveryId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const admins = await this.prisma.user.findMany({
+      where: { roles: EnumUserRoles.ADMIN },
+      select: { id: true, email: true, fullName: true, username: true },
+    });
+
+    if (admins.length === 0) {
+      this.logger.warn(
+        `notifyAdminCompensationFailed: no admin users found in DB, skipping (delivery ${input.deliveryId}, orphaned PI ${input.orphanedPaymentIntentId})`,
+      );
+      return null;
+    }
+
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const customerLabel =
+      delivery.customer?.businessName ??
+      delivery.customer?.contactName ??
+      "Customer";
+    const amountStr = `$${Number(input.amount).toFixed(2)}`;
+    const stripeDashboardUrl = `https://dashboard.stripe.com/payments/${input.orphanedPaymentIntentId}`;
+
+    // Resolve the actor (dealer) name. Prefer the explicit narrative context
+    // (which carries the user who pressed the button), fall back to the
+    // customer's attached user.
+    const actorUser = delivery.customer?.user;
+    const actorName =
+      input.narrative?.actorName ??
+      actorUser?.fullName ??
+      actorUser?.username ??
+      actorUser?.email ??
+      "Unknown dealer";
+    const actorEmail =
+      input.narrative?.actorEmail ?? actorUser?.email ?? "unknown";
+    const actorRole = input.narrative?.actorRole ?? "DEALER";
+
+    // Build the step-by-step narrative. This is the heart of what the user
+    // asked for: "this dealer by name tries this and this and this step by
+    // step then the system do this and then this fails this needs you".
+    const narrativeLines = this.buildPricingEditNarrativeLines({
+      deliveryId: delivery.id,
+      deliveryRef,
+      status: delivery.status,
+      customerLabel,
+      actorName,
+      actorEmail,
+      actorRole,
+      actorUserId: input.narrative?.actorUserId ?? actorUser?.id ?? null,
+      reason: input.reason,
+      oldPrice: input.narrative?.oldPrice,
+      newPrice: input.amount,
+      oldQuoteId: input.narrative?.oldQuoteId,
+      newQuoteId: input.narrative?.newQuoteId,
+      oldPaymentIntentId: input.narrative?.oldPaymentIntentId,
+      newPaymentIntentId: input.orphanedPaymentIntentId,
+      oldPickupAddress: input.narrative?.oldPickupAddress,
+      oldDropoffAddress: input.narrative?.oldDropoffAddress,
+      newPickupAddress: input.narrative?.newPickupAddress ?? delivery.pickupAddress,
+      newDropoffAddress: input.narrative?.newDropoffAddress ?? delivery.dropoffAddress,
+      failureType: "COMPENSATION_FAILED",
+      failureSteps: [
+        {
+          step: 1,
+          label: "Loaded delivery and validated status",
+          outcome: "ok" as const,
+        },
+        {
+          step: 2,
+          label: "Validated the new quote provided by the dealer",
+          outcome: "ok" as const,
+        },
+        {
+          step: 3,
+          label: `Created a NEW Stripe PaymentIntent (${input.orphanedPaymentIntentId}) for ${amountStr} with manual capture`,
+          outcome: "ok" as const,
+        },
+        {
+          step: 4,
+          label: "Ran the DB transaction to update the delivery + payment rows",
+          outcome: "failed" as const,
+          detail: input.dbError ?? "Unknown DB error",
+        },
+        {
+          step: 5,
+          label: `Compensation: tried to CANCEL the new PaymentIntent (${input.orphanedPaymentIntentId})`,
+          outcome: "failed" as const,
+          detail: input.stripeError ?? "Unknown Stripe error",
+        },
+      ],
+      adminAction: [
+        `1. Open the Stripe dashboard: ${stripeDashboardUrl}`,
+        `2. Verify the PaymentIntent status (it should be "requires_capture").`,
+        `3. Click "Cancel" to release the hold on the customer's card.`,
+        `4. Reply to this email / mark resolved in the audit log once done.`,
+      ],
+      closing:
+        "The original PaymentIntent for this delivery is still active and the delivery row is unchanged, so the customer is NOT double-charged. Only the orphaned hold above needs manual release.",
+    });
+
+    const sendPromises = admins.map((admin) => {
+      const adminName = admin.fullName || admin.username || "admin";
+      return this.queueAndSend({
+        actorUserId: admin.id,
+        customerId: delivery.customerId,
+        deliveryId: delivery.id,
+        driverId: null,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.PAYMENT_FAILED,
+        templateCode: "admin-compensation-failed",
+        toEmail: admin.email,
+        subject: `URGENT: Phantom auth hold ${amountStr} on delivery #${deliveryRef} — manual cancel required`,
+        body: [`Hi ${adminName},`, "", ...narrativeLines].join("\n"),
+        payload: {
+          deliveryId: delivery.id,
+          orphanedPaymentIntentId: input.orphanedPaymentIntentId,
+          amount: input.amount,
+          dbError: input.dbError ?? null,
+          stripeError: input.stripeError ?? null,
+          reason: input.reason ?? null,
+          stripeDashboardUrl,
+          severity: "critical",
+          // Include the narrative so the admin notification bell dropdown
+          // can render a structured preview if it wants to.
+          narrative: (input.narrative ?? null) as any,
+          actorName,
+          actorEmail,
+          actorRole,
+          customerLabel,
+          deliveryRef,
+          // Structured step-by-step data for the admin NotificationBell to
+          // render as a visual timeline (instead of just dumping the email
+          // body text). The frontend PricingEditNarrativeCard component
+          // consumes these arrays.
+          failureSteps: [
+            { step: 1, label: "Loaded delivery and validated status", outcome: "ok" as const },
+            { step: 2, label: "Validated the new quote provided by the dealer", outcome: "ok" as const },
+            {
+              step: 3,
+              label: `Created a NEW Stripe PaymentIntent (${input.orphanedPaymentIntentId}) for ${amountStr} with manual capture`,
+              outcome: "ok" as const,
+            },
+            {
+              step: 4,
+              label: "Ran the DB transaction to update the delivery + payment rows",
+              outcome: "failed" as const,
+              detail: input.dbError ?? "Unknown DB error",
+            },
+            {
+              step: 5,
+              label: `Compensation: tried to CANCEL the new PaymentIntent (${input.orphanedPaymentIntentId})`,
+              outcome: "failed" as const,
+              detail: input.stripeError ?? "Unknown Stripe error",
+            },
+          ] as any,
+          adminAction: [
+            `Open the Stripe dashboard: ${stripeDashboardUrl}`,
+            `Verify the PaymentIntent status (it should be "requires_capture").`,
+            `Click "Cancel" to release the hold on the customer's card.`,
+            `Reply to this email / mark resolved in the audit log once done.`,
+          ] as any,
+          failureType: "COMPENSATION_FAILED" as any,
+          oldPaymentIntentId: input.narrative?.oldPaymentIntentId ?? null,
+          newPaymentIntentId: input.orphanedPaymentIntentId,
+          oldPrice: input.narrative?.oldPrice ?? null,
+          newPrice: input.amount,
+        },
+      }).catch((err: any) => {
+        this.logger.error(
+          `Failed to send compensation-failed notification to admin ${admin.id} (${admin.email}): ${err.message}`,
+        );
+        return null;
+      });
+    });
+
+    const results = await Promise.all(sendPromises);
+    const sent = results.filter((r) => r !== null).length;
+    this.logger.log(
+      `notifyAdminCompensationFailed: sent to ${sent}/${admins.length} admin(s) for delivery ${input.deliveryId} (orphaned PI ${input.orphanedPaymentIntentId})`,
+    );
+    return results[0];
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Admin alert: SYSTEM-LEVEL pricing edit failure (not compensation).
+  //
+  // Fires when the pricing edit engine fails for a reason that suggests a
+  // SYSTEM problem rather than a user-card problem:
+  //   - STRIPE_API_ERROR       (Stripe returned an unexpected error)
+  //   - STRIPE_NOT_CONFIGURED  (server misconfiguration)
+  //   - NEW_PI_FAILED_UNKNOWN  (PI came back in an unexpected status)
+  //
+  // These don't leave an orphan auth hold (the engine never persisted the
+  // new PI), so no immediate manual action is required. But the admin should
+  // still know because:
+  //   - STRIPE_NOT_CONFIGURED means no dealer can edit pricing at all
+  //   - STRIPE_API_ERROR could indicate a wider Stripe outage
+  //   - NEW_PI_FAILED_UNKNOWN could indicate a Stripe API contract change
+  //
+  // Card-decline errors (NO_SAVED_CARD, CARD_DECLINED, CARD_REQUIRES_ACTION)
+  // and INVALID_STATUS do NOT trigger this notification — those are user-side
+  // issues the dealer can resolve themselves via the PricingEditErrorDialog.
+  // ─────────────────────────────────────────────────────────────────
+  async notifyAdminPricingEditSystemFailure(input: {
+    deliveryId: string;
+    errorCode: string;
+    errorMessage: string;
+    /** Optional: the new PI id if one was created (for NEW_PI_FAILED_UNKNOWN). */
+    newPaymentIntentId?: string | null;
+    /** Optional: Stripe error details for the audit trail. */
+    stripeError?: string;
+    stripeCode?: string;
+    stripeDeclineCode?: string;
+    reason?: string;
+    narrative?: PricingEditNarrativeContext;
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        customer: {
+          select: {
+            id: true,
+            businessName: true,
+            contactName: true,
+            user: {
+              select: { id: true, email: true, fullName: true, username: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyAdminPricingEditSystemFailure: delivery ${input.deliveryId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const admins = await this.prisma.user.findMany({
+      where: { roles: EnumUserRoles.ADMIN },
+      select: { id: true, email: true, fullName: true, username: true },
+    });
+
+    if (admins.length === 0) {
+      this.logger.warn(
+        `notifyAdminPricingEditSystemFailure: no admin users found in DB, skipping (delivery ${input.deliveryId}, code ${input.errorCode})`,
+      );
+      return null;
+    }
+
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const customerLabel =
+      delivery.customer?.businessName ??
+      delivery.customer?.contactName ??
+      "Customer";
+
+    const actorUser = delivery.customer?.user;
+    const actorName =
+      input.narrative?.actorName ??
+      actorUser?.fullName ??
+      actorUser?.username ??
+      actorUser?.email ??
+      "Unknown dealer";
+    const actorEmail = input.narrative?.actorEmail ?? actorUser?.email ?? "unknown";
+    const actorRole = input.narrative?.actorRole ?? "DEALER";
+
+    // Build a narrative tailored to "system failure" — fewer steps than the
+    // compensation case (we never reached the DB transaction), but the same
+    // step-by-step shape so the admin immediately understands the sequence.
+    const isConfigIssue = input.errorCode === "STRIPE_NOT_CONFIGURED";
+    const severity = isConfigIssue ? "critical" : "warning";
+
+    const failureSteps: PricingEditNarrativeStep[] = isConfigIssue
+      ? [
+          {
+            step: 1,
+            label: "Loaded delivery and validated status",
+            outcome: "ok",
+          },
+          {
+            step: 2,
+            label:
+              "Tried to reach Stripe to create a new PaymentIntent — STRIPE SERVICE IS NOT CONFIGURED ON THE SERVER",
+            outcome: "failed",
+            detail:
+              "StripeService was not injected. This usually means STRIPE_SECRET_KEY is missing or the StripeModule failed to initialize. No dealer can edit pricing until this is fixed.",
+          },
+        ]
+      : input.errorCode === "NEW_PI_FAILED_UNKNOWN" && input.newPaymentIntentId
+        ? [
+            {
+              step: 1,
+              label: "Loaded delivery and validated status",
+              outcome: "ok",
+            },
+            {
+              step: 2,
+              label: "Validated the new quote provided by the dealer",
+              outcome: "ok",
+            },
+            {
+              step: 3,
+              label: `Created a new Stripe PaymentIntent (${input.newPaymentIntentId}) — but Stripe returned an UNEXPECTED status`,
+              outcome: "failed",
+              detail: input.stripeError ?? input.errorMessage,
+            },
+            {
+              step: 4,
+              label: "Best-effort cleanup: tried to cancel the unexpected PI",
+              outcome: "ok",
+              detail:
+                "Cleanup is best-effort; Stripe usually auto-releases these after 7 days. No DB row was ever written for this PI.",
+            },
+          ]
+        : [
+            {
+              step: 1,
+              label: "Loaded delivery and validated status",
+              outcome: "ok",
+            },
+            {
+              step: 2,
+              label: "Validated the new quote provided by the dealer",
+              outcome: "ok",
+            },
+            {
+              step: 3,
+              label:
+                "Tried to create a new Stripe PaymentIntent — STRIPE API RETURNED AN ERROR",
+              outcome: "failed",
+              detail: input.stripeError ?? input.errorMessage,
+            },
+          ];
+
+    const narrativeLines = this.buildPricingEditNarrativeLines({
+      deliveryId: delivery.id,
+      deliveryRef,
+      status: delivery.status,
+      customerLabel,
+      actorName,
+      actorEmail,
+      actorRole,
+      actorUserId: input.narrative?.actorUserId ?? actorUser?.id ?? null,
+      reason: input.reason,
+      oldPrice: input.narrative?.oldPrice,
+      newPrice: input.narrative?.newPrice,
+      oldQuoteId: input.narrative?.oldQuoteId,
+      newQuoteId: input.narrative?.newQuoteId,
+      oldPaymentIntentId: input.narrative?.oldPaymentIntentId,
+      newPaymentIntentId: input.newPaymentIntentId ?? null,
+      failureType: input.errorCode,
+      failureSteps,
+      adminAction: isConfigIssue
+        ? [
+            "1. Check that STRIPE_SECRET_KEY is set in the server environment.",
+            "2. Check that the StripeModule is properly imported in the app module.",
+            "3. Restart the server and verify the StripeService logs at startup.",
+            "4. Once fixed, ask the dealer to retry the edit — no manual Stripe action needed.",
+          ]
+        : [
+            "No immediate manual action is required — the original PaymentIntent is still active and the delivery is unchanged.",
+            "If this error repeats across many deliveries, check the Stripe status page and server logs for a wider issue.",
+            "If a new PaymentIntent was created with an unexpected status, you can inspect it in the Stripe dashboard:",
+            ...(input.newPaymentIntentId
+              ? [
+                  `   https://dashboard.stripe.com/payments/${input.newPaymentIntentId}`,
+                ]
+              : []),
+          ],
+      closing:
+        "The dealer saw a friendly error dialog and can retry. The original authorization (if any) is still active — no orphan hold was created.",
+    });
+
+    const sendPromises = admins.map((admin) => {
+      const adminName = admin.fullName || admin.username || "admin";
+      return this.queueAndSend({
+        actorUserId: admin.id,
+        customerId: delivery.customerId,
+        deliveryId: delivery.id,
+        driverId: null,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.PAYMENT_FAILED,
+        templateCode: "admin-pricing-edit-system-failure",
+        toEmail: admin.email,
+        subject: isConfigIssue
+          ? `CRITICAL: Pricing edits broken — Stripe not configured (delivery #${deliveryRef})`
+          : `Pricing edit system failure (${input.errorCode}) on delivery #${deliveryRef}`,
+        body: [`Hi ${adminName},`, "", ...narrativeLines].join("\n"),
+        payload: {
+          deliveryId: delivery.id,
+          errorCode: input.errorCode,
+          errorMessage: input.errorMessage,
+          newPaymentIntentId: input.newPaymentIntentId ?? null,
+          stripeError: input.stripeError ?? null,
+          stripeCode: input.stripeCode ?? null,
+          stripeDeclineCode: input.stripeDeclineCode ?? null,
+          reason: input.reason ?? null,
+          severity,
+          narrative: (input.narrative ?? null) as any,
+          actorName,
+          actorEmail,
+          actorRole,
+          customerLabel,
+          deliveryRef,
+          // Structured step-by-step data for the admin NotificationBell to
+          // render as a visual timeline. Mirrors the compensation-failed
+          // payload shape so the frontend PricingEditNarrativeCard can handle
+          // both notification types with the same component.
+          failureSteps: failureSteps as any,
+          adminAction: (isConfigIssue
+            ? [
+                "Check that STRIPE_SECRET_KEY is set in the server environment.",
+                "Check that the StripeModule is properly imported in the app module.",
+                "Restart the server and verify the StripeService logs at startup.",
+                "Once fixed, ask the dealer to retry the edit — no manual Stripe action needed.",
+              ]
+            : [
+                "No immediate manual action is required — the original PaymentIntent is still active and the delivery is unchanged.",
+                "If this error repeats across many deliveries, check the Stripe status page and server logs for a wider issue.",
+                ...(input.newPaymentIntentId
+                  ? [
+                      `Inspect the new PaymentIntent in the Stripe dashboard: https://dashboard.stripe.com/payments/${input.newPaymentIntentId}`,
+                    ]
+                  : []),
+              ]) as any,
+          failureType: input.errorCode as any,
+          oldPaymentIntentId: input.narrative?.oldPaymentIntentId ?? null,
+          oldPrice: input.narrative?.oldPrice ?? null,
+          newPrice: input.narrative?.newPrice ?? null,
+          stripeDashboardUrl: input.newPaymentIntentId
+            ? `https://dashboard.stripe.com/payments/${input.newPaymentIntentId}`
+            : null,
+        },
+      }).catch((err: any) => {
+        this.logger.error(
+          `Failed to send pricing-edit-system-failure notification to admin ${admin.id} (${admin.email}): ${err.message}`,
+        );
+        return null;
+      });
+    });
+
+    const results = await Promise.all(sendPromises);
+    const sent = results.filter((r) => r !== null).length;
+    this.logger.log(
+      `notifyAdminPricingEditSystemFailure: sent to ${sent}/${admins.length} admin(s) for delivery ${input.deliveryId} (code ${input.errorCode})`,
+    );
+    return results[0];
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Private helper: build the step-by-step narrative body shared by both
+  // notifyAdminCompensationFailed and notifyAdminPricingEditSystemFailure.
+  //
+  // The narrative shape is exactly what the dealer-facing spec asked for:
+  //
+  //   "Dealer X (name) tried to edit pricing on delivery Y.
+  //    They were changing the price from $A to $B.
+  //    They provided this reason: '...'.
+  //
+  //    What the system did, step by step:
+  //      1. ... ✓
+  //      2. ... ✓
+  //      3. ... ✗ FAILED: <error>
+  //
+  //    This needs you:
+  //      1. ...
+  //      2. ..."
+  // ─────────────────────────────────────────────────────────────────
+  private buildPricingEditNarrativeLines(
+    ctx: PricingEditNarrativeInput,
+  ): string[] {
+    const lines: string[] = [];
+
+    // ── Header: who tried to do what ────────────────────────────────────
+    lines.push(
+      `Dealer ${ctx.customerLabel} (actor: ${ctx.actorName} <${ctx.actorEmail}>, role: ${ctx.actorRole}) ` +
+        `tried to edit pricing on delivery #${ctx.deliveryRef} (status: ${ctx.status}).`,
+    );
+    lines.push("");
+
+    // ── What they tried to do ───────────────────────────────────────────
+    lines.push("What they tried to do:");
+    if (ctx.oldPrice != null && ctx.newPrice != null) {
+      const delta = ctx.newPrice - ctx.oldPrice;
+      const deltaStr =
+        Math.abs(delta) < 0.001
+          ? "no price change"
+          : delta > 0
+            ? `+$${delta.toFixed(2)}`
+            : `-$${Math.abs(delta).toFixed(2)}`;
+      lines.push(
+        `  • Change the price from $${ctx.oldPrice.toFixed(2)} → $${ctx.newPrice.toFixed(2)} (${deltaStr}).`,
+      );
+    } else if (ctx.newPrice != null) {
+      lines.push(`  • Set the price to $${ctx.newPrice.toFixed(2)}.`);
+    }
+    if (ctx.oldPickupAddress || ctx.newPickupAddress) {
+      if (ctx.oldPickupAddress && ctx.newPickupAddress && ctx.oldPickupAddress !== ctx.newPickupAddress) {
+        lines.push(`  • Change the pickup address:`);
+        lines.push(`      From: ${ctx.oldPickupAddress}`);
+        lines.push(`      To:   ${ctx.newPickupAddress}`);
+      } else if (ctx.newPickupAddress) {
+        lines.push(`  • Pickup: ${ctx.newPickupAddress}`);
+      }
+    }
+    if (ctx.oldDropoffAddress || ctx.newDropoffAddress) {
+      if (ctx.oldDropoffAddress && ctx.newDropoffAddress && ctx.oldDropoffAddress !== ctx.newDropoffAddress) {
+        lines.push(`  • Change the drop-off address:`);
+        lines.push(`      From: ${ctx.oldDropoffAddress}`);
+        lines.push(`      To:   ${ctx.newDropoffAddress}`);
+      } else if (ctx.newDropoffAddress) {
+        lines.push(`  • Drop-off: ${ctx.newDropoffAddress}`);
+      }
+    }
+    if (ctx.oldQuoteId && ctx.newQuoteId && ctx.oldQuoteId !== ctx.newQuoteId) {
+      lines.push(`  • Switch from quote ${ctx.oldQuoteId} → ${ctx.newQuoteId}.`);
+    }
+    if (ctx.reason) {
+      lines.push(`  • Reason provided: "${ctx.reason}"`);
+    }
+    lines.push("");
+
+    // ── What the system did, step by step ───────────────────────────────
+    lines.push("What the system did, step by step:");
+    for (const step of ctx.failureSteps) {
+      const marker = step.outcome === "ok" ? "✓" : step.outcome === "failed" ? "✗ FAILED" : "→";
+      lines.push(`  ${step.step}. ${step.label} — ${marker}`);
+      if (step.detail) {
+        lines.push(`     → ${step.detail}`);
+      }
+    }
+    lines.push("");
+
+    // ── PaymentIntent ids involved (for Stripe dashboard lookup) ────────
+    lines.push("PaymentIntent ids involved:");
+    if (ctx.oldPaymentIntentId) {
+      lines.push(`  • Old (still active): ${ctx.oldPaymentIntentId}`);
+    }
+    if (ctx.newPaymentIntentId) {
+      lines.push(`  • New (orphaned): ${ctx.newPaymentIntentId}`);
+    }
+    if (!ctx.oldPaymentIntentId && !ctx.newPaymentIntentId) {
+      lines.push("  • (none — no Stripe PaymentIntent was involved)");
+    }
+    lines.push("");
+
+    // ── This needs you ──────────────────────────────────────────────────
+    lines.push("This needs you:");
+    for (const action of ctx.adminAction) {
+      lines.push(`  ${action}`);
+    }
+    lines.push("");
+
+    // ── Closing note ────────────────────────────────────────────────────
+    if (ctx.closing) {
+      lines.push(ctx.closing);
+      lines.push("");
+    }
+
+    // ── Incident details footer (machine-readable for grep/email search) ──
+    lines.push("---");
+    lines.push("Incident details (machine-readable)");
+    lines.push(`Delivery: #${ctx.deliveryRef} (${ctx.deliveryId})`);
+    lines.push(`Dealer: ${ctx.customerLabel}`);
+    lines.push(`Actor: ${ctx.actorName} <${ctx.actorEmail}> (role: ${ctx.actorRole})`);
+    if (ctx.actorUserId) {
+      lines.push(`Actor user id: ${ctx.actorUserId}`);
+    }
+    lines.push(`Status at time of edit: ${ctx.status}`);
+    lines.push(`Failure type: ${ctx.failureType}`);
+    lines.push(`Detected at: ${new Date().toISOString()}`);
+
+    return lines;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Types shared by the pricing-edit admin notifications.
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Step-by-step description of one phase of the pricing edit flow.
+ * Used by buildPricingEditNarrativeLines to render a narrative like:
+ *   "1. Loaded delivery — ✓
+ *    2. Created new PI — ✗ FAILED: <detail>"
+ */
+export interface PricingEditNarrativeStep {
+  step: number;
+  label: string;
+  outcome: "ok" | "failed" | "skipped";
+  detail?: string;
+}
+
+/**
+ * Optional richer context passed by the pricing edit engine to the admin
+ * notifications. All fields are optional so older callers still work.
+ */
+export interface PricingEditNarrativeContext {
+  actorUserId?: string | null;
+  actorName?: string;
+  actorEmail?: string;
+  actorRole?: string;
+  oldPrice?: number | null;
+  newPrice?: number;
+  oldQuoteId?: string | null;
+  newQuoteId?: string;
+  oldPaymentIntentId?: string | null;
+  oldPickupAddress?: string;
+  oldDropoffAddress?: string;
+  newPickupAddress?: string;
+  newDropoffAddress?: string;
+}
+
+/**
+ * Internal shape consumed by buildPricingEditNarrativeLines.
+ */
+interface PricingEditNarrativeInput {
+  deliveryId: string;
+  deliveryRef: string;
+  status: string;
+  customerLabel: string;
+  actorName: string;
+  actorEmail: string;
+  actorRole: string;
+  actorUserId: string | null;
+  reason?: string;
+  oldPrice?: number | null;
+  newPrice?: number;
+  oldQuoteId?: string | null;
+  newQuoteId?: string;
+  oldPaymentIntentId?: string | null;
+  newPaymentIntentId?: string | null;
+  oldPickupAddress?: string;
+  oldDropoffAddress?: string;
+  newPickupAddress?: string;
+  newDropoffAddress?: string;
+  failureType: string;
+  failureSteps: PricingEditNarrativeStep[];
+  adminAction: string[];
+  closing?: string;
 }

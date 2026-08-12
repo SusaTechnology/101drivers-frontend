@@ -1929,3 +1929,234 @@ export class VerifyVinResponseBody {
   @swagger.ApiProperty()
   valid!: boolean;
 }
+
+/**
+ * Body for POST /api/deliveryRequests/:id/edit-pricing
+ *
+ * Allows a dealer to edit the pricing/addresses of a delivery that is in
+ * DRAFT, LISTED, or EXPIRED status. Other statuses are blocked.
+ *
+ * The caller must first generate a new quote via POST /api/deliveryRequests/quote-preview
+ * with the new addresses, then pass that quote's id here.
+ *
+ * Stripe reconciliation is handled automatically:
+ *  - PREPAID + price changed on LISTED/EXPIRED → new PI created, old PI cancelled
+ *  - POSTPAID → just updates Payment.amount in DB
+ *  - Price unchanged → no Stripe call
+ *  - EXPIRED → reactivates the delivery (EXPIRED → QUOTED → LISTED)
+ */
+export class EditDeliveryPricingBody {
+  @swagger.ApiProperty({
+    description:
+      "ID of the new Quote to attach. Generate one first via POST /api/deliveryRequests/quote-preview with the new addresses.",
+  })
+  @IsString()
+  @IsNotEmpty()
+  newQuoteId!: string;
+
+  @swagger.ApiProperty({
+    description:
+      "Human-readable reason for the edit (required for audit trail). e.g. 'Customer changed pickup address from X to Y after listing.'",
+  })
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    enum: EnumDeliveryStatusHistoryActorRole,
+    description:
+      "Role of the user initiating the edit. Defaults to BUSINESS_CUSTOMER if omitted.",
+  })
+  @IsOptional()
+  @IsEnum(EnumDeliveryStatusHistoryActorRole)
+  actorRole?: EnumDeliveryStatusHistoryActorRole | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    default: true,
+    description:
+      "When status is EXPIRED, re-list the delivery after editing (EXPIRED → QUOTED → LISTED). Set to false to edit fields while keeping status EXPIRED.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  reactivateIfExpired?: boolean;
+}
+
+export class EditDeliveryPricingResponseDto {
+  @swagger.ApiProperty()
+  deliveryId!: string;
+
+  @swagger.ApiProperty({ enum: EnumDeliveryRequestStatus })
+  status!: EnumDeliveryRequestStatus;
+
+  @swagger.ApiProperty({ nullable: true })
+  oldQuoteId!: string | null;
+
+  @swagger.ApiProperty()
+  newQuoteId!: string;
+
+  @swagger.ApiProperty({ nullable: true })
+  oldPrice!: number | null;
+
+  @swagger.ApiProperty()
+  newPrice!: number;
+
+  @swagger.ApiProperty({ nullable: true })
+  oldPaymentIntentId!: string | null;
+
+  @swagger.ApiProperty({ nullable: true })
+  newPaymentIntentId!: string | null;
+
+  @swagger.ApiProperty()
+  priceChanged!: boolean;
+
+  @swagger.ApiProperty({
+    enum: ["none", "reauthorized", "skipped_postpaid", "skipped_no_payment"],
+  })
+  stripeAction!: string;
+
+  @swagger.ApiProperty()
+  reactivated!: boolean;
+}
+
+/**
+ * Body for `POST /api/deliveryRequests/:id/edit-pricing/preview`.
+ *
+ * This is the read-only companion to /edit-pricing. It computes the price
+ * delta, determines whether the actual edit would trigger a Stripe
+ * reauthorization, and returns a user-facing headline + body the frontend
+ * can render in a confirmation dialog.
+ *
+ * Importantly, this endpoint NEVER throws PricingEditException for
+ * non-editable statuses — it returns `editable: false` + `notEditableReason`
+ * instead, so the frontend can render the dialog with a disabled submit
+ * button (better UX than a hard error).
+ */
+export class PreviewEditDeliveryPricingBody {
+  @swagger.ApiProperty({
+    description:
+      "ID of the new Quote to preview. Generate one first via POST /api/deliveryRequests/quote-preview with the new addresses.",
+  })
+  @IsString()
+  @IsNotEmpty()
+  newQuoteId!: string;
+
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    enum: EnumDeliveryStatusHistoryActorRole,
+    description:
+      "Role of the user initiating the preview. ADMIN can preview edits on terminal-state deliveries (CANCELLED/DISPUTED/CLOSED/COMPLETED) — other roles will see editable:false for those statuses.",
+  })
+  @IsOptional()
+  @IsEnum(EnumDeliveryStatusHistoryActorRole)
+  actorRole?: EnumDeliveryStatusHistoryActorRole | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    default: true,
+    description:
+      "When status is EXPIRED, indicates whether the actual edit would re-list the delivery. Mirrors the same flag on EditDeliveryPricingBody.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  reactivateIfExpired?: boolean;
+}
+
+/**
+ * Response for `POST /api/deliveryRequests/:id/edit-pricing/preview`.
+ *
+ * All fields are populated by DeliveryPricingEditEngine.previewPricingEdit()
+ * and are designed to drive a frontend confirmation dialog WITHOUT requiring
+ * the frontend to re-implement delta math or message phrasing.
+ */
+export class PreviewEditDeliveryPricingResponseDto {
+  @swagger.ApiProperty()
+  deliveryId!: string;
+
+  @swagger.ApiProperty({ enum: EnumDeliveryRequestStatus })
+  status!: EnumDeliveryRequestStatus;
+
+  @swagger.ApiProperty({
+    description:
+      "True if the dealer (or admin) is allowed to edit this delivery in its current status.",
+  })
+  editable!: boolean;
+
+  @swagger.ApiProperty({
+    required: false,
+    description:
+      "When editable is false, a machine-readable reason ('driver_accepted' | 'terminal_state' | 'unknown') for the frontend to switch on.",
+  })
+  notEditableReason?: string;
+
+  @swagger.ApiProperty({
+    description:
+      "True if the caller is an admin previewing an edit on a terminal-state delivery.",
+  })
+  isAdminOverride!: boolean;
+
+  @swagger.ApiProperty({ nullable: true })
+  oldQuoteId!: string | null;
+
+  @swagger.ApiProperty()
+  newQuoteId!: string;
+
+  @swagger.ApiProperty({ nullable: true })
+  oldPrice!: number | null;
+
+  @swagger.ApiProperty()
+  newPrice!: number;
+
+  @swagger.ApiProperty({
+    description: "newPrice - oldPrice in dollars. Positive = increase, negative = decrease, 0 = unchanged.",
+  })
+  priceDelta!: number;
+
+  @swagger.ApiProperty({
+    enum: ["increase", "decrease", "unchanged"],
+  })
+  priceDirection!: string;
+
+  @swagger.ApiProperty({
+    enum: ["none", "reauthorized", "skipped_postpaid", "skipped_no_payment"],
+    description:
+      "What the engine WILL do on the actual edit call. 'reauthorized' = new PI created + old PI cancelled.",
+  })
+  expectedStripeAction!: string;
+
+  @swagger.ApiProperty({
+    description:
+      "User-facing headline — e.g. 'Your new price is higher'. Render this as the dialog title.",
+  })
+  headline!: string;
+
+  @swagger.ApiProperty({
+    description:
+      "User-facing body explaining the charge/release in plain English with the delta in brackets. Render this as the dialog description.",
+  })
+  body!: string;
+
+  @swagger.ApiProperty()
+  willReactivate!: boolean;
+
+  @swagger.ApiProperty()
+  oldPickupAddress!: string;
+
+  @swagger.ApiProperty()
+  newPickupAddress!: string;
+
+  @swagger.ApiProperty()
+  oldDropoffAddress!: string;
+
+  @swagger.ApiProperty()
+  newDropoffAddress!: string;
+
+  @swagger.ApiProperty()
+  isPostpaid!: boolean;
+
+  @swagger.ApiProperty()
+  hasPayment!: boolean;
+}

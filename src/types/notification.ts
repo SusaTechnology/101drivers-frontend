@@ -216,16 +216,40 @@ export const LOCK_IN_TEMPLATE_STYLES: Record<string, { icon: string; color: stri
 };
 
 /**
- * Resolve the effective style for a notification, preferring lock-in-specific
- * styling via `templateCode` and falling back to the default `type` style.
+ * Pricing-edit admin alert template codes. These fire from the
+ * DeliveryPricingEditEngine when something goes wrong with a dealer's pricing
+ * edit and an admin needs to know. Distinctive red badge so admins can spot
+ * them immediately in the notification bell dropdown.
+ *
+ * - admin-compensation-failed: WORST CASE — both DB tx and Stripe cancel
+ *   failed, customer has a phantom auth hold. Admin MUST manually cancel the
+ *   PI in the Stripe dashboard.
+ * - admin-pricing-edit-system-failure: SYSTEM-LEVEL issue (Stripe not
+ *   configured, Stripe API errored, PI came back in unexpected status). No
+ *   orphan hold, but the admin should investigate.
+ */
+export const PRICING_EDIT_TEMPLATE_STYLES: Record<string, { icon: string; color: string; label: string }> = {
+  'admin-compensation-failed': { icon: 'AlertTriangle', color: 'red', label: 'Phantom Auth — Action Required' },
+  'admin-pricing-edit-system-failure': { icon: 'AlertCircle', color: 'amber', label: 'Pricing Edit System Issue' },
+};
+
+/**
+ * Resolve the effective style for a notification, preferring template-specific
+ * styling via `templateCode` (lock-in / pricing-edit admin alerts) and
+ * falling back to the default `type` style.
  * Falls back to GENERAL if the type is unknown.
  */
 export function getNotificationStyle(notification: {
   type: string;
   templateCode?: string | null;
 }): { icon: string; color: string; label: string } {
-  if (notification.templateCode && LOCK_IN_TEMPLATE_STYLES[notification.templateCode]) {
-    return LOCK_IN_TEMPLATE_STYLES[notification.templateCode];
+  if (notification.templateCode) {
+    if (LOCK_IN_TEMPLATE_STYLES[notification.templateCode]) {
+      return LOCK_IN_TEMPLATE_STYLES[notification.templateCode];
+    }
+    if (PRICING_EDIT_TEMPLATE_STYLES[notification.templateCode]) {
+      return PRICING_EDIT_TEMPLATE_STYLES[notification.templateCode];
+    }
   }
   return (
     NOTIFICATION_TYPE_STYLES[notification.type as NotificationEventType] ??
