@@ -1534,10 +1534,40 @@ async schedulePreview(
     @common.Body() data: DeliveryRequestUpdateInput
   ): Promise<DeliveryRequest | null> {
     try {
+      // Strip fields the frontend may send that are NOT valid Prisma
+      // DeliveryRequestUpdateInput keys. Without this, the `...data` spread
+      // below passes them through to prisma.deliveryRequest.update(), which
+      // throws a PrismaClientValidationError:
+      //   - customerId / quoteId / resubmittedFromId / createdByUserId:
+      //     these are foreign-key SCALARS. Prisma's typed UpdateInput only
+      //     accepts the relation form (customer: { connect: { id } }), not
+      //     the flat scalar. They are converted to relation connects below.
+      //   - transmission / recipientBusinessName / transmissionOther:
+      //     form-only fields that have no matching column on DeliveryRequest.
+      //     The dealer-edit-delivery form includes them for UX but they must
+      //     never reach Prisma.
+      //   - customer / quote / createdBy / resubmittedFrom as RELATION
+      //     objects are kept and handled by the explicit `connect:` blocks
+      //     below (so we delete the raw form here to avoid double-handling).
+      const {
+        customerId,
+        quoteId,
+        resubmittedFromId,
+        createdByUserId,
+        transmission,
+        transmissionOther,
+        recipientBusinessName,
+        customer: rawCustomer,
+        quote: rawQuote,
+        createdBy: rawCreatedBy,
+        resubmittedFrom: rawResubmittedFrom,
+        ...rest
+      } = data as any;
+
       return await this.service.updateDeliveryRequest({
         where: params,
         data: {
-          ...data,
+          ...rest,
 
           compliance: data.compliance
             ? {
@@ -1549,11 +1579,19 @@ async schedulePreview(
             ? {
                 connect: data.createdBy,
               }
+            : createdByUserId
+            ? {
+                connect: { id: createdByUserId },
+              }
             : undefined,
 
           customer: data.customer
             ? {
                 connect: data.customer,
+              }
+            : customerId
+            ? {
+                connect: { id: customerId },
               }
             : undefined,
 
@@ -1579,6 +1617,10 @@ async schedulePreview(
             ? {
                 connect: data.quote,
               }
+            : quoteId
+            ? {
+                connect: { id: quoteId },
+              }
             : undefined,
 
           rating: data.rating
@@ -1590,6 +1632,10 @@ async schedulePreview(
           resubmittedFrom: data.resubmittedFrom
             ? {
                 connect: data.resubmittedFrom,
+              }
+            : resubmittedFromId
+            ? {
+                connect: { id: resubmittedFromId },
               }
             : undefined,
 
