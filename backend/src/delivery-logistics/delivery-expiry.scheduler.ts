@@ -24,9 +24,15 @@ import { businessNow } from "./business-time";
  * BOOKED  → LISTED  : every 15 min, if pickupWindowEnd < now (driver ghosted)
  * ACTIVE  → flag    : every hour, if updatedAt > 24 hours ago (stale alert, no transition)
  *
- * Orphan-auth sweep: every 30 min, cancels any EXPIRED delivery's stale Stripe
- * PaymentIntent that the LISTED-expiry cron missed (e.g. due to a transient
- * Stripe outage at the moment of expiry).
+ * Orphan-auth sweep: once per day at 03:00 server time, cancels any EXPIRED
+ * delivery's stale Stripe PaymentIntent that the LISTED-expiry cron missed
+ * (e.g. due to a transient Stripe outage at the moment of expiry).
+ *
+ * Daily is sufficient because:
+ *   - Stripe auto-releases uncaptured authorizations after 7 days regardless.
+ *   - The inline release in `expireListedDeliveries` already handles the
+ *     happy path (sweep only catches the rare miss).
+ *   - A daily batch keeps Stripe API call volume low and predictable.
  */
 @Injectable()
 export class DeliveryExpiryScheduler {
@@ -380,9 +386,11 @@ export class DeliveryExpiryScheduler {
    *    from a previous bug.
    *  - Payments left in AUTHORIZED state from before this sweep was deployed.
    *
-   * Runs every 30 minutes.
+   * Runs once per day at 03:00 server time. Daily is sufficient because
+   * Stripe auto-releases uncaptured auths after 7 days; this sweep just
+   * releases them earlier than that for customer-card-hold UX.
    */
-  @Cron("*/30 * * * *")
+  @Cron("0 3 * * *")
   async releaseOrphanStripeAuths() {
     if (!this.stripeService) {
       return;

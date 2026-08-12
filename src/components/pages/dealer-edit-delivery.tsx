@@ -531,36 +531,12 @@ export default function EditDeliveryPage() {
     },
   });
 
-  // Save as Draft mutation
-  const saveAsDraft = usePatch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}`, {
-    onSuccess: () => {
-      toast.success("Saved as draft", {
-        description: "Delivery moved to Drafts. You can continue editing or delete it from there.",
-      });
-      navigate({ to: "/dealer-delivery-details", search: { id: deliveryId } });
-    },
-    onError: (error: any) => {
-      const errorMessage = error?.message || "Failed to save as draft";
-      toast.error("Failed to save as draft", {
-        description: errorMessage,
-      });
-      console.error("Save as draft failed:", error);
-    },
-  });
-
-  const handleSaveAsDraft = () => {
-    if (!pickupCoords || !dropoffCoords) {
-      toast.error("Missing addresses", {
-        description: "Please enter pickup and drop-off addresses before saving.",
-      });
-      return;
-    }
-    const payload = {
-      ...buildPayload(getValues()),
-      status: "DRAFT",
-    };
-    saveAsDraft.mutate(payload);
-  };
+  // NOTE: There is intentionally no "Save as Draft" mutation on this page.
+  // The "Save as Draft" button has been removed — this page is for editing
+  // deliveries in DRAFT/QUOTED/LISTED/EXPIRED status, and silently reverting
+  // a delivery back to DRAFT would discard any existing Stripe auth without
+  // explanation. Drafts are managed on the dedicated draft-edit page
+  // (dealer-edit-draft.tsx), reachable from the Drafts tab.
 
   const {
     register,
@@ -2773,37 +2749,19 @@ export default function EditDeliveryPage() {
                         </>
                       )}
                     </Button>
-                    {/* "Save as Draft" is hidden when the delivery is already
-                        LISTED — a listed delivery is publicly visible to
-                        drivers, and silently reverting it to a draft would
-                        pull it off the board without warning. Drafts are
-                        still reachable from the Drafts tab for QUOTED /
-                        EXPIRED deliveries (where Save-as-Draft makes sense
-                        as a "park it for later" action). */}
-                    {deliveryData?.status !== 'LISTED' && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="py-6 rounded-2xl border-slate-200 dark:border-slate-700 font-extrabold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={saveAsDraft.isPending}
-                        onClick={handleSaveAsDraft}
-                      >
-                        {saveAsDraft.isPending ? (
-                          <>
-                            Saving...
-                            <RefreshCw className="ml-2 h-5 w-5 animate-spin" />
-                          </>
-                        ) : (
-                          "Save as Draft"
-                        )}
-                      </Button>
-                    )}
                   </div>
-                  {deliveryData?.status !== 'LISTED' && (
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center sm:text-right">
-                      Saves changes and moves this delivery to the Drafts tab (you can delete it from there later)
-                    </p>
-                  )}
+
+                  {/* Note about the "Edit Delivery" flow — this page is for
+                      editing deliveries in DRAFT/QUOTED/LISTED/EXPIRED status.
+                      It is NOT a draft-edit page. The dedicated draft-edit page
+                      (dealer-edit-draft.tsx) is where dealers update DRAFT
+                      deliveries without any payment/Stripe involvement.
+
+                      There is intentionally no "Save as Draft" button here —
+                      reverting a LISTED/QUOTED/EXPIRED delivery back to DRAFT
+                      from the edit page would be surprising and would discard
+                      any existing Stripe auth without explanation. Drafts are
+                      managed from the Drafts tab instead. */}
 
                   {!isFormValidForSubmission && !updateDelivery.isPending && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-3 text-center">

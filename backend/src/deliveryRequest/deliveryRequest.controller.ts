@@ -3267,10 +3267,16 @@ async schedulePreview(
   //
   // This guard runs at the TOP of PATCH /:id and rejects any attempt to
   // change those fields while the delivery is in a dealer-editable status
-  // (DRAFT/QUOTED/LISTED/EXPIRED). The dealer must use /edit-pricing instead.
+  // WITH AN ACTIVE PAYMENT ROW (QUOTED/LISTED/EXPIRED). The dealer must
+  // use /edit-pricing instead.
   //
-  // Admins (role=ADMIN) are exempt — they may need to PATCH pricing fields
-  // directly when fixing a manually-intervened delivery.
+  // DRAFT is EXEMPT — drafts have no Payment row, no Stripe auth, nothing
+  // to reconcile. The dedicated draft-edit page (dealer-edit-draft.tsx)
+  // PATCHes addresses/quote freely, and that's correct because no payment
+  // machinery has touched the delivery yet.
+  //
+  // Admins (role=ADMIN) are also exempt — they may need to PATCH pricing
+  // fields directly when fixing a manually-intervened delivery.
   //
   // Non-editable statuses (BOOKED/ACTIVE/COMPLETED/CLOSED/CANCELLED/DISPUTED)
   // don't need this guard because pricing edits aren't allowed there at all,
@@ -3312,13 +3318,24 @@ async schedulePreview(
       return;
     }
 
-    const dealerEditableStatuses: EnumDeliveryRequestStatus[] = [
-      EnumDeliveryRequestStatus.DRAFT,
+    // DRAFT is always exempt — no Payment row, no Stripe auth to reconcile.
+    // The dedicated draft-edit page (dealer-edit-draft.tsx) PATCHes addresses
+    // and quote freely, and that's correct because no payment machinery has
+    // touched the delivery yet.
+    if (delivery.status === EnumDeliveryRequestStatus.DRAFT) {
+      return;
+    }
+
+    // For QUOTED/LISTED/EXPIRED, a Payment row may exist (LISTED/EXPIRED) or
+    // may not (QUOTED with no Payment yet). Either way, the pricing-edit
+    // engine is the canonical path for changes to pricing-controlled fields
+    // on these statuses, so the lockdown applies.
+    const lockdownStatuses: EnumDeliveryRequestStatus[] = [
       EnumDeliveryRequestStatus.QUOTED,
       EnumDeliveryRequestStatus.LISTED,
       EnumDeliveryRequestStatus.EXPIRED,
     ];
-    if (!dealerEditableStatuses.includes(delivery.status)) {
+    if (!lockdownStatuses.includes(delivery.status)) {
       // Status is not dealer-editable (e.g. BOOKED/ACTIVE/COMPLETED) — the
       // PATCH endpoint's own logic + role-based access control will reject
       // inappropriate changes. No need to enforce the lockdown here.
