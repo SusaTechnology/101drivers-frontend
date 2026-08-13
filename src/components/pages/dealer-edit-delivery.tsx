@@ -724,7 +724,19 @@ export default function EditDeliveryPage() {
     setIsDealerAuthorized(!!dealerAuthorized);
   }, [dealerAuthorized]);
 
-  // Reset quote and schedule when location changes
+  // Reset ONLY the quote when location changes — keep schedule slots intact.
+  //
+  // Why not clear the schedule too? The schedule slots (pickup time window,
+  // dropoff time window, selected date, customer choice) are time-window
+  // selections that the user already made. They do not depend on the quote
+  // distance — they depend on the business's operating hours for that date.
+  // When the user picks a new address, only the price/miles need to be
+  // recalculated. Wiping the schedule here would force the user to re-pick
+  // their time slots every time they tweak an address, which is bad UX.
+  //
+  // The auto-calc effect below will fire because `hasCalculated` flips to
+  // false, fetch a new quote with the new coords, and the schedule slots
+  // remain visible in the UI throughout.
   useEffect(() => {
     if (isDataLoadingRef.current) {
       prevPickupCoordsRef.current = pickupCoords;
@@ -747,15 +759,14 @@ export default function EditDeliveryPage() {
     prevDropoffCoordsRef.current = dropoffCoords;
 
     if ((pickupChanged || dropoffChanged) && hasCalculated && quoteId) {
-      console.log('Location changed, resetting quote and schedule...');
+      console.log('Location changed, resetting quote only — schedule slots preserved');
       setQuoteId(null);
       setHasCalculated(false);
       setQuoteData({ miles: 0, total: 0, base: 0, distance: 0, insurance: 0, transaction: 0 });
-      setValidatedWindows(null);
-      setSchedulePreviewData(null);
-      setCustomerChose(null);
-      setSelectedSlot(null);
-      setSuggestedSlots({ pickup: [], dropoff: [] });
+      // Intentionally NOT clearing: validatedWindows, schedulePreviewData,
+      // customerChose, selectedSlot, suggestedSlots, selectedDate.
+      // These represent the user's time-window choices and should survive
+      // an address change so the user doesn't have to re-pick them.
     }
   }, [pickupCoords, dropoffCoords]);
 
