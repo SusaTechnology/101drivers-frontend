@@ -616,6 +616,43 @@ export default function EditDeliveryPage() {
           requiresOpsConfirmation: deliveryData.requiresOpsConfirmation || false,
           afterHours: deliveryData.afterHours || false,
         });
+
+        // Populate the calendar date from the existing pickup window.
+        // The ISO string is converted to a business-timezone (America/Los_Angeles)
+        // calendar date — e.g. "2026-08-15T14:00:00.000Z" → Aug 15 2026 in PT
+        // (even if the user's browser is in a different timezone). Without this,
+        // the date-picker button shows "Choose a date" on initial load even
+        // though the delivery already has a scheduled date.
+        //
+        // We also populate suggestedSlots with the existing slot so the
+        // time-slot Select dropdown shows the saved slot as a selectable
+        // option. Without this, the Select renders with no <SelectItem>s
+        // and the saved slot is invisible to the user.
+        const pickupSlotLabel = isoToTimeWindow(deliveryData.pickupWindowStart, deliveryData.pickupWindowEnd);
+        const dropoffSlotLabel = isoToTimeWindow(deliveryData.dropoffWindowStart, deliveryData.dropoffWindowEnd);
+        const pickupSlot: SlotItem = {
+          label: pickupSlotLabel,
+          start: deliveryData.pickupWindowStart,
+          end: deliveryData.pickupWindowEnd,
+        };
+        const dropoffSlot: SlotItem = {
+          label: dropoffSlotLabel,
+          start: deliveryData.dropoffWindowStart,
+          end: deliveryData.dropoffWindowEnd,
+        };
+        setSuggestedSlots({ pickup: [pickupSlot], dropoff: [dropoffSlot] });
+
+        // Convert the ISO pickup window start to a business-timezone YYYY-MM-DD
+        // string, then parse that into a local Date at midnight. The Calendar
+        // component compares dates by day, so a midnight local Date is correct.
+        const ptDateStr = new Date(deliveryData.pickupWindowStart).toLocaleDateString('en-CA', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          timeZone: BUSINESS_TZ,
+        }); // 'en-CA' locale yields YYYY-MM-DD
+        const [y, m, d] = ptDateStr.split('-').map(Number);
+        setSelectedDate(new Date(y, m - 1, d));
       }
 
       // Vehicle info
