@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  GoneException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -276,22 +277,59 @@ async bookDelivery(input: {
     });
     const pickupPin = existingDelivery?.pickupPin ?? this.generatePickupPin();
 
-    const booking = await tx.deliveryAssignment.create({
-      data: {
-        deliveryId: input.deliveryId,
-        driverId: input.driverId,
-        assignedByUserId: input.bookedByUserId ?? null,
-        reason: input.reason ?? null,
+    // ── ATOMIC COMPARE-AND-SWAP ON STATUS ──
+    //
+    // This is the primary defense against double-booking. Even if two drivers
+    // race past `assertDriverCanBookDelivery` (which only does a findFirst
+    // check — a TOCTOU race under READ COMMITTED), only ONE of them will
+    // succeed here: the updateMany filters by `status: LISTED`, so whoever
+    // runs second finds the status already BOOKED and `updated.count === 0`.
+    //
+    // The partial unique index on DeliveryAssignment(deliveryId) WHERE
+    // unassignedAt IS NULL (migration 20260813000000) is the SECOND defense:
+    // if both drivers somehow get past the compare-and-swap (e.g. a future
+    // code path skips it), the DB rejects the duplicate assignment insert
+    // with Prisma error code P2002, which we catch below.
+    const updated = await tx.deliveryRequest.updateMany({
+      where: {
+        id: input.deliveryId,
+        status: EnumDeliveryRequestStatus.LISTED,
       },
-    });
-
-    await tx.deliveryRequest.update({
-      where: { id: input.deliveryId },
       data: {
         status: EnumDeliveryRequestStatus.BOOKED,
         ...(existingDelivery?.pickupPin ? {} : { pickupPin }),
       },
     });
+
+    if (updated.count === 0) {
+      // Either the delivery no longer exists, or its status is no longer
+      // LISTED (another driver just booked it). Either way, this driver
+      // loses the race.
+      throw new GoneException("This gig was just booked by another driver");
+    }
+
+    let booking;
+    try {
+      booking = await tx.deliveryAssignment.create({
+        data: {
+          deliveryId: input.deliveryId,
+          driverId: input.driverId,
+          assignedByUserId: input.bookedByUserId ?? null,
+          reason: input.reason ?? null,
+        },
+      });
+    } catch (error: any) {
+      // P2002 = unique constraint violation. The partial unique index
+      // delivery_assignment_active_unique rejected this insert because
+      // another driver's assignment row was committed microseconds ago.
+      // This is the last line of defense — the compare-and-swap above
+      // should have already caught this case, but we handle it here too
+      // for defense in depth.
+      if (error?.code === "P2002") {
+        throw new GoneException("This gig was just booked by another driver");
+      }
+      throw error;
+    }
 
     await tx.deliveryStatusHistory.create({
       data: {

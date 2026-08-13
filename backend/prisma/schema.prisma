@@ -422,6 +422,23 @@ model DeliveryAssignment {
 
   @@index([deliveryId, assignedAt])
   @@index([driverId, assignedAt])
+
+  // NOTE: There is also a PARTIAL UNIQUE INDEX at the database level that
+  // cannot be declared in Prisma syntax. It is created by migration
+  // 20260813000000_add_active_assignment_unique_index:
+  //
+  //   CREATE UNIQUE INDEX delivery_assignment_active_unique
+  //     ON "DeliveryAssignment"("deliveryId")
+  //     WHERE "unassignedAt" IS NULL;
+  //
+  // This enforces that AT MOST ONE active (unassignedAt IS NULL) assignment
+  // can exist per delivery at any time, preventing double-booking race
+  // conditions. Application code catches Prisma error P2002 (unique constraint
+  // violation) and converts it to a user-friendly GoneException.
+  //
+  // The partial index (vs. a full @@unique([deliveryId])) preserves
+  // historical assignment rows for audit — every driver who was ever
+  // assigned remains in the table with unassignedAt set.
 }
 
 model TrackingSession {

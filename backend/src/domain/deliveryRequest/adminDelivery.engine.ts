@@ -166,14 +166,28 @@ async assignDriver(input: {
   };
 
   await this.prisma.$transaction(async (tx) => {
-    await tx.deliveryAssignment.create({
-      data: {
-        deliveryId: input.deliveryId,
-        driverId: input.driverId,
-        assignedByUserId: input.actorUserId ?? null,
-        reason: input.reason ?? "Admin assigned driver",
-      },
-    });
+    try {
+      await tx.deliveryAssignment.create({
+        data: {
+          deliveryId: input.deliveryId,
+          driverId: input.driverId,
+          assignedByUserId: input.actorUserId ?? null,
+          reason: input.reason ?? "Admin assigned driver",
+        },
+      });
+    } catch (error: any) {
+      // P2002 = unique constraint violation on
+      // delivery_assignment_active_unique (migration 20260813000000).
+      // The pre-check above (delivery.assignments.length > 0) is a TOCTOU
+      // race — another admin could have assigned a driver between our
+      // findUnique and this create. The DB index catches it.
+      if (error?.code === "P2002") {
+        throw new BadRequestException(
+          "Delivery already has an active assignment (assigned concurrently)"
+        );
+      }
+      throw error;
+    }
 
     await tx.deliveryRequest.update({
       where: { id: input.deliveryId },
@@ -1168,59 +1182,93 @@ async assignDriver(input: {
       },
     });
 
-    await this.prisma.deliveryAssignment.updateMany({
-      where: {
-        deliveryId: input.deliveryId,
-        unassignedAt: null,
-      },
-      data: {
-        unassignedAt: new Date(),
-      },
-    });
-
-    await this.prisma.deliveryAssignment.create({
-      data: {
-        deliveryId: input.deliveryId,
-        driverId: input.newDriverId,
-        assignedByUserId: input.actorUserId ?? null,
-        reason: input.reason ?? "Admin reassignment",
-      },
-    });
-
-    await this.prisma.deliveryRequest.update({
-      where: { id: input.deliveryId },
-      data: {
-        status: EnumDeliveryRequestStatus.BOOKED,
-      },
-    });
-
-    await this.prisma.deliveryStatusHistory.create({
-      data: {
-        deliveryId: input.deliveryId,
-        actorUserId: input.actorUserId ?? null,
-        actorRole: EnumDeliveryStatusHistoryActorRole.ADMIN,
-        actorType: EnumDeliveryStatusHistoryActorType.USER,
-        fromStatus: delivery.status as any,
-        toStatus: EnumDeliveryStatusHistoryToStatus.BOOKED,
-        note: input.reason ?? "Delivery reassigned by admin",
-      },
-    });
-
-    await this.prisma.adminAuditLog.create({
-      data: {
-        action: EnumAdminAuditLogAction.DELIVERY_REASSIGN,
-        actorUserId: input.actorUserId ?? null,
-        actorType: EnumAdminAuditLogActorType.USER,
-        deliveryId: input.deliveryId,
-        driverId: input.newDriverId,
-        reason: input.reason ?? null,
-        beforeJson: beforeAssignments ?? Prisma.JsonNull,
-        afterJson: {
+    // ── ATOMIC REASSIGNMENT ──
+    //
+    // Wrap unassign-old + create-new + status-update + history + audit-log
+    // in a single transaction. Previously these were 5 separate statements —
+    // a crash between them could leave the delivery with no active assignment
+    // (unassigned but no new row created) or with status still LISTED while
+    // a new assignment exists.
+    //
+    // Order matters for the partial unique index
+    // (delivery_assignment_active_unique, migration 20260813000000):
+    //   1. updateMany SET unassignedAt = now() WHERE unassignedAt IS NULL
+    //      → releases the existing active assignment, removing it from the
+    //        partial index's WHERE clause.
+    //   2. create new DeliveryAssignment → succeeds because the index now
+    //      sees zero active rows for this delivery.
+    // If we did these in the reverse order, the create would hit P2002
+    // because the old active row is still in the index.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.deliveryAssignment.updateMany({
+        where: {
           deliveryId: input.deliveryId,
-          newDriverId: input.newDriverId,
+          unassignedAt: null,
+        },
+        data: {
+          unassignedAt: new Date(),
+        },
+      });
+
+      try {
+        await tx.deliveryAssignment.create({
+          data: {
+            deliveryId: input.deliveryId,
+            driverId: input.newDriverId,
+            assignedByUserId: input.actorUserId ?? null,
+            reason: input.reason ?? "Admin reassignment",
+          },
+        });
+      } catch (error: any) {
+        // P2002 = unique constraint violation on
+        // delivery_assignment_active_unique. Shouldn't happen here because
+        // we just unassigned the old row, but if it does (e.g. another
+        // admin concurrently reassigned to a different driver), surface a
+        // clean error instead of leaking the raw Prisma code.
+        if (error?.code === "P2002") {
+          throw new BadRequestException(
+            "Could not reassign — another active assignment was created concurrently. " +
+              "Please reload and try again."
+          );
+        }
+        throw error;
+      }
+
+      await tx.deliveryRequest.update({
+        where: { id: input.deliveryId },
+        data: {
           status: EnumDeliveryRequestStatus.BOOKED,
         },
-      },
+      });
+
+      await tx.deliveryStatusHistory.create({
+        data: {
+          deliveryId: input.deliveryId,
+          actorUserId: input.actorUserId ?? null,
+          actorRole: EnumDeliveryStatusHistoryActorRole.ADMIN,
+          actorType: EnumDeliveryStatusHistoryActorType.USER,
+          fromStatus: delivery.status as any,
+          toStatus: EnumDeliveryStatusHistoryToStatus.BOOKED,
+          note: input.reason ?? "Delivery reassigned by admin",
+        },
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          action: EnumAdminAuditLogAction.DELIVERY_REASSIGN,
+          actorUserId: input.actorUserId ?? null,
+          actorType: EnumAdminAuditLogActorType.USER,
+          deliveryId: input.deliveryId,
+          driverId: input.newDriverId,
+          reason: input.reason ?? null,
+          beforeJson: beforeAssignments ?? Prisma.JsonNull,
+          afterJson: {
+            deliveryId: input.deliveryId,
+            newDriverId: input.newDriverId,
+            status: EnumDeliveryRequestStatus.BOOKED,
+          },
+        },
+      });
     });
 
     this.emitStatusChanged(input.deliveryId, EnumDeliveryRequestStatus.BOOKED);
