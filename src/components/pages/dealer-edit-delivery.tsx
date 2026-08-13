@@ -1214,86 +1214,86 @@ export default function EditDeliveryPage() {
     };
   };
 
-  /**
-   * Fire the POST /edit-pricing call. Extracted as a standalone function so
-   * the PricingEditErrorDialog's retry button can re-invoke it without
-   * re-running react-hook-form's handleSubmit.
-   *
-   * Returns the parsed JSON response on success, throws on HTTP error.
-   * The thrown error has `.code` and `.details` attached from the backend's
-   * PricingEditException so the dialog can switch on them.
-   */
-  const submitPricingEdit = async (params: { qId: string; reason: string }) => {
-    const apiUrl = import.meta.env.VITE_API_URL;
-    const res = await authFetch(
-      `${apiUrl}/api/deliveryRequests/${deliveryId}/edit-pricing`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          newQuoteId: params.qId,
-          reason: params.reason,
-          actorRole: 'DEALER',
-          reactivateIfExpired: isExpired,
-        }),
-      },
-    );
-    if (!res.ok) {
-      // Parse the structured error. The backend's PricingEditException
-      // returns { statusCode, code, message, details }.
-      let errBody: any = null;
-      try {
-        errBody = await res.json();
-      } catch {
-        // response had no JSON body
-      }
-      const err: any = new Error(
-        errBody?.message || `Pricing edit failed (HTTP ${res.status})`,
-      );
-      err.code = errBody?.code;
-      err.details = errBody?.details;
-      err.status = res.status;
-      throw err;
+  // ── Pricing-edit mutations ─────────────────────────────────────────────
+  // Both /edit-pricing/preview (read-only) and /edit-pricing (writes DB +
+  // Stripe) are POSTs that go through the same `useCreate` mutation hook
+  // from our dataQuery library. That gives us:
+  //   - Automatic token + token-refresh handling (via baseFetch)
+  //   - Proper error propagation: baseFetch throws a ParsedApiError that
+  //     preserves the backend's structured `code` and `details` fields, so
+  //     the PricingEditErrorDialog can switch on err.code (NO_SAVED_CARD,
+  //     CARD_DECLINED, etc.) to show the right recovery button.
+  //   - React-query loading / error / success state for the dialog UI.
+  //
+  // We pass `onSuccessInvalidate: false` because we manually invalidate the
+  // delivery query after the full edit flow completes (preview + edit +
+  // PATCH). Auto-invalidating on preview would refetch the delivery every
+  // time the dealer opens the confirm dialog, which is unnecessary.
+
+  const previewPricingEditMutation = useCreate<
+    PriceDifferencePreview,
+    { newQuoteId: string; reactivateIfExpired: boolean }
+  >(
+    `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/edit-pricing/preview`,
+    {
+      onSuccessInvalidate: false,
+      successMessage: undefined,
+    },
+  );
+
+  const submitPricingEditMutation = useCreate<
+    any,
+    {
+      newQuoteId: string;
+      reason: string;
+      actorRole?: string;
+      reactivateIfExpired: boolean;
     }
-    return res.json();
-  };
+  >(
+    `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${deliveryId}/edit-pricing`,
+    {
+      onSuccessInvalidate: false,
+      successMessage: undefined,
+    },
+  );
 
   /**
    * Fire the POST /edit-pricing/preview call. Read-only — does NOT modify
    * the delivery or Stripe. Returns the parsed preview so the
    * PriceDifferenceConfirmDialog can render the charge/release message.
+   *
+   * Wraps `previewPricingEditMutation.mutateAsync` so callers can `await`
+   * the result. The thrown error (on failure) is a ParsedApiError with
+   * `.code` and `.details` preserved from the backend's PricingEditException.
    */
   const fetchPricingEditPreview = async (
     qId: string,
   ): Promise<PriceDifferencePreview> => {
-    const apiUrl = import.meta.env.VITE_API_URL;
-    const res = await authFetch(
-      `${apiUrl}/api/deliveryRequests/${deliveryId}/edit-pricing/preview`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          newQuoteId: qId,
-          reactivateIfExpired: isExpired,
-        }),
-      },
-    );
-    if (!res.ok) {
-      let errBody: any = null;
-      try {
-        errBody = await res.json();
-      } catch {
-        // no JSON body
-      }
-      const err: any = new Error(
-        errBody?.message || `Preview failed (HTTP ${res.status})`,
-      );
-      err.code = errBody?.code;
-      err.details = errBody?.details;
-      err.status = res.status;
-      throw err;
-    }
-    return res.json();
+    return previewPricingEditMutation.mutateAsync({
+      newQuoteId: qId,
+      reactivateIfExpired: isExpired,
+    });
+  };
+
+  /**
+   * Fire the POST /edit-pricing call. Extracted as a standalone function so
+   * the PricingEditErrorDialog's retry button can re-invoke it without
+   * re-running react-hook-form's handleSubmit.
+   *
+   * Returns the parsed JSON response on success, throws a ParsedApiError on
+   * failure — the error has `.code` and `.details` attached from the
+   * backend's PricingEditException so the dialog can switch on them.
+   */
+  const submitPricingEdit = async (params: {
+    qId: string;
+    reason: string;
+  }) => {
+    return submitPricingEditMutation.mutateAsync({
+      newQuoteId: params.qId,
+      reason: params.reason,
+      actorRole: 'DEALER',
+      reactivateIfExpired: isExpired,
+    });
   };
 
   const onSubmit = async (data: DeliveryFormData) => {

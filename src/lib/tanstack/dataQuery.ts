@@ -360,31 +360,67 @@ async function refreshAccessToken(): Promise<string> {
 
 // ==================== ERROR PARSING ====================
 
-async function parseError(response: Response): Promise<Error> {
-  let errorData;
+/**
+ * Parsed error from a failed API response.
+ *
+ * Backend endpoints that throw NestJS `BadRequestException({ code, message,
+ * details })` (e.g. `PricingEditException`) will produce a response body
+ * like:
+ *   {
+ *     statusCode: 400,
+ *     error: "Bad Request",
+ *     code: "NO_SAVED_CARD",
+ *     message: "You don't have a saved card...",
+ *     details: { ... }
+ *   }
+ *
+ * We preserve `code` and `details` on the thrown Error so callers (e.g. the
+ * PricingEditErrorDialog) can switch on `err.code` to show the right
+ * recovery button. Callers that only read `.message` are unaffected.
+ */
+export interface ParsedApiError extends Error {
+  code?: string;
+  details?: Record<string, unknown>;
+  status?: number;
+}
+
+async function parseError(response: Response): Promise<ParsedApiError> {
+  let errorData: any;
   try {
     errorData = await response.json();
   } catch {
-    return new Error(`Request failed with status ${response.status}`);
+    const e = new Error(`Request failed with status ${response.status}`) as ParsedApiError;
+    e.status = response.status;
+    return e;
   }
 
-  // Handle structured error response.
-  // NestJS BadRequestException("string") → { message: "string" }
-  // NestJS ValidationPipe errors       → { message: ["field must be X", ...] }
-  // We join array messages with "; " so they're readable in toasts.
+  // Build the base error from the message field.
+  let msg: string;
   if (errorData?.message) {
-    const msg = Array.isArray(errorData.message)
+    msg = Array.isArray(errorData.message)
       ? errorData.message.join("; ")
       : String(errorData.message);
-    return new Error(msg);
+  } else if (errorData?.errors) {
+    msg = Object.values(errorData.errors).flat().join(", ");
+  } else {
+    msg = `Request failed with status ${response.status}`;
   }
 
-  if (errorData?.errors) {
-    const messages = Object.values(errorData.errors).flat().join(", ");
-    return new Error(messages);
-  }
+  const err = new Error(msg) as ParsedApiError;
 
-  return new Error(`Request failed with status ${response.status}`);
+  // Preserve structured fields from NestJS exception objects.
+  // BadRequestException({ code, message, details }) puts `code` and
+  // `details` at the top level of the response body (alongside `statusCode`
+  // and `error`). Capture them so frontend dialogs can switch on `err.code`.
+  if (errorData && typeof errorData.code === "string") {
+    err.code = errorData.code;
+  }
+  if (errorData && errorData.details && typeof errorData.details === "object") {
+    err.details = errorData.details;
+  }
+  err.status = response.status;
+
+  return err;
 }
 
 // ==================== QUERY HOOK ====================
