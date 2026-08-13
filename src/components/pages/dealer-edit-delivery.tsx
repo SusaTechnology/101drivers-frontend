@@ -1819,7 +1819,7 @@ export default function EditDeliveryPage() {
                           placeholder="Search Pickup (Service Area Only)"
                           icon={<MapPin className="h-5 w-5 text-slate-400" />}
                           bounds={pickupBounds}
-                          strictBounds={true}
+                          strictBounds={false}
                         />
                         {errors.pickupAddress && (
                           <p className="text-xs text-red-500">{errors.pickupAddress.message}</p>

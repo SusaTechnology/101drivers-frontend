@@ -568,7 +568,7 @@ export default function EditDraftPage() {
                     placeholder="Search Pickup (Service Area Only)"
                     icon={<MapPin className="h-5 w-5 text-slate-400" />}
                     bounds={pickupBounds}
-                    strictBounds={true}
+                    strictBounds={false}
                   />
                 </div>
                 <div className="space-y-2">
