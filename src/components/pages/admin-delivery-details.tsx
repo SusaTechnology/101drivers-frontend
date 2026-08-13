@@ -57,7 +57,7 @@ import {
   formatDeliveryDate,
   formatRelativeTime,
 } from '@/hooks/useAdminDeliveries';
-import type { AdminDeliveryDetail, Evidence, StatusHistory, AssignDriverRequest, ApproveComplianceRequest, ForceCancelRequest, LegalHoldRequest, OpenDisputeRequest } from '@/types/delivery';
+import type { AdminDeliveryDetail, Evidence, StatusHistory, AssignDriverRequest, ReassignDriverRequest, ApproveComplianceRequest, ForceCancelRequest, LegalHoldRequest, OpenDisputeRequest } from '@/types/delivery';
 import {
   Hash as Numbers,
   MapPin,
@@ -192,24 +192,56 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
       toast.error('Driver ID is required');
       return;
     }
-    
-    const payload: AssignDriverRequest = {
-      driverId: assignDriverForm.driverId,
-      actorUserId,
-      reason: assignDriverForm.reason,
-    };
-    
-    deliveryActions.assignDriver.mutate(payload, {
-      onSuccess: () => {
-        toast.success('Driver assigned successfully');
-        setAssignDriverOpen(false);
-        setAssignDriverForm({ driverId: '', reason: 'Ops manually assigned nearest approved driver' });
-        refetch();
-      },
-      onError: (err) => {
-        toast.error('Failed to assign driver', { description: err.message });
-      },
-    });
+
+    // Branch on whether the delivery already has an active driver.
+    //
+    // If `delivery.activeAssignment` is non-null, the delivery is in BOOKED
+    // state and the `/assign-driver` endpoint would reject with 400
+    // "Delivery can only be assigned from QUOTED or LISTED state". We must
+    // use the `/reassign` endpoint instead, which atomically unassigns the
+    // old driver and creates a new assignment.
+    //
+    // Note the field-name difference: assign uses `driverId`, reassign uses
+    // `newDriverId`. The backend DTOs enforce this.
+    const isReassign = !!delivery?.activeAssignment;
+
+    if (isReassign) {
+      const payload: ReassignDriverRequest = {
+        newDriverId: assignDriverForm.driverId,
+        actorUserId,
+        reason: assignDriverForm.reason,
+      };
+
+      deliveryActions.reassignDriver.mutate(payload, {
+        onSuccess: () => {
+          toast.success('Driver reassigned successfully');
+          setAssignDriverOpen(false);
+          setAssignDriverForm({ driverId: '', reason: 'Ops manually assigned nearest approved driver' });
+          refetch();
+        },
+        onError: (err) => {
+          toast.error('Failed to reassign driver', { description: err.message });
+        },
+      });
+    } else {
+      const payload: AssignDriverRequest = {
+        driverId: assignDriverForm.driverId,
+        actorUserId,
+        reason: assignDriverForm.reason,
+      };
+
+      deliveryActions.assignDriver.mutate(payload, {
+        onSuccess: () => {
+          toast.success('Driver assigned successfully');
+          setAssignDriverOpen(false);
+          setAssignDriverForm({ driverId: '', reason: 'Ops manually assigned nearest approved driver' });
+          refetch();
+        },
+        onError: (err) => {
+          toast.error('Failed to assign driver', { description: err.message });
+        },
+      });
+    }
   };
   
   const submitApproveCompliance = () => {
@@ -1357,12 +1389,17 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
             <Button variant="outline" onClick={() => setAssignDriverOpen(false)} className="rounded-xl">
               Cancel
             </Button>
-            <Button 
-              onClick={submitAssignDriver} 
-              disabled={deliveryActions.assignDriver.isPending || !assignDriverForm.driverId}
+            <Button
+              onClick={submitAssignDriver}
+              disabled={
+                deliveryActions.assignDriver.isPending ||
+                deliveryActions.reassignDriver.isPending ||
+                !assignDriverForm.driverId
+              }
               className="bg-primary text-slate-950 hover:bg-primary/90 rounded-xl"
             >
-              {deliveryActions.assignDriver.isPending && (
+              {(deliveryActions.assignDriver.isPending ||
+                deliveryActions.reassignDriver.isPending) && (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
               {delivery?.activeAssignment ? 'Reassign Driver' : 'Assign Driver'}

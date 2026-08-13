@@ -6,6 +6,8 @@ import type {
   AdminDeliveriesQueryParams,
   AssignDriverRequest,
   AssignDriverResponse,
+  ReassignDriverRequest,
+  ReassignDriverResponse,
   ApproveComplianceRequest,
   ApproveComplianceResponse,
   ForceCancelRequest,
@@ -350,13 +352,48 @@ export function formatCurrency(amount: number | null | undefined): string {
 // ==================== ACTION MUTATION HOOKS ====================
 
 /**
- * Hook for assigning a driver to a delivery
+ * Hook for assigning a driver to a delivery.
+ *
+ * Used for the INITIAL assignment only — when the delivery has no active
+ * driver yet (status QUOTED or LISTED). If the delivery already has an
+ * active assignment (status BOOKED), use `useReassignDriver` instead —
+ * the `/assign-driver` endpoint rejects deliveries that aren't in QUOTED
+ * or LISTED state.
  */
 export function useAssignDriver(deliveryId: string) {
   return useDataMutation<AssignDriverResponse, AssignDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/deliveryRequests/${deliveryId}/assign-driver`,
     method: 'POST',
     successMessage: 'Driver assigned successfully',
+    invalidateQueryKey: [
+      ['admin-deliveries'],
+      ['admin-delivery-detail', deliveryId],
+    ],
+  });
+}
+
+/**
+ * Hook for REASSIGNING a delivery that already has an active driver.
+ *
+ * Calls the `/reassign` endpoint (PATCH), which:
+ *   1. Unassigns the current driver (sets unassignedAt = now() on the
+ *      existing DeliveryAssignment row — preserved for audit history).
+ *   2. Creates a new DeliveryAssignment row for the new driver.
+ *   3. Transitions the delivery status to BOOKED (if not already).
+ *
+ * Allowed delivery states: LISTED, BOOKED. The initial-assign endpoint
+ * (`/assign-driver`) would reject these with a 400 "Delivery can only be
+ * assigned from QUOTED or LISTED state" — this hook is the correct one
+ * to use when `delivery.activeAssignment` is non-null.
+ *
+ * Note the field name difference: assign uses `driverId`, reassign uses
+ * `newDriverId`. The backend DTOs enforce this.
+ */
+export function useReassignDriver(deliveryId: string) {
+  return useDataMutation<AssignDriverResponse, ReassignDriverRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/deliveryRequests/${deliveryId}/reassign`,
+    method: 'PATCH',
+    successMessage: 'Driver reassigned successfully',
     invalidateQueryKey: [
       ['admin-deliveries'],
       ['admin-delivery-detail', deliveryId],
@@ -432,6 +469,7 @@ export function useDeliveryActions(deliveryId: string, options?: {
   onError?: (action: string, error: Error) => void;
 }) {
   const assignDriver = useAssignDriver(deliveryId);
+  const reassignDriver = useReassignDriver(deliveryId);
   const approveCompliance = useApproveCompliance(deliveryId);
   const forceCancel = useForceCancel(deliveryId);
   const legalHold = useLegalHold(deliveryId);
@@ -445,6 +483,14 @@ export function useDeliveryActions(deliveryId: string, options?: {
       isError: assignDriver.isError,
       error: assignDriver.error,
       reset: assignDriver.reset,
+    },
+    reassignDriver: {
+      mutate: reassignDriver.mutate,
+      mutateAsync: reassignDriver.mutateAsync,
+      isPending: reassignDriver.isPending,
+      isError: reassignDriver.isError,
+      error: reassignDriver.error,
+      reset: reassignDriver.reset,
     },
     approveCompliance: {
       mutate: approveCompliance.mutate,
@@ -481,6 +527,7 @@ export function useDeliveryActions(deliveryId: string, options?: {
     // Track if any action is in progress
     isAnyPending: 
       assignDriver.isPending || 
+      reassignDriver.isPending || 
       approveCompliance.isPending || 
       forceCancel.isPending || 
       legalHold.isPending ||

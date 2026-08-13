@@ -449,6 +449,17 @@ export interface AssignDriverResponse {
   }>;
 }
 
+// Reassign Driver (different endpoint + field name from Assign Driver)
+// Used when the delivery already has an active assignment (status BOOKED).
+// Backend endpoint: PATCH /api/deliveryRequests/:id/reassign
+export interface ReassignDriverRequest {
+  newDriverId: string;
+  actorUserId: string;
+  reason: string;
+}
+
+export type ReassignDriverResponse = AssignDriverResponse;
+
 // Approve Compliance
 export interface ApproveComplianceRequest {
   actorUserId: string;
