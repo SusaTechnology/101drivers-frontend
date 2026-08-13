@@ -1291,7 +1291,7 @@ export default function EditDeliveryPage() {
     return submitPricingEditMutation.mutateAsync({
       newQuoteId: params.qId,
       reason: params.reason,
-      actorRole: 'DEALER',
+      actorRole: 'BUSINESS_CUSTOMER',
       reactivateIfExpired: isExpired,
     });
   };
@@ -1436,11 +1436,30 @@ export default function EditDeliveryPage() {
       }
 
       // ── Step 2: PATCH the non-pricing fields. ───────────────────────────
-      // The engine already updated the quote + addresses. The PATCH now
-      // updates schedule, vehicle, recipient, etc. Address fields in the
-      // payload are idempotent (they match what the engine just set).
-      const payload = buildPayload(pending.formData);
-      updateDelivery.mutate(payload, {
+      // The engine already updated the quote + addresses via /edit-pricing.
+      // The PATCH now updates ONLY schedule, vehicle, recipient, etc.
+      //
+      // We MUST strip pricing + address fields from the payload because the
+      // backend rejects PATCHes that touch any of those fields on a LISTED
+      // delivery (PRICING_EDIT_VIA_PATCH_BLOCKED). They have to go through
+      // /edit-pricing so Stripe reconciliation runs atomically. See the
+      // backend's PricingEditException for the full list of blocked fields.
+      const fullPayload = buildPayload(pending.formData);
+      const {
+        quote: _strippedQuote,
+        pickupAddress: _spa,
+        pickupLat: _spl,
+        pickupLng: _spg,
+        pickupPlaceId: _spp,
+        pickupState: _sps,
+        dropoffAddress: _sda,
+        dropoffLat: _sdl,
+        dropoffLng: _sdg,
+        dropoffPlaceId: _sdp,
+        dropoffState: _sds,
+        ...patchPayload
+      } = fullPayload;
+      updateDelivery.mutate(patchPayload, {
         onSuccess: async () => {
           const apiUrl = import.meta.env.VITE_API_URL;
           queryClient.invalidateQueries({ queryKey: [`${apiUrl}/api/deliveryRequests/${deliveryId}`] });
