@@ -879,7 +879,27 @@ export default function EditDeliveryPage() {
     }
   );
 
-  // Auto-calculate quote when both addresses are set
+  // Auto-calculate quote when both addresses are set.
+  //
+  // IMPORTANT: `hasCalculated` MUST be in the deps array. Here's why:
+  //
+  // When the user picks a new address, TWO effects fire on the same render:
+  //   1. The reset effect (above, line ~690) clears `hasCalculated` to false.
+  //   2. This auto-calc effect also runs, but on this render it still sees
+  //      the OLD `hasCalculated=true` (state update hasn't flushed yet), so
+  //      it skips.
+  //
+  // On the NEXT render, `hasCalculated` is now false — but `pickupCoords` /
+  // `dropoffCoords` haven't changed since the previous render, so if those
+  // were the only deps, this effect would NOT re-run and the quote would
+  // never get re-fetched. The dealer would have to click "Recalculate"
+  // manually.
+  //
+  // Including `hasCalculated` in the deps ensures this effect re-fires the
+  // moment the reset effect flips it back to false, so the new quote is
+  // fetched automatically. `serviceType` is also included so switching
+  // service type re-quotes (though there's no service-type selector on
+  // this page currently — kept for safety / future use).
   useEffect(() => {
     if (isDataLoadingRef.current) return;
     if (pickupCoords && dropoffCoords && !hasCalculated && pickupAddress && dropoffAddress) {
@@ -890,7 +910,7 @@ export default function EditDeliveryPage() {
         ...(customer?.profileId && { customerId: customer.profileId }),
       });
     }
-  }, [pickupCoords, dropoffCoords]);
+  }, [pickupCoords, dropoffCoords, hasCalculated, serviceType]);
 
   // Mutation for schedule preview
   const getSchedulePreview = useCreate<SchedulePreviewResponse, SchedulePreviewRequest>(
