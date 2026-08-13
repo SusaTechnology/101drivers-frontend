@@ -1902,6 +1902,8 @@ export default function EditDeliveryPage() {
                           isLoaded={isLoaded}
                           placeholder="Search destination (California only)"
                           icon={<Flag className="h-5 w-5 text-slate-400" />}
+                          bounds={CA_BOUNDS}
+                          strictBounds={false}
                         />
                         {errors.dropoffAddress && (
                           <p className="text-xs text-red-500">{errors.dropoffAddress.message}</p>
