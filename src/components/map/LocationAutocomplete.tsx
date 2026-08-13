@@ -146,6 +146,14 @@ export default function LocationAutocomplete({
     }
 
     setIsLoading(true);
+    // Show the dropdown immediately so the user sees the loading spinner
+    // while Google is fetching predictions. Without this, the dropdown
+    // only appears AFTER results come back — which means if Google returns
+    // zero results (or is slow), the dropdown never shows and the user
+    // thinks autocomplete is broken, forcing them to type the full address
+    // manually. This was the original behavior before commit ed73911
+    // inadvertently removed it.
+    setShowDropdown(true);
 
     const request: google.maps.places.AutocompletionRequest = {
         input,
