@@ -696,6 +696,10 @@ export function DealerSignIn({
                         <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
                         Must pass a background check and DMV review
                       </li>
+                       <li className="flex gap-3">
+                        <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
+                        Having your own car insurance is required and helps speed up approval.
+                      </li>
                 </ul>
                 <div className="mt-6">
                   <Button
