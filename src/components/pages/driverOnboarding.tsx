@@ -416,6 +416,7 @@ export default function DriverOnboardingPage() {
 
   // Watch all form fields for validation feedback
   const acceptTerms = watch("acceptTerms");
+  const haveInsurance = watch("haveInsurance")
   const homeAreaValue = watch("homeArea");
   const watchPassword = watch("password");
   const watchConfirmPassword = watch("confirmPassword");
@@ -1261,7 +1262,27 @@ export default function DriverOnboardingPage() {
                     after booking, contact customer support.
                   </AlertDescription>
                 </Alert>
-
+                <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 shadow-md">
+                  <div className="flex items-start space-x-3">
+                    <Checkbox
+                      id="haveInsurance"
+                      checked={haveInsurance}
+                      onCheckedChange={(checked) => setValue("haveInsurance", checked as boolean)}
+                      className="mt-0.5 w-5 h-5 rounded accent-lime-500"
+                    />
+                    <Label
+                      htmlFor="haveInsurance"
+                      className={cn(
+                        "text-sm cursor-pointer leading-relaxed flex items-center flex-wrap gap-y-1",
+                        haveInsurance
+                          ? "text-green-700 dark:text-green-300 font-medium"
+                          : "text-slate-700 dark:text-slate-300"
+                      )}
+                    >
+I have my own car Insurance and agree to show proof before final approval if requested
+                    </Label>
+                  </div>
+                </div>
                 {/* Box 2: Agreement Checkbox */}
                 <div className="space-y-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 shadow-md">
                   <div className="flex items-start space-x-3">
