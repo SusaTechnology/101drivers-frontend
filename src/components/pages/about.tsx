@@ -52,7 +52,7 @@ function AboutPage() {
 
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
               <Link
-                to="/landing#quote"
+                to="/home#quote"
                 className="lime-btn px-8 py-4 rounded-2xl text-base hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center justify-center gap-2"
               >
                 Get an Instant Quote
@@ -258,7 +258,7 @@ function AboutPage() {
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link
-                  to="/landing#quote"
+                  to="/home#quote"
                   className="lime-btn px-8 py-4 rounded-2xl text-base hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center justify-center gap-2"
                 >
                   Get an Instant Quote
@@ -319,7 +319,7 @@ function AboutPage() {
                 </li>
                 <li>
                   <Link
-                    to="/landing"
+                    to="/home"
                     className="hover:text-primary transition-colors"
                   >
                     Home

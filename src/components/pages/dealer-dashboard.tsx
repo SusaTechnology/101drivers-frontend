@@ -203,7 +203,7 @@ export default function DealerDashboard() {
     clearAuth()
     stopSessionKeepAlive()
     toast.success('Signed out successfully')
-    navigate({ to: '/landing' })
+    navigate({ to: '/home' })
   }
 
   const { data: customerProfile } = useDataQuery<{

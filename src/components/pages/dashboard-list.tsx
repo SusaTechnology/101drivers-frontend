@@ -786,7 +786,7 @@ export default function DriverGigBoardPage() {
     clearAuth()
     stopSessionKeepAlive()
     toast.success('Signed out successfully')
-    navigate({ to: '/landing' })
+    navigate({ to: '/home' })
   }
 
   // Update a single filter

@@ -27,25 +27,25 @@ export const NavBar = () => {
 
           <nav className="hidden md:flex items-center gap-8">
             <Link
-              to="/landing#how"
+              to="/home#how"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               How it works
             </Link>
             <Link
-              to="/landing#dealers"
+              to="/home#dealers"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               Business
             </Link>
             <Link
-              to="/landing#dealers"
+              to="/home#dealers"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               Individuals
             </Link>
             <Link
-              to="/landing#drivers"
+              to="/home#drivers"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
               Drivers
@@ -68,28 +68,28 @@ export const NavBar = () => {
         <div className="md:hidden border-t border-slate-200 dark:border-slate-800">
           <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
             <Link
-              to="/landing#how"
+              to="/home#how"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
               onClick={() => setMobileMenuOpen(false)}
             >
               How it works
             </Link>
             <Link
-              to="/landing#dealers"
+              to="/home#dealers"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
               onClick={() => setMobileMenuOpen(false)}
             >
               Business
             </Link>
             <Link
-              to="/landing#dealers"
+              to="/home#dealers"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
               onClick={() => setMobileMenuOpen(false)}
             >
               Individuals
             </Link>
             <Link
-              to="/landing#drivers"
+              to="/home#drivers"
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
               onClick={() => setMobileMenuOpen(false)}
             >
@@ -105,7 +105,7 @@ export const NavBar = () => {
 
             <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
               <Link
-                to="/landing#quote"
+                to="/home#quote"
                 className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-black bg-lime-500 text-slate-950 hover:opacity-95 transition"
                 onClick={() => setMobileMenuOpen(false)}
               >

@@ -412,7 +412,7 @@ export default function DriverMapPage() {
     clearAuth()
     stopSessionKeepAlive()
     toast.success('Signed out successfully')
-    navigate({ to: '/landing' })
+    navigate({ to: '/home' })
   }
 
   const handleRefresh = () => {

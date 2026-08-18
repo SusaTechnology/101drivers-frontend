@@ -39,13 +39,13 @@ export function DealerSignUp() {
 
             <nav className="hidden md:flex items-center gap-8">
               <a
-                href="/landing#how"
+                href="/home#how"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
               >
                 How it works
               </a>
               <a
-                href="/landing#standard"
+                href="/home#standard"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
               >
                 Compliance
@@ -89,14 +89,14 @@ export function DealerSignUp() {
             <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
               <a
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2"
-                href="/landing#how"
+                href="/home#how"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 How it works
               </a>
               <a
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2"
-                href="/landing#standard"
+                href="/home#standard"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Compliance

@@ -74,7 +74,7 @@ export default function DriverProofCamPage() {
       {/* Back link top-left */}
       <div className="sticky top-0 p-6">
         <Link
-          to="/landing"
+          to="/home"
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />

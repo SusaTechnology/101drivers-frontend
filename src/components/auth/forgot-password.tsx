@@ -240,7 +240,7 @@ export function ResetPassword() {
 
             <nav className="hidden md:flex items-center gap-8">
               <Link
-                to="/landing"
+                to="/home"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
               >
                 Home
@@ -299,7 +299,7 @@ export function ResetPassword() {
           <div className="md:hidden border-t border-slate-200 dark:border-slate-800 animate-in slide-in-from-top">
             <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
               <Link
-                to="/landing"
+                to="/home"
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2"
                 onClick={() => setMobileMenuOpen(false)}
               >

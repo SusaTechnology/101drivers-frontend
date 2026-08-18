@@ -34,7 +34,7 @@ export const Route = createFileRoute('/')({
     
     // Not authenticated - redirect to landing page
     throw redirect({
-      to: '/landing',
+      to: '/home',
       replace: true,
     })
   },

@@ -462,20 +462,20 @@ export function QuoteDetails() {
       <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-10">
-            <Link to="/landing" className="flex items-center" aria-label="101 Drivers">
+            <Link to="/home" className="flex items-center" aria-label="101 Drivers">
               <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200">
                 <img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" />
               </div>
             </Link>
             <nav className="hidden md:flex items-center gap-8">
-              <a href="/landing#how" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">How it works</a>
-              <a href="/landing#standard" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Compliance</a>
-              <a href="/landing#dealers" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Dealers</a>
-              <a href="/landing#drivers" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Drivers</a>
+              <a href="/home#how" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">How it works</a>
+              <a href="/home#standard" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Compliance</a>
+              <a href="/home#dealers" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Dealers</a>
+              <a href="/home#drivers" className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">Drivers</a>
             </nav>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/landing#estimate" className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <Link to="/home#estimate" className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
               <ArrowLeft className="w-4 h-4" />
               <span className="hidden sm:inline">Back to Estimate</span>
               <span className="sm:hidden">Back</span>
@@ -488,12 +488,12 @@ export function QuoteDetails() {
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-slate-200 dark:border-slate-800 animate-in slide-in-from-top">
             <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
-              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/landing#how" onClick={() => setMobileMenuOpen(false)}>How it works</a>
-              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/landing#standard" onClick={() => setMobileMenuOpen(false)}>Compliance</a>
-              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/landing#dealers" onClick={() => setMobileMenuOpen(false)}>Dealers</a>
-              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/landing#drivers" onClick={() => setMobileMenuOpen(false)}>Drivers</a>
+              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#how" onClick={() => setMobileMenuOpen(false)}>How it works</a>
+              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#standard" onClick={() => setMobileMenuOpen(false)}>Compliance</a>
+              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#dealers" onClick={() => setMobileMenuOpen(false)}>Dealers</a>
+              <a className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2" href="/home#drivers" onClick={() => setMobileMenuOpen(false)}>Drivers</a>
               <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
-                <Link to="/landing#estimate" className="text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors py-1" onClick={() => setMobileMenuOpen(false)}>
+                <Link to="/home#estimate" className="text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors py-1" onClick={() => setMobileMenuOpen(false)}>
                   Back to Estimate
                 </Link>
               </div>
@@ -567,7 +567,7 @@ export function QuoteDetails() {
                       </p>
                     </div>
                     <Button variant="outline" size="sm" className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 font-bold hover:opacity-90 transition border border-slate-200 dark:border-slate-700" asChild>
-                      <Link to="/landing#estimate">
+                      <Link to="/home#estimate">
                         <Edit className="w-4 h-4 text-primary" />
                         Edit route
                       </Link>
@@ -1219,7 +1219,7 @@ export function QuoteDetails() {
                 </p>
               </div>
               <Button className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-950 font-extrabold hover:opacity-90 transition" asChild>
-                <a href="/landing#standard">
+                <a href="/home#standard">
                   View Compliance
                   <ShieldCheck className="w-4 h-4" />
                 </a>

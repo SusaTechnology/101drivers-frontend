@@ -107,7 +107,7 @@ export default function QuoteConfirmation() {
       <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-10">
-            <Link to="/landing" className="flex items-center" aria-label="101 Drivers">
+            <Link to="/home" className="flex items-center" aria-label="101 Drivers">
               <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200">
                 <img
                   src="/assets/101drivers-logo.jpg"
@@ -119,13 +119,13 @@ export default function QuoteConfirmation() {
 
             <nav className="hidden md:flex items-center gap-8">
               <a
-                href="/landing#how"
+                href="/home#how"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
               >
                 How it works
               </a>
               <a
-                href="/landing#standard"
+                href="/home#standard"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
               >
                 Compliance
@@ -159,13 +159,13 @@ export default function QuoteConfirmation() {
           <div className="md:hidden border-t border-slate-200 dark:border-slate-800">
             <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
               <a
-                href="/landing#how"
+                href="/home#how"
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors"
               >
                 How it works
               </a>
               <a
-                href="/landing#standard"
+                href="/home#standard"
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-lime-500 transition-colors"
               >
                 Compliance
@@ -468,7 +468,7 @@ export default function QuoteConfirmation() {
                   GPS tracking, and a complete post-trip report.
                 </p>
                 <a
-                  href="/landing#standard"
+                  href="/home#standard"
                   className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-lime-600 dark:text-lime-400 hover:underline"
                 >
                   <Verified className="h-4 w-4" />

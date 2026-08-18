@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import LandingPage  from '@/components/pages/landingPage'
+import LandingPage  from '@/components/pages/homePage'
 import { isAuthenticated, getUser, startSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 
-export const Route = createFileRoute('/landing/')({
+export const Route = createFileRoute('/home/')({
   beforeLoad: () => {
     // Start session keep-alive if authenticated
     if (isAuthenticated()) {

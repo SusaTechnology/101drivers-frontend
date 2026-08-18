@@ -157,7 +157,7 @@ export default function LandingPage() {
 
   // Fetch landing page settings (public endpoint, no auth)
   const { data: settings, isLoading: settingsLoading, isError: settingsError, error: settingsErrorMsg } = useDataQuery<LandingPageSettings>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/public/landing-page`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/public/home-page`,
     noFilter: true,
     fetchWithoutRefresh: true,
     publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint

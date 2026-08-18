@@ -322,7 +322,7 @@ export function DealerSignIn({
 
             <nav className="hidden md:flex items-center gap-8">
               <Link
-                to="/landing"
+                to="/home"
                 className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
               >
                 Home
@@ -355,7 +355,7 @@ export function DealerSignIn({
               className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
               asChild
             >
-              <Link to="/landing">
+              <Link to="/home">
                 <ArrowLeft className="w-4 h-4" />
                 Back to Home
               </Link>
@@ -381,7 +381,7 @@ export function DealerSignIn({
           <div className="md:hidden border-t border-slate-200 dark:border-slate-800 animate-in slide-in-from-top">
             <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
               <Link
-                to="/landing"
+                to="/home"
                 className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors py-2"
                 onClick={() => setMobileMenuOpen(false)}
               >
@@ -415,7 +415,7 @@ export function DealerSignIn({
                   asChild
                 >
                   <Link
-                    to="/landing"
+                    to="/home"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Back to Home
