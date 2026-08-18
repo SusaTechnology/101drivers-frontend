@@ -107,6 +107,73 @@ export interface PaymentDetail extends PaymentListItem {
   events: PaymentEvent[];
 }
 
+// ── Admin Payment Detail (single-payment view) ──
+//
+// Returned by GET /api/payments/admin/:id. Includes more than the list item:
+//   - pickup window times (for context)
+//   - pickupPin (for ops verification)
+//   - active driver assignment (driver + user)
+//   - lockInAmount (for trips with captured lock-in)
+//   - ALL payment events (list endpoint only returns latest 5)
+export interface AdminPaymentDetailDelivery {
+  id: string;
+  status: string;
+  serviceType: string;
+  customerId: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  pickupWindowStart: string | null;
+  pickupWindowEnd: string | null;
+  dropoffWindowStart: string | null;
+  dropoffWindowEnd: string | null;
+  pickupPin: string | null;
+  customer: {
+    id: string;
+    customerType: 'BUSINESS' | 'PRIVATE';
+    businessName?: string;
+    contactName?: string;
+    contactEmail?: string;
+  };
+  assignments?: Array<{
+    id: string;
+    driverId: string;
+    assignedAt: string;
+    driver: {
+      id: string;
+      status: string;
+      user: {
+        id: string;
+        fullName: string | null;
+        email: string;
+      };
+    };
+  }>;
+  payout?: PaymentPayout;
+}
+
+export interface AdminPaymentDetail {
+  id: string;
+  amount: number;
+  paymentType: PaymentType;
+  provider: PaymentProvider;
+  status: PaymentStatus;
+  invoiceId: string | null;
+  authorizedAt: string | null;
+  capturedAt: string | null;
+  paidAt: string | null;
+  voidedAt: string | null;
+  refundedAt: string | null;
+  failureCode: string | null;
+  failureMessage: string | null;
+  providerChargeId: string | null;
+  providerPaymentIntentId: string | null;
+  lockInAmount: number | null;
+  createdAt: string;
+  updatedAt: string;
+  delivery: AdminPaymentDetailDelivery;
+  events: PaymentEvent[];
+}
+
 // Action request/response types
 export interface MarkInvoicedRequest {
   actorUserId: string;

@@ -1,7 +1,8 @@
 // Hooks for admin payments API
 import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery';
-import type { 
-  AdminPaymentsResponse, 
+import type {
+  AdminPaymentsResponse,
+  AdminPaymentDetail,
   AdminPaymentsQueryParams,
   MarkInvoicedRequest,
   MarkInvoicedResponse,
@@ -40,15 +41,39 @@ function buildQueryString(params: AdminPaymentsQueryParams): string {
  */
 export function useAdminPayments(params: AdminPaymentsQueryParams = {}) {
   const queryString = buildQueryString(params);
-  
+
   // Use a stable key by serializing params
   const paramsKey = JSON.stringify(params);
-  
+
   return useDataQuery<AdminPaymentsResponse>({
     apiEndPoint: `${API_BASE_URL}/api/payments/admin${queryString}`,
     noFilter: true,
     staleTime: 30 * 1000, // 30 seconds
     queryKey: ['admin-payments', paramsKey],
+  });
+}
+
+/**
+ * Hook for fetching a single payment's full detail (admin view).
+ *
+ * Calls GET /api/payments/admin/:id which returns the payment, its
+ * associated delivery (with customer + active driver assignment + payout),
+ * and ALL payment events (the list endpoint only returns the latest 5
+ * events).
+ *
+ * Used by the /admin-payment-detail?paymentId=... route.
+ */
+export function useAdminPaymentDetail(paymentId: string) {
+  return useDataQuery<AdminPaymentDetail>({
+    apiEndPoint: `${API_BASE_URL}/api/payments/admin/${paymentId}`,
+    noFilter: true,
+    // Don't refetch too aggressively — payment state changes are typically
+    // triggered by admin actions that invalidate the query anyway.
+    staleTime: 30 * 1000, // 30 seconds
+    queryKey: ['admin-payment-detail', paymentId],
+    // Skip the fetch entirely if no paymentId (e.g. user navigated directly
+    // without the search param). Avoids a 404 from the API.
+    enabled: !!paymentId,
   });
 }
 

@@ -68,6 +68,27 @@ async getAdminPayments(
   });
 }
 
+/**
+ * Get a single payment by ID with full detail for the admin payment-detail
+ * page. Returns the payment, associated delivery + customer + active driver
+ * + payout, and ALL payment events (vs. the list endpoint which only returns
+ * the latest 5).
+ *
+ * Frontend route: /admin-payment-detail?paymentId=...
+ */
+@common.Get("admin/:id")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "Payment",
+  action: "read",
+  possession: "any",
+})
+async getAdminPaymentDetail(
+  @common.Param("id") id: string
+): Promise<any> {
+  return this.service.getAdminPaymentDetail(id);
+}
+
 @common.Post(":id/mark-paid")
 @swagger.ApiOkResponse({ type: Object })
 @nestAccessControl.UseRoles({

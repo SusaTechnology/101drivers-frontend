@@ -17,8 +17,8 @@ import { Route as QuoteConfirmationIndexRouteImport } from './routes/quote-confi
 import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
 import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
-import { Route as LandingIndexRouteImport } from './routes/landing/index'
 import { Route as InsurancePortalIndexRouteImport } from './routes/insurance-portal/index'
+import { Route as HomeIndexRouteImport } from './routes/home/index'
 import { Route as HelpDriverIndexRouteImport } from './routes/help-driver/index'
 import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/index'
 import { Route as DriverIndexRouteImport } from './routes/driver/index'
@@ -72,6 +72,7 @@ import { Route as AdminPricingIndexRouteImport } from './routes/admin-pricing/in
 import { Route as AdminPricingRuleIndexRouteImport } from './routes/admin-pricing-rule/index'
 import { Route as AdminPricingConfigIndexRouteImport } from './routes/admin-pricing-config/index'
 import { Route as AdminPaymentsIndexRouteImport } from './routes/admin-payments/index'
+import { Route as AdminPaymentDetailIndexRouteImport } from './routes/admin-payment-detail/index'
 import { Route as AdminNotificationPolicyIndexRouteImport } from './routes/admin-notification-policy/index'
 import { Route as AdminLandingPageSettingsIndexRouteImport } from './routes/admin-landing-page-settings/index'
 import { Route as AdminInsuranceReportingIndexRouteImport } from './routes/admin-insurance-reporting/index'
@@ -155,14 +156,14 @@ const LiveTrackIndexRoute = LiveTrackIndexRouteImport.update({
   path: '/live-track/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LandingIndexRoute = LandingIndexRouteImport.update({
-  id: '/landing/',
-  path: '/landing/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const InsurancePortalIndexRoute = InsurancePortalIndexRouteImport.update({
   id: '/insurance-portal/',
   path: '/insurance-portal/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeIndexRoute = HomeIndexRouteImport.update({
+  id: '/home/',
+  path: '/home/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpDriverIndexRoute = HelpDriverIndexRouteImport.update({
@@ -448,6 +449,11 @@ const AdminPaymentsIndexRoute = AdminPaymentsIndexRouteImport.update({
   path: '/admin-payments/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPaymentDetailIndexRoute = AdminPaymentDetailIndexRouteImport.update({
+  id: '/admin-payment-detail/',
+  path: '/admin-payment-detail/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminNotificationPolicyIndexRoute =
   AdminNotificationPolicyIndexRouteImport.update({
     id: '/admin-notification-policy/',
@@ -709,6 +715,7 @@ export interface FileRoutesByFullPath {
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
+  '/admin-payment-detail/': typeof AdminPaymentDetailIndexRoute
   '/admin-payments/': typeof AdminPaymentsIndexRoute
   '/admin-pricing-config/': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule/': typeof AdminPricingRuleIndexRoute
@@ -762,8 +769,8 @@ export interface FileRoutesByFullPath {
   '/driver/': typeof DriverIndexRoute
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
+  '/home/': typeof HomeIndexRoute
   '/insurance-portal/': typeof InsurancePortalIndexRoute
-  '/landing/': typeof LandingIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
   '/privacy/': typeof PrivacyIndexRoute
@@ -815,6 +822,7 @@ export interface FileRoutesByTo {
   '/admin-insurance-reporting': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings': typeof AdminLandingPageSettingsIndexRoute
   '/admin-notification-policy': typeof AdminNotificationPolicyIndexRoute
+  '/admin-payment-detail': typeof AdminPaymentDetailIndexRoute
   '/admin-payments': typeof AdminPaymentsIndexRoute
   '/admin-pricing-config': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule': typeof AdminPricingRuleIndexRoute
@@ -868,8 +876,8 @@ export interface FileRoutesByTo {
   '/driver': typeof DriverIndexRoute
   '/help-customer': typeof HelpCustomerIndexRoute
   '/help-driver': typeof HelpDriverIndexRoute
+  '/home': typeof HomeIndexRoute
   '/insurance-portal': typeof InsurancePortalIndexRoute
-  '/landing': typeof LandingIndexRoute
   '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
   '/privacy': typeof PrivacyIndexRoute
@@ -923,6 +931,7 @@ export interface FileRoutesById {
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
+  '/admin-payment-detail/': typeof AdminPaymentDetailIndexRoute
   '/admin-payments/': typeof AdminPaymentsIndexRoute
   '/admin-pricing-config/': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule/': typeof AdminPricingRuleIndexRoute
@@ -976,8 +985,8 @@ export interface FileRoutesById {
   '/driver/': typeof DriverIndexRoute
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
+  '/home/': typeof HomeIndexRoute
   '/insurance-portal/': typeof InsurancePortalIndexRoute
-  '/landing/': typeof LandingIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
   '/privacy/': typeof PrivacyIndexRoute
@@ -1032,6 +1041,7 @@ export interface FileRouteTypes {
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
     | '/admin-notification-policy/'
+    | '/admin-payment-detail/'
     | '/admin-payments/'
     | '/admin-pricing-config/'
     | '/admin-pricing-rule/'
@@ -1085,8 +1095,8 @@ export interface FileRouteTypes {
     | '/driver/'
     | '/help-customer/'
     | '/help-driver/'
+    | '/home/'
     | '/insurance-portal/'
-    | '/landing/'
     | '/live-track/'
     | '/map-test/'
     | '/privacy/'
@@ -1138,6 +1148,7 @@ export interface FileRouteTypes {
     | '/admin-insurance-reporting'
     | '/admin-landing-page-settings'
     | '/admin-notification-policy'
+    | '/admin-payment-detail'
     | '/admin-payments'
     | '/admin-pricing-config'
     | '/admin-pricing-rule'
@@ -1191,8 +1202,8 @@ export interface FileRouteTypes {
     | '/driver'
     | '/help-customer'
     | '/help-driver'
+    | '/home'
     | '/insurance-portal'
-    | '/landing'
     | '/live-track'
     | '/map-test'
     | '/privacy'
@@ -1245,6 +1256,7 @@ export interface FileRouteTypes {
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
     | '/admin-notification-policy/'
+    | '/admin-payment-detail/'
     | '/admin-payments/'
     | '/admin-pricing-config/'
     | '/admin-pricing-rule/'
@@ -1298,8 +1310,8 @@ export interface FileRouteTypes {
     | '/driver/'
     | '/help-customer/'
     | '/help-driver/'
+    | '/home/'
     | '/insurance-portal/'
-    | '/landing/'
     | '/live-track/'
     | '/map-test/'
     | '/privacy/'
@@ -1332,6 +1344,7 @@ export interface RootRouteChildren {
   AdminInsuranceReportingIndexRoute: typeof AdminInsuranceReportingIndexRoute
   AdminLandingPageSettingsIndexRoute: typeof AdminLandingPageSettingsIndexRoute
   AdminNotificationPolicyIndexRoute: typeof AdminNotificationPolicyIndexRoute
+  AdminPaymentDetailIndexRoute: typeof AdminPaymentDetailIndexRoute
   AdminPaymentsIndexRoute: typeof AdminPaymentsIndexRoute
   AdminPricingConfigIndexRoute: typeof AdminPricingConfigIndexRoute
   AdminPricingRuleIndexRoute: typeof AdminPricingRuleIndexRoute
@@ -1384,8 +1397,8 @@ export interface RootRouteChildren {
   DriverWalletIndexRoute: typeof DriverWalletIndexRoute
   HelpCustomerIndexRoute: typeof HelpCustomerIndexRoute
   HelpDriverIndexRoute: typeof HelpDriverIndexRoute
+  HomeIndexRoute: typeof HomeIndexRoute
   InsurancePortalIndexRoute: typeof InsurancePortalIndexRoute
-  LandingIndexRoute: typeof LandingIndexRoute
   LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
   PrivacyIndexRoute: typeof PrivacyIndexRoute
@@ -1455,18 +1468,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LiveTrackIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/landing/': {
-      id: '/landing/'
-      path: '/landing'
-      fullPath: '/landing/'
-      preLoaderRoute: typeof LandingIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/insurance-portal/': {
       id: '/insurance-portal/'
       path: '/insurance-portal'
       fullPath: '/insurance-portal/'
       preLoaderRoute: typeof InsurancePortalIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home/': {
+      id: '/home/'
+      path: '/home'
+      fullPath: '/home/'
+      preLoaderRoute: typeof HomeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help-driver/': {
@@ -1840,6 +1853,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPaymentsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-payment-detail/': {
+      id: '/admin-payment-detail/'
+      path: '/admin-payment-detail'
+      fullPath: '/admin-payment-detail/'
+      preLoaderRoute: typeof AdminPaymentDetailIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-notification-policy/': {
       id: '/admin-notification-policy/'
       path: '/admin-notification-policy'
@@ -2211,6 +2231,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminInsuranceReportingIndexRoute: AdminInsuranceReportingIndexRoute,
   AdminLandingPageSettingsIndexRoute: AdminLandingPageSettingsIndexRoute,
   AdminNotificationPolicyIndexRoute: AdminNotificationPolicyIndexRoute,
+  AdminPaymentDetailIndexRoute: AdminPaymentDetailIndexRoute,
   AdminPaymentsIndexRoute: AdminPaymentsIndexRoute,
   AdminPricingConfigIndexRoute: AdminPricingConfigIndexRoute,
   AdminPricingRuleIndexRoute: AdminPricingRuleIndexRoute,
@@ -2263,8 +2284,8 @@ const rootRouteChildren: RootRouteChildren = {
   DriverWalletIndexRoute: DriverWalletIndexRoute,
   HelpCustomerIndexRoute: HelpCustomerIndexRoute,
   HelpDriverIndexRoute: HelpDriverIndexRoute,
+  HomeIndexRoute: HomeIndexRoute,
   InsurancePortalIndexRoute: InsurancePortalIndexRoute,
-  LandingIndexRoute: LandingIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,
   PrivacyIndexRoute: PrivacyIndexRoute,

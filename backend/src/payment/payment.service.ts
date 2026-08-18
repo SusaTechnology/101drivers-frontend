@@ -290,6 +290,109 @@ constructor(
   };
 }
 
+/**
+ * Fetch a single payment by ID with full detail for the admin payment-detail
+ * page. Includes the associated delivery, customer, payout, and ALL payment
+ * events (vs. the list endpoint which only returns the latest 5 events).
+ */
+async getAdminPaymentDetail(paymentId: string): Promise<any> {
+  const payment = await this.prisma.payment.findUnique({
+    where: { id: paymentId },
+    select: {
+      id: true,
+      amount: true,
+      paymentType: true,
+      provider: true,
+      status: true,
+      invoiceId: true,
+      authorizedAt: true,
+      capturedAt: true,
+      paidAt: true,
+      voidedAt: true,
+      refundedAt: true,
+      failureCode: true,
+      failureMessage: true,
+      providerChargeId: true,
+      providerPaymentIntentId: true,
+      lockInAmount: true,
+      createdAt: true,
+      updatedAt: true,
+      delivery: {
+        select: {
+          id: true,
+          status: true,
+          serviceType: true,
+          customerId: true,
+          pickupAddress: true,
+          dropoffAddress: true,
+          pickupWindowStart: true,
+          pickupWindowEnd: true,
+          dropoffWindowStart: true,
+          dropoffWindowEnd: true,
+          pickupPin: true,
+          customer: {
+            select: {
+              id: true,
+              customerType: true,
+              businessName: true,
+              contactName: true,
+              contactEmail: true,
+            },
+          },
+          assignments: {
+            where: { unassignedAt: null },
+            take: 1,
+            select: {
+              id: true,
+              driverId: true,
+              assignedAt: true,
+              driver: {
+                select: {
+                  id: true,
+                  status: true,
+                  user: {
+                    select: {
+                      id: true,
+                      fullName: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          payout: {
+            select: {
+              id: true,
+              status: true,
+              netAmount: true,
+              paidAt: true,
+            },
+          },
+        },
+      },
+      events: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          amount: true,
+          message: true,
+          providerRef: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  if (!payment) {
+    throw new NotFoundException(`Payment ${paymentId} not found`);
+  }
+
+  return payment;
+}
+
 async adminMarkPaymentPaid(input: {
   paymentId: string;
   actorUserId?: string | null;
