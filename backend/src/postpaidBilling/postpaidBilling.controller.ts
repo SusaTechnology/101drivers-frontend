@@ -178,8 +178,12 @@ export class PostpaidBillingController {
       select: { id: true },
     });
     if (!customer) {
+      // User isn't a dealer (driver/admin). Don't leak our internal data
+      // model — return a plain English message so the toast on the dealer
+      // portal doesn't say "Customer record".
       throw new BadRequestException(
-        "Authenticated user has no Customer record — only BUSINESS customers can use postpaid billing",
+        "Postpaid billing is only available for business dealer accounts. " +
+          "If you believe this is an error, please contact support.",
       );
     }
     return this.postpaidBilling.getMyStatus(customer.id);

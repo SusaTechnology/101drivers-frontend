@@ -18,6 +18,26 @@ interface CardInfo {
   isDefault: boolean
 }
 
+// Strip Stripe's "Request req_xxx:" prefix and other internal id-bearing
+// prefixes from error messages so dealer toasts stay human-readable.
+// Stripe's SDK often returns messages like:
+//   "Request req_1abc2xyz: The customer does not have a payment method..."
+// We want the dealer to see the second half, not the request id.
+function stripStripePrefix(s: string | undefined | null): string {
+  if (!s) return 'Unknown error'
+  let cleaned = String(s)
+    .replace(/^Request req_[A-Za-z0-9]+:\s*/i, '')
+    .trim()
+  // If the remaining text still contains internal Stripe ids (pm_, in_,
+  // sub_, customer, ch_, pi_) treat it as not safe for the dealer and
+  // fall back to a generic message.
+  const looksUnsafe = /(pm_|in_|sub_|cust|req_|ch_|pi_)[A-Za-z0-9]+/i.test(cleaned)
+  if (!cleaned || looksUnsafe) {
+    return 'We could not save your card at this time. Please try again or contact support.'
+  }
+  return cleaned
+}
+
 // ── Setup Form (collect card without charging) ──────────────────
 function SetupCardForm({ customerId, onSuccess, onCancel }: { customerId: string; onSuccess: () => void; onCancel: () => void }) {
   const stripe = useStripe()
@@ -37,15 +57,29 @@ function SetupCardForm({ customerId, onSuccess, onCancel }: { customerId: string
         },
       })
 
-      if (result.setupIntent?.status === 'succeeded' || result.setupIntent?.status === 'requires_action') {
+      // `stripe.confirmSetup` returns a discriminated union; pull the
+      // fields out via destructuring so TS can narrow the type from the
+      // presence of `error` / `setupIntent`.
+      const { error: setupError, setupIntent } = result as
+        | { error: import('@stripe/stripe-js').StripeError; setupIntent?: undefined }
+        | { error?: undefined; setupIntent: { status: string } }
+
+      if (setupError) {
+        toast.error('Card not saved', {
+          description: stripStripePrefix(setupError.message) || 'Please try again with a different card.',
+        })
+      } else if (
+        setupIntent?.status === 'succeeded' ||
+        setupIntent?.status === 'requires_action'
+      ) {
         // Webhook will save the card to our DB
         toast.success('Card saved!', { description: 'Your card is now saved for faster checkout.' })
         onSuccess()
       } else {
-        toast.error('Card not saved', { description: 'Please try again.' })
+        toast.error('Card not saved', { description: 'Please try again with a different card.' })
       }
     } catch (err: any) {
-      toast.error('Failed to save card', { description: err.message || 'Unknown error' })
+      toast.error('Failed to save card', { description: stripStripePrefix(err?.message) })
     } finally {
       setLoading(false)
     }
@@ -96,7 +130,7 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
       }
     },
     onError: (error: any) => {
-      toast.error('Failed to initialize card save', { description: error?.message || 'Unknown error' })
+      toast.error('Failed to initialize card save', { description: stripStripePrefix(error?.message) })
     },
   })
 
@@ -109,7 +143,7 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
       refetchCards()
     },
     onError: (error: any) => {
-      toast.error('Failed to remove card', { description: error?.message })
+      toast.error('Failed to remove card', { description: stripStripePrefix(error?.message) })
     },
   })
 

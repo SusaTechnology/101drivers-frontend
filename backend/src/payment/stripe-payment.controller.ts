@@ -358,7 +358,10 @@ export class StripePaymentController {
       };
     } catch (err: any) {
       this.logger.error(`SetupIntent creation failed: ${err.message}`);
-      throw new BadRequestException(`Failed to create SetupIntent: ${err.message}`);
+      // Don't leak Stripe's raw message ("Request req_xxx: ...") to the dealer.
+      throw new BadRequestException(
+        this.translateStripeCardError(err, 'We could not save your card at this time. Please try again or contact support.'),
+      );
     }
   }
 
@@ -466,7 +469,9 @@ export class StripePaymentController {
       return { success: true };
     } catch (err: any) {
       this.logger.error(`Failed to remove payment method: ${err.message}`);
-      throw new BadRequestException(`Failed to remove card: ${err.message}`);
+      throw new BadRequestException(
+        this.translateStripeCardError(err, 'We could not remove your card at this time. Please try again or contact support.'),
+      );
     }
   }
 
@@ -818,5 +823,69 @@ export class StripePaymentController {
 
     this.logger.log(`Invoice ${invoice.invoiceNumber} marked as paid`);
     return { success: true, invoiceNumber: invoice.invoiceNumber };
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Translate Stripe SDK errors on save-card / remove-card flows into
+  // dealer-facing English. Never leaks Stripe's "Request req_xxx:" prefix,
+  // internal ids (pm_, in_, sub_, ch_, pi_), or API-key hints to the dealer.
+  //
+  // Recognized dealer-facing errors:
+  //   • card_declined (with decline_code) — card-level declines
+  //   • expired_card / incorrect_cvc / incorrect_number — bad card data
+  //   • processing_error — transient Stripe-side issue
+  //   • StripeAuthenticationError — our API keys are wrong (don't tell the dealer)
+  //   • APIConnectionError — network blip between us and Stripe
+  //
+  // Falls back to `fallbackMsg` (a generic "please try again or contact
+  // support" line supplied by the caller) for anything unrecognized.
+  // ─────────────────────────────────────────────────────────────────
+  private translateStripeCardError(err: any, fallbackMsg: string): string {
+    const code = err?.code || '';
+    const declineCode = err?.decline_code || '';
+
+    // Card-level declines — these are dealer-actionable.
+    if (code === 'card_declined' || declineCode) {
+      switch (declineCode) {
+        case 'insufficient_funds':
+          return 'Your card was declined for insufficient funds. Please use a different card.';
+        case 'expired_card':
+          return 'Your card has expired. Please save a new card.';
+        case 'incorrect_cvc':
+          return 'The security code on your card is incorrect. Please update your card.';
+        case 'lost_card':
+        case 'stolen_card':
+          return 'Your card was reported lost or stolen. Please use a different card.';
+        case 'do_not_honor':
+          return 'Your bank declined the charge. Please call the number on your card to authorize it.';
+        case 'transaction_not_allowed':
+          return 'Your bank does not allow this type of charge on this card. Please use a different card.';
+        case 'fraudulent':
+        case 'pickup_card':
+          return 'Your card was declined for security reasons. Please use a different card.';
+        default:
+          return 'Your card was declined. Please use a different card or contact your bank.';
+      }
+    }
+    if (code === 'expired_card') return 'Your card has expired. Please save a new card.';
+    if (code === 'incorrect_number') return 'The card number is incorrect. Please save a new card.';
+    if (code === 'invalid_cvc') return 'The security code on your card is incorrect. Please save a new card.';
+    if (code === 'processing_error') return 'An error occurred while processing your card. Please try again in a moment.';
+
+    // Internal Stripe config / network issues — don't leak to the dealer.
+    if (err?.type === 'StripeAuthenticationError' || err?.type === 'StripeInvalidApiKeyError') {
+      return 'We could not process your request at this time. Please contact support.';
+    }
+    if (err?.type === 'StripeConnectionError' || err?.type === 'APIConnectionError') {
+      return 'We could not reach the payment processor. Please try again in a moment.';
+    }
+
+    // Generic fallback. Try to surface the (cleaned) Stripe message only if
+    // it doesn't contain internal Stripe ids; otherwise use fallbackMsg.
+    const cleaned = String(err?.message || '')
+      .replace(/^Request req_[A-Za-z0-9]+:\s*/i, '')
+      .trim();
+    const looksSafe = !!cleaned && !/(pm_|in_|sub_|cust|req_|ch_|pi_)[A-Za-z0-9]+/i.test(cleaned);
+    return looksSafe ? `We could not process your request: ${cleaned}.` : fallbackMsg;
   }
 }

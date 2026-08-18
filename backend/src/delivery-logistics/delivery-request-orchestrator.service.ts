@@ -507,12 +507,19 @@ export class DeliveryRequestOrchestratorService {
     });
   }
 
-  // Translate Stripe SDK errors into customer-facing English. Falls back to
-  // the raw message if we don't recognize the code.
+  // Translate Stripe SDK errors into customer-facing English. Never leaks
+  // Stripe's "Request req_xxx:" prefix, internal error codes, or API-key
+  // hints to the dealer — falls back to a generic "contact support" line
+  // for anything we don't recognize.
   private translateStripeError(err: any): string {
     const code = err?.code || '';
     const declineCode = err?.decline_code || '';
-    const msg = err?.message || 'Unknown payment error';
+    // Stripe prefixes messages like "Request req_1abc2xyz: <real reason>".
+    // The dealer doesn't care about the request id — strip it so the toast
+    // stays short and human-readable.
+    const stripReq = (s: string) =>
+      String(s || '').replace(/^Request req_[A-Za-z0-9]+:\s*/i, '').trim();
+    const rawMsg = stripReq(err?.message || '');
 
     // Common card-decline codes from Stripe
     if (code === 'card_declined' || declineCode) {
@@ -528,9 +535,17 @@ export class DeliveryRequestOrchestratorService {
           return 'Your card was reported lost or stolen. Please use a different card.';
         case 'do_not_honor':
           return 'Your bank declined the charge. Please call the number on your card to authorize it.';
+        case 'transaction_not_allowed':
+          return 'Your bank does not allow this type of charge on this card. Please use a different card.';
+        case 'fraudulent':
+        case 'pickup_card':
+          return 'Your card was declined for security reasons. Please use a different card.';
+        case 'invalid_cvc':
+        case 'incorrect_number':
+          return 'Your card details are incorrect. Please save a new card under Payment Methods.';
         case 'generic_decline':
         default:
-          return `Your card was declined${declineCode ? ` (${declineCode})` : ''}. Please use a different card.`;
+          return 'Your card was declined. Please use a different card or contact your bank.';
       }
     }
     if (code === 'expired_card') {
@@ -542,16 +557,31 @@ export class DeliveryRequestOrchestratorService {
     if (code === 'incorrect_number') {
       return 'The card number is incorrect. Please save a new card under Payment Methods.';
     }
-    if (err?.type === 'StripeAuthenticationError') {
-      return 'Stripe authentication failed. Please verify your Stripe API keys are correct.';
+    if (code === 'invalid_cvc') {
+      return 'The security code on your card is incorrect. Please save a new card under Payment Methods.';
+    }
+    if (code === 'payment_method_action_required') {
+      return 'Your bank needs you to approve this charge. Please contact your bank or use a different card.';
+    }
+    // Internal Stripe config issues — DO NOT leak these to the dealer.
+    // The dealer can't fix our API keys; tell them to contact support.
+    if (err?.type === 'StripeAuthenticationError' || err?.type === 'StripeInvalidApiKeyError') {
+      return 'We could not process your payment at this time. Please contact support and we will get back to you shortly.';
     }
     if (err?.type === 'StripeConnectionError' || err?.type === 'APIConnectionError') {
-      return 'Could not reach the payment processor. Please try again in a moment.';
+      return 'We could not reach the payment processor. Please try again in a moment.';
     }
     if (err?.type === 'StripeInvalidRequestError') {
-      return `Payment request was invalid: ${msg}. Please contact support.`;
+      // Don't echo Stripe's raw message — it can contain internal field names.
+      return 'We could not process your payment at this time. Please try again or contact support.';
     }
-    return `Payment failed: ${msg}`;
+    // Generic fallback — keep the (stripped) message only if it looks
+    // dealer-readable (no internal Stripe ids like "pm_xxx", "in_xxx",
+    // "sub_xxx", "customer_xxx"). Otherwise fall back to "contact support".
+    const looksSafe = !!rawMsg && !/(pm_|in_|sub_|cust|req_|ch_|pi_)[A-Za-z0-9]+/i.test(rawMsg);
+    return looksSafe
+      ? `Payment could not be completed: ${rawMsg}.`
+      : 'We could not process your payment at this time. Please try again or contact support.';
   }
 
   // ─────────────────────────────────────────────────────────────────

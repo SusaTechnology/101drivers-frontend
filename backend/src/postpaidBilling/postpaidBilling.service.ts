@@ -801,7 +801,14 @@ export class PostpaidBillingService {
     });
 
     if (!dealer) {
-      throw new NotFoundException("Customer not found");
+      // Dealer-facing — don't say "Customer not found" (that's our internal
+      // Prisma jargon). The dealer calling /me/status already authenticated;
+      // if we got here, their account is in a weird state and support is
+      // the right next step.
+      throw new NotFoundException(
+        "We could not load your postpaid billing summary. " +
+          "Please contact support and we will get back to you shortly.",
+      );
     }
 
     const outstandingCents = await this.computeOutstandingBalanceCents(dealerId);
