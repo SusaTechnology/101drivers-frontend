@@ -300,6 +300,15 @@ export class PaymentPolicyService {
       PAID: ["REFUNDED", "PAID"],
       VOIDED: ["VOIDED"],
       REFUNDED: ["REFUNDED"],
+      // ── Postpaid (Option A) lifecycle ──
+      // AUTHORIZED → PENDING_STRIPE_USAGE: existing postpaid Payment rows
+      //   are created with status=AUTHORIZED. The postpaid engine later
+      //   transitions them through the InvoiceItem-based lifecycle. Allow
+      //   this transition + the forward path; reverse transitions are
+      //   blocked (no admin undo of weekly billing).
+      PENDING_STRIPE_USAGE: ["USAGE_REPORTED", "CHARGE_FAILED", "FAILED", "VOIDED", "PENDING_STRIPE_USAGE"],
+      USAGE_REPORTED: ["PAID", "CHARGE_FAILED", "USAGE_REPORTED"],
+      CHARGE_FAILED: ["USAGE_REPORTED", "PAID", "FAILED", "CHARGE_FAILED"],
     };
 
     if (!allowed[fromStatus].includes(toStatus)) {

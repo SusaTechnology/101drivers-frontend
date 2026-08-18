@@ -73,6 +73,20 @@ model Customer {
   pricingConfig       PricingConfig?                   @relation(fields: [pricingConfigId], references: [id])
   pricingConfigId     String?
   pricingModeOverride EnumCustomerPricingModeOverride?
+
+  // ── Postpaid billing (Option A — dealer weekly postpaid via Stripe) ──
+  // billingMode: defaults to WEEKLY_POSTPAID when postpaidEnabled=true.
+  // NULL means "no billing mode assigned yet" (legacy customers / prepaid).
+  billingMode                  EnumCustomerBillingMode?
+  // Stripe Subscription id anchoring the weekly billing cycle ($0 anchor price).
+  stripeSubscriptionId         String?
+  // Per-dealer cap on unpaid balance, in cents. NULL = unlimited.
+  postpaidCreditLimitCents     Int?
+  // When true, dealer is blocked from creating deliveries (set on charge failure).
+  billingFrozen                Boolean                          @default(false)
+  billingFrozenAt              DateTime?
+  billingFrozenReason          String?
+
   ratings             DeliveryRating[]
   suspendedAt         DateTime?
   suspensionReason    String?
@@ -82,6 +96,7 @@ model Customer {
   vehicles            SavedVehicle[]
 
   @@index([customerType, approvalStatus])
+  @@index([billingMode, billingFrozen])
 }
 
 model Driver {
@@ -587,8 +602,18 @@ model Payment {
   updatedAt               DateTime               @updatedAt
   voidedAt                DateTime?
 
+  // ── Postpaid (Option A) — Stripe InvoiceItem linkage ──
+  // stripeInvoiceItemId: set when an InvoiceItem is created on delivery completion
+  //   (one InvoiceItem per delivery, with pickup/dropoff in the description).
+  // stripeInvoiceId: set when the weekly Stripe invoice is finalized + paid/failed
+  //   via webhook. Multiple Payment rows can share the same stripeInvoiceId
+  //   (all deliveries from the same weekly cycle).
+  stripeInvoiceItemId     String?
+  stripeInvoiceId         String?
+
   @@index([status, createdAt])
   @@index([paymentType, status])
+  @@index([stripeInvoiceId])
 }
 
 model PaymentEvent {
@@ -1002,6 +1027,19 @@ enum EnumCustomerPricingModeOverride {
   CATEGORY_ABC
 }
 
+// ── Postpaid billing mode (Option A implemented; B/C reserved for future) ──
+// WEEKLY_POSTPAID      — dealer billed weekly via Stripe metered anchor
+//                        subscription + per-delivery InvoiceItems.
+// PREPAID_AFTER_DELIVERY — Option B (future): card captured at delivery
+//                        completion, not at creation.
+// PREPAID_INSTANT      — Option C (future): guest prepaid at creation
+//                        via Stripe dialog (landing-page flow).
+enum EnumCustomerBillingMode {
+  WEEKLY_POSTPAID
+  PREPAID_AFTER_DELIVERY
+  PREPAID_INSTANT
+}
+
 enum EnumDriverStatus {
   WAITLISTED
   INVITED
@@ -1179,6 +1217,18 @@ enum EnumPaymentStatus {
   PAID
   VOIDED
   REFUNDED
+  // ── Postpaid (Option A) lifecycle ──
+  // PENDING_STRIPE_USAGE: delivery created, no Stripe call yet. (Legacy
+  //   postpaid used AUTHORIZED for the same state — we keep AUTHORIZED for
+  //   prepaid and introduce this new value for the postpaid InvoiceItem flow
+  //   so the two paths can be distinguished in queries/reports.)
+  PENDING_STRIPE_USAGE
+  // USAGE_REPORTED: delivery completed, Stripe.InvoiceItems.create succeeded,
+  //   waiting for Stripe's weekly Sunday invoice to be created + charged.
+  USAGE_REPORTED
+  // CHARGE_FAILED: Stripe's weekly charge failed (invoice.payment_failed
+  //   webhook). Dealer is frozen. Admin can retry or unfreeze after card fix.
+  CHARGE_FAILED
 }
 
 enum EnumPaymentEventStatus {

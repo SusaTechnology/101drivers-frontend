@@ -143,6 +143,14 @@ export class PaymentEventPolicyService {
       PAID: [EnumPaymentEventType.MARK_PAID, EnumPaymentEventType.REFUND],
       VOIDED: [EnumPaymentEventType.VOID],
       REFUNDED: [EnumPaymentEventType.REFUND],
+      // Postpaid (Option A) lifecycle states — the platform does not create
+      // PaymentEvent rows for these transitions directly; the PostpaidBilling
+      // engine + Stripe webhook update Payment.status in place. Mark the
+      // allowed event types as empty arrays so manual admin events can still
+      // be created if needed (validation will reject them by default).
+      PENDING_STRIPE_USAGE: [],
+      USAGE_REPORTED: [EnumPaymentEventType.MARK_PAID, EnumPaymentEventType.FAIL],
+      CHARGE_FAILED: [EnumPaymentEventType.FAIL, EnumPaymentEventType.MARK_PAID],
     };
 
     if (!allowedByStatus[paymentStatus].includes(type)) {

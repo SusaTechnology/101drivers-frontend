@@ -38,6 +38,7 @@ import { EmailVerificationService } from "../auth/email-verification/email-verif
 import { PasswordService } from "../auth/password.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { StripeService } from "../providers/stripe/stripe.service";
+import { PostpaidBillingService } from "../postpaidBilling/postpaidBilling.service";
 import { businessIsPastCutoff, businessIsSameDay, businessHourOf, businessNow } from "./business-time";
 
 export type CreateDeliveryDraftFromQuoteInput = {
@@ -297,6 +298,7 @@ export class DeliveryRequestOrchestratorService {
     private readonly notificationEventEngine: NotificationEventEngine,
     @Optional() @Inject(StripeService) private readonly stripeService?: StripeService,
     @Optional() @Inject(forwardRef(() => TrackingGateway)) private readonly trackingGateway?: TrackingGateway,
+    @Optional() @Inject(forwardRef(() => PostpaidBillingService)) private readonly postpaidBilling?: PostpaidBillingService,
   ) {
     const logger = new Logger(DeliveryRequestOrchestratorService.name);
     logger.log(
@@ -2113,6 +2115,25 @@ private async resolveIndividualCustomerForCreate(
         ? EnumPaymentPaymentType.POSTPAID
         : EnumPaymentPaymentType.PREPAID;
 
+    // ── Postpaid (Option A) pre-check ──────────────────────────────
+    // If the dealer is on WEEKLY_POSTPAID billing, verify they can create
+    // another delivery (not frozen, approved, has saved card, cap not
+    // exceeded). Throws a user-facing error if any check fails.
+    //
+    // Safe no-op for prepaid dealers (canDealerCreateDelivery returns
+    // ok:true reason:"NOT_POSTPAID" for them).
+    if (this.postpaidBilling && paymentType === EnumPaymentPaymentType.POSTPAID) {
+      const amountCents = Math.round(Number(quote.estimatedPrice) * 100);
+      const eligibility = await this.postpaidBilling.canDealerCreateDelivery(
+        customer.id,
+        amountCents,
+      );
+      if (!eligibility.ok && eligibility.reason !== "NOT_POSTPAID") {
+        const friendlyMessage = this.mapEligibilityErrorToMessage(eligibility);
+        throw new BadRequestException(friendlyMessage);
+      }
+    }
+
     // Create the Payment row first; the shared Stripe helper will update it
     // to STRIPE/AUTHORIZED (prepaid) or leave it MANUAL (postpaid → invoice).
     const payment = await this.prisma.payment.create({
@@ -3280,5 +3301,38 @@ private async resolveIndividualCustomerForCreate(
         : NaN;
 
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  /**
+   * Convert the postpaid billing engine's eligibility result into a
+   * human-friendly message for the dealer. The engine stays HTTP-agnostic
+   * (it doesn't know about exceptions); this method does the translation.
+   */
+  private mapEligibilityErrorToMessage(eligibility: {
+    reason?: string;
+    usedCents?: number;
+    limitCents?: number | null;
+    attemptedCents?: number;
+  }): string {
+    const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+    switch (eligibility.reason) {
+      case "FROZEN":
+        return "Your account is frozen due to a failed weekly charge. Please update your payment method and contact support.";
+      case "NOT_APPROVED":
+        return "Your business account is not yet approved for postpaid billing.";
+      case "NO_PAYMENT_METHOD":
+        return "No saved payment method on file. Please add a card via your account settings before creating a delivery.";
+      case "NO_SUBSCRIPTION":
+        return "Your postpaid subscription isn't set up yet. Please contact support to complete onboarding.";
+      case "OVER_LIMIT":
+        return (
+          `This delivery would exceed your postpaid credit limit. ` +
+          `Used: ${dollars(eligibility.usedCents ?? 0)} / ` +
+          `Limit: ${eligibility.limitCents == null ? "unlimited" : dollars(eligibility.limitCents)}. ` +
+          `Please ask admin to raise the cap, or pay down your balance.`
+        );
+      default:
+        return "Cannot create this delivery due to a billing eligibility issue. Please contact support.";
+    }
   }
 }

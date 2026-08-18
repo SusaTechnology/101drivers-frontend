@@ -14,6 +14,7 @@ import { Request, Response } from "express";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { PostpaidBillingService } from "../postpaidBilling/postpaidBilling.service";
 
 @Controller("stripe")
 export class StripeWebhookController {
@@ -24,6 +25,8 @@ export class StripeWebhookController {
     private readonly prisma: PrismaService,
     @Optional() @Inject(NotificationEventEngine)
     private readonly notificationEngine?: NotificationEventEngine,
+    @Optional() @Inject(PostpaidBillingService)
+    private readonly postpaidBilling?: PostpaidBillingService,
   ) {}
 
   @Post("webhook")
@@ -89,6 +92,29 @@ export class StripeWebhookController {
 
         case "setup_intent.succeeded":
           await this.handleSetupIntentSucceeded(event.data.object);
+          break;
+
+        // ── Postpaid (Option A) — invoice.* events ──
+        // Fired by Stripe's weekly anchor subscription. Delegated to
+        // PostpaidBillingService which updates Payment rows + freezes
+        // the dealer on charge failure. Safe to no-op if the service
+        // isn't injected (e.g. during cold-start when Stripe is disabled).
+        case "invoice.upcoming":
+          if (this.postpaidBilling) {
+            await this.postpaidBilling.handleInvoiceUpcoming(event.data.object.id);
+          }
+          break;
+
+        case "invoice.payment_succeeded":
+          if (this.postpaidBilling) {
+            await this.postpaidBilling.handleInvoicePaymentSucceeded(event.data.object.id);
+          }
+          break;
+
+        case "invoice.payment_failed":
+          if (this.postpaidBilling) {
+            await this.postpaidBilling.handleInvoicePaymentFailed(event.data.object.id);
+          }
           break;
 
         default:

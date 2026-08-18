@@ -65,6 +65,7 @@ import { InsurancePortalController } from "./insurance-portal/insurance-portal.c
 import { ContentController } from "./content/content.controller";
 import { NotificationEventEngine } from "./domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "./common/mail/mail.service";
+import { PostpaidBillingModule } from "./postpaidBilling/postpaidBilling.module";
 @Module({
   controllers: [StripeWebhookController, InsurancePortalController, ContentController],
   imports: [
@@ -120,6 +121,7 @@ import { MailService } from "./common/mail/mail.service";
     SupportRequestModule,
     SupportRequestNoteModule,
     GatewayModule,
+    PostpaidBillingModule,
     ScheduleModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true }),
     ServeStaticModule.forRootAsync({

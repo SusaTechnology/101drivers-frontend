@@ -224,7 +224,11 @@ class Payment {
     | "INVOICED"
     | "PAID"
     | "VOIDED"
-    | "REFUNDED";
+    | "REFUNDED"
+    // ── Postpaid (Option A) lifecycle ──
+    | "PENDING_STRIPE_USAGE"
+    | "USAGE_REPORTED"
+    | "CHARGE_FAILED";
 
   @ApiProperty({
     required: true,
@@ -244,6 +248,31 @@ class Payment {
     nullable: true,
   })
   voidedAt!: Date | null;
+
+  // ── Postpaid (Option A) — Stripe InvoiceItem linkage ──
+  @ApiProperty({
+    required: false,
+    type: String,
+  })
+  @IsString()
+  @MaxLength(256)
+  @IsOptional()
+  @Field(() => String, {
+    nullable: true,
+  })
+  stripeInvoiceItemId!: string | null;
+
+  @ApiProperty({
+    required: false,
+    type: String,
+  })
+  @IsString()
+  @MaxLength(256)
+  @IsOptional()
+  @Field(() => String, {
+    nullable: true,
+  })
+  stripeInvoiceId!: string | null;
 }
 
 export { Payment as Payment };

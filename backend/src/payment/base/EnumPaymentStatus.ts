@@ -19,6 +19,10 @@ export enum EnumPaymentStatus {
   Paid = "PAID",
   Voided = "VOIDED",
   Refunded = "REFUNDED",
+  // ── Postpaid (Option A) lifecycle ──
+  PendingStripeUsage = "PENDING_STRIPE_USAGE",
+  UsageReported = "USAGE_REPORTED",
+  ChargeFailed = "CHARGE_FAILED",
 }
 
 registerEnumType(EnumPaymentStatus, {

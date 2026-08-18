@@ -27,6 +27,7 @@ import { NotificationEventEngine } from "../domain/notificationEvent/notificatio
 import { DeliveryComplianceEngine } from "../domain/deliveryCompliance/deliveryCompliance.engine";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
 import { StripeService } from "../providers/stripe/stripe.service";
+import { PostpaidBillingService } from "../postpaidBilling/postpaidBilling.service";
 import {
   EnumDriverPayoutStatus,
   EnumDriverPayoutType,
@@ -67,7 +68,9 @@ export class DeliveryLifecycleService {
     private readonly configService: ConfigService,
     @Optional() private readonly stripeService?: StripeService,
     @Optional() @Inject(forwardRef(() => TrackingGateway))
-    private readonly trackingGateway?: TrackingGateway
+    private readonly trackingGateway?: TrackingGateway,
+    @Optional() @Inject(forwardRef(() => PostpaidBillingService))
+    private readonly postpaidBilling?: PostpaidBillingService
   ) {
     this.logger.log(
       `TrackingGateway ${this.trackingGateway ? 'INJECTED' : 'NOT INJECTED (undefined)'}`
@@ -874,6 +877,24 @@ async completeTrip(input: {
       actorUserId: input.actorUserId ?? null,
     });
     this.emitStatusChanged(input.deliveryId, "COMPLETED");
+
+    // ── Postpaid (Option A) — report usage to Stripe ──
+    // Non-blocking: failure here must not fail the delivery completion.
+    // reportUsageToStripe already logs + leaves Payment in prior status
+    // for admin review on failure. Wrapped in try/catch as a belt-and-
+    // suspenders safeguard.
+    if (this.postpaidBilling) {
+      try {
+        await this.postpaidBilling.reportUsageToStripe({
+          deliveryId: input.deliveryId,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `PostpaidBillingService.reportUsageToStripe threw for delivery ${input.deliveryId}: ${err?.message}`,
+          err?.stack,
+        );
+      }
+    }
 
     return result;
   });

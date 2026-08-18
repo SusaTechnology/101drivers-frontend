@@ -2,6 +2,7 @@ import { Module, forwardRef } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { PrismaModule } from "../prisma/prisma.module";
 import { GatewayModule } from "../gateways/gateway.module";
+import { PostpaidBillingModule } from "../postpaidBilling/postpaidBilling.module";
 
 import { GoogleMapsService } from "./google-maps.service";
 import { PricingEngineService } from "./pricing-engine.service";
@@ -20,7 +21,16 @@ import { DeliveryEvidenceEngine } from "src/domain/deliveryEvidence/deliveryEvid
 import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.engine";
 
 @Module({
-  imports: [ConfigModule, PrismaModule, forwardRef(() => GatewayModule)],
+  imports: [
+    ConfigModule,
+    PrismaModule,
+    forwardRef(() => GatewayModule),
+    // PostpaidBillingModule is imported so DeliveryLifecycleService can
+    // inject PostpaidBillingService and call reportUsageToStripe() at
+    // delivery completion. The service is @Optional-injected so the
+    // lifecycle still works if the module is removed (e.g. tests).
+    forwardRef(() => PostpaidBillingModule),
+  ],
   providers: [
     GoogleMapsService,
     PricingEngineService,
