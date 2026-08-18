@@ -457,8 +457,17 @@ function InlineEditPricing({
           <SelectContent>
             <SelectItem value="null">No override (use config's mode)</SelectItem>
             <SelectItem value="PER_MILE">Per Mile</SelectItem>
-            <SelectItem value="FLAT_TIER">Flat Tier</SelectItem>
             <SelectItem value="CATEGORY_ABC">Category A/B/C</SelectItem>
+            {/* FLAT_TIER is DEPRECATED — hidden from the picker so admins
+                can't accidentally select it. But if a customer already has
+                this value set from a prior assignment, we still render the
+                option so the dropdown can show the current state and the
+                admin can switch to a supported mode. */}
+            {pricingModeOverride === 'FLAT_TIER' && (
+              <SelectItem value="FLAT_TIER" className="text-amber-600 dark:text-amber-400">
+                Flat Tier (deprecated — switch to Per Mile)
+              </SelectItem>
+            )}
           </SelectContent>
         </Select>
         <p className="text-xs text-slate-500">

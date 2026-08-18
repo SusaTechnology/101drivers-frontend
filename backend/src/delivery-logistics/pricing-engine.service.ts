@@ -239,7 +239,13 @@ export class PricingEngineService {
       // quote snapshots. Math: baseFee + max(0, miles - flatMiles) * perMileRate
       // ──────────────────────────────────────────────────────────────────
       if (config.perMileRate == null) {
-        throw new BadRequestException("PER_MILE config requires perMileRate");
+        // Surface a clear, admin-actionable message. The dealer sees this
+        // as a delivery-creation failure, so the message must explain what
+        // to do next (ask admin to fix the pricing config).
+        throw new BadRequestException(
+          "This dealer's pricing configuration is incomplete (missing per-mile rate). " +
+            "Please contact support so an admin can update the pricing config before placing this delivery."
+        );
       }
 
       const flatMilesAllowance = Number(config.flatMiles ?? 0);
@@ -294,7 +300,8 @@ export class PricingEngineService {
 
       if (sortedRules.length === 0) {
         throw new BadRequestException(
-          "CATEGORY_ABC config requires at least one category rule"
+          "This dealer's pricing configuration is incomplete (no ABC category rules defined). " +
+            "Please contact support so an admin can update the pricing config before placing this delivery."
         );
       }
 
@@ -452,7 +459,9 @@ export class PricingEngineService {
       });
 
       if (!customer) {
-        throw new NotFoundException("Customer not found for quote pricing");
+        throw new NotFoundException(
+          "We could not load your account information. Please contact support."
+        );
       }
 
       if (customer.pricingConfigId) {
@@ -496,7 +505,10 @@ export class PricingEngineService {
         });
 
         if (!config) {
-          throw new NotFoundException("Customer PricingConfig not found");
+          throw new NotFoundException(
+            "Your assigned pricing configuration could not be found. " +
+              "Please contact support so an admin can re-assign a pricing plan to your account."
+          );
         }
 
         return {
@@ -635,16 +647,25 @@ export class PricingEngineService {
   ): EnumQuotePricingMode {
     // DEPRECATED: FLAT_TIER mode is no longer supported. Any override or
     // config that requests FLAT_TIER is silently mapped to PER_MILE (Flat).
+    //
+    // NOTE: the override branch below MUST remap FLAT_TIER → PER_MILE too.
+    // Earlier revisions left the FLAT_TIER override case un-handled, which
+    // caused it to fall through to the trailing `return CATEGORY_ABC` —
+    // silently routing customers with a stale FLAT_TIER override into the
+    // ABC branch. If their assigned config was a PER_MILE (Flat) config
+    // (which has no categoryRules), the ABC branch would then throw
+    // "CATEGORY_ABC config requires at least one category rule" —
+    // surfacing to the dealer as "Flat Pricing doesn't work".
     if (override != null) {
       if (override === EnumCustomerPricingModeOverride.PER_MILE) {
         return EnumQuotePricingMode.PER_MILE;
       }
-
-      // FLAT_TIER override → fall back to PER_MILE (Flat with extra mileage).
-      // if (override === EnumCustomerPricingModeOverride.FLAT_TIER) {
-      //   return EnumQuotePricingMode.FLAT_TIER;
-      // }
-
+      // FLAT_TIER override → silently remap to PER_MILE (Flat with extra
+      // mileage). The override UI no longer exposes FLAT_TIER, but legacy
+      // customers may still have it set from before the deprecation.
+      if (override === EnumCustomerPricingModeOverride.FLAT_TIER) {
+        return EnumQuotePricingMode.PER_MILE;
+      }
       return EnumQuotePricingMode.CATEGORY_ABC;
     }
 
@@ -652,10 +673,10 @@ export class PricingEngineService {
       return EnumQuotePricingMode.PER_MILE;
     }
 
-    // if (configMode === EnumPricingConfigPricingMode.FLAT_TIER) {
-    //   return EnumQuotePricingMode.FLAT_TIER;
-    // }
-    // Legacy FLAT_TIER configs are treated as PER_MILE (Flat) at calculation time.
+    // Legacy FLAT_TIER configs are treated as PER_MILE (Flat) at calculation
+    // time. The FLAT_TIER calc branch in computeQuoteFromConfig is
+    // intentionally disabled; this remap routes the quote through the
+    // PER_MILE formula instead.
     if (configMode === EnumPricingConfigPricingMode.FLAT_TIER) {
       return EnumQuotePricingMode.PER_MILE;
     }
