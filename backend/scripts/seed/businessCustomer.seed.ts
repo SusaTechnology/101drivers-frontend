@@ -27,11 +27,30 @@ export async function seedBusinessCustomer(bcryptSalt: Salt) {
     phone: "+1 650 555 0199",
   });
 
-  // If you want postpaid for demo:
-  await prisma.customer.update({
-    where: { id: customer.id },
-    data: { postpaidEnabled: true },
-  });
+  // NOTE: postpaidEnabled is intentionally NOT set to true here.
+  // Setting it to true without also calling
+  // PostpaidBillingService.setupDealerForPostpaid() leaves the dealer in an
+  // illegal half-configured state (postpaid flag on, but no Stripe Customer /
+  // Subscription / saved PM, billingMode null) and any postpaid delivery
+  // attempt against them will be rejected by canDealerCreateDelivery with
+  // reason NO_SUBSCRIPTION.
+  //
+  // To seed a fully-functional postpaid dealer you must (in this order):
+  //   1. Set STRIPE_SECRET_KEY + STRIPE_POSTPAID_PRICE_ID in the env.
+  //   2. Uncomment the update below to flip the flag.
+  //   3. After seeding, call:
+  //        POST /api/postpaid-billing/dealers/<customerId>/setup
+  //      (admin auth required) to create the Stripe Customer + anchor
+  //      Subscription and persist stripeCustomerId / stripeSubscriptionId
+  //      on the Customer row.
+  //   4. Have the dealer save a card via /api/payments/stripe/save-card so
+  //      stripeDefaultPaymentMethodId gets set (otherwise the first weekly
+  //      invoice will fail and freeze the dealer).
+  //
+  // await prisma.customer.update({
+  //   where: { id: customer.id },
+  //   data: { postpaidEnabled: true },
+  // });
 
   const lot = await ensureCustomerAddress({
     customerId: customer.id,

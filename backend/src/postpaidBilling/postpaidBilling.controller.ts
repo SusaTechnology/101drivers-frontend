@@ -1,10 +1,19 @@
-// PostpaidBillingController — admin-only endpoints for managing dealer
-// postpaid billing. The actual Stripe calls live in PostpaidBillingService;
-// this controller only validates input + delegates.
+// PostpaidBillingController — admin + dealer-scoped endpoints for managing
+// dealer postpaid billing. The actual Stripe calls live in
+// PostpaidBillingService; this controller only validates input + delegates.
 //
-// Routes are mounted under /api/postpaid-billing/*. Admin auth is enforced
-// by the global JwtAuthGuard + ACL module (re-uses the existing admin
-// guard pattern used elsewhere in the codebase).
+// Routes are mounted under /api/postpaid-billing/*. Auth is enforced by
+// the global JwtAuthGuard + ACL module.
+//
+// Endpoints split:
+//   • /dealers/:dealerId/* — ADMIN-ONLY (setup, cap, unfreeze, retry-charge,
+//     status). Dealers cannot call these on themselves or others.
+//   • /me/status — DEALER-SCOPED. Resolves the dealerId from the JWT user,
+//     never trusts a body/param dealerId. Returns a redacted subset of the
+//     admin status (no per-payment breakdown — dealer gets that from the
+//     Stripe invoice PDF).
+//   • /cron/auto-retry — internal trigger (no HTTP route; the @Cron
+//     decorator calls autoRetryFrozenDealers daily at 06:00 server time).
 
 import {
   BadRequestException,
@@ -14,10 +23,14 @@ import {
   Logger,
   Param,
   Post,
-  Query,
   UseGuards,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import * as defaultAuthGuard from "../auth/defaultAuth.guard";
+import * as nestAccessControl from "nest-access-control";
+import { UserData } from "../auth/userData.decorator";
+import { User } from "@prisma/client";
 import { PostpaidBillingService } from "./postpaidBilling.service";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -31,17 +44,19 @@ export class PostpaidBillingController {
     private readonly prisma: PrismaService,
   ) {}
 
-  // ─── Setup ────────────────────────────────────────────────────
+  // ─── ADMIN: Setup ────────────────────────────────────────────
 
   @Post("dealers/:dealerId/setup")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
   @ApiOperation({ summary: "Onboard an approved dealer onto weekly postpaid billing (creates Stripe Customer + $0/wk anchor subscription)" })
   async setupDealer(@Param("dealerId") dealerId: string) {
     return this.postpaidBilling.setupDealerForPostpaid(dealerId);
   }
 
-  // ─── Cap ──────────────────────────────────────────────────────
+  // ─── ADMIN: Cap ──────────────────────────────────────────────
 
   @Post("dealers/:dealerId/cap")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
   @ApiOperation({ summary: "Set the per-dealer postpaid cap (cents, null = unlimited)" })
   async setCap(
     @Param("dealerId") dealerId: string,
@@ -54,9 +69,10 @@ export class PostpaidBillingController {
     return { ok: true, dealerId, capCents: body.capCents };
   }
 
-  // ─── Freeze ───────────────────────────────────────────────────
+  // ─── ADMIN: Freeze ───────────────────────────────────────────
 
   @Post("dealers/:dealerId/unfreeze")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
   @ApiOperation({ summary: "Manually unfreeze a dealer after they fixed their card" })
   async unfreeze(@Param("dealerId") dealerId: string) {
     await this.postpaidBilling.unfreezeDealer(dealerId);
@@ -64,15 +80,17 @@ export class PostpaidBillingController {
   }
 
   @Post("dealers/:dealerId/retry-charge")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
   @ApiOperation({ summary: "Retry the most recent failed weekly invoice (Stripe.pay)" })
   async retryCharge(@Param("dealerId") dealerId: string) {
     await this.postpaidBilling.retryFailedCharge(dealerId);
     return { ok: true, dealerId };
   }
 
-  // ─── Status / Inspect ────────────────────────────────────────
+  // ─── ADMIN: Status / Inspect ────────────────────────────────
 
   @Get("dealers/:dealerId/status")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
   @ApiOperation({ summary: "Inspect a dealer's postpaid billing state (cap, frozen, outstanding, weekly invoice summary)" })
   async getStatus(@Param("dealerId") dealerId: string) {
     const dealer = await this.prisma.customer.findUnique({
@@ -138,5 +156,58 @@ export class PostpaidBillingController {
         stripeInvoiceItemId: p.stripeInvoiceItemId,
       })),
     };
+  }
+
+  // ─── DEALER: Self-service status ─────────────────────────────
+  //
+  // Dealers call this to render their "Weekly Postpaid" panel —
+  // outstanding balance, frozen banner, next invoice date, cap usage.
+  //
+  // Auth: any authenticated user. We resolve the dealerId from the
+  // JWT user → Customer row. If the authenticated user has no Customer
+  // row (driver/admin), we return 404. We never trust a dealerId
+  // passed in the URL or body for this route — a dealer must not be
+  // able to query another dealer's status.
+
+  @Get("me/status")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard)
+  @ApiOperation({ summary: "Get the authenticated dealer's own postpaid billing status (outstanding, frozen, next invoice)" })
+  async getMyStatus(@UserData() user: User) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    if (!customer) {
+      throw new BadRequestException(
+        "Authenticated user has no Customer record — only BUSINESS customers can use postpaid billing",
+      );
+    }
+    return this.postpaidBilling.getMyStatus(customer.id);
+  }
+
+  // ─── CRON: auto-retry frozen dealers ──────────────────────────
+  //
+  // Runs daily at 06:00 server time. Finds every dealer that is
+  // frozen with reason CHARGE_FAILED AND has a saved payment method,
+  // and retries their most recent failed weekly invoice. If the
+  // retry succeeds, the payment_succeeded webhook clears the freeze;
+  // if it fails again, the payment_failed webhook re-freezes (no-op
+  // due to the idempotency guard in handleInvoicePaymentFailed).
+  //
+  // This unblocks dealers whose card failed once and who subsequently
+  // added a new card via the saved-card flow, without requiring
+  // admin intervention.
+
+  @Cron(CronExpression.EVERY_DAY_AT_6AM)
+  async handleDailyAutoRetry() {
+    this.logger.log("Daily auto-retry cron: starting");
+    try {
+      await this.postpaidBilling.autoRetryFrozenDealers();
+    } catch (err: any) {
+      this.logger.error(
+        `Daily auto-retry cron failed: ${err?.message}`,
+        err?.stack,
+      );
+    }
   }
 }

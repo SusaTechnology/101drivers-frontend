@@ -96,6 +96,10 @@ import { useTheme } from '@/lib/theme';
 import { PhotoDialog, usePhotoUpload, downloadImageAsFile } from '@/components/ui/photo-dialog';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { CustomerPricingCard } from '@/components/admin/CustomerPricingCard';
+// Admin-side postpaid billing management card — Setup, Unfreeze, Retry,
+// and a status display (outstanding balance, frozen state, Stripe IDs).
+// Rendered alongside CustomerPricingCard for BUSINESS customers.
+import PostpaidBillingCard from '@/components/admin/PostpaidBillingCard';
 import {
   useAdminUserDetail,
   useApproveCustomer,
@@ -1592,6 +1596,16 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                     customer={user.customer}
                     onPricingChanged={refetch}
                   />
+                )}
+
+                {/* Postpaid billing management card — admin controls for
+                    weekly postpaid billing. Shown for any BUSINESS customer
+                    (whether postpaidEnabled=true or false) so the admin can
+                    onboard a dealer onto postpaid at any time after
+                    approval. The card itself surfaces the Setup Postpaid
+                    button and the dealer's current billing state. */}
+                {user.customer?.customerType === 'BUSINESS' && user.customer.id && (
+                  <PostpaidBillingCard dealerId={user.customer.id} />
                 )}
 
                 {/* Signup Incomplete card — shown when the user is a

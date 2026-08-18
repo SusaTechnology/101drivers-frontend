@@ -119,21 +119,6 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
     setTimeout(() => refetchCards(), 2000)
   }
 
-  // Postpaid dealers don't need a saved card
-  if (postpaidEnabled) {
-    return (
-      <div className="rounded-2xl border border-blue-200 dark:border-blue-800/40 bg-blue-50 dark:bg-blue-900/10 p-4">
-        <div className="flex items-center gap-2">
-          <CheckCircle className="h-4 w-4 text-blue-500" />
-          <p className="font-bold text-blue-700 dark:text-blue-300">Postpaid billing</p>
-        </div>
-        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-          Your account is billed after delivery. No card on file needed.
-        </p>
-      </div>
-    )
-  }
-
   if (cardsLoading) {
     return <div className="flex items-center gap-2 text-slate-400"><Loader2 className="w-4 h-4 animate-spin" /><span>Loading...</span></div>
   }
@@ -150,6 +135,26 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
 
   return (
     <div className="space-y-3">
+      {/* Postpaid banner — only shown for postpaid dealers. Saved card is
+          required for the weekly Stripe invoice to succeed; show the banner
+          + then fall through to the normal saved-cards UI below. */}
+      {postpaidEnabled && (
+        <div className="rounded-2xl border border-blue-200 dark:border-blue-800/40 bg-blue-50 dark:bg-blue-900/10 p-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-blue-500" />
+            <p className="font-bold text-blue-700 dark:text-blue-300">Postpaid weekly billing</p>
+          </div>
+          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+            Your saved card is charged automatically each week for completed deliveries.
+            {cards.length === 0 && (
+              <span className="block mt-1 font-bold text-amber-600 dark:text-amber-400">
+                No card on file — add one below so the weekly invoice can succeed.
+              </span>
+            )}
+          </p>
+        </div>
+      )}
+
       {cards.length > 0 ? (
         cards.map(card => (
           <div key={card.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 flex items-center justify-between gap-3">

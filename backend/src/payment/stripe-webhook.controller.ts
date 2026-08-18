@@ -117,6 +117,12 @@ export class StripeWebhookController {
           }
           break;
 
+        case "invoice.finalized":
+          if (this.postpaidBilling) {
+            await this.postpaidBilling.handleInvoiceFinalized(event.data.object.id);
+          }
+          break;
+
         default:
           this.logger.log(`Unhandled event type: ${event.type}`);
       }

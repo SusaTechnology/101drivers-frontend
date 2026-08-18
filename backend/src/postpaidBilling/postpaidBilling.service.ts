@@ -544,6 +544,11 @@ export class PostpaidBillingService {
    * the invoice itself has its own id. To match, we look at
    * invoice.lines.data[].invoiceitem for each line and update the
    * Payment rows that match.
+   *
+   * Idempotency: Stripe retries webhooks. This handler is idempotent —
+   * re-marking an already-PAID Payment as PAID is a no-op. We also
+   * short-circuit the $0 anchor invoice (subscription_cycle with no
+   * InvoiceItems) silently to avoid log noise on every retry.
    */
   async handleInvoicePaymentSucceeded(invoiceId: string): Promise<void> {
     if (!this.stripeService) return;
@@ -558,8 +563,15 @@ export class PostpaidBillingService {
         .filter(Boolean);
 
       if (invoiceItemIds.length === 0) {
+        // $0 anchor subscription cycle — no per-delivery line items.
+        // Don't log on every retry; just short-circuit.
+        const billingReason = (invoice as any).billing_reason;
+        if (billingReason === "subscription_cycle") {
+          // Anchor invoice — expected, no action needed.
+          return;
+        }
         this.logger.log(
-          `invoice.payment_succeeded ${invoiceId}: no InvoiceItems — likely the $0 anchor charge, nothing to mark`,
+          `invoice.payment_succeeded ${invoiceId}: no InvoiceItems (billing_reason=${billingReason}) — nothing to mark`,
         );
         return;
       }
@@ -590,6 +602,12 @@ export class PostpaidBillingService {
    * insufficient funds, etc.). Mark the Payments as CHARGE_FAILED and
    * freeze the dealer so they can't create more deliveries until the
    * issue is resolved.
+   *
+   * Idempotency: Stripe retries webhooks. The Payment updateMany is
+   * idempotent (re-marking CHARGE_FAILED is a no-op). For the freeze,
+   * we skip the re-write if the dealer is already frozen with the same
+   * reason — avoids bumping billingFrozenAt on every retry and keeps
+   * logs clean.
    */
   async handleInvoicePaymentFailed(invoiceId: string): Promise<void> {
     if (!this.stripeService) return;
@@ -622,18 +640,37 @@ export class PostpaidBillingService {
       // Freeze the dealer so they can't create more deliveries until admin
       // resolves (e.g. dealer adds a new card → admin clicks "retry" or
       // "unfreeze" in the admin UI).
+      //
+      // Idempotency: skip the UPDATE if the dealer is already frozen with
+      // the same reason. Saves a write + avoids bumping billingFrozenAt.
       if (stripeCustomerId) {
-        await this.prisma.customer.updateMany({
+        const existing = await this.prisma.customer.findFirst({
           where: { stripeCustomerId },
-          data: {
-            billingFrozen: true,
-            billingFrozenAt: new Date(),
-            billingFrozenReason: FREEZE_REASONS.CHARGE_FAILED,
-          },
+          select: { id: true, billingFrozen: true, billingFrozenReason: true },
         });
-        this.logger.warn(
-          `Dealer with stripeCustomer ${stripeCustomerId} FROZEN due to failed invoice ${invoiceId}`,
-        );
+        const alreadyFrozenWithSameReason =
+          existing?.billingFrozen === true &&
+          existing.billingFrozenReason === FREEZE_REASONS.CHARGE_FAILED;
+
+        if (existing && !alreadyFrozenWithSameReason) {
+          await this.prisma.customer.update({
+            where: { id: existing.id },
+            data: {
+              billingFrozen: true,
+              billingFrozenAt: new Date(),
+              billingFrozenReason: FREEZE_REASONS.CHARGE_FAILED,
+            },
+          });
+          this.logger.warn(
+            `Dealer ${existing.id} (stripeCustomer ${stripeCustomerId}) FROZEN due to failed invoice ${invoiceId}`,
+          );
+        } else if (alreadyFrozenWithSameReason) {
+          // Skip silently — Stripe retry, nothing changed.
+        } else {
+          this.logger.warn(
+            `invoice.payment_failed ${invoiceId}: no Customer row found for stripeCustomer ${stripeCustomerId} — cannot freeze`,
+          );
+        }
       }
     } catch (err: any) {
       this.logger.error(
@@ -715,6 +752,199 @@ export class PostpaidBillingService {
     // Stripe will fire invoice.payment_succeeded or .payment_failed shortly;
     // our webhook handlers will update Payment rows + freeze state.
     this.logger.log(`Retried invoice ${invoice.id} for dealer ${dealerId}`);
+  }
+
+  // ─── DEALER-SCOPED STATUS ──────────────────────────────────────
+
+  /**
+   * Returns the dealer's own postpaid billing status. Used by the
+   * dealer-facing "Weekly Postpaid" panel — outstanding balance,
+   * frozen state + reason, cap usage, and Stripe IDs (for debugging).
+   *
+   * Caller (PostpaidBillingController.getMyStatus) is responsible for
+   * authenticating the request and resolving the dealerId from the
+   * JWT — we never trust a dealerId passed in the body.
+   *
+   * Returns the same shape as the admin getStatus endpoint, but
+   * WITHOUT the unpaidPayments array (dealers don't need line-by-line
+   * detail; they get that from their Stripe invoice PDF).
+   */
+  async getMyStatus(dealerId: string): Promise<{
+    dealerId: string;
+    businessName: string | null;
+    postpaidEnabled: boolean;
+    billingMode: string | null;
+    billingFrozen: boolean;
+    billingFrozenAt: Date | null;
+    billingFrozenReason: string | null;
+    capCents: number | null;
+    outstandingCents: number;
+    outstandingDollars: number;
+    unpaidDeliveryCount: number;
+    hasSavedPaymentMethod: boolean;
+    nextInvoiceDate: Date | null;
+  }> {
+    const dealer = await this.prisma.customer.findUnique({
+      where: { id: dealerId },
+      select: {
+        id: true,
+        businessName: true,
+        postpaidEnabled: true,
+        billingMode: true,
+        billingFrozen: true,
+        billingFrozenAt: true,
+        billingFrozenReason: true,
+        postpaidCreditLimitCents: true,
+        stripeDefaultPaymentMethodId: true,
+        stripeSubscriptionId: true,
+      },
+    });
+
+    if (!dealer) {
+      throw new NotFoundException("Customer not found");
+    }
+
+    const outstandingCents = await this.computeOutstandingBalanceCents(dealerId);
+
+    // Count unpaid postpaid deliveries
+    const unpaidCount = await this.prisma.payment.count({
+      where: {
+        delivery: { customerId: dealerId },
+        paymentType: EnumPaymentPaymentType.POSTPAID,
+        status: {
+          in: [
+            EnumPaymentStatus.PENDING_STRIPE_USAGE,
+            EnumPaymentStatus.USAGE_REPORTED,
+            EnumPaymentStatus.CHARGE_FAILED,
+            EnumPaymentStatus.AUTHORIZED,
+            EnumPaymentStatus.INVOICED,
+          ],
+        },
+      },
+    });
+
+    // Look up the next upcoming invoice from Stripe (best-effort —
+    // returns null if Stripe is unconfigured or no open invoice exists).
+    // Stripe SDK v22 renamed `retrieveUpcoming` to `createPreview` —
+    // same behavior, new name.
+    let nextInvoiceDate: Date | null = null;
+    if (this.stripeService && dealer.stripeSubscriptionId) {
+      try {
+        const upcoming = await this.stripeService.stripe.invoices.createPreview({
+          subscription: dealer.stripeSubscriptionId,
+        });
+        // Stripe's next_payment_attempt is the timestamp we want.
+        const ts = (upcoming as any).next_payment_attempt;
+        if (ts) {
+          nextInvoiceDate = new Date(ts * 1000);
+        }
+      } catch (err: any) {
+        // Likely "no upcoming invoice" — log + continue.
+        this.logger.debug(
+          `getMyStatus: no upcoming invoice for dealer ${dealerId} (${err?.message})`,
+        );
+      }
+    }
+
+    return {
+      dealerId: dealer.id,
+      businessName: dealer.businessName,
+      postpaidEnabled: dealer.postpaidEnabled,
+      billingMode: dealer.billingMode,
+      billingFrozen: dealer.billingFrozen,
+      billingFrozenAt: dealer.billingFrozenAt,
+      billingFrozenReason: dealer.billingFrozenReason,
+      capCents: dealer.postpaidCreditLimitCents,
+      outstandingCents,
+      outstandingDollars: Number((outstandingCents / 100).toFixed(2)),
+      unpaidDeliveryCount: unpaidCount,
+      hasSavedPaymentMethod: Boolean(dealer.stripeDefaultPaymentMethodId),
+      nextInvoiceDate,
+    };
+  }
+
+  // ─── AUTO-RETRY CRON ────────────────────────────────────────────
+
+  /**
+   * Daily job: for every dealer that is currently frozen AND has a
+   * saved payment method, attempt to retry the most recent failed
+   * weekly invoice. If the retry succeeds, the payment_succeeded
+   * webhook will fire and clear the freeze. If it fails again, the
+   * webhook re-freezes (no-op due to the idempotency guard above).
+   *
+   * This unblocks dealers whose card failed once (e.g. expired) and
+   * who subsequently added a new card via the saved-card flow,
+   * without requiring admin intervention.
+   *
+   * Called by the @Cron decorator in PostpaidBillingController at
+   * 06:00 server time daily.
+   */
+  async autoRetryFrozenDealers(): Promise<void> {
+    if (!this.stripeService) return;
+
+    const frozenDealers = await this.prisma.customer.findMany({
+      where: {
+        billingFrozen: true,
+        stripeSubscriptionId: { not: null },
+        stripeDefaultPaymentMethodId: { not: null },
+        billingFrozenReason: FREEZE_REASONS.CHARGE_FAILED,
+      },
+      select: { id: true, businessName: true },
+    });
+
+    if (frozenDealers.length === 0) {
+      this.logger.debug("autoRetryFrozenDealers: no frozen dealers with saved PM");
+      return;
+    }
+
+    this.logger.log(
+      `autoRetryFrozenDealers: retrying ${frozenDealers.length} frozen dealer(s)`,
+    );
+
+    for (const dealer of frozenDealers) {
+      try {
+        await this.retryFailedCharge(dealer.id);
+      } catch (err: any) {
+        // Don't let one dealer's failure abort the rest.
+        this.logger.warn(
+          `autoRetryFrozenDealers: retry for dealer ${dealer.id} failed: ${err?.message}`,
+        );
+      }
+    }
+  }
+
+  // ─── invoice.finalized (debug hook) ──────────────────────────────
+
+  /**
+   * invoice.finalized — fires when Stripe transitions the weekly
+   * invoice from draft to open. Line items are now locked, the
+   * customer can see the invoice in their Stripe portal, and the
+   * charge will be attempted shortly.
+   *
+   * We use this only for logging — the actual PAID/FAILED transitions
+   * are handled by handleInvoicePaymentSucceeded / Failed.
+   */
+  async handleInvoiceFinalized(invoiceId: string): Promise<void> {
+    if (!this.stripeService) return;
+    try {
+      const invoice = await this.stripeService.stripe.invoices.retrieve(invoiceId);
+      const stripeCustomerId = this.resolveStripeCustomerId(invoice.customer);
+      const dealer = stripeCustomerId
+        ? await this.prisma.customer.findFirst({
+            where: { stripeCustomerId },
+            select: { id: true, businessName: true },
+          })
+        : null;
+      this.logger.log(
+        `invoice.finalized ${invoiceId}: $${(invoice.total / 100).toFixed(2)} ` +
+          `for dealer ${dealer?.businessName ?? dealer?.id ?? "?"} ` +
+          `(${(invoice as any).lines?.data?.length ?? 0} line items)`,
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `handleInvoiceFinalized failed for invoice ${invoiceId}: ${err?.message}`,
+      );
+    }
   }
 
   // ─── INTERNAL HELPERS ───────────────────────────────────────────

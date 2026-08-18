@@ -84,6 +84,10 @@ import {
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useDataMutation, authFetch, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 import NotificationBell from '@/components/notifications/NotificationBell'
+// Postpaid billing panel — dealer-facing read-only summary (outstanding,
+// next invoice, frozen banner, cap usage). Only rendered when the customer
+// has postpaidEnabled=true on their profile.
+import PostpaidStatusPanel from '@/components/postpaid/PostpaidStatusPanel'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import { BUSINESS_TZ } from '@/lib/timezone'
@@ -505,6 +509,16 @@ export default function DealerDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Postpaid billing status panel — only for BUSINESS customers on
+          weekly postpaid. Shows outstanding balance, next invoice date,
+          cap usage, and a frozen banner if the dealer's weekly charge
+          failed. The panel polls /api/postpaid-billing/me/status every
+          minute so changes (e.g. admin unfreeze, new invoice payment)
+          surface without a manual refresh. */}
+      {customerProfile?.postpaidEnabled && dealerId && (
+        <PostpaidStatusPanel customerId={dealerId} />
       )}
 
       {/* Stats Summary */}

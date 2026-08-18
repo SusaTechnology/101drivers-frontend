@@ -51,7 +51,24 @@ export type IPostpaidBillingService = {
   handleInvoiceUpcoming(invoiceId: string): Promise<void>;
   handleInvoicePaymentSucceeded(invoiceId: string): Promise<void>;
   handleInvoicePaymentFailed(invoiceId: string): Promise<void>;
+  handleInvoiceFinalized(invoiceId: string): Promise<void>;
   setCreditCap(dealerId: string, capCents: number | null): Promise<void>;
   unfreezeDealer(dealerId: string): Promise<void>;
   retryFailedCharge(dealerId: string): Promise<void>;
+  getMyStatus(dealerId: string): Promise<{
+    dealerId: string;
+    businessName: string | null;
+    postpaidEnabled: boolean;
+    billingMode: string | null;
+    billingFrozen: boolean;
+    billingFrozenAt: Date | null;
+    billingFrozenReason: string | null;
+    capCents: number | null;
+    outstandingCents: number;
+    outstandingDollars: number;
+    unpaidDeliveryCount: number;
+    hasSavedPaymentMethod: boolean;
+    nextInvoiceDate: Date | null;
+  }>;
+  autoRetryFrozenDealers(): Promise<void>;
 };
