@@ -965,12 +965,12 @@ async completeTrip(input: {
         });
       }
 
-      // ── Apply close penalty (if pickup PIN was verified) ──────────
-      // The penalty engine reads compliance.pickupCompletedAt to decide:
-      //   • PIN verified + applyPenalty=true → $48 penalty to customer,
+      // ── Apply close penalty (if a driver has committed) ───────────
+      // The penalty engine checks if the delivery status is BOOKED or
+      // ACTIVE (driver has accepted the job / is on the way):
+      //   • BOOKED/ACTIVE + applyPenalty=true → $48 penalty to customer,
       //     driver gets $48 payout, Payment.amount updated to $48.
-      //   • PIN not verified → no penalty, no payout (driver arrived but
-      //     didn't complete pickup — no compensation per product spec).
+      //   • LISTED (no driver committed) → no penalty, no payout.
       //   • Admin can override by passing applyPenalty=false.
       // See deliveryClosePenalty.engine.ts for the full rules.
       let penaltyResult: { applied: boolean; penaltyAmountDollars: number } | null = null;
@@ -998,7 +998,7 @@ async completeTrip(input: {
       });
 
       const note = penaltyResult?.applied
-        ? `${input.reason ?? "Delivery closed by customer"} — $${penaltyResult.penaltyAmountDollars} penalty applied (pickup PIN verified)`
+        ? `${input.reason ?? "Delivery closed by customer"} — $${penaltyResult.penaltyAmountDollars} penalty applied (driver committed)`
         : input.reason ?? "Delivery closed by customer";
 
       await tx.deliveryStatusHistory.create({

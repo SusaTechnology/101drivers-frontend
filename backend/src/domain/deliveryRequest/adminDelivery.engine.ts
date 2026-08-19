@@ -436,10 +436,10 @@ async assignDriver(input: {
       // ── Close penalty (admin opt-in) ──────────────────────────────
       // Applied AFTER the lock-in logic above so it can override the
       // Payment.amount and driver payout if the admin chose to apply the
-      // penalty. The penalty engine reads compliance.pickupCompletedAt
-      // (the "PIN verified" turning point) to decide whether a penalty
-      // is warranted. If applyPenalty=false (the default), no penalty.
-      // See deliveryClosePenalty.engine.ts for the full rules.
+      // penalty. The penalty engine checks if the delivery status is
+      // BOOKED or ACTIVE (driver has committed) to decide whether a
+      // penalty is warranted. If applyPenalty=false (the default), no
+      // penalty. See deliveryClosePenalty.engine.ts for the full rules.
       if (this.deliveryClosePenaltyEngine && input.applyPenalty === true) {
         try {
           await this.deliveryClosePenaltyEngine.applyClosePenalty(tx, {

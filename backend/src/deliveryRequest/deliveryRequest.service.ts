@@ -900,7 +900,7 @@ async adminCancelDelivery(input: {
  * cancel. Does NOT write anything.
  */
 async adminPreviewClosePenalty(deliveryId: string): Promise<{
-  pickupPinVerified: boolean;
+  driverCommitted: boolean;
   penaltyAmountDollars: number | null;
   driverId: string | null;
   outcome: "apply_penalty" | "no_penalty" | "no_driver";

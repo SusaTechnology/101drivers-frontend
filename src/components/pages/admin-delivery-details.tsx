@@ -294,7 +294,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
           toast.success('Delivery force-cancelled', {
             description: `Base fee $${delivery.lockInBaseFee.toFixed(2)} retained — driver keeps $${driverNet} (${driverSharePct}% share). Customer and driver have been emailed.`,
           });
-        } else if (applyPenalty && penaltyPreview?.pickupPinVerified) {
+        } else if (applyPenalty && penaltyPreview?.driverCommitted) {
           toast.success('Delivery cancelled with penalty', {
             description: `$48 penalty applied to the customer and paid to the driver.`,
           });
@@ -1550,13 +1550,14 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
             ) : null}
 
             {/* Close penalty preview — fetched when the dialog opens.
-                Shows the admin whether the pickup PIN was verified (penalty
-                warranted) and lets them choose whether to apply the $48
-                penalty fee to the customer + pay it to the driver. */}
+                Shows the admin whether a driver has committed to the
+                delivery (status is BOOKED or ACTIVE) and lets them choose
+                whether to apply the $48 penalty fee to the customer +
+                pay it to the driver. */}
             {penaltyPreviewLoading ? (
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                <p className="text-xs text-slate-500">Checking pickup PIN status…</p>
+                <p className="text-xs text-slate-500">Checking delivery status…</p>
               </div>
             ) : penaltyPreview ? (
               <div className={`p-3 rounded-xl border ${

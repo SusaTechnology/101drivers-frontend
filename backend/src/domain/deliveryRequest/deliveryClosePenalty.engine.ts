@@ -2,22 +2,27 @@
  * DeliveryClosePenaltyEngine
  * ─────────────────────────────────────────────────────────────────────────────
  * Purpose: Handle the penalty fee + driver payout when a delivery is CLOSED
- *          (or cancelled) because the vehicle couldn't be moved after the
- *          driver arrived and verified the pickup PIN.
+ *          (or cancelled) after a driver has committed to it (BOOKED or
+ *          ACTIVE status) but the vehicle couldn't be moved.
  *
  * RULES (per product spec):
- *   • First 60 minutes of waiting = free. Driver gets no payment for waiting.
- *   • If the driver verified the pickup PIN (compliance.pickupCompletedAt
- *     is set) AND the delivery is closed/cancelled because the vehicle
- *     cannot be moved → a base penalty fee is applied to the customer,
- *     and the driver receives a payout equal to the penalty fee.
- *   • If the pickup PIN was NOT verified → no penalty, no driver payout.
- *     (Driver arrived but didn't complete pickup — no compensation.)
+ *   • If the delivery is in BOOKED or ACTIVE status (a driver has accepted
+ *     the job and is on the way / at the pickup location) AND the delivery
+ *     is closed/cancelled because the vehicle cannot be moved → a base
+ *     penalty fee is applied to the customer, and the driver receives a
+ *     payout equal to the penalty fee.
+ *   • If the delivery is in LISTED status (no driver has accepted yet) →
+ *     no penalty, no driver payout. The driver hasn't committed any time
+ *     to this delivery.
+ *   • First 60 minutes of waiting = free. This rule is about the waiting
+ *     time AFTER the driver arrives — it doesn't affect whether the
+ *     penalty applies. The penalty is a flat fee for the driver's
+ *     commitment (travel + arrival), not for waiting.
  *   • Admin cancels: the admin should be ASKED whether to apply the
  *     penalty fee. This engine exposes `previewClosePenalty` so the admin
  *     UI can show the choice, and `applyClosePenalty` accepts an explicit
  *     `applyPenalty` boolean. The admin cancel flow should NOT auto-apply.
- *   • Dealer close: auto-applies the penalty if the PIN was verified.
+ *   • Dealer close: auto-applies the penalty if the status is BOOKED/ACTIVE.
  *
  * LOOSE COUPLING:
  *   • The penalty amount is a single constant (CLOSE_PENALTY_FEE_DOLLARS)
@@ -35,17 +40,11 @@
  *     releasing the original authorization hold; this engine only updates
  *     Payment.amount to the penalty amount (for postpaid invoicing) and
  *     captures the penalty (for prepaid, if a PaymentIntent exists).
- *
- * FUTURE EXTENSIBILITY:
- *   • To make the penalty tiered (e.g. $48 for first 60min, $96 after),
- *     replace CLOSE_PENALTY_FEE_DOLLARS with a function of
- *     (pickupCompletedAt, now). The signature of `applyClosePenalty`
- *     already accepts the delivery row, so the calculation can read
- *     pickupCompletedAt and compute the amount dynamically.
  */
 
 import { Injectable, Logger } from "@nestjs/common";
 import {
+  EnumDeliveryRequestStatus,
   EnumDriverPayoutStatus,
   EnumDriverPayoutType,
   EnumPaymentPaymentType,
@@ -58,11 +57,10 @@ import { businessNow } from "../../delivery-logistics/business-time";
 
 /**
  * The base penalty fee applied when a delivery is closed/cancelled after
- * the pickup PIN was verified but the vehicle couldn't be moved.
+ * a driver has committed to it (BOOKED/ACTIVE) but the vehicle couldn't
+ * be moved.
  *
  * Per product spec: $48. Change this single constant to adjust the fee.
- * (If a tiered structure is needed in the future, replace this with a
- * function — see the "FUTURE EXTENSIBILITY" note in the file header.)
  */
 export const CLOSE_PENALTY_FEE_DOLLARS = 48;
 
@@ -71,19 +69,23 @@ export const CLOSE_PENALTY_FEE_DOLLARS = 48;
  * whether to apply the penalty fee. Does NOT write anything.
  */
 export interface ClosePenaltyPreview {
-  /** True if the pickup PIN was verified (compliance.pickupCompletedAt set) */
-  pickupPinVerified: boolean;
-  /** The penalty amount in dollars (null if pickupPinVerified is false) */
+  /**
+   * True if the delivery is in BOOKED or ACTIVE status — a driver has
+   * committed to this delivery (accepted the job, is on the way or at
+   * the pickup location). The penalty is warranted in this case.
+   */
+  driverCommitted: boolean;
+  /** The penalty amount in dollars (null if driverCommitted is false) */
   penaltyAmountDollars: number | null;
-  /** The penalty amount in cents (null if pickupPinVerified is false) */
+  /** The penalty amount in cents (null if driverCommitted is false) */
   penaltyAmountCents: number | null;
   /** The driver who would receive the payout (null if no active assignment) */
   driverId: string | null;
   /**
    * What would happen if applyClosePenalty is called:
-   *   - "apply_penalty"    → PIN verified, penalty + driver payout will be applied
-   *   - "no_penalty"       → PIN not verified, no penalty, no payout
-   *   - "no_driver"        → PIN verified but no active driver assignment (no payout)
+   *   - "apply_penalty"    → driver committed, penalty + driver payout will be applied
+   *   - "no_penalty"       → no driver committed (LISTED status), no penalty, no payout
+   *   - "no_driver"        → driver committed but no active driver assignment (no payout)
    */
   outcome: "apply_penalty" | "no_penalty" | "no_driver";
   /** Human-readable summary for the admin UI */
@@ -124,8 +126,9 @@ export class DeliveryClosePenaltyEngine {
    * Preview what would happen if the penalty is applied.
    *
    * Called by the admin UI BEFORE the admin confirms the cancel — so the
-   * admin can see "PIN was verified, $48 penalty will be applied to the
-   * dealer and paid to the driver. Apply penalty?" with Yes/No buttons.
+   * admin can see "A driver has committed to this delivery, $48 penalty
+   * will be applied to the dealer and paid to the driver. Apply penalty?"
+   * with Yes/No buttons.
    *
    * Does NOT write anything. Safe to call multiple times.
    */
@@ -135,9 +138,6 @@ export class DeliveryClosePenaltyEngine {
       select: {
         id: true,
         status: true,
-        compliance: {
-          select: { pickupCompletedAt: true },
-        },
         assignments: {
           where: { unassignedAt: null },
           orderBy: { assignedAt: "desc" },
@@ -149,7 +149,7 @@ export class DeliveryClosePenaltyEngine {
 
     if (!delivery) {
       return {
-        pickupPinVerified: false,
+        driverCommitted: false,
         penaltyAmountDollars: null,
         penaltyAmountCents: null,
         driverId: null,
@@ -158,39 +158,46 @@ export class DeliveryClosePenaltyEngine {
       };
     }
 
-    const pickupPinVerified = delivery.compliance?.pickupCompletedAt != null;
+    // A driver has "committed" to the delivery if the status is BOOKED
+    // (driver accepted the job) or ACTIVE (driver is on the way / at
+    // the pickup location). In these states, the driver has invested
+    // time and effort — the penalty compensates them for that commitment.
+    // In LISTED status, no driver has accepted yet → no penalty.
+    const driverCommitted =
+      delivery.status === EnumDeliveryRequestStatus.BOOKED ||
+      delivery.status === EnumDeliveryRequestStatus.ACTIVE;
     const driverId = delivery.assignments[0]?.driverId ?? null;
 
-    if (!pickupPinVerified) {
+    if (!driverCommitted) {
       return {
-        pickupPinVerified: false,
+        driverCommitted: false,
         penaltyAmountDollars: null,
         penaltyAmountCents: null,
         driverId,
         outcome: "no_penalty",
         summary:
-          "Pickup PIN was not verified. No penalty fee will be applied and the driver will not receive a payout.",
+          "No driver has committed to this delivery yet (status is not BOOKED or ACTIVE). No penalty fee will be applied and the driver will not receive a payout.",
       };
     }
 
     if (!driverId) {
       return {
-        pickupPinVerified: true,
+        driverCommitted: true,
         penaltyAmountDollars: CLOSE_PENALTY_FEE_DOLLARS,
         penaltyAmountCents: CLOSE_PENALTY_FEE_DOLLARS * 100,
         driverId: null,
         outcome: "no_driver",
-        summary: `Pickup PIN was verified, but there is no active driver assignment. The $${CLOSE_PENALTY_FEE_DOLLARS} penalty fee can be applied to the customer, but no driver payout will be created.`,
+        summary: `A driver has committed to this delivery (status: ${delivery.status}), but there is no active driver assignment. The $${CLOSE_PENALTY_FEE_DOLLARS} penalty fee can be applied to the customer, but no driver payout will be created.`,
       };
     }
 
     return {
-      pickupPinVerified: true,
+      driverCommitted: true,
       penaltyAmountDollars: CLOSE_PENALTY_FEE_DOLLARS,
       penaltyAmountCents: CLOSE_PENALTY_FEE_DOLLARS * 100,
       driverId,
       outcome: "apply_penalty",
-      summary: `Pickup PIN was verified. A $${CLOSE_PENALTY_FEE_DOLLARS} penalty fee will be applied to the customer and paid to the driver.`,
+      summary: `A driver has committed to this delivery (status: ${delivery.status}). A $${CLOSE_PENALTY_FEE_DOLLARS} penalty fee will be applied to the customer and paid to the driver.`,
     };
   }
 
@@ -233,10 +240,11 @@ export class DeliveryClosePenaltyEngine {
   ): Promise<ApplyClosePenaltyResult> {
     const preview = await this.previewClosePenalty(input.deliveryId);
 
-    // If the admin chose not to apply the penalty, or the PIN wasn't
-    // verified, do nothing. The caller still proceeds with the status
-    // transition (CLOSED/CANCELLED) — we just don't touch payment/payout.
-    if (!input.applyPenalty || !preview.pickupPinVerified) {
+    // If the admin chose not to apply the penalty, or no driver has
+    // committed (status is not BOOKED/ACTIVE), do nothing. The caller
+    // still proceeds with the status transition (CLOSED/CANCELLED) — we
+    // just don't touch payment/payout.
+    if (!input.applyPenalty || !preview.driverCommitted) {
       return {
         applied: false,
         penaltyAmountDollars: 0,

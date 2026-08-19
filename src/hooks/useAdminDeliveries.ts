@@ -446,12 +446,13 @@ export function useForceCancel(deliveryId: string) {
 /**
  * Close penalty preview — returned by GET /api/deliveryRequests/:id/close-penalty-preview.
  *
- * Shows whether the pickup PIN was verified (penalty warranted), the penalty
- * amount, and a human-readable summary. Used by the admin cancel dialog to
- * let the admin decide whether to apply the $48 penalty.
+ * Shows whether a driver has committed to the delivery (status is BOOKED or
+ * ACTIVE), the penalty amount, and a human-readable summary. Used by the
+ * admin cancel dialog to let the admin decide whether to apply the $48
+ * penalty.
  */
 export interface ClosePenaltyPreview {
-  pickupPinVerified: boolean;
+  driverCommitted: boolean;
   penaltyAmountDollars: number | null;
   penaltyAmountCents: number | null;
   driverId: string | null;
