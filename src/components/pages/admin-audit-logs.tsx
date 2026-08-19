@@ -443,7 +443,7 @@ const formatFieldLabel = (key: string): string => {
     // Pricing fields
     pricingMode: 'Pricing Mode',
     baseFee: 'Base Fee',
-    perMileRate: 'Per Mile Rate',
+    perMileRate: 'Rate per Mile',
     insuranceFee: 'Insurance Fee',
     transactionFeePct: 'Transaction Fee %',
     transactionFeeFixed: 'Fixed Transaction Fee',

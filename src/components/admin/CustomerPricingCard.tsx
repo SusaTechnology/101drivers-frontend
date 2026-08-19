@@ -69,7 +69,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const MODE_LABELS: Record<string, string> = {
-  PER_MILE: 'Per Mile',
+  PER_MILE: 'Flat Pricing',
   FLAT_TIER: 'Flat Tier',
   CATEGORY_ABC: 'Category A/B/C',
 };
@@ -247,7 +247,11 @@ function ReadOnlyPricingSummary({
         </div>
       </div>
 
-      {/* Mode override */}
+      {/* Mode override display — HIDDEN per product decision (the picker
+          above is also hidden). Legacy overrides are silently cleared on
+          the next save (handleSubmit sends pricingModeOverride: null).
+          To re-enable: uncomment this block. */}
+      {/*
       {customer.pricingModeOverride && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-900/30">
           <div className="text-xs">
@@ -263,6 +267,7 @@ function ReadOnlyPricingSummary({
           </div>
         </div>
       )}
+      */}
 
       {/* Financial summary grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -270,7 +275,7 @@ function ReadOnlyPricingSummary({
         {config.pricingMode === 'PER_MILE' && (
           <>
             <StatBox
-              label="Per Mile"
+              label="Rate per Mile"
               value={config.perMileRate != null ? `$${config.perMileRate.toFixed(2)}` : '—'}
             />
             <StatBox
@@ -401,7 +406,11 @@ function InlineEditPricing({
     assignMutation.mutate({
       pathParams: { id: customer.id },
       pricingConfigId: selectedConfigId,
-      pricingModeOverride: pricingModeOverride === 'null' ? null : pricingModeOverride,
+      // Pricing Mode Override is hidden in the UI per product decision —
+      // always send null so the backend clears any stale override. If
+      // product decides to re-enable the override picker, restore the
+      // original expression: pricingModeOverride === 'null' ? null : pricingModeOverride
+      pricingModeOverride: null,
       postpaidEnabled,
       actorUserId: user?.id || 'admin_user',
       note: note.trim() || undefined,
@@ -447,7 +456,15 @@ function InlineEditPricing({
         )}
       </div>
 
-      {/* Mode override */}
+      {/* Mode override — HIDDEN per product decision.
+          The pricing config already defines the mode (Flat Pricing or
+          Category A/B/C). If a dealer needs a different mode, switch their
+          pricing config — no need for a per-customer override.
+          The backend field (pricingModeOverride) remains in the schema and
+          the submitted payload (always sent as null below), so legacy
+          overrides keep working until admins clear them.
+          To re-enable: uncomment this block. */}
+      {/*
       <div className="space-y-2">
         <Label className="text-sm font-bold">Pricing Mode Override</Label>
         <Select value={pricingModeOverride} onValueChange={setPricingModeOverride}>
@@ -456,18 +473,11 @@ function InlineEditPricing({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="null">No override (use config's mode)</SelectItem>
-            <SelectItem value="PER_MILE">Per Mile</SelectItem>
+            <SelectItem value="PER_MILE">Flat Pricing</SelectItem>
             <SelectItem value="CATEGORY_ABC">Category A/B/C</SelectItem>
-            {/* FLAT_TIER is DEPRECATED — hidden from the picker so admins
-                can't accidentally select it. But if a customer already has
-                this value set from a prior assignment, we still render the
-                option so the dropdown can show the current state and the
-                admin can switch to a supported mode. */}
-            {pricingModeOverride === 'FLAT_TIER' && (
-              <SelectItem value="FLAT_TIER" className="text-amber-600 dark:text-amber-400">
-                Flat Tier (deprecated — switch to Per Mile)
-              </SelectItem>
-            )}
+            <SelectItem value="FLAT_TIER" className="text-amber-600 dark:text-amber-400">
+              Flat Tier (deprecated — switch to Flat Pricing)
+            </SelectItem>
           </SelectContent>
         </Select>
         <p className="text-xs text-slate-500">
@@ -475,6 +485,7 @@ function InlineEditPricing({
           "No override" to use the config's default.
         </p>
       </div>
+      */}
 
       {/* Postpaid toggle */}
       <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
@@ -872,13 +883,17 @@ function PreviewQuoteDialog({
             </div>
           )}
 
-          {/* Customer override notice */}
+          {/* Customer override notice — HIDDEN per product decision
+              (Pricing Mode Override is no longer surfaced in the UI).
+              To re-enable: uncomment this block. */}
+          {/*
           {customerOverride && customerOverride !== 'null' && (
             <div className="text-xs text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
               <AlertCircle className="w-3.5 h-3.5" />
               Using customer's mode override: {MODE_LABELS[customerOverride] || customerOverride}
             </div>
           )}
+          */}
         </div>
 
         <DialogFooter>

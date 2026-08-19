@@ -11,6 +11,13 @@
 //
 // No "set cap" / "unfreeze" / "retry charge" buttons — those are admin-only
 // and live in the admin user-detail page.
+//
+// NOTE: The "Cap" stat tile is intentionally commented out per product
+// decision — caps are not shown to dealers for now. The backend logic
+// (postpaidCreditLimitCents / canDealerCreateDelivery cap check) remains
+// in place; admins can still set a cap via the admin API. When product
+// decides to surface caps to dealers again, uncomment the Cap block below
+// and switch the grid back to grid-cols-4.
 
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -150,7 +157,10 @@ export default function PostpaidStatusPanel({ customerId }: { customerId: string
               </Button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Cap tile is commented out per product decision — caps are not
+                shown to dealers for now. Switch back to grid-cols-4 when
+                re-enabling. */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Outstanding balance */}
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -163,9 +173,13 @@ export default function PostpaidStatusPanel({ customerId }: { customerId: string
                 <div className="text-[10px] text-slate-400">
                   {status.unpaidDeliveryCount} unpaid {status.unpaidDeliveryCount === 1 ? 'delivery' : 'deliveries'}
                 </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+                  Total amount owed for completed deliveries not yet charged to your card.
+                </div>
               </div>
 
-              {/* Cap usage (read-only; cap set by admin) */}
+              {/* Cap usage — HIDDEN per product decision (caps not shown to dealers for now)
+                  To re-enable: uncomment this block and switch the grid above to grid-cols-4.
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <Package className="h-3 w-3" />
@@ -177,7 +191,11 @@ export default function PostpaidStatusPanel({ customerId }: { customerId: string
                 <div className="text-[10px] text-slate-400">
                   {status.capCents === null ? 'No limit set' : `$${status.outstandingDollars.toFixed(2)} used`}
                 </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+                  Maximum outstanding balance allowed before new deliveries are blocked.
+                </div>
               </div>
+              */}
 
               {/* Next invoice date */}
               <div className="space-y-1">
@@ -202,6 +220,9 @@ export default function PostpaidStatusPanel({ customerId }: { customerId: string
                       })
                     : 'No upcoming invoice'}
                 </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+                  When Stripe will next charge your saved card for the outstanding balance.
+                </div>
               </div>
 
               {/* Saved card status */}
@@ -215,6 +236,9 @@ export default function PostpaidStatusPanel({ customerId }: { customerId: string
                 </div>
                 <div className="text-[10px] text-slate-400">
                   Charged weekly by Stripe
+                </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+                  The card Stripe charges automatically when your weekly invoice is created.
                 </div>
               </div>
             </div>

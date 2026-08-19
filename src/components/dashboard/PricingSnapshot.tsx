@@ -33,7 +33,7 @@ interface PricingSnapshotProps {
 const MODE_CONFIG = {
   PER_MILE: {
     icon: Calculator,
-    label: 'Per Mile',
+    label: 'Flat Pricing',
     color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
   },
   FLAT_TIER: {
@@ -122,7 +122,7 @@ export function PricingSnapshot({ data, isLoading }: PricingSnapshotProps) {
               </div>
               {data.pricingMode === 'PER_MILE' && data.perMileRate && (
                 <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800">
-                  <p className="text-[10px] font-bold text-teal-600 uppercase">Per Mile Rate</p>
+                  <p className="text-[10px] font-bold text-teal-600 uppercase">Rate per Mile</p>
                   <p className="text-lg font-black text-teal-700 dark:text-teal-300">
                     {formatDashboardCurrency(data.perMileRate)}/mi
                   </p>

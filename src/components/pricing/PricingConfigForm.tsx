@@ -457,7 +457,7 @@ export function PricingConfigForm({
               <Input
                 id="name"
                 {...register('name')}
-                placeholder="e.g., Default Per Mile Pricing"
+                placeholder="e.g., Default Flat Pricing"
                 className={cn(
                   "w-full h-11 rounded-2xl border px-4 text-sm",
                   errors.name ? "border-red-500" : "border-slate-200 dark:border-slate-700"
@@ -500,7 +500,7 @@ export function PricingConfigForm({
                       <SelectItem value="PER_MILE">
                         <div className="flex items-center gap-2">
                           <Calculator className="w-4 h-4 text-primary" />
-                          Flat (with extra mileage)
+                          Flat Pricing
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -555,7 +555,7 @@ export function PricingConfigForm({
               <div className="flex items-start gap-3">
                 <Calculator className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Flat (with extra mileage)</div>
+                  <div className="font-bold text-slate-900 dark:text-white">Flat Pricing</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                     Flat fee covers the first <strong>flatMiles</strong> miles, then a per-mile rate applies.
                     Formula: <code className="font-mono text-[11px]">baseFee + max(0, miles − flatMiles) × perMileRate</code>.
@@ -628,7 +628,7 @@ export function PricingConfigForm({
       {pricingMode === 'PER_MILE' && (
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
           <CardHeader className="border-b border-slate-100 dark:border-slate-800">
-            <CardTitle className="text-xl font-black">Per Mile Rate</CardTitle>
+            <CardTitle className="text-xl font-black">Flat Pricing Rate</CardTitle>
             <CardDescription className="text-sm mt-1">
               Set the flat fee, free miles included, and per-mile rate for this configuration
             </CardDescription>
@@ -858,7 +858,7 @@ export function PricingConfigForm({
                       </div>
                       <div>
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
-                          Per Mile Rate ($)
+                          Rate per Mile ($)
                         </Label>
                         <div className="relative">
                           <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

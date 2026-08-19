@@ -117,7 +117,7 @@ const modeBadgeStyles: Record<PricingMode, { icon: React.ElementType; className:
   PER_MILE: {
     icon: Calculator,
     className: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400 border-teal-200 dark:border-teal-800',
-    label: 'Per Mile',
+    label: 'Flat Pricing',
   },
 };
 
@@ -248,7 +248,7 @@ function ModeSpecificSection({ config }: { config: PricingConfig }) {
           <div className="w-8 h-8 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
             <Calculator className="w-4 h-4 text-teal-600 dark:text-teal-400" />
           </div>
-          <h4 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">Per-Mile Pricing</h4>
+          <h4 className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">Flat Pricing</h4>
         </div>
         <div className="rounded-2xl bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-900/30 p-6">
           <div className="text-center">
@@ -256,7 +256,7 @@ function ModeSpecificSection({ config }: { config: PricingConfig }) {
             <div className="text-4xl font-black text-teal-700 dark:text-teal-300">
               ${perMileRate.toFixed(2)}
             </div>
-            <div className="text-sm text-teal-600 dark:text-teal-400 font-bold mt-1">per mile</div>
+            <div className="text-sm text-teal-600 dark:text-teal-400 font-bold mt-1">per extra mile</div>
           </div>
 
           <div className="mt-4 pt-4 border-t border-teal-200 dark:border-teal-900/30 grid grid-cols-2 gap-4 text-center">
@@ -394,7 +394,7 @@ function ModeSpecificSection({ config }: { config: PricingConfig }) {
                     <div className="text-lg font-black text-slate-900 dark:text-white">${rule.baseFee?.toFixed(2) ?? '—'}</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Per Mile</div>
+                    <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Rate</div>
                     <div className="text-lg font-black text-slate-900 dark:text-white">${rule.perMileRate?.toFixed(2) ?? '—'}<span className="text-xs font-medium text-slate-400">/mi</span></div>
                   </div>
                   <div className="space-y-1">
@@ -584,7 +584,9 @@ export function PricingConfigList({
     const user = getUser();
     const payload = {
       pricingConfigId: selectedConfigId,
-      pricingModeOverride: pricingModeOverride === 'null' ? null : pricingModeOverride,
+      // Pricing Mode Override is hidden in the UI per product decision —
+      // always send null so the backend clears any stale override.
+      pricingModeOverride: null,
       postpaidEnabled,
       actorUserId: user?.id || 'admin_user',
       note: note.trim() || undefined,
@@ -630,7 +632,9 @@ export function PricingConfigList({
     bulkAssignMutation.mutate({
       pricingConfigId: selectedConfigId,
       customerIds: bulkSelectedCustomerIds,
-      pricingModeOverride: bulkPricingModeOverride === 'null' ? null : bulkPricingModeOverride,
+      // Pricing Mode Override is hidden in the UI per product decision —
+      // always send null so the backend clears any stale override.
+      pricingModeOverride: null,
       postpaidEnabled: bulkPostpaidEnabled,
       note: bulkNote.trim() || null,
       actorUserId: user?.id || 'admin_user',
@@ -1139,7 +1143,14 @@ export function PricingConfigList({
               </div>
             )}
 
-            {/* Pricing Mode Override */}
+            {/* Pricing Mode Override — HIDDEN per product decision.
+                The pricing config already defines the mode. If a dealer needs
+                a different mode, switch their pricing config — no need for a
+                per-customer override. The submitted payload always sends
+                pricingModeOverride: null (see handleSubmit) so legacy
+                overrides are cleared on the next save.
+                To re-enable: uncomment this block. */}
+            {/*
             <div className="space-y-2">
               <label className="text-sm font-medium">Pricing Mode Override</label>
               <Select value={pricingModeOverride} onValueChange={setPricingModeOverride}>
@@ -1148,7 +1159,7 @@ export function PricingConfigList({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="null">No override</SelectItem>
-                  <SelectItem value="PER_MILE">Per Mile</SelectItem>
+                  <SelectItem value="PER_MILE">Flat Pricing</SelectItem>
                   <SelectItem value="CATEGORY_ABC">Category A/B/C</SelectItem>
                 </SelectContent>
               </Select>
@@ -1156,6 +1167,7 @@ export function PricingConfigList({
                 Override the pricing mode for this customer. Leave as &ldquo;No override&rdquo; to use the configuration&rsquo;s mode.
               </p>
             </div>
+            */}
 
             {/* Postpaid Enabled */}
             <div className="flex items-center space-x-2">
@@ -1251,11 +1263,17 @@ export function PricingConfigList({
                           Postpaid
                         </Badge>
                       )}
+                      {/* Pricing Mode Override badge — HIDDEN per product
+                          decision. Legacy overrides are cleared on the next
+                          save (handleSubmit sends pricingModeOverride: null).
+                          To re-enable: uncomment this block. */}
+                      {/*
                       {customer.pricingModeOverride && (
                         <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 text-[10px]">
                           {customer.pricingModeOverride}
                         </Badge>
                       )}
+                      */}
                     </div>
                   </div>
                 ))}
@@ -1384,7 +1402,10 @@ export function PricingConfigList({
                 )}
               </div>
 
-              {/* Pricing Mode Override */}
+              {/* Pricing Mode Override — HIDDEN per product decision.
+                  The pricing config already defines the mode. To re-enable:
+                  uncomment this block. */}
+              {/*
               <div className="space-y-2">
                 <label className="text-sm font-medium">Pricing Mode Override (applies to all)</label>
                 <Select value={bulkPricingModeOverride} onValueChange={setBulkPricingModeOverride}>
@@ -1393,11 +1414,12 @@ export function PricingConfigList({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="null">No override</SelectItem>
-                    <SelectItem value="PER_MILE">Per Mile</SelectItem>
+                    <SelectItem value="PER_MILE">Flat Pricing</SelectItem>
                     <SelectItem value="CATEGORY_ABC">Category A/B/C</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              */}
 
               {/* Postpaid — tri-state: null = leave existing, true = enable, false = disable */}
               <div className="space-y-2">
