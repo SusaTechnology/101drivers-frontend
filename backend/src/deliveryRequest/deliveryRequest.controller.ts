@@ -196,6 +196,7 @@ async adminForceCancelDelivery(
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
     reason: body.reason,
+    applyPenalty: body.applyPenalty ?? false,
   });
 }
 

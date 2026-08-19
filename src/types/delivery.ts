@@ -202,6 +202,13 @@ export interface DeliveryListItem {
    * Used by the frontend to show "Closed by Admin/Customer".
    */
   closedByActorRole?: string | null;
+
+  /**
+   * Actor role of whoever cancelled the delivery (ADMIN, PRIVATE_CUSTOMER,
+   * BUSINESS_CUSTOMER, DEALER). null if not cancelled or unknown.
+   * Used by the frontend to show "Cancelled by Admin/Dealer".
+   */
+  cancelledByActorRole?: string | null;
 }
 
 // Filters applied
@@ -480,6 +487,13 @@ export interface ApproveComplianceResponse {
 export interface ForceCancelRequest {
   actorUserId: string;
   reason: string;
+  /**
+   * Whether to apply the $48 close penalty fee. The admin UI should call
+   * GET /api/deliveryRequests/:id/close-penalty-preview first to show
+   * the admin the choice, then pass the admin's decision here.
+   * Default: false (admin must explicitly opt in).
+   */
+  applyPenalty?: boolean;
 }
 
 export interface ForceCancelResponse {

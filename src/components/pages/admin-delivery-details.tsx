@@ -45,11 +45,12 @@ import { Navbar } from '../shared/layout/testNavbar';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
-import { useAdminDeliveryDetail, useDeliveryActions, useDriverLookup } from '@/hooks/useAdminDeliveries';
+import { useAdminDeliveryDetail, useDeliveryActions, useDriverLookup, useClosePenaltyPreview } from '@/hooks/useAdminDeliveries';
 import {
   getStatusColor,
   getDisplayStatus,
   getClosedByLabel,
+  getCancelledByLabel,
   getServiceTypeLabel,
   getTrackingStatusLabel,
   formatMiles,
@@ -110,7 +111,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   
   // Action mutations
   const deliveryActions = useDeliveryActions(deliveryId);
-  
+
   // Refund mutation
   const refundMutation = useDataMutation({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/refund/:paymentId`,
@@ -139,6 +140,12 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
   const [photoDialogSrc, setPhotoDialogSrc] = useState<string>('');
   const [photoDialogTitle, setPhotoDialogTitle] = useState<string>('');
+
+  // Fetch the close penalty preview only when the cancel dialog is open.
+  // Returns whether the pickup PIN was verified (penalty warranted) and
+  // the penalty amount, so the admin can make an informed choice.
+  const { data: penaltyPreview, isLoading: penaltyPreviewLoading } =
+    useClosePenaltyPreview(deliveryId, forceCancelOpen);
   
   // Form states
   const [assignDriverForm, setAssignDriverForm] = useState({
@@ -147,6 +154,11 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   });
   const [approveComplianceNote, setApproveComplianceNote] = useState('VIN and evidence reviewed by operations');
   const [forceCancelReason, setForceCancelReason] = useState('');
+  // Whether the admin chose to apply the $48 close penalty. Default: false.
+  // The penalty preview is fetched when the dialog opens (useClosePenaltyPreview
+  // below) so the admin can see whether the pickup PIN was verified before
+  // deciding.
+  const [applyPenalty, setApplyPenalty] = useState(false);
   const [legalHoldForm, setLegalHoldForm] = useState({
     legalHold: true,
     note: 'Preserve delivery evidence pending formal review',
@@ -271,6 +283,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
     const payload: ForceCancelRequest = {
       actorUserId,
       reason: forceCancelReason,
+      applyPenalty,
     };
     
     deliveryActions.forceCancel.mutate(payload, {
@@ -281,11 +294,16 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
           toast.success('Delivery force-cancelled', {
             description: `Base fee $${delivery.lockInBaseFee.toFixed(2)} retained — driver keeps $${driverNet} (${driverSharePct}% share). Customer and driver have been emailed.`,
           });
+        } else if (applyPenalty && penaltyPreview?.pickupPinVerified) {
+          toast.success('Delivery cancelled with penalty', {
+            description: `$48 penalty applied to the customer and paid to the driver.`,
+          });
         } else {
           toast.success('Delivery cancelled successfully');
         }
         setForceCancelOpen(false);
         setForceCancelReason('');
+        setApplyPenalty(false);
         refetch();
       },
       onError: (err) => {
@@ -363,6 +381,14 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
   // drop-off evidence is shown as "CLOSED" instead of "CANCELLED".
   const displayStatus = delivery ? getDisplayStatus(delivery) : '';
   const closedByLabel = delivery ? getClosedByLabel(delivery.closedByActorRole) : null;
+  const cancelledByLabel = delivery ? getCancelledByLabel(delivery.cancelledByActorRole) : null;
+
+  // Terminal statuses — no cancel/close actions should be available.
+  // The admin can still view details, but the action buttons are hidden.
+  const isTerminalStatus =
+    delivery?.status === 'CANCELLED' ||
+    delivery?.status === 'CLOSED' ||
+    delivery?.status === 'COMPLETED';
 
   // Build the evidence list for a given phase, ensuring DASHBOARD_PHOTO
   // is always present (as a "No photo" placeholder if missing).
@@ -515,7 +541,9 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 label={
                   displayStatus === 'CLOSED'
                     ? (closedByLabel ?? 'Closed')
-                    : displayStatus
+                    : displayStatus === 'CANCELLED'
+                      ? (cancelledByLabel ?? 'Cancelled')
+                      : displayStatus
                 }
               />
               {delivery.scheduling?.isUrgent && (
@@ -561,10 +589,15 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 Open Dispute
               </Button>
             )}
-            <Button variant="destructive" onClick={handleForceCancel} className="rounded-xl bg-slate-900 text-white hover:bg-slate-800">
-              <Ban className="w-4 h-4 mr-1" />
-              Force Cancel
-            </Button>
+            {/* Only show the Cancel button for non-terminal deliveries.
+                CANCELLED / CLOSED / COMPLETED deliveries can't be cancelled
+                again — the admin should see the status badge instead. */}
+            {!isTerminalStatus && (
+              <Button variant="destructive" onClick={handleForceCancel} className="rounded-xl bg-slate-900 text-white hover:bg-slate-800">
+                <Ban className="w-4 h-4 mr-1" />
+                Cancel Delivery
+              </Button>
+            )}
           </div>
         </section>
 
@@ -1243,10 +1276,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                   <Scale className="w-4 h-4 mr-2" />
                   Apply Legal Hold
                 </Button>
-                <Button variant="destructive" onClick={handleForceCancel} className="w-full rounded-xl bg-slate-900 text-white hover:bg-slate-800">
-                  <Ban className="w-4 h-4 mr-2" />
-                  Force Cancel
-                </Button>
+                {/* Only show the Cancel button for non-terminal deliveries. */}
+                {!isTerminalStatus && (
+                  <Button variant="destructive" onClick={handleForceCancel} className="w-full rounded-xl bg-slate-900 text-white hover:bg-slate-800">
+                    <Ban className="w-4 h-4 mr-2" />
+                    Cancel Delivery
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -1462,13 +1498,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
         </DialogContent>
       </Dialog>
 
-      {/* Force Cancel Dialog */}
+      {/* Cancel Delivery Dialog */}
       <AlertDialog open={forceCancelOpen} onOpenChange={setForceCancelOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-rose-600">
               <Ban className="w-5 h-5" />
-              Force Cancel Delivery
+              Cancel Delivery
             </AlertDialogTitle>
             <AlertDialogDescription>
               {delivery?.lockedInAt && delivery?.lockInBaseFee
@@ -1481,7 +1517,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               <Label htmlFor="cancelReason">Reason for Cancellation</Label>
               <Textarea
                 id="cancelReason"
-                placeholder="Enter reason for force cancellation (required)"
+                placeholder="Enter reason for cancellation (required)"
                 value={forceCancelReason}
                 onChange={(e) => setForceCancelReason(e.target.value)}
                 className="rounded-xl border-rose-200 focus:border-rose-400"
@@ -1512,6 +1548,52 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
                 </p>
               </div>
             ) : null}
+
+            {/* Close penalty preview — fetched when the dialog opens.
+                Shows the admin whether the pickup PIN was verified (penalty
+                warranted) and lets them choose whether to apply the $48
+                penalty fee to the customer + pay it to the driver. */}
+            {penaltyPreviewLoading ? (
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                <p className="text-xs text-slate-500">Checking pickup PIN status…</p>
+              </div>
+            ) : penaltyPreview ? (
+              <div className={`p-3 rounded-xl border ${
+                penaltyPreview.outcome === 'apply_penalty'
+                  ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'
+                  : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+              }`}>
+                <p className={`text-xs font-semibold ${
+                  penaltyPreview.outcome === 'apply_penalty'
+                    ? 'text-blue-700 dark:text-blue-400'
+                    : 'text-slate-600 dark:text-slate-400'
+                }`}>
+                  Close penalty
+                </p>
+                <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
+                  {penaltyPreview.summary}
+                </p>
+                {penaltyPreview.outcome === 'apply_penalty' && (
+                  <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={applyPenalty}
+                      onChange={(e) => setApplyPenalty(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-slate-700 dark:text-slate-300">
+                      Apply <strong>${penaltyPreview.penaltyAmountDollars?.toFixed(2)}</strong> penalty to customer and pay it to the driver
+                    </span>
+                  </label>
+                )}
+                {penaltyPreview.outcome === 'no_driver' && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    No active driver assignment — the penalty can be charged but no driver payout will be created.
+                  </p>
+                )}
+              </div>
+            ) : null}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
@@ -1523,7 +1605,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               {deliveryActions.forceCancel.isPending && (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               )}
-              Force Cancel
+              Cancel Delivery
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1384,6 +1384,19 @@ export class ForceCancelDeliveryAdminBody {
   @IsOptional()
   @IsString()
   actorUserId?: string | null;
+
+  @swagger.ApiProperty({
+    required: false,
+    default: false,
+    description:
+      "Whether to apply the $48 close penalty fee to the customer and pay it to the driver. " +
+      "Admin should call GET /api/deliveryRequests/:id/close-penalty-preview first to see " +
+      "whether the pickup PIN was verified (penalty is warranted). Default: false (admin " +
+      "must explicitly opt in — penalty is NOT auto-applied on admin force-cancel).",
+  })
+  @IsOptional()
+  @IsBoolean()
+  applyPenalty?: boolean;
 }
 
 export class OpenDisputeAdminBody {

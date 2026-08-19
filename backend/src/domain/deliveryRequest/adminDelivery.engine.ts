@@ -557,6 +557,16 @@ async assignDriver(input: {
     deliveryId: string;
     actorUserId?: string | null;
     reason: string;
+    /**
+     * Whether to apply the close penalty fee ($48 to customer, $48 to driver).
+     * Admin UI should call `previewClosePenalty` first to show the admin
+     * the choice, then pass the admin's decision here.
+     *
+     * Default: false — admin must explicitly opt in. This is intentional:
+     * the product spec says "don't auto-apply on admin cancel; let the
+     * admin decide."
+     */
+    applyPenalty?: boolean;
   }): Promise<void> {
     const delivery = await this.prisma.deliveryRequest.findUnique({
       where: { id: input.deliveryId },
@@ -764,6 +774,30 @@ async assignDriver(input: {
             legalHold: false,
           },
         });
+      }
+
+      // ── Close penalty (admin opt-in) ──────────────────────────────
+      // Same as in cancelDelivery above. Applied BEFORE the status update
+      // so it can override Payment.amount and create the driver payout.
+      // If applyPenalty=false (the default), no penalty. The penalty engine
+      // reads compliance.pickupCompletedAt to decide whether a penalty is
+      // warranted even when the admin opts in.
+      if (this.deliveryClosePenaltyEngine && input.applyPenalty === true) {
+        try {
+          await this.deliveryClosePenaltyEngine.applyClosePenalty(tx, {
+            deliveryId: input.deliveryId,
+            applyPenalty: true,
+            actorUserId: input.actorUserId ?? null,
+            actorRole: "ADMIN",
+            reason: input.reason,
+          });
+        } catch (err: any) {
+          this.logger.error(
+            `Admin force-cancel: close penalty failed for delivery ${input.deliveryId}: ${err?.message}`,
+            err?.stack,
+          );
+          // Non-blocking — the cancel still proceeds.
+        }
       }
 
       await tx.deliveryRequest.update({

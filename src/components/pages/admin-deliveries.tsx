@@ -32,6 +32,7 @@ import {
   getStatusColor,
   getDisplayStatus,
   getClosedByLabel,
+  getCancelledByLabel,
   getServiceTypeLabel,
   formatMiles,
 } from '@/hooks/useAdminDeliveries';
@@ -391,7 +392,9 @@ export default function AdminDeliveriesPage() {
                   label={
                     getDisplayStatus(delivery) === 'CLOSED'
                       ? (getClosedByLabel(delivery.closedByActorRole) ?? 'Closed')
-                      : getDisplayStatus(delivery)
+                      : getDisplayStatus(delivery) === 'CANCELLED'
+                        ? (getCancelledByLabel(delivery.cancelledByActorRole) ?? 'Cancelled')
+                        : getDisplayStatus(delivery)
                   }
                 />
                 <Badge variant="outline" className="text-[10px] font-medium">

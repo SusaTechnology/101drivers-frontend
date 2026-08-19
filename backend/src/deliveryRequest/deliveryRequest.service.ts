@@ -1304,10 +1304,21 @@ async getAdminDeliveries(input: {
       const latestTrackingPoint = row.trackingSession?.points?.[0] ?? null;
 
       // "Closed by" actorRole for CLOSED deliveries
-      const closedEntry = row.statusHistory?.[0];
+      const closedEntry = row.statusHistory?.find(
+        (h: any) => h.toStatus === EnumDeliveryRequestStatus.CLOSED
+      );
       const closedByActorRole =
         row.status === EnumDeliveryRequestStatus.CLOSED && closedEntry
           ? closedEntry.actorRole
+          : null;
+
+      // "Cancelled by" actorRole for CANCELLED deliveries
+      const cancelledEntry = row.statusHistory?.find(
+        (h: any) => h.toStatus === EnumDeliveryRequestStatus.CANCELLED
+      );
+      const cancelledByActorRole =
+        row.status === EnumDeliveryRequestStatus.CANCELLED && cancelledEntry
+          ? cancelledEntry.actorRole
           : null;
 
       return {
@@ -1363,6 +1374,9 @@ async getAdminDeliveries(input: {
 
         // "Closed by" actor role for CLOSED deliveries
         closedByActorRole,
+
+        // "Cancelled by" actor role for CANCELLED deliveries
+        cancelledByActorRole,
       };
     }),
     count,
@@ -1737,6 +1751,14 @@ async getAdminDeliveryDetail(input: {
       delivery.status === EnumDeliveryRequestStatus.CLOSED
         ? statusHistory.find((e: any) => e.toStatus === "CLOSED")?.actorRole ?? null
         : null,
+
+    // "Cancelled by" actor role for CANCELLED deliveries — mirrors
+    // closedByActorRole so the admin UI can show "Cancelled by Admin" vs
+    // "Cancelled by Dealer" instead of a generic "Cancelled" badge.
+    cancelledByActorRole:
+      delivery.status === EnumDeliveryRequestStatus.CANCELLED
+        ? statusHistory.find((e: any) => e.toStatus === "CANCELLED")?.actorRole ?? null
+        : null,
   };
 }
 async adminAssignDriver(input: {
@@ -1778,11 +1800,13 @@ async adminForceCancelDelivery(input: {
   deliveryId: string;
   actorUserId?: string | null;
   reason: string;
+  applyPenalty?: boolean;
 }): Promise<any> {
   await this.adminDeliveryEngine.forceCancelDelivery({
     deliveryId: input.deliveryId,
     actorUserId: input.actorUserId ?? null,
     reason: this.trimRequiredString(input.reason),
+    applyPenalty: input.applyPenalty ?? false,
   });
 
   return this.getAdminDeliveryDetail({

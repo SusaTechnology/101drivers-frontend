@@ -302,6 +302,18 @@ export function getClosedByLabel(closedByActorRole?: string | null): string | nu
 }
 
 /**
+ * Human-readable label for a cancelled delivery — "Cancelled by Admin" or
+ * "Cancelled by Dealer". Returns null if not cancelled or actor unknown.
+ */
+export function getCancelledByLabel(cancelledByActorRole?: string | null): string | null {
+  if (cancelledByActorRole === 'ADMIN') return 'Cancelled by Admin';
+  if (cancelledByActorRole === 'PRIVATE_CUSTOMER' || cancelledByActorRole === 'BUSINESS_CUSTOMER' || cancelledByActorRole === 'DEALER') {
+    return 'Cancelled by Dealer';
+  }
+  return null;
+}
+
+/**
  * Get service type display name
  */
 export function getServiceTypeLabel(serviceType: string): string {
@@ -428,6 +440,39 @@ export function useForceCancel(deliveryId: string) {
       ['admin-deliveries'],
       ['admin-delivery-detail', deliveryId],
     ],
+  });
+}
+
+/**
+ * Close penalty preview — returned by GET /api/deliveryRequests/:id/close-penalty-preview.
+ *
+ * Shows whether the pickup PIN was verified (penalty warranted), the penalty
+ * amount, and a human-readable summary. Used by the admin cancel dialog to
+ * let the admin decide whether to apply the $48 penalty.
+ */
+export interface ClosePenaltyPreview {
+  pickupPinVerified: boolean;
+  penaltyAmountDollars: number | null;
+  penaltyAmountCents: number | null;
+  driverId: string | null;
+  outcome: 'apply_penalty' | 'no_penalty' | 'no_driver';
+  summary: string;
+}
+
+/**
+ * Hook for fetching the close penalty preview for a delivery.
+ * Pass `enabled` = true only when the cancel dialog is open (avoids
+ * fetching for every delivery in the list).
+ */
+export function useClosePenaltyPreview(deliveryId: string, enabled: boolean) {
+  return useDataQuery<ClosePenaltyPreview>({
+    apiEndPoint: deliveryId
+      ? `${API_BASE_URL}/api/deliveryRequests/${deliveryId}/close-penalty-preview`
+      : '',
+    noFilter: true,
+    enabled: !!deliveryId && enabled,
+    staleTime: 0, // always refetch when the dialog opens
+    queryKey: ['close-penalty-preview', deliveryId],
   });
 }
 
