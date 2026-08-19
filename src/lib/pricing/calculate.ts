@@ -5,7 +5,7 @@
  * It mirrors the backend `PricingEngineService.calculateQuote` in
  * backend/src/delivery-logistics/pricing-engine.service.ts exactly —
  * same formulas, same rounding (Number(x.toFixed(2))), same mode
- * resolution, same mileage-category boundaries.
+ * resolution, same mileage-category boundaries (read from DB categoryRules).
  *
  * Used by:
  *   - PricingConfigForm "Quote Preview" panel (Item 10)
@@ -17,7 +17,7 @@
  * you change one, change the other.
  *
  * ────────────────────────────────────────────────────────────────────
- * SUPPORTED PRICING MODELS (only two — the legacy FLAT_TIER is DEPRECATED)
+ * SUPPORTED PRICING MODELS (only two — FLAT_TIER is DEPRECATED)
  * ────────────────────────────────────────────────────────────────────
  *
  * 1. ABC (progressive tiered, schema name CATEGORY_ABC)
@@ -27,11 +27,11 @@
  *    (where prevBandMax starts at 0 and is set to each band's maxMiles after it's processed,
  *    so the bands are always contiguous regardless of the minMiles values the admin enters.)
  *
- *    Example (baseFee=50, A: 0-25 @ $2.00, B: 25-75 @ $1.80, C: 75+ @ $1.75):
+ *    Example (baseFee=50, A: 0-25 @ $2.00, B: 25-50 @ $1.80, C: 50+ @ $1.75):
  *      15 mi  -> 50 + 30 + 0   + 0    = $80
  *      25 mi  -> 50 + 50 + 0   + 0    = $100
  *      50 mi  -> 50 + 50 + 45  + 0    = $145
- *      100 mi -> 50 + 50 + 90  + 43.75 = $233.75
+ *      100 mi -> 50 + 50 + 45  + 87.5 = $232.50
  *
  * 2. Flat (flat fee + extra mileage, schema name PER_MILE)
  *      total = baseFee + max(0, miles - flatMiles) × perMileRate
@@ -43,11 +43,9 @@
  *      100 mi -> 101 + 135  = $236
  *
  * 3. FLAT_TIER (DEPRECATED)
- *    Hidden from the admin UI. Backend calculation branch is commented out.
- *    The enum value is kept in Prisma only so historical quote snapshots
- *    continue to resolve their `pricingMode` field without breaking.
- *    If a legacy config still has pricingMode=FLAT_TIER, the backend
- *    falls back to PER_MILE (Flat) math.
+ *    No longer creatable via the admin UI. The calc branch has been
+ *    removed. resolveEffectiveMode remaps any legacy FLAT_TIER config
+ *    to PER_MILE so historical quote snapshots keep resolving.
  */
 
 export type PricingMode = 'PER_MILE' | 'FLAT_TIER' | 'CATEGORY_ABC';
@@ -172,14 +170,37 @@ export interface PricingCalcResult {
 }
 
 /**
- * Resolve the mileage category from a distance.
+ * Resolve the mileage category (A / B / C) for a given distance.
+ *
+ * Band boundaries are read from the categoryRules in the config — NOT
+ * hardcoded. The maxMiles of category A defines the A/B boundary, and the
+ * maxMiles of category B defines the B/C boundary. Category C is always
+ * "everything above B" (its maxMiles is typically null / open-ended).
+ *
+ * Fallbacks (used only when a rule is missing OR its maxMiles is null):
+ *   A.maxMiles ?? 25
+ *   B.maxMiles ?? 50
+ * (These match the seed values in backend/scripts/seed/index.ts.)
  *
  * Backend mirror: backend/src/delivery-logistics/pricing-engine.service.ts
- *   resolveMileageCategory(miles): miles ≤ 25 → A, ≤ 75 → B, else C
+ *   PricingEngineService.resolveMileageCategory(miles, categoryRules)
+ *
+ * NOTE: This is purely for DISPLAY purposes (the `mileageCategory` field on
+ * the Quote). The actual price math in `calculatePricing` iterates ALL bands
+ * and does NOT call this function.
  */
-export function resolveMileageCategory(miles: number): MileageCategory {
-  if (miles <= 25) return 'A';
-  if (miles <= 75) return 'B';
+export function resolveMileageCategory(
+  miles: number,
+  categoryRules?: Array<{ category: MileageCategory; maxMiles: number | null }> | null
+): MileageCategory {
+  const ruleA = categoryRules?.find((r) => r.category === 'A');
+  const ruleB = categoryRules?.find((r) => r.category === 'B');
+
+  const aMax = ruleA?.maxMiles ?? 25;
+  const bMax = ruleB?.maxMiles ?? 50;
+
+  if (miles <= aMax) return 'A';
+  if (miles <= bMax) return 'B';
   return 'C';
 }
 
@@ -260,37 +281,33 @@ export function calculatePricing(input: PricingCalcInput): PricingCalcResult {
 
     baseFare = r2(config.baseFee ?? 0);
     distanceCharge = r2(billedMiles * config.perMileRate);
-  } else if (effectiveMode === 'FLAT_TIER') {
-    // ──────────────────────────────────────────────────────────────────
-    // DEPRECATED — FLAT_TIER mode.
-    // The platform now supports only two pricing models: ABC (CATEGORY_ABC)
-    // and Flat (PER_MILE). FLAT_TIER is hidden from the admin UI and its
-    // calculation branch is intentionally disabled. The enum value is kept
-    // in the Prisma schema only so historical quote snapshots continue to
-    // resolve their `pricingMode` field without breaking.
-    //
-    // If a legacy config somehow still has pricingMode=FLAT_TIER, fall
-    // back to baseFee-only (no distance charge) so the quote still resolves.
-    // ──────────────────────────────────────────────────────────────────
-    mileageCategory = resolveMileageCategory(distanceMiles);
-    baseFare = r2(config.baseFee ?? 0);
-    distanceCharge = 0;
   } else {
     // ──────────────────────────────────────────────────────────────────
-    // ABC model (progressive tiered)
-    // total = baseFee + Σ (miles_in_band_i × rate_i)
-    // where bands are the categoryRules rows sorted by minMiles.
-    // Each band contributes max(0, min(miles, maxMiles ?? ∞) - minMiles) × perMileRate.
-    // The config-level baseFee is added once on top.
+    // ABC model (progressive tiered, schema name CATEGORY_ABC)
     //
-    // categoryOverride (Item 5 Preview endpoint): when an admin forces a
-    // specific category A/B/C via the preview dialog, we still use the
-    // progressive tiered math — the override only affects which category
-    // is reported in the result's `mileageCategory` field (display only).
-    // The math itself is purely distance-based and progressive.
+    // Formula (tax-bracket style, bands defined in DB via categoryRules):
+    //   price = baseFee
+    //         + MIN(miles, maxMiles_A) × rate_A
+    //         + MAX(0, MIN(miles, maxMiles_B) − maxMiles_A) × rate_B
+    //         + MAX(0, miles − maxMiles_B) × rate_C
+    //
+    // where maxMiles_A / maxMiles_B come from the categoryRules rows.
+    // The implementation iterates bands sorted by minMiles and tracks
+    // prevUpper so bands are always contiguous (avoids the 0.01-mile gap
+    // when admins enter 25.01 / 75.01).
+    //
+    // The config-level baseFee is added once on top. Per-rule baseFee /
+    // flatPrice are NOT used by this formula (kept in schema for legacy
+    // rows only).
+    //
+    // categoryOverride (Preview endpoint): informational only — the math
+    // is purely distance-based and progressive. The override only affects
+    // which category is REPORTED in the result's `mileageCategory` field
+    // (used for UI display).
     // ──────────────────────────────────────────────────────────────────
     mileageCategory =
-      input.categoryOverride ?? resolveMileageCategory(distanceMiles);
+      input.categoryOverride ??
+      resolveMileageCategory(distanceMiles, config.categoryRules);
 
     baseFare = r2(config.baseFee ?? 0);
 

@@ -280,7 +280,6 @@ export default function AdminPricingConfigFormPage({ configId }: AdminPricingCon
               <ul className="list-disc list-inside space-y-1 mt-2">
                 <li><strong>ABC (Progressive Tiered):</strong> Requires <code>categoryRules</code> with per-mile rates for each mileage band. <code>tiers</code>, <code>perMileRate</code>, and <code>flatMiles</code> must be empty/null. Formula: <code className="font-mono">baseFee + Σ(band_miles × band_rate)</code>. With defaults: 15 mi → $80, 25 mi → $100, 50 mi → $145, 100 mi → $232.50.</li>
                 <li><strong>Flat (with extra mileage):</strong> Schema name <code>PER_MILE</code>. Requires <code>perMileRate</code>; <code>flatMiles</code> optional (default 0). <code>tiers</code> and <code>categoryRules</code> must be empty. Formula: <code className="font-mono">baseFee + max(0, miles − flatMiles) × perMileRate</code>. With defaults: 15 mi → $101, 25 mi → $101, 50 mi → $146, 100 mi → $236.</li>
-                <li><strong>FLAT_TIER:</strong> DEPRECATED — hidden from the UI. Existing legacy configs will be calculated using the Flat (PER_MILE) formula. Please migrate them to one of the two supported modes.</li>
               </ul>
             </AlertDescription>
           </Alert>

@@ -533,7 +533,7 @@ async startTrip(input: {
     //
     // Skip lock-in if:
     //   - No quote / no snapshot (legacy deliveries)
-    //   - baseFee is 0 or null (e.g. FLAT_TIER pricing mode without a base)
+    //   - baseFee is 0 or null (e.g. a pricing config without a base fee)
     //   - Already locked in (idempotent re-call safety)
     //   - No Stripe service configured (test/dev environments)
     const snapshot = (delivery.quote?.pricingSnapshot ?? {}) as Record<string, unknown>;

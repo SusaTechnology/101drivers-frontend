@@ -155,6 +155,15 @@ export class PricingConfigPolicyService {
   }
 
   private validateModeSpecificConfig(row: any): void {
+    // FLAT_TIER is deprecated — reject at the policy layer too so GraphQL
+    // mutations can't create new FLAT_TIER configs bypassing the admin engine.
+    if (row.pricingMode === EnumPricingConfigPricingMode.FLAT_TIER) {
+      throw new AppException(
+        "FLAT_TIER pricing mode is deprecated. Use PER_MILE or CATEGORY_ABC.",
+        ErrorCodes.BUSINESS_RULE_VIOLATION
+      );
+    }
+
     if (row.pricingMode === EnumPricingConfigPricingMode.PER_MILE) {
       this.ensureNonNegativeNumber(
         row.perMileRate,
@@ -176,17 +185,6 @@ export class PricingConfigPolicyService {
           ErrorCodes.BUSINESS_RULE_VIOLATION
         );
       }
-    }
-
-    if (
-      row.pricingMode === EnumPricingConfigPricingMode.FLAT_TIER &&
-      row.perMileRate !== undefined &&
-      row.perMileRate !== null
-    ) {
-      throw new AppException(
-        "perMileRate is not allowed for FLAT_TIER pricing mode",
-        ErrorCodes.BUSINESS_RULE_VIOLATION
-      );
     }
   }
 
@@ -371,13 +369,17 @@ export class PricingConfigPolicyService {
   }
 
   private ensurePricingMode(value: unknown): void {
+    // FLAT_TIER is deprecated — reject here so the policy layer refuses
+    // new FLAT_TIER configs even via the generic GraphQL create path.
+    // Legacy rows in the DB still resolve at quote time (PricingEngine
+    // remaps FLAT_TIER → PER_MILE), but no new ones can be created.
     if (
       value !== EnumPricingConfigPricingMode.PER_MILE &&
-      value !== EnumPricingConfigPricingMode.FLAT_TIER &&
       value !== EnumPricingConfigPricingMode.CATEGORY_ABC
     ) {
       throw new AppException(
-        "pricingMode is invalid",
+        "pricingMode is invalid. Supported values: PER_MILE, CATEGORY_ABC. " +
+          "FLAT_TIER is deprecated.",
         ErrorCodes.VALIDATION_ERROR
       );
     }

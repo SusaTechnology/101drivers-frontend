@@ -11,7 +11,8 @@
 //     payment_failed → updates Payment rows + freezes dealer on failure
 //
 // WHAT THIS DOES NOT OWN
-//   • Pricing — calls existing PricingEngineService for FLAT_TIER amounts
+//   • Pricing — reads Payment.amount (calculated by PricingEngineService at
+//     quote time using either PER_MILE or CATEGORY_ABC mode).
 //   • Driver payouts — out of scope (existing PaymentPayoutEngine handles)
 //   • Stripe webhook parsing — handled by StripeWebhookController, which
 //     delegates invoice.* events here
@@ -166,9 +167,19 @@ export class PostpaidBillingService {
 
     // 2. Create the anchor subscription ($0/week metered price →
     //    Stripe auto-creates weekly invoices, charging the saved PM).
-    //    We use billing_cycle_anchor so the first invoice aligns with
-    //    Sunday 02:00 dealer-TZ (admin can configure later). For now
-    //    we let Stripe pick the anchor (creation time + 7d cycles).
+    //
+    //    collection_method="charge_automatically" → Stripe charges the saved
+    //    payment method automatically when each weekly invoice is created.
+    //
+    //    NOTE: `days_until_due` is ONLY valid when collection_method=
+    //    "send_invoice". With "charge_automatically" Stripe rejects it with
+    //    HTTP 400: "You can only specify 'days_until_due' if invoice
+    //    collection method is 'send_invoice'." So we omit it — Stripe will
+    //    attempt payment 1 hour after the invoice is created (default).
+    //
+    //    billing_cycle_anchor is intentionally omitted so Stripe picks the
+    //    anchor (creation time + 7d cycles). A future admin can migrate
+    //    dealers to a Sunday 02:00 dealer-TZ anchor if needed.
     const subscription = await this.stripeService.stripe.subscriptions.create({
       customer: stripeCustomer.id,
       items: [{ price: this.postpaidPriceId }],
@@ -186,7 +197,6 @@ export class PostpaidBillingService {
       // If no PM is attached yet, the first invoice will fail. That's fine —
       // the dealer freezes until they add a card via the saved-card flow.
       // We don't want the subscription itself to be cancelled on first failure.
-      days_until_due: 7,
     });
 
     // 3. Persist Stripe Customer + Subscription IDs on Customer row
@@ -305,8 +315,8 @@ export class PostpaidBillingService {
    * Called by the delivery orchestrator when a delivery completes.
    *
    * Creates a Stripe InvoiceItem with:
-   *   • amount = Payment.amount × 100 (FLAT_TIER-calculated by the existing
-   *     pricing engine at delivery-creation time)
+   *   • amount = Payment.amount × 100 (calculated by the pricing engine at
+   *     delivery-creation time using either PER_MILE or CATEGORY_ABC mode)
    *   • description = "Delivery #X — pickup → dropoff (Y mi) — $Z"
    *   • metadata = { deliveryId, paymentId, customerId, source }
    *

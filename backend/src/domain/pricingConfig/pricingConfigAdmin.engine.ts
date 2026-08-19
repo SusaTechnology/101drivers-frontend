@@ -12,7 +12,6 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import {
   PricingCategoryRuleInputDto,
-  PricingTierInputDto,
   SavePricingConfigBody,
 } from "../../pricingConfig/dto/pricingConfigAdmin.dto";
 
@@ -259,6 +258,21 @@ export class PricingConfigAdminEngine {
       throw new BadRequestException("driverSharePct must be between 0 and 100");
     }
 
+    // The platform supports exactly two pricing modes:
+    //   • PER_MILE     — "Flat with extra mileage" (baseFee + max(0, miles − flatMiles) × perMileRate)
+    //   • CATEGORY_ABC — "ABC progressive tiered" (tax-bracket style bands)
+    //
+    // FLAT_TIER is DEPRECATED and no longer accepted by the admin save
+    // endpoint. Legacy configs with pricingMode=FLAT_TIER still resolve at
+    // quote time (remapped to PER_MILE by PricingEngineService), but admins
+    // cannot create or edit them anymore.
+    if (body.pricingMode === EnumPricingConfigPricingMode.FLAT_TIER) {
+      throw new BadRequestException(
+        "FLAT_TIER pricing mode is deprecated. Use PER_MILE (Flat with extra mileage) " +
+          "or CATEGORY_ABC (progressive tiered) instead."
+      );
+    }
+
     if (
       body.pricingMode === EnumPricingConfigPricingMode.PER_MILE &&
       (body.perMileRate == null || Number(body.perMileRate) <= 0)
@@ -280,15 +294,6 @@ export class PricingConfigAdminEngine {
     }
 
     if (
-      body.pricingMode === EnumPricingConfigPricingMode.FLAT_TIER &&
-      (!body.tiers || body.tiers.length === 0)
-    ) {
-      throw new BadRequestException(
-        "tiers are required when pricingMode is FLAT_TIER"
-      );
-    }
-
-    if (
       body.pricingMode === EnumPricingConfigPricingMode.CATEGORY_ABC &&
       (!body.categoryRules || body.categoryRules.length === 0)
     ) {
@@ -297,31 +302,10 @@ export class PricingConfigAdminEngine {
       );
     }
 
-    this.validateTiers(body.tiers ?? []);
+    // tiers[] are only relevant for the deprecated FLAT_TIER mode. We no
+    // longer accept them — silently drop on save so the admin UI can keep
+    // sending an empty array without breaking. Validation is skipped.
     this.validateCategoryRules(body.categoryRules ?? [], body.pricingMode);
-  }
-
-  private validateTiers(tiers: PricingTierInputDto[]): void {
-    const ordered = [...tiers].sort((a, b) => a.minMiles - b.minMiles);
-
-    for (let i = 0; i < ordered.length; i++) {
-      const tier = ordered[i];
-
-      if (tier.maxMiles != null && tier.maxMiles < tier.minMiles) {
-        throw new BadRequestException(
-          `Tier maxMiles must be greater than or equal to minMiles at index ${i}`
-        );
-      }
-
-      if (i > 0) {
-        const prev = ordered[i - 1];
-        if (prev.maxMiles != null && tier.minMiles < prev.maxMiles) {
-          throw new BadRequestException(
-            "Pricing tiers overlap; provide non-overlapping tier ranges"
-          );
-        }
-      }
-    }
   }
 
   private validateCategoryRules(

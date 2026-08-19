@@ -381,7 +381,7 @@ export class PreviewQuoteBody {
       "Force a specific mileage category (A/B/C) regardless of distance. " +
       "Only affects CATEGORY_ABC configs. Lets an admin preview " +
       "'what would category C cost at 50 miles?' without changing the " +
-      "distance input. Ignored for PER_MILE / FLAT_TIER modes.",
+      "distance input. Ignored for PER_MILE mode.",
   })
   @IsOptional()
   @IsEnum(EnumQuoteMileageCategory)

@@ -664,8 +664,8 @@ function PreviewQuoteDialog({
 
   // The admin-detail endpoint returns a SUBSET of the pricing config (no
   // tiers or categoryRules). For PER_MILE mode, that's enough — the math
-  // only needs baseFee, perMileRate, flatMiles. For FLAT_TIER and
-  // CATEGORY_ABC, we need the full config (with tiers/rules). So for those
+  // only needs baseFee, perMileRate, flatMiles. For CATEGORY_ABC (and
+  // legacy FLAT_TIER), we need the full config (with rules). So for those
   // modes, fetch the full config on demand when the dialog opens.
   const needsFullConfig =
     config?.pricingMode === 'FLAT_TIER' || config?.pricingMode === 'CATEGORY_ABC';

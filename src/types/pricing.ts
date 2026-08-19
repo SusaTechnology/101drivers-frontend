@@ -1,5 +1,11 @@
 // Types for Pricing Configuration - matching API response
 
+// The platform supports exactly two pricing modes:
+//   • PER_MILE     — "Flat with extra mileage" (baseFee + max(0, miles − flatMiles) × perMileRate)
+//   • CATEGORY_ABC — "ABC progressive tiered" (tax-bracket style bands)
+// FLAT_TIER is DEPRECATED — kept in the union only so legacy configs loaded
+// from the API don't crash the form. The admin picker no longer offers it,
+// and the backend refuses to create new FLAT_TIER configs.
 export type PricingMode = 'CATEGORY_ABC' | 'FLAT_TIER' | 'PER_MILE';
 
 // Category rule from API

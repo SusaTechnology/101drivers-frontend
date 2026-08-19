@@ -1149,7 +1149,6 @@ export function PricingConfigList({
                 <SelectContent>
                   <SelectItem value="null">No override</SelectItem>
                   <SelectItem value="PER_MILE">Per Mile</SelectItem>
-                  <SelectItem value="FLAT_TIER">Flat Tier</SelectItem>
                   <SelectItem value="CATEGORY_ABC">Category A/B/C</SelectItem>
                 </SelectContent>
               </Select>
@@ -1395,7 +1394,6 @@ export function PricingConfigList({
                   <SelectContent>
                     <SelectItem value="null">No override</SelectItem>
                     <SelectItem value="PER_MILE">Per Mile</SelectItem>
-                    <SelectItem value="FLAT_TIER">Flat Tier</SelectItem>
                     <SelectItem value="CATEGORY_ABC">Category A/B/C</SelectItem>
                   </SelectContent>
                 </Select>

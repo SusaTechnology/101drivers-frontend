@@ -257,40 +257,33 @@ export class PricingEngineService {
       distanceCharge = Number(
         (billableMiles * config.perMileRate).toFixed(2)
       );
-    } else if (effectiveMode === EnumQuotePricingMode.FLAT_TIER) {
-      // ──────────────────────────────────────────────────────────────────
-      // DEPRECATED — FLAT_TIER mode.
-      // The platform now supports only two pricing models: ABC (CATEGORY_ABC)
-      // and Flat (PER_MILE). FLAT_TIER is hidden from the admin UI and its
-      // calculation branch is intentionally disabled. The enum value is kept
-      // in the Prisma schema only so historical quote snapshots continue to
-      // resolve their `pricingMode` field without breaking.
-      //
-      // If a legacy config somehow still has pricingMode=FLAT_TIER, fall
-      // back to baseFee-only (no distance charge) so the quote still resolves.
-      // ──────────────────────────────────────────────────────────────────
-      mileageCategory = this.resolveMileageCategory(distanceMiles);
-      baseFare = Number((config.baseFee ?? 0).toFixed(2));
-      distanceCharge = 0;
     } else {
       // ──────────────────────────────────────────────────────────────────
-      // ABC model (progressive tiered)
-      // total = baseFee + Σ (miles_in_band_i × rate_i)
-      // where bands are the categoryRules rows sorted by minMiles.
-      // Each band contributes max(0, min(miles, maxMiles ?? ∞) - minMiles) × perMileRate.
-      // The config-level baseFee is added once on top.
+      // ABC model (progressive tiered, schema name CATEGORY_ABC)
       //
-      // categoryOverride (Item 5 Preview endpoint): when an admin forces a
-      // specific category A/B/C via the preview dialog, we still use the
-      // progressive tiered math — the override only affects which band's
-      // perMileRate applies, but ALL bands below the chosen one still
-      // contribute their miles. In practice, since the new formula iterates
-      // ALL bands in order, the override is informational only (used to
-      // display "you're previewing as category B" in the UI). The math
-      // itself is purely distance-based and progressive.
+      // Formula (tax-bracket style, bands defined in DB via categoryRules):
+      //   price = baseFee
+      //         + MIN(miles, maxMiles_A) × rate_A
+      //         + MAX(0, MIN(miles, maxMiles_B) − maxMiles_A) × rate_B
+      //         + MAX(0, miles − maxMiles_B) × rate_C
+      //
+      // where maxMiles_A / maxMiles_B come from the categoryRules rows
+      // (A.maxMiles, B.maxMiles). The implementation iterates bands sorted
+      // by minMiles and tracks prevUpper so bands are always contiguous
+      // (avoids the 0.01-mile gap when admins enter 25.01 / 75.01).
+      //
+      // The config-level baseFee is added once on top. Per-rule baseFee /
+      // flatPrice are NOT used by this formula (kept in schema for legacy
+      // rows only).
+      //
+      // categoryOverride (Preview endpoint): informational only — the math
+      // is purely distance-based and progressive. The override only affects
+      // which category is REPORTED in the result's `mileageCategory` field
+      // (used for UI display).
       // ──────────────────────────────────────────────────────────────────
       mileageCategory =
-        input.categoryOverride ?? this.resolveMileageCategory(distanceMiles);
+        input.categoryOverride ??
+        this.resolveMileageCategory(distanceMiles, config.categoryRules);
 
       baseFare = Number((config.baseFee ?? 0).toFixed(2));
 
@@ -645,17 +638,22 @@ export class PricingEngineService {
     override: EnumCustomerPricingModeOverride | null | undefined,
     configMode: EnumPricingConfigPricingMode
   ): EnumQuotePricingMode {
-    // DEPRECATED: FLAT_TIER mode is no longer supported. Any override or
-    // config that requests FLAT_TIER is silently mapped to PER_MILE (Flat).
+    // The platform supports exactly two pricing modes:
+    //   • PER_MILE     — "Flat with extra mileage" (baseFee + extra miles × rate)
+    //   • CATEGORY_ABC — "ABC progressive tiered" (tax-bracket style bands)
     //
-    // NOTE: the override branch below MUST remap FLAT_TIER → PER_MILE too.
-    // Earlier revisions left the FLAT_TIER override case un-handled, which
-    // caused it to fall through to the trailing `return CATEGORY_ABC` —
-    // silently routing customers with a stale FLAT_TIER override into the
-    // ABC branch. If their assigned config was a PER_MILE (Flat) config
-    // (which has no categoryRules), the ABC branch would then throw
-    // "CATEGORY_ABC config requires at least one category rule" —
-    // surfacing to the dealer as "Flat Pricing doesn't work".
+    // FLAT_TIER is DEPRECATED. The enum value is kept in the Prisma schema
+    // only so historical quote snapshots and legacy customer overrides keep
+    // resolving. Any FLAT_TIER value (override or config) is silently
+    // remapped to PER_MILE — the closest semantic equivalent.
+    //
+    // NOTE: the override branch MUST remap FLAT_TIER → PER_MILE too. Earlier
+    // revisions left the FLAT_TIER override case un-handled, which caused it
+    // to fall through to the trailing `return CATEGORY_ABC` — silently
+    // routing customers with a stale FLAT_TIER override into the ABC branch.
+    // If their assigned config was a PER_MILE config (no categoryRules), the
+    // ABC branch would throw "no ABC category rules defined" — surfacing to
+    // the dealer as "Flat Pricing doesn't work".
     if (override != null) {
       if (override === EnumCustomerPricingModeOverride.PER_MILE) {
         return EnumQuotePricingMode.PER_MILE;
@@ -674,9 +672,8 @@ export class PricingEngineService {
     }
 
     // Legacy FLAT_TIER configs are treated as PER_MILE (Flat) at calculation
-    // time. The FLAT_TIER calc branch in computeQuoteFromConfig is
-    // intentionally disabled; this remap routes the quote through the
-    // PER_MILE formula instead.
+    // time. The FLAT_TIER calc branch has been removed; this remap routes
+    // the quote through the PER_MILE formula instead.
     if (configMode === EnumPricingConfigPricingMode.FLAT_TIER) {
       return EnumQuotePricingMode.PER_MILE;
     }
@@ -684,9 +681,39 @@ export class PricingEngineService {
     return EnumQuotePricingMode.CATEGORY_ABC;
   }
 
-  private resolveMileageCategory(miles: number): EnumQuoteMileageCategory {
-    if (miles <= 25) return EnumQuoteMileageCategory.A;
-    if (miles <= 75) return EnumQuoteMileageCategory.B;
+  /**
+   * Resolve the mileage category (A / B / C) for a given distance.
+   *
+   * Band boundaries are read from the categoryRules in the PricingConfig —
+   * NOT hardcoded. The maxMiles of category A defines the A/B boundary,
+   * and the maxMiles of category B defines the B/C boundary. Category C is
+   * always "everything above B" (its maxMiles is typically null / open-ended).
+   *
+   * Fallbacks (used only when a rule is missing OR its maxMiles is null):
+   *   A.maxMiles ?? 25
+   *   B.maxMiles ?? 50
+   * (These match the seed values in backend/scripts/seed/index.ts.)
+   *
+   * If categoryRules is empty (shouldn't happen — validated upstream), all
+   * three fallbacks kick in and the function reduces to the legacy behavior:
+   *   miles ≤ 25 → A, miles ≤ 50 → B, else C.
+   *
+   * NOTE: This is purely for DISPLAY / audit purposes (the `mileageCategory`
+   * field on Quote). The actual price math iterates ALL bands in
+   * computeQuoteFromConfig — it does NOT use this function.
+   */
+  private resolveMileageCategory(
+    miles: number,
+    categoryRules: ResolvedPricingContext["config"]["categoryRules"]
+  ): EnumQuoteMileageCategory {
+    const ruleA = categoryRules.find((r) => r.category === EnumQuoteMileageCategory.A);
+    const ruleB = categoryRules.find((r) => r.category === EnumQuoteMileageCategory.B);
+
+    const aMax = ruleA?.maxMiles ?? 25;
+    const bMax = ruleB?.maxMiles ?? 50;
+
+    if (miles <= aMax) return EnumQuoteMileageCategory.A;
+    if (miles <= bMax) return EnumQuoteMileageCategory.B;
     return EnumQuoteMileageCategory.C;
   }
 }

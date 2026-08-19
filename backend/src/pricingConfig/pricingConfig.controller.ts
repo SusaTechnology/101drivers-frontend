@@ -60,7 +60,7 @@ async setDefaultPricingConfig(
     type: "object",
     properties: {
       pricingConfigId: { type: "string" },
-      pricingMode: { type: "string", enum: ["PER_MILE", "FLAT_TIER", "CATEGORY_ABC"] },
+      pricingMode: { type: "string", enum: ["PER_MILE", "CATEGORY_ABC"] },
       mileageCategory: { type: "string", enum: ["A", "B", "C"], nullable: true },
       estimatedPrice: { type: "number" },
       estimatedDriverPayout: { type: "number" },

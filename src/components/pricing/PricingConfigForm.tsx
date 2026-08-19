@@ -63,6 +63,9 @@ const createPricingConfigSchema = (pricingMode: PricingMode) => {
     id: z.string().optional(),
     name: z.string().min(1, 'Configuration name is required'),
     description: z.string().optional(),
+    // FLAT_TIER is kept in the enum only so legacy configs loaded in edit
+    // mode don't fail schema validation. The picker below no longer offers
+    // it, and the backend refuses to create new FLAT_TIER configs.
     pricingMode: z.enum(['CATEGORY_ABC', 'FLAT_TIER', 'PER_MILE']),
     baseFee: z.number().min(0, 'Base fee must be 0 or greater'),
     // .nullish() accepts number | null | undefined.
@@ -78,9 +81,10 @@ const createPricingConfigSchema = (pricingMode: PricingMode) => {
     driverSharePct: z.number().min(0).max(100),
     active: z.boolean(),
     activateAsDefault: z.boolean(),
-    // Conditional validation based on pricing mode.
-    // NOTE: FLAT_TIER mode is DEPRECATED — hidden from the UI but kept in the
-    // schema for backward-compat with legacy configs that may be loaded in edit mode.
+    // tiers[] are only relevant for the deprecated FLAT_TIER mode. We keep
+    // the field in the schema so legacy configs loaded in edit mode don't
+    // fail validation, but the picker no longer offers FLAT_TIER so this
+    // branch is effectively dead. New configs always send tiers: [].
     tiers: pricingMode === 'FLAT_TIER'
       ? z.array(z.object({
           id: z.string().optional(),

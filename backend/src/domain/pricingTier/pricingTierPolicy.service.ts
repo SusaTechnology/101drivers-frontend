@@ -50,9 +50,15 @@ export class PricingTierPolicyService {
 
     const pricingConfig = await this.ensurePricingConfigExists(client, pricingConfigId);
 
+    // FLAT_TIER is deprecated — no new PricingTier rows can be created.
+    // The whole PricingTier table is effectively read-only / legacy now.
+    // Existing tier rows on legacy FLAT_TIER configs are not used by the
+    // pricing engine (FLAT_TIER configs are remapped to PER_MILE at quote
+    // time), so this block exists only to refuse new tier creation.
     if (pricingConfig.pricingMode !== EnumPricingConfigPricingMode.FLAT_TIER) {
       throw new AppException(
-        "PricingTier is only allowed for FLAT_TIER pricing configs",
+        "PricingTier is only allowed for legacy FLAT_TIER pricing configs. " +
+          "FLAT_TIER is deprecated — use PER_MILE or CATEGORY_ABC instead.",
         ErrorCodes.BUSINESS_RULE_VIOLATION
       );
     }
@@ -128,7 +134,8 @@ export class PricingTierPolicyService {
 
     if (pricingConfig.pricingMode !== EnumPricingConfigPricingMode.FLAT_TIER) {
       throw new AppException(
-        "PricingTier is only allowed for FLAT_TIER pricing configs",
+        "PricingTier is only allowed for legacy FLAT_TIER pricing configs. " +
+          "FLAT_TIER is deprecated — use PER_MILE or CATEGORY_ABC instead.",
         ErrorCodes.BUSINESS_RULE_VIOLATION
       );
     }

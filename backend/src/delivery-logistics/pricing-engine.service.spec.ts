@@ -5,16 +5,16 @@
  *   1. ABC (CATEGORY_ABC) — progressive tiered (tax-bracket style):
  *        total = baseFee + Σ(band_miles × band_rate)
  *      where bands are categoryRules sorted by minMiles. Each band contributes
- *      max(0, min(miles, maxMiles ?? ∞) − minMiles) × perMileRate.
+ *      max(0, min(miles, maxMiles ?? ∞) − prevBandMax) × perMileRate.
  *      With seed (baseFee=50, A:0-25@$2, B:25-50@$1.80, C:50+@$1.75):
  *        15 mi → $80, 25 mi → $100, 50 mi → $145, 100 mi → $232.50
  *   2. Flat (PER_MILE) — flat fee + extra mileage:
  *        total = baseFee + max(0, miles − flatMiles) × perMileRate
  *
- * DEPRECATED: FLAT_TIER mode is hidden from UI and its calc branch is
- * commented out. resolveEffectiveMode maps any FLAT_TIER config/override
- * to PER_MILE so legacy snapshots still resolve. The legacy tests below
- * verify that fallback behavior.
+ * DEPRECATED: FLAT_TIER mode is no longer creatable via the admin UI and the
+ * calc branch has been removed. resolveEffectiveMode still remaps any legacy
+ * FLAT_TIER config/override to PER_MILE so historical snapshots resolve. The
+ * legacy tests below verify that remap behavior.
  */
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { PricingEngineService } from "./pricing-engine.service";
@@ -208,7 +208,12 @@ describe("PricingEngineService.previewQuote", () => {
     });
   });
 
-  describe("FLAT_TIER (DEPRECATED)", () => {
+  describe("FLAT_TIER (DEPRECATED — legacy remap to PER_MILE)", () => {
+    // FLAT_TIER is no longer creatable via the admin UI, but legacy configs
+    // may still have pricingMode=FLAT_TIER in the DB. The engine remaps
+    // these to PER_MILE at calculation time so the quote still resolves.
+    // These tests verify that remap behavior stays intact.
+
     it("legacy FLAT_TIER config with perMileRate is silently treated as PER_MILE (Flat)", async () => {
       // resolveEffectiveMode maps FLAT_TIER → PER_MILE, so the math is
       // baseFee + max(0, miles − flatMiles) × perMileRate.
