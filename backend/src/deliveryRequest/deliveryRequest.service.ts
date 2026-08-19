@@ -877,14 +877,39 @@ async adminCancelDelivery(input: {
   deliveryId: string;
   actorUserId?: string | null;
   reason: string;
+  /**
+   * Whether to apply the close penalty fee ($48 to customer, $48 to driver).
+   * Admin UI should call adminPreviewClosePenalty first, then pass the
+   * admin's choice here. Default: false (admin must explicitly opt in).
+   */
+  applyPenalty?: boolean;
 }): Promise<any> {
   await this.adminDeliveryEngine.cancelDelivery({
     deliveryId: input.deliveryId,
     actorUserId: input.actorUserId ?? null,
     reason: input.reason,
+    applyPenalty: input.applyPenalty ?? false,
   });
 
   return this.domain.findUnique({ id: input.deliveryId });
+}
+
+/**
+ * Preview the close penalty for a delivery — used by the admin UI to show
+ * the admin the choice (apply $48 penalty or not) BEFORE confirming the
+ * cancel. Does NOT write anything.
+ */
+async adminPreviewClosePenalty(deliveryId: string): Promise<{
+  pickupPinVerified: boolean;
+  penaltyAmountDollars: number | null;
+  driverId: string | null;
+  outcome: "apply_penalty" | "no_penalty" | "no_driver";
+  summary: string;
+}> {
+  // Delegate to the penalty engine via the lifecycle service (which has
+  // the engine injected). This keeps the service layer as the single
+  // entry point for the controller.
+  return this.lifecycleService.previewClosePenalty(deliveryId);
 }
 
 async adminReassignDelivery(input: {
@@ -1774,12 +1799,14 @@ async closeDelivery(input: {
   actorUserId?: string | null;
   actorRole?: string | null;
   reason?: string | null;
+  applyPenalty?: boolean;
 }): Promise<any> {
   await this.lifecycleService.closeDelivery({
     deliveryId: input.deliveryId,
     actorUserId: input.actorUserId ?? null,
     actorRole: (input.actorRole as any) ?? null,
     reason: this.trimOptionalString(input.reason) ?? null,
+    applyPenalty: input.applyPenalty ?? true,
   });
 
   return this.getAdminDeliveryDetail({

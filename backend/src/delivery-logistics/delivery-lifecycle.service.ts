@@ -26,6 +26,7 @@ import { DriverJobFeedService } from "./driver-job-feed.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { DeliveryComplianceEngine } from "../domain/deliveryCompliance/deliveryCompliance.engine";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
+import { DeliveryClosePenaltyEngine } from "../domain/deliveryRequest/deliveryClosePenalty.engine";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PostpaidBillingService } from "../postpaidBilling/postpaidBilling.service";
 import {
@@ -65,6 +66,7 @@ export class DeliveryLifecycleService {
     private readonly notificationEventEngine: NotificationEventEngine,
     private readonly deliveryComplianceEngine: DeliveryComplianceEngine,
     private readonly paymentPayoutEngine: PaymentPayoutEngine,
+    private readonly deliveryClosePenaltyEngine: DeliveryClosePenaltyEngine,
     private readonly configService: ConfigService,
     @Optional() private readonly stripeService?: StripeService,
     @Optional() @Inject(forwardRef(() => TrackingGateway))
@@ -906,13 +908,34 @@ async completeTrip(input: {
    * flow. The delivery is marked CLOSED (not COMPLETED).
    * Can be called from BOOKED or ACTIVE status.
    */
+  /**
+   * Preview the close penalty for a delivery.
+   *
+   * Used by the admin UI to show the admin the choice (apply $48 penalty
+   * or not) BEFORE confirming the cancel. Does NOT write anything.
+   *
+   * Delegates to DeliveryClosePenaltyEngine.previewClosePenalty.
+   */
+  async previewClosePenalty(deliveryId: string) {
+    return this.deliveryClosePenaltyEngine.previewClosePenalty(deliveryId);
+  }
+
   async closeDelivery(input: {
     deliveryId: string;
     actorUserId?: string | null;
     actorRole?: EnumDeliveryStatusHistoryActorRole | null;
     reason?: string | null;
+    /**
+     * Whether to apply the close penalty fee. For dealer-initiated close,
+     * the caller passes `true` (auto-apply if pickup PIN was verified).
+     * For admin-initiated close/cancel, the admin UI should pass the
+     * admin's explicit choice.
+     */
+    applyPenalty?: boolean;
   }) {
-    return this.prisma.$transaction(async (tx) => {
+    const applyPenalty = input.applyPenalty ?? true;
+
+    const result = await this.prisma.$transaction(async (tx) => {
       const delivery = await tx.deliveryRequest.findUnique({
         where: { id: input.deliveryId },
         select: { id: true, status: true },
@@ -942,10 +965,41 @@ async completeTrip(input: {
         });
       }
 
+      // ── Apply close penalty (if pickup PIN was verified) ──────────
+      // The penalty engine reads compliance.pickupCompletedAt to decide:
+      //   • PIN verified + applyPenalty=true → $48 penalty to customer,
+      //     driver gets $48 payout, Payment.amount updated to $48.
+      //   • PIN not verified → no penalty, no payout (driver arrived but
+      //     didn't complete pickup — no compensation per product spec).
+      //   • Admin can override by passing applyPenalty=false.
+      // See deliveryClosePenalty.engine.ts for the full rules.
+      let penaltyResult: { applied: boolean; penaltyAmountDollars: number } | null = null;
+      try {
+        const r = await this.deliveryClosePenaltyEngine.applyClosePenalty(tx, {
+          deliveryId: input.deliveryId,
+          applyPenalty,
+          actorUserId: input.actorUserId ?? null,
+          actorRole: input.actorRole ?? null,
+          reason: input.reason ?? null,
+        });
+        penaltyResult = { applied: r.applied, penaltyAmountDollars: r.penaltyAmountDollars };
+      } catch (err: any) {
+        // Penalty failure should NOT block the close. Log and continue —
+        // the status transition still happens. Admin can reconcile later.
+        this.logger.error(
+          `Close penalty failed for delivery ${input.deliveryId}: ${err?.message}`,
+          err?.stack,
+        );
+      }
+
       await tx.deliveryRequest.update({
         where: { id: input.deliveryId },
         data: { status: EnumDeliveryRequestStatus.CLOSED },
       });
+
+      const note = penaltyResult?.applied
+        ? `${input.reason ?? "Delivery closed by customer"} — $${penaltyResult.penaltyAmountDollars} penalty applied (pickup PIN verified)`
+        : input.reason ?? "Delivery closed by customer";
 
       await tx.deliveryStatusHistory.create({
         data: {
@@ -953,17 +1007,41 @@ async completeTrip(input: {
           actorUserId: input.actorUserId ?? null,
           actorRole: input.actorRole ?? null,
           actorType: EnumDeliveryStatusHistoryActorType.USER,
-          note: input.reason ?? "Delivery closed by customer",
+          note,
           fromStatus: delivery.status as any,
           toStatus: EnumDeliveryStatusHistoryToStatus.CLOSED,
         },
       });
 
-      return { ok: true, deliveryId: input.deliveryId };
+      return { ok: true, deliveryId: input.deliveryId, penaltyResult };
     }).then(async (result) => {
       this.emitStatusChanged(input.deliveryId, "CLOSED");
+
+      // ── Postpaid usage reporting ──────────────────────────────────
+      // For postpaid CLOSED deliveries where a penalty was applied, the
+      // Payment.amount was updated to the penalty amount inside the tx.
+      // reportUsageToStripe creates the Stripe InvoiceItem using that
+      // amount — so the penalty lands on the dealer's next weekly invoice.
+      // Safe no-op for prepaid, and no-op if no penalty was applied
+      // (reportUsageToStripe skips if paymentType !== POSTPAID).
+      if (result.penaltyResult?.applied && this.postpaidBilling) {
+        try {
+          await this.postpaidBilling.reportUsageToStripe({
+            deliveryId: input.deliveryId,
+          });
+        } catch (err: any) {
+          // Non-blocking — admin can retry via dashboard.
+          this.logger.error(
+            `reportUsageToStripe failed for closed delivery ${input.deliveryId}: ${err?.message}`,
+            err?.stack,
+          );
+        }
+      }
+
       return result;
     });
+
+    return result;
   }
 
   // ── GPS Proximity Check for "Start Pickup Now" ──

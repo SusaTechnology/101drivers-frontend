@@ -2029,6 +2029,44 @@ private async resolveIndividualCustomerForCreate(
           input.dropoffWindowEnd
         ));
 
+    // ── Resolve payment type EARLY ────────────────────────────────────
+    // Computed here (before any DB writes) so the postpaid pre-check below
+    // can run BEFORE we create the DeliveryRequest row. This prevents the
+    // "orphaned LISTED row" bug: if the pre-check fails (no card, frozen,
+    // over cap), we throw BEFORE any row is created — no cleanup needed,
+    // no locked quoteId, the dealer can retry immediately after fixing
+    // the issue (e.g. adding a saved card).
+    const paymentType =
+      customer.customerType === EnumCustomerCustomerType.BUSINESS &&
+      customer.postpaidEnabled === true
+        ? EnumPaymentPaymentType.POSTPAID
+        : EnumPaymentPaymentType.PREPAID;
+
+    // ── Postpaid (Option A) pre-check ──────────────────────────────
+    // If the dealer is on WEEKLY_POSTPAID billing, verify they can create
+    // another delivery (not frozen, approved, has saved card, cap not
+    // exceeded). Throws a user-facing error if any check fails.
+    //
+    // Safe no-op for prepaid dealers (canDealerCreateDelivery returns
+    // ok:true reason:"NOT_POSTPAID" for them).
+    //
+    // CRITICAL: this runs BEFORE deliveryRequest.create so a failed check
+    // leaves no orphaned row. Previously this ran AFTER the row was
+    // created, which orphaned a LISTED row on failure and locked the
+    // quoteId — causing "quote already attached to an active delivery"
+    // on retry.
+    if (this.postpaidBilling && paymentType === EnumPaymentPaymentType.POSTPAID) {
+      const amountCents = Math.round(Number(quote.estimatedPrice) * 100);
+      const eligibility = await this.postpaidBilling.canDealerCreateDelivery(
+        customer.id,
+        amountCents,
+      );
+      if (!eligibility.ok && eligibility.reason !== "NOT_POSTPAID") {
+        const friendlyMessage = this.mapEligibilityErrorToMessage(eligibility);
+        throw new BadRequestException(friendlyMessage);
+      }
+    }
+
     // Release any CANCELLED *or* DRAFT delivery that still holds this quoteId
     // before creating the new delivery, otherwise the create below will throw
     // a 409 "Another record with the requested (quoteId) already exists" and
@@ -2139,30 +2177,9 @@ private async resolveIndividualCustomerForCreate(
       },
     });
 
-    const paymentType =
-      customer.customerType === EnumCustomerCustomerType.BUSINESS &&
-      customer.postpaidEnabled === true
-        ? EnumPaymentPaymentType.POSTPAID
-        : EnumPaymentPaymentType.PREPAID;
-
-    // ── Postpaid (Option A) pre-check ──────────────────────────────
-    // If the dealer is on WEEKLY_POSTPAID billing, verify they can create
-    // another delivery (not frozen, approved, has saved card, cap not
-    // exceeded). Throws a user-facing error if any check fails.
-    //
-    // Safe no-op for prepaid dealers (canDealerCreateDelivery returns
-    // ok:true reason:"NOT_POSTPAID" for them).
-    if (this.postpaidBilling && paymentType === EnumPaymentPaymentType.POSTPAID) {
-      const amountCents = Math.round(Number(quote.estimatedPrice) * 100);
-      const eligibility = await this.postpaidBilling.canDealerCreateDelivery(
-        customer.id,
-        amountCents,
-      );
-      if (!eligibility.ok && eligibility.reason !== "NOT_POSTPAID") {
-        const friendlyMessage = this.mapEligibilityErrorToMessage(eligibility);
-        throw new BadRequestException(friendlyMessage);
-      }
-    }
+    // paymentType was already resolved and the postpaid pre-check already
+    // ran ABOVE (before deliveryRequest.create). See the "Resolve payment
+    // type EARLY" block near line 2039.
 
     // Create the Payment row first; the shared Stripe helper will update it
     // to STRIPE/AUTHORIZED (prepaid) or leave it MANUAL (postpaid → invoice).
@@ -2477,6 +2494,38 @@ private async resolveIndividualCustomerForCreate(
           input.dropoffWindowEnd
         ));
 
+    // ─── Step 3.5: Postpaid pre-check ─────────────────────────────────
+    // Mirror of createDeliveryFromAcceptedQuote: if the dealer is on
+    // WEEKLY_POSTPAID billing, verify they can create another delivery
+    // (not frozen, approved, has saved card, cap not exceeded) BEFORE we
+    // flip the DRAFT → LISTED. If the check fails, the row stays as DRAFT
+    // — the dealer can fix the issue (e.g. add a saved card) and retry.
+    //
+    // Safe no-op for prepaid dealers (canDealerCreateDelivery returns
+    // ok:true reason:"NOT_POSTPAID" for them).
+    //
+    // NOTE: paymentType is computed here for the pre-check only. The same
+    // expression is repeated at Step 8 below when creating the Payment
+    // row — kept duplicated (not hoisted) so the Step 8 block stays
+    // self-contained and readable.
+    const paymentType =
+      customer.customerType === EnumCustomerCustomerType.BUSINESS &&
+      customer.postpaidEnabled === true
+        ? EnumPaymentPaymentType.POSTPAID
+        : EnumPaymentPaymentType.PREPAID;
+
+    if (this.postpaidBilling && paymentType === EnumPaymentPaymentType.POSTPAID) {
+      const amountCents = Math.round(Number(quote.estimatedPrice) * 100);
+      const eligibility = await this.postpaidBilling.canDealerCreateDelivery(
+        customer.id,
+        amountCents,
+      );
+      if (!eligibility.ok && eligibility.reason !== "NOT_POSTPAID") {
+        const friendlyMessage = this.mapEligibilityErrorToMessage(eligibility);
+        throw new BadRequestException(friendlyMessage);
+      }
+    }
+
     // ─── Step 4: UPDATE the DRAFT row → LISTED (in-place promotion) ───
     // NO releasePriorQuoteId call — the quoteId stays on this same row.
     // We DO set quoteId explicitly to `effectiveQuoteId` so that the row is
@@ -2581,12 +2630,8 @@ private async resolveIndividualCustomerForCreate(
     });
 
     // ─── Step 8: Payment + PaymentEvent ───────────────────────────────
-    const paymentType =
-      customer.customerType === EnumCustomerCustomerType.BUSINESS &&
-      customer.postpaidEnabled === true
-        ? EnumPaymentPaymentType.POSTPAID
-        : EnumPaymentPaymentType.PREPAID;
-
+    // paymentType was already resolved at Step 3.5 (above, before the UPDATE)
+    // so the postpaid pre-check could run. Re-use that value here.
     const payment = await this.prisma.payment.create({
       data: {
         deliveryId: delivery.id,

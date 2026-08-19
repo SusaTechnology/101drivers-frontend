@@ -19,6 +19,7 @@ import { PasswordService } from "../auth/password.service";
 import { DeliveryComplianceEngine } from "src/domain/deliveryCompliance/deliveryCompliance.engine";
 import { DeliveryEvidenceEngine } from "src/domain/deliveryEvidence/deliveryEvidence.engine";
 import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.engine";
+import { DeliveryClosePenaltyEngine } from "src/domain/deliveryRequest/deliveryClosePenalty.engine";
 
 @Module({
   imports: [
@@ -44,7 +45,8 @@ import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.en
     PasswordService,
     DeliveryComplianceEngine,
     DeliveryEvidenceEngine,
-    PaymentPayoutEngine
+    PaymentPayoutEngine,
+    DeliveryClosePenaltyEngine
   ],
   exports: [
     GoogleMapsService,
@@ -55,7 +57,8 @@ import { PaymentPayoutEngine } from "src/domain/deliveryRequest/paymentPayout.en
     NotificationEventEngine,
     DeliveryComplianceEngine,
     DeliveryEvidenceEngine,
-    PaymentPayoutEngine
+    PaymentPayoutEngine,
+    DeliveryClosePenaltyEngine
   ],
 })
 export class DeliveryLogisticsModule {}

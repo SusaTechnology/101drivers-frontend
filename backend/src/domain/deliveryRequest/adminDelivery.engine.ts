@@ -18,6 +18,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
 import { TrackingGateway } from "../../gateways/tracking.gateway";
 import { StripeService } from "../../providers/stripe/stripe.service";
+import { DeliveryClosePenaltyEngine } from "./deliveryClosePenalty.engine";
 
 @Injectable()
 export class AdminDeliveryEngine {
@@ -30,6 +31,7 @@ export class AdminDeliveryEngine {
     private readonly trackingGateway?: TrackingGateway,
     @Optional() @Inject(StripeService)
     private readonly stripeService?: StripeService,
+    private readonly deliveryClosePenaltyEngine?: DeliveryClosePenaltyEngine,
   ) {}
 
   /**
@@ -253,6 +255,16 @@ async assignDriver(input: {
     deliveryId: string;
     actorUserId?: string | null;
     reason: string;
+    /**
+     * Whether to apply the close penalty fee ($48 to customer, $48 to driver).
+     * The admin UI should call `previewClosePenalty` first to show the admin
+     * the choice, then pass the admin's decision here.
+     *
+     * Default: false — admin must explicitly opt in. This is intentional:
+     * the product spec says "don't auto-apply on admin cancel; let the admin
+     * decide."
+     */
+    applyPenalty?: boolean;
   }): Promise<void> {
     const delivery = await this.prisma.deliveryRequest.findUnique({
       where: { id: input.deliveryId },
@@ -419,6 +431,31 @@ async assignDriver(input: {
         }
         // CAPTURED/PAID legacy: admin must use the manual refund endpoint
         // (`/payments/stripe/refund/:paymentId`) — not done here automatically.
+      }
+
+      // ── Close penalty (admin opt-in) ──────────────────────────────
+      // Applied AFTER the lock-in logic above so it can override the
+      // Payment.amount and driver payout if the admin chose to apply the
+      // penalty. The penalty engine reads compliance.pickupCompletedAt
+      // (the "PIN verified" turning point) to decide whether a penalty
+      // is warranted. If applyPenalty=false (the default), no penalty.
+      // See deliveryClosePenalty.engine.ts for the full rules.
+      if (this.deliveryClosePenaltyEngine && input.applyPenalty === true) {
+        try {
+          await this.deliveryClosePenaltyEngine.applyClosePenalty(tx, {
+            deliveryId: input.deliveryId,
+            applyPenalty: true,
+            actorUserId: input.actorUserId ?? null,
+            actorRole: "ADMIN",
+            reason: input.reason,
+          });
+        } catch (err: any) {
+          this.logger.error(
+            `Admin cancel: close penalty failed for delivery ${input.deliveryId}: ${err?.message}`,
+            err?.stack,
+          );
+          // Non-blocking — the cancel still proceeds.
+        }
       }
 
       // Update delivery status

@@ -838,10 +838,19 @@ export class DeliveryPricingEditEngine {
         `Old price: ${oldPriceStr} · New price: ${newPriceStr}.`;
     } else if (priceDirection === "increase") {
       headline = "Your new price is higher";
-      if (!hasPayment || isPostpaid) {
+      if (!hasPayment) {
+        // DRAFT — no Payment row yet, nothing to reconcile.
         body =
           `Since the addresses changed, the new price is higher than the old one. ` +
-          `The new amount (${newPriceStr}) will be applied when the delivery is next listed or captured. ` +
+          `The new amount (${newPriceStr}) will be used when you place this delivery. ` +
+          `Old price: ${oldPriceStr} → New price: ${newPriceStr} ` +
+          `(additional ${deltaAbsStr}).`;
+      } else if (isPostpaid) {
+        // POSTPAID LISTED — no Stripe call, but the weekly invoice will
+        // reflect the new amount when usage is reported at completion.
+        body =
+          `Since the addresses changed, the new price is higher than the old one. ` +
+          `No charge is made right now — the new amount (${newPriceStr}) will appear on your next weekly postpaid invoice when this delivery is completed. ` +
           `Old price: ${oldPriceStr} → New price: ${newPriceStr} ` +
           `(additional ${deltaAbsStr}).`;
       } else {
@@ -855,10 +864,19 @@ export class DeliveryPricingEditEngine {
     } else {
       // decrease
       headline = "Your new price is lower";
-      if (!hasPayment || isPostpaid) {
+      if (!hasPayment) {
+        // DRAFT — no Payment row yet, nothing to reconcile.
         body =
           `Since the addresses changed, the new price is lower than the old one. ` +
-          `The new amount (${newPriceStr}) will be applied when the delivery is next listed or captured. ` +
+          `The new amount (${newPriceStr}) will be used when you place this delivery. ` +
+          `Old price: ${oldPriceStr} → New price: ${newPriceStr} ` +
+          `(${deltaAbsStr} less).`;
+      } else if (isPostpaid) {
+        // POSTPAID LISTED — no Stripe call, but the weekly invoice will
+        // reflect the lower amount when usage is reported at completion.
+        body =
+          `Since the addresses changed, the new price is lower than the old one. ` +
+          `No charge is made right now — the new, lower amount (${newPriceStr}) will appear on your next weekly postpaid invoice when this delivery is completed. ` +
           `Old price: ${oldPriceStr} → New price: ${newPriceStr} ` +
           `(${deltaAbsStr} less).`;
       } else {

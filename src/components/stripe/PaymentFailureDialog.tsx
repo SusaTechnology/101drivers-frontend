@@ -17,8 +17,14 @@
  *
  * Stays mounted across retry attempts — only closes on success or on
  * explicit "Update card" navigation.
+ *
+ * Loading state: the parent should pass `loading={submitDelivery.isPending}`
+ * so the spinner reflects the actual mutation state. The dialog itself does
+ * NOT manage retry loading internally — this fixes the bug where the spinner
+ * stayed stuck after a retry (because `mutate()` is fire-and-forget and the
+ * internal `retrying` state never got reset on repeated identical errors).
  */
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AlertTriangle, CreditCard, RefreshCw, Loader2 } from 'lucide-react'
 import {
@@ -43,6 +49,12 @@ interface PaymentFailureDialogProps {
   onUpdateCard?: () => void
   /** Path to navigate to when updating card. Default '/dealer-setting'. */
   updateCardPath?: string
+  /**
+   * External loading state — should be `submitDelivery.isPending` from the
+   * parent. Drives the spinner on the Retry button. When true, both buttons
+   * are disabled. The dialog itself does NOT manage retry loading internally.
+   */
+  loading?: boolean
 }
 
 export default function PaymentFailureDialog({
@@ -52,27 +64,14 @@ export default function PaymentFailureDialog({
   onRetry,
   onUpdateCard,
   updateCardPath = '/dealer-setting',
+  loading = false,
 }: PaymentFailureDialogProps) {
   const navigate = useNavigate()
-  const [retrying, setRetrying] = useState(false)
 
-  // Reset retrying state if the dialog re-opens with a new reason
-  useEffect(() => {
-    if (open) setRetrying(false)
-  }, [open, reason])
-
-  const handleRetry = async () => {
-    setRetrying(true)
-    try {
-      await onRetry()
-      // If onRetry completes without throwing, the parent will close this
-      // dialog by setting `open=false`. We don't close here because the
-      // parent needs to navigate after a successful create.
-    } catch {
-      // Parent will update `reason` with the new error message — dialog
-      // stays open. Just stop the spinner.
-      setRetrying(false)
-    }
+  const handleRetry = () => {
+    // No internal state — the parent's `loading` prop drives the spinner.
+    // The parent should pass `loading={submitDelivery.isPending}`.
+    void onRetry()
   }
 
   const handleUpdateCard = () => {
@@ -143,10 +142,10 @@ export default function PaymentFailureDialog({
           {/* Retry is always available */}
           <Button
             onClick={handleRetry}
-            disabled={retrying}
+            disabled={loading}
             className="w-full py-3 rounded-2xl font-extrabold text-sm bg-slate-900 hover:bg-slate-800 text-white"
           >
-            {retrying ? (
+            {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Retrying...
@@ -163,12 +162,12 @@ export default function PaymentFailureDialog({
           {cardNeedsUpdating && (
             <Button
               onClick={handleUpdateCard}
-              disabled={retrying}
+              disabled={loading}
               variant="outline"
               className="w-full py-3 rounded-2xl font-extrabold text-sm border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               <CreditCard className="w-4 h-4" />
-              Update card info
+              Add / Update card
             </Button>
           )}
         </div>

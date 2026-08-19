@@ -1456,6 +1456,7 @@ export default function ReviewDeliveryPage() {
       reason={paymentFailure.reason}
       code={paymentFailure.code}
       onRetry={handlePaymentRetry}
+      loading={submitDelivery.isPending}
     />
     </div>
   );

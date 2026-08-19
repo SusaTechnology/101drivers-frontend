@@ -215,13 +215,17 @@ async adminForceCancelDelivery(
 })
 async closeDelivery(
   @common.Param("id") id: string,
-  @common.Body() body: { actorUserId?: string; actorRole?: string; reason?: string }
+  @common.Body() body: { actorUserId?: string; actorRole?: string; reason?: string; applyPenalty?: boolean }
 ): Promise<any> {
   return this.service.closeDelivery({
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
     actorRole: body.actorRole ?? null,
     reason: body.reason ?? null,
+    // Default: true — dealer-initiated close auto-applies the penalty if
+    // the pickup PIN was verified. Pass false to skip (e.g. admin acting
+    // on behalf of dealer with explicit no-penalty decision).
+    applyPenalty: body.applyPenalty ?? true,
   });
 }
 
@@ -466,7 +470,38 @@ async adminCancelDelivery(
     deliveryId: id,
     actorUserId: body.actorUserId ?? null,
     reason: body.reason,
+    applyPenalty: body.applyPenalty ?? false,
   });
+}
+
+@common.Get(":id/close-penalty-preview")
+@swagger.ApiOkResponse({
+  schema: {
+    type: "object",
+    properties: {
+      pickupPinVerified: { type: "boolean" },
+      penaltyAmountDollars: { type: "number", nullable: true },
+      driverId: { type: "string", nullable: true },
+      outcome: { type: "string", enum: ["apply_penalty", "no_penalty", "no_driver"] },
+      summary: { type: "string" },
+    },
+  },
+})
+@swagger.ApiOperation({
+  summary:
+    "Preview the close penalty for a delivery. Returns whether the pickup PIN was " +
+    "verified (penalty warranted) and the penalty amount. Used by the admin UI " +
+    "to show the admin the choice before confirming a cancel with penalty.",
+})
+@nestAccessControl.UseRoles({
+  resource: "DeliveryRequest",
+  action: "read",
+  possession: "any",
+})
+async adminPreviewClosePenalty(
+  @common.Param("id") id: string,
+): Promise<any> {
+  return this.service.adminPreviewClosePenalty(id);
 }
 
 @common.Post(":id/admin-reassign")
