@@ -22,9 +22,14 @@ export const Route = createFileRoute('/home/')({
           to: '/driver/dashboard',
           replace: true,
         })
-      } else if (roles.includes('BUSINESS_CUSTOMER') || roles.includes('PRIVATE_CUSTOMER')) {
+      } else if (roles.includes('BUSINESS_CUSTOMER')) {
         throw redirect({
           to: '/dealer-dashboard',
+          replace: true,
+        })
+      } else if (roles.includes('PRIVATE_CUSTOMER')) {
+        throw redirect({
+          to: '/individual-dashboard',
           replace: true,
         })
       }

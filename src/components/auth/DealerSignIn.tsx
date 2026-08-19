@@ -223,7 +223,13 @@ export function DealerSignIn({
 
       setTimeout(() => {
         if (userType === "dealer") {
-          navigate({ to: "/dealer-dashboard" });
+          // Branch: PRIVATE_CUSTOMER → individual dashboard, BUSINESS_CUSTOMER → dealer dashboard
+          const userRoles = data.roles || [];
+          if (userRoles.includes("PRIVATE_CUSTOMER")) {
+            navigate({ to: "/individual-dashboard" });
+          } else {
+            navigate({ to: "/dealer-dashboard" });
+          }
         } else if (userType === "driver") {
           // Use login data to decide where to redirect — no extra API call needed
           if (data.onboardingCompleted) {

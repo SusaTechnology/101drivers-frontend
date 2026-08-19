@@ -23,6 +23,7 @@ import { NotificationEventEngine } from "../domain/notificationEvent/notificatio
 import { MailService } from "src/common/mail/mail.service";
 import {
   EnumCustomerCustomerType,
+  EnumCustomerApprovalStatus,
   EnumDriverStatus,
   EnumUserRoles,
   EnumEmailVerificationPurpose,
@@ -591,12 +592,101 @@ export class AuthService {
   }
 
   async signupPrivateCustomer(
-    _dto: SignupCustomerDto,
-    _request: Request,
-    _response: Response
-  ): Promise<never> {
-    throw new BadRequestException(
-      "Private customer signup is deprecated. Use /deliveryRequests/individual/create-from-quote"
+    dto: SignupCustomerDto,
+    request: Request,
+    response: Response
+  ): Promise<UserInfo | VerificationRequiredResult> {
+    // ─── Private (individual) customer signup ─────────────────────────
+    // Mirrors signupBusinessCustomer but with key differences:
+    //   • No businessName / businessPlaceId required
+    //   • No businessPlaceId uniqueness check (private customers don't have one)
+    //   • roles: PRIVATE_CUSTOMER (not BUSINESS_CUSTOMER)
+    //   • customerType: PRIVATE (not BUSINESS)
+    //   • approvalStatus: APPROVED immediately (private customers don't need
+    //     admin approval — the DealerSignIn flow already skips approval
+    //     checks for PRIVATE_CUSTOMER role)
+    //   • OTP purpose: "PRIVATE_CUSTOMER"
+    //
+    // The same SignupCustomerDto is used — business-specific fields are
+    // all optional and simply ignored here.
+
+    const normalizedEmail = dto.email.trim().toLowerCase();
+
+    // Pre-flight email uniqueness check (same as business signup).
+    await this.ensureEmailDoesNotExist(normalizedEmail);
+
+    if (!dto.verificationToken) {
+      await this.emailVerificationService.requestVerification(
+        normalizedEmail,
+        dto.contactName || dto.fullName,
+        "PRIVATE_CUSTOMER"
+      );
+
+      return {
+        action: "VERIFICATION_REQUIRED",
+        email: normalizedEmail,
+        message: "Verification OTP sent to your email",
+      };
+    }
+
+    await this.emailVerificationService.consumeTokenForEmail(
+      normalizedEmail,
+      dto.verificationToken,
+      EnumEmailVerificationPurpose.SIGNUP
+    );
+
+    const hashed = await this.passwordService.hash(dto.password);
+
+    const userPhone = dto.contactPhone ?? dto.phone ?? null;
+
+    // Atomic User+Customer creation — same transaction pattern as business.
+    const { userId, username, userRoles } = await this.prisma.$transaction(
+      async (tx) => {
+        const createdUser = await tx.user.create({
+          data: {
+            username: this.generateUsernameFromEmail(normalizedEmail),
+            email: normalizedEmail,
+            password: hashed,
+            roles: EnumUserRoles.PRIVATE_CUSTOMER,
+            fullName: dto.fullName,
+            phone: userPhone,
+            isActive: true,
+            emailVerifiedAt: new Date(),
+          },
+          select: { id: true, username: true, roles: true },
+        });
+
+        await tx.customer.create({
+          data: {
+            customerType: EnumCustomerCustomerType.PRIVATE,
+            contactName: dto.contactName,
+            contactEmail: normalizedEmail,
+            contactPhone: dto.contactPhone ?? dto.phone ?? null,
+            phone: dto.phone ?? null,
+            // Private customers are auto-approved — no admin review needed.
+            approvalStatus: EnumCustomerApprovalStatus.APPROVED,
+            approvedAt: new Date(),
+            user: { connect: { id: createdUser.id } },
+          },
+          select: { id: true },
+        });
+
+        return {
+          userId: createdUser.id,
+          username: createdUser.username,
+          userRoles: createdUser.roles,
+        };
+      },
+    );
+
+    return this.issueToken(
+      userId,
+      username,
+      normalizedEmail,
+      userRoles,
+      request,
+      response,
+      dto.fullName
     );
   }
 

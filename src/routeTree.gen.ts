@@ -18,6 +18,7 @@ import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
 import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as InsurancePortalIndexRouteImport } from './routes/insurance-portal/index'
+import { Route as IndividualDashboardIndexRouteImport } from './routes/individual-dashboard/index'
 import { Route as HomeIndexRouteImport } from './routes/home/index'
 import { Route as HelpDriverIndexRouteImport } from './routes/help-driver/index'
 import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/index'
@@ -108,6 +109,7 @@ import { Route as DriverCompletedRouteImport } from './routes/driver/completed'
 import { Route as DriverBookedLaterRouteImport } from './routes/driver/booked-later'
 import { Route as DriverActiveRouteImport } from './routes/driver/active'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
+import { Route as AuthIndividualSignupRouteImport } from './routes/auth/individual-signup'
 import { Route as AuthDealerSignupRouteImport } from './routes/auth/dealer-signup'
 import { Route as AuthDealerSigninRouteImport } from './routes/auth/dealer-signin'
 import { Route as AuthAdminSigninRouteImport } from './routes/auth/admin-signin'
@@ -161,6 +163,12 @@ const InsurancePortalIndexRoute = InsurancePortalIndexRouteImport.update({
   path: '/insurance-portal/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IndividualDashboardIndexRoute =
+  IndividualDashboardIndexRouteImport.update({
+    id: '/individual-dashboard/',
+    path: '/individual-dashboard/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const HomeIndexRoute = HomeIndexRouteImport.update({
   id: '/home/',
   path: '/home/',
@@ -635,6 +643,11 @@ const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
   path: '/auth/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthIndividualSignupRoute = AuthIndividualSignupRouteImport.update({
+  id: '/auth/individual-signup',
+  path: '/auth/individual-signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthDealerSignupRoute = AuthDealerSignupRouteImport.update({
   id: '/auth/dealer-signup',
   path: '/auth/dealer-signup',
@@ -680,6 +693,7 @@ export interface FileRoutesByFullPath {
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
+  '/auth/individual-signup': typeof AuthIndividualSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/driver/active': typeof DriverActiveRoute
   '/driver/booked-later': typeof DriverBookedLaterRoute
@@ -770,6 +784,7 @@ export interface FileRoutesByFullPath {
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
   '/home/': typeof HomeIndexRoute
+  '/individual-dashboard/': typeof IndividualDashboardIndexRoute
   '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -787,6 +802,7 @@ export interface FileRoutesByTo {
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
+  '/auth/individual-signup': typeof AuthIndividualSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/driver/active': typeof DriverActiveRoute
   '/driver/booked-later': typeof DriverBookedLaterRoute
@@ -877,6 +893,7 @@ export interface FileRoutesByTo {
   '/help-customer': typeof HelpCustomerIndexRoute
   '/help-driver': typeof HelpDriverIndexRoute
   '/home': typeof HomeIndexRoute
+  '/individual-dashboard': typeof IndividualDashboardIndexRoute
   '/insurance-portal': typeof InsurancePortalIndexRoute
   '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
@@ -896,6 +913,7 @@ export interface FileRoutesById {
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
+  '/auth/individual-signup': typeof AuthIndividualSignupRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/driver/active': typeof DriverActiveRoute
   '/driver/booked-later': typeof DriverBookedLaterRoute
@@ -986,6 +1004,7 @@ export interface FileRoutesById {
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
   '/home/': typeof HomeIndexRoute
+  '/individual-dashboard/': typeof IndividualDashboardIndexRoute
   '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -1006,6 +1025,7 @@ export interface FileRouteTypes {
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
+    | '/auth/individual-signup'
     | '/auth/reset-password'
     | '/driver/active'
     | '/driver/booked-later'
@@ -1096,6 +1116,7 @@ export interface FileRouteTypes {
     | '/help-customer/'
     | '/help-driver/'
     | '/home/'
+    | '/individual-dashboard/'
     | '/insurance-portal/'
     | '/live-track/'
     | '/map-test/'
@@ -1113,6 +1134,7 @@ export interface FileRouteTypes {
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
+    | '/auth/individual-signup'
     | '/auth/reset-password'
     | '/driver/active'
     | '/driver/booked-later'
@@ -1203,6 +1225,7 @@ export interface FileRouteTypes {
     | '/help-customer'
     | '/help-driver'
     | '/home'
+    | '/individual-dashboard'
     | '/insurance-portal'
     | '/live-track'
     | '/map-test'
@@ -1221,6 +1244,7 @@ export interface FileRouteTypes {
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
+    | '/auth/individual-signup'
     | '/auth/reset-password'
     | '/driver/active'
     | '/driver/booked-later'
@@ -1311,6 +1335,7 @@ export interface FileRouteTypes {
     | '/help-customer/'
     | '/help-driver/'
     | '/home/'
+    | '/individual-dashboard/'
     | '/insurance-portal/'
     | '/live-track/'
     | '/map-test/'
@@ -1330,6 +1355,7 @@ export interface RootRouteChildren {
   AuthAdminSigninRoute: typeof AuthAdminSigninRoute
   AuthDealerSigninRoute: typeof AuthDealerSigninRoute
   AuthDealerSignupRoute: typeof AuthDealerSignupRoute
+  AuthIndividualSignupRoute: typeof AuthIndividualSignupRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AboutIndexRoute: typeof AboutIndexRoute
   AdminAuditLogsIndexRoute: typeof AdminAuditLogsIndexRoute
@@ -1398,6 +1424,7 @@ export interface RootRouteChildren {
   HelpCustomerIndexRoute: typeof HelpCustomerIndexRoute
   HelpDriverIndexRoute: typeof HelpDriverIndexRoute
   HomeIndexRoute: typeof HomeIndexRoute
+  IndividualDashboardIndexRoute: typeof IndividualDashboardIndexRoute
   InsurancePortalIndexRoute: typeof InsurancePortalIndexRoute
   LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
@@ -1473,6 +1500,13 @@ declare module '@tanstack/react-router' {
       path: '/insurance-portal'
       fullPath: '/insurance-portal/'
       preLoaderRoute: typeof InsurancePortalIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/individual-dashboard/': {
+      id: '/individual-dashboard/'
+      path: '/individual-dashboard'
+      fullPath: '/individual-dashboard/'
+      preLoaderRoute: typeof IndividualDashboardIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home/': {
@@ -2105,6 +2139,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/individual-signup': {
+      id: '/auth/individual-signup'
+      path: '/auth/individual-signup'
+      fullPath: '/auth/individual-signup'
+      preLoaderRoute: typeof AuthIndividualSignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/dealer-signup': {
       id: '/auth/dealer-signup'
       path: '/auth/dealer-signup'
@@ -2217,6 +2258,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthAdminSigninRoute: AuthAdminSigninRoute,
   AuthDealerSigninRoute: AuthDealerSigninRoute,
   AuthDealerSignupRoute: AuthDealerSignupRoute,
+  AuthIndividualSignupRoute: AuthIndividualSignupRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   AboutIndexRoute: AboutIndexRoute,
   AdminAuditLogsIndexRoute: AdminAuditLogsIndexRoute,
@@ -2285,6 +2327,7 @@ const rootRouteChildren: RootRouteChildren = {
   HelpCustomerIndexRoute: HelpCustomerIndexRoute,
   HelpDriverIndexRoute: HelpDriverIndexRoute,
   HomeIndexRoute: HomeIndexRoute,
+  IndividualDashboardIndexRoute: IndividualDashboardIndexRoute,
   InsurancePortalIndexRoute: InsurancePortalIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,

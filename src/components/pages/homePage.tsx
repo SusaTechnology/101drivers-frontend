@@ -48,6 +48,7 @@ import {
   KeyRound,
   CreditCard,
   Sparkles,
+  UserCircle,
   Download,
   Send,
   Loader2,
@@ -477,9 +478,12 @@ export default function LandingPage() {
                 </Link>
               </li>
               <li>
-                <span className="text-slate-400 dark:text-slate-600 font-semibold cursor-default">
+                <Link
+                  to="/auth/individual-signup"
+                  className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
+                >
                   Individual
-                </span>
+                </Link>
               </li>
               <li>
                 <Link
@@ -1010,9 +1014,39 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ===== SECTION 6 — Signup Form (Dealer Signup) ===== */}
+        {/* ===== SECTION 6 — Signup Choice (Business / Personal) ===== */}
         <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <DealerSignupForm isLoaded={isLoaded} embedded={true} />
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-2">
+              Get started with 101 Drivers
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-8">
+              Choose your account type to sign up
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
+              {/* Business delivery — primary, slightly larger/highlighted */}
+              <Button
+                asChild
+                className="flex-1 h-16 text-base font-extrabold rounded-2xl bg-primary text-slate-950 hover:bg-primary/90 shadow-lg shadow-primary/20"
+              >
+                <Link to="/auth/dealer-signup">
+                  <Building className="w-5 h-5 mr-2" />
+                  Business delivery
+                </Link>
+              </Button>
+              {/* Personal delivery — secondary, equal but outline */}
+              <Button
+                asChild
+                variant="outline"
+                className="flex-1 h-16 text-base font-extrabold rounded-2xl border-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <Link to="/auth/individual-signup">
+                  <UserCircle className="w-5 h-5 mr-2" />
+                  Personal delivery
+                </Link>
+              </Button>
+            </div>
+          </div>
         </section>
 
         {/* ===== SECTION 7 — Driver Recruitment ===== */}
