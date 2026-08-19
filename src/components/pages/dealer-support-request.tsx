@@ -71,8 +71,10 @@ export default function DealerSupportRequest() {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
 
-  // Determine customer type for UI display
-  const isPrivateCustomer = user?.userType === 'PRIVATE_CUSTOMER'
+  // Determine customer type from roles array (NOT userType — that field
+  // doesn't exist on the user object, so this was always false before,
+  // causing private customers to get DEALER support categories).
+  const isPrivateCustomer = user?.roles?.includes('PRIVATE_CUSTOMER') ?? false
 
   // Get categories for current role (for UI dropdown)
   const categories = isPrivateCustomer ? CATEGORIES_BY_ROLE.PRIVATE_CUSTOMER : CATEGORIES_BY_ROLE.DEALER

@@ -400,7 +400,9 @@ export default function DealerDashboard() {
     transitionMutation.mutate({
       toStatus,
       actorUserId: user?.id || null,
-      actorRole: 'BUSINESS_CUSTOMER',
+      // Derive actorRole from the customer profile so audit logs correctly
+      // label private-customer actions as PRIVATE_CUSTOMER.
+      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'BUSINESS_CUSTOMER',
       note,
     })
   }

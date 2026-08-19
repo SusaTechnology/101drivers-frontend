@@ -201,6 +201,9 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
 
   const user = getUser()
   const dealerId = user?.profileId
+  // Derive customer type from roles for audit-log accuracy (was hardcoded
+  // to BUSINESS_CUSTOMER, mislabeling private-customer actions).
+  const isPrivateCustomer = user?.roles?.includes('PRIVATE_CUSTOMER') ?? false
   const { socketConnected } = useDealerDeliverySocket({ dealerId, deliveryId: id })
 
   // Load Google Maps API
@@ -393,7 +396,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     transitionDeliveryMutation.mutate({
       toStatus,
       actorUserId: user?.id || null,
-      actorRole: 'BUSINESS_CUSTOMER',
+      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'BUSINESS_CUSTOMER',
       note,
     })
   }

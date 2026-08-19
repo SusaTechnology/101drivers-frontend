@@ -163,6 +163,21 @@ export default function ReviewDeliveryPage() {
   const [editedValues, setEditedValues] = useState<Partial<ReviewDeliveryData>>({});
   const customer = getUser();
 
+  // Fetch the customer profile to get the actual customerType (PRIVATE vs BUSINESS).
+  // Used by the schedule-preview requests below — previously this was hardcoded
+  // to 'BUSINESS', which applied business scheduling rules to private customers.
+  const { data: customerProfile } = useDataQuery<{ customerType: string }>({
+    apiEndPoint: customer?.profileId
+      ? `${API_URL}/api/customers/${customer.profileId}`
+      : '',
+    enabled: !!customer?.profileId,
+    noFilter: true,
+    staleTime: 60 * 1000,
+  });
+  // Derive customerType from the profile, falling back to the user's role.
+  const customerType = customerProfile?.customerType
+    ?? (customer?.roles?.includes('PRIVATE_CUSTOMER') ? 'PRIVATE' : 'BUSINESS');
+
   // Check if dealer has a saved card (to show/hide "save card" nudge)
   const { data: savedCardsData } = useDataQuery<{ cards: any[] }>({
     apiEndPoint: `${API_URL}/api/payments/stripe/saved-cards/${customer?.profileId}`,
@@ -270,7 +285,7 @@ export default function ReviewDeliveryPage() {
           body: JSON.stringify({
             quoteId: reviewData.quoteId,
             serviceType: reviewData.serviceType,
-            customerType: 'BUSINESS',
+            customerType,
             customerId: customer?.profileId,
             customerChose: reviewData.customerChose || 'PICKUP_WINDOW',
             preferredDate,
@@ -307,7 +322,7 @@ export default function ReviewDeliveryPage() {
       const body: Record<string, unknown> = {
         quoteId: reviewData.quoteId,
         serviceType: reviewData.serviceType,
-        customerType: 'BUSINESS',
+        customerType,
         customerId: customer?.profileId,
         customerChose: chose,
         preferredDate,

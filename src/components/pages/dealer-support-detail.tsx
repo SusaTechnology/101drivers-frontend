@@ -123,8 +123,9 @@ export default function DealerSupportDetail() {
 
   const [replyMessage, setReplyMessage] = useState('')
 
-  // Determine customer type
-  const isPrivateCustomer = user?.userType === 'PRIVATE_CUSTOMER'
+  // Determine customer type from roles array (NOT userType — that field
+  // doesn't exist on the user object, so this was always false before).
+  const isPrivateCustomer = user?.roles?.includes('PRIVATE_CUSTOMER') ?? false
 
   // Fetch support request detail
   const {

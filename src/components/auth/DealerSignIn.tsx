@@ -223,13 +223,11 @@ export function DealerSignIn({
 
       setTimeout(() => {
         if (userType === "dealer") {
-          // Branch: PRIVATE_CUSTOMER → individual dashboard, BUSINESS_CUSTOMER → dealer dashboard
-          const userRoles = data.roles || [];
-          if (userRoles.includes("PRIVATE_CUSTOMER")) {
-            navigate({ to: "/individual-dashboard" });
-          } else {
-            navigate({ to: "/dealer-dashboard" });
-          }
+          // Both BUSINESS_CUSTOMER and PRIVATE_CUSTOMER use the same
+          // dealer pages. The pages conditionally hide business-specific
+          // content (postpaid panel, business profile) based on
+          // customerType from the API.
+          navigate({ to: "/dealer-dashboard" });
         } else if (userType === "driver") {
           // Use login data to decide where to redirect — no extra API call needed
           if (data.onboardingCompleted) {

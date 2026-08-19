@@ -18,7 +18,6 @@ import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
 import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as InsurancePortalIndexRouteImport } from './routes/insurance-portal/index'
-import { Route as IndividualDashboardIndexRouteImport } from './routes/individual-dashboard/index'
 import { Route as HomeIndexRouteImport } from './routes/home/index'
 import { Route as HelpDriverIndexRouteImport } from './routes/help-driver/index'
 import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/index'
@@ -163,12 +162,6 @@ const InsurancePortalIndexRoute = InsurancePortalIndexRouteImport.update({
   path: '/insurance-portal/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndividualDashboardIndexRoute =
-  IndividualDashboardIndexRouteImport.update({
-    id: '/individual-dashboard/',
-    path: '/individual-dashboard/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const HomeIndexRoute = HomeIndexRouteImport.update({
   id: '/home/',
   path: '/home/',
@@ -784,7 +777,6 @@ export interface FileRoutesByFullPath {
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
   '/home/': typeof HomeIndexRoute
-  '/individual-dashboard/': typeof IndividualDashboardIndexRoute
   '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -893,7 +885,6 @@ export interface FileRoutesByTo {
   '/help-customer': typeof HelpCustomerIndexRoute
   '/help-driver': typeof HelpDriverIndexRoute
   '/home': typeof HomeIndexRoute
-  '/individual-dashboard': typeof IndividualDashboardIndexRoute
   '/insurance-portal': typeof InsurancePortalIndexRoute
   '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
@@ -1004,7 +995,6 @@ export interface FileRoutesById {
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
   '/home/': typeof HomeIndexRoute
-  '/individual-dashboard/': typeof IndividualDashboardIndexRoute
   '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -1116,7 +1106,6 @@ export interface FileRouteTypes {
     | '/help-customer/'
     | '/help-driver/'
     | '/home/'
-    | '/individual-dashboard/'
     | '/insurance-portal/'
     | '/live-track/'
     | '/map-test/'
@@ -1225,7 +1214,6 @@ export interface FileRouteTypes {
     | '/help-customer'
     | '/help-driver'
     | '/home'
-    | '/individual-dashboard'
     | '/insurance-portal'
     | '/live-track'
     | '/map-test'
@@ -1335,7 +1323,6 @@ export interface FileRouteTypes {
     | '/help-customer/'
     | '/help-driver/'
     | '/home/'
-    | '/individual-dashboard/'
     | '/insurance-portal/'
     | '/live-track/'
     | '/map-test/'
@@ -1424,7 +1411,6 @@ export interface RootRouteChildren {
   HelpCustomerIndexRoute: typeof HelpCustomerIndexRoute
   HelpDriverIndexRoute: typeof HelpDriverIndexRoute
   HomeIndexRoute: typeof HomeIndexRoute
-  IndividualDashboardIndexRoute: typeof IndividualDashboardIndexRoute
   InsurancePortalIndexRoute: typeof InsurancePortalIndexRoute
   LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
@@ -1500,13 +1486,6 @@ declare module '@tanstack/react-router' {
       path: '/insurance-portal'
       fullPath: '/insurance-portal/'
       preLoaderRoute: typeof InsurancePortalIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/individual-dashboard/': {
-      id: '/individual-dashboard/'
-      path: '/individual-dashboard'
-      fullPath: '/individual-dashboard/'
-      preLoaderRoute: typeof IndividualDashboardIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home/': {
@@ -2327,7 +2306,6 @@ const rootRouteChildren: RootRouteChildren = {
   HelpCustomerIndexRoute: HelpCustomerIndexRoute,
   HelpDriverIndexRoute: HelpDriverIndexRoute,
   HomeIndexRoute: HomeIndexRoute,
-  IndividualDashboardIndexRoute: IndividualDashboardIndexRoute,
   InsurancePortalIndexRoute: InsurancePortalIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,
