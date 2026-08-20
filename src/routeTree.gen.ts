@@ -114,6 +114,7 @@ import { Route as AuthDealerSigninRouteImport } from './routes/auth/dealer-signi
 import { Route as AuthAdminSigninRouteImport } from './routes/auth/admin-signin'
 import { Route as AdminUserDetailUserIdRouteImport } from './routes/admin-user-detail/$userId'
 import { Route as TrackTokenIndexRouteImport } from './routes/track/$token/index'
+import { Route as AuthIndividualVerifyEmailIndexRouteImport } from './routes/auth/individual-verify-email/index'
 import { Route as AdminPricingConfigCreateIndexRouteImport } from './routes/admin-pricing-config/create/index'
 import { Route as AdminPricingConfigEditConfigIdRouteImport } from './routes/admin-pricing-config/edit/$configId'
 
@@ -666,6 +667,12 @@ const TrackTokenIndexRoute = TrackTokenIndexRouteImport.update({
   path: '/track/$token/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthIndividualVerifyEmailIndexRoute =
+  AuthIndividualVerifyEmailIndexRouteImport.update({
+    id: '/auth/individual-verify-email/',
+    path: '/auth/individual-verify-email/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminPricingConfigCreateIndexRoute =
   AdminPricingConfigCreateIndexRouteImport.update({
     id: '/admin-pricing-config/create/',
@@ -786,6 +793,7 @@ export interface FileRoutesByFullPath {
   '/terms/': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
+  '/auth/individual-verify-email/': typeof AuthIndividualVerifyEmailIndexRoute
   '/track/$token/': typeof TrackTokenIndexRoute
 }
 export interface FileRoutesByTo {
@@ -894,6 +902,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create': typeof AdminPricingConfigCreateIndexRoute
+  '/auth/individual-verify-email': typeof AuthIndividualVerifyEmailIndexRoute
   '/track/$token': typeof TrackTokenIndexRoute
 }
 export interface FileRoutesById {
@@ -1004,6 +1013,7 @@ export interface FileRoutesById {
   '/terms/': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
+  '/auth/individual-verify-email/': typeof AuthIndividualVerifyEmailIndexRoute
   '/track/$token/': typeof TrackTokenIndexRoute
 }
 export interface FileRouteTypes {
@@ -1115,6 +1125,7 @@ export interface FileRouteTypes {
     | '/terms/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
+    | '/auth/individual-verify-email/'
     | '/track/$token/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1223,6 +1234,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create'
+    | '/auth/individual-verify-email'
     | '/track/$token'
   id:
     | '__root__'
@@ -1332,6 +1344,7 @@ export interface FileRouteTypes {
     | '/terms/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
+    | '/auth/individual-verify-email/'
     | '/track/$token/'
   fileRoutesById: FileRoutesById
 }
@@ -1420,6 +1433,7 @@ export interface RootRouteChildren {
   TermsIndexRoute: typeof TermsIndexRoute
   AdminPricingConfigEditConfigIdRoute: typeof AdminPricingConfigEditConfigIdRoute
   AdminPricingConfigCreateIndexRoute: typeof AdminPricingConfigCreateIndexRoute
+  AuthIndividualVerifyEmailIndexRoute: typeof AuthIndividualVerifyEmailIndexRoute
   TrackTokenIndexRoute: typeof TrackTokenIndexRoute
 }
 
@@ -2160,6 +2174,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackTokenIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/individual-verify-email/': {
+      id: '/auth/individual-verify-email/'
+      path: '/auth/individual-verify-email'
+      fullPath: '/auth/individual-verify-email/'
+      preLoaderRoute: typeof AuthIndividualVerifyEmailIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-pricing-config/create/': {
       id: '/admin-pricing-config/create/'
       path: '/admin-pricing-config/create'
@@ -2315,6 +2336,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsIndexRoute: TermsIndexRoute,
   AdminPricingConfigEditConfigIdRoute: AdminPricingConfigEditConfigIdRoute,
   AdminPricingConfigCreateIndexRoute: AdminPricingConfigCreateIndexRoute,
+  AuthIndividualVerifyEmailIndexRoute: AuthIndividualVerifyEmailIndexRoute,
   TrackTokenIndexRoute: TrackTokenIndexRoute,
 }
 export const routeTree = rootRouteImport

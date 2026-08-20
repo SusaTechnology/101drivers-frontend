@@ -6,18 +6,20 @@
  * (same layout, same field styling, same terms checkbox with policy links).
  * The only difference: no business fields, no Google Places autocomplete.
  *
- * OTP flow:
+ * OTP flow (separate page — same pattern as driver signup):
  *   1. User fills form → clicks "Send Verification Code"
- *   2. Backend sends OTP email with link to /auth/individual-signup?otp=XXXX
- *   3. User enters OTP inline (auto-verified on 6th digit) OR clicks the
- *      email link which auto-fills the OTP and restores the form draft
- *   4. User clicks "Create Account" → backend creates User+Customer,
- *      issues tokens (auto-login), redirects to /dealer-dashboard
+ *   2. This form sends the OTP via the backend, saves the pending payload
+ *      to sessionStorage, and navigates to /auth/individual-verify-email
+ *   3. The verify page shows the OTP entry UI (InputOTP component)
+ *   4. User enters the 6-digit code (or clicks the email link which
+ *      auto-fills it via ?otp=XXXX URL param)
+ *   5. On verify, the backend creates User+Customer, issues tokens,
+ *      redirects to /dealer-dashboard
  *
  * Reuses: Button, Input, Card, Label, PolicySheet, toast, useDataMutation
  * — same UI primitives as DealerSignupForm for visual consistency.
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { useNavigate, Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,7 +32,6 @@ import {
   CheckCircle,
   Eye,
   EyeOff,
-  AlertCircle,
   KeyRound,
   UserCircle,
   Loader2,
@@ -48,12 +49,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useDataMutation, setUser } from "@/lib/tanstack/dataQuery";
+import { useDataMutation } from "@/lib/tanstack/dataQuery";
 import PolicySheet from "@/components/shared/PolicySheet";
 
-// localStorage key for saving the individual signup draft (so the OTP
-// email link can restore the form state).
-const INDIVIDUAL_SIGNUP_DRAFT_KEY = "individualSignupDraft";
+// sessionStorage key for the pending signup payload (so the verify page
+// can read it and complete the registration).
+const INDIVIDUAL_PENDING_PAYLOAD_KEY = "individualPendingPayload";
 
 // ── Form schema (same fields as dealer's Account & Contact Information) ─
 const individualSignupSchema = z
@@ -89,7 +90,7 @@ const individualSignupSchema = z
 
 type IndividualSignupFormData = z.infer<typeof individualSignupSchema>;
 
-// ── Payload types ───────────────────────────────────────────────────────
+// ── Payload type (sent to backend, stored in sessionStorage for verify page) ─
 interface IndividualSignupPayload {
   email: string;
   password: string;
@@ -100,10 +101,6 @@ interface IndividualSignupPayload {
   contactPhone: string;
 }
 
-interface IndividualSignupPayloadWithOtp extends IndividualSignupPayload {
-  verificationToken: string;
-}
-
 // ── Component ───────────────────────────────────────────────────────────
 export function IndividualSignupForm() {
   const navigate = useNavigate();
@@ -112,20 +109,11 @@ export function IndividualSignupForm() {
   const [openPolicySheet, setOpenPolicySheet] = useState<
     "customer-agreement" | "customer-terms" | "customer-privacy" | null
   >(null);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpValue, setOtpValue] = useState("");
-  const [otpFocused, setOtpFocused] = useState(false);
-  const [otpVerified, setOtpVerified] = useState(false);
-  const [otpAttempted, setOtpAttempted] = useState(false);
-  const [registrationComplete, setRegistrationComplete] = useState(false);
-  const [pendingSignupData, setPendingSignupData] =
-    useState<IndividualSignupPayload | null>(null);
 
   const {
     register,
     handleSubmit,
     watch,
-    reset,
     formState: { errors },
   } = useForm<IndividualSignupFormData>({
     resolver: zodResolver(individualSignupSchema),
@@ -165,51 +153,10 @@ export function IndividualSignupForm() {
     register("contactPhone").onChange(e);
   };
 
-  // ── Check for OTP in URL and restore draft from localStorage ────────
-  // Same pattern as DealerSignupForm: when the user clicks the email link,
-  // the OTP is in the URL (?otp=XXXX) and the form draft is in localStorage.
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlOtp = urlParams.get("otp");
-
-    if (urlOtp) {
-      const draftStr = localStorage.getItem(INDIVIDUAL_SIGNUP_DRAFT_KEY);
-      if (draftStr) {
-        try {
-          const draft = JSON.parse(draftStr);
-          if (draft.formData) {
-            // Restore form data
-            reset(draft.formData, { keepDefaultValues: false });
-            if (draft.formData.contactPhone) {
-              const digits = draft.formData.contactPhone;
-              let formatted = digits;
-              if (digits.length > 6) {
-                formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-              } else if (digits.length > 3) {
-                formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-              } else if (digits.length > 0) {
-                formatted = `(${digits}`;
-              }
-              setContactPhoneDisplay(formatted);
-            }
-            // Set OTP and show verification step
-            setOtpValue(urlOtp);
-            setOtpSent(true);
-            setPendingSignupData(draft.payload);
-          }
-        } catch (e) {
-          console.error("Failed to parse draft", e);
-        }
-      } else {
-        toast.error("Session expired", {
-          description: "Please start a new registration.",
-        });
-      }
-    }
-  }, [reset]);
-
-  // ── Mutations ────────────────────────────────────────────────────────
-  // Step 1: send OTP (trailing slash = step 1 endpoint)
+  // ── Mutation: send OTP (step 1) ──────────────────────────────────────
+  // On success: save the pending payload to sessionStorage and navigate
+  // to the separate verify-email page. The verify page reads the payload,
+  // shows the OTP entry UI, and calls step 2 to create the account.
   const sendOtpMutation = useDataMutation<
     { message: string },
     IndividualSignupPayload
@@ -221,18 +168,14 @@ export function IndividualSignupForm() {
       toast.success("Code sent to your email", {
         description: data.message || "Please check your inbox.",
       });
-      setOtpSent(true);
-      setPendingSignupData(variables);
-      setOtpVerified(false);
-      setOtpAttempted(false);
-      setOtpValue("");
-
-      // Save draft to localStorage so the OTP email link can restore it.
-      const formValues = watch();
-      localStorage.setItem(
-        INDIVIDUAL_SIGNUP_DRAFT_KEY,
-        JSON.stringify({ formData: formValues, payload: variables }),
+      // Save pending payload to sessionStorage so the verify page can
+      // complete the registration.
+      sessionStorage.setItem(
+        INDIVIDUAL_PENDING_PAYLOAD_KEY,
+        JSON.stringify(variables),
       );
+      // Navigate to the separate OTP entry page.
+      navigate({ to: "/auth/individual-verify-email" });
     },
     onError: (error) => {
       const errorMessage = error.message || "Please try again later.";
@@ -258,135 +201,6 @@ export function IndividualSignupForm() {
     errorMessage: "Failed to send code",
   });
 
-  // Step 2: verify OTP + create account (no trailing slash = step 2)
-  const verifyOtpMutation = useDataMutation<
-    any,
-    IndividualSignupPayloadWithOtp
-  >({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private`,
-    fetchWithoutRefresh: true,
-    publicEndpoint: true,
-    onSuccess: (data, variables) => {
-      toast.success("Account created successfully!", {
-        description: "Welcome to 101 Drivers!",
-      });
-      setRegistrationComplete(true);
-      localStorage.removeItem(INDIVIDUAL_SIGNUP_DRAFT_KEY);
-
-      // The backend issues tokens on success (auto-login).
-      // Store user data and redirect to the dashboard.
-      if (data && typeof data === "object" && "id" in data) {
-        setUser({
-          id: data.id,
-          username: data.username,
-          email: data.email,
-          roles: data.roles || ["PRIVATE_CUSTOMER"],
-          fullName: data.fullName || variables.fullName,
-          profileId: data.profileId,
-        });
-        setTimeout(() => {
-          navigate({ to: "/dealer-dashboard" });
-        }, 1500);
-      } else {
-        setTimeout(() => {
-          navigate({ to: "/auth/dealer-signin" });
-        }, 2000);
-      }
-    },
-    onError: (error) => {
-      const errorMessage = error.message || "Invalid code or server error.";
-      if (errorMessage.toLowerCase().includes("already")) {
-        toast.error("Email already registered", {
-          description:
-            "This email is already associated with an account. Please sign in instead.",
-          action: {
-            label: "Log In",
-            onClick: () => {
-              window.location.href = "/auth/dealer-signin";
-            },
-          },
-          duration: 8000,
-        });
-      } else {
-        toast.error("Verification failed", {
-          description: errorMessage,
-        });
-      }
-    },
-    successMessage: "Account created successfully",
-    errorMessage: "Failed to create account",
-  });
-
-  // Resend OTP (same endpoint as step 1)
-  const resendCodeMutation = useDataMutation<
-    { message: string },
-    IndividualSignupPayload
-  >({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private/`,
-    fetchWithoutRefresh: true,
-    publicEndpoint: true,
-    onSuccess: (data) => {
-      toast.success("Code resent", {
-        description: data.message || "Please check your inbox.",
-      });
-      setOtpValue("");
-      setOtpVerified(false);
-      setOtpAttempted(false);
-    },
-    onError: (error) => {
-      toast.error("Failed to resend code", {
-        description: error.message || "Please try again later.",
-      });
-    },
-    successMessage: "Code resent successfully",
-    errorMessage: "Failed to resend code",
-  });
-
-  // Live OTP check (does NOT consume the token — just validates format)
-  const verifyOtpCheckMutation = useDataMutation<
-    { verified: boolean },
-    { email: string; verificationToken: string }
-  >({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/verify-otp`,
-    fetchWithoutRefresh: true,
-    publicEndpoint: true,
-    onSuccessInvalidate: false,
-    onSuccess: (data, variables) => {
-      if (variables.verificationToken === otpValueRef.current) {
-        setOtpVerified(data.verified);
-        setOtpAttempted(true);
-      }
-    },
-    onError: () => {
-      setOtpVerified(false);
-      setOtpAttempted(true);
-    },
-  });
-
-  // Ref to track the latest otpValue inside mutation callbacks
-  const otpValueRef = useRef(otpValue);
-  useEffect(() => {
-    otpValueRef.current = otpValue;
-  }, [otpValue]);
-
-  // Auto-verify when the user types 6 digits
-  useEffect(() => {
-    if (!otpSent) return;
-    if (otpValue.length === 6) {
-      if (!verifyOtpCheckMutation.isPending) {
-        verifyOtpCheckMutation.mutate({
-          email: pendingSignupData?.email ?? "",
-          verificationToken: otpValue,
-        });
-      }
-    } else {
-      if (otpVerified || otpAttempted) {
-        setOtpVerified(false);
-        setOtpAttempted(false);
-      }
-    }
-  }, [otpValue, otpSent]);
-
   // ── Submit handler ───────────────────────────────────────────────────
   const onSubmit = (data: IndividualSignupFormData) => {
     const payload: IndividualSignupPayload = {
@@ -398,22 +212,10 @@ export function IndividualSignupForm() {
       contactEmail: data.contactEmail.trim().toLowerCase(),
       contactPhone: data.contactPhone,
     };
-
-    if (!otpSent) {
-      sendOtpMutation.mutate(payload);
-    } else if (otpVerified) {
-      const payloadWithOtp: IndividualSignupPayloadWithOtp = {
-        ...payload,
-        verificationToken: otpValue,
-      };
-      verifyOtpMutation.mutate(payloadWithOtp);
-    }
+    sendOtpMutation.mutate(payload);
   };
 
-  const isPending =
-    sendOtpMutation.isPending ||
-    verifyOtpMutation.isPending ||
-    resendCodeMutation.isPending;
+  const isPending = sendOtpMutation.isPending;
 
   // Password validation checks (same as dealer form)
   const passwordChecks = {
@@ -431,29 +233,6 @@ export function IndividualSignupForm() {
     passwordChecks.hasLower &&
     passwordChecks.hasNumber &&
     passwordChecks.hasSpecial;
-
-  // ── Success screen ───────────────────────────────────────────────────
-  if (registrationComplete) {
-    return (
-      <Card className="max-w-2xl mx-auto border-slate-200 dark:border-slate-800 shadow-lg rounded-3xl">
-        <CardContent className="p-8 text-center">
-          <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
-            <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">
-            Welcome to 101 Drivers!
-          </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Your personal account has been created successfully. Redirecting
-            you to your dashboard…
-          </p>
-          <div className="mt-6">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   // ── Main form ────────────────────────────────────────────────────────
   return (
@@ -672,70 +451,6 @@ export function IndividualSignupForm() {
             </div>
           </div>
 
-          {/* ── OTP Section — shown after "Send Verification Code" ──────── */}
-          {otpSent && (
-            <div className="space-y-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Enter the 6-digit code sent to your email
-                </Label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (pendingSignupData) {
-                      resendCodeMutation.mutate(pendingSignupData);
-                    }
-                  }}
-                  disabled={resendCodeMutation.isPending}
-                  className="text-xs text-primary hover:underline font-semibold"
-                >
-                  {resendCodeMutation.isPending ? "Resending…" : "Resend code"}
-                </button>
-              </div>
-              <Input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="000000"
-                value={otpValue}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
-                  setOtpValue(digits);
-                }}
-                onFocus={() => setOtpFocused(true)}
-                onBlur={() => setOtpFocused(false)}
-                className={cn(
-                  "text-center text-2xl font-black tracking-[0.5em] rounded-xl h-14",
-                  otpVerified
-                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10"
-                    : otpAttempted && otpValue.length === 6
-                      ? "border-red-500 bg-red-50 dark:bg-red-900/10"
-                      : otpFocused && !otpValue.trim()
-                        ? "border-primary"
-                        : "",
-                )}
-              />
-              {verifyOtpCheckMutation.isPending && otpValue.length === 6 && !otpVerified && (
-                <p className="text-xs text-slate-400 flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Checking code…
-                </p>
-              )}
-              {otpVerified && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" />
-                  Code verified!
-                </p>
-              )}
-              {otpAttempted && otpValue.length === 6 && !otpVerified && !verifyOtpCheckMutation.isPending && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  Invalid code. Please try again.
-                </p>
-              )}
-            </div>
-          )}
-
           {/* ── Terms and Conditions — matches dealer form exactly ─────── */}
           <div
             className={cn(
@@ -814,32 +529,25 @@ export function IndividualSignupForm() {
             <Info className="w-5 h-5 text-amber-500 shrink-0" />
             <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
               You'll receive a 6-digit verification code by email. Enter it
-              above to complete your signup. The code expires in 15 minutes.
+              on the next page to complete your signup. The code expires in 15 minutes.
             </p>
           </div>
 
           {/* ── Submit button ───────────────────────────────────────────── */}
           <Button
             type="submit"
-            disabled={isPending || !acceptTerms || (otpSent && !otpVerified)}
+            disabled={isPending || !acceptTerms}
             className="w-full h-14 rounded-2xl font-extrabold text-sm bg-primary hover:bg-primary/90 text-slate-950"
           >
             {isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {sendOtpMutation.isPending || resendCodeMutation.isPending
-                  ? "Sending Code..."
-                  : "Creating Account..."}
-              </>
-            ) : !otpSent ? (
-              <>
-                <KeyRound className="w-4 h-4 mr-2" />
-                Send Verification Code
+                Sending Code...
               </>
             ) : (
               <>
-                <CheckCircle className="w-4 h-4 mr-2" />
-                {otpVerified ? "Create Account" : "Enter Valid Code"}
+                <KeyRound className="w-4 h-4 mr-2" />
+                Send Verification Code
               </>
             )}
           </Button>

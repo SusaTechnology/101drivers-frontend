@@ -217,7 +217,7 @@ export class MailService {
       case "BUSINESS_CUSTOMER":
         return `${this.appDomain}/auth/dealer-signup?otp=${encodeURIComponent(token)}`;
       case "PRIVATE_CUSTOMER":
-        return `${this.appDomain}/auth/individual-signup?otp=${encodeURIComponent(token)}`;
+        return `${this.appDomain}/auth/individual-verify-email?otp=${encodeURIComponent(token)}`;
       case "PASSWORD_RESET":
         const params = new URLSearchParams();
         if (email) params.set("email", email);
