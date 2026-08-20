@@ -118,21 +118,21 @@ export class MailService {
       audience === "PASSWORD_RESET"
         ? "Use the code below to reset your 101 Drivers password."
         : audience === "PRIVATE_CUSTOMER"
-        ? "Use the verification code below to continue your delivery request."
+        ? "Use the verification code below to continue your 101 Drivers signup."
         : "Use the verification code below to continue your 101 Drivers signup.";
 
     const actionLabel =
       audience === "PASSWORD_RESET"
         ? "Reset Password"
         : audience === "PRIVATE_CUSTOMER"
-        ? "Continue Request"
+        ? "Continue Signup"
         : "Continue Signup";
 
     const helperText =
       audience === "PASSWORD_RESET"
         ? "Copy and paste this code into the reset password form."
         : audience === "PRIVATE_CUSTOMER"
-        ? "Copy and paste this code into the delivery request form."
+        ? "Copy and paste this code into the signup form."
         : "Copy and paste this code into the signup form.";
 
     const text = [
@@ -217,7 +217,7 @@ export class MailService {
       case "BUSINESS_CUSTOMER":
         return `${this.appDomain}/auth/dealer-signup?otp=${encodeURIComponent(token)}`;
       case "PRIVATE_CUSTOMER":
-        return `${this.appDomain}/quote-details?otp=${encodeURIComponent(token)}`;
+        return `${this.appDomain}/auth/individual-signup?otp=${encodeURIComponent(token)}`;
       case "PASSWORD_RESET":
         const params = new URLSearchParams();
         if (email) params.set("email", email);

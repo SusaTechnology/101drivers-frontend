@@ -2,19 +2,17 @@
 /**
  * IndividualSignupForm — signup form for personal (private) customers.
  *
- * This is a slimmed-down version of DealerSignupForm that collects only
- * the fields a personal customer needs:
- *   • Full name
- *   • Email (login)
- *   • Phone
- *   • Password + confirm
- *   • Terms acceptance
- *   • OTP email verification (same two-step pattern as dealer signup)
+ * Mirrors the "Account & Contact Information" section of DealerSignupForm
+ * (same layout, same field styling, same terms checkbox with policy links).
+ * The only difference: no business fields, no Google Places autocomplete.
  *
- * No business fields (businessName, businessPlaceId, etc.).
- *
- * On success, the backend issues tokens (auto-login) and the user is
- * redirected to /individual-dashboard.
+ * OTP flow:
+ *   1. User fills form → clicks "Send Verification Code"
+ *   2. Backend sends OTP email with link to /auth/individual-signup?otp=XXXX
+ *   3. User enters OTP inline (auto-verified on 6th digit) OR clicks the
+ *      email link which auto-fills the OTP and restores the form draft
+ *   4. User clicks "Create Account" → backend creates User+Customer,
+ *      issues tokens (auto-login), redirects to /dealer-dashboard
  *
  * Reuses: Button, Input, Card, Label, PolicySheet, toast, useDataMutation
  * — same UI primitives as DealerSignupForm for visual consistency.
@@ -34,9 +32,9 @@ import {
   EyeOff,
   AlertCircle,
   KeyRound,
-  ArrowRight,
-  LogIn as LoginIcon,
+  UserCircle,
   Loader2,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,17 +51,21 @@ import { cn } from "@/lib/utils";
 import { useDataMutation, setUser } from "@/lib/tanstack/dataQuery";
 import PolicySheet from "@/components/shared/PolicySheet";
 
-// ── Form schema ─────────────────────────────────────────────────────────
+// localStorage key for saving the individual signup draft (so the OTP
+// email link can restore the form state).
+const INDIVIDUAL_SIGNUP_DRAFT_KEY = "individualSignupDraft";
+
+// ── Form schema (same fields as dealer's Account & Contact Information) ─
 const individualSignupSchema = z
   .object({
-    fullName: z.string().min(1, "Full name is required"),
-    email: z
+    contactName: z.string().min(1, "Name is required"),
+    contactEmail: z
       .string()
       .min(1, "Email is required")
       .email("Please enter a valid email address"),
-    phone: z
+    contactPhone: z
       .string()
-      .min(1, "Phone number is required")
+      .min(1, "Mobile number is required")
       .regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
     password: z
       .string()
@@ -107,7 +109,9 @@ export function IndividualSignupForm() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showPolicySheet, setShowPolicySheet] = useState(false);
+  const [openPolicySheet, setOpenPolicySheet] = useState<
+    "customer-agreement" | "customer-terms" | "customer-privacy" | null
+  >(null);
   const [otpSent, setOtpSent] = useState(false);
   const [otpValue, setOtpValue] = useState("");
   const [otpFocused, setOtpFocused] = useState(false);
@@ -121,20 +125,88 @@ export function IndividualSignupForm() {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
   } = useForm<IndividualSignupFormData>({
     resolver: zodResolver(individualSignupSchema),
     defaultValues: {
-      fullName: "",
-      email: "",
-      phone: "",
+      contactName: "",
+      contactEmail: "",
+      contactPhone: "",
       password: "",
       confirmPassword: "",
       acceptTerms: false,
     },
   });
 
+  const watchContactName = watch("contactName");
+  const watchContactEmail = watch("contactEmail");
+  const watchContactPhone = watch("contactPhone");
+  const watchPassword = watch("password");
+  const watchConfirmPassword = watch("confirmPassword");
   const acceptTerms = watch("acceptTerms");
+
+  // Phone display formatter — (XXX) XXX-XXXX
+  const [contactPhoneDisplay, setContactPhoneDisplay] = useState("");
+  const handleContactPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+    let formatted = digits;
+    if (digits.length > 6) {
+      formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    } else if (digits.length > 3) {
+      formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    } else if (digits.length > 0) {
+      formatted = `(${digits}`;
+    }
+    setContactPhoneDisplay(formatted);
+    // Store raw digits in the form
+    (e.target as HTMLInputElement).value = digits;
+    // Trigger react-hook-form onChange
+    register("contactPhone").onChange(e);
+  };
+
+  // ── Check for OTP in URL and restore draft from localStorage ────────
+  // Same pattern as DealerSignupForm: when the user clicks the email link,
+  // the OTP is in the URL (?otp=XXXX) and the form draft is in localStorage.
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlOtp = urlParams.get("otp");
+
+    if (urlOtp) {
+      const draftStr = localStorage.getItem(INDIVIDUAL_SIGNUP_DRAFT_KEY);
+      if (draftStr) {
+        try {
+          const draft = JSON.parse(draftStr);
+          if (draft.formData) {
+            // Restore form data
+            reset(draft.formData, { keepDefaultValues: false });
+            if (draft.formData.contactPhone) {
+              const digits = draft.formData.contactPhone;
+              let formatted = digits;
+              if (digits.length > 6) {
+                formatted = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+              } else if (digits.length > 3) {
+                formatted = `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+              } else if (digits.length > 0) {
+                formatted = `(${digits}`;
+              }
+              setContactPhoneDisplay(formatted);
+            }
+            // Set OTP and show verification step
+            setOtpValue(urlOtp);
+            setOtpSent(true);
+            setPendingSignupData(draft.payload);
+          }
+        } catch (e) {
+          console.error("Failed to parse draft", e);
+        }
+      } else {
+        toast.error("Session expired", {
+          description: "Please start a new registration.",
+        });
+      }
+    }
+  }, [reset]);
 
   // ── Mutations ────────────────────────────────────────────────────────
   // Step 1: send OTP (trailing slash = step 1 endpoint)
@@ -154,6 +226,13 @@ export function IndividualSignupForm() {
       setOtpVerified(false);
       setOtpAttempted(false);
       setOtpValue("");
+
+      // Save draft to localStorage so the OTP email link can restore it.
+      const formValues = watch();
+      localStorage.setItem(
+        INDIVIDUAL_SIGNUP_DRAFT_KEY,
+        JSON.stringify({ formData: formValues, payload: variables }),
+      );
     },
     onError: (error) => {
       const errorMessage = error.message || "Please try again later.";
@@ -181,7 +260,7 @@ export function IndividualSignupForm() {
 
   // Step 2: verify OTP + create account (no trailing slash = step 2)
   const verifyOtpMutation = useDataMutation<
-    { message: string },
+    any,
     IndividualSignupPayloadWithOtp
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private`,
@@ -192,26 +271,23 @@ export function IndividualSignupForm() {
         description: "Welcome to 101 Drivers!",
       });
       setRegistrationComplete(true);
+      localStorage.removeItem(INDIVIDUAL_SIGNUP_DRAFT_KEY);
 
       // The backend issues tokens on success (auto-login).
-      // Store user data and redirect to the individual dashboard.
-      // The response includes the same UserInfo shape as login.
+      // Store user data and redirect to the dashboard.
       if (data && typeof data === "object" && "id" in data) {
-        const userInfo = data as any;
         setUser({
-          id: userInfo.id,
-          username: userInfo.username,
-          email: userInfo.email,
-          roles: userInfo.roles || ["PRIVATE_CUSTOMER"],
-          fullName: userInfo.fullName || variables.fullName,
-          profileId: userInfo.profileId,
+          id: data.id,
+          username: data.username,
+          email: data.email,
+          roles: data.roles || ["PRIVATE_CUSTOMER"],
+          fullName: data.fullName || variables.fullName,
+          profileId: data.profileId,
         });
-        // Redirect after a short delay so the toast is visible
         setTimeout(() => {
-          navigate({ to: "/individual-dashboard" });
+          navigate({ to: "/dealer-dashboard" });
         }, 1500);
       } else {
-        // If no auto-login data, redirect to sign-in
         setTimeout(() => {
           navigate({ to: "/auth/dealer-signin" });
         }, 2000);
@@ -314,20 +390,18 @@ export function IndividualSignupForm() {
   // ── Submit handler ───────────────────────────────────────────────────
   const onSubmit = (data: IndividualSignupFormData) => {
     const payload: IndividualSignupPayload = {
-      email: data.email.trim().toLowerCase(),
+      email: data.contactEmail.trim().toLowerCase(),
       password: data.password,
-      fullName: data.fullName.trim(),
-      phone: data.phone,
-      contactName: data.fullName.trim(),
-      contactEmail: data.email.trim().toLowerCase(),
-      contactPhone: data.phone,
+      fullName: data.contactName.trim(),
+      phone: data.contactPhone,
+      contactName: data.contactName.trim(),
+      contactEmail: data.contactEmail.trim().toLowerCase(),
+      contactPhone: data.contactPhone,
     };
 
     if (!otpSent) {
-      // Step 1: send OTP
       sendOtpMutation.mutate(payload);
     } else if (otpVerified) {
-      // Step 2: verify OTP + create account
       const payloadWithOtp: IndividualSignupPayloadWithOtp = {
         ...payload,
         verificationToken: otpValue,
@@ -341,16 +415,27 @@ export function IndividualSignupForm() {
     verifyOtpMutation.isPending ||
     resendCodeMutation.isPending;
 
-  // ── Phone formatter ──────────────────────────────────────────────────
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 10);
-    return digits;
+  // Password validation checks (same as dealer form)
+  const passwordChecks = {
+    hasLength: (watchPassword || "").length >= 8,
+    hasUpper: /[A-Z]/.test(watchPassword || ""),
+    hasLower: /[a-z]/.test(watchPassword || ""),
+    hasNumber: /[0-9]/.test(watchPassword || ""),
+    hasSpecial: /[^A-Za-z0-9]/.test(watchPassword || ""),
+    hasMatch:
+      !!watchConfirmPassword && watchPassword === watchConfirmPassword,
   };
+  passwordChecks.allValid =
+    passwordChecks.hasLength &&
+    passwordChecks.hasUpper &&
+    passwordChecks.hasLower &&
+    passwordChecks.hasNumber &&
+    passwordChecks.hasSpecial;
 
   // ── Success screen ───────────────────────────────────────────────────
   if (registrationComplete) {
     return (
-      <Card className="max-w-md mx-auto border-slate-200 dark:border-slate-800 shadow-lg rounded-3xl">
+      <Card className="max-w-2xl mx-auto border-slate-200 dark:border-slate-800 shadow-lg rounded-3xl">
         <CardContent className="p-8 text-center">
           <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
             <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
@@ -372,153 +457,224 @@ export function IndividualSignupForm() {
 
   // ── Main form ────────────────────────────────────────────────────────
   return (
-    <Card className="max-w-md mx-auto border-slate-200 dark:border-slate-800 shadow-lg rounded-3xl">
-      <CardHeader className="space-y-1 p-6">
-        <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">
-          Create your personal account
-        </CardTitle>
-        <CardDescription className="text-sm text-slate-600 dark:text-slate-400">
-          Sign up as an individual to request deliveries. No business
-          information required.
-        </CardDescription>
+    <Card className="max-w-2xl mx-auto border-slate-200 dark:border-slate-800 shadow-lg rounded-3xl overflow-hidden">
+      {/* Header — matches dealer form's "Account & Contact Information" */}
+      <CardHeader className="p-6 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-primary mb-1">
+              Step 2
+            </p>
+            <CardTitle className="text-2xl font-black text-slate-900 dark:text-white mt-2">
+              Account & Contact Information
+            </CardTitle>
+            <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+              Create your personal account to request deliveries.
+            </CardDescription>
+          </div>
+          <span className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
+            <UserCircle className="w-3 h-3 text-primary" />
+            Required
+          </span>
+        </div>
       </CardHeader>
-      <CardContent className="p-6 pt-0">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Full Name */}
-          <div className="space-y-2">
-            <Label htmlFor="fullName" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              Full Name
-            </Label>
-            <div className="relative">
-              <Person className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                id="fullName"
-                placeholder="John Doe"
-                {...register("fullName")}
-                className={cn(
-                  "pl-10 rounded-xl h-11",
-                  errors.fullName && "border-red-500",
+
+      <CardContent className="p-6 pt-8 space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {/* ── Your Contact Details ─────────────────────────────────────── */}
+          <div className={cn(
+            "space-y-4 p-4 rounded-2xl border transition-all duration-300",
+            errors.contactName || errors.contactEmail || errors.contactPhone
+              ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+              : "border-transparent"
+          )}>
+            <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <UserCircle className="w-4 h-4" />
+              Your Contact Details
+            </h4>
+
+            {/* Name */}
+            <div className="space-y-2">
+              <Label htmlFor="contactName" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Name{!watchContactName?.trim() && <span className="text-red-500">*</span>}
+              </Label>
+              <div className="relative">
+                <Person className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="contactName"
+                  {...register("contactName")}
+                  className={cn(
+                    "w-full h-14 pl-12 pr-4 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm transition-colors",
+                    errors.contactName
+                      ? "border-red-400 dark:border-red-500"
+                      : watchContactName?.trim()
+                        ? "border-green-300 dark:border-green-700"
+                        : "border-slate-200 dark:border-slate-700"
+                  )}
+                  placeholder="John Doe"
+                  disabled={isPending}
+                />
+                {watchContactName?.trim() && !errors.contactName && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  </div>
                 )}
-              />
+              </div>
+              {errors.contactName && (
+                <p className="text-sm text-red-500 font-medium">{errors.contactName.message}</p>
+              )}
             </div>
-            {errors.fullName && (
-              <p className="text-xs text-red-500">{errors.fullName.message}</p>
-            )}
+
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="contactEmail" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Email{!watchContactEmail?.trim() && <span className="text-red-500">*</span>}
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="contactEmail"
+                  type="email"
+                  autoComplete="off"
+                  {...register("contactEmail")}
+                  className={cn(
+                    "w-full h-14 pl-12 pr-4 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm transition-colors",
+                    errors.contactEmail
+                      ? "border-red-400 dark:border-red-500"
+                      : watchContactEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchContactEmail)
+                        ? "border-green-300 dark:border-green-700"
+                        : "border-slate-200 dark:border-slate-700"
+                  )}
+                  placeholder="your@email.com"
+                  disabled={isPending}
+                />
+                {watchContactEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchContactEmail) && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  </div>
+                )}
+              </div>
+              {errors.contactEmail && (
+                <p className="text-sm text-red-500 font-medium">{errors.contactEmail.message}</p>
+              )}
+            </div>
+
+            {/* Mobile */}
+            <div className="space-y-2">
+              <Label htmlFor="contactPhone" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Mobile{!watchContactPhone?.trim() && <span className="text-red-500">*</span>}
+              </Label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="contactPhone"
+                  name="contactPhone"
+                  value={contactPhoneDisplay}
+                  onChange={handleContactPhoneChange}
+                  type="tel"
+                  autoComplete="off"
+                  inputMode="tel"
+                  maxLength={14}
+                  className={cn(
+                    "w-full h-14 pl-12 pr-4 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm transition-colors",
+                    errors.contactPhone
+                      ? "border-red-400 dark:border-red-500"
+                      : (watchContactPhone?.replace(/\D/g, '').length || 0) >= 10
+                        ? "border-green-300 dark:border-green-700"
+                        : "border-slate-200 dark:border-slate-700"
+                  )}
+                  placeholder="(555) 123-4567"
+                  disabled={isPending}
+                />
+                {(watchContactPhone?.replace(/\D/g, '').length || 0) >= 10 && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  </div>
+                )}
+              </div>
+              {errors.contactPhone && (
+                <p className="text-sm text-red-500 font-medium">{errors.contactPhone.message}</p>
+              )}
+            </div>
           </div>
 
-          {/* Email */}
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              Email Address
-            </Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                {...register("email")}
-                className={cn(
-                  "pl-10 rounded-xl h-11",
-                  errors.email && "border-red-500",
+          {/* ── Account Password ────────────────────────────────────────── */}
+          <div className={cn(
+            "space-y-4 p-4 rounded-2xl border transition-all duration-300",
+            (errors.password || errors.confirmPassword ||
+             (watchPassword && watchConfirmPassword && watchPassword !== watchConfirmPassword))
+              ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+              : "border-transparent"
+          )}>
+            <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <Lock className="w-4 h-4" />
+              Account Password
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Password */}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Password{!passwordChecks.allValid && <span className="text-red-500">*</span>}
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    id="password"
+                    {...register("password")}
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="off"
+                    className="w-full h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                    placeholder="Create password"
+                    disabled={isPending}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-red-500">{errors.password.message}</p>
                 )}
-              />
+              </div>
+
+              {/* Confirm Password */}
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Confirm Password{!passwordChecks.hasMatch && <span className="text-red-500">*</span>}
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    id="confirmPassword"
+                    {...register("confirmPassword")}
+                    type={showConfirmPassword ? "text" : "password"}
+                    autoComplete="off"
+                    className="w-full h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                    placeholder="Repeat password"
+                    disabled={isPending}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
+                )}
+              </div>
             </div>
-            {errors.email && (
-              <p className="text-xs text-red-500">{errors.email.message}</p>
-            )}
           </div>
 
-          {/* Phone */}
-          <div className="space-y-2">
-            <Label htmlFor="phone" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              Mobile Number
-            </Label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="1234567890"
-                {...register("phone")}
-                onChange={(e) => {
-                  const formatted = formatPhone(e.target.value);
-                  e.target.value = formatted;
-                }}
-                className={cn(
-                  "pl-10 rounded-xl h-11",
-                  errors.phone && "border-red-500",
-                )}
-              />
-            </div>
-            {errors.phone && (
-              <p className="text-xs text-red-500">{errors.phone.message}</p>
-            )}
-          </div>
-
-          {/* Password */}
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              Password
-            </Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                {...register("password")}
-                className={cn(
-                  "pl-10 pr-10 rounded-xl h-11",
-                  errors.password && "border-red-500",
-                )}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {errors.password && (
-              <p className="text-xs text-red-500">{errors.password.message}</p>
-            )}
-          </div>
-
-          {/* Confirm Password */}
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              Confirm Password
-            </Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                id="confirmPassword"
-                type={showConfirmPassword ? "text" : "password"}
-                placeholder="••••••••"
-                {...register("confirmPassword")}
-                className={cn(
-                  "pl-10 pr-10 rounded-xl h-11",
-                  errors.confirmPassword && "border-red-500",
-                )}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {errors.confirmPassword && (
-              <p className="text-xs text-red-500">{errors.confirmPassword.message}</p>
-            )}
-          </div>
-
-          {/* OTP Section — shown after the first submit */}
+          {/* ── OTP Section — shown after "Send Verification Code" ──────── */}
           {otpSent && (
-            <div className="space-y-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <div className="space-y-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   Enter the 6-digit code sent to your email
@@ -580,35 +736,93 @@ export function IndividualSignupForm() {
             </div>
           )}
 
-          {/* Terms */}
-          <div className="space-y-2">
-            <label className="flex items-start gap-2 cursor-pointer">
+          {/* ── Terms and Conditions — matches dealer form exactly ─────── */}
+          <div
+            className={cn(
+              "space-y-2 p-4 rounded-2xl border transition-all duration-300",
+              errors.acceptTerms
+                ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
+                : acceptTerms
+                ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
+                : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30"
+            )}
+          >
+            <div className="flex items-start space-x-3">
               <input
                 type="checkbox"
+                id="acceptTerms"
                 {...register("acceptTerms")}
-                className="w-4 h-4 mt-0.5 rounded border-slate-300 text-primary focus:ring-primary"
+                className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-primary focus:ring-primary focus:ring-offset-0"
+                disabled={isPending}
               />
-              <span className="text-xs text-slate-600 dark:text-slate-400">
-                I agree to the{" "}
+              <Label
+                htmlFor="acceptTerms"
+                className={cn(
+                  "text-xs leading-relaxed cursor-pointer flex-1 flex-wrap",
+                  errors.acceptTerms
+                    ? "text-red-700 dark:text-red-300 font-bold"
+                    : acceptTerms
+                    ? "text-green-700 dark:text-green-300 font-medium"
+                    : "text-slate-600 dark:text-slate-400"
+                )}
+              >
+                I agree to receive email notifications and accept the{" "}
                 <button
                   type="button"
-                  onClick={() => setShowPolicySheet(true)}
-                  className="text-primary hover:underline font-semibold"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setOpenPolicySheet("customer-agreement");
+                  }}
+                  className="font-extrabold hover:text-primary underline inline"
                 >
-                  Terms and Privacy Policy
+                  Customer Agreement
                 </button>
-              </span>
-            </label>
+                ,{" "}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setOpenPolicySheet("customer-terms");
+                  }}
+                  className="font-extrabold hover:text-primary underline inline"
+                >
+                  Terms of Service
+                </button>
+                , and{" "}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setOpenPolicySheet("customer-privacy");
+                  }}
+                  className="font-extrabold hover:text-primary underline inline"
+                >
+                  Privacy Policy
+                </button>
+                .
+              </Label>
+            </div>
             {errors.acceptTerms && (
-              <p className="text-xs text-red-500">{errors.acceptTerms.message}</p>
+              <p className="text-sm text-red-500 font-medium">
+                {errors.acceptTerms.message}
+              </p>
             )}
           </div>
 
-          {/* Submit button */}
+          {/* ── Info banner ─────────────────────────────────────────────── */}
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 flex gap-3">
+            <Info className="w-5 h-5 text-amber-500 shrink-0" />
+            <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-normal font-medium">
+              You'll receive a 6-digit verification code by email. Enter it
+              above to complete your signup. The code expires in 15 minutes.
+            </p>
+          </div>
+
+          {/* ── Submit button ───────────────────────────────────────────── */}
           <Button
             type="submit"
             disabled={isPending || !acceptTerms || (otpSent && !otpVerified)}
-            className="w-full h-12 rounded-xl font-extrabold text-sm bg-primary hover:bg-primary/90 text-slate-950"
+            className="w-full h-14 rounded-2xl font-extrabold text-sm bg-primary hover:bg-primary/90 text-slate-950"
           >
             {isPending ? (
               <>
@@ -630,7 +844,7 @@ export function IndividualSignupForm() {
             )}
           </Button>
 
-          {/* Sign in link */}
+          {/* ── Sign in link ────────────────────────────────────────────── */}
           <div className="text-center pt-2">
             <span className="text-xs text-slate-500 dark:text-slate-400">
               Already have an account?{" "}
@@ -645,8 +859,14 @@ export function IndividualSignupForm() {
         </form>
       </CardContent>
 
-      {/* Policy Sheet */}
-      <PolicySheet open={showPolicySheet} onOpenChange={setShowPolicySheet} />
+      {/* Policy Sheet — same component as dealer form */}
+      <PolicySheet
+        open={!!openPolicySheet}
+        onOpenChange={(open) => {
+          if (!open) setOpenPolicySheet(null);
+        }}
+        type={openPolicySheet ?? "customer-agreement"}
+      />
     </Card>
   );
 }
