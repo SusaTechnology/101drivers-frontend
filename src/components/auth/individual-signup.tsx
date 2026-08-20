@@ -116,6 +116,23 @@ export function IndividualSignUp() {
             </Link>
           </div>
 
+          {/* Signup type switcher — lets users navigate between the two
+              signup pages without going back to the homepage. */}
+          <div className="mb-6 flex items-center gap-2 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/50">
+            <Link
+              to="/auth/individual-signup"
+              className="flex-1 text-center py-2.5 px-4 rounded-xl text-sm font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+            >
+              Personal Customer
+            </Link>
+            <Link
+              to="/auth/dealer-signup"
+              className="flex-1 text-center py-2.5 px-4 rounded-xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+            >
+              Sign up as a Business
+            </Link>
+          </div>
+
           <IndividualSignupForm />
         </div>
       </main>
