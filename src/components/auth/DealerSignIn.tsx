@@ -153,27 +153,28 @@ export function DealerSignIn({
         return;
       }
 
-      // Check 3: Approval status for BUSINESS_CUSTOMER only (not PRIVATE_CUSTOMER)
-      // Individual/Private customers don't need approval
-      if (isDealer && isBusinessCustomer && data.customerApprovalStatus) {
+      // Check 3: Approval status for ALL customer types (business + private)
+      // Both BUSINESS_CUSTOMER and PRIVATE_CUSTOMER must be approved by
+      // an admin before they can log in.
+      if (isDealer && (isBusinessCustomer || isPrivateCustomer) && data.customerApprovalStatus) {
         const status = data.customerApprovalStatus;
         if (status === 'PENDING') {
           setLoginError(
-            "Your dealer account is pending approval. We'll notify you by email once an administrator reviews your application."
+            "Your account is pending approval. We'll notify you by email once an administrator reviews your application."
           );
           toast.error("Account pending approval.");
           return;
         }
         if (status === 'REJECTED') {
           setLoginError(
-            "Your dealer account application was not approved. Please contact support for more information."
+            "Your account application was not approved. Please contact support for more information."
           );
           toast.error("Account not approved.");
           return;
         }
         if (status === 'SUSPENDED') {
           setLoginError(
-            "Your dealer account has been suspended. Please contact support for assistance."
+            "Your account has been suspended. Please contact support for assistance."
           );
           toast.error("Account suspended.");
           return;

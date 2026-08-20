@@ -14,8 +14,8 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
-import { ArrowRight, Mail, RefreshCw, Loader2 } from 'lucide-react';
-import { useDataMutation, setUser } from '@/lib/tanstack/dataQuery';
+import { ArrowRight, Mail, RefreshCw, Loader2, CheckCircle, Clock } from 'lucide-react';
+import { useDataMutation } from '@/lib/tanstack/dataQuery';
 import { cn } from '@/lib/utils';
 
 const INDIVIDUAL_PENDING_PAYLOAD_KEY = 'individualPendingPayload';
@@ -32,6 +32,7 @@ export default function IndividualVerifyEmailPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [email, setEmail] = useState('');
   const [countdown, setCountdown] = useState(0);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
 
   const navigate = useNavigate();
 
@@ -110,36 +111,24 @@ export default function IndividualVerifyEmailPage() {
   // Mutation for verifying OTP and completing registration.
   // Sends ONLY {email, verificationToken} — no password, no payload.
   // The backend reads the User data from the stored row (created in step 1).
+  //
+  // After verification, the account is PENDING admin approval (same as
+  // business customers). The user sees a success page — NOT auto-login.
+  // They can log in only after the admin approves their account.
   const verifyOtpMutation = useDataMutation<
     any,
     VerifyOtpPayload
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private`,
     method: 'POST',
-    onSuccess: (data) => {
-      toast.success('Account created successfully!', {
-        description: 'Welcome to 101 Drivers!',
+    onSuccess: () => {
+      toast.success('Sign-up submitted successfully!', {
+        description: 'Your account is pending admin approval.',
       });
       sessionStorage.removeItem(INDIVIDUAL_PENDING_PAYLOAD_KEY);
-
-      // The backend issues tokens on success (auto-login).
-      if (data && typeof data === 'object' && 'id' in data) {
-        setUser({
-          id: data.id,
-          username: data.username,
-          email: data.email,
-          roles: data.roles || ['PRIVATE_CUSTOMER'],
-          fullName: data.fullName || '',
-          profileId: data.profileId,
-        });
-        setTimeout(() => {
-          navigate({ to: '/dealer-dashboard' });
-        }, 1500);
-      } else {
-        setTimeout(() => {
-          navigate({ to: '/auth/dealer-signin' });
-        }, 2000);
-      }
+      // Show the success page (pending approval) — same as business signup.
+      // Do NOT auto-login. The user must wait for admin approval.
+      setRegistrationComplete(true);
     },
     onError: (error) => {
       const errorMessage = error.message || 'Invalid code or server error.';
@@ -184,6 +173,106 @@ export default function IndividualVerifyEmailPage() {
 
   const isPending = resendCodeMutation.isPending || verifyOtpMutation.isPending;
 
+  // ── Success page (pending admin approval) ────────────────────────────
+  // Same as the dealer signup success page — the user sees this after
+  // verifying their email. They cannot log in until the admin approves.
+  if (registrationComplete) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+        <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-[480px] mx-auto px-6 h-16 flex items-center">
+            <Link to="/" className="flex items-center" aria-label="101 Drivers">
+              <div className="w-10 h-10 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200">
+                <img
+                  src="/assets/101drivers-logo.jpg"
+                  alt="101 Drivers"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </Link>
+          </div>
+        </header>
+
+        <main className="flex-1 flex items-center justify-center px-6 py-10">
+          <div className="w-full max-w-md text-center space-y-6">
+            {/* Success icon */}
+            <div className="relative inline-block">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-400 to-green-500 flex items-center justify-center shadow-lg shadow-green-500/30">
+                <CheckCircle className="w-12 h-12 text-white" />
+              </div>
+              <div className="absolute -inset-2 rounded-full border-2 border-green-400/30 animate-pulse" />
+            </div>
+
+            <h2 className="text-3xl font-black text-slate-900 dark:text-white">
+              Sign-up Submitted!
+            </h2>
+            <p className="text-lg text-slate-600 dark:text-slate-400 max-w-md">
+              Thank you. Our team has received your sign-up request. We will
+              review your details and contact you within 1-2 business days to
+              schedule an onboarding call.
+            </p>
+
+            {/* Status badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
+              <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                Under Review
+              </span>
+            </div>
+
+            {/* What happens next */}
+            <div className="text-left space-y-3 pt-4">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <ArrowRight className="w-5 h-5 text-primary" />
+                What Happens Next?
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-black text-blue-600 dark:text-blue-400">1</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white text-sm">Sign-up Review</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Our team will carefully review your submitted information.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-black text-purple-600 dark:text-purple-400">2</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white text-sm">Onboarding Call</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">We will contact you directly to schedule a call and walk you through the platform.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                  <div className="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-black text-green-600 dark:text-green-400">3</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white text-sm">Account Activation</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Once approved, you can log in and start requesting deliveries.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Back to home */}
+            <div className="pt-4">
+              <Link
+                to="/home"
+                className="inline-flex items-center gap-2 text-sm font-bold text-lime-600 dark:text-lime-400 hover:text-lime-700 dark:hover:text-lime-300 transition"
+              >
+                ← Back to Home
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ── OTP entry page ───────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
       {/* Header with logo */}

@@ -23,7 +23,6 @@ import { NotificationEventEngine } from "../domain/notificationEvent/notificatio
 import { MailService } from "src/common/mail/mail.service";
 import {
   EnumCustomerCustomerType,
-  EnumCustomerApprovalStatus,
   EnumDriverStatus,
   EnumUserRoles,
   EnumEmailVerificationPurpose,
@@ -749,9 +748,10 @@ export class AuthService {
               contactEmail: normalizedEmail,
               contactPhone: existingUser.phone ?? dto.contactPhone ?? dto.phone ?? null,
               phone: dto.phone ?? existingUser.phone ?? null,
-              // Private customers are auto-approved
-              approvalStatus: EnumCustomerApprovalStatus.APPROVED,
-              approvedAt: new Date(),
+              // Private customers follow the same approval flow as business
+              // customers — approvalStatus defaults to PENDING. The admin
+              // reviews and approves. The user sees the "Sign-up Submitted"
+              // success page and cannot log in until approved.
               user: { connect: { id: existingUser.id } },
             },
             select: { id: true },
@@ -811,8 +811,8 @@ export class AuthService {
             contactEmail: normalizedEmail,
             contactPhone: userPhone,
             phone: dto.phone ?? null,
-            approvalStatus: EnumCustomerApprovalStatus.APPROVED,
-            approvedAt: new Date(),
+            // Private customers follow the same approval flow as business
+            // customers — approvalStatus defaults to PENDING.
             user: { connect: { id: createdUser.id } },
           },
           select: { id: true },
