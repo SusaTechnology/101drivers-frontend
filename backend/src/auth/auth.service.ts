@@ -55,6 +55,7 @@ type VerificationRequiredResult = {
 type PendingVerificationResult = {
   action: "PENDING_VERIFICATION";
   email: string;
+  createdAt: Date;
   message: string;
 };
 
@@ -650,7 +651,7 @@ export class AuthService {
       // Check if a User with this email already exists
       const existingUser = await this.prisma.user.findUnique({
         where: { email: normalizedEmail },
-        select: { id: true, emailVerifiedAt: true, roles: true },
+        select: { id: true, emailVerifiedAt: true, roles: true, createdAt: true },
       });
 
       if (existingUser) {
@@ -658,9 +659,12 @@ export class AuthService {
           // Pending signup — User was created but OTP never verified.
           // Return PENDING_VERIFICATION so the frontend can show the
           // "verify old signup or use another email" dialog.
+          // Include createdAt so the dialog can display when the
+          // registration was started.
           return {
             action: "PENDING_VERIFICATION",
             email: normalizedEmail,
+            createdAt: existingUser.createdAt,
             message:
               "You started a registration with this email but didn't verify it. " +
               "Would you like to verify it now or use a different email?",

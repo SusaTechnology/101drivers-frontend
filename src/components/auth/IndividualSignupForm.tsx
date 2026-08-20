@@ -25,14 +25,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   User as Person,
   Phone,
   Mail,
@@ -44,7 +36,6 @@ import {
   UserCircle,
   Loader2,
   Info,
-  AlertCircle,
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,6 +52,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
 import PolicySheet from "@/components/shared/PolicySheet";
+import PendingRegistrationDialog from "@/components/auth/PendingRegistrationDialog";
 
 // sessionStorage key for the pending signup payload (so the verify page
 // can read it and complete the registration).
@@ -123,6 +115,7 @@ export function IndividualSignupForm() {
   // Pending verification dialog — shown when the user tries to sign up
   // with an email that has a pending (unverified) registration.
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [pendingCreatedAt, setPendingCreatedAt] = useState<string | null>(null);
 
   const {
     register,
@@ -181,6 +174,7 @@ export function IndividualSignupForm() {
       // Check if the backend says there's a pending (unverified) registration
       if (data.action === "PENDING_VERIFICATION") {
         setPendingEmail(data.email);
+        setPendingCreatedAt(data.createdAt ?? null);
         return;
       }
 
@@ -694,56 +688,24 @@ export function IndividualSignupForm() {
         type={openPolicySheet ?? "customer-agreement"}
       />
 
-      {/* Pending Verification Dialog — shown when the user tries to sign up
-          with an email that has a pending (unverified) registration. */}
-      <Dialog open={!!pendingEmail} onOpenChange={(open) => { if (!open) setPendingEmail(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-600">
-              <AlertCircle className="w-5 h-5" />
-              Pending Registration Found
-            </DialogTitle>
-            <DialogDescription>
-              You started a registration with{" "}
-              <strong className="text-slate-900 dark:text-white">{pendingEmail}</strong>{" "}
-              but didn't verify your email. Would you like to pick up where you
-              left off, or use a different email address?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto rounded-xl"
-              onClick={() => {
-                setPendingEmail(null);
-                // Clear the email field so the user can enter a new one
-                const emailInput = document.getElementById("contactEmail") as HTMLInputElement;
-                if (emailInput) emailInput.focus();
-              }}
-            >
-              Use Another Email
-            </Button>
-            <Button
-              className="w-full sm:w-auto rounded-xl bg-primary text-slate-950 hover:bg-primary/90"
-              disabled={resendOtpMutation.isPending}
-              onClick={() => {
-                if (pendingEmail) {
-                  resendOtpMutation.mutate({ email: pendingEmail });
-                }
-              }}
-            >
-              {resendOtpMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Sending Code...
-                </>
-              ) : (
-                "Verify the Old Signup"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Pending Registration Dialog — shown when the user tries to sign up
+          with an email that has a pending (unverified) registration.
+          Extracted into its own component for reusability. */}
+      <PendingRegistrationDialog
+        email={pendingEmail}
+        createdAt={pendingCreatedAt}
+        isResending={resendOtpMutation.isPending}
+        onVerify={(email) => {
+          resendOtpMutation.mutate({ email });
+        }}
+        onUseAnother={() => {
+          setPendingEmail(null);
+          setPendingCreatedAt(null);
+          // Focus the email field so the user can enter a new one
+          const emailInput = document.getElementById("contactEmail") as HTMLInputElement;
+          if (emailInput) emailInput.focus();
+        }}
+      />
     </Card>
   );
 }
