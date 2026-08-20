@@ -45,6 +45,7 @@ import {
   Loader2,
   Info,
   AlertCircle,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,6 +128,7 @@ export function IndividualSignupForm() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<IndividualSignupFormData>({
     resolver: zodResolver(individualSignupSchema),
@@ -160,10 +162,8 @@ export function IndividualSignupForm() {
       formatted = `(${digits}`;
     }
     setContactPhoneDisplay(formatted);
-    // Store raw digits in the form
-    (e.target as HTMLInputElement).value = digits;
-    // Trigger react-hook-form onChange
-    register("contactPhone").onChange(e);
+    // Update the react-hook-form field with the raw digits
+    setValue("contactPhone", digits, { shouldValidate: true });
   };
 
   // ── Mutation: send OTP (step 1) ──────────────────────────────────────
@@ -269,20 +269,21 @@ export function IndividualSignupForm() {
 
   // Password validation checks (same as dealer form)
   const passwordChecks = {
-    hasLength: (watchPassword || "").length >= 8,
-    hasUpper: /[A-Z]/.test(watchPassword || ""),
-    hasLower: /[a-z]/.test(watchPassword || ""),
+    minLength: (watchPassword?.length || 0) >= 8,
+    hasUppercase: /[A-Z]/.test(watchPassword || ""),
+    hasLowercase: /[a-z]/.test(watchPassword || ""),
     hasNumber: /[0-9]/.test(watchPassword || ""),
-    hasSpecial: /[^A-Za-z0-9]/.test(watchPassword || ""),
-    hasMatch:
-      !!watchConfirmPassword && watchPassword === watchConfirmPassword,
+    hasSpecial: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(watchPassword || ""),
+    hasMatch: !!watchConfirmPassword && watchPassword === watchConfirmPassword,
+    allValid: false,
   };
   passwordChecks.allValid =
-    passwordChecks.hasLength &&
-    passwordChecks.hasUpper &&
-    passwordChecks.hasLower &&
+    passwordChecks.minLength &&
+    passwordChecks.hasUppercase &&
+    passwordChecks.hasLowercase &&
     passwordChecks.hasNumber &&
-    passwordChecks.hasSpecial;
+    passwordChecks.hasSpecial &&
+    passwordChecks.hasMatch;
 
   // ── Main form ────────────────────────────────────────────────────────
   return (
@@ -440,63 +441,130 @@ export function IndividualSignupForm() {
               Account Password
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Password */}
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Password{!passwordChecks.allValid && <span className="text-red-500">*</span>}
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="password"
-                    {...register("password")}
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="off"
-                    className="w-full h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
-                    placeholder="Create password"
-                    disabled={isPending}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                {errors.password && (
-                  <p className="text-sm text-red-500">{errors.password.message}</p>
-                )}
+            {/* Password — single column */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Password{!passwordChecks.allValid && <span className="text-red-500">*</span>}
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="password"
+                  {...register("password")}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="off"
+                  className="w-full h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                  placeholder="Create password"
+                  disabled={isPending}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
+              {errors.password && (
+                <p className="text-sm text-red-500">{errors.password.message}</p>
+              )}
+            </div>
 
-              {/* Confirm Password */}
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Confirm Password{!passwordChecks.hasMatch && <span className="text-red-500">*</span>}
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    id="confirmPassword"
-                    {...register("confirmPassword")}
-                    type={showConfirmPassword ? "text" : "password"}
-                    autoComplete="off"
-                    className="w-full h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
-                    placeholder="Repeat password"
-                    disabled={isPending}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+            {/* Confirm Password — single column */}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Confirm Password{!passwordChecks.hasMatch && <span className="text-red-500">*</span>}
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  id="confirmPassword"
+                  {...register("confirmPassword")}
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="off"
+                  className="w-full h-14 pl-12 pr-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
+                  placeholder="Repeat password"
+                  disabled={isPending}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+              {errors.confirmPassword && (
+                <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
+              )}
+            </div>
+
+            {/* Password Requirements — same checklist as dealer form */}
+            <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 space-y-2">
+              <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Password Requirements
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                <div className="flex items-center gap-2">
+                  {passwordChecks.minLength ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.minLength ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    8+ characters
+                  </span>
                 </div>
-                {errors.confirmPassword && (
-                  <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
-                )}
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasUppercase ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasUppercase ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    1 uppercase
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasLowercase ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasLowercase ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    1 lowercase
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasNumber ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasNumber ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    1 number
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasSpecial ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasSpecial ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    1 special char
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {passwordChecks.hasMatch ? (
+                    <Check className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                  ) : (
+                    <div className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-slate-600 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs ${passwordChecks.hasMatch ? 'text-green-600 dark:text-green-400 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+                    Passwords match
+                  </span>
+                </div>
               </div>
             </div>
           </div>
