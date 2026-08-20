@@ -369,6 +369,17 @@ async getAdminUsers(query: {
   const skip = (page - 1) * pageSize;
 
   const where: Prisma.UserWhereInput = {
+    // ── Exclude pending (unverified) signups ──────────────────────────
+    // Users who started a signup but never verified their email with OTP
+    // (emailVerifiedAt=null, no Customer, no Driver) should NOT appear in
+    // the admin users list. They're incomplete registrations that will be
+    // cleaned up automatically or completed when the user verifies.
+    // Admins don't need to see or manage these.
+    NOT: {
+      emailVerifiedAt: null,
+      customer: null,
+      driver: null,
+    },
     ...(query.q
       ? {
           OR: [
@@ -519,6 +530,16 @@ async getAdminUsers(query: {
 }
 
 async getAdminUsersSummary(): Promise<any> {
+  // Same filter as getAdminUsers — exclude pending (unverified) signups
+  // from all counts so the admin dashboard numbers match the list.
+  const verifiedFilter = {
+    NOT: {
+      emailVerifiedAt: null,
+      customer: null,
+      driver: null,
+    },
+  } as Prisma.UserWhereInput;
+
   const [
     totalUsers,
     activeUsers,
@@ -530,20 +551,20 @@ async getAdminUsersSummary(): Promise<any> {
     pendingCustomers,
     pendingDrivers,
   ] = await Promise.all([
-    this.prisma.user.count(),
-    this.prisma.user.count({ where: { isActive: true } }),
-    this.prisma.user.count({ where: { isActive: false } }),
+    this.prisma.user.count({ where: verifiedFilter }),
+    this.prisma.user.count({ where: { ...verifiedFilter, isActive: true } }),
+    this.prisma.user.count({ where: { ...verifiedFilter, isActive: false } }),
     this.prisma.user.count({
-      where: { roles: EnumUserRoles.PRIVATE_CUSTOMER },
+      where: { ...verifiedFilter, roles: EnumUserRoles.PRIVATE_CUSTOMER },
     }),
     this.prisma.user.count({
-      where: { roles: EnumUserRoles.BUSINESS_CUSTOMER },
+      where: { ...verifiedFilter, roles: EnumUserRoles.BUSINESS_CUSTOMER },
     }),
     this.prisma.user.count({
-      where: { roles: EnumUserRoles.DRIVER },
+      where: { ...verifiedFilter, roles: EnumUserRoles.DRIVER },
     }),
     this.prisma.user.count({
-      where: { roles: EnumUserRoles.ADMIN },
+      where: { ...verifiedFilter, roles: EnumUserRoles.ADMIN },
     }),
     this.prisma.customer.count({
       where: { approvalStatus: EnumCustomerApprovalStatus.PENDING },
