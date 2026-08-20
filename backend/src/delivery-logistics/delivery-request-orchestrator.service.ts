@@ -349,6 +349,20 @@ export class DeliveryRequestOrchestratorService {
       stripeDefaultPaymentMethodId: string | null;
     };
     customerEmail?: string | null;
+    /**
+     * Customer type — determines the capture method:
+     *   • BUSINESS → capture_method='manual' (authorize hold, capture at
+     *     completion). Business prepaid customers get a hold on their card;
+     *     the actual capture happens at startTrip (lock-in) + completeTrip
+     *     (remainder).
+     *   • PRIVATE  → capture_method='automatic' (charge immediately). Private
+     *     customers are charged the full amount at delivery creation — no
+     *     hold, no later capture step.
+     *
+     * This is loosely coupled: if a new customer type is added in the future,
+     * it defaults to 'manual' (the existing safe behavior).
+     */
+    customerType?: EnumCustomerCustomerType;
   }): Promise<{ paymentIntentId: string; clientSecret: string; status: string }> {
     // POSTPAID — no charge now, invoice later. Keep MANUAL.
     if (params.paymentType === EnumPaymentPaymentType.POSTPAID) {
@@ -416,19 +430,22 @@ export class DeliveryRequestOrchestratorService {
 
     let result: { paymentIntentId: string; clientSecret: string; status?: string };
     try {
+      // Determine capture method based on customer type:
+      //   PRIVATE  → 'automatic' (charge immediately, no hold)
+      //   BUSINESS → 'manual'    (authorize hold, capture at completion)
+      //   default  → 'manual'    (safe fallback for any future customer type)
+      const captureMethod =
+        params.customerType === EnumCustomerCustomerType.PRIVATE
+          ? 'automatic'
+          : 'manual';
+
       result = await this.stripeService.createPaymentIntent({
         amount: params.amount,
         deliveryId: params.deliveryId,
         customerEmail: params.customerEmail || undefined,
         stripeCustomerId,
-        // By this point paymentMethodId is guaranteed to be a string (the
-        // null/empty cases above throw early). Coerce to satisfy the
-        // `string | undefined` signature in createPaymentIntent.
         paymentMethodId: paymentMethodId ?? undefined,
-        // Saved card → confirm immediately, hold funds (manual capture).
-        // Driver start-trip will partial-capture the lock-in fee;
-        // completion will create a 2nd PI for the remainder.
-        captureMethod: 'manual',
+        captureMethod,
         confirm: true,
       });
     } catch (err: any) {
@@ -438,19 +455,32 @@ export class DeliveryRequestOrchestratorService {
       throw new BadRequestException(friendly);
     }
 
-    // Stripe succeeded — update the Payment row to STRIPE.
-    // If PI status is requires_capture → funds are held (this is the happy path).
-    // If PI status is requires_payment_method or requires_action → card needs
-    // customer intervention; surface that as a clear error so dealer knows.
+    // Stripe succeeded — update the Payment row based on PI status:
+    //   • requires_capture → AUTHORIZED (funds held, business prepaid)
+    //   • succeeded         → CAPTURED (funds captured, private customer
+    //     charged immediately with capture_method='automatic')
     const piStatus = result.status || '';
     if (piStatus === 'requires_capture' || piStatus === 'succeeded') {
+      // For private customers (automatic capture), the charge is already
+      // captured → status = CAPTURED. For business prepaid (manual
+      // capture), funds are held → status = AUTHORIZED (captured later
+      // at startTrip / completeTrip).
+      const isInstantCapture =
+        piStatus === 'succeeded' &&
+        params.customerType === EnumCustomerCustomerType.PRIVATE;
+
       await this.prisma.payment.update({
         where: { id: params.paymentId },
         data: {
           provider: EnumPaymentProvider.STRIPE,
           providerPaymentIntentId: result.paymentIntentId,
-          status: EnumPaymentStatus.AUTHORIZED,
+          status: isInstantCapture
+            ? EnumPaymentStatus.CAPTURED
+            : EnumPaymentStatus.AUTHORIZED,
           authorizedAt: businessNow().toJSDate(),
+          ...(isInstantCapture
+            ? { capturedAt: businessNow().toJSDate() }
+            : {}),
         },
       });
       return {
@@ -1384,6 +1414,7 @@ private async createIndividualDeliveryForResolvedCustomer(
         stripeDefaultPaymentMethodId: customer.stripeDefaultPaymentMethodId,
       },
       customerEmail: input.recipientEmail || customer.user?.email || null,
+      customerType: customer.customerType,
     });
     paymentIntentId = result.paymentIntentId;
     clientSecret = result.clientSecret;
@@ -2213,6 +2244,7 @@ private async resolveIndividualCustomerForCreate(
             stripeDefaultPaymentMethodId: customer.stripeDefaultPaymentMethodId,
           },
           customerEmail: customer.contactEmail || customer.user?.email || null,
+          customerType: customer.customerType,
         });
       } catch (err: any) {
         // Mark the delivery as CANCELLED so it doesn't pollute the driver feed,
@@ -2661,6 +2693,7 @@ private async resolveIndividualCustomerForCreate(
             stripeDefaultPaymentMethodId: customer.stripeDefaultPaymentMethodId,
           },
           customerEmail: customer.contactEmail || customer.user?.email || null,
+          customerType: customer.customerType,
         });
       } catch (err: any) {
         await this.cancelDeliveryOnPaymentFailure(
