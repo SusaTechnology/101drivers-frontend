@@ -824,7 +824,7 @@ export default function LandingPage() {
                   <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">Service Price</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Enter pickup and drop-off locations above for your price.
+                      This example uses flat rate pricing up to a set distance. Enter pickup and drop-off locations to see your price.
                     </p>
                   </div>
                 </div>
