@@ -276,21 +276,34 @@ function DriverStatusBadge({ status }: { status: DriverStatus }) {
   );
 }
 
-// Special badge for orphaned business/private customer signups — users whose
-// role is BUSINESS_CUSTOMER or PRIVATE_CUSTOMER but who have NO Customer row
-// attached. Previously the list fell through to <CustomerStatusBadge
-// status="PENDING" /> for these rows, which was misleading: the signup
-// actually FAILED (the Customer row was never created), and the User row is
-// just an orphan blocking the dealer from retrying with the same email.
-//
-// The rose/amber color + AlertCircle icon + "Incomplete Signup" label make
-// the failed-signup state visually distinct from a genuine pending-approval
-// customer (which has a Customer row with approvalStatus=PENDING).
-function IncompleteSignupBadge() {
+// Badge for users with role BUSINESS_CUSTOMER or PRIVATE_CUSTOMER but no
+// Customer row attached. Two cases:
+//   1. emailVerifiedAt = null → "Pending Verification" (amber) — the user
+//      started a signup but hasn't verified their email with OTP yet.
+//      This is the normal pending state with the new server-side storage.
+//   2. emailVerifiedAt != null but no Customer → "Incomplete Signup"
+//      (red) — an anomaly (the email was verified but the Customer row
+//      was never created, e.g. a crash between OTP verification and
+//      Customer creation). Admin should delete this row.
+function IncompleteSignupBadge({ emailVerifiedAt }: { emailVerifiedAt?: string | null }) {
+  if (!emailVerifiedAt) {
+    // Pending email verification — normal state with the new signup flow
+    return (
+      <Badge
+        className="text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900"
+        title="User started a registration but hasn't verified their email yet. They can complete the signup by entering the OTP sent to their email."
+      >
+        <Clock className="w-3 h-3 mr-1" />
+        Pending Verification
+      </Badge>
+    );
+  }
+
+  // Email verified but no Customer row — anomaly, truly failed signup
   return (
     <Badge
       className="text-[10px] font-bold border bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900"
-      title="User row was created but the Customer record is missing — likely a failed signup. The dealer cannot retry with this email until this row is deleted."
+      title="Email was verified but the Customer record is missing — likely a failed signup. The user cannot retry with this email until this row is deleted."
     >
       <AlertCircle className="w-3 h-3 mr-1" />
       Incomplete Signup
@@ -1042,7 +1055,7 @@ export default function AdminUsersPage() {
                             // signup actually FAILED — show "Incomplete Signup"
                             // instead so admin knows this row is garbage and
                             // can be deleted.
-                            <IncompleteSignupBadge />
+                            <IncompleteSignupBadge emailVerifiedAt={user.emailVerifiedAt} />
                           ) : (
                             <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
                           )}

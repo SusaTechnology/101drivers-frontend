@@ -46,6 +46,18 @@ type VerificationRequiredResult = {
   message: string;
 };
 
+/**
+ * Returned when a user tries to sign up with an email that has a pending
+ * (unverified) signup. The frontend shows a dialog: "You started a
+ * registration with this email but didn't verify it. Verify now or use
+ * a different email?"
+ */
+type PendingVerificationResult = {
+  action: "PENDING_VERIFICATION";
+  email: string;
+  message: string;
+};
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -595,27 +607,90 @@ export class AuthService {
     dto: SignupCustomerDto,
     request: Request,
     response: Response
-  ): Promise<UserInfo | VerificationRequiredResult> {
+  ): Promise<UserInfo | VerificationRequiredResult | PendingVerificationResult> {
     // ─── Private (individual) customer signup ─────────────────────────
-    // Mirrors signupBusinessCustomer but with key differences:
-    //   • No businessName / businessPlaceId required
-    //   • No businessPlaceId uniqueness check (private customers don't have one)
-    //   • roles: PRIVATE_CUSTOMER (not BUSINESS_CUSTOMER)
-    //   • customerType: PRIVATE (not BUSINESS)
-    //   • approvalStatus: APPROVED immediately (private customers don't need
-    //     admin approval — the DealerSignIn flow already skips approval
-    //     checks for PRIVATE_CUSTOMER role)
-    //   • OTP purpose: "PRIVATE_CUSTOMER"
     //
-    // The same SignupCustomerDto is used — business-specific fields are
-    // all optional and simply ignored here.
+    // SERVER-SIDE STORAGE (no password in browser sessionStorage):
+    //   Step 1 (no verificationToken):
+    //     • Check if email exists
+    //     • If exists + emailVerifiedAt=null → return PENDING_VERIFICATION
+    //       (frontend shows dialog: "verify old signup or use another email")
+    //     • If exists + verified → throw "Email already registered"
+    //     • If not exists → create User with isActive=false,
+    //       emailVerifiedAt=null (pending). Send OTP.
+    //   Step 2 (with verificationToken):
+    //     • Verify OTP
+    //     • Find the User created in step 1
+    //     • Activate (isActive=true, emailVerifiedAt=now) + create Customer
+    //     • Issue tokens (auto-login)
+    //
+    // The frontend sends ONLY {email, verificationToken} in step 2 — no
+    // password, no payload. The backend reads everything from the stored
+    // User row. This is more secure and works across devices.
+    //
+    // BACKWARD COMPAT: if step 2 is called with the full payload (legacy
+    // frontend or dealer signup), and no User exists yet, the backend
+    // creates from the payload (old behavior).
 
     const normalizedEmail = dto.email.trim().toLowerCase();
 
-    // Pre-flight email uniqueness check (same as business signup).
-    await this.ensureEmailDoesNotExist(normalizedEmail);
-
+    // ── Step 1: send OTP ────────────────────────────────────────────────
     if (!dto.verificationToken) {
+      // Validate required fields for step 1
+      if (!dto.password || dto.password.length < 6) {
+        throw new BadRequestException("Password is required (min 6 characters)");
+      }
+      if (!dto.fullName) {
+        throw new BadRequestException("Full name is required");
+      }
+      if (!dto.contactName) {
+        throw new BadRequestException("Contact name is required");
+      }
+
+      // Check if a User with this email already exists
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true, emailVerifiedAt: true, roles: true },
+      });
+
+      if (existingUser) {
+        if (existingUser.emailVerifiedAt == null) {
+          // Pending signup — User was created but OTP never verified.
+          // Return PENDING_VERIFICATION so the frontend can show the
+          // "verify old signup or use another email" dialog.
+          return {
+            action: "PENDING_VERIFICATION",
+            email: normalizedEmail,
+            message:
+              "You started a registration with this email but didn't verify it. " +
+              "Would you like to verify it now or use a different email?",
+          };
+        }
+        // Email already registered and verified
+        throw new BadRequestException(
+          "This email is already registered. Please sign in instead."
+        );
+      }
+
+      // Create the User row (inactive, unverified) — stores the password
+      // hash and contact info server-side. No Customer row yet.
+      const hashed = await this.passwordService.hash(dto.password);
+      const userPhone = dto.contactPhone ?? dto.phone ?? null;
+
+      await this.prisma.user.create({
+        data: {
+          username: this.generateUsernameFromEmail(normalizedEmail),
+          email: normalizedEmail,
+          password: hashed,
+          roles: EnumUserRoles.PRIVATE_CUSTOMER,
+          fullName: dto.fullName,
+          phone: userPhone,
+          isActive: false,
+          emailVerifiedAt: null,
+        },
+      });
+
+      // Send OTP
       await this.emailVerificationService.requestVerification(
         normalizedEmail,
         dto.contactName || dto.fullName,
@@ -629,17 +704,86 @@ export class AuthService {
       };
     }
 
+    // ── Step 2: verify OTP + create account ────────────────────────────
     await this.emailVerificationService.consumeTokenForEmail(
       normalizedEmail,
       dto.verificationToken,
       EnumEmailVerificationPurpose.SIGNUP
     );
 
-    const hashed = await this.passwordService.hash(dto.password);
+    // Find the User created in step 1
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        username: true,
+        roles: true,
+        emailVerifiedAt: true,
+        fullName: true,
+        phone: true,
+      },
+    });
 
+    if (existingUser && existingUser.emailVerifiedAt == null) {
+      // ── New flow: User exists from step 1, activate it ──────────────
+      const { userId, username, userRoles } = await this.prisma.$transaction(
+        async (tx) => {
+          // Activate the User
+          await tx.user.update({
+            where: { id: existingUser.id },
+            data: {
+              isActive: true,
+              emailVerifiedAt: new Date(),
+            },
+          });
+
+          // Create the Customer row
+          await tx.customer.create({
+            data: {
+              customerType: EnumCustomerCustomerType.PRIVATE,
+              contactName: dto.contactName || existingUser.fullName || "",
+              contactEmail: normalizedEmail,
+              contactPhone: existingUser.phone ?? dto.contactPhone ?? dto.phone ?? null,
+              phone: dto.phone ?? existingUser.phone ?? null,
+              // Private customers are auto-approved
+              approvalStatus: EnumCustomerApprovalStatus.APPROVED,
+              approvedAt: new Date(),
+              user: { connect: { id: existingUser.id } },
+            },
+            select: { id: true },
+          });
+
+          return {
+            userId: existingUser.id,
+            username: existingUser.username,
+            userRoles: existingUser.roles,
+          };
+        },
+      );
+
+      return this.issueToken(
+        userId,
+        username,
+        normalizedEmail,
+        userRoles,
+        request,
+        response,
+        existingUser.fullName ?? dto.fullName ?? "",
+      );
+    }
+
+    // ── Backward compat: User doesn't exist (legacy/dealer flow) ───────
+    // Create from the payload. This path is used when the old frontend
+    // sends the full payload in step 2 (no User was created in step 1).
+    if (!dto.password) {
+      throw new BadRequestException(
+        "No pending registration found. Please start a new registration."
+      );
+    }
+
+    const hashed = await this.passwordService.hash(dto.password);
     const userPhone = dto.contactPhone ?? dto.phone ?? null;
 
-    // Atomic User+Customer creation — same transaction pattern as business.
     const { userId, username, userRoles } = await this.prisma.$transaction(
       async (tx) => {
         const createdUser = await tx.user.create({
@@ -648,7 +792,7 @@ export class AuthService {
             email: normalizedEmail,
             password: hashed,
             roles: EnumUserRoles.PRIVATE_CUSTOMER,
-            fullName: dto.fullName,
+            fullName: dto.fullName || "",
             phone: userPhone,
             isActive: true,
             emailVerifiedAt: new Date(),
@@ -659,11 +803,10 @@ export class AuthService {
         await tx.customer.create({
           data: {
             customerType: EnumCustomerCustomerType.PRIVATE,
-            contactName: dto.contactName,
+            contactName: dto.contactName || dto.fullName || "",
             contactEmail: normalizedEmail,
-            contactPhone: dto.contactPhone ?? dto.phone ?? null,
+            contactPhone: userPhone,
             phone: dto.phone ?? null,
-            // Private customers are auto-approved — no admin review needed.
             approvalStatus: EnumCustomerApprovalStatus.APPROVED,
             approvedAt: new Date(),
             user: { connect: { id: createdUser.id } },
@@ -686,8 +829,57 @@ export class AuthService {
       userRoles,
       request,
       response,
-      dto.fullName
+      dto.fullName || "",
     );
+  }
+
+  /**
+   * Resend OTP for a pending private customer signup.
+   *
+   * Called when a user tries to sign up with an email that has a pending
+   * (unverified) registration, and chooses "Verify the old signup" in the
+   * dialog. Generates a new OTP and sends it to the email.
+   *
+   * The User row already exists (created in step 1 of signupPrivateCustomer)
+   * — this just sends a fresh OTP.
+   */
+  async resendPrivateCustomerOtp(email: string): Promise<VerificationRequiredResult> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true, emailVerifiedAt: true, fullName: true, roles: true },
+    });
+
+    if (!existingUser) {
+      throw new BadRequestException(
+        "No pending registration found for this email. Please start a new registration."
+      );
+    }
+
+    if (existingUser.emailVerifiedAt != null) {
+      throw new BadRequestException(
+        "This email is already verified. Please sign in instead."
+      );
+    }
+
+    if (existingUser.roles !== EnumUserRoles.PRIVATE_CUSTOMER) {
+      throw new BadRequestException(
+        "This email is associated with a different account type. Please use the correct signup page."
+      );
+    }
+
+    await this.emailVerificationService.requestVerification(
+      normalizedEmail,
+      existingUser.fullName,
+      "PRIVATE_CUSTOMER"
+    );
+
+    return {
+      action: "VERIFICATION_REQUIRED",
+      email: normalizedEmail,
+      message: "A new verification code has been sent to your email.",
+    };
   }
 
   async signupBusinessCustomer(
@@ -742,6 +934,13 @@ export class AuthService {
       dto.verificationToken,
       EnumEmailVerificationPurpose.SIGNUP
     );
+
+    // dto.password is optional in the DTO (made optional so the private
+    // customer verify step can send only {email, otp}). For business
+    // signup, the password is always required — validate here.
+    if (!dto.password) {
+      throw new BadRequestException("Password is required");
+    }
 
     const hashed = await this.passwordService.hash(dto.password);
 

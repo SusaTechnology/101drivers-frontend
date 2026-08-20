@@ -79,6 +79,22 @@ export class AuthController {
     return this.authService.signupPrivateCustomer(body, request, response);
   }
 
+  /**
+   * Resend OTP for a pending private customer signup.
+   * Called when a user tries to sign up with an email that has a pending
+   * (unverified) registration and chooses "Verify the old signup".
+   *
+   * Body: { email: string }
+   * Returns: { action: "VERIFICATION_REQUIRED", email, message }
+   */
+  @Post("signup/customer/private/resend-otp")
+  @HttpCode(HttpStatus.OK)
+  async resendPrivateCustomerOtp(
+    @Body() body: { email: string }
+  ): Promise<any> {
+    return this.authService.resendPrivateCustomerOtp(body.email);
+  }
+
   @Post("signup/customer/business")
   @HttpCode(HttpStatus.OK)
   async signupBusinessCustomer(

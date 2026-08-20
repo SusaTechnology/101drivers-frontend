@@ -25,6 +25,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   User as Person,
   Phone,
   Mail,
@@ -36,6 +44,7 @@ import {
   UserCircle,
   Loader2,
   Info,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,6 +119,10 @@ export function IndividualSignupForm() {
     "customer-agreement" | "customer-terms" | "customer-privacy" | null
   >(null);
 
+  // Pending verification dialog — shown when the user tries to sign up
+  // with an email that has a pending (unverified) registration.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -158,21 +171,29 @@ export function IndividualSignupForm() {
   // to the separate verify-email page. The verify page reads the payload,
   // shows the OTP entry UI, and calls step 2 to create the account.
   const sendOtpMutation = useDataMutation<
-    { message: string },
+    any,
     IndividualSignupPayload
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private/`,
     fetchWithoutRefresh: true,
     publicEndpoint: true,
     onSuccess: (data, variables) => {
+      // Check if the backend says there's a pending (unverified) registration
+      if (data.action === "PENDING_VERIFICATION") {
+        setPendingEmail(data.email);
+        return;
+      }
+
+      // Normal flow — OTP sent successfully
       toast.success("Code sent to your email", {
         description: data.message || "Please check your inbox.",
       });
-      // Save pending payload to sessionStorage so the verify page can
-      // complete the registration.
+      // Store ONLY the email in sessionStorage (NOT the password or payload).
+      // The backend already has the User row with the hashed password.
+      // The verify page sends only {email, otp} — no sensitive data.
       sessionStorage.setItem(
         INDIVIDUAL_PENDING_PAYLOAD_KEY,
-        JSON.stringify(variables),
+        JSON.stringify({ email: variables.email }),
       );
       // Navigate to the separate OTP entry page.
       navigate({ to: "/auth/individual-verify-email" });
@@ -201,6 +222,35 @@ export function IndividualSignupForm() {
     errorMessage: "Failed to send code",
   });
 
+  // ── Mutation: resend OTP for a pending signup ───────────────────────
+  // Called when the user chooses "Verify the old signup" in the dialog.
+  const resendOtpMutation = useDataMutation<
+    { message: string; email: string },
+    { email: string }
+  >({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private/resend-otp`,
+    method: 'POST',
+    fetchWithoutRefresh: true,
+    publicEndpoint: true,
+    onSuccess: (data) => {
+      toast.success("Code sent to your email", {
+        description: data.message || "Please check your inbox.",
+      });
+      // Store just the email (not the payload — the backend already has it)
+      sessionStorage.setItem(
+        INDIVIDUAL_PENDING_PAYLOAD_KEY,
+        JSON.stringify({ email: data.email }),
+      );
+      setPendingEmail(null);
+      navigate({ to: "/auth/individual-verify-email" });
+    },
+    onError: (error) => {
+      toast.error("Failed to resend code", {
+        description: error.message || "Please try again later.",
+      });
+    },
+  });
+
   // ── Submit handler ───────────────────────────────────────────────────
   const onSubmit = (data: IndividualSignupFormData) => {
     const payload: IndividualSignupPayload = {
@@ -215,7 +265,7 @@ export function IndividualSignupForm() {
     sendOtpMutation.mutate(payload);
   };
 
-  const isPending = sendOtpMutation.isPending;
+  const isPending = sendOtpMutation.isPending || resendOtpMutation.isPending;
 
   // Password validation checks (same as dealer form)
   const passwordChecks = {
@@ -575,6 +625,57 @@ export function IndividualSignupForm() {
         }}
         type={openPolicySheet ?? "customer-agreement"}
       />
+
+      {/* Pending Verification Dialog — shown when the user tries to sign up
+          with an email that has a pending (unverified) registration. */}
+      <Dialog open={!!pendingEmail} onOpenChange={(open) => { if (!open) setPendingEmail(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertCircle className="w-5 h-5" />
+              Pending Registration Found
+            </DialogTitle>
+            <DialogDescription>
+              You started a registration with{" "}
+              <strong className="text-slate-900 dark:text-white">{pendingEmail}</strong>{" "}
+              but didn't verify your email. Would you like to pick up where you
+              left off, or use a different email address?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto rounded-xl"
+              onClick={() => {
+                setPendingEmail(null);
+                // Clear the email field so the user can enter a new one
+                const emailInput = document.getElementById("contactEmail") as HTMLInputElement;
+                if (emailInput) emailInput.focus();
+              }}
+            >
+              Use Another Email
+            </Button>
+            <Button
+              className="w-full sm:w-auto rounded-xl bg-primary text-slate-950 hover:bg-primary/90"
+              disabled={resendOtpMutation.isPending}
+              onClick={() => {
+                if (pendingEmail) {
+                  resendOtpMutation.mutate({ email: pendingEmail });
+                }
+              }}
+            >
+              {resendOtpMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Sending Code...
+                </>
+              ) : (
+                "Verify the Old Signup"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

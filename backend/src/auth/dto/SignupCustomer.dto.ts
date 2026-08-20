@@ -11,28 +11,41 @@ export class SignupCustomerDto {
 
   @ApiProperty({
     example: "Password123!",
+    required: false,
     description:
-      "Password is sent on the second call together with verificationToken",
+      "Password. Required on step 1 (send OTP). Optional on step 2 (verify OTP) " +
+      "— if omitted, the backend reads the stored password hash from the User " +
+      "row created in step 1.",
   })
+  @IsOptional()
   @IsString()
   @MinLength(6)
-  password!: string;
+  password?: string;
 
   @ApiProperty({
     example: "Mike Dealer",
-    description: "User full name; usually same as contact person name",
+    required: false,
+    description:
+      "User full name. Required on step 1. Optional on step 2 (read from stored User).",
   })
+  @IsOptional()
   @IsString()
-  fullName!: string;
+  fullName?: string;
 
   @ApiProperty({ example: "+1 415 555 0123", required: false })
   @IsOptional()
   @IsString()
   phone?: string;
 
-  @ApiProperty({ example: "Mike Dealer" })
+  @ApiProperty({
+    example: "Mike Dealer",
+    required: false,
+    description:
+      "Contact person name. Required on step 1. Optional on step 2 (read from stored User).",
+  })
+  @IsOptional()
   @IsString()
-  contactName!: string;
+  contactName?: string;
 
   @ApiProperty({ example: "+1 415 555 0123", required: false })
   @IsOptional()

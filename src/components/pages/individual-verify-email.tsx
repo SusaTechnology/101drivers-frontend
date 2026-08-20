@@ -2,18 +2,12 @@
 /**
  * IndividualVerifyEmailPage — separate page for entering the OTP code.
  *
- * Mirrors the driver-verify-email page pattern:
- *   1. User fills the signup form → clicks "Send Verification Code"
- *   2. IndividualSignupForm saves the pending payload to sessionStorage
- *      and navigates here
- *   3. This page shows the OTP entry UI (InputOTP component)
- *   4. User enters the 6-digit code (or clicks the email link which
- *      auto-fills it via ?otp=XXXX URL param)
- *   5. On verify, the backend creates the User+Customer, issues tokens,
- *      and redirects to /dealer-dashboard
+ * SERVER-SIDE STORAGE: this page sends ONLY {email, verificationToken}
+ * to the backend. The backend reads the password hash and contact info
+ * from the User row created in step 1 — no sensitive data in the
+ * browser's sessionStorage.
  *
- * Reuses: InputOTP, Button, toast, useDataMutation — same UI primitives
- * as the driver verify page for visual consistency.
+ * The sessionStorage stores ONLY the email (not the password or payload).
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -26,24 +20,16 @@ import { cn } from '@/lib/utils';
 
 const INDIVIDUAL_PENDING_PAYLOAD_KEY = 'individualPendingPayload';
 
-interface IndividualSignupPayload {
+// Step 2 payload — ONLY email + OTP. No password, no contact info.
+// The backend reads everything else from the stored User row.
+interface VerifyOtpPayload {
   email: string;
-  password: string;
-  fullName: string;
-  phone: string;
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string;
-}
-
-interface IndividualSignupPayloadWithOtp extends IndividualSignupPayload {
   verificationToken: string;
 }
 
 export default function IndividualVerifyEmailPage() {
   const [otpValue, setOtpValue] = useState('');
   const [isComplete, setIsComplete] = useState(false);
-  const [pendingPayload, setPendingPayload] = useState<IndividualSignupPayload | null>(null);
   const [email, setEmail] = useState('');
   const [countdown, setCountdown] = useState(0);
 
@@ -62,16 +48,25 @@ export default function IndividualVerifyEmailPage() {
     }
   }, []);
 
-  // Load pending signup data from sessionStorage
+  // Load pending email from sessionStorage.
+  // Only the email is stored — NOT the password or contact info.
+  // The backend has the User row from step 1 and reads everything from there.
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem(INDIVIDUAL_PENDING_PAYLOAD_KEY);
       if (stored) {
-        const payload = JSON.parse(stored);
-        setPendingPayload(payload);
-        setEmail(payload.email);
+        const data = JSON.parse(stored);
+        // The stored data may be the full payload (legacy) or just {email}
+        const email = data.email || data.contactEmail;
+        if (email) {
+          setEmail(email);
+        } else {
+          toast.error('No pending registration found', {
+            description: 'Please start a new registration.',
+          });
+          navigate({ to: '/auth/individual-signup' });
+        }
       } else {
-        // No pending data — redirect back to signup
         toast.error('No pending registration found', {
           description: 'Please start a new registration.',
         });
@@ -89,17 +84,19 @@ export default function IndividualVerifyEmailPage() {
     return () => clearTimeout(timer);
   }, [countdown]);
 
-  // Mutation for resending code (step 1 endpoint — sends a new OTP)
+  // Mutation for resending code — calls the resend endpoint which sends
+  // a new OTP to the email. The User row already exists from step 1.
   const resendCodeMutation = useDataMutation<
-    { message: string },
-    IndividualSignupPayload
+    { message: string; email: string },
+    { email: string }
   >({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private/`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private/resend-otp`,
+    method: 'POST',
     onSuccess: () => {
       toast.success('Code resent successfully', {
         description: 'Check your email for the new verification code.',
       });
-      setCountdown(60); // Start 60s cooldown
+      setCountdown(60);
     },
     onError: (error) => {
       toast.error('Failed to resend code', {
@@ -110,28 +107,29 @@ export default function IndividualVerifyEmailPage() {
     publicEndpoint: true,
   });
 
-  // Mutation for verifying OTP and completing registration (step 2)
+  // Mutation for verifying OTP and completing registration.
+  // Sends ONLY {email, verificationToken} — no password, no payload.
+  // The backend reads the User data from the stored row (created in step 1).
   const verifyOtpMutation = useDataMutation<
     any,
-    IndividualSignupPayloadWithOtp
+    VerifyOtpPayload
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private`,
-    onSuccess: (data, variables) => {
+    method: 'POST',
+    onSuccess: (data) => {
       toast.success('Account created successfully!', {
         description: 'Welcome to 101 Drivers!',
       });
-      // Clear session data
       sessionStorage.removeItem(INDIVIDUAL_PENDING_PAYLOAD_KEY);
 
       // The backend issues tokens on success (auto-login).
-      // Store user data and redirect to the dashboard.
       if (data && typeof data === 'object' && 'id' in data) {
         setUser({
           id: data.id,
           username: data.username,
           email: data.email,
           roles: data.roles || ['PRIVATE_CUSTOMER'],
-          fullName: data.fullName || variables.fullName,
+          fullName: data.fullName || '',
           profileId: data.profileId,
         });
         setTimeout(() => {
@@ -171,17 +169,17 @@ export default function IndividualVerifyEmailPage() {
   }, []);
 
   const handleResend = () => {
-    if (!pendingPayload || countdown > 0) return;
-    resendCodeMutation.mutate(pendingPayload);
+    if (!email || countdown > 0) return;
+    resendCodeMutation.mutate({ email });
   };
 
   const handleVerify = () => {
-    if (!otpValue || otpValue.length !== 6 || !pendingPayload) return;
-    const payloadWithOtp: IndividualSignupPayloadWithOtp = {
-      ...pendingPayload,
+    if (!otpValue || otpValue.length !== 6 || !email) return;
+    const payload: VerifyOtpPayload = {
+      email,
       verificationToken: otpValue,
     };
-    verifyOtpMutation.mutate(payloadWithOtp);
+    verifyOtpMutation.mutate(payload);
   };
 
   const isPending = resendCodeMutation.isPending || verifyOtpMutation.isPending;
