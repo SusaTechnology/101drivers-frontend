@@ -121,6 +121,41 @@ export default function DriverWalletPage() {
 
   const referrals = referralHistory?.referrals || []
 
+  // ── Referral Program Config (admin-configurable) ──────────
+  // Drives every dynamic value on the "Refer a Friend" card:
+  // reward amount, required trips, days to complete, max referrals.
+  // Falls back to the documented policy (150 / 30 / 30 / 10) while
+  // the request is in flight so the page renders correctly on first
+  // paint and never shows a stale hardcoded value.
+  const DEFAULT_REFERRAL_CONFIG = {
+    rewardAmount: 150,
+    tripsRequired: 30,
+    daysToComplete: 30,
+    maxReferrals: 10,
+  }
+  const { data: referralConfigData } = useDataQuery<any>({
+    apiEndPoint: `${API_URL}/api/referrals/program-config`,
+    noFilter: true,
+  })
+  const referralConfig = {
+    rewardAmount:
+      typeof referralConfigData?.rewardAmount === 'number'
+        ? referralConfigData.rewardAmount
+        : DEFAULT_REFERRAL_CONFIG.rewardAmount,
+    tripsRequired:
+      typeof referralConfigData?.tripsRequired === 'number'
+        ? referralConfigData.tripsRequired
+        : DEFAULT_REFERRAL_CONFIG.tripsRequired,
+    daysToComplete:
+      typeof referralConfigData?.daysToComplete === 'number'
+        ? referralConfigData.daysToComplete
+        : DEFAULT_REFERRAL_CONFIG.daysToComplete,
+    maxReferrals:
+      typeof referralConfigData?.maxReferrals === 'number'
+        ? referralConfigData.maxReferrals
+        : DEFAULT_REFERRAL_CONFIG.maxReferrals,
+  }
+
   // ── Fetch real earnings data ───────────────────────────────
   const { data: earningsData, refetch: refetchEarnings } = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/driverPayouts/my-earnings`,
@@ -447,7 +482,7 @@ export default function DriverWalletPage() {
             variant="outline"
             className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
           >
-            On trip {ref.tripsCompleted || 0} of {ref.tripsRequired || 5}
+            On trip {ref.tripsCompleted || 0} of {ref.tripsRequired || referralConfig.tripsRequired}
           </Badge>
         )
       case 'COMPLETED':
@@ -467,7 +502,7 @@ export default function DriverWalletPage() {
             className="bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
           >
             <Gift className="w-3.5 h-3.5" />
-            ${ref.rewardAmount || 50} earned
+            ${ref.rewardAmount || referralConfig.rewardAmount} earned
           </Badge>
         )
       default:
@@ -620,9 +655,11 @@ export default function DriverWalletPage() {
                   <Gift className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div className="space-y-1.5">
-                  <CardTitle className="text-lg font-black">Refer a Friend & Earn $50</CardTitle>
+                  <CardTitle className="text-lg font-black">
+                    Refer a Friend &amp; Earn ${referralConfig.rewardAmount}
+                  </CardTitle>
                   <CardDescription className="text-sm leading-relaxed">
-                    Share your unique referral link with friends who want to become drivers. When they sign up using your link and complete their first 5 trips, you both earn $50. There is no limit to how many friends you can refer — the more you share, the more you earn!
+                    Share your unique referral link with friends who want to become drivers. When they sign up using your link and complete {referralConfig.tripsRequired} deliveries within {referralConfig.daysToComplete} days, you both earn ${referralConfig.rewardAmount}. You can refer up to {referralConfig.maxReferrals} friends.
                   </CardDescription>
                 </div>
               </div>
@@ -664,10 +701,13 @@ export default function DriverWalletPage() {
               </div>
               <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                  Active referrals
+                  Referrals used
                 </p>
                 <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
-                  {referralStats?.activeReferrals || 0}
+                  {referralStats?.totalReferrals || 0}{' '}
+                  <span className="text-sm font-bold text-slate-400">
+                    / {referralStats?.maxReferrals ?? referralConfig.maxReferrals}
+                  </span>
                 </p>
               </div>
             </div>
@@ -678,7 +718,7 @@ export default function DriverWalletPage() {
               className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl hover:shadow-emerald-600/20 transition inline-flex items-center justify-center gap-2 font-extrabold"
             >
               <Gift className="w-4 h-4" />
-              Refer a Friend & Earn $50
+              Refer a Friend
               <ArrowForward className="w-4 h-4" />
             </Button>
           </CardContent>
@@ -1188,10 +1228,10 @@ export default function DriverWalletPage() {
               <PartyPopper className="w-6 h-6 text-blue-500 rotate-12" />
             </div>
 
-            {/* $50 reward */}
+            {/* Reward amount — driven by admin-configured referral program settings */}
             <div>
               <div className="text-4xl font-black bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent">
-                $50
+                ${referralConfig.rewardAmount}
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 Reward for each successful referral
@@ -1209,7 +1249,7 @@ export default function DriverWalletPage() {
                   Link copied to clipboard!
                 </DialogTitle>
                 <DialogDescription className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Share this link with friends. When they sign up as a driver and complete their first 5 trips, you both earn $50!
+                  Share this link with friends. When they sign up as a driver and complete {referralConfig.tripsRequired} deliveries within {referralConfig.daysToComplete} days, you both earn ${referralConfig.rewardAmount}!
                 </DialogDescription>
               </DialogHeader>
 

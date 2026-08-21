@@ -1,9 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { AppSettingService } from "../appSetting/appSetting.service";
 
 @Injectable()
 export class ReferralService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly appSettingService: AppSettingService,
+  ) {}
 
   /**
    * Resolve the driver record from the authenticated user's JWT payload.
@@ -79,6 +83,9 @@ export class ReferralService {
 
   /**
    * Get referral stats: total earned, pending, active count.
+   *
+   * Also returns the admin-configured `maxReferrals` so the driver
+   * Wallet UI can show progress toward the cap (e.g. "3 / 10 friends").
    */
   async getMyReferralStats(driverId: string) {
     const referrals = await this.prisma.referral.findMany({
@@ -115,17 +122,34 @@ export class ReferralService {
       }
     }
 
+    // Read the admin-configured program config so the UI can show
+    // the cap (maxReferrals). Other fields (rewardAmount, tripsRequired,
+    // daysToComplete) are exposed via the /referrals/program-config
+    // endpoint below — we only add maxReferrals here to avoid
+    // duplicating the full config object in stats.
+    const config = await this.appSettingService.getReferralProgramSettings();
+
     return {
       totalEarned,
       pendingReward,
       activeReferrals,
       completedReferrals,
       totalReferrals: realReferrals.length,
+      maxReferrals: config.maxReferrals,
     };
   }
 
   /**
    * Apply a referral code when a new driver signs up.
+   *
+   * Reads the admin-configured referral program settings
+   * (rewardAmount, tripsRequired, maxReferrals) and stamps them onto
+   * the new Referral row so the policy at sign-up time is preserved —
+   * even if the admin changes the config later, this referral keeps
+   * its original terms.
+   *
+   * Enforces maxReferrals: if the referrer has already hit the cap,
+   * the code is rejected with a clear error message.
    */
   async applyReferral(driverId: string, referralCode: string) {
     if (!referralCode) {
@@ -152,11 +176,36 @@ export class ReferralService {
       throw new BadRequestException("You already used a referral code");
     }
 
+    // ── Enforce maxReferrals on the referrer ────────────────────
+    // Count all referrals made by the referrer that have actually
+    // been used (i.e. have a referredDriverId — PENDING rows with
+    // no referredDriverId are just the code placeholder and don't
+    // count toward the cap).
+    const config = await this.appSettingService.getReferralProgramSettings();
+
+    const referrerActiveCount = await this.prisma.referral.count({
+      where: {
+        referrerId: referral.referrerId,
+        referredDriverId: { not: null },
+      },
+    });
+
+    if (referrerActiveCount >= config.maxReferrals) {
+      throw new BadRequestException(
+        `This driver has already reached the referral limit (${config.maxReferrals} friends). ` +
+        "Please ask them to share their code with someone else, or contact support."
+      );
+    }
+
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },
       select: { user: { select: { email: true } } },
     });
 
+    // ── Stamp the current policy onto the new referral row ─────
+    // This freezes the reward amount + trip requirement at the
+    // values configured at sign-up time, so admin changes to the
+    // program config don't retroactively change pending referrals.
     await this.prisma.referral.create({
       data: {
         referralCode,
@@ -164,6 +213,8 @@ export class ReferralService {
         referredDriverId: driverId,
         referredEmail: driver?.user?.email || null,
         status: "REGISTERED",
+        tripsRequired: config.tripsRequired,
+        rewardAmount: config.rewardAmount,
       },
     });
 
@@ -238,5 +289,18 @@ export class ReferralService {
     }
 
     return code!;
+  }
+
+  /**
+   * Get the admin-configured referral program config for the driver
+   * Wallet UI. Returns reward amount, required trips, days to complete,
+   * and the max referrals cap.
+   *
+   * This is a thin wrapper around AppSettingService so the driver can
+   * fetch the config from the same /api/referrals namespace as the
+   * other wallet endpoints, instead of hitting /api/appSettings.
+   */
+  async getMyReferralProgramConfig() {
+    return this.appSettingService.getReferralProgramSettings();
   }
 }

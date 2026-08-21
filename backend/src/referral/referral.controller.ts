@@ -83,4 +83,24 @@ export class ReferralController {
     const profile = await this.referralService.getDriverProfile(driverId);
     res.json(profile);
   }
+
+  /**
+   * GET /referrals/program-config
+   * Returns the admin-configured referral program policy:
+   *   - rewardAmount   ($ paid to each side on completion)
+   *   - tripsRequired  (# of completed deliveries the referred driver must make)
+   *   - daysToComplete (# of days the referred driver has to complete the trips)
+   *   - maxReferrals   (cap on # of friends a single driver can refer)
+   *
+   * Used by the driver Wallet page to render the "Refer a Friend"
+   * card without hardcoding the reward amount.
+   */
+  @common.Get("program-config")
+  @swagger.ApiOkResponse({ description: "Referral program configuration" })
+  async getReferralProgramConfig(
+    @common.Res() res: Response,
+  ): Promise<void> {
+    const config = await this.referralService.getMyReferralProgramConfig();
+    res.json(config);
+  }
 }

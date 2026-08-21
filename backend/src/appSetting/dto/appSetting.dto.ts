@@ -1,11 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsBoolean,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
   IsUrl,
+  Max,
   MaxLength,
+  Min,
 } from "class-validator";
 
 export class LandingPageSettingsResponseDto {
@@ -119,4 +122,66 @@ export class UpdateDeliverySettingsBody {
   @IsOptional()
   @IsNumber()
   transitBufferMinutes?: number;
+}
+
+// ============================================================
+// REFERRAL PROGRAM SETTINGS
+// ============================================================
+// The driver referral program is admin-configurable. The admin sets:
+//   - rewardAmount:     $ paid to referrer + referred driver on completion
+//   - tripsRequired:    # of completed deliveries the referred driver must make
+//   - daysToComplete:   # of days the referred driver has to complete the trips
+//   - maxReferrals:     cap on # of friends a single driver can refer
+//
+// Defaults match the current advertised policy:
+//   rewardAmount=150, tripsRequired=30, daysToComplete=30, maxReferrals=10
+//
+// These values are read by ReferralService.applyReferral when a new
+// referral row is created, so changing them in the admin UI takes
+// effect for all NEW referrals immediately. Existing referral rows
+// keep whatever tripsRequired / rewardAmount they were created with.
+// ============================================================
+
+export class ReferralProgramSettingsResponseDto {
+  @ApiProperty({ description: "Reward amount in USD paid to each side on completion" })
+  rewardAmount!: number;
+
+  @ApiProperty({ description: "Number of completed deliveries the referred driver must make" })
+  tripsRequired!: number;
+
+  @ApiProperty({ description: "Number of days the referred driver has to complete the required trips" })
+  daysToComplete!: number;
+
+  @ApiProperty({ description: "Maximum number of friends a single driver can refer" })
+  maxReferrals!: number;
+}
+
+export class UpdateReferralProgramSettingsBody {
+  @ApiPropertyOptional({ description: "Reward amount in USD (must be >= 0)" })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(10000)
+  rewardAmount?: number;
+
+  @ApiPropertyOptional({ description: "Required completed deliveries (must be >= 1)" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  tripsRequired?: number;
+
+  @ApiPropertyOptional({ description: "Days to complete the required trips (must be >= 1)" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  daysToComplete?: number;
+
+  @ApiPropertyOptional({ description: "Maximum referrals per driver (must be >= 1)" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  maxReferrals?: number;
 }

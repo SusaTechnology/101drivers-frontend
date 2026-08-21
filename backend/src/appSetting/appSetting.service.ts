@@ -12,10 +12,15 @@ import { AppSettingPolicyService } from "../domain/appSetting/appSettingPolicy.s
 import {
   LandingPageSettingsResponseDto,
   UpdateLandingPageSettingsBody,
+  DeliverySettingsResponseDto,
+  UpdateDeliverySettingsBody,
+  ReferralProgramSettingsResponseDto,
+  UpdateReferralProgramSettingsBody,
 } from "./dto/appSetting.dto";
 
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
 const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
+const REFERRAL_PROGRAM_SETTINGS_KEY = "REFERRAL_PROGRAM_SETTINGS";
 
 type LandingPageSettingsValue = {
   fundraisingEnabled: boolean;
@@ -249,6 +254,93 @@ export class AppSettingService extends AppSettingServiceBase {
     await this.prisma.appSetting.upsert({
       where: { key: DELIVERY_SETTINGS_KEY },
       create: { key: DELIVERY_SETTINGS_KEY, value: next as any },
+      update: { value: next as any },
+    });
+
+    return next;
+  }
+
+  // ============================================================
+  // REFERRAL PROGRAM SETTINGS (admin-configurable)
+  // ============================================================
+  // Controls the driver referral program. Values are read by
+  // ReferralService.applyReferral when a new referral row is created,
+  // so changing them in the admin UI takes effect for all NEW
+  // referrals immediately. Existing referral rows keep whatever
+  // tripsRequired / rewardAmount they were created with.
+  // ============================================================
+
+  /**
+   * Default referral program policy. Matches the current advertised
+   * policy: $150 reward, 30 trips in 30 days, max 10 friends.
+   */
+  private getDefaultReferralProgramSettings(): ReferralProgramSettingsResponseDto {
+    return {
+      rewardAmount: 150,
+      tripsRequired: 30,
+      daysToComplete: 30,
+      maxReferrals: 10,
+    };
+  }
+
+  async getReferralProgramSettings(): Promise<ReferralProgramSettingsResponseDto> {
+    const row = await this.prisma.appSetting.findUnique({
+      where: { key: REFERRAL_PROGRAM_SETTINGS_KEY },
+      select: { value: true },
+    });
+
+    const defaults = this.getDefaultReferralProgramSettings();
+
+    if (!row?.value || typeof row.value !== "object") {
+      return defaults;
+    }
+
+    const v = row.value as Partial<ReferralProgramSettingsResponseDto>;
+
+    // Merge with defaults so a partial / legacy value blob still
+    // returns a complete shape — every field has a sane fallback.
+    return {
+      rewardAmount:
+        typeof v.rewardAmount === "number" && Number.isFinite(v.rewardAmount) && v.rewardAmount >= 0
+          ? v.rewardAmount
+          : defaults.rewardAmount,
+      tripsRequired:
+        typeof v.tripsRequired === "number" && Number.isFinite(v.tripsRequired) && v.tripsRequired >= 1
+          ? Math.floor(v.tripsRequired)
+          : defaults.tripsRequired,
+      daysToComplete:
+        typeof v.daysToComplete === "number" && Number.isFinite(v.daysToComplete) && v.daysToComplete >= 1
+          ? Math.floor(v.daysToComplete)
+          : defaults.daysToComplete,
+      maxReferrals:
+        typeof v.maxReferrals === "number" && Number.isFinite(v.maxReferrals) && v.maxReferrals >= 1
+          ? Math.floor(v.maxReferrals)
+          : defaults.maxReferrals,
+    };
+  }
+
+  async updateReferralProgramSettings(
+    input: UpdateReferralProgramSettingsBody
+  ): Promise<ReferralProgramSettingsResponseDto> {
+    const current = await this.getReferralProgramSettings();
+
+    // Coerce to safe numbers — the DTO validators already reject
+    // negatives / non-numbers, but we still clamp here so a partial
+    // update (e.g. only rewardAmount) doesn't blow away the others.
+    const next: ReferralProgramSettingsResponseDto = {
+      rewardAmount:
+        input.rewardAmount != null ? Number(input.rewardAmount) : current.rewardAmount,
+      tripsRequired:
+        input.tripsRequired != null ? Math.floor(Number(input.tripsRequired)) : current.tripsRequired,
+      daysToComplete:
+        input.daysToComplete != null ? Math.floor(Number(input.daysToComplete)) : current.daysToComplete,
+      maxReferrals:
+        input.maxReferrals != null ? Math.floor(Number(input.maxReferrals)) : current.maxReferrals,
+    };
+
+    await this.prisma.appSetting.upsert({
+      where: { key: REFERRAL_PROGRAM_SETTINGS_KEY },
+      create: { key: REFERRAL_PROGRAM_SETTINGS_KEY, value: next as any },
       update: { value: next as any },
     });
 

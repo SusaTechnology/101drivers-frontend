@@ -21,6 +21,8 @@ import {
   UpdateLandingPageSettingsBody,
   DeliverySettingsResponseDto,
   UpdateDeliverySettingsBody,
+  ReferralProgramSettingsResponseDto,
+  UpdateReferralProgramSettingsBody,
 } from "./dto/appSetting.dto";
 
 @swagger.ApiTags("appSettings")
@@ -80,6 +82,33 @@ export class AppSettingController extends AppSettingControllerBase {
     @common.Body() body: UpdateDeliverySettingsBody
   ): Promise<DeliverySettingsResponseDto> {
     return this.service.updateDeliverySettings(body);
+  }
+
+  // ============================================================
+  // REFERRAL PROGRAM SETTINGS (admin-only)
+  // ============================================================
+  @common.Get("referral-program")
+  @swagger.ApiOkResponse({ type: ReferralProgramSettingsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getReferralProgramSettings(): Promise<ReferralProgramSettingsResponseDto> {
+    return this.service.getReferralProgramSettings();
+  }
+
+  @common.Patch("referral-program")
+  @swagger.ApiOkResponse({ type: ReferralProgramSettingsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async updateReferralProgramSettings(
+    @common.Body() body: UpdateReferralProgramSettingsBody
+  ): Promise<ReferralProgramSettingsResponseDto> {
+    return this.service.updateReferralProgramSettings(body);
   }
 
  @common.UseInterceptors(AclValidateRequestInterceptor)

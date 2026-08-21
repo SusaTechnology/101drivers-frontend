@@ -1466,8 +1466,14 @@ model Referral {
   referredDriver  Driver?            @relation("ReferredByReferrals", fields: [referredDriverId], references: [id])
   status          EnumReferralStatus @default(PENDING)
   tripsCompleted  Int                @default(0)
-  tripsRequired   Int                @default(5)
-  rewardAmount     Float              @default(50.0)
+  // Defaults reflect the current advertised policy ($150 reward for
+  // 30 completed trips). The actual values used for NEW referrals are
+  // read from the admin-configured REFERRAL_PROGRAM_SETTINGS app
+  // setting at applyReferral time — these schema defaults are only
+  // a backstop for rows created outside applyReferral (e.g. direct
+  // DB inserts) and for existing rows in legacy databases.
+  tripsRequired   Int                @default(30)
+  rewardAmount     Float              @default(150.0)
   rewardPaidAt    DateTime?
   payoutId        String?            @unique
   payout          DriverPayout?      @relation(fields: [payoutId], references: [id])
