@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { PrismaModule } from "../prisma/prisma.module";
 import { GatewayModule } from "../gateways/gateway.module";
 import { PostpaidBillingModule } from "../postpaidBilling/postpaidBilling.module";
+import { ReferralModule } from "../referral/referral.module";
 
 import { GoogleMapsService } from "./google-maps.service";
 import { PricingEngineService } from "./pricing-engine.service";
@@ -31,6 +32,12 @@ import { DeliveryClosePenaltyEngine } from "src/domain/deliveryRequest/deliveryC
     // delivery completion. The service is @Optional-injected so the
     // lifecycle still works if the module is removed (e.g. tests).
     forwardRef(() => PostpaidBillingModule),
+    // ReferralModule provides ReferralTriggerService — needed by
+    // DeliveryLifecycleService to fire the ON_DELIVERIES_COMPLETED
+    // trigger when a referred driver completes their Nth delivery.
+    // forwardRef breaks the circular chain (ReferralModule imports
+    // DriverPayoutModule which imports DeliveryLogisticsModule).
+    forwardRef(() => ReferralModule),
   ],
   providers: [
     GoogleMapsService,

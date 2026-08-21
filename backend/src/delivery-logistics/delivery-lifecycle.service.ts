@@ -29,6 +29,7 @@ import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.eng
 import { DeliveryClosePenaltyEngine } from "../domain/deliveryRequest/deliveryClosePenalty.engine";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PostpaidBillingService } from "../postpaidBilling/postpaidBilling.service";
+import { ReferralTriggerService } from "../referral/referral-trigger.service";
 import {
   EnumDriverPayoutStatus,
   EnumDriverPayoutType,
@@ -72,7 +73,12 @@ export class DeliveryLifecycleService {
     @Optional() @Inject(forwardRef(() => TrackingGateway))
     private readonly trackingGateway?: TrackingGateway,
     @Optional() @Inject(forwardRef(() => PostpaidBillingService))
-    private readonly postpaidBilling?: PostpaidBillingService
+    private readonly postpaidBilling?: PostpaidBillingService,
+    // Referral trigger — @Optional so the lifecycle service can still
+    // construct if the ReferralModule isn't imported (e.g. in tests).
+    // forwardRef breaks the circular chain.
+    @Optional() @Inject(forwardRef(() => ReferralTriggerService))
+    private readonly referralTrigger?: ReferralTriggerService
   ) {
     this.logger.log(
       `TrackingGateway ${this.trackingGateway ? 'INJECTED' : 'NOT INJECTED (undefined)'}`
@@ -893,6 +899,24 @@ async completeTrip(input: {
       } catch (err: any) {
         this.logger.error(
           `PostpaidBillingService.reportUsageToStripe threw for delivery ${input.deliveryId}: ${err?.message}`,
+          err?.stack,
+        );
+      }
+    }
+
+    // ── Fire the referral trigger (if this driver was referred) ──
+    // Decoupled one-line call: the referral trigger service decides
+    // internally whether to fire a payout (based on the snapshotted
+    // policy on the referred driver's Referral row + the live
+    // program config + isActive flag). If the program is paused, the
+    // trigger is a no-op. If it fails for any reason, the cron picks
+    // up the slack. We don't await — keep the delivery completion fast.
+    if (this.referralTrigger) {
+      try {
+        await this.referralTrigger.onDeliveryCompleted(input.driverId);
+      } catch (err: any) {
+        this.logger.error(
+          `ReferralTriggerService.onDeliveryCompleted threw for driver ${input.driverId}: ${err?.message}`,
           err?.stack,
         );
       }

@@ -493,7 +493,11 @@ export class StripeWebhookController {
     // firing earlier (e.g., at transfer creation) would be premature
     // because the transfer could still fail and the commission would
     // never materialize.
-    if (this.notificationEngine) {
+    //
+    // For referral payouts (REFERRAL_REFERRER, REFERRAL_REFERRED),
+    // there's no commission to admins and no delivery to look up, so
+    // we skip this notification entirely.
+    if (this.notificationEngine && payout.deliveryId) {
       try {
         await this.notificationEngine.notifyAdminCommissionReceived({
           deliveryId: payout.deliveryId,

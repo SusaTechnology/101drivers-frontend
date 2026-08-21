@@ -139,6 +139,12 @@ model Driver {
   stripeConnectAccountId String?
   stripeConnectOnboardingComplete Boolean @default(false)
   status           EnumDriverStatus           @default(WAITLISTED)
+  // Tracks the highest tier the referrer has been paid out for.
+  // Incremented each time the referrer crosses a multiple of
+  // `referralThreshold` (read live from REFERRAL_PROGRAM_SETTINGS).
+  // E.g. threshold=20: tier 0 (unpaid) → 1 ($150 at 20 successful)
+  // → 2 (another $150 at 40) → ...
+  lastPaidReferrerTier  Int                   @default(0)
   updatedAt        DateTime                   @updatedAt
   user             User                       @relation(name: "DriverOnUser", fields: [userId], references: [id])
   userId           String                     @unique
@@ -635,8 +641,13 @@ model PaymentEvent {
 
 model DriverPayout {
   createdAt          DateTime               @default(now())
-  delivery           DeliveryRequest        @relation(fields: [deliveryId], references: [id])
-  deliveryId         String                 @unique
+  // deliveryId is nullable to support referral payouts (which are
+  // not tied to a specific delivery). Existing trip-completion
+  // payouts keep deliveryId set + unique constraint intact.
+  // Postgres allows multiple NULLs in a unique column, so referral
+  // payouts (with deliveryId = null) don't violate uniqueness.
+  delivery           DeliveryRequest?       @relation(fields: [deliveryId], references: [id])
+  deliveryId         String?                @unique
   driver             Driver                 @relation(fields: [driverId], references: [id])
   driverId           String
   driverSharePct     Float
@@ -650,12 +661,16 @@ model DriverPayout {
   platformFee        Float
   providerTransferId String?
   referral           Referral?              @relation()
+  // Back-relation for the REFERRED driver's one-shot reward payout
+  // (the referrer tier payouts don't link to a specific referral).
+  referredByReferral Referral?              @relation("ReferralReferredPayout")
   batchItems         PayoutBatchItem[]
   status             EnumDriverPayoutStatus @default(PENDING)
   type               EnumDriverPayoutType   @default(TRIP_COMPLETION)
   updatedAt          DateTime               @updatedAt
 
   @@index([driverId, status, createdAt])
+  @@index([type, status])
 }
 
 model PayoutBatch {
@@ -1264,6 +1279,13 @@ enum EnumDriverPayoutType {
   LOCK_IN_FEE
   BONUS
   ADJUSTMENT
+  // Referral payouts — not tied to a specific delivery.
+  // REFERRAL_REFERRER: paid to the referrer per `referralThreshold`
+  //   successful referrals (tiered model).
+  // REFERRAL_REFERRED: one-shot reward paid to the referred driver
+  //   when their referral becomes successful (trigger fires).
+  REFERRAL_REFERRER
+  REFERRAL_REFERRED
 }
 
 enum EnumPayoutBatchType {
@@ -1453,6 +1475,17 @@ enum EnumReferralStatus {
   COMPLETED
   CLOSED
   REWARD_PAID
+  EXPIRED
+}
+
+// EnumReferralRewardTrigger — when does a referral "become successful"?
+//   ON_APPROVED: when admin moves the referred driver from
+//     PENDING_APPROVAL → APPROVED.
+//   ON_DELIVERIES_COMPLETED: when the referred driver completes
+//     `requiredDeliveries` deliveries.
+enum EnumReferralRewardTrigger {
+  ON_APPROVED
+  ON_DELIVERIES_COMPLETED
 }
 
 model Referral {
@@ -1465,22 +1498,42 @@ model Referral {
   referredDriverId String?            @unique
   referredDriver  Driver?            @relation("ReferredByReferrals", fields: [referredDriverId], references: [id])
   status          EnumReferralStatus @default(PENDING)
+
+  // ── Per-referral policy snapshot (stamped at applyReferral time) ──
+  // These values are FROZEN at creation so admin changes to the
+  // program config don't retroactively change pending referrals.
+  // The only fields read LIVE at trigger time are `referralThreshold`
+  // and `referrerRewardAmount` from the AppSetting (because they
+  // determine tier payouts, which are about counting, not per-referral terms).
+  rewardTrigger          EnumReferralRewardTrigger @default(ON_DELIVERIES_COMPLETED)
+  requiredDeliveries     Int                       @default(30)
+  windowStartDate       DateTime?                 // snapshot of program windowStartDate
+  windowEndDate         DateTime?                 // snapshot of program windowEndDate
+  expiresAt             DateTime?                 // computed = windowEndDate (or null if FOREVER)
+  referredGetsReward    Boolean                    @default(true)
+  referredRewardAmount  Float?                     // snapshotted; null when referredGetsReward=false
+
+  // ── Trip counter (incremented on each delivery completion) ──
   tripsCompleted  Int                @default(0)
-  // Defaults reflect the current advertised policy ($150 reward for
-  // 30 completed trips). The actual values used for NEW referrals are
-  // read from the admin-configured REFERRAL_PROGRAM_SETTINGS app
-  // setting at applyReferral time — these schema defaults are only
-  // a backstop for rows created outside applyReferral (e.g. direct
-  // DB inserts) and for existing rows in legacy databases.
-  tripsRequired   Int                @default(30)
-  rewardAmount     Float              @default(150.0)
+
+  // ── Referred driver's one-shot reward payout state ──
+  // (only set if referredGetsReward=true at the time the trigger fires)
+  referredRewardPaidAt  DateTime?
+  referredPayoutId      String?               @unique
+  referredPayout        DriverPayout?         @relation("ReferralReferredPayout", fields: [referredPayoutId], references: [id])
+
+  // ── Legacy referrer reward field (kept for backward compat with
+  // any code that still references it; not used in the tiered model) ──
+  rewardAmount     Float              @default(0.0)
   rewardPaidAt    DateTime?
   payoutId        String?            @unique
   payout          DriverPayout?      @relation(fields: [payoutId], references: [id])
+
   createdAt       DateTime          @default(now())
   updatedAt       DateTime           @updatedAt
 
   @@index([referrerId, status])
   @@index([referredDriverId])
   @@index([referralCode])
+  @@index([expiresAt])
 }

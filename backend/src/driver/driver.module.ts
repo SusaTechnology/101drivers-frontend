@@ -11,9 +11,18 @@ import { DriverDomain } from "src/domain/driver/driver.domain";
 import { DriverApprovalEngine } from "src/domain/driver/driverApproval.engine";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "src/common/mail/mail.service";
+import { ReferralModule } from "../referral/referral.module";
 
 @Module({
-  imports: [DriverModuleBase, forwardRef(() => AuthModule)],
+  // ReferralModule provides ReferralTriggerService — needed by
+  // DriverApprovalEngine to fire the ON_APPROVED trigger when admin
+  // approves a referred driver. forwardRef to break the circular
+  // dependency chain.
+  imports: [
+    DriverModuleBase,
+    forwardRef(() => AuthModule),
+    forwardRef(() => ReferralModule),
+  ],
   controllers: [DriverController, DriverOnboardingController, DriverOnboardingPublicController],
   providers: [DriverService, DriverResolver, DriverDomain, DriverPolicyService, DriverApprovalEngine, NotificationEventEngine, MailService],
   exports: [DriverService],

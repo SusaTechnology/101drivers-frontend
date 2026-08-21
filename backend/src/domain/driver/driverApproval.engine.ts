@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from "@nestjs/common";
 import {
   EnumAdminAuditLogAction,
   EnumAdminAuditLogActorType,
@@ -9,13 +9,22 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { NotificationEventEngine } from "../notificationEvent/notificationEvent.engine";
+import { ReferralTriggerService } from "../../referral/referral-trigger.service";
 import { randomBytes } from "crypto";
 
 @Injectable()
 export class DriverApprovalEngine {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notificationEventEngine: NotificationEventEngine
+    private readonly notificationEventEngine: NotificationEventEngine,
+    // forwardRef avoids a circular module dependency:
+    //   DriverModule → DriverApprovalEngine → ReferralTriggerService
+    //   → ReferralModule → DriverPayoutModule → DeliveryLogisticsModule → ...
+    //   → DriverModule (if it ever reaches back here)
+    // The referral trigger is fire-and-forget — if it fails, the cron
+    // will pick up the slack. We never rethrow into the approval flow.
+    @Inject(forwardRef(() => ReferralTriggerService))
+    private readonly referralTrigger: ReferralTriggerService,
   ) {}
 
   /**
@@ -233,6 +242,18 @@ export class DriverApprovalEngine {
         },
       });
     }
+
+    // ── Fire the referral trigger (if this driver was referred) ──
+    // Decoupled one-line call: the referral trigger service decides
+    // internally whether to fire a payout (based on the snapshotted
+    // policy on the referred driver's Referral row + the live
+    // program config). If the program is paused, the trigger is a
+    // no-op. If it fails for any reason, the cron picks up the slack.
+    // We don't await — keep the approval flow fast.
+    void this.referralTrigger.onDriverApproved(input.driverId).catch((err) => {
+      // Swallow — don't break the approval flow on referral trigger failure
+      console.error("[DriverApprovalEngine] referral trigger failed:", err);
+    });
   }
 
   /**

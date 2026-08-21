@@ -69,6 +69,7 @@ import { Route as AdminReportOpsSummaryIndexRouteImport } from './routes/admin-r
 import { Route as AdminReportDisputesIndexRouteImport } from './routes/admin-report-disputes/index'
 import { Route as AdminReportDeliveriesIndexRouteImport } from './routes/admin-report-deliveries/index'
 import { Route as AdminReportComplianceIndexRouteImport } from './routes/admin-report-compliance/index'
+import { Route as AdminReferralProgramIndexRouteImport } from './routes/admin-referral-program/index'
 import { Route as AdminPricingIndexRouteImport } from './routes/admin-pricing/index'
 import { Route as AdminPricingRuleIndexRouteImport } from './routes/admin-pricing-rule/index'
 import { Route as AdminPricingConfigIndexRouteImport } from './routes/admin-pricing-config/index'
@@ -437,6 +438,12 @@ const AdminReportComplianceIndexRoute =
     path: '/admin-report-compliance/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminReferralProgramIndexRoute =
+  AdminReferralProgramIndexRouteImport.update({
+    id: '/admin-referral-program/',
+    path: '/admin-referral-program/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminPricingIndexRoute = AdminPricingIndexRouteImport.update({
   id: '/admin-pricing/',
   path: '/admin-pricing/',
@@ -734,6 +741,7 @@ export interface FileRoutesByFullPath {
   '/admin-pricing-config/': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule/': typeof AdminPricingRuleIndexRoute
   '/admin-pricing/': typeof AdminPricingIndexRoute
+  '/admin-referral-program/': typeof AdminReferralProgramIndexRoute
   '/admin-report-compliance/': typeof AdminReportComplianceIndexRoute
   '/admin-report-deliveries/': typeof AdminReportDeliveriesIndexRoute
   '/admin-report-disputes/': typeof AdminReportDisputesIndexRoute
@@ -843,6 +851,7 @@ export interface FileRoutesByTo {
   '/admin-pricing-config': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule': typeof AdminPricingRuleIndexRoute
   '/admin-pricing': typeof AdminPricingIndexRoute
+  '/admin-referral-program': typeof AdminReferralProgramIndexRoute
   '/admin-report-compliance': typeof AdminReportComplianceIndexRoute
   '/admin-report-deliveries': typeof AdminReportDeliveriesIndexRoute
   '/admin-report-disputes': typeof AdminReportDisputesIndexRoute
@@ -954,6 +963,7 @@ export interface FileRoutesById {
   '/admin-pricing-config/': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule/': typeof AdminPricingRuleIndexRoute
   '/admin-pricing/': typeof AdminPricingIndexRoute
+  '/admin-referral-program/': typeof AdminReferralProgramIndexRoute
   '/admin-report-compliance/': typeof AdminReportComplianceIndexRoute
   '/admin-report-deliveries/': typeof AdminReportDeliveriesIndexRoute
   '/admin-report-disputes/': typeof AdminReportDisputesIndexRoute
@@ -1066,6 +1076,7 @@ export interface FileRouteTypes {
     | '/admin-pricing-config/'
     | '/admin-pricing-rule/'
     | '/admin-pricing/'
+    | '/admin-referral-program/'
     | '/admin-report-compliance/'
     | '/admin-report-deliveries/'
     | '/admin-report-disputes/'
@@ -1175,6 +1186,7 @@ export interface FileRouteTypes {
     | '/admin-pricing-config'
     | '/admin-pricing-rule'
     | '/admin-pricing'
+    | '/admin-referral-program'
     | '/admin-report-compliance'
     | '/admin-report-deliveries'
     | '/admin-report-disputes'
@@ -1285,6 +1297,7 @@ export interface FileRouteTypes {
     | '/admin-pricing-config/'
     | '/admin-pricing-rule/'
     | '/admin-pricing/'
+    | '/admin-referral-program/'
     | '/admin-report-compliance/'
     | '/admin-report-deliveries/'
     | '/admin-report-disputes/'
@@ -1375,6 +1388,7 @@ export interface RootRouteChildren {
   AdminPricingConfigIndexRoute: typeof AdminPricingConfigIndexRoute
   AdminPricingRuleIndexRoute: typeof AdminPricingRuleIndexRoute
   AdminPricingIndexRoute: typeof AdminPricingIndexRoute
+  AdminReferralProgramIndexRoute: typeof AdminReferralProgramIndexRoute
   AdminReportComplianceIndexRoute: typeof AdminReportComplianceIndexRoute
   AdminReportDeliveriesIndexRoute: typeof AdminReportDeliveriesIndexRoute
   AdminReportDisputesIndexRoute: typeof AdminReportDisputesIndexRoute
@@ -1859,6 +1873,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminReportComplianceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-referral-program/': {
+      id: '/admin-referral-program/'
+      path: '/admin-referral-program'
+      fullPath: '/admin-referral-program/'
+      preLoaderRoute: typeof AdminReferralProgramIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-pricing/': {
       id: '/admin-pricing/'
       path: '/admin-pricing'
@@ -2278,6 +2299,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminPricingConfigIndexRoute: AdminPricingConfigIndexRoute,
   AdminPricingRuleIndexRoute: AdminPricingRuleIndexRoute,
   AdminPricingIndexRoute: AdminPricingIndexRoute,
+  AdminReferralProgramIndexRoute: AdminReferralProgramIndexRoute,
   AdminReportComplianceIndexRoute: AdminReportComplianceIndexRoute,
   AdminReportDeliveriesIndexRoute: AdminReportDeliveriesIndexRoute,
   AdminReportDisputesIndexRoute: AdminReportDisputesIndexRoute,

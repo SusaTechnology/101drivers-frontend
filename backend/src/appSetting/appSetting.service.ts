@@ -16,6 +16,8 @@ import {
   UpdateDeliverySettingsBody,
   ReferralProgramSettingsResponseDto,
   UpdateReferralProgramSettingsBody,
+  ReferralRewardTrigger,
+  ReferralTimeLimitMode,
 } from "./dto/appSetting.dto";
 
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
@@ -261,28 +263,53 @@ export class AppSettingService extends AppSettingServiceBase {
   }
 
   // ============================================================
-  // REFERRAL PROGRAM SETTINGS (admin-configurable)
+  // REFERRAL PROGRAM SETTINGS (admin-configurable, tiered model)
   // ============================================================
-  // Controls the driver referral program. Values are read by
-  // ReferralService.applyReferral when a new referral row is created,
-  // so changing them in the admin UI takes effect for all NEW
-  // referrals immediately. Existing referral rows keep whatever
-  // tripsRequired / rewardAmount they were created with.
+  // Drives the driver referral program. The referrer earns
+  // `referrerRewardAmount` for every `referralThreshold` of
+  // SUCCESSFUL referrals (tiered). The referred driver earns a
+  // one-shot `referredRewardAmount` when their referral becomes
+  // successful (per-referral).
+  //
+  // Per-referral policy (rewardTrigger, requiredDeliveries, window
+  // dates, referredRewardAmount) is SNAPSHOT onto each Referral row
+  // at applyReferral time. The referrer-tier policy (referralThreshold,
+  // referrerRewardAmount) is read LIVE at trigger time so the admin
+  // can adjust incentives mid-program.
   // ============================================================
 
   /**
    * Default referral program policy. Matches the current advertised
-   * policy: $150 reward, 30 trips in 30 days, max 10 friends.
+   * policy: $150 to referrer per 20 successful referrals, $150 to
+   * the referred driver once when they complete 30 deliveries within
+   * a 1-year calendar window.
    */
   private getDefaultReferralProgramSettings(): ReferralProgramSettingsResponseDto {
+    // Default window: 1 year from now (renewed each time the admin
+    // resets, but stable enough for first run).
+    const now = new Date();
+    const windowStart = now.toISOString();
+    const windowEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()).toISOString();
+
     return {
-      rewardAmount: 150,
-      tripsRequired: 30,
-      daysToComplete: 30,
-      maxReferrals: 10,
+      isActive: true,
+      rewardTrigger: ReferralRewardTrigger.ON_DELIVERIES_COMPLETED,
+      requiredDeliveries: 30,
+      timeLimitMode: ReferralTimeLimitMode.CALENDAR_RANGE,
+      windowStartDate: windowStart,
+      windowEndDate: windowEnd,
+      referrerRewardAmount: 150,
+      referralThreshold: 20,
+      referredGetsReward: true,
+      referredRewardAmount: 150,
     };
   }
 
+  /**
+   * Read the live referral program config. Returns the default policy
+   * if no row exists yet, or a merged shape if the stored row is
+   * partial (legacy / future-tolerant).
+   */
   async getReferralProgramSettings(): Promise<ReferralProgramSettingsResponseDto> {
     const row = await this.prisma.appSetting.findUnique({
       where: { key: REFERRAL_PROGRAM_SETTINGS_KEY },
@@ -300,22 +327,47 @@ export class AppSettingService extends AppSettingServiceBase {
     // Merge with defaults so a partial / legacy value blob still
     // returns a complete shape — every field has a sane fallback.
     return {
-      rewardAmount:
-        typeof v.rewardAmount === "number" && Number.isFinite(v.rewardAmount) && v.rewardAmount >= 0
-          ? v.rewardAmount
-          : defaults.rewardAmount,
-      tripsRequired:
-        typeof v.tripsRequired === "number" && Number.isFinite(v.tripsRequired) && v.tripsRequired >= 1
-          ? Math.floor(v.tripsRequired)
-          : defaults.tripsRequired,
-      daysToComplete:
-        typeof v.daysToComplete === "number" && Number.isFinite(v.daysToComplete) && v.daysToComplete >= 1
-          ? Math.floor(v.daysToComplete)
-          : defaults.daysToComplete,
-      maxReferrals:
-        typeof v.maxReferrals === "number" && Number.isFinite(v.maxReferrals) && v.maxReferrals >= 1
-          ? Math.floor(v.maxReferrals)
-          : defaults.maxReferrals,
+      isActive: typeof v.isActive === "boolean" ? v.isActive : defaults.isActive,
+      rewardTrigger:
+        v.rewardTrigger === ReferralRewardTrigger.ON_APPROVED ||
+        v.rewardTrigger === ReferralRewardTrigger.ON_DELIVERIES_COMPLETED
+          ? v.rewardTrigger
+          : defaults.rewardTrigger,
+      requiredDeliveries:
+        typeof v.requiredDeliveries === "number" &&
+        Number.isFinite(v.requiredDeliveries) &&
+        v.requiredDeliveries >= 1
+          ? Math.floor(v.requiredDeliveries)
+          : defaults.requiredDeliveries,
+      timeLimitMode:
+        v.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE ||
+        v.timeLimitMode === ReferralTimeLimitMode.FOREVER
+          ? v.timeLimitMode
+          : defaults.timeLimitMode,
+      windowStartDate:
+        typeof v.windowStartDate === "string" ? v.windowStartDate : defaults.windowStartDate,
+      windowEndDate:
+        typeof v.windowEndDate === "string" ? v.windowEndDate : defaults.windowEndDate,
+      referrerRewardAmount:
+        typeof v.referrerRewardAmount === "number" &&
+        Number.isFinite(v.referrerRewardAmount) &&
+        v.referrerRewardAmount >= 0
+          ? v.referrerRewardAmount
+          : defaults.referrerRewardAmount,
+      referralThreshold:
+        typeof v.referralThreshold === "number" &&
+        Number.isFinite(v.referralThreshold) &&
+        v.referralThreshold >= 1
+          ? Math.floor(v.referralThreshold)
+          : defaults.referralThreshold,
+      referredGetsReward:
+        typeof v.referredGetsReward === "boolean" ? v.referredGetsReward : defaults.referredGetsReward,
+      referredRewardAmount:
+        typeof v.referredRewardAmount === "number" && Number.isFinite(v.referredRewardAmount) && v.referredRewardAmount >= 0
+          ? v.referredRewardAmount
+          : v.referredGetsReward === false
+            ? null
+            : defaults.referredRewardAmount,
     };
   }
 
@@ -324,19 +376,55 @@ export class AppSettingService extends AppSettingServiceBase {
   ): Promise<ReferralProgramSettingsResponseDto> {
     const current = await this.getReferralProgramSettings();
 
-    // Coerce to safe numbers — the DTO validators already reject
-    // negatives / non-numbers, but we still clamp here so a partial
-    // update (e.g. only rewardAmount) doesn't blow away the others.
+    // Compute the next shape, merging partial input onto current.
     const next: ReferralProgramSettingsResponseDto = {
-      rewardAmount:
-        input.rewardAmount != null ? Number(input.rewardAmount) : current.rewardAmount,
-      tripsRequired:
-        input.tripsRequired != null ? Math.floor(Number(input.tripsRequired)) : current.tripsRequired,
-      daysToComplete:
-        input.daysToComplete != null ? Math.floor(Number(input.daysToComplete)) : current.daysToComplete,
-      maxReferrals:
-        input.maxReferrals != null ? Math.floor(Number(input.maxReferrals)) : current.maxReferrals,
+      isActive: input.isActive != null ? input.isActive : current.isActive,
+      rewardTrigger: input.rewardTrigger != null ? input.rewardTrigger : current.rewardTrigger,
+      requiredDeliveries:
+        input.requiredDeliveries != null
+          ? Math.floor(Number(input.requiredDeliveries))
+          : current.requiredDeliveries,
+      timeLimitMode: input.timeLimitMode != null ? input.timeLimitMode : current.timeLimitMode,
+      windowStartDate:
+        input.windowStartDate !== undefined
+          ? input.windowStartDate
+          : current.windowStartDate,
+      windowEndDate:
+        input.windowEndDate !== undefined ? input.windowEndDate : current.windowEndDate,
+      referrerRewardAmount:
+        input.referrerRewardAmount != null
+          ? Number(input.referrerRewardAmount)
+          : current.referrerRewardAmount,
+      referralThreshold:
+        input.referralThreshold != null
+          ? Math.floor(Number(input.referralThreshold))
+          : current.referralThreshold,
+      referredGetsReward:
+        input.referredGetsReward != null ? input.referredGetsReward : current.referredGetsReward,
+      referredRewardAmount:
+        input.referredRewardAmount !== undefined
+          ? input.referredRewardAmount
+          : current.referredRewardAmount,
     };
+
+    // Cross-field validation: if CALENDAR_RANGE, both dates must be set.
+    if (
+      next.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE &&
+      (!next.windowStartDate || !next.windowEndDate)
+    ) {
+      throw new Error(
+        "Referral program: windowStartDate and windowEndDate are required when timeLimitMode = CALENDAR_RANGE"
+      );
+    }
+
+    // Cross-field validation: if referredGetsReward=false, clear the referredRewardAmount.
+    if (!next.referredGetsReward) {
+      next.referredRewardAmount = null;
+    } else if (next.referredRewardAmount == null) {
+      // If admin just flipped referredGetsReward=true but didn't provide an amount,
+      // fall back to the referrerRewardAmount (symmetric default).
+      next.referredRewardAmount = next.referrerRewardAmount;
+    }
 
     await this.prisma.appSetting.upsert({
       where: { key: REFERRAL_PROGRAM_SETTINGS_KEY },

@@ -1616,35 +1616,46 @@ async notifyTripCompleted(input: {
    * balance — they still need to pull it to their bank via instant/standard payout).
    */
   async notifyDriverPayoutPaid(input: {
-    deliveryId: string;
+    deliveryId: string | null;
     driverId: string;
     amount: number;
-    payoutType: "LOCK_IN_FEE" | "TRIP_COMPLETION";
+    payoutType: "LOCK_IN_FEE" | "TRIP_COMPLETION" | "REFERRAL_REFERRER" | "REFERRAL_REFERRED";
     transferId: string;
   }) {
-    const [delivery, driver] = await Promise.all([
-      this.prisma.deliveryRequest.findUnique({
-        where: { id: input.deliveryId },
-        select: {
-          id: true,
-          pickupAddress: true,
-          dropoffAddress: true,
-        },
-      }),
-      this.prisma.driver.findUnique({
-        where: { id: input.driverId },
-        select: {
-          id: true,
-          user: { select: { email: true, fullName: true } },
-        },
-      }),
-    ]);
+    // For referral payouts (no delivery), skip the delivery lookup.
+    const delivery = input.deliveryId
+      ? await this.prisma.deliveryRequest.findUnique({
+          where: { id: input.deliveryId },
+          select: {
+            id: true,
+            pickupAddress: true,
+            dropoffAddress: true,
+          },
+        })
+      : null;
 
-    if (!delivery || !driver) {
-      this.logger.warn(
-        `notifyDriverPayoutPaid: delivery ${input.deliveryId} or driver ${input.driverId} not found, skipping`,
-      );
-      return null;
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        user: { select: { email: true, fullName: true } },
+      },
+    });
+
+    if ((!input.deliveryId || !delivery) || !driver) {
+      // For referral payouts (no delivery), only require the driver.
+      if (input.deliveryId && !delivery) {
+        this.logger.warn(
+          `notifyDriverPayoutPaid: delivery ${input.deliveryId} or driver ${input.driverId} not found, skipping`,
+        );
+        return null;
+      }
+      if (!driver) {
+        this.logger.warn(
+          `notifyDriverPayoutPaid: driver ${input.driverId} not found, skipping`,
+        );
+        return null;
+      }
     }
 
     const toEmail = driver.user?.email;
@@ -1657,42 +1668,68 @@ async notifyTripCompleted(input: {
 
     const displayName = driver.user?.fullName || "Driver";
     const amountStr = `$${Number(input.amount).toFixed(2)}`;
-    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    // For referral payouts (no delivery), use a generic ref + label.
+    const deliveryRef = delivery?.id?.slice(-6).toUpperCase() ?? "N/A";
     const payoutLabel =
       input.payoutType === "LOCK_IN_FEE"
         ? "lock-in fee (trip started)"
-        : "trip completion payout";
+        : input.payoutType === "REFERRAL_REFERRER"
+          ? "referral tier reward"
+          : input.payoutType === "REFERRAL_REFERRED"
+            ? "referral signup reward"
+            : "trip completion payout";
+
+    // Build the payout detail lines — for referral payouts, we don't
+    // have pickup/dropoff so we use a different set of details.
+    const isReferralPayout =
+      input.payoutType === "REFERRAL_REFERRER" ||
+      input.payoutType === "REFERRAL_REFERRED";
+
+    const detailLines = isReferralPayout
+      ? [
+          `Amount: ${amountStr}`,
+          `Type: ${payoutLabel}`,
+          `Stripe Transfer ID: ${input.transferId}`,
+          `Date: ${new Date().toISOString()}`,
+        ]
+      : [
+          `Delivery: #${deliveryRef}`,
+          `Pickup: ${delivery?.pickupAddress ?? "N/A"}`,
+          `Drop-off: ${delivery?.dropoffAddress ?? "N/A"}`,
+          `Amount: ${amountStr}`,
+          `Type: ${payoutLabel}`,
+          `Stripe Transfer ID: ${input.transferId}`,
+          `Date: ${new Date().toISOString()}`,
+        ];
 
     return this.queueAndSend({
       driverId: driver.id,
-      deliveryId: delivery.id,
+      deliveryId: delivery?.id ?? null,
       channel: EnumNotificationEventChannel.EMAIL,
       type: EnumNotificationEventType.DRIVER_PAYOUT_PAID,
       templateCode: "driver-payout-paid",
       toEmail,
-      subject: `Payout received — ${amountStr} for delivery #${deliveryRef}`,
+      subject: isReferralPayout
+        ? `Referral reward received — ${amountStr}`
+        : `Payout received — ${amountStr} for delivery #${deliveryRef}`,
       body: [
         `Hi ${displayName},`,
         "",
-        `Good news — your ${payoutLabel} of ${amountStr} has been transferred to your Stripe Connect account.`,
+        isReferralPayout
+          ? `Good news — your ${payoutLabel} of ${amountStr} has been transferred to your Stripe Connect account.`
+          : `Good news — your ${payoutLabel} of ${amountStr} has been transferred to your Stripe Connect account.`,
         "",
         "The funds are now in your Connect balance. You can pull them to your bank account from your driver wallet page (instant payout arrives in minutes, standard payout takes 1-2 business days).",
         "",
         "---",
         "Payout Details",
-        `Delivery: #${deliveryRef}`,
-        `Pickup: ${delivery.pickupAddress}`,
-        `Drop-off: ${delivery.dropoffAddress}`,
-        `Amount: ${amountStr}`,
-        `Type: ${payoutLabel}`,
-        `Stripe Transfer ID: ${input.transferId}`,
-        `Date: ${new Date().toISOString()}`,
+        ...detailLines,
         "---",
         "",
         "Thank you for driving with 101 Drivers!",
       ].join("\n"),
       payload: {
-        deliveryId: delivery.id,
+        deliveryId: delivery?.id ?? null,
         driverId: driver.id,
         amount: input.amount,
         transferId: input.transferId,
@@ -1706,29 +1743,30 @@ async notifyTripCompleted(input: {
    * Triggered by the `transfer.failed` webhook.
    */
   async notifyDriverPayoutFailed(input: {
-    deliveryId: string;
+    deliveryId: string | null;
     driverId: string;
     amount: number;
     transferId: string;
     failureReason?: string;
   }) {
-    const [delivery, driver] = await Promise.all([
-      this.prisma.deliveryRequest.findUnique({
-        where: { id: input.deliveryId },
-        select: { id: true, pickupAddress: true, dropoffAddress: true },
-      }),
-      this.prisma.driver.findUnique({
-        where: { id: input.driverId },
-        select: {
-          id: true,
-          user: { select: { email: true, fullName: true } },
-        },
-      }),
-    ]);
+    // For referral payouts (no delivery), skip the delivery lookup.
+    const delivery = input.deliveryId
+      ? await this.prisma.deliveryRequest.findUnique({
+          where: { id: input.deliveryId },
+          select: { id: true, pickupAddress: true, dropoffAddress: true },
+        })
+      : null;
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        user: { select: { email: true, fullName: true } },
+      },
+    });
 
-    if (!delivery || !driver) {
+    if ((input.deliveryId && !delivery) || !driver) {
       this.logger.warn(
-        `notifyDriverPayoutFailed: delivery ${input.deliveryId} or driver ${input.driverId} not found, skipping`,
+        `notifyDriverPayoutFailed: delivery ${input.deliveryId ?? "null"} or driver ${input.driverId} not found, skipping`,
       );
       return null;
     }
@@ -1738,20 +1776,25 @@ async notifyTripCompleted(input: {
 
     const displayName = driver.user?.fullName || "Driver";
     const amountStr = `$${Number(input.amount).toFixed(2)}`;
-    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const deliveryRef = delivery?.id?.slice(-6).toUpperCase() ?? "N/A";
+    const isReferralPayout = !input.deliveryId;
 
     return this.queueAndSend({
       driverId: driver.id,
-      deliveryId: delivery.id,
+      deliveryId: delivery?.id ?? null,
       channel: EnumNotificationEventChannel.EMAIL,
       type: EnumNotificationEventType.DRIVER_PAYOUT_FAILED,
       templateCode: "driver-payout-failed",
       toEmail,
-      subject: `Payout failed — ${amountStr} for delivery #${deliveryRef}`,
+      subject: isReferralPayout
+        ? `Payout failed — ${amountStr}`
+        : `Payout failed — ${amountStr} for delivery #${deliveryRef}`,
       body: [
         `Hi ${displayName},`,
         "",
-        `A payout of ${amountStr} for delivery #${deliveryRef} could not be completed.`,
+        isReferralPayout
+          ? `A referral reward payout of ${amountStr} could not be completed.`
+          : `A payout of ${amountStr} for delivery #${deliveryRef} could not be completed.`,
         "",
         `Reason: ${input.failureReason || "Unknown error"}`,
         "",
@@ -1759,15 +1802,22 @@ async notifyTripCompleted(input: {
         "",
         "---",
         "Payout Details",
-        `Delivery: #${deliveryRef}`,
-        `Pickup: ${delivery.pickupAddress}`,
-        `Drop-off: ${delivery.dropoffAddress}`,
-        `Amount: ${amountStr}`,
-        `Stripe Transfer ID: ${input.transferId}`,
+        ...(isReferralPayout
+          ? [
+              `Amount: ${amountStr}`,
+              `Stripe Transfer ID: ${input.transferId}`,
+            ]
+          : [
+              `Delivery: #${deliveryRef}`,
+              `Pickup: ${delivery?.pickupAddress ?? "N/A"}`,
+              `Drop-off: ${delivery?.dropoffAddress ?? "N/A"}`,
+              `Amount: ${amountStr}`,
+              `Stripe Transfer ID: ${input.transferId}`,
+            ]),
         "---",
       ].join("\n"),
       payload: {
-        deliveryId: delivery.id,
+        deliveryId: delivery?.id ?? null,
         driverId: driver.id,
         amount: input.amount,
         transferId: input.transferId,

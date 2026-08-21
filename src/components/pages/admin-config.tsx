@@ -28,6 +28,7 @@ import {
   Edit3,
   Power,
   Lock,
+  Gift,
 } from 'lucide-react'
 import { InsurancePortalPasswordDialog } from '../shared/InsurancePortalPasswordDialog'
 import {
@@ -128,6 +129,17 @@ const configCards = [
       { icon: FileText, label: "Policies" },
       { icon: Users, label: "FAQs" },
       { icon: Edit3, label: "WYSIWYG" },
+    ]
+  },
+  {
+    href: "/admin-referral-program",
+    icon: Gift,
+    title: "Referral Program",
+    description: "Configure the driver referral program: tier rewards, trigger type (signup-approved vs deliveries-completed), time window, referred-driver payout, and pause/activate. View program stats + per-referrer breakdown.",
+    chips: [
+      { icon: Gift, label: "Rewards" },
+      { icon: Users, label: "Referrers" },
+      { icon: Power, label: "Activate" },
     ]
   },
   {

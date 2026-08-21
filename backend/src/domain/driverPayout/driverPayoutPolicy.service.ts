@@ -21,12 +21,9 @@ export class DriverPayoutPolicyService {
     const row = data as any;
 
     const deliveryId = this.resolveRelationId(row.delivery, row.deliveryId);
-    if (!deliveryId) {
-      throw new AppException(
-        "delivery is required",
-        ErrorCodes.VALIDATION_ERROR
-      );
-    }
+    // deliveryId may be null for referral payouts (REFERRAL_REFERRER,
+    // REFERRAL_REFERRED) — those aren't tied to a specific delivery.
+    // We only enforce delivery existence + status check when deliveryId is set.
 
     const driverId = this.resolveRelationId(row.driver, row.driverId);
     if (!driverId) {
@@ -36,10 +33,12 @@ export class DriverPayoutPolicyService {
       );
     }
 
-    const delivery = await this.ensureDeliveryExists(client, deliveryId);
-    const driver = await this.ensureDriverExists(client, driverId);
+    if (deliveryId) {
+      const delivery = await this.ensureDeliveryExists(client, deliveryId);
+      this.validateDeliveryAllowsPayout(delivery.status, row.type);
+    }
 
-    this.validateDeliveryAllowsPayout(delivery.status, row.type);
+    const driver = await this.ensureDriverExists(client, driverId);
     this.validateDriverAllowsPayout(driver.status);
 
     this.ensurePercent(
@@ -73,7 +72,14 @@ export class DriverPayoutPolicyService {
     this.ensurePayoutStatus(row.status ?? EnumDriverPayoutStatus.PENDING);
     this.validatePayoutStatusFields(row);
 
-    await this.ensureNoExistingPayoutForDelivery(client, deliveryId);
+    // Only enforce the "one payout per delivery" uniqueness check
+    // when deliveryId is set. Referral payouts (REFERRAL_REFERRER,
+    // REFERRAL_REFERRED) have no delivery, so they're excluded from
+    // this check. (Referral tier payouts ARE unique per (driver, tier)
+    // by virtue of the ReferralPayoutProviderImpl's findFirst check.)
+    if (deliveryId) {
+      await this.ensureNoExistingPayoutForDelivery(client, deliveryId);
+    }
   }
 
   async beforeUpdate(
@@ -152,7 +158,12 @@ export class DriverPayoutPolicyService {
       failedAt: this.resolveUpdatedValue(data.failedAt, existing!.failedAt),
     };
 
-    this.validateDeliveryAllowsPayout(existing!.delivery.status, merged.type);
+    // Delivery may be null for referral payouts (REFERRAL_REFERRER,
+    // REFERRAL_REFERRED) — those payouts aren't tied to a specific
+    // delivery. Skip the delivery-status check in that case.
+    if (existing!.delivery) {
+      this.validateDeliveryAllowsPayout(existing!.delivery.status, merged.type);
+    }
     this.validateDriverAllowsPayout(existing!.driver.status);
 
     this.ensurePercent(

@@ -121,39 +121,99 @@ export default function DriverWalletPage() {
 
   const referrals = referralHistory?.referrals || []
 
-  // ── Referral Program Config (admin-configurable) ──────────
+  // ── Referral Program Config (admin-configurable, tiered model) ─
   // Drives every dynamic value on the "Refer a Friend" card:
-  // reward amount, required trips, days to complete, max referrals.
-  // Falls back to the documented policy (150 / 30 / 30 / 10) while
-  // the request is in flight so the page renders correctly on first
-  // paint and never shows a stale hardcoded value.
+  //   - isActive: master on/off. When false, the card shows a paused
+  //     notice and the action button is hidden (referral history stays).
+  //   - rewardTrigger: 'ON_APPROVED' | 'ON_DELIVERIES_COMPLETED'
+  //   - requiredDeliveries: N when trigger = ON_DELIVERIES_COMPLETED
+  //   - timeLimitMode: 'CALENDAR_RANGE' | 'FOREVER'
+  //   - windowStartDate, windowEndDate: when CALENDAR_RANGE
+  //   - referrerRewardAmount: $ per tier (per `referralThreshold` successful referrals)
+  //   - referralThreshold: successful referrals per tier
+  //   - referredGetsReward: does the referred driver also get paid?
+  //   - referredRewardAmount: one-shot $ to the referred driver
+  //
+  // Falls back to the documented policy (150/30/30/20/true/150) while
+  // the request is in flight so first paint is correct.
   const DEFAULT_REFERRAL_CONFIG = {
-    rewardAmount: 150,
-    tripsRequired: 30,
-    daysToComplete: 30,
-    maxReferrals: 10,
+    isActive: true,
+    rewardTrigger: 'ON_DELIVERIES_COMPLETED' as const,
+    requiredDeliveries: 30,
+    timeLimitMode: 'CALENDAR_RANGE' as const,
+    windowStartDate: null as string | null,
+    windowEndDate: null as string | null,
+    referrerRewardAmount: 150,
+    referralThreshold: 20,
+    referredGetsReward: true,
+    referredRewardAmount: 150 as number | null,
   }
   const { data: referralConfigData } = useDataQuery<any>({
     apiEndPoint: `${API_URL}/api/referrals/program-config`,
     noFilter: true,
   })
   const referralConfig = {
-    rewardAmount:
-      typeof referralConfigData?.rewardAmount === 'number'
-        ? referralConfigData.rewardAmount
-        : DEFAULT_REFERRAL_CONFIG.rewardAmount,
-    tripsRequired:
-      typeof referralConfigData?.tripsRequired === 'number'
-        ? referralConfigData.tripsRequired
-        : DEFAULT_REFERRAL_CONFIG.tripsRequired,
-    daysToComplete:
-      typeof referralConfigData?.daysToComplete === 'number'
-        ? referralConfigData.daysToComplete
-        : DEFAULT_REFERRAL_CONFIG.daysToComplete,
-    maxReferrals:
-      typeof referralConfigData?.maxReferrals === 'number'
-        ? referralConfigData.maxReferrals
-        : DEFAULT_REFERRAL_CONFIG.maxReferrals,
+    isActive:
+      typeof referralConfigData?.isActive === 'boolean'
+        ? referralConfigData.isActive
+        : DEFAULT_REFERRAL_CONFIG.isActive,
+    rewardTrigger:
+      referralConfigData?.rewardTrigger === 'ON_APPROVED' ||
+      referralConfigData?.rewardTrigger === 'ON_DELIVERIES_COMPLETED'
+        ? referralConfigData.rewardTrigger
+        : DEFAULT_REFERRAL_CONFIG.rewardTrigger,
+    requiredDeliveries:
+      typeof referralConfigData?.requiredDeliveries === 'number'
+        ? referralConfigData.requiredDeliveries
+        : DEFAULT_REFERRAL_CONFIG.requiredDeliveries,
+    timeLimitMode:
+      referralConfigData?.timeLimitMode === 'CALENDAR_RANGE' ||
+      referralConfigData?.timeLimitMode === 'FOREVER'
+        ? referralConfigData.timeLimitMode
+        : DEFAULT_REFERRAL_CONFIG.timeLimitMode,
+    windowStartDate:
+      typeof referralConfigData?.windowStartDate === 'string'
+        ? referralConfigData.windowStartDate
+        : DEFAULT_REFERRAL_CONFIG.windowStartDate,
+    windowEndDate:
+      typeof referralConfigData?.windowEndDate === 'string'
+        ? referralConfigData.windowEndDate
+        : DEFAULT_REFERRAL_CONFIG.windowEndDate,
+    referrerRewardAmount:
+      typeof referralConfigData?.referrerRewardAmount === 'number'
+        ? referralConfigData.referrerRewardAmount
+        : DEFAULT_REFERRAL_CONFIG.referrerRewardAmount,
+    referralThreshold:
+      typeof referralConfigData?.referralThreshold === 'number'
+        ? referralConfigData.referralThreshold
+        : DEFAULT_REFERRAL_CONFIG.referralThreshold,
+    referredGetsReward:
+      typeof referralConfigData?.referredGetsReward === 'boolean'
+        ? referralConfigData.referredGetsReward
+        : DEFAULT_REFERRAL_CONFIG.referredGetsReward,
+    referredRewardAmount:
+      typeof referralConfigData?.referredRewardAmount === 'number'
+        ? referralConfigData.referredRewardAmount
+        : DEFAULT_REFERRAL_CONFIG.referredRewardAmount,
+  }
+
+  // Build the human-readable description string for the "Refer a Friend" card.
+  // Varies based on trigger type + time mode + referred-gets-reward.
+  const buildReferralDescription = () => {
+    const both = referralConfig.referredGetsReward
+    const bothAmount = referralConfig.referredRewardAmount ?? referralConfig.referrerRewardAmount
+    const earn = both
+      ? `you both earn $${bothAmount}`
+      : `you earn $${referralConfig.referrerRewardAmount}`
+    const triggerClause =
+      referralConfig.rewardTrigger === 'ON_APPROVED'
+        ? 'gets approved'
+        : `completes ${referralConfig.requiredDeliveries} deliveries`
+    const windowClause =
+      referralConfig.timeLimitMode === 'CALENDAR_RANGE' && referralConfig.windowEndDate
+        ? ` Program runs until ${new Date(referralConfig.windowEndDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}.`
+        : ''
+    return `Share your unique referral link with friends who want to become drivers. When they sign up using your link and ${triggerClause}, ${earn}.${windowClause} You earn $${referralConfig.referrerRewardAmount} for every ${referralConfig.referralThreshold} successful referrals — refer as many friends as you want.`
   }
 
   // ── Fetch real earnings data ───────────────────────────────
@@ -482,7 +542,7 @@ export default function DriverWalletPage() {
             variant="outline"
             className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
           >
-            On trip {ref.tripsCompleted || 0} of {ref.tripsRequired || referralConfig.tripsRequired}
+            On trip {ref.tripsCompleted || 0} of {ref.requiredDeliveries || ref.tripsRequired || referralConfig.requiredDeliveries}
           </Badge>
         )
       case 'COMPLETED':
@@ -502,7 +562,7 @@ export default function DriverWalletPage() {
             className="bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
           >
             <Gift className="w-3.5 h-3.5" />
-            ${ref.rewardAmount || referralConfig.rewardAmount} earned
+            ${ref.referredRewardAmount ?? ref.rewardAmount ?? referralConfig.referredRewardAmount ?? 0} earned
           </Badge>
         )
       default:
@@ -656,10 +716,12 @@ export default function DriverWalletPage() {
                 </div>
                 <div className="space-y-1.5">
                   <CardTitle className="text-lg font-black">
-                    Refer a Friend &amp; Earn ${referralConfig.rewardAmount}
+                    Refer a Friend &amp; Earn ${referralConfig.referrerRewardAmount}
                   </CardTitle>
                   <CardDescription className="text-sm leading-relaxed">
-                    Share your unique referral link with friends who want to become drivers. When they sign up using your link and complete {referralConfig.tripsRequired} deliveries within {referralConfig.daysToComplete} days, you both earn ${referralConfig.rewardAmount}. You can refer up to {referralConfig.maxReferrals} friends.
+                    {referralConfig.isActive
+                      ? buildReferralDescription()
+                      : 'The referral program is currently paused. Your accrued rewards remain yours — see Referral History below for your past referrals and earnings.'}
                   </CardDescription>
                 </div>
               </div>
@@ -689,7 +751,8 @@ export default function DriverWalletPage() {
               </div>
             )}
 
-            {/* Stats row */}
+            {/* Stats row — shows tier progress + total earnings from referrals.
+                Always visible (even when paused) so the driver can see their progress. */}
             <div className="grid grid-cols-2 gap-3">
               <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
@@ -698,29 +761,56 @@ export default function DriverWalletPage() {
                 <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
                   ${((referralStats?.totalEarned || 0) + (referralStats?.pendingReward || 0)).toFixed(2)}
                 </p>
+                {referralStats?.pendingReward > 0 && (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    ${Number(referralStats.pendingReward).toFixed(2)} pending
+                  </p>
+                )}
               </div>
               <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                  Referrals used
+                  Successful referrals
                 </p>
                 <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
-                  {referralStats?.totalReferrals || 0}{' '}
-                  <span className="text-sm font-bold text-slate-400">
-                    / {referralStats?.maxReferrals ?? referralConfig.maxReferrals}
+                  {referralStats?.successfulReferrals ?? 0}
+                  <span className="text-sm font-bold text-slate-400 ml-1">
+                    / {referralStats?.threshold ?? referralConfig.referralThreshold} per tier
                   </span>
                 </p>
+                {typeof referralStats?.nextTierProgress === 'number' && (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {referralStats.nextTierProgress}% to next tier · need {referralStats?.nextTierReferralsNeeded ?? 0} more
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Primary share button — opens the referral dialog */}
-            <Button
-              onClick={openReferralDialog}
-              className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl hover:shadow-emerald-600/20 transition inline-flex items-center justify-center gap-2 font-extrabold"
-            >
-              <Gift className="w-4 h-4" />
-              Refer a Friend
-              <ArrowForward className="w-4 h-4" />
-            </Button>
+            {/* Tier progress bar — shows progress toward the next tier payout */}
+            {typeof referralStats?.nextTierProgress === 'number' && (
+              <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(0, referralStats.nextTierProgress))}%` }}
+                />
+              </div>
+            )}
+
+            {/* Primary share button — hidden when program is paused */}
+            {referralConfig.isActive ? (
+              <Button
+                onClick={openReferralDialog}
+                className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl hover:shadow-emerald-600/20 transition inline-flex items-center justify-center gap-2 font-extrabold"
+              >
+                <Gift className="w-4 h-4" />
+                Refer a Friend
+                <ArrowForward className="w-4 h-4" />
+              </Button>
+            ) : (
+              <div className="w-full py-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 text-center text-sm font-bold flex items-center justify-center gap-2">
+                <Info className="w-4 h-4" />
+                Referral program paused — your accrued rewards remain yours
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1231,10 +1321,10 @@ export default function DriverWalletPage() {
             {/* Reward amount — driven by admin-configured referral program settings */}
             <div>
               <div className="text-4xl font-black bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent">
-                ${referralConfig.rewardAmount}
+                ${referralConfig.referrerRewardAmount}
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Reward for each successful referral
+                Reward for every {referralConfig.referralThreshold} successful referrals
               </p>
             </div>
 
@@ -1249,7 +1339,15 @@ export default function DriverWalletPage() {
                   Link copied to clipboard!
                 </DialogTitle>
                 <DialogDescription className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Share this link with friends. When they sign up as a driver and complete {referralConfig.tripsRequired} deliveries within {referralConfig.daysToComplete} days, you both earn ${referralConfig.rewardAmount}!
+                  {(() => {
+                    const triggerClause = referralConfig.rewardTrigger === 'ON_APPROVED'
+                      ? 'gets approved'
+                      : `completes ${referralConfig.requiredDeliveries} deliveries`
+                    const bothClause = referralConfig.referredGetsReward
+                      ? ` you both earn $${referralConfig.referredRewardAmount ?? referralConfig.referrerRewardAmount}!`
+                      : ` you earn $${referralConfig.referrerRewardAmount}!`
+                    return `Share this link with friends. When they sign up as a driver and ${triggerClause},${bothClause}`
+                  })()}
                 </DialogDescription>
               </DialogHeader>
 

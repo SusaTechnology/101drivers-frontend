@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsBoolean,
+  IsDateString,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -125,63 +127,148 @@ export class UpdateDeliverySettingsBody {
 }
 
 // ============================================================
-// REFERRAL PROGRAM SETTINGS
+// REFERRAL PROGRAM SETTINGS (admin-configurable, tiered model)
 // ============================================================
-// The driver referral program is admin-configurable. The admin sets:
-//   - rewardAmount:     $ paid to referrer + referred driver on completion
-//   - tripsRequired:    # of completed deliveries the referred driver must make
-//   - daysToComplete:   # of days the referred driver has to complete the trips
-//   - maxReferrals:     cap on # of friends a single driver can refer
+// The driver referral program is admin-configurable. The referrer
+// earns `referrerRewardAmount` for every `referralThreshold` of
+// SUCCESSFUL referrals (tiered payout). The referred driver earns
+// a one-shot `referredRewardAmount` when their own referral becomes
+// successful (per-referral, not tiered).
 //
 // Defaults match the current advertised policy:
-//   rewardAmount=150, tripsRequired=30, daysToComplete=30, maxReferrals=10
+//   isActive=true, rewardTrigger=ON_DELIVERIES_COMPLETED,
+//   requiredDeliveries=30, timeLimitMode=CALENDAR_RANGE (1 year),
+//   referrerRewardAmount=150, referralThreshold=20,
+//   referredGetsReward=true, referredRewardAmount=150
 //
-// These values are read by ReferralService.applyReferral when a new
-// referral row is created, so changing them in the admin UI takes
-// effect for all NEW referrals immediately. Existing referral rows
-// keep whatever tripsRequired / rewardAmount they were created with.
+// These values are READ at applyReferral time and SNAPSHOT onto
+// each new Referral row, so admin changes don't retroactively
+// change pending referrals. The threshold + referrerRewardAmount
+// are read LIVE at trigger time (because tiers are about counting,
+// and the admin should be able to adjust incentives mid-program).
 // ============================================================
 
+/**
+ * When does a referral "become successful"?
+ * - ON_APPROVED: when admin moves the referred driver from
+ *   PENDING_APPROVAL → APPROVED.
+ * - ON_DELIVERIES_COMPLETED: when the referred driver completes
+ *   `requiredDeliveries` deliveries.
+ */
+export enum ReferralRewardTrigger {
+  ON_APPROVED = "ON_APPROVED",
+  ON_DELIVERIES_COMPLETED = "ON_DELIVERIES_COMPLETED",
+}
+
+/**
+ * Time window mode for the program.
+ * - CALENDAR_RANGE: referrals must become successful within
+ *   [windowStartDate, windowEndDate]. Referrals created outside
+ *   this range are rejected at applyReferral time.
+ * - FOREVER: no deadline; whenever the trigger eventually fires,
+ *   payout happens.
+ */
+export enum ReferralTimeLimitMode {
+  CALENDAR_RANGE = "CALENDAR_RANGE",
+  FOREVER = "FOREVER",
+}
+
 export class ReferralProgramSettingsResponseDto {
-  @ApiProperty({ description: "Reward amount in USD paid to each side on completion" })
-  rewardAmount!: number;
+  @ApiProperty({ description: "Master on/off switch for the referral program" })
+  isActive!: boolean;
 
-  @ApiProperty({ description: "Number of completed deliveries the referred driver must make" })
-  tripsRequired!: number;
+  @ApiProperty({
+    description: "When does a referral become successful (trigger payout)",
+    enum: ReferralRewardTrigger,
+  })
+  rewardTrigger!: ReferralRewardTrigger;
 
-  @ApiProperty({ description: "Number of days the referred driver has to complete the required trips" })
-  daysToComplete!: number;
+  @ApiProperty({
+    description: "Required completed deliveries (only used when rewardTrigger = ON_DELIVERIES_COMPLETED)",
+  })
+  requiredDeliveries!: number;
 
-  @ApiProperty({ description: "Maximum number of friends a single driver can refer" })
-  maxReferrals!: number;
+  @ApiProperty({
+    description: "Time window mode",
+    enum: ReferralTimeLimitMode,
+  })
+  timeLimitMode!: ReferralTimeLimitMode;
+
+  @ApiPropertyOptional({ nullable: true, description: "ISO date — program window start (used when CALENDAR_RANGE)" })
+  windowStartDate!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, description: "ISO date — program window end (used when CALENDAR_RANGE)" })
+  windowEndDate!: string | null;
+
+  @ApiProperty({ description: "Reward amount in USD paid to the REFERRER per tier (every referralThreshold successful referrals)" })
+  referrerRewardAmount!: number;
+
+  @ApiProperty({ description: "Number of successful referrals required per tier (e.g. 20 = $150 per 20)" })
+  referralThreshold!: number;
+
+  @ApiProperty({ description: "Does the referred driver also get a one-shot reward?" })
+  referredGetsReward!: boolean;
+
+  @ApiPropertyOptional({ nullable: true, description: "One-shot reward amount in USD paid to the REFERRED driver when their referral becomes successful (null when referredGetsReward=false)" })
+  referredRewardAmount!: number | null;
 }
 
 export class UpdateReferralProgramSettingsBody {
-  @ApiPropertyOptional({ description: "Reward amount in USD (must be >= 0)" })
+  @ApiPropertyOptional({ description: "Master on/off switch" })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiPropertyOptional({ description: "Trigger type", enum: ReferralRewardTrigger })
+  @IsOptional()
+  @IsEnum(ReferralRewardTrigger)
+  rewardTrigger?: ReferralRewardTrigger;
+
+  @ApiPropertyOptional({ description: "Required deliveries (>= 1, used when trigger = ON_DELIVERIES_COMPLETED)" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  requiredDeliveries?: number;
+
+  @ApiPropertyOptional({ description: "Time window mode", enum: ReferralTimeLimitMode })
+  @IsOptional()
+  @IsEnum(ReferralTimeLimitMode)
+  timeLimitMode?: ReferralTimeLimitMode;
+
+  @ApiPropertyOptional({ nullable: true, description: "ISO date — program window start (required when CALENDAR_RANGE)" })
+  @IsOptional()
+  @IsDateString()
+  windowStartDate?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, description: "ISO date — program window end (required when CALENDAR_RANGE)" })
+  @IsOptional()
+  @IsDateString()
+  windowEndDate?: string | null;
+
+  @ApiPropertyOptional({ description: "Referrer reward per tier in USD (>= 0)" })
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(10000)
-  rewardAmount?: number;
+  referrerRewardAmount?: number;
 
-  @ApiPropertyOptional({ description: "Required completed deliveries (must be >= 1)" })
+  @ApiPropertyOptional({ description: "Successful referrals per tier (>= 1)" })
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(1000)
-  tripsRequired?: number;
+  referralThreshold?: number;
 
-  @ApiPropertyOptional({ description: "Days to complete the required trips (must be >= 1)" })
+  @ApiPropertyOptional({ description: "Does the referred driver also get paid?" })
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(365)
-  daysToComplete?: number;
+  @IsBoolean()
+  referredGetsReward?: boolean;
 
-  @ApiPropertyOptional({ description: "Maximum referrals per driver (must be >= 1)" })
+  @ApiPropertyOptional({ nullable: true, description: "Referred reward in USD (>= 0, null when referredGetsReward=false)" })
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(1000)
-  maxReferrals?: number;
+  @IsNumber()
+  @Min(0)
+  @Max(10000)
+  referredRewardAmount?: number | null;
 }

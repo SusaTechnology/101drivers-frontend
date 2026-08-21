@@ -1,5 +1,6 @@
 import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
+import * as nestAccessControl from "nest-access-control";
 import { Response } from "express";
 import { ReferralService } from "./referral.service";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
@@ -42,7 +43,7 @@ export class ReferralController {
 
   /**
    * GET /referrals/my-stats
-   * Get referral stats: total earned, pending, active count.
+   * Get referral stats: total earned, pending, active count, tier progress.
    */
   @common.Get("my-stats")
   @swagger.ApiOkResponse({ description: "Referral stats" })
@@ -87,10 +88,15 @@ export class ReferralController {
   /**
    * GET /referrals/program-config
    * Returns the admin-configured referral program policy:
-   *   - rewardAmount   ($ paid to each side on completion)
-   *   - tripsRequired  (# of completed deliveries the referred driver must make)
-   *   - daysToComplete (# of days the referred driver has to complete the trips)
-   *   - maxReferrals   (cap on # of friends a single driver can refer)
+   *   - isActive (master on/off)
+   *   - rewardTrigger (ON_APPROVED | ON_DELIVERIES_COMPLETED)
+   *   - requiredDeliveries (when trigger = ON_DELIVERIES_COMPLETED)
+   *   - timeLimitMode (CALENDAR_RANGE | FOREVER)
+   *   - windowStartDate, windowEndDate (when CALENDAR_RANGE)
+   *   - referrerRewardAmount ($ per tier)
+   *   - referralThreshold (successful referrals per tier)
+   *   - referredGetsReward (bool)
+   *   - referredRewardAmount ($ one-shot to referred driver)
    *
    * Used by the driver Wallet page to render the "Refer a Friend"
    * card without hardcoding the reward amount.
@@ -102,5 +108,68 @@ export class ReferralController {
   ): Promise<void> {
     const config = await this.referralService.getMyReferralProgramConfig();
     res.json(config);
+  }
+
+  // ============================================================
+  // ADMIN ENDPOINTS — for the /admin-referral-program page.
+  // All guarded by nest-access-control with the AppSetting resource.
+  // ============================================================
+
+  /**
+   * GET /referrals/admin/stats
+   * Program-wide stats: total referrals, successful, active, expired,
+   * total $ paid out, total $ pending, unique referrers.
+   */
+  @common.Get("admin/stats")
+  @swagger.ApiOkResponse({ description: "Program-wide referral stats" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getAdminProgramStats(): Promise<any> {
+    return this.referralService.getAdminProgramStats();
+  }
+
+  /**
+   * GET /referrals/admin/referrers
+   * Paginated list of referrers with their stats.
+   * Query params: page (default 1), pageSize (default 20), search (by name).
+   */
+  @common.Get("admin/referrers")
+  @swagger.ApiOkResponse({ description: "Paginated list of referrers" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getAdminReferrersList(
+    @common.Query("page") page?: string,
+    @common.Query("pageSize") pageSize?: string,
+    @common.Query("search") search?: string,
+  ): Promise<any> {
+    return this.referralService.getAdminReferrersList({
+      page: page ? parseInt(page, 10) : 1,
+      pageSize: pageSize ? parseInt(pageSize, 10) : 20,
+      search: search || undefined,
+    });
+  }
+
+  /**
+   * GET /referrals/admin/referrers/:referrerId
+   * Detail view for a single referrer — list of all their referrals
+   * + tier payout history.
+   */
+  @common.Get("admin/referrers/:referrerId")
+  @swagger.ApiOkResponse({ description: "Referrer detail with referrals + payouts" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getAdminReferrerDetail(
+    @common.Param("referrerId") referrerId: string,
+  ): Promise<any> {
+    return this.referralService.getAdminReferrerDetail(referrerId);
   }
 }
