@@ -49,14 +49,22 @@ export class ReferralExpiryScheduler {
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async handleExpiry(): Promise<void> {
     try {
-      // ── Conditional: skip if program isActive=false ──
       const config = await this.appSettingService.getReferralProgramSettings();
-      if (!config.isActive) {
-        this.logger.log("Referral program is paused (isActive=false) — cron skipping");
-        return;
-      }
 
-      // ── Conditional: skip if outside the time window ──
+      // ── Conditional: skip if outside the calendar window ──
+      // Per the user spec: "the CRON should run only on the referral
+      // time span. so if today is not in the time window the CRON
+      // will not run."
+      //
+      // Note: the isActive flag does NOT affect the cron. Pausing the
+      // program (isActive=false) blocks new referrals from being
+      // created AND blocks triggers from firing payouts, but it does
+      // NOT stop the expiry sweep. This is correct: even when paused,
+      // referrals past their expiresAt should be marked EXPIRED so
+      // they don't pollute admin stats as "active" forever.
+      //
+      // For FOREVER mode, there's no calendar window — the cron
+      // always runs (subject to the 2-day throttle).
       if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) {
         const now = new Date();
         const windowStart = config.windowStartDate ? new Date(config.windowStartDate) : null;
@@ -88,6 +96,10 @@ export class ReferralExpiryScheduler {
       }
 
       // ── Do the actual expiry sweep ──
+      // Marks referrals past their expiresAt as EXPIRED (unless they're
+      // already in a terminal status). The trigger service ALSO checks
+      // expiresAt at fire-time as a defensive measure, so even if the
+      // cron is delayed, payouts can't slip through past expiry.
       const result = await this.prisma.referral.updateMany({
         where: {
           expiresAt: { lt: now },

@@ -151,6 +151,14 @@ export default function AdminReferralProgramPage() {
   // ── Config state ──
   const [config, setConfig] = useState<ReferralConfig | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
+  // Threshold-lowering confirmation (#5): when the admin lowers the
+  // threshold below the currently-saved value, we show a warning
+  // dialog because lowering the threshold may trigger retroactive
+  // tier payouts for referrers who already have successful referrals.
+  // (floor(successfulCount / newThreshold) > lastPaidReferrerTier
+  //  → next trigger fires one or more payouts immediately.)
+  const [thresholdWarningOpen, setThresholdWarningOpen] = useState(false);
+  const [pendingSavePayload, setPendingSavePayload] = useState<any | null>(null);
 
   // Form state (separate from the fetched config so admin can edit before saving)
   const [formIsActive, setFormIsActive] = useState(true);
@@ -237,8 +245,7 @@ export default function AdminReferralProgramPage() {
       return;
     }
 
-    setSavingConfig(true);
-    updateConfigMutation.mutate({
+    const payload = {
       isActive: formIsActive,
       rewardTrigger: formTrigger,
       requiredDeliveries,
@@ -249,7 +256,40 @@ export default function AdminReferralProgramPage() {
       referralThreshold: threshold,
       referredGetsReward: formReferredGetsReward,
       referredRewardAmount: formReferredGetsReward ? referredAmount : null,
-    });
+    };
+
+    // ── Threshold-lowering warning (#5) ──
+    // If the new threshold is LOWER than the currently-saved one,
+    // warn the admin that this may trigger retroactive tier payouts.
+    // Example: referrer has 25 successful referrals, current threshold
+    // = 20 (paid 1 tier = $150). If admin lowers to 10, the next
+    // trigger call fires tier 2 (25/10 = 2) → another $150 paid out
+    // immediately for the same 25 referrals.
+    if (config && threshold < config.referralThreshold) {
+      setPendingSavePayload(payload);
+      setThresholdWarningOpen(true);
+      return;
+    }
+
+    doSave(payload);
+  };
+
+  const doSave = (payload: any) => {
+    setSavingConfig(true);
+    updateConfigMutation.mutate(payload);
+  };
+
+  const confirmThresholdLowering = () => {
+    setThresholdWarningOpen(false);
+    if (pendingSavePayload) {
+      doSave(pendingSavePayload);
+      setPendingSavePayload(null);
+    }
+  };
+
+  const cancelThresholdLowering = () => {
+    setThresholdWarningOpen(false);
+    setPendingSavePayload(null);
   };
 
   // ── Fetch program stats ──
@@ -696,6 +736,39 @@ export default function AdminReferralProgramPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* ── Threshold-lowering warning dialog (#5) ── */}
+        <Dialog open={thresholdWarningOpen} onOpenChange={(o) => !o && cancelThresholdLowering()}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-500" />
+                Lowering the threshold?
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                You're lowering the threshold from <span className="font-bold">{config?.referralThreshold}</span> to <span className="font-bold">{formThreshold}</span>.
+                Referrers who already have successful referrals may immediately qualify for one or more new tier payouts on the next trigger fire.
+                <br /><br />
+                <span className="font-semibold">Example:</span> a referrer with 25 successful referrals at threshold 20 has been paid for tier 1 ($150). If you lower to 10, the next trigger call sees floor(25/10) = 2 tiers → another $150 paid out immediately.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-2 mt-2">
+              <Button
+                variant="outline"
+                onClick={cancelThresholdLowering}
+                className="flex-1 rounded-2xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmThresholdLowering}
+                className="flex-1 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold"
+              >
+                Save anyway
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* ── Referrer detail dialog ── */}
         <Dialog open={detailOpen} onOpenChange={(o) => !o && closeDetail()}>

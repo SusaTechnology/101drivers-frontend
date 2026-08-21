@@ -12,9 +12,19 @@
  * DriverPayoutService, Stripe, or any other concrete payment detail.
  * Swap providers by implementing the interface and rebinding the
  * DI token (REFERRAL_REWARD_PAYOUT_PROVIDER).
+ *
+ * Idempotency:
+ *   - REFERRAL_REFERRER payouts: enforced by a DB unique constraint
+ *     on (driverId, type, tierNumber). If two trigger calls race,
+ *     only one create() succeeds; the other throws a unique-constraint
+ *     error which we catch and treat as "already paid — fetch existing".
+ *   - REFERRAL_REFERRED payouts: enforced by Referral.referredPayoutId
+ *     being @unique. The idempotency check + atomic upsert happens
+ *     inside a transaction.
  */
 
 import { Injectable, Logger } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   ReferralRewardPayoutProvider,
@@ -32,73 +42,66 @@ export class ReferralPayoutProviderImpl implements ReferralRewardPayoutProvider 
   /**
    * Create a tier payout for the referrer (type = REFERRAL_REFERRER).
    *
-   * Idempotency: a referrer can only have ONE payout per tier number.
-   * We use a unique constraint on (driverId, type, "tierNumber")
-   * via a JSON metadata field — but since Prisma doesn't easily
-   * support composite unique constraints on existing columns + JSON,
-   * we use a findFirst check inside a transaction.
+   * Idempotency: enforced by the unique constraint on
+   * (driverId, type, tierNumber). If a payout for this driver + tier
+   * already exists, the create() will throw a unique-constraint error
+   * (Prisma's P2002 error code), and we catch it and fetch the
+   * existing row.
    *
-   * The metadata field stores `{ tierNumber }` so we can query it
-   * later for stats / display.
+   * This is RACE-SAFE: if two trigger calls fire simultaneously when
+   * a referrer crosses a tier boundary, only one create() will
+   * succeed; the other gets the P2002 error and falls back to the
+   * existing row.
    */
   async createReferrerTierPayout(
     input: CreateReferrerTierPayoutInput
   ): Promise<ReferralPayoutResult> {
     const { referrerDriverId, amount, tierNumber } = input;
 
-    // Idempotency check: if a payout for this driver + tier already
-    // exists, return its ID. The metadata field stores the tier number.
-    // We use the failureMessage column as JSON storage for tier number
-    // (since DriverPayout has no dedicated metadata column and we
-    // don't want to add one for this). The "failureMessage" field is
-    // null for non-failed payouts, so we repurpose it for tier metadata.
-    // Format: "TIER:N" (parsed by the stats service if needed).
-    const tierTag = `TIER:${tierNumber}`;
+    try {
+      const payout = await this.prisma.driverPayout.create({
+        data: {
+          driverId: referrerDriverId,
+          deliveryId: null,
+          type: "REFERRAL_REFERRER",
+          status: "PENDING",
+          grossAmount: amount,
+          netAmount: amount,
+          platformFee: 0,
+          insuranceFee: 0,
+          driverSharePct: 100,
+          tierNumber,
+        },
+      });
 
-    const existing = await this.prisma.driverPayout.findFirst({
-      where: {
-        driverId: referrerDriverId,
-        type: "REFERRAL_REFERRER",
-        failureMessage: tierTag,
-      },
-      select: { id: true },
-    });
-
-    if (existing) {
       this.logger.log(
-        `Referrer tier payout already exists for driver ${referrerDriverId} tier ${tierNumber} — returning existing ID ${existing.id}`
+        `Created referrer tier payout: driver=${referrerDriverId} tier=${tierNumber} amount=$${amount} payoutId=${payout.id}`
       );
-      return { payoutId: existing.id };
+
+      return { payoutId: payout.id };
+    } catch (err: any) {
+      // P2002 = unique constraint violation — someone else already
+      // created this tier payout (race condition resolved by the DB).
+      if (err?.code === "P2002") {
+        this.logger.log(
+          `Referrer tier payout already exists for driver ${referrerDriverId} tier ${tierNumber} (race resolved by DB) — fetching existing ID`
+        );
+        const existing = await this.prisma.driverPayout.findFirst({
+          where: {
+            driverId: referrerDriverId,
+            type: "REFERRAL_REFERRER",
+            tierNumber,
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          return { payoutId: existing.id };
+        }
+        // Should not happen — but if the row vanished between the
+        // P2002 and the findFirst, fall through and re-throw.
+      }
+      throw err;
     }
-
-    // Create the payout row. Referral payouts have:
-    //   - deliveryId = null (no delivery)
-    //   - type = REFERRAL_REFERRER
-    //   - grossAmount = netAmount = amount (no platform/insurance fees)
-    //   - driverSharePct = 100 (driver gets 100% of this reward)
-    //   - platformFee = 0, insuranceFee = 0
-    //   - status = PENDING (will be PAID when the batch processor runs)
-    //   - failureMessage = "TIER:N" (used as tier metadata)
-    const payout = await this.prisma.driverPayout.create({
-      data: {
-        driverId: referrerDriverId,
-        deliveryId: null,
-        type: "REFERRAL_REFERRER",
-        status: "PENDING",
-        grossAmount: amount,
-        netAmount: amount,
-        platformFee: 0,
-        insuranceFee: 0,
-        driverSharePct: 100,
-        failureMessage: tierTag,
-      },
-    });
-
-    this.logger.log(
-      `Created referrer tier payout: driver=${referrerDriverId} tier=${tierNumber} amount=$${amount} payoutId=${payout.id}`
-    );
-
-    return { payoutId: payout.id };
   }
 
   /**
@@ -108,6 +111,10 @@ export class ReferralPayoutProviderImpl implements ReferralRewardPayoutProvider 
    *
    * Idempotency: if the referral already has a `referredPayoutId`,
    * return that ID instead of creating a new payout.
+   *
+   * Race-safe: the check + create happen inside a transaction with
+   * a re-check inside the tx, so concurrent calls can't create
+   * duplicate payouts.
    */
   async createReferredRewardPayout(
     input: CreateReferredRewardPayoutInput
@@ -150,6 +157,10 @@ export class ReferralPayoutProviderImpl implements ReferralRewardPayoutProvider 
           platformFee: 0,
           insuranceFee: 0,
           driverSharePct: 100,
+          // tierNumber is null for REFERRAL_REFERRED (it's a one-shot
+          // reward, not a tier payout). The unique constraint on
+          // (driverId, type, tierNumber) doesn't apply when tierNumber
+          // is null (Postgres treats NULLs as distinct).
         },
       });
 

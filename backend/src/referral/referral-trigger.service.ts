@@ -265,9 +265,15 @@ export class ReferralTriggerService {
       // The referred driver gets `referredRewardAmount` once when their
       // own referral becomes successful. The referrer's tier payout is
       // handled separately below.
+      //
+      // Skip if amount ≤ 0 — avoids creating a useless $0 DriverPayout
+      // row (which Stripe would reject + would email the driver "you
+      // earned $0.00"). The referral is still marked REWARD_PAID so it
+      // counts toward the referrer's tier progress.
       if (
         referral.referredGetsReward &&
         referral.referredRewardAmount != null &&
+        referral.referredRewardAmount > 0 &&
         referral.referredDriverId
       ) {
         // The payout provider is idempotent — it checks Referral.referredPayoutId
@@ -304,9 +310,18 @@ export class ReferralTriggerService {
    * Reads `referralThreshold` and `referrerRewardAmount` LIVE from
    * the config — the admin can adjust these mid-program.
    *
-   * Uses `Driver.lastPaidReferrerTier` to track which tiers have
-   * already been paid out. This makes the operation idempotent
-   * across multiple trigger calls + cron runs.
+   * Race-safety:
+   *   - `Driver.lastPaidReferrerTier` is incremented via a conditional
+   *     `updateMany` (only if the value matches the expected old tier).
+   *     This prevents two concurrent calls from both bumping past the
+   *     same tier.
+   *   - The DriverPayout row is protected by a DB unique constraint
+   *     on (driverId, type=REFERRAL_REFERRER, tierNumber). If a race
+   *     slips through, only one create() succeeds; the other catches
+   *     the P2002 error and fetches the existing row.
+   *
+   * This makes the operation idempotent across multiple trigger calls
+   * + cron runs.
    */
   private async maybeFireReferrerTierPayouts(
     tx: any,
@@ -328,35 +343,58 @@ export class ReferralTriggerService {
       },
     });
 
-    // Read the referrer's last paid tier (atomic with a row lock via findUnique)
-    const referrer = await tx.driver.findUnique({
-      where: { id: referrerDriverId },
-      select: { lastPaidReferrerTier: true },
-    });
+    const targetTier = Math.floor(successfulCount / threshold);
 
-    if (!referrer) return;
+    // Atomically claim tiers one at a time. Each iteration:
+    //   1. Compute next tier (current lastPaid + 1)
+    //   2. Try to create the DriverPayout (unique constraint catches races)
+    //   3. Atomically bump lastPaidReferrerTier via conditional updateMany
+    //      (only if it's still at the old value — prevents double-bump)
+    //   4. If we lost the race (updateMany affected 0 rows), bail
+    while (true) {
+      // Re-read the referrer's lastPaidReferrerTier inside the tx
+      // so we always have the freshest value.
+      const referrer = await tx.driver.findUnique({
+        where: { id: referrerDriverId },
+        select: { lastPaidReferrerTier: true },
+      });
+      if (!referrer) return;
 
-    const currentTier = Math.floor(successfulCount / threshold);
+      if (referrer.lastPaidReferrerTier >= targetTier) {
+        // Already paid up to or past the target tier — done.
+        return;
+      }
 
-    // Fire payouts for any newly-crossed tiers
-    // E.g. lastPaidTier=0, currentTier=2 → fire tier 1 + tier 2
-    while (referrer.lastPaidReferrerTier < currentTier) {
       const nextTier = referrer.lastPaidReferrerTier + 1;
 
-      // Use the payout provider (idempotent — checks for existing payout)
+      // Create the tier payout. If a race happened and the row already
+      // exists, the payout provider catches the P2002 and returns the
+      // existing ID — so this is safe to call repeatedly.
       const result = await this.payoutProvider.createReferrerTierPayout({
         referrerDriverId,
         amount,
         tierNumber: nextTier,
       });
 
-      // Increment the counter (atomic)
-      await tx.driver.update({
-        where: { id: referrerDriverId },
+      // Atomically bump lastPaidReferrerTier ONLY if it's still at
+      // the old value. If another concurrent call already bumped it,
+      // updateMany returns 0 — we re-loop, re-read, and skip.
+      const bumpResult = await tx.driver.updateMany({
+        where: {
+          id: referrerDriverId,
+          lastPaidReferrerTier: referrer.lastPaidReferrerTier,
+        },
         data: { lastPaidReferrerTier: nextTier },
       });
 
-      referrer.lastPaidReferrerTier = nextTier;
+      if (bumpResult.count === 0) {
+        // Lost the race — another caller already bumped past nextTier.
+        // Bail out; they'll handle the remaining tiers.
+        this.logger.log(
+          `Referrer ${referrerDriverId} tier ${nextTier} race lost to another caller — bailing`
+        );
+        return;
+      }
 
       this.logger.log(
         `Referrer ${referrerDriverId} crossed tier ${nextTier} (${successfulCount} successful / ${threshold} threshold) — payout ${result.payoutId} created`

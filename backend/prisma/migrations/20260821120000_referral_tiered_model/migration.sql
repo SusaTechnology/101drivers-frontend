@@ -25,20 +25,16 @@
 -- ────────────────────────────────────────────────────────────────
 -- 1. Delete all existing Referral rows (test data only)
 -- ────────────────────────────────────────────────────────────────
--- Also clear any DriverPayout rows that referenced them (via payoutId)
--- so the FK constraint isn't violated when we drop columns.
--- Use SET NULL on the FK so historical payout rows stay intact
--- (we don't want to delete financial records, just unlink them).
-UPDATE "DriverPayout" dp
-SET "referralId" = NULL
--- (Note: this column is implied by the relation — Prisma names it
---  according to the relation field on Referral, which is `payoutId`
---  pointing to DriverPayout.id. The DriverPayout side has no
---  explicit FK column; the relation is one-to-one via Referral.payoutId.)
-WHERE EXISTS (
-  SELECT 1 FROM "Referral" r WHERE r."payoutId" = dp."id"
-);
-
+-- Referral.payoutId → DriverPayout.id is an OPTIONAL FK on the
+-- Referral side (Prisma's default onDelete behavior for optional
+-- relations is SET NULL). Deleting a Referral row that has payoutId
+-- set will SET NULL the DriverPayout's back-relation resolver — no
+-- FK constraint violation, no DriverPayout rows harmed.
+-- (DriverPayout has no explicit FK column pointing to Referral —
+-- the relation is purely virtual via Referral.payoutId.)
+--
+-- Therefore we can safely DELETE FROM "Referral" without first
+-- unlinking any DriverPayout rows.
 DELETE FROM "Referral";
 
 -- ────────────────────────────────────────────────────────────────

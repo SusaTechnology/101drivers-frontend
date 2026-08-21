@@ -728,8 +728,12 @@ export default function DriverWalletPage() {
             </div>
           </CardHeader>
           <CardContent className="relative z-10 space-y-4">
-            {/* Referral code display */}
-            {referralCode && (
+            {/* Referral code display — hidden entirely when program is
+                paused (#6). The code itself can't be used to refer new
+                drivers (applyReferral is blocked server-side), so showing
+                the code + Copy button would be misleading. Stats row +
+                history stay visible so the driver can see their progress. */}
+            {referralCode && referralConfig.isActive && (
               <div className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-950 border border-emerald-100 dark:border-emerald-900/30">
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">

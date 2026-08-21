@@ -254,6 +254,95 @@ export class ReferralService {
       throw new BadRequestException("You already used a referral code");
     }
 
+    // ── Late-referral exploit check (#3) ────────────────────────
+    // Reject if the applying driver has already made progress toward
+    // being a driver (e.g. completed deliveries or been approved).
+    // Prevents the "do 29 deliveries, then apply a code, complete
+    // the 30th, referrer gets $150 for an already-active driver"
+    // exploit.
+    //
+    // Rule: a referral code can only be applied if the driver has
+    //   - NOT completed any deliveries yet, AND
+    //   - NOT been approved yet (status is still WAITLISTED, INVITED,
+    //     ONBOARDING, or PENDING_APPROVAL — but NOT APPROVED)
+    const applyingDriver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        id: true,
+        status: true,
+        approvedAt: true,
+      },
+    });
+
+    if (applyingDriver?.status === "APPROVED") {
+      throw new BadRequestException(
+        "You can't apply a referral code after being approved as a driver. " +
+        "Referral codes must be applied before approval."
+      );
+    }
+
+    // Count the applying driver's completed deliveries — if any,
+    // they've already started driving and can't apply a code.
+    const assignments = await this.prisma.deliveryAssignment.findMany({
+      where: { driverId },
+      select: { deliveryId: true },
+    });
+
+    if (assignments.length > 0) {
+      const completedCount = await this.prisma.deliveryRequest.count({
+        where: {
+          id: { in: assignments.map((a) => a.deliveryId) },
+          status: "COMPLETED",
+        },
+      });
+
+      if (completedCount > 0) {
+        throw new BadRequestException(
+          "You can't apply a referral code after completing deliveries. " +
+          "Referral codes must be applied before your first delivery."
+        );
+      }
+    }
+
+    // ── Circular referral exploit check (#4) ────────────────────
+    // Walk the referrer's "referredBy" chain up to N hops. If the
+    // applying driver appears anywhere in the chain, reject — this
+    // prevents A↔B circular referral farming (A refers B, B refers A,
+    // both farm tier payouts indefinitely).
+    //
+    // We walk FROM the referrer UP to whoever referred THEM, etc.
+    // If we find the applying driver (driverId) in that chain, the
+    // applying driver is "upstream" of the referrer — meaning the
+    // referrer was referred by the applying driver (directly or
+    // transitively), so applying this code creates a cycle.
+    const MAX_CHAIN_DEPTH = 5;
+    let currentDriverId: string | null = referral.referrerId;
+    const visited = new Set<string>([driverId]); // guard against infinite loops
+
+    for (let depth = 0; depth < MAX_CHAIN_DEPTH && currentDriverId; depth++) {
+      if (visited.has(currentDriverId)) break; // already-seen cycle, stop
+      visited.add(currentDriverId);
+
+      // If the current driver in the chain IS the applying driver,
+      // we have a cycle — reject.
+      if (currentDriverId === driverId) {
+        throw new BadRequestException(
+          "This referral creates a circular referral chain. " +
+          "You can't use a referral code from someone you referred (directly or transitively)."
+        );
+      }
+
+      // Find who referred the current driver in the chain.
+      // Skip if currentDriverId is null (chain ended).
+      if (!currentDriverId) break;
+      const upstreamReferral: { referrerId: string } | null = await this.prisma.referral.findFirst({
+        where: { referredDriverId: currentDriverId },
+        select: { referrerId: true },
+      });
+
+      currentDriverId = upstreamReferral?.referrerId ?? null;
+    }
+
     // ── Read live config + validate program state ──────────────
     const config = await this.appSettingService.getReferralProgramSettings();
 

@@ -667,8 +667,19 @@ model DriverPayout {
   batchItems         PayoutBatchItem[]
   status             EnumDriverPayoutStatus @default(PENDING)
   type               EnumDriverPayoutType   @default(TRIP_COMPLETION)
+  // tierNumber is only set for REFERRAL_REFERRER payouts — identifies
+  // which tier the payout rewards (1 = first N successful, 2 = second N, etc.).
+  // NULL for all other payout types. Used by the @@unique constraint
+  // below to prevent duplicate tier payouts under race conditions.
+  tierNumber         Int?
   updatedAt          DateTime               @updatedAt
 
+  // Prevents duplicate referrer tier payouts under concurrent triggers:
+  // a referrer can only have ONE payout per (driverId, type=REFERRAL_REFERRER, tierNumber).
+  // Postgres treats NULLs as distinct in unique constraints, so non-referral
+  // payouts (tierNumber = null) don't conflict with each other or with
+  // referral payouts. This is the single source of truth for tier idempotency.
+  @@unique([driverId, type, tierNumber])
   @@index([driverId, status, createdAt])
   @@index([type, status])
 }
