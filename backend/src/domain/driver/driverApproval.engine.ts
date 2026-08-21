@@ -250,7 +250,24 @@ export class DriverApprovalEngine {
     // program config). If the program is paused, the trigger is a
     // no-op. If it fails for any reason, the cron picks up the slack.
     // We don't await — keep the approval flow fast.
-    void this.referralTrigger.onDriverApproved(input.driverId).catch((err) => {
+    //
+    // isFirstApproval computation: the `driver` object was fetched
+    // BEFORE the status update above, so `driver.approvedAt` reflects
+    // the OLD value. If it's null, this is the FIRST approval transition
+    // (PENDING_APPROVAL/REJECTED → APPROVED). If it's a Date, this is
+    // a re-approval (e.g. SUSPENDED → APPROVED) and the referral
+    // trigger must NOT fire again (would be a duplicate payout).
+    //
+    // The approveDriver method accepts both PENDING_APPROVAL and
+    // REJECTED as source states (see guard at line 162-167). For both
+    // of those, approvedAt would be null on a truly first approval.
+    // (REJECTED → APPROVED happens when a driver was previously
+    // rejected without ever being approved; their approvedAt stays null.)
+    // SUSPENDED drivers have approvedAt set (they were approved before
+    // being suspended), so their re-approval correctly passes
+    // isFirstApproval=false.
+    const isFirstApproval = !driver.approvedAt;
+    void this.referralTrigger.onDriverApproved(input.driverId, isFirstApproval).catch((err) => {
       // Swallow — don't break the approval flow on referral trigger failure
       console.error("[DriverApprovalEngine] referral trigger failed:", err);
     });

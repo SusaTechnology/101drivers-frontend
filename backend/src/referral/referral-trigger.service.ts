@@ -60,16 +60,55 @@ export class ReferralTriggerService {
   ) {}
 
   /**
-   * Called when admin moves a driver from PENDING_APPROVAL → APPROVED.
+   * Called when admin moves a driver to APPROVED status.
    *
-   * Looks up the referral where this driver is the referred driver,
-   * checks if the snapshotted policy is rewardTrigger = ON_APPROVED,
-   * and if so, fires the payout (subject to isActive + expiry checks).
+   * IMPORTANT: This hook fires on EVERY approval transition —
+   * PENDING_APPROVAL → APPROVED (first approval), REJECTED → APPROVED
+   * (re-approval after rejection), SUSPENDED → APPROVED (re-approval
+   * after suspension). The caller must pass `isFirstApproval=true`
+   * ONLY for the first approval (PENDING_APPROVAL → APPROVED with
+   * no prior approvedAt timestamp).
    *
-   * Safe to call multiple times — idempotent.
+   * Why: per the platform's referral model, the ON_APPROVED trigger
+   * should pay out EXACTLY ONCE — when the referred driver becomes
+   * a "proper signup" (admin-approved for the first time). If the
+   * driver is later rejected and re-approved, or suspended and
+   * re-approved, the trigger must NOT fire again. The referral
+   * stays "reward paid" forever after the first payout.
+   *
+   * The caller (DriverApprovalEngine.approveDriver) computes
+   * `isFirstApproval` by checking `driver.approvedAt` BEFORE the
+   * status update — if null, this is the first approval; if set,
+   * it's a re-approval.
+   *
+   * Safe to call multiple times — idempotent. The internal
+   * `referral.status === REWARD_PAID` guard is a backstop in
+   * case the caller forgets to pass `isFirstApproval`.
+   *
+   * @param driverId The driver who was just approved
+   * @param isFirstApproval True only on the FIRST approval transition
+   *   (PENDING_APPROVAL → APPROVED when approvedAt was previously null).
+   *   False for re-approvals (REJECTED → APPROVED, SUSPENDED → APPROVED).
+   *   Defaults to true for backward compat with callers that don't pass it.
    */
-  async onDriverApproved(driverId: string): Promise<void> {
+  async onDriverApproved(driverId: string, isFirstApproval: boolean = true): Promise<void> {
     try {
+      // ── First-approval-only enforcement ──
+      // If this is a re-approval (REJECTED → APPROVED or SUSPENDED → APPROVED),
+      // the referral should NOT fire again. The referral was either:
+      //   - Already paid out on the first approval (status=REWARD_PAID) →
+      //     the idempotency guard below catches it
+      //   - Never triggered because the program was paused / outside window
+      //     at the time of first approval → it's too late now. The driver
+      //     already became a "proper signup" once. We don't get a second
+      //     bite at the cherry — that would be a duplicate payout.
+      if (!isFirstApproval) {
+        this.logger.log(
+          `onDriverApproved: driver ${driverId} is being RE-approved (isFirstApproval=false) — referral trigger skipped to prevent duplicate payout`
+        );
+        return;
+      }
+
       const referral = await this.prisma.referral.findFirst({
         where: { referredDriverId: driverId },
         select: {
@@ -90,7 +129,9 @@ export class ReferralTriggerService {
         return;
       }
 
-      // Idempotency: already paid out
+      // Idempotency: already paid out (backstop guard in case caller
+      // mis-passed isFirstApproval, or in case the trigger fires twice
+      // for the same approval event due to a retry)
       if (referral.status === "REWARD_PAID" || referral.referredRewardPaidAt) {
         this.logger.log(
           `onDriverApproved: referral ${referral.id} already paid — skipping`
