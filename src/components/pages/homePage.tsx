@@ -1,5 +1,5 @@
 //@ts-nocheck
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,7 @@ import { useCreate, useDataQuery } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
+import { calculateHomeFlatQuote, HOME_FLAT_QUOTE_CONFIG } from "@/lib/pricing/home-flat-quote";
 
 // Types for landing page settings
 interface LandingPageSettings {
@@ -102,8 +103,12 @@ export default function LandingPage() {
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
-  const [quoteResult, setQuoteResult] = useState<any>(null);
+  const [quoteResult, setQuoteResult] = useState<ReturnType<typeof calculateHomeFlatQuote> | null>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+
+  // Ref to the #estimate section so the "Instant Quote" button can
+  // smooth-scroll to it after computing the price.
+  const estimateRef = useRef<HTMLElement | null>(null);
 
   // Rate limit quote calculations to 3 per session
   const QUOTE_MAX_ATTEMPTS = 3;
@@ -201,6 +206,11 @@ export default function LandingPage() {
       setIsLoadingQuote(false);
     },
   });
+  // NOTE: The home page no longer calls the backend quote-preview endpoint.
+  // The price is computed client-side via `calculateHomeFlatQuote` (see
+  // src/lib/pricing/home-flat-quote.ts) — a self-contained flat-rate
+  // formula that is decoupled from backend pricing config. The `getQuote`
+  // mutation above is retained for reference but is no longer invoked.
 
   const handlePickupSelect = useCallback((place: google.maps.places.PlaceResult) => {
     setPickupError("");
@@ -301,14 +311,49 @@ export default function LandingPage() {
     );
   };
 
+  /**
+   * Promise-returning wrapper around Google Directions API.
+   * Used by `handleCalculateEstimate` when the user clicks the
+   * "Instant Quote" button before the auto-fire effect has had a
+   * chance to populate `distance`. Keeps the button click responsive.
+   */
+  const computeDrivingDistanceMiles = useCallback((
+    origin: google.maps.LatLngLiteral,
+    destination: google.maps.LatLngLiteral,
+  ): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const directionsService = new google.maps.DirectionsService();
+      directionsService.route(
+        { origin, destination, travelMode: google.maps.TravelMode.DRIVING },
+        (result, status) => {
+          if (status === 'OK' && result) {
+            const meters = result.routes[0].legs[0].distance?.value;
+            if (meters) {
+              resolve(Math.round(meters * 0.000621371));
+              return;
+            }
+          }
+          reject(new Error(`Directions API failed: ${status}`));
+        },
+      );
+    });
+  }, []);
+
   useEffect(() => {
     if (pickupCoords && dropoffCoords) {
       calculateDistance();
     }
   }, [pickupCoords, dropoffCoords]);
 
-  // Fire estimate automatically once both addresses are confirmed
-  const handleCalculateEstimate = useCallback(() => {
+  // Compute the flat-rate quote and (optionally) smooth-scroll to the
+  // #estimate section so the customer sees the price.
+  //
+  // This is fully client-side — no backend call. The flat-rate formula
+  // lives in src/lib/pricing/home-flat-quote.ts and is decoupled from
+  // any backend pricing config.
+  const handleCalculateEstimate = useCallback(async (opts?: { scrollToEstimate?: boolean }) => {
+    const scrollToEstimate = opts?.scrollToEstimate ?? false;
+
     if (quoteLimitReached) {
       toast.error("Quote limit reached", {
         description: `You've used all ${QUOTE_MAX_ATTEMPTS} free quote calculations. Please sign up for a dealer account to get unlimited quotes.`,
@@ -329,18 +374,60 @@ export default function LandingPage() {
     setPickupError("");
     setDropoffError("");
     setIsLoadingQuote(true);
-    getQuote.mutate({
-      pickupAddress,
-      dropoffAddress,
-    });
-  }, [pickupAddress, dropoffAddress, pickupInZone, quoteLimitReached, getQuote]);
 
-  // Auto-trigger estimate as soon as both addresses are set and pickup is in zone
-  useEffect(() => {
-    if (pickupAddress && dropoffAddress && pickupInZone === true && !quoteLimitReached && !isLoadingQuote) {
-      handleCalculateEstimate();
+    try {
+      // Use the already-computed driving distance if available;
+      // otherwise compute it inline so the button click is
+      // responsive even if the auto-fire effect hasn't run yet.
+      let miles = distance;
+      if (miles == null && pickupCoords && dropoffCoords) {
+        try {
+          miles = await computeDrivingDistanceMiles(pickupCoords, dropoffCoords);
+          setDistance(miles);
+        } catch (e) {
+          console.error('Inline distance computation failed:', e);
+        }
+      }
+      if (miles == null) {
+        toast.error("Could not calculate distance", {
+          description: "Please try again in a moment.",
+        });
+        setIsLoadingQuote(false);
+        return;
+      }
+
+      // Compute the flat-rate quote (pure function, no I/O).
+      const result = calculateHomeFlatQuote(miles);
+      setQuoteResult(result);
+
+      // Increment attempt counter (preserves existing rate-limit behavior).
+      const newCount = quoteAttempts + 1;
+      setQuoteAttempts(newCount);
+      sessionStorage.setItem("quoteAttempts", String(newCount));
+
+      // Smooth-scroll to the Service Price section so the user sees the price.
+      // Slight delay so the quote result is painted before the scroll fires.
+      if (scrollToEstimate) {
+        setTimeout(() => {
+          estimateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+      }
+    } finally {
+      setIsLoadingQuote(false);
     }
-  }, [pickupAddress, dropoffAddress, pickupInZone, handleCalculateEstimate, quoteLimitReached, isLoadingQuote]);
+  }, [pickupAddress, dropoffAddress, pickupInZone, pickupCoords, dropoffCoords, distance, quoteLimitReached, quoteAttempts, computeDrivingDistanceMiles]);
+
+  // Auto-trigger estimate as soon as both addresses are set, pickup is in
+  // zone, AND the driving distance has been computed. We wait for
+  // `distance` because the flat-rate quote is computed client-side from
+  // the driving distance (no backend quote-preview call anymore).
+  // Note: this auto-fire does NOT scroll — only the button click scrolls,
+  // so the page doesn't jump around while the user is still typing.
+  useEffect(() => {
+    if (pickupAddress && dropoffAddress && pickupInZone === true && !quoteLimitReached && !isLoadingQuote && distance != null) {
+      handleCalculateEstimate({ scrollToEstimate: false });
+    }
+  }, [pickupAddress, dropoffAddress, pickupInZone, distance, handleCalculateEstimate, quoteLimitReached, isLoadingQuote]);
 
   // Dealer lead submission
   const submitDealerLead = useCreate(`${import.meta.env.VITE_API_URL}/api/dealerLeads/public`, {
@@ -587,6 +674,19 @@ export default function LandingPage() {
                     onChange={setPickupAddress}
                     onPlaceSelect={handlePickupSelect}
                     onClear={handlePickupClear}
+                    onReject={() => {
+                      // Address was outside the configured bounds — tell the user
+                      // WHY the field was cleared so they know to enter a CA address.
+                      setPickupAddress("");
+                      setPickupCoords(null);
+                      setPickupInZone(false);
+                      setPickupError("This address is outside California. Please enter a pickup address inside CA.");
+                      setDistance(null);
+                      setQuoteResult(null);
+                      toast.error("Outside California", {
+                        description: "Pickup must be inside California. Please enter a CA address.",
+                      });
+                    }}
                     placeholder="Enter address in pickup area"
                     isLoaded={isLoaded}
                     icon={<Target className="h-4 w-4 text-slate-400" />}
@@ -622,6 +722,18 @@ export default function LandingPage() {
                     onChange={setDropoffAddress}
                     onPlaceSelect={handleDropoffSelect}
                     onClear={handleDropoffClear}
+                    onReject={() => {
+                      // Address was outside the configured bounds — tell the user
+                      // WHY the field was cleared so they know to enter a CA address.
+                      setDropoffAddress("");
+                      setDropoffCoords(null);
+                      setDropoffError("This address is outside California. Please enter a drop-off address inside CA.");
+                      setDistance(null);
+                      setQuoteResult(null);
+                      toast.error("Outside California", {
+                        description: "Drop-off must be inside California. Please enter a CA address.",
+                      });
+                    }}
                     placeholder="Anywhere in SoCal"
                     isLoaded={isLoaded}
                     icon={<Flag className="h-4 w-4 text-slate-400" />}
@@ -638,11 +750,19 @@ export default function LandingPage() {
                   )}
                 </div>
 
-                {/* Recalculate button — estimate auto-fires when both addresses are set */}
+                {/* Recalculate button — estimate auto-fires when both addresses are set,
+                    but the button ALSO smooth-scrolls to the #estimate section so the
+                    customer sees the price after clicking. */}
                 {!quoteLimitReached ? (
                   <a
                     href="#estimate"
-                    onClick={(e) => { e.preventDefault(); handleCalculateEstimate(); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      // Fire the calculation with scroll-to-estimate enabled.
+                      // handleCalculateEstimate is async — it will smooth-scroll
+                      // to #estimate after the quote is computed.
+                      handleCalculateEstimate({ scrollToEstimate: true });
+                    }}
                     className={`w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2 ${
                       isLoadingQuote || !pickupAddress || !dropoffAddress || pickupInZone === false
                         ? "opacity-50 pointer-events-none"
@@ -776,7 +896,11 @@ export default function LandingPage() {
         </section>
 
         {/* ===== SECTION 3 — Price Estimate ===== */}
-        <section id="estimate" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <section
+          id="estimate"
+          ref={estimateRef}
+          className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pb-8 scroll-mt-4"
+        >
           {quoteLimitReached && !quoteResult ? (
             <Card className="rounded-2xl border-lime-200 dark:border-lime-900/40 bg-lime-50/50 dark:bg-lime-900/5 overflow-hidden">
               <CardContent className="p-6 sm:p-8 text-center">
@@ -824,7 +948,7 @@ export default function LandingPage() {
                   <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">Service Price</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      This example uses flat rate pricing up to a set distance. Enter pickup and drop-off locations to see your price.
+                      Flat-rate pricing: ${HOME_FLAT_QUOTE_CONFIG.baseFee} covers the first {HOME_FLAT_QUOTE_CONFIG.flatMiles} miles, then ${HOME_FLAT_QUOTE_CONFIG.perMileRate.toFixed(2)}/mile. Enter pickup and drop-off to see your price.
                     </p>
                   </div>
                 </div>
@@ -835,32 +959,80 @@ export default function LandingPage() {
                       <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                         Service Price
                       </h3>
-                      <Badge variant="secondary" className="mt-2 gap-1.5 px-3 py-1.5">
-                        <Ruler className="h-3.5 w-3.5 text-lime-500" />
-                        <span className="text-[11px] font-black uppercase tracking-widest">
-                          {Math.round(quoteResult.distanceMiles)} miles
-                        </span>
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <Badge variant="secondary" className="gap-1.5 px-3 py-1.5">
+                          <Ruler className="h-3.5 w-3.5 text-lime-500" />
+                          <span className="text-[11px] font-black uppercase tracking-widest">
+                            {Math.round(quoteResult.distanceMiles)} miles
+                          </span>
+                        </Badge>
+                        {quoteResult.formula?.label && (
+                          <Badge variant="outline" className="gap-1.5 px-3 py-1.5 border-lime-300 dark:border-lime-700 text-lime-700 dark:text-lime-300">
+                            <Bolt className="h-3.5 w-3.5" />
+                            <span className="text-[11px] font-black uppercase tracking-widest">
+                              {quoteResult.formula.label}
+                            </span>
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-3xl sm:text-4xl font-black text-lime-500">
                         ${quoteResult.estimatedPrice.toFixed(2)}
                       </p>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                        (incl. fees)
+                        flat rate
                       </p>
                     </div>
                   </div>
 
-                  {quoteResult?.feesBreakdown && (
-                    <div className="flex justify-between items-center py-3 border-t border-slate-100 dark:border-slate-800">
-                      <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
-                        Base Fee
-                      </span>
-                      <span className="font-black text-sm text-slate-900 dark:text-white">
-                        ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
-                      </span>
+                  {/* Flat-rate formula announcement */}
+                  {quoteResult.formula && (
+                    <div className="p-3 sm:p-4 rounded-xl bg-lime-50 dark:bg-lime-900/10 border border-lime-200 dark:border-lime-900/30">
+                      <div className="flex items-start gap-2">
+                        <Bolt className="h-4 w-4 text-lime-600 dark:text-lime-400 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-lime-700 dark:text-lime-300">
+                            Flat-Rate Formula
+                          </p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 leading-relaxed font-medium">
+                            {quoteResult.formula.description}
+                          </p>
+                          <p className="text-xs text-slate-900 dark:text-white mt-2 font-mono font-bold break-words">
+                            {quoteResult.formula.expression}
+                          </p>
+                        </div>
+                      </div>
                     </div>
+                  )}
+
+                  {quoteResult?.feesBreakdown && (
+                    <>
+                      <div className="flex justify-between items-center py-2 border-t border-slate-100 dark:border-slate-800">
+                        <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
+                          Base Fee (covers first {quoteResult.feesBreakdown.flatMilesAllowance} mi)
+                        </span>
+                        <span className="font-black text-sm text-slate-900 dark:text-white">
+                          ${quoteResult.feesBreakdown.baseFare.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-slate-600 dark:text-slate-400 text-sm font-semibold">
+                          Extra miles ({quoteResult.feesBreakdown.billedMiles} mi × ${quoteResult.feesBreakdown.perMileRate.toFixed(2)}/mi)
+                        </span>
+                        <span className="font-black text-sm text-slate-900 dark:text-white">
+                          ${quoteResult.feesBreakdown.distanceCharge.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-t border-slate-200 dark:border-slate-700">
+                        <span className="text-slate-900 dark:text-white text-sm font-extrabold">
+                          Total
+                        </span>
+                        <span className="font-black text-base text-lime-600 dark:text-lime-400">
+                          ${quoteResult.feesBreakdown.total.toFixed(2)}
+                        </span>
+                      </div>
+                    </>
                   )}
 
                   {/* Disclaimer */}

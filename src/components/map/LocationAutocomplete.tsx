@@ -17,6 +17,18 @@ interface LocationAutocompleteProps {
   strictBounds?: boolean;
   /** LatLngBoundsLiteral to bias or restrict autocomplete results */
   bounds?: google.maps.LatLngBoundsLiteral;
+  /**
+   * Fired when the user selects an address that is rejected because it
+   * falls outside the configured `bounds` (when `strictBounds` is on).
+   *
+   * The component clears the input value and `onChange('')` is called
+   * — this callback lets the parent show the user WHY the value was
+   * cleared (e.g. "outside California, please enter a CA address").
+   *
+   * Optional. Existing callers that don't pass it behave exactly as
+   * before (silent rejection).
+   */
+  onReject?: (reason: 'out-of-bounds') => void;
 }
 
 // All US state abbreviations except CA
@@ -87,6 +99,7 @@ export default function LocationAutocomplete({
   disabled = false,
   strictBounds = false,
   bounds,
+  onReject,
 }: LocationAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -244,6 +257,9 @@ export default function LocationAutocomplete({
             setInputValue('');
             onChangeRef.current('');
             onClear?.();
+            // Notify the parent so it can show the user WHY the address was
+            // cleared (e.g. "outside California — please enter a CA address").
+            onReject?.('out-of-bounds');
             return;
           }
         }
