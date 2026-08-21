@@ -190,7 +190,7 @@ export function IndividualSignupForm() {
         JSON.stringify({ email: variables.email }),
       );
       // Navigate to the separate OTP entry page.
-      navigate({ to: "/auth/individual-verify-email" });
+      navigate({ to: "/individual-verify-email" });
     },
     onError: (error) => {
       const errorMessage = error.message || "Please try again later.";
@@ -236,7 +236,7 @@ export function IndividualSignupForm() {
         JSON.stringify({ email: data.email }),
       );
       setPendingEmail(null);
-      navigate({ to: "/auth/individual-verify-email" });
+      navigate({ to: "/individual-verify-email" });
     },
     onError: (error) => {
       toast.error("Failed to resend code", {
@@ -286,9 +286,9 @@ export function IndividualSignupForm() {
       <CardHeader className="p-6 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-widest text-primary mb-1">
+            {/* <p className="text-[11px] font-black uppercase tracking-widest text-primary mb-1">
               Step 2
-            </p>
+            </p> */}
             <CardTitle className="text-2xl font-black text-slate-900 dark:text-white mt-2">
               Account & Contact Information
             </CardTitle>

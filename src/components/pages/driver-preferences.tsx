@@ -492,7 +492,7 @@ export default function DriverPreferencesPage() {
         <div className="max-w-[900px] mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              to="/driver-menu"
+              to="/driver/dashboard"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-center"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -523,14 +523,14 @@ export default function DriverPreferencesPage() {
               )}
             </Button>
 
-            <Button
+            {/* <Button
               onClick={handleSignOut}
               variant="outline"
               className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm font-bold text-slate-700 dark:text-slate-200"
             >
               <LogOut className="w-4 h-4" />
               Sign Out
-            </Button>
+            </Button> */}
           </div>
         </div>
       </header>

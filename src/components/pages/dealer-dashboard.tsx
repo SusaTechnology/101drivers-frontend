@@ -449,11 +449,11 @@ export default function DealerDashboard() {
             <div className="leading-tight"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: BUSINESS_TZ })}</div><div className="text-sm font-extrabold text-slate-900 dark:text-white">{isPrivateCustomer ? 'My Deliveries' : 'Delivery Dashboard'}</div></div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            {/* <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <span className={cn("text-xs font-bold transition-colors", !showAll ? "text-lime-600" : "text-slate-400")}>My</span>
               <Switch checked={showAll} onCheckedChange={setShowAll} className="data-[state=checked]:bg-lime-500" />
               <span className={cn("text-xs font-bold transition-colors", showAll ? "text-lime-600" : "text-slate-400")}>All</span>
-            </div>
+            </div> */}
             <Button variant={showMapView ? "default" : "outline"} size="icon" className={cn("w-10 h-10 rounded-xl", showMapView && "bg-lime-500 text-slate-950")} onClick={() => setShowMapView(!showMapView)} title="Map view"><Map className="h-5 w-5" /></Button>
             <NotificationBell />
             <Button asChild variant="ghost" size="icon" className="w-10 h-10 rounded-xl" title="Help">

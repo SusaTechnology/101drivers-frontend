@@ -55,7 +55,6 @@ import {
 } from '@/lib/tanstack/dataQuery'
 import { useQuery } from '@tanstack/react-query'
 
-
 // Import the location autocomplete component
 import LocationAutocomplete from '@/components/map/LocationAutocomplete'
 

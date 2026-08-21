@@ -63,7 +63,7 @@ export default function PaymentFailureDialog({
   code,
   onRetry,
   onUpdateCard,
-  updateCardPath = '/dealer-setting',
+  updateCardPath = '/dealer-settings',
   loading = false,
 }: PaymentFailureDialogProps) {
   const navigate = useNavigate()

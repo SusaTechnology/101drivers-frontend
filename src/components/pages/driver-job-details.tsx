@@ -818,14 +818,14 @@ export default function DriverJobDetailsPage() {
                 <div className="mt-2 space-y-3 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                   <p className="font-bold text-slate-900 dark:text-white">Before you confirm, here's the full delivery flow:</p>
                   <ol className="list-decimal pl-5 space-y-1.5">
-                    <li>Open the app and choose Map View or List View.</li>
-                    <li>Toggle on "Use my current location".</li>
-                    <li>Filter pickups by distance and date.</li>
-                    <li>Tap on the job you want, review the schedule and all important messages.</li>
-                    <li>Accept the job — once confirmed, it moves to My Bookings.</li>
-                    <li>Go to My Bookings and tap the job when you're ready to start.</li>
-                    <li>Arrive at the pickup location on time.</li>
-                    <li>Introduce yourself politely at the dealership.</li>
+                    {/* <li>Open the app and choose Map View or List View.</li> */}
+                    {/* <li>Toggle on "Use my current location".</li> */}
+                    {/* <li>Filter pickups by distance and date.</li> */}
+                    {/* <li>Tap on the job you want, review the schedule and all important messages.</li> */}
+                    {/* <li>Accept the job — once confirmed, it moves to My Bookings.</li> */}
+                    {/* <li>Go to My Bookings and tap the job when you're ready to start.</li> */}
+                    {/* <li>Arrive at the pickup location on time.</li> */}
+                    {/* <li>Introduce yourself politely at the dealership.</li> */}
                     <li>Receive the 4-digit authorization PIN from the customer and verify it's the correct vehicle.</li>
                     <li>Take six pictures in this order: Left front corner, Right front corner, Passenger full side, Right rear corner, Left rear corner, Driver's full side.</li>
                     <li>Take a Dashboard Photo showing the fuel gauge or battery charge level (must be at least half full).</li>
@@ -881,8 +881,8 @@ export default function DriverJobDetailsPage() {
 
                 <div className="px-6 pb-6 space-y-0">
                   {/* Pickup / Drop-off — side by side */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="min-w-0">
+                  <div className="flex justify-around flex-wrap ">
+                    <div className="ml-5 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup</p>
@@ -906,7 +906,7 @@ export default function DriverJobDetailsPage() {
                   <div className="border-t border-slate-200 dark:border-slate-700 my-4" />
 
                   {/* Stats — inline, bullet-separated */}
-                  <div className="flex items-baseline justify-center gap-2 flex-wrap">
+                  <div className="flex items-baseline justify-center gap-5 flex-wrap">
                     <span className="text-lg font-black text-primary">{formatCurrency(payout)}</span>
                     <span className="text-slate-300 dark:text-slate-600 font-bold">·</span>
                     <span className="text-sm font-black text-slate-900 dark:text-white">

@@ -465,7 +465,7 @@ export default function DriverOnboardingPage() {
   );
 
   // Form is ready to submit only when all fields are filled AND terms accepted
-  const isFormReady = allRequiredFieldsFilled && acceptTerms;
+  const isFormReady = allRequiredFieldsFilled && acceptTerms && haveInsurance;
 
   // Determine if any mutation is pending
   const isPending = sendOtpMutation.isPending;

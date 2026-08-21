@@ -1,7 +1,7 @@
 import IndividualVerifyEmailPage from '@/components/pages/individual-verify-email'
 import { createFileRoute } from '@tanstack/react-router'
 
-export const Route = createFileRoute('/auth/individual-verify-email/')({
+export const Route = createFileRoute('/individual-verify-email/')({
   component: RouteComponent,
   validateSearch: (search: Record<string, unknown>) => {
     return {

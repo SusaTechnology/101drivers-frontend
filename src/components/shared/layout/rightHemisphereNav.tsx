@@ -46,7 +46,7 @@ export const RightHemisphereNav = () => {
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
           <LogIn className="w-4 h-4" />
-          Log in
+          Log in/ Sign Up
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
         </button>
 
@@ -84,7 +84,7 @@ export const RightHemisphereNav = () => {
         className="md:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
       >
         <LogIn className="w-3.5 h-3.5" />
-        <span>Log in</span>
+        <span>Log in /Sign Up</span>
       </button>
 
       {/* Mobile Hamburger Menu Button */}

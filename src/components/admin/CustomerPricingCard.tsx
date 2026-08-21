@@ -70,7 +70,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const MODE_LABELS: Record<string, string> = {
   PER_MILE: 'Flat Pricing',
-  FLAT_TIER: 'Flat Tier',
+  // FLAT_TIER: 'Flat Tier',
   CATEGORY_ABC: 'Category A/B/C',
 };
 

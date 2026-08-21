@@ -580,6 +580,7 @@ export default function EditDraftPage() {
                     onPlaceSelect={handleDropoffSelect}
                     isLoaded={isLoaded}
                     placeholder="Search drop-off location"
+                    bounds={CA_BOUNDS}
                     icon={<Flag className="h-5 w-5 text-slate-400" />}
                   />
                 </div>

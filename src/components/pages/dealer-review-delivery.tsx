@@ -1333,7 +1333,7 @@ export default function ReviewDeliveryPage() {
                       </p>
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
                         You'll enter your card after submission. Save it in{' '}
-                        <a href="/dealer-setting" className="underline font-bold hover:text-amber-800 dark:hover:text-amber-200">
+                        <a href="/dealer-settings" className="underline font-bold hover:text-amber-800 dark:hover:text-amber-200">
                           Settings → Payment method
                         </a>{' '}
                         to skip this step on future deliveries.

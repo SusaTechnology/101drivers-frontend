@@ -163,7 +163,7 @@ export default function LandingPage() {
 
   // Fetch landing page settings (public endpoint, no auth)
   const { data: settings, isLoading: settingsLoading, isError: settingsError, error: settingsErrorMsg } = useDataQuery<LandingPageSettings>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/public/home-page`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/public/landing-page`,
     noFilter: true,
     fetchWithoutRefresh: true,
     publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint
@@ -778,7 +778,7 @@ export default function LandingPage() {
                   </a>
                 ) : (
                   <a
-                    href="#dealers"
+                    href="#estimate"
                     className="w-full px-6 py-3.5 rounded-2xl bg-lime-500 text-slate-950 hover:bg-lime-600 hover:shadow-lg hover:shadow-lime-500/20 font-extrabold transition flex items-center justify-center gap-2"
                   >
                     <Lock className="h-4 w-4" />

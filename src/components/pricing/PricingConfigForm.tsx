@@ -500,7 +500,7 @@ export function PricingConfigForm({
                       <SelectItem value="PER_MILE">
                         <div className="flex items-center gap-2">
                           <Calculator className="w-4 h-4 text-primary" />
-                          Flat Pricing
+                          Flat (with extra mileage)
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -555,7 +555,7 @@ export function PricingConfigForm({
               <div className="flex items-start gap-3">
                 <Calculator className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-900 dark:text-white">Flat Pricing</div>
+                  <div className="font-bold text-slate-900 dark:text-white">Flat (with extra mileage)</div>
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                     Flat fee covers the first <strong>flatMiles</strong> miles, then a per-mile rate applies.
                     Formula: <code className="font-mono text-[11px]">baseFee + max(0, miles − flatMiles) × perMileRate</code>.

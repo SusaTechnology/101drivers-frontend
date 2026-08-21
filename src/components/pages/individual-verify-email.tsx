@@ -382,14 +382,14 @@ export default function IndividualVerifyEmailPage() {
           </Button>
 
           {/* Back to signup link */}
-          <div className="text-center">
+          {/* <div className="text-center">
             <Link
               to="/auth/individual-signup"
               className="text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-lime-600 dark:hover:text-lime-400 transition"
             >
               ← Back to registration
             </Link>
-          </div>
+          </div> */}
         </div>
       </main>
     </div>

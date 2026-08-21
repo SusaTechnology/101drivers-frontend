@@ -41,10 +41,10 @@ function buildQueryString(params: AdminPaymentsQueryParams): string {
  */
 export function useAdminPayments(params: AdminPaymentsQueryParams = {}) {
   const queryString = buildQueryString(params);
-
+ 
   // Use a stable key by serializing params
   const paramsKey = JSON.stringify(params);
-
+ 
   return useDataQuery<AdminPaymentsResponse>({
     apiEndPoint: `${API_BASE_URL}/api/payments/admin${queryString}`,
     noFilter: true,

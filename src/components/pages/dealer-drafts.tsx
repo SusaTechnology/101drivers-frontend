@@ -315,7 +315,7 @@ export default function DealerDrafts() {
                                 <Edit className="h-3 w-3" />
                                 Edit
                               </Button>
-                              <Button
+                              {/* <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleDelete(draft.id)}
@@ -323,7 +323,7 @@ export default function DealerDrafts() {
                                 disabled={deleteMutation.isPending}
                               >
                                 <Trash2 className="h-3 w-3" />
-                              </Button>
+                              </Button> */}
                             </div>
                           </TableCell>
                         </TableRow>

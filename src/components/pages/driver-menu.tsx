@@ -359,13 +359,13 @@ export default function DriverMenuPage() {
                 </p>
               </div>
 
-              <Button
+              {/* <Button
                 onClick={handleSignOut}
                 className="lime-btn inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl hover:shadow-xl hover:shadow-primary/20 transition"
               >
                 Sign Out
                 <LogOut className="w-4 h-4" />
-              </Button>
+              </Button> */}
             </div>
           </CardContent>
         </Card>

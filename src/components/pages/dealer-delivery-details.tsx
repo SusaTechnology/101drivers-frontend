@@ -413,6 +413,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
   const tipUpdateMutation = useDataMutation({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/tips/:id`,
     method: 'PATCH',
+    enabled: !!existingTip,
     onSuccessInvalidate: false,
     successMessage: '',
     onSuccess: () => {

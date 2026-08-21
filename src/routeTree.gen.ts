@@ -18,6 +18,7 @@ import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
 import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as InsurancePortalIndexRouteImport } from './routes/insurance-portal/index'
+import { Route as IndividualVerifyEmailIndexRouteImport } from './routes/individual-verify-email/index'
 import { Route as HomeIndexRouteImport } from './routes/home/index'
 import { Route as HelpDriverIndexRouteImport } from './routes/help-driver/index'
 import { Route as HelpCustomerIndexRouteImport } from './routes/help-customer/index'
@@ -114,7 +115,6 @@ import { Route as AuthDealerSigninRouteImport } from './routes/auth/dealer-signi
 import { Route as AuthAdminSigninRouteImport } from './routes/auth/admin-signin'
 import { Route as AdminUserDetailUserIdRouteImport } from './routes/admin-user-detail/$userId'
 import { Route as TrackTokenIndexRouteImport } from './routes/track/$token/index'
-import { Route as AuthIndividualVerifyEmailIndexRouteImport } from './routes/auth/individual-verify-email/index'
 import { Route as AdminPricingConfigCreateIndexRouteImport } from './routes/admin-pricing-config/create/index'
 import { Route as AdminPricingConfigEditConfigIdRouteImport } from './routes/admin-pricing-config/edit/$configId'
 
@@ -163,6 +163,12 @@ const InsurancePortalIndexRoute = InsurancePortalIndexRouteImport.update({
   path: '/insurance-portal/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IndividualVerifyEmailIndexRoute =
+  IndividualVerifyEmailIndexRouteImport.update({
+    id: '/individual-verify-email/',
+    path: '/individual-verify-email/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const HomeIndexRoute = HomeIndexRouteImport.update({
   id: '/home/',
   path: '/home/',
@@ -667,12 +673,6 @@ const TrackTokenIndexRoute = TrackTokenIndexRouteImport.update({
   path: '/track/$token/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthIndividualVerifyEmailIndexRoute =
-  AuthIndividualVerifyEmailIndexRouteImport.update({
-    id: '/auth/individual-verify-email/',
-    path: '/auth/individual-verify-email/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AdminPricingConfigCreateIndexRoute =
   AdminPricingConfigCreateIndexRouteImport.update({
     id: '/admin-pricing-config/create/',
@@ -784,6 +784,7 @@ export interface FileRoutesByFullPath {
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
   '/home/': typeof HomeIndexRoute
+  '/individual-verify-email/': typeof IndividualVerifyEmailIndexRoute
   '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -793,7 +794,6 @@ export interface FileRoutesByFullPath {
   '/terms/': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
-  '/auth/individual-verify-email/': typeof AuthIndividualVerifyEmailIndexRoute
   '/track/$token/': typeof TrackTokenIndexRoute
 }
 export interface FileRoutesByTo {
@@ -893,6 +893,7 @@ export interface FileRoutesByTo {
   '/help-customer': typeof HelpCustomerIndexRoute
   '/help-driver': typeof HelpDriverIndexRoute
   '/home': typeof HomeIndexRoute
+  '/individual-verify-email': typeof IndividualVerifyEmailIndexRoute
   '/insurance-portal': typeof InsurancePortalIndexRoute
   '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
@@ -902,7 +903,6 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create': typeof AdminPricingConfigCreateIndexRoute
-  '/auth/individual-verify-email': typeof AuthIndividualVerifyEmailIndexRoute
   '/track/$token': typeof TrackTokenIndexRoute
 }
 export interface FileRoutesById {
@@ -1004,6 +1004,7 @@ export interface FileRoutesById {
   '/help-customer/': typeof HelpCustomerIndexRoute
   '/help-driver/': typeof HelpDriverIndexRoute
   '/home/': typeof HomeIndexRoute
+  '/individual-verify-email/': typeof IndividualVerifyEmailIndexRoute
   '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
@@ -1013,7 +1014,6 @@ export interface FileRoutesById {
   '/terms/': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
-  '/auth/individual-verify-email/': typeof AuthIndividualVerifyEmailIndexRoute
   '/track/$token/': typeof TrackTokenIndexRoute
 }
 export interface FileRouteTypes {
@@ -1116,6 +1116,7 @@ export interface FileRouteTypes {
     | '/help-customer/'
     | '/help-driver/'
     | '/home/'
+    | '/individual-verify-email/'
     | '/insurance-portal/'
     | '/live-track/'
     | '/map-test/'
@@ -1125,7 +1126,6 @@ export interface FileRouteTypes {
     | '/terms/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
-    | '/auth/individual-verify-email/'
     | '/track/$token/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1225,6 +1225,7 @@ export interface FileRouteTypes {
     | '/help-customer'
     | '/help-driver'
     | '/home'
+    | '/individual-verify-email'
     | '/insurance-portal'
     | '/live-track'
     | '/map-test'
@@ -1234,7 +1235,6 @@ export interface FileRouteTypes {
     | '/terms'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create'
-    | '/auth/individual-verify-email'
     | '/track/$token'
   id:
     | '__root__'
@@ -1335,6 +1335,7 @@ export interface FileRouteTypes {
     | '/help-customer/'
     | '/help-driver/'
     | '/home/'
+    | '/individual-verify-email/'
     | '/insurance-portal/'
     | '/live-track/'
     | '/map-test/'
@@ -1344,7 +1345,6 @@ export interface FileRouteTypes {
     | '/terms/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
-    | '/auth/individual-verify-email/'
     | '/track/$token/'
   fileRoutesById: FileRoutesById
 }
@@ -1424,6 +1424,7 @@ export interface RootRouteChildren {
   HelpCustomerIndexRoute: typeof HelpCustomerIndexRoute
   HelpDriverIndexRoute: typeof HelpDriverIndexRoute
   HomeIndexRoute: typeof HomeIndexRoute
+  IndividualVerifyEmailIndexRoute: typeof IndividualVerifyEmailIndexRoute
   InsurancePortalIndexRoute: typeof InsurancePortalIndexRoute
   LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
@@ -1433,7 +1434,6 @@ export interface RootRouteChildren {
   TermsIndexRoute: typeof TermsIndexRoute
   AdminPricingConfigEditConfigIdRoute: typeof AdminPricingConfigEditConfigIdRoute
   AdminPricingConfigCreateIndexRoute: typeof AdminPricingConfigCreateIndexRoute
-  AuthIndividualVerifyEmailIndexRoute: typeof AuthIndividualVerifyEmailIndexRoute
   TrackTokenIndexRoute: typeof TrackTokenIndexRoute
 }
 
@@ -1500,6 +1500,13 @@ declare module '@tanstack/react-router' {
       path: '/insurance-portal'
       fullPath: '/insurance-portal/'
       preLoaderRoute: typeof InsurancePortalIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/individual-verify-email/': {
+      id: '/individual-verify-email/'
+      path: '/individual-verify-email'
+      fullPath: '/individual-verify-email/'
+      preLoaderRoute: typeof IndividualVerifyEmailIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home/': {
@@ -2174,13 +2181,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackTokenIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/individual-verify-email/': {
-      id: '/auth/individual-verify-email/'
-      path: '/auth/individual-verify-email'
-      fullPath: '/auth/individual-verify-email/'
-      preLoaderRoute: typeof AuthIndividualVerifyEmailIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin-pricing-config/create/': {
       id: '/admin-pricing-config/create/'
       path: '/admin-pricing-config/create'
@@ -2327,6 +2327,7 @@ const rootRouteChildren: RootRouteChildren = {
   HelpCustomerIndexRoute: HelpCustomerIndexRoute,
   HelpDriverIndexRoute: HelpDriverIndexRoute,
   HomeIndexRoute: HomeIndexRoute,
+  IndividualVerifyEmailIndexRoute: IndividualVerifyEmailIndexRoute,
   InsurancePortalIndexRoute: InsurancePortalIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,
@@ -2336,7 +2337,6 @@ const rootRouteChildren: RootRouteChildren = {
   TermsIndexRoute: TermsIndexRoute,
   AdminPricingConfigEditConfigIdRoute: AdminPricingConfigEditConfigIdRoute,
   AdminPricingConfigCreateIndexRoute: AdminPricingConfigCreateIndexRoute,
-  AuthIndividualVerifyEmailIndexRoute: AuthIndividualVerifyEmailIndexRoute,
   TrackTokenIndexRoute: TrackTokenIndexRoute,
 }
 export const routeTree = rootRouteImport

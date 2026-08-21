@@ -486,7 +486,7 @@ export function DealerSignIn({
                   <Input
                     id="username"
                     type="text"
-                    placeholder="dealer@business.com"
+                    placeholder="enter your email here..."
                     className="h-14 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 input-focus-ring text-sm"
                     disabled={loginMutation.isPending || forgotPasswordMutation.isPending}
                     {...register("username")}
@@ -584,7 +584,7 @@ export function DealerSignIn({
             {/* Sign Up Now Card */}
             <CustomCard className="bg-white/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
               <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                Sign Up Now!
+                New customer?
               </h2>
               <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
                 <li className="flex gap-3">
@@ -600,6 +600,15 @@ export function DealerSignIn({
                   View before &amp; after photos, full delivery history, and payment reports on your account
                 </li>
               </ul>
+              <Link to="/auth/dealer-signup"
+                  className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-14 text-base mt-6"
+                >
+                
+                    <>
+                      Sign up
+                      <ArrowRight className="w-5 h-5 font-bold" />
+                    </>
+                </Link>
             </CustomCard>
 
             {/* Bottom Sign Up Link */}
@@ -626,14 +635,14 @@ export function DealerSignIn({
             {/* Left: Intro Section */}
             <div className="lg:col-span-6 order-2 lg:order-1">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0 hidden md:block">
+               {/* <div className="w-12 h-12 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0 hidden md:block">
                   {isAdmin ? (
                     <Lock className="text-primary w-6 h-6 font-bold" />
                   ) : (
                     <Car className="text-primary w-6 h-6 font-bold" />
                   )}
                 </div>
-                <div className="hidden md:block">
+                 <div className="hidden md:block">
                   <h1 className="text-4xl font-black text-slate-900 dark:text-white">
                     {isAdmin ? "Admin Sign In" : "Welcome back, Driver"}
                   </h1>
@@ -652,7 +661,7 @@ export function DealerSignIn({
                       </div>
                     </div>
                   )}
-                </div>
+                </div> */}
               </div>
 
               {isAdmin ? (

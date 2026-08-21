@@ -1411,14 +1411,14 @@ const DROPOFF_REF_IMAGES = [
               </div>
 
               <div className="flex items-center gap-2">
-                <Button
+                {/* <Button
                   onClick={handleSignOut}
                   variant="outline"
                   className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-sm font-bold text-slate-700 dark:text-slate-200"
                 >
                   <LogOut className="w-4 h-4" />
                   Sign Out
-                </Button>
+                </Button> */}
 
                 <Button
                   variant="outline"

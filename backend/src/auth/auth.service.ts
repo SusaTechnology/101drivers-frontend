@@ -650,22 +650,16 @@ export class AuthService {
       // Check if a User with this email already exists
       const existingUser = await this.prisma.user.findUnique({
         where: { email: normalizedEmail },
-        select: {
-          id: true,
-          emailVerifiedAt: true,
-          roles: true,
-          createdAt: true,
-          customer: {
-            select: { id: true, approvalStatus: true },
-          },
-        },
+        select: { id: true, emailVerifiedAt: true, roles: true, createdAt: true },
       });
 
       if (existingUser) {
-        // ── Case 1: Pending (unverified) signup ────────────────────────
         if (existingUser.emailVerifiedAt == null) {
-          // User was created but OTP never verified. Show the dialog so
-          // the user can resend the OTP or use a different email.
+          // Pending signup — User was created but OTP never verified.
+          // Return PENDING_VERIFICATION so the frontend can show the
+          // "verify old signup or use another email" dialog.
+          // Include createdAt so the dialog can display when the
+          // registration was started.
           return {
             action: "PENDING_VERIFICATION",
             email: normalizedEmail,
@@ -675,36 +669,10 @@ export class AuthService {
               "Would you like to verify it now or use a different email?",
           };
         }
-
-        // ── Case 2: REJECTED customer — allow re-registration ──────────
-        // The admin rejected the customer's application. Delete the old
-        // User + Customer rows so the user can register fresh with the
-        // same email. The admin can see the new registration and approve
-        // or reject again.
-        if (existingUser.customer?.approvalStatus === "REJECTED") {
-          await this.prisma.$transaction(async (tx) => {
-            // Delete the Customer row first (FK constraint)
-            if (existingUser.customer?.id) {
-              await tx.customer.delete({
-                where: { id: existingUser.customer.id },
-              });
-            }
-            // Delete the User row
-            await tx.user.delete({
-              where: { id: existingUser.id },
-            });
-          });
-
-          // Fall through to create a new User + send OTP below.
-          // The old rejected account is gone — the user starts fresh.
-        } else {
-          // ── Case 3: Active or pending-approval verified user ──────────
-          // The email is already registered and verified (APPROVED,
-          // PENDING, or SUSPENDED). Tell the user to sign in.
-          throw new BadRequestException(
-            "This email is already registered. Please sign in instead."
-          );
-        }
+        // Email already registered and verified
+        throw new BadRequestException(
+          "This email is already registered. Please sign in instead."
+        );
       }
 
       // Create the User row (inactive, unverified) — stores the password

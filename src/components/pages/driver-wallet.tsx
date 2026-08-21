@@ -516,7 +516,7 @@ export default function DriverWalletPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
+            {/* <Button
               variant="outline"
               size="icon"
               className="w-10 h-10 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
@@ -524,7 +524,7 @@ export default function DriverWalletPage() {
               aria-label="Sign out"
             >
               <LogOut className="w-4 h-4" />
-            </Button>
+            </Button> */}
             <Button
               variant="outline"
               size="icon"

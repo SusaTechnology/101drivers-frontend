@@ -473,10 +473,10 @@ export default function AdminDisputesPage() {
               <Download className="h-3.5 w-3.5 mr-1" />
               Excel
             </Button>
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => handleExport('pdf')}>
+           {/* <Button variant="outline" size="sm" className="rounded-xl" onClick={() => handleExport('pdf')}>
               <Download className="h-3.5 w-3.5 mr-1" />
               PDF
-            </Button>
+            </Button>*/}
             <Button
               onClick={handleRefresh}
               disabled={isFetching}

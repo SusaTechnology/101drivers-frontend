@@ -565,13 +565,13 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
+            {(delivery.status !== 'EXPIRED'&& delivery.status !== 'BOOKED')&&<Button
               onClick={handleAssignDriver}
               className="bg-primary text-slate-950 hover:bg-primary/90 rounded-xl"
             >
               <User className="w-4 h-4 mr-1" />
               Assign Driver
-            </Button>
+            </Button>}
             <Button variant="outline" onClick={handleExportEvidence} className="rounded-xl">
               <Download className="w-4 h-4 mr-1" />
               Export Evidence

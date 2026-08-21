@@ -119,7 +119,7 @@ export default function AdminPricingConfigPage() {
             </h1>
             <p className="text-slate-600 dark:text-slate-400 mt-2 text-lg max-w-3xl leading-relaxed">
               Create and manage pricing configurations for the 101 Drivers platform.
-              Supports Flat Pricing, Flat Tier (deprecated), and Category A/B/C pricing modes.
+              Supports Flat Pricing, and Category A/B/C pricing modes.
             </p>
           </div>
 
@@ -172,7 +172,7 @@ export default function AdminPricingConfigPage() {
             <AlertDescription className="text-blue-900/80 dark:text-blue-200/80 text-xs mt-1">
               <ul className="list-disc list-inside space-y-1 mt-2">
                 <li><strong>Flat Pricing:</strong> Flat fee covers the first N miles, then a per-mile rate applies. Formula: <code>baseFee + max(0, miles − flatMiles) × perMileRate</code></li>
-                <li><strong>Flat Tier:</strong> DEPRECATED — migrate to Flat Pricing or Category A/B/C</li>
+                {/* <li><strong>Flat Tier:</strong> DEPRECATED — migrate to Flat Pricing or Category A/B/C</li> */}
                 <li><strong>Category A/B/C:</strong> Progressive tiered pricing with per-mile rates for each mileage band</li>
               </ul>
             </AlertDescription>

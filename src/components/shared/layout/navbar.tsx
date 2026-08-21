@@ -42,7 +42,7 @@ export const NavBar = () => {
               to="/home#dealers"
               className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             >
-              Individuals
+              Personal
             </Link>
             <Link
               to="/home#drivers"
@@ -86,7 +86,7 @@ export const NavBar = () => {
               className="text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-primary transition-colors"
               onClick={() => setMobileMenuOpen(false)}
             >
-              Individuals
+              Personal
             </Link>
             <Link
               to="/home#drivers"

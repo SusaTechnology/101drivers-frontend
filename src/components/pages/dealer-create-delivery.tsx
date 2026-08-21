@@ -2040,6 +2040,7 @@ const handleQuotePreview = () => {
       // stale one because the dealer re-calculated), the backend uses ours.
       const {
         customerId: _cid,
+        quoteId: _qid,
         serviceType: _st,
         status: _s,
         pickupAddress: _pa,

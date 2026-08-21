@@ -211,12 +211,12 @@ const CUSTOMER_PRIVACY_HTML = `<h2>Customer Privacy Policy</h2>
 <div class="blockquote"><p><strong>Placeholder content.</strong> This Customer Privacy Policy is provided as a starting point. An administrator must review and refine it with legal counsel before publishing. This Privacy Policy is distinct from the driver-facing Privacy Policy.</p></div>`
 
 const CONTENT_SECTIONS = [
-  { key: 'agreement', label: 'Independent Driver Agreement', icon: Handshake, type: 'richtext', importHtml: AGREEMENT_HTML },
   { key: 'customer-agreement', label: 'Customer Agreement', icon: Handshake, type: 'richtext', importHtml: CUSTOMER_AGREEMENT_HTML },
   { key: 'customer-terms', label: 'Customer Terms of Service', icon: FileText, type: 'richtext', importHtml: CUSTOMER_TERMS_HTML },
   { key: 'customer-privacy', label: 'Customer Privacy Policy', icon: Shield, type: 'richtext', importHtml: CUSTOMER_PRIVACY_HTML },
-  { key: 'terms', label: 'Terms of Service', icon: FileText, type: 'richtext', importHtml: TERMS_HTML },
-  { key: 'privacy', label: 'Privacy Policy', icon: Shield, type: 'richtext', importHtml: PRIVACY_HTML },
+  { key: 'agreement', label: 'Independent Driver Agreement', icon: Handshake, type: 'richtext', importHtml: AGREEMENT_HTML },
+  { key: 'terms', label: 'Driver Terms of Service', icon: FileText, type: 'richtext', importHtml: TERMS_HTML },
+  { key: 'privacy', label: 'Driver Privacy Policy', icon: Shield, type: 'richtext', importHtml: PRIVACY_HTML },
   { key: 'help-driver', label: 'Driver Help FAQs', icon: HelpCircle, type: 'faq', importHtml: null },
   { key: 'help-customer', label: 'Customer Help FAQs', icon: HelpCircle, type: 'faq', importHtml: null },
 ]
@@ -403,13 +403,7 @@ export default function AdminContentPage() {
                   {content ? (
                     <RichTextEditor key={activeKey} content={content} onChange={setContent} />
                   ) : (
-                    <div
-                      className="min-h-[400px] p-4 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl flex items-center justify-center text-slate-400 text-sm"
-                      // onClick={handleImportCurrent}
-                      role="button"
-                    >
-                      No saved content yet. Start typing below, or ask an admin to seed the initial content.
-                    </div>
+                    <RichTextEditor key={activeKey} content={content} onChange={setContent} />
                   )}
                 </CardContent>
               </Card>
