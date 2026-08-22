@@ -258,9 +258,11 @@ export default function AdminReferralProgramPage() {
     },
   });
 
-  const handleToggleActive = () => {
+  // Switch passes the NEW desired value (true = activate, false = pause).
+  // We forward it directly to the mutation instead of computing !formIsActive.
+  const handleToggleActive = (nextValue: boolean) => {
     setTogglingActive(true);
-    toggleActiveMutation.mutate({ isActive: !formIsActive });
+    toggleActiveMutation.mutate({ isActive: nextValue });
   };
 
   const handleSaveConfig = () => {
@@ -464,34 +466,12 @@ export default function AdminReferralProgramPage() {
                   Pausing hides the action button but keeps referral history + accrued rewards visible to drivers.
                 </p>
               </div>
-              <Button
-                onClick={handleToggleActive}
+              <Switch
+                checked={formIsActive}
+                onCheckedChange={handleToggleActive}
                 disabled={togglingActive || !config}
-                className={
-                  // Button color reflects the ACTION the button will perform:
-                  //   - currently ACTIVE → amber (warning, clicking will pause)
-                  //   - currently PAUSED → emerald (go, clicking will activate)
-                  formIsActive
-                    ? 'px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0' 
-                    : 'px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0'
-                }
-              >
-                {togglingActive || !config ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> ...
-                  </>
-                ) : formIsActive ? (
-                  // Currently ACTIVE → button says "Deactivate" (clicking pauses)
-                  <>
-                    <Power className="w-4 h-4" /> Deactivate
-                  </>
-                ) : (
-                  // Currently PAUSED → button says "Activate" (clicking resumes)
-                  <>
-                    <Check className="w-4 h-4" /> Activate
-                  </>
-                )}
-              </Button>
+                aria-label="Toggle referral program"
+              />
             </div>
 
             {/* ── Paused notice + form disable wrapper ──
