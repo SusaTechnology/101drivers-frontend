@@ -1217,6 +1217,83 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ===== SECTION 5b — Our Services (SEO keyword content) ===== */}
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
+            Our Vehicle Delivery Services
+          </h2>
+          <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
+            Professional car pickup and delivery across California — built for dealerships and individuals.
+          </p>
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <Store className="h-5 w-5 text-[#00C853]" />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
+                Dealership Car Delivery
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Move vehicles between dealership lots, auction sites, body shops, and customer locations. Flat-rate pricing with GPS tracking and photo proof for every delivery.
+              </p>
+            </article>
+            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <User className="h-5 w-5 text-[#00C853]" />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
+                Individual Car Transport
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Need a car moved across town or across Southern California? Get an instant quote, book in minutes, and track your vehicle in real time. No dealership account required.
+              </p>
+            </article>
+            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <Shield className="h-5 w-5 text-[#00C853]" />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
+                Insured Vehicle Transport
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Every delivery is fully insured from pickup to drop-off. GPS-stamped photos, VIN verification, and odometer readings document the condition of your vehicle at every step.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        {/* ===== SECTION 5c — Areas We Serve (local SEO) ===== */}
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
+            Areas We Serve in California
+          </h2>
+          <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
+            Car delivery service across Greater Los Angeles and Southern California.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-2">
+            {[
+              'Santa Monica', 'Venice', 'Marina del Rey', 'Playa del Rey',
+              'Culver City', 'Westchester', 'West LA', 'Los Angeles',
+              'Beverly Hills', 'Century City', 'Brentwood', 'Pacific Palisades',
+              'El Segundo', 'Hawthorne', 'Inglewood', 'Torrance',
+              'Long Beach', 'Glendale', 'Burbank', 'Pasadena',
+              'Downey', 'Norwalk', 'El Monte', 'Pasadena',
+              'Orange County', 'Anaheim', 'Irvine', 'Santa Ana',
+              'San Fernando Valley', 'Hollywood', 'Koreatown', 'Downtown LA',
+            ].map((city) => (
+              <span
+                key={city}
+                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+              >
+                {city}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-4">
+            Pickup zone covers Westside LA. Drop-off available anywhere in Southern California. Don&apos;t see your city? <Link to="/help-customer" className="text-lime-500 font-bold hover:underline">Contact us</Link> to check availability.
+          </p>
+        </section>
+
         {/* ===== SECTION 6 — Signup Choice (Business / Personal) ===== */}
         <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="max-w-2xl mx-auto text-center">
@@ -1265,16 +1342,16 @@ export default function LandingPage() {
                     <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white">
                       Be Your Own Boss. Drive Different Cars. Know Your Pay Upfront.
                     </h3>
-                    <h6 className="text-sm font-black leading-tight text-slate-600 dark:text-white mt-2">
+                    <p className="text-sm font-bold leading-tight text-slate-600 dark:text-white mt-2">
                       Choose when you work and plan your day with full visibility.
-                    </h6>
+                    </p>
                   </div>
-                
+
                 </div>
                 <div className="mt-7 space-y-2">
-                  <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white mb-4">
+                  <h4 className="text-lg font-black leading-tight text-slate-900 dark:text-white mb-4">
                   How It Works
-                </h3>
+                </h4>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-slate-600 dark:text-slate-400">See the exact route, pickup time, and earnings before you accept any job</p>
