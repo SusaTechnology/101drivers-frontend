@@ -490,6 +490,21 @@ async getAdminUsers(query: {
           approvedByUserId: true,
           createdAt: true,
           updatedAt: true,
+          // Referral relationship — show the referrer's name + the
+          // referral code used (if this driver was referred).
+          referredBy: {
+            select: {
+              id: true,
+              referralCode: true,
+              status: true,
+              referrer: {
+                select: {
+                  id: true,
+                  user: { select: { fullName: true } },
+                },
+              },
+            },
+          },
         },
       },
       _count: {
@@ -751,6 +766,31 @@ async getAdminUserDetail(id: string): Promise<any> {
               enabled: true,
               emailEnabled: true,
               smsEnabled: true,
+            },
+          },
+          // Referral relationship — present if this driver was referred
+          // by another driver. Exposed in the admin detail view so the
+          // admin can see who referred this driver, what code was used,
+          // the referral status, the trip progress, and the reward amount.
+          referredBy: {
+            select: {
+              id: true,
+              referralCode: true,
+              status: true,
+              tripsCompleted: true,
+              requiredDeliveries: true,
+              rewardTrigger: true,
+              expiresAt: true,
+              referredGetsReward: true,
+              referredRewardAmount: true,
+              referredRewardPaidAt: true,
+              createdAt: true,
+              referrer: {
+                select: {
+                  id: true,
+                  user: { select: { fullName: true, email: true } },
+                },
+              },
             },
           },
           _count: {

@@ -1015,6 +1015,7 @@ export default function AdminUsersPage() {
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Customer Info</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Driver Info</TableHead>
+                      <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Referred By</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Created</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Actions</TableHead>
                     </TableRow>
@@ -1082,6 +1083,37 @@ export default function AdminUsersPage() {
                                 {user._count.scheduleChangesRequested} schedule requests
                               </div>
                             </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </TableCell>
+                        {/* Referred By — only shown for drivers (referrals only apply to drivers).
+                            If the driver was referred, show the referrer's name + the referral
+                            code they used. Otherwise show "Direct signup". */}
+                        <TableCell className="px-4 py-3">
+                          {user.driver?.referredBy ? (
+                            <div className="space-y-0.5">
+                              <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                {user.driver.referredBy.referrer.user.fullName || 'Unknown referrer'}
+                              </div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                Code: {user.driver.referredBy.referralCode}
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-[9px] px-1.5 py-0 rounded-full font-bold border',
+                                  user.driver.referredBy.status === 'REWARD_PAID' && 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
+                                  user.driver.referredBy.status === 'EXPIRED' && 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300',
+                                  user.driver.referredBy.status === 'PENDING' && 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400',
+                                  !['REWARD_PAID', 'EXPIRED', 'PENDING'].includes(user.driver.referredBy.status) && 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+                                )}
+                              >
+                                {user.driver.referredBy.status}
+                              </Badge>
+                            </div>
+                          ) : user.driver ? (
+                            <span className="text-xs text-slate-400">Direct signup</span>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
                           )}

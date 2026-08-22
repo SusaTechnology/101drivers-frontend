@@ -16,6 +16,7 @@ import { TokenService } from "./token.service";
 import { UserModule } from "../user/user.module";
 import { CustomerModule } from "../customer/customer.module";
 import { DriverModule } from "../driver/driver.module";
+import { ReferralModule } from "../referral/referral.module";
 import { EmailVerificationService } from "./email-verification/email-verification.service";
 import { MailModule } from "src/common/mail/mail.module";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
@@ -25,6 +26,11 @@ import { PrismaService } from "../prisma/prisma.service";
     forwardRef(() => UserModule),
     forwardRef(() => CustomerModule),
     forwardRef(() => DriverModule),
+    // ReferralModule provides ReferralService.applyReferral which is
+    // called from AuthService.signupDriver to properly snapshot the
+    // referral program policy onto the new Referral row. forwardRef
+    // to break the circular dependency chain.
+    forwardRef(() => ReferralModule),
     PassportModule,
     SecretsManagerModule,
     MailModule,

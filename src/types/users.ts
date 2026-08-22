@@ -11,6 +11,18 @@ export type CustomerApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSP
 
 export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
 
+// Referral relationship status — matches the backend EnumReferralStatus enum
+// (prisma/schema.prisma).
+export type ReferralStatus =
+  | 'PENDING'            // Code holder row (no referred driver yet)
+  | 'REGISTERED'         // Referred driver signed up (applied the code)
+  | 'ONBOARDING_COMPLETE' // Referred driver completed onboarding
+  | 'TRIPPING'           // Referred driver is making deliveries
+  | 'COMPLETED'          // Referral trigger condition met (paid out)
+  | 'CLOSED'             // Manually closed by admin
+  | 'REWARD_PAID'        // Reward has been paid out (terminal success)
+  | 'EXPIRED';           // Past expiresAt without the trigger firing
+
 // ==================== ADMIN USERS TABLE TYPES ====================
 
 export interface AdminUserRow {
@@ -66,6 +78,17 @@ export interface AdminDriverEmbed {
   licenseBackUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  // Referral relationship — present if this driver was referred by another driver.
+  // Null if the driver signed up without a referral code.
+  referredBy: {
+    id: string;
+    referralCode: string;
+    status: ReferralStatus;
+    referrer: {
+      id: string;
+      user: { fullName: string | null };
+    };
+  } | null;
 }
 
 // ==================== ADMIN USERS LIST RESPONSE ====================
@@ -270,6 +293,25 @@ export interface AdminUserDriverDetail {
   location: DriverLocationDetail | null;
   preferences: DriverPreferencesDetail | null;
   alerts: DriverAlertsDetail | null;
+  // Referral relationship — present if this driver was referred by another driver.
+  // Null if the driver signed up without a referral code.
+  referredBy: {
+    id: string;
+    referralCode: string;
+    status: ReferralStatus;
+    tripsCompleted: number;
+    requiredDeliveries: number;
+    rewardTrigger: 'ON_APPROVED' | 'ON_DELIVERIES_COMPLETED';
+    expiresAt: string | null;
+    referredGetsReward: boolean;
+    referredRewardAmount: number | null;
+    referredRewardPaidAt: string | null;
+    createdAt: string;
+    referrer: {
+      id: string;
+      user: { fullName: string | null; email: string | null };
+    };
+  } | null;
   _count: {
     assignments: number;
     notifications: number;

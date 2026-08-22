@@ -42,6 +42,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Edit,
+  Gift,
   Save,
   XIcon,
   Send,
@@ -2036,6 +2037,95 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                             <div>
                               <Label className="text-xs font-bold text-slate-500">Approved</Label>
                               <div className="text-sm">{formatDate(user.driver.approvedAt)}</div>
+                            </div>
+                          )}
+                          <Separator />
+                          {/* ── Referral section ──
+                              Shows the referral relationship if this driver was referred
+                              by another driver. Displays: referrer name + email, the
+                              referral code used, the referral status, the trigger type
+                              + trip progress, the reward amount, and the paid date.
+                              Hidden entirely if the driver signed up without a referral
+                              code (referredBy = null). */}
+                          {user.driver.referredBy && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <Gift className="w-4 h-4 text-emerald-500" />
+                                <span className="text-xs font-black uppercase tracking-widest text-slate-500">
+                                  Referral
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
+                                <div>
+                                  <Label className="text-xs font-bold text-slate-500">Referred by</Label>
+                                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    {user.driver.referredBy.referrer.user.fullName || 'Unknown'}
+                                  </div>
+                                  {user.driver.referredBy.referrer.user.email && (
+                                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {user.driver.referredBy.referrer.user.email}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <Label className="text-xs font-bold text-slate-500">Code used</Label>
+                                  <div className="text-sm font-mono font-bold text-slate-900 dark:text-white">
+                                    {user.driver.referredBy.referralCode}
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs font-bold text-slate-500">Status</Label>
+                                  <div className="mt-1">
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        'text-[10px] px-2 py-0.5 rounded-full font-bold border',
+                                        user.driver.referredBy.status === 'REWARD_PAID' && 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
+                                        user.driver.referredBy.status === 'EXPIRED' && 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300',
+                                        user.driver.referredBy.status === 'PENDING' && 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400',
+                                        !['REWARD_PAID', 'EXPIRED', 'PENDING'].includes(user.driver.referredBy.status) && 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+                                      )}
+                                    >
+                                      {user.driver.referredBy.status}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs font-bold text-slate-500">Trigger</Label>
+                                  <div className="text-sm text-slate-700 dark:text-slate-300">
+                                    {user.driver.referredBy.rewardTrigger === 'ON_APPROVED'
+                                      ? 'On first approval'
+                                      : `${user.driver.referredBy.tripsCompleted} / ${user.driver.referredBy.requiredDeliveries} deliveries`}
+                                  </div>
+                                </div>
+                                {user.driver.referredBy.referredGetsReward && user.driver.referredBy.referredRewardAmount != null && (
+                                  <div>
+                                    <Label className="text-xs font-bold text-slate-500">Referred reward</Label>
+                                    <div className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                                      ${user.driver.referredBy.referredRewardAmount.toFixed(2)}
+                                      {user.driver.referredBy.referredRewardPaidAt && (
+                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-normal ml-1">
+                                          paid {formatDate(user.driver.referredBy.referredRewardPaidAt)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                                {user.driver.referredBy.expiresAt && (
+                                  <div>
+                                    <Label className="text-xs font-bold text-slate-500">Expires</Label>
+                                    <div className="text-sm text-slate-700 dark:text-slate-300">
+                                      {formatDate(user.driver.referredBy.expiresAt)}
+                                    </div>
+                                  </div>
+                                )}
+                                <div>
+                                  <Label className="text-xs font-bold text-slate-500">Applied</Label>
+                                  <div className="text-sm text-slate-700 dark:text-slate-300">
+                                    {formatDate(user.driver.referredBy.createdAt)}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           )}
                           <Separator />

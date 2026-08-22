@@ -3,6 +3,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { Request, Response } from "express";
 import { Credentials } from "./Credentials";
@@ -21,6 +23,7 @@ import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "src/common/mail/mail.service";
+import { ReferralService } from "../referral/referral.service";
 import {
   EnumCustomerCustomerType,
   EnumDriverStatus,
@@ -72,6 +75,14 @@ export class AuthService {
     private readonly emailVerificationService: EmailVerificationService,
     private readonly notificationEventEngine: NotificationEventEngine,
     private readonly mailService: MailService,
+    // ReferralService is injected via forwardRef because AuthModule
+    // and ReferralModule form a circular dependency chain (ReferralModule
+    // imports DriverPayoutModule which imports DeliveryLogisticsModule
+    // which imports ReferralModule; AuthModule imports ReferralModule).
+    // forwardRef breaks the cycle at the TS-level so DI can resolve it
+    // at runtime.
+    @Inject(forwardRef(() => ReferralService))
+    private readonly referralService: ReferralService,
   ) {}
 
   private normalizeIdentifier(identifier: string): string {
@@ -481,32 +492,29 @@ export class AuthService {
     );
 
     // ── Apply referral code if provided ──────────────────────
-    // Outside the transaction — non-blocking. If the referral is invalid,
-    // expired, or self-referral, we just skip it. The driver account is
-    // already created at this point.
+    // Outside the transaction — non-blocking. Delegates to
+    // ReferralService.applyReferral which:
+    //   - Validates the code exists + is PENDING
+    //   - Checks for self-referral + already-used-code
+    //   - Reads the live program config + validates program is active
+    //   - Validates the current date is inside the calendar window
+    //   - SNAPS the policy onto the new Referral row (rewardTrigger,
+    //     requiredDeliveries, expiresAt, referredGetsReward,
+    //     referredRewardAmount) so admin changes don't retroactively
+    //     affect pending referrals
+    //
+    // If applyReferral throws (invalid code, paused, out-of-window,
+    // self-referral, already-used), we just log + skip. The driver
+    // account is already created at this point — referral failure
+    // must NOT block signup.
     if (dto.referralCode && driverId) {
       try {
-        const existingRef = await this.prisma.referral.findFirst({
-          where: { referralCode: dto.referralCode, status: "PENDING" },
-          select: { referrerId: true },
-        });
-        if (existingRef) {
-          await this.prisma.referral.create({
-            data: {
-              referralCode: dto.referralCode,
-              referrer: { connect: { id: existingRef.referrerId } },
-              referredDriver: { connect: { id: driverId } },
-              referredEmail: normalizedEmail,
-              status: "REGISTERED",
-            },
-          });
-          this.logger.log(`Referral ${dto.referralCode} applied for new driver ${driverId}`);
-        } else {
-          this.logger.warn(`Referral code ${dto.referralCode} not found or expired, skipping for driver ${driverId}`);
-        }
+        await this.referralService.applyReferral(driverId, dto.referralCode);
+        this.logger.log(`Referral ${dto.referralCode} applied for new driver ${driverId}`);
       } catch (refErr: any) {
-        // Non-blocking: invalid/expired/self-referral just gets skipped
-        this.logger.warn(`Referral application failed for driver ${driverId}: ${refErr.message}`);
+        // Non-blocking: invalid/expired/self-referral/paused/out-of-window
+        // just gets skipped. Driver account still created.
+        this.logger.warn(`Referral application failed for driver ${driverId} (code: ${dto.referralCode}): ${refErr.message}`);
       }
     }
 
