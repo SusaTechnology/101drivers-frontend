@@ -209,10 +209,24 @@ export default function DriverWalletPage() {
       referralConfig.rewardTrigger === 'ON_APPROVED'
         ? 'gets approved'
         : `completes ${referralConfig.requiredDeliveries} deliveries`
-    const windowClause =
-      referralConfig.timeLimitMode === 'CALENDAR_RANGE' && referralConfig.windowEndDate
-        ? ` Program runs until ${new Date(referralConfig.windowEndDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}.`
-        : ''
+
+    // Show the full program window (start → end) so the driver knows
+    // exactly when the referral program is active. Hidden in FOREVER mode.
+    const fmtDate = (iso: string) =>
+      new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    let windowClause = ''
+    if (referralConfig.timeLimitMode === 'CALENDAR_RANGE') {
+      const start = referralConfig.windowStartDate
+      const end = referralConfig.windowEndDate
+      if (start && end) {
+        windowClause = ` Program runs from ${fmtDate(start)} to ${fmtDate(end)}.`
+      } else if (end) {
+        windowClause = ` Program runs until ${fmtDate(end)}.`
+      } else if (start) {
+        windowClause = ` Program started on ${fmtDate(start)}.`
+      }
+    }
+
     return `Share your unique referral link with friends who want to become drivers. When they sign up using your link and ${triggerClause}, ${earn}.${windowClause} You earn $${referralConfig.referrerRewardAmount} for every ${referralConfig.referralThreshold} successful referrals — refer as many friends as you want.`
   }
 
