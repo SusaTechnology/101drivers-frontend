@@ -444,7 +444,14 @@ export default function AdminReferralProgramPage() {
                   Program Status
                 </Label>
                 <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
-                  {formIsActive ? 'Active — drivers can refer friends' : 'Paused — "Refer a Friend" card hidden from drivers'}
+                  {/* Use config?.isActive (the actual DB state from the query)
+                      to avoid showing a stale "Active" flash before the query
+                      loads (formIsActive defaults to true in useState). */}
+                  {config
+                    ? (formIsActive
+                        ? 'Active — drivers can refer friends'
+                        : 'Paused — "Refer a Friend" card hidden from drivers')
+                    : 'Loading…'}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                   Pausing hides the action button but keeps referral history + accrued rewards visible to drivers.
@@ -452,24 +459,29 @@ export default function AdminReferralProgramPage() {
               </div>
               <Button
                 onClick={handleToggleActive}
-                disabled={togglingActive}
+                disabled={togglingActive || !config}
                 className={
+                  // Button color reflects the ACTION the button will perform:
+                  //   - currently ACTIVE → amber (warning, clicking will pause)
+                  //   - currently PAUSED → emerald (go, clicking will activate)
                   formIsActive
-                    ? 'px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0' 
-                    : 'px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0'
+                    ? 'px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0' 
+                    : 'px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0'
                 }
               >
-                {togglingActive ? (
+                {togglingActive || !config ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" /> ...
                   </>
                 ) : formIsActive ? (
-                  <>
-                    <Check className="w-4 h-4" /> Activate
-                  </>
-                ) : (
+                  // Currently ACTIVE → button says "Deactivate" (clicking pauses)
                   <>
                     <Power className="w-4 h-4" /> Deactivate
+                  </>
+                ) : (
+                  // Currently PAUSED → button says "Activate" (clicking resumes)
+                  <>
+                    <Check className="w-4 h-4" /> Activate
                   </>
                 )}
               </Button>
