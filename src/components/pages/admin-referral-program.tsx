@@ -455,8 +455,8 @@ export default function AdminReferralProgramPage() {
                 disabled={togglingActive}
                 className={
                   formIsActive
-                    ? 'px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0'
-                    : 'px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0'
+                    ? 'px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0' 
+                    : 'px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0'
                 }
               >
                 {togglingActive ? (
@@ -465,11 +465,11 @@ export default function AdminReferralProgramPage() {
                   </>
                 ) : formIsActive ? (
                   <>
-                    <Power className="w-4 h-4" /> Deactivate
+                    <Check className="w-4 h-4" /> Activate
                   </>
                 ) : (
                   <>
-                    <Check className="w-4 h-4" /> Activate
+                    <Power className="w-4 h-4" /> Deactivate
                   </>
                 )}
               </Button>
