@@ -541,6 +541,10 @@ export default function LandingPage() {
                 <img
                   src="/assets/101drivers-logo.jpg"
                   alt="101 Drivers logo"
+                  width={40}
+                  height={40}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -1291,6 +1295,65 @@ export default function LandingPage() {
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-4">
             Pickup zone covers Westside LA. Drop-off available anywhere in Southern California. Don&apos;t see your city? <Link to="/help-customer" className="text-lime-500 font-bold hover:underline">Contact us</Link> to check availability.
+          </p>
+        </section>
+
+        {/* ===== SECTION 5d — Why Choose 101 Drivers (internal links + trust signals) ===== */}
+        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
+            Why Choose 101 Drivers for Car Delivery
+          </h2>
+          <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
+            Transparent pricing, real-time tracking, and fully insured vehicle transport — built for California dealers and individuals.
+          </p>
+          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-lime-500/15">
+                <Bolt className="h-5 w-5 text-[#00C853]" />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
+                Instant Flat-Rate Quotes
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Enter your pickup and drop-off addresses to get an upfront price. No hidden fees, no surprises — just a flat rate based on driving distance.
+              </p>
+            </article>
+            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-lime-500/15">
+                <Navigation className="h-5 w-5 text-[#00C853]" />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
+                Real-Time GPS Tracking
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Track your vehicle on a live map from pickup to drop-off. GPS-stamped photos at every step document the condition of your car.
+              </p>
+            </article>
+            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-lime-500/15">
+                <Shield className="h-5 w-5 text-[#00C853]" />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
+                Fully Insured Delivery
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Every vehicle is insured from pickup to drop-off. VIN verification, odometer readings, and photo proof protect your car at every mile.
+              </p>
+            </article>
+            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-lime-500/15">
+                <CreditCard className="h-5 w-5 text-[#00C853]" />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
+                Pay After Delivery
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                No upfront fees for business accounts. Pay only after your vehicle is successfully delivered to its destination.
+              </p>
+            </article>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-8 leading-relaxed">
+            Learn more about <Link to="/about" className="text-lime-500 font-bold hover:underline">how 101 Drivers works</Link>, read our <Link to="/help-customer" className="text-lime-500 font-bold hover:underline">customer FAQ</Link>, or check our <Link to="/terms" className="text-lime-500 font-bold hover:underline">terms of service</Link> and <Link to="/privacy" className="text-lime-500 font-bold hover:underline">privacy policy</Link>. Drivers can learn about <Link to="/help-driver" className="text-lime-500 font-bold hover:underline">driving with 101 Drivers</Link> and <Link to="/driver-onboarding" className="text-lime-500 font-bold hover:underline">apply to drive</Link>.
           </p>
         </section>
 

@@ -20,6 +20,10 @@ export const NavBar = () => {
               <img
                 src="/assets/101drivers-logo.jpg"
                 alt="101 Drivers"
+                width={40}
+                height={40}
+                loading="eager"
+                decoding="async"
                 className="w-full h-full object-cover"
               />
             </div>
