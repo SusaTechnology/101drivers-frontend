@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -95,6 +96,7 @@ import {
   Store,
   Shield,
   AlertCircle,
+  Gift,
   Clock,
   ChevronLeft,
   ChevronRight,
@@ -1015,7 +1017,6 @@ export default function AdminUsersPage() {
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Customer Info</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Driver Info</TableHead>
-                      <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Referred By</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Created</TableHead>
                       <TableHead className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Actions</TableHead>
                     </TableRow>
@@ -1035,8 +1036,45 @@ export default function AdminUsersPage() {
                                 {getInitials(user.fullName)}
                               </AvatarFallback>
                             </Avatar>
-                            <div>
-                              <div className="font-medium text-sm">{user.fullName}</div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-medium text-sm">{user.fullName}</span>
+                                {/* Referred badge — shown for drivers who were referred by another driver.
+                                    Hover shows the referrer's name + the referral code used + the referral status.
+                                    TooltipProvider wraps the badge so the tooltip works without a global provider. */}
+                                {user.driver?.referredBy && (
+                                  <TooltipProvider delayDuration={150}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className={cn(
+                                            'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border cursor-help',
+                                            user.driver.referredBy.status === 'REWARD_PAID' && 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
+                                            user.driver.referredBy.status === 'EXPIRED' && 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300',
+                                            !['REWARD_PAID', 'EXPIRED'].includes(user.driver.referredBy.status) && 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+                                          )}
+                                        >
+                                          <Gift className="w-2.5 h-2.5" />
+                                          Referred
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" className="max-w-xs">
+                                        <div className="space-y-0.5">
+                                          <div className="font-bold">
+                                            Referred by {user.driver.referredBy.referrer.user.fullName || 'Unknown'}
+                                          </div>
+                                          <div className="text-[10px] opacity-80 font-mono">
+                                            Code: {user.driver.referredBy.referralCode}
+                                          </div>
+                                          <div className="text-[10px] opacity-80">
+                                            Status: {user.driver.referredBy.status}
+                                          </div>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </div>
                               <div className="text-xs text-slate-500">{user.email}</div>
                             </div>
                           </div>
@@ -1083,37 +1121,6 @@ export default function AdminUsersPage() {
                                 {user._count.scheduleChangesRequested} schedule requests
                               </div>
                             </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
-                        </TableCell>
-                        {/* Referred By — only shown for drivers (referrals only apply to drivers).
-                            If the driver was referred, show the referrer's name + the referral
-                            code they used. Otherwise show "Direct signup". */}
-                        <TableCell className="px-4 py-3">
-                          {user.driver?.referredBy ? (
-                            <div className="space-y-0.5">
-                              <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                                {user.driver.referredBy.referrer.user.fullName || 'Unknown referrer'}
-                              </div>
-                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                                Code: {user.driver.referredBy.referralCode}
-                              </div>
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  'text-[9px] px-1.5 py-0 rounded-full font-bold border',
-                                  user.driver.referredBy.status === 'REWARD_PAID' && 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
-                                  user.driver.referredBy.status === 'EXPIRED' && 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300',
-                                  user.driver.referredBy.status === 'PENDING' && 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400',
-                                  !['REWARD_PAID', 'EXPIRED', 'PENDING'].includes(user.driver.referredBy.status) && 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
-                                )}
-                              >
-                                {user.driver.referredBy.status}
-                              </Badge>
-                            </div>
-                          ) : user.driver ? (
-                            <span className="text-xs text-slate-400">Direct signup</span>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
                           )}
