@@ -151,6 +151,7 @@ export default function AdminReferralProgramPage() {
   // ── Config state ──
   const [config, setConfig] = useState<ReferralConfig | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [togglingActive, setTogglingActive] = useState(false);
   // Threshold-lowering confirmation (#5): when the admin lowers the
   // threshold below the currently-saved value, we show a warning
   // dialog because lowering the threshold may trigger retroactive
@@ -202,7 +203,12 @@ export default function AdminReferralProgramPage() {
     },
   });
 
-  // ── Update config ──
+  // ── Update config (full save) ──
+  // Used by the "Save Configuration" button at the bottom of the form.
+  // This endpoint validates ALL fields, so the admin must fill in
+  // everything before clicking Save. The form fields are disabled
+  // when the program is paused (isActive=false) — the admin must
+  // activate first to edit the configuration.
   const updateConfigMutation = useDataMutation<any, any>({
     apiEndPoint: `${API_URL}/api/appSettings/referral-program`,
     method: 'PATCH',
@@ -216,6 +222,39 @@ export default function AdminReferralProgramPage() {
       setSavingConfig(false);
     },
   });
+
+  // ── Toggle active state (separate endpoint) ──
+  // Used by the dedicated "Activate" / "Deactivate" button next to
+  // the master toggle. Hits the /active endpoint which ONLY flips
+  // the isActive boolean — doesn't run cross-field validation, so
+  // the admin can pause/resume the program without having to fill in
+  // all the other config fields.
+  const toggleActiveMutation = useDataMutation<any, any>({
+    apiEndPoint: `${API_URL}/api/appSettings/referral-program/active`,
+    method: 'PATCH',
+    onSuccess: (data) => {
+      toast.success(
+        data?.isActive
+          ? 'Referral program activated'
+          : 'Referral program paused'
+      );
+      setTogglingActive(false);
+      // Update local form state + config immediately so the UI
+      // reflects the change without waiting for refetch.
+      setFormIsActive(!!data?.isActive);
+      setConfig(data);
+      configQuery.refetch();
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to toggle', { description: error.message });
+      setTogglingActive(false);
+    },
+  });
+
+  const handleToggleActive = () => {
+    setTogglingActive(true);
+    toggleActiveMutation.mutate({ isActive: !formIsActive });
+  };
 
   const handleSaveConfig = () => {
     // Validate
@@ -395,8 +434,11 @@ export default function AdminReferralProgramPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* ── Master on/off toggle ── */}
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            {/* ── Master on/off toggle ──
+                Separate from the rest of the form: a dedicated
+                Activate / Deactivate button that hits the /active
+                endpoint. Doesn't require filling in any other fields. */}
+            <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
               <div className="flex-1 min-w-0">
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
                   Program Status
@@ -408,20 +450,61 @@ export default function AdminReferralProgramPage() {
                   Pausing hides the action button but keeps referral history + accrued rewards visible to drivers.
                 </p>
               </div>
-              <Switch
-                checked={formIsActive}
-                onCheckedChange={setFormIsActive}
-                aria-label="Toggle referral program"
-              />
+              <Button
+                onClick={handleToggleActive}
+                disabled={togglingActive}
+                className={
+                  formIsActive
+                    ? 'px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0'
+                    : 'px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold transition inline-flex items-center gap-2 shrink-0'
+                }
+              >
+                {togglingActive ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> ...
+                  </>
+                ) : formIsActive ? (
+                  <>
+                    <Power className="w-4 h-4" /> Deactivate
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" /> Activate
+                  </>
+                )}
+              </Button>
             </div>
 
-            {/* ── Trigger type ── */}
-            <div className="space-y-3">
-              <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                When does the referrer get paid?
-              </Label>
-              <Select value={formTrigger} onValueChange={(v: RewardTrigger) => setFormTrigger(v)}>
-                <SelectTrigger className="h-12 rounded-2xl">
+            {/* ── Paused notice + form disable wrapper ──
+                When the program is paused, the rest of the form is
+                disabled (greyed out) and a notice explains that the
+                admin must activate the program to edit the configuration.
+                This prevents the admin from getting validation errors
+                ("Window start + end dates are required...") when they
+                just want to pause without filling in everything. */}
+            {!formIsActive && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed font-medium">
+                  The program is currently paused. To edit the configuration below, activate the program first using the button above.
+                </p>
+              </div>
+            )}
+
+            <fieldset
+              disabled={!formIsActive || savingConfig}
+              className={cn(
+                'space-y-6 transition-opacity',
+                !formIsActive && 'opacity-50 pointer-events-none'
+              )}
+            >
+              {/* ── Trigger type ── */}
+              <div className="space-y-3">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  When does the referrer get paid?
+                </Label>
+                <Select value={formTrigger} onValueChange={(v: RewardTrigger) => setFormTrigger(v)}>
+                  <SelectTrigger className="h-12 rounded-2xl">
                   <SelectValue placeholder="Select trigger" />
                 </SelectTrigger>
                 <SelectContent>
@@ -563,12 +646,16 @@ export default function AdminReferralProgramPage() {
                 </div>
               )}
             </div>
+            </fieldset>
 
-            {/* ── Save button ── */}
+            {/* ── Save button ──
+                Disabled when the program is paused (form fields are
+                also disabled, so there's nothing to save). The admin
+                must activate the program first to edit + save the config. */}
             <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
               <Button
                 onClick={handleSaveConfig}
-                disabled={savingConfig}
+                disabled={savingConfig || !formIsActive}
                 className="px-6 py-3 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center gap-2"
               >
                 {savingConfig ? (

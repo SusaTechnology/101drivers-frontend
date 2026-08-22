@@ -435,6 +435,33 @@ export class AppSettingService extends AppSettingServiceBase {
     return next;
   }
 
+  /**
+   * Toggle just the `isActive` flag — separate from the full config
+   * update so the admin can pause/resume the program WITHOUT having
+   * to fill in all the other fields (which the full update endpoint
+   * validates).
+   *
+   * Used by the dedicated "Activate" / "Deactivate" button on the
+   * admin UI. Does NOT run cross-field validation — it just flips
+   * the boolean on the existing config row.
+   *
+   * If no config row exists yet, this seeds it with the defaults +
+   * the requested isActive value.
+   */
+  async setReferralProgramActive(isActive: boolean): Promise<ReferralProgramSettingsResponseDto> {
+    const current = await this.getReferralProgramSettings();
+    const next: ReferralProgramSettingsResponseDto = {
+      ...current,
+      isActive,
+    };
+    await this.prisma.appSetting.upsert({
+      where: { key: REFERRAL_PROGRAM_SETTINGS_KEY },
+      create: { key: REFERRAL_PROGRAM_SETTINGS_KEY, value: next as any },
+      update: { value: next as any },
+    });
+    return next;
+  }
+
   // ============================================================
   // HELPERS
   // ============================================================

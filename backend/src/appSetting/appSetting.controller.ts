@@ -111,6 +111,30 @@ export class AppSettingController extends AppSettingControllerBase {
     return this.service.updateReferralProgramSettings(body);
   }
 
+  /**
+   * PATCH /api/appSettings/referral-program/active
+   * Toggle just the `isActive` flag — separate endpoint so the admin
+   * can pause/resume the program WITHOUT having to fill in all the
+   * other config fields (which the full update endpoint validates).
+   *
+   * Body: { isActive: boolean }
+   *
+   * Used by the dedicated "Activate" / "Deactivate" button on the
+   * admin UI. Does NOT run cross-field validation.
+   */
+  @common.Patch("referral-program/active")
+  @swagger.ApiOkResponse({ type: ReferralProgramSettingsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async setReferralProgramActive(
+    @common.Body() body: { isActive: boolean }
+  ): Promise<ReferralProgramSettingsResponseDto> {
+    return this.service.setReferralProgramActive(body.isActive);
+  }
+
  @common.UseInterceptors(AclValidateRequestInterceptor)
   @common.Post()
   @swagger.ApiCreatedResponse({ type: AppSetting })
