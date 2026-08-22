@@ -198,6 +198,31 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
       </nav>
 
       <main className="max-w-6xl mx-auto px-6 py-10 lg:py-16">
+        {/* ── SEO: FAQPage structured data (JSON-LD) ──
+            Eligible for FAQ rich results in Google Search — shows the
+            Q/A pairs as expandable accordions directly in the SERP.
+            Built from the SAME FAQ arrays rendered on the page, so the
+            structured data always matches the visible content. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "FAQPage",
+              mainEntity: [
+                ...(isCustomer ? activeCustomerFaqs : []),
+                ...(isDriver ? activeDriverFaqs : []),
+              ].map((faq) => ({
+                "@type": "Question",
+                name: faq.question,
+                acceptedAnswer: {
+                  "@type": "Answer",
+                  text: faq.answer,
+                },
+              })),
+            }),
+          }}
+        />
         {/* Header */}
         <div className="mb-10">
           <div className="flex items-center gap-3 mb-4">

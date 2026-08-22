@@ -642,14 +642,45 @@ export default function LandingPage() {
     <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <NavBar />
       <main className="w-full">
+        {/* ── SEO: LocalBusiness structured data (JSON-LD) ──
+            Helps Google show rich results for local service searches
+            like "car delivery California" / "vehicle delivery LA".
+            Inline-rendered so it's visible to crawlers even without SSR. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "AutoTransporter",
+              name: "101 Drivers",
+              description:
+                "California's premier vehicle delivery service. Flat-rate car pickup & delivery across Southern California.",
+              url: "https://101drivers.com/home",
+              telephone: "+1-310-962-8402",
+              email: "support@101drivers.com",
+              areaServed: {
+                "@type": "State",
+                name: "California",
+              },
+              knowsAbout: [
+                "Vehicle delivery",
+                "Car pickup and delivery",
+                "Dealer vehicle transport",
+                "Flat-rate car delivery",
+              ],
+              priceRange: "$$",
+              sameAs: [],
+            }),
+          }}
+        />
 
         {/* ===== SECTION 1 — Instant Quote Entry ===== */}
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-8 lg:pt-12 pb-6">
           {/* Hero heading */}
           <div>
-            <h2 className="text-4xl sm:text-5xl lg:text-[44px] font-black leading-tight text-slate-900 dark:text-white">
+            <h1 className="text-4xl sm:text-5xl lg:text-[44px] font-black leading-tight text-slate-900 dark:text-white">
               Car Pickup & Delivery <span className="text-[#a9ce42]">Across SoCal</span>
-            </h2>
+            </h1>
             <div className="inline-flex items-center gap-2 text-lime-500 font-black text-[11px] uppercase tracking-widest mt-2">
               <Bolt className="h-4 w-4" />
               Instant Quote

@@ -1,3 +1,59 @@
 # https://www.robotstxt.org/robotstxt.html
+#
+# Public routes (crawlable): /, /home, /about, /privacy, /terms,
+# /agreement, /help-customer, /help-driver, /driver-onboarding,
+# /driver-signin, /auth/dealer-signin, /auth/dealer-signup,
+# /auth/individual-signup.
+#
+# Secure/auth-gated routes (blocked): admin dashboards, driver
+# dashboards, dealer dashboards, insurance portal, map test,
+# quote/post-quote, live-track, tracking tokens, verify-email
+# OTP pages, application-submitted.
+
 User-agent: *
-Disallow:
+Disallow: /admin-
+Disallow: /dealer-dashboard
+Disallow: /dealer-create-delivery
+Disallow: /dealer-delivery-details
+Disallow: /dealer-drafts
+Disallow: /dealer-edit-delivery
+Disallow: /dealer-edit-draft
+Disallow: /dealer-onboarding
+Disallow: /dealer-review-delivery
+Disallow: /dealer-settings
+Disallow: /dealer-support-detail
+Disallow: /dealer-support-list
+Disallow: /dealer-support-request
+Disallow: /driver/
+Disallow: /driver-active
+Disallow: /driver-booked-later
+Disallow: /driver-completed
+Disallow: /driver-completed-details
+Disallow: /driver-inbox
+Disallow: /driver-issue-report
+Disallow: /driver-job-details
+Disallow: /driver-menu
+Disallow: /driver-onboarding-complete
+Disallow: /driver-pickup-checklist
+Disallow: /driver-preferences
+Disallow: /driver-proof-cam
+Disallow: /driver-repositioning
+Disallow: /driver-starting-location
+Disallow: /driver-support-detail
+Disallow: /driver-support-list
+Disallow: /driver-verify-email
+Disallow: /driver-wallet
+Disallow: /driver-application-submitted
+Disallow: /auth/admin-signin
+Disallow: /auth/reset-password
+Disallow: /individual-verify-email
+Disallow: /map-test
+Disallow: /insurance-portal
+Disallow: /live-track
+Disallow: /track/
+Disallow: /quote-details
+Disallow: /quote-confirmation
+
+Allow: /
+
+Sitemap: https://101drivers.com/sitemap.xml

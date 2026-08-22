@@ -38,7 +38,35 @@
     
     <!-- Microsoft Tiles -->
     <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
-    
+
+    <!-- ── SEO: Open Graph + Twitter Card + Canonical ──
+         These power social sharing previews (Facebook, X, LinkedIn,
+         Slack, Discord) and consolidate URL equity to a single
+         canonical URL (avoids / vs /home duplicate-content issue).
+         Override per-route if needed (e.g. different og:title on
+         /about vs /home) by mutating these meta tags at runtime. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="101 Drivers" />
+    <meta property="og:title" content="101 Drivers - Vehicle Delivery Service" />
+    <meta property="og:description" content="California's premier vehicle delivery service for dealers. Track deliveries, manage fleet movements, and get real-time updates." />
+    <meta property="og:url" content="https://101drivers.com/home" />
+    <meta property="og:image" content="https://101drivers.com/assets/101drivers-logo.jpg" />
+    <meta property="og:image:alt" content="101 Drivers logo" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="101 Drivers - Vehicle Delivery Service" />
+    <meta name="twitter:description" content="California's premier vehicle delivery service for dealers." />
+    <meta name="twitter:image" content="https://101drivers.com/assets/101drivers-logo.jpg" />
+    <link rel="canonical" href="https://101drivers.com/home" />
+
+    <!-- ── Performance: preconnect to third-party origins ──
+         Saves 1 DNS lookup + 1 TLS handshake (~100-300ms each) on the
+         first request to each origin. Order matters: preconnect before
+         the actual resource request (fonts/maps/stripe) appears. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://maps.googleapis.com" />
+    <link rel="preconnect" href="https://js.stripe.com" />
+
     <!-- Fonts -->
     <link
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
