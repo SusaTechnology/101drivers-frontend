@@ -183,25 +183,32 @@ export default function AdminReferralProgramPage() {
   const [detailReferrerId, setDetailReferrerId] = useState<string | null>(null);
 
   // ── Fetch config ──
+  // NOTE: useDataQuery wraps TanStack Query's useQuery, which does NOT
+  // accept onSuccess (removed in v5). We use configQuery.data directly
+  // + a useEffect to sync form state when the data loads/changes.
   const configQuery = useDataQuery<any>({
     apiEndPoint: `${API_URL}/api/appSettings/referral-program`,
     noFilter: true,
-    onSuccess: (data) => {
-      if (data) {
-        setConfig(data);
-        setFormIsActive(data.isActive ?? true);
-        setFormTrigger(data.rewardTrigger ?? 'ON_DELIVERIES_COMPLETED');
-        setFormRequiredDeliveries(String(data.requiredDeliveries ?? 30));
-        setFormTimeMode(data.timeLimitMode ?? 'CALENDAR_RANGE');
-        setFormWindowStart(data.windowStartDate ? data.windowStartDate.slice(0, 10) : '');
-        setFormWindowEnd(data.windowEndDate ? data.windowEndDate.slice(0, 10) : '');
-        setFormReferrerAmount(String(data.referrerRewardAmount ?? 150));
-        setFormThreshold(String(data.referralThreshold ?? 20));
-        setFormReferredGetsReward(data.referredGetsReward ?? true);
-        setFormReferredAmount(String(data.referredRewardAmount ?? 150));
-      }
-    },
   });
+
+  // Sync fetched config → local form state.
+  // Runs on initial load + every refetch.
+  useEffect(() => {
+    const data = configQuery.data;
+    if (data) {
+      setConfig(data);
+      setFormIsActive(data.isActive ?? true);
+      setFormTrigger(data.rewardTrigger ?? 'ON_DELIVERIES_COMPLETED');
+      setFormRequiredDeliveries(String(data.requiredDeliveries ?? 30));
+      setFormTimeMode(data.timeLimitMode ?? 'CALENDAR_RANGE');
+      setFormWindowStart(data.windowStartDate ? data.windowStartDate.slice(0, 10) : '');
+      setFormWindowEnd(data.windowEndDate ? data.windowEndDate.slice(0, 10) : '');
+      setFormReferrerAmount(String(data.referrerRewardAmount ?? 150));
+      setFormThreshold(String(data.referralThreshold ?? 20));
+      setFormReferredGetsReward(data.referredGetsReward ?? true);
+      setFormReferredAmount(String(data.referredRewardAmount ?? 150));
+    }
+  }, [configQuery.data]);
 
   // ── Update config (full save) ──
   // Used by the "Save Configuration" button at the bottom of the form.
