@@ -558,7 +558,17 @@ async startTrip(input: {
       payment.paymentType === EnumPaymentPaymentType.PREPAID &&
       payment.provider === EnumPaymentProvider.STRIPE &&
       payment.providerPaymentIntentId &&
-      this.stripeService
+      this.stripeService &&
+      // Only attempt lock-in capture if the payment is still in AUTHORIZED
+      // state (funds held but not yet charged). If the payment is already
+      // CAPTURED — which happens for PRIVATE customers who are charged
+      // instantly at delivery creation (captureMethod='automatic') — the
+      // money is already collected. Calling capturePaymentIntent() on an
+      // already-succeeded PaymentIntent throws a Stripe error, which
+      // surfaced to the driver as "payment authorization could not be
+      // captured". Skipping it here lets private-customer deliveries
+      // start normally.
+      payment.status === EnumPaymentStatus.AUTHORIZED
     ) {
       // Cap at the authorized amount — can't capture more than what's held
       const cappedFee = Math.min(lockInFee, Number(payment.amount ?? lockInFee));
