@@ -992,22 +992,62 @@ export class PaymentPayoutEngine {
    * Request a manual free withdrawal.
    * Collects all ELIGIBLE payouts for this driver into a PayoutBatch.
    * Minimum balance: $50. Arrives in 1-2 business days.
+   *
+   * Pre-checks Stripe Connect BEFORE creating the batch — if the
+   * driver hasn't set up their bank account, tells them to do so
+   * first instead of creating a stuck PENDING batch.
+   *
+   * If the Stripe transfer fails, reverts payouts from PAID back to
+   * ELIGIBLE + marks batch FAILED — so the driver can retry later.
    */
   async requestFreeWithdrawal(driverId: string): Promise<any> {
     const availableBalance = await this.getDriverAvailableBalance(driverId);
 
     if (availableBalance < this.MIN_FREE_WITHDRAWAL) {
       throw new BadRequestException(
-        `Minimum withdrawal amount is $${this.MIN_FREE_WITHDRAWAL}. Current balance: $${availableBalance.toFixed(2)}`,
+        `You need at least $${this.MIN_FREE_WITHDRAWAL.toFixed(2)} to withdraw. ` +
+        `Current balance: $${availableBalance.toFixed(2)}`,
       );
     }
 
+    // ── Pre-check: does the driver have Stripe Connect set up? ──
+    // If not, tell them to set it up BEFORE creating a batch.
+    // This prevents the "stuck PENDING batch" bug.
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        stripeConnectAccountId: true,
+        stripeConnectOnboardingComplete: true,
+      },
+    });
+
+    if (!driver?.stripeConnectAccountId || !driver.stripeConnectOnboardingComplete) {
+      throw new BadRequestException(
+        'You need to set up your payout account before you can withdraw. ' +
+        'Tap "Set Up Payouts" below to connect your bank account through Stripe. ' +
+        'This is a one-time setup and takes about 2 minutes.',
+      );
+    }
+
+    if (!this.stripeService) {
+      throw new BadRequestException(
+        'Payouts are temporarily unavailable. Please try again later or contact support.',
+      );
+    }
+
+    // ── Check for stuck PENDING batches from previous failures ──
+    // If there's an old PENDING batch that should have been resolved,
+    // clean it up before proceeding. This unblocks drivers who hit
+    // the old bug where batches stayed PENDING forever.
     const existingPending = await this.prisma.payoutBatch.findFirst({
       where: { driverId, status: 'PENDING' },
     });
     if (existingPending) {
-      throw new BadRequestException(
-        'You already have a pending withdrawal. Please wait for it to complete.',
+      // Auto-revert the stuck batch: flip payouts back to ELIGIBLE,
+      // mark the batch FAILED, so the driver can retry.
+      await this.revertFailedBatch(
+        existingPending.id,
+        'A previous withdrawal was stuck. Your balance has been restored and you can try again.',
       );
     }
 
@@ -1056,22 +1096,51 @@ export class PaymentPayoutEngine {
    * Request an instant payout.
    * Collects all ELIGIBLE payouts, deducts $1.50 fee, pays immediately via Stripe.
    * Any amount >= $5. Arrives in minutes.
+   *
+   * Pre-checks Stripe Connect BEFORE creating the batch — same
+   * rationale as requestFreeWithdrawal.
    */
   async requestInstantPayout(driverId: string): Promise<any> {
     const availableBalance = await this.getDriverAvailableBalance(driverId);
 
     if (availableBalance < this.MIN_INSTANT_PAYOUT) {
       throw new BadRequestException(
-        `Minimum instant payout is $${this.MIN_INSTANT_PAYOUT}. Current balance: $${availableBalance.toFixed(2)}`,
+        `You need at least $${this.MIN_INSTANT_PAYOUT.toFixed(2)} for an instant payout. ` +
+        `Current balance: $${availableBalance.toFixed(2)}`,
       );
     }
 
+    // ── Pre-check: does the driver have Stripe Connect set up? ──
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        stripeConnectAccountId: true,
+        stripeConnectOnboardingComplete: true,
+      },
+    });
+
+    if (!driver?.stripeConnectAccountId || !driver.stripeConnectOnboardingComplete) {
+      throw new BadRequestException(
+        'You need to set up your payout account before you can cash out. ' +
+        'Tap "Set Up Payouts" below to connect your bank account through Stripe. ' +
+        'This is a one-time setup and takes about 2 minutes.',
+      );
+    }
+
+    if (!this.stripeService) {
+      throw new BadRequestException(
+        'Payouts are temporarily unavailable. Please try again later or contact support.',
+      );
+    }
+
+    // ── Clean up any stuck PENDING batches from previous failures ──
     const existingPending = await this.prisma.payoutBatch.findFirst({
       where: { driverId, status: 'PENDING' },
     });
     if (existingPending) {
-      throw new BadRequestException(
-        'You already have a pending withdrawal. Please wait for it to complete.',
+      await this.revertFailedBatch(
+        existingPending.id,
+        'A previous withdrawal was stuck. Your balance has been restored and you can try again.',
       );
     }
 
@@ -1187,7 +1256,8 @@ export class PaymentPayoutEngine {
    */
   private async processBatchTransfer(batch: any): Promise<void> {
     if (!this.stripeService) {
-      this.logger.warn('StripeService not available — batch remains PENDING');
+      this.logger.warn('StripeService not available — reverting batch as FAILED');
+      await this.revertFailedBatch(batch.id, 'Stripe service is not configured. Please contact support.');
       return;
     }
 
@@ -1197,7 +1267,11 @@ export class PaymentPayoutEngine {
     });
 
     if (!driver?.stripeConnectAccountId || !driver.stripeConnectOnboardingComplete) {
-      this.logger.warn(`Driver ${batch.driverId} has no Stripe Connect — batch ${batch.id} remains PENDING`);
+      this.logger.warn(`Driver ${batch.driverId} has no Stripe Connect — reverting batch ${batch.id} as FAILED`);
+      await this.revertFailedBatch(
+        batch.id,
+        'Your payout account is not set up. Tap "Set Up Payouts" to connect your bank account through Stripe.',
+      );
       return;
     }
 
@@ -1216,10 +1290,14 @@ export class PaymentPayoutEngine {
         data: { status: 'COMPLETED', stripeTransferId: transfer.id, completedAt: new Date() },
       });
     } catch (err: any) {
-      await this.prisma.payoutBatch.update({
-        where: { id: batch.id },
-        data: { status: 'FAILED', failureMessage: err.message || 'Unknown error', failedAt: new Date() },
-      });
+      // Stripe transfer failed — revert payouts back to ELIGIBLE so the
+      // driver can retry. Don't leave them stuck with money "PAID" in
+      // the system but not in their bank.
+      this.logger.error(`Batch transfer failed for batch ${batch.id}: ${err.message}`);
+      await this.revertFailedBatch(
+        batch.id,
+        `The transfer to your bank failed: ${err.message}. Your balance has been restored — please try again.`,
+      );
     }
   }
 
@@ -1228,7 +1306,8 @@ export class PaymentPayoutEngine {
    */
   private async processBatchInstantPayout(batch: any): Promise<void> {
     if (!this.stripeService) {
-      this.logger.warn('StripeService not available — batch remains PENDING');
+      this.logger.warn('StripeService not available — reverting instant batch as FAILED');
+      await this.revertFailedBatch(batch.id, 'Stripe service is not configured. Please contact support.');
       return;
     }
 
@@ -1238,7 +1317,11 @@ export class PaymentPayoutEngine {
     });
 
     if (!driver?.stripeConnectAccountId || !driver.stripeConnectOnboardingComplete) {
-      this.logger.warn(`Driver ${batch.driverId} has no Stripe Connect — batch ${batch.id} remains PENDING`);
+      this.logger.warn(`Driver ${batch.driverId} has no Stripe Connect — reverting instant batch ${batch.id} as FAILED`);
+      await this.revertFailedBatch(
+        batch.id,
+        'Your payout account is not set up. Tap "Set Up Payouts" to connect your bank account through Stripe.',
+      );
       return;
     }
 
@@ -1257,10 +1340,53 @@ export class PaymentPayoutEngine {
         data: { status: 'COMPLETED', stripePayoutId: payout.id, completedAt: new Date() },
       });
     } catch (err: any) {
-      await this.prisma.payoutBatch.update({
-        where: { id: batch.id },
-        data: { status: 'FAILED', failureMessage: err.message || 'Unknown error', failedAt: new Date() },
+      this.logger.error(`Instant payout failed for batch ${batch.id}: ${err.message}`);
+      await this.revertFailedBatch(
+        batch.id,
+        `The instant payout failed: ${err.message}. Your balance has been restored — please try again or use the free withdrawal option.`,
+      );
+    }
+  }
+
+  /**
+   * Revert a FAILED batch: flip its DriverPayouts back from PAID to
+   * ELIGIBLE (so the driver can retry), and mark the batch itself
+   * as FAILED with a human-readable message.
+   *
+   * The batch record stays in the DB (transfer history is preserved)
+   * — it just gets status=FAILED + a failureMessage.
+   */
+  private async revertFailedBatch(batchId: string, failureMessage: string): Promise<void> {
+    try {
+      // Revert all payouts in this batch from PAID → ELIGIBLE
+      const batchItems = await this.prisma.payoutBatchItem.findMany({
+        where: { batchId },
+        select: { driverPayoutId: true },
       });
+
+      for (const item of batchItems) {
+        await this.prisma.driverPayout.update({
+          where: { id: item.driverPayoutId },
+          data: {
+            status: EnumDriverPayoutStatus.ELIGIBLE,
+            paidAt: null,
+          },
+        });
+      }
+
+      // Mark the batch as FAILED (keep the record for transfer history)
+      await this.prisma.payoutBatch.update({
+        where: { id: batchId },
+        data: {
+          status: 'FAILED',
+          failureMessage,
+          failedAt: new Date(),
+        },
+      });
+
+      this.logger.log(`Reverted batch ${batchId}: ${batchItems.length} payout(s) restored to ELIGIBLE. Reason: ${failureMessage}`);
+    } catch (revertErr: any) {
+      this.logger.error(`Failed to revert batch ${batchId}: ${revertErr.message}`);
     }
   }
 
