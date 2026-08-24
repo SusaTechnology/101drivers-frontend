@@ -1159,13 +1159,40 @@ export default function DriverWalletPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {connectStatus?.setupComplete ? (
-              <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 p-4">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-emerald-600" />
-                  <p className="font-bold text-emerald-700 dark:text-emerald-300">Payouts are active</p>
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 p-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                    <p className="font-bold text-emerald-700 dark:text-emerald-300">Payouts are active</p>
+                  </div>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                    Your earnings are automatically transferred to your connected account after each delivery.
+                  </p>
                 </div>
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                  Your earnings are automatically transferred to your connected account after each delivery.
+                {/* ── Update / change bank account ──
+                    Even when onboarding is complete, the driver may need to:
+                      - Change their bank account
+                      - Update their personal details
+                      - Fix a deactivated account
+                    Stripe's accountLinks.create works on existing accounts,
+                    so the same onboarding endpoint handles both initial setup
+                    and updates. The button opens Stripe's hosted portal
+                    where the driver can edit their bank details. */}
+                <Button
+                  onClick={() => user?.profileId && connectOnboardingMutation.mutate({ driverId: user.profileId })}
+                  disabled={connectOnboardingMutation.isPending || !user?.profileId}
+                  variant="outline"
+                  className="w-full py-3 rounded-2xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition inline-flex items-center justify-center gap-2 font-bold text-sm"
+                >
+                  {connectOnboardingMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="w-4 h-4" />
+                  )}
+                  {connectOnboardingMutation.isPending ? 'Loading...' : 'Update bank account or details'}
+                </Button>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center">
+                  Opens Stripe&apos;s secure portal where you can change your bank account, update your address, or edit your personal details.
                 </p>
               </div>
             ) : (
