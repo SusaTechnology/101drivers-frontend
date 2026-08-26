@@ -763,8 +763,190 @@ export class PostpaidBillingService {
   // ─── ADMIN ACTIONS ─────────────────────────────────────────────
 
   /**
-   * Set or clear the per-dealer postpaid cap (in cents). null = unlimited.
+   * Pre-check: can the admin switch this dealer's billing mode?
+   *
+   * Returns:
+   *   - canSwitch: boolean (false if blocked)
+   *   - blockReason: string | null (why it's blocked)
+   *   - outstandingBalance: number (sum of USAGE_REPORTED + AUTHORIZED postpaid payments)
+   *   - pendingDeliveryCount: number (USAGE_REPORTED payments awaiting invoice)
+   *   - failedChargeCount: number (CHARGE_FAILED + FAILED payments — unresolved)
+   *   - hasSavedPaymentMethod: boolean
+   *   - currentMode: 'PREPAID' | 'POSTPAID'
+   *
+   * The admin UI calls this before showing the switch dialog so the
+   * admin sees the full impact BEFORE committing to the switch.
    */
+  async getSwitchEligibility(dealerId: string): Promise<{
+    canSwitch: boolean;
+    blockReason: string | null;
+    outstandingBalance: number;
+    pendingDeliveryCount: number;
+    failedChargeCount: number;
+    hasSavedPaymentMethod: boolean;
+    currentMode: 'PREPAID' | 'POSTPAID';
+    stripeSubscriptionId: string | null;
+  }> {
+    const dealer = await this.prisma.customer.findUnique({
+      where: { id: dealerId },
+      select: {
+        id: true,
+        postpaidEnabled: true,
+        billingMode: true,
+        stripeCustomerId: true,
+        stripeDefaultPaymentMethodId: true,
+        stripeSubscriptionId: true,
+        billingFrozen: true,
+      },
+    });
+
+    if (!dealer) {
+      throw new NotFoundException('Dealer not found');
+    }
+
+    const currentMode = dealer.postpaidEnabled ? 'POSTPAID' : 'PREPAID';
+
+    // Count failed charges (both postpaid CHARGE_FAILED + prepaid FAILED)
+    const failedChargeCount = await this.prisma.payment.count({
+      where: {
+        delivery: { customerId: dealerId },
+        status: { in: ['CHARGE_FAILED', 'FAILED'] },
+      },
+    });
+
+    // Count pending postpaid deliveries (USAGE_REPORTED — awaiting weekly invoice)
+    const pendingDeliveryCount = await this.prisma.payment.count({
+      where: {
+        delivery: { customerId: dealerId },
+        paymentType: 'POSTPAID',
+        status: 'USAGE_REPORTED',
+      },
+    });
+
+    // Outstanding balance = sum of unpaid postpaid payments
+    const outstandingCents = await this.computeOutstandingBalanceCents(dealerId);
+    const outstandingBalance = Number((outstandingCents / 100).toFixed(2));
+
+    const hasSavedPaymentMethod = Boolean(dealer.stripeDefaultPaymentMethodId);
+
+    // Determine if switch is blocked
+    let canSwitch = true;
+    let blockReason: string | null = null;
+
+    // Block if there are unresolved failed charges
+    if (failedChargeCount > 0) {
+      canSwitch = false;
+      blockReason =
+        `Cannot switch billing modes — this dealer has ${failedChargeCount} ` +
+        `failed charge(s) that must be resolved first. Retry the charge ` +
+        `or contact the dealer to update their payment method, then switch.`;
+    }
+
+    // Block switching TO postpaid if no saved card
+    if (canSwitch && currentMode === 'PREPAID' && !hasSavedPaymentMethod) {
+      canSwitch = false;
+      blockReason =
+        'Cannot switch to Postpaid — no saved payment method on file. ' +
+        'The dealer must add a card first (Settings → Payment Methods), ' +
+        'then retry the switch.';
+    }
+
+    return {
+      canSwitch,
+      blockReason,
+      outstandingBalance,
+      pendingDeliveryCount,
+      failedChargeCount,
+      hasSavedPaymentMethod,
+      currentMode,
+      stripeSubscriptionId: dealer.stripeSubscriptionId,
+    };
+  }
+
+  /**
+   * Safely switch a dealer's billing mode.
+   *
+   * Postpaid → Prepaid:
+   *   - Sets postpaidEnabled = false (new deliveries are prepaid immediately)
+   *   - Cancels the Stripe subscription with cancel_at_period_end = true
+   *     (current billing cycle finishes — pending InvoiceItems are still charged)
+   *   - Sets billingMode = PREPAID_INSTANT
+   *   - Does NOT clear stripeCustomerId / stripeDefaultPaymentMethodId
+   *     (still needed for prepaid charges)
+   *   - Clears stale NO_STRIPE_CUSTOMER / NO_SAVED_CARD failure codes
+   *     on old Payment rows (the underlying issue is resolved by the switch)
+   *
+   * Prepaid → Postpaid:
+   *   - Calls setupDealerForPostpaid (creates Stripe customer + subscription)
+   *   - Sets postpaidEnabled = true
+   *   - Sets billingMode = WEEKLY_POSTPAID
+   */
+  async switchBillingMode(
+    dealerId: string,
+    newMode: 'PREPAID' | 'POSTPAID',
+  ): Promise<void> {
+    // Pre-check
+    const eligibility = await this.getSwitchEligibility(dealerId);
+    if (!eligibility.canSwitch) {
+      throw new BadRequestException(eligibility.blockReason || 'Cannot switch billing modes');
+    }
+
+    if (newMode === eligibility.currentMode) {
+      throw new BadRequestException(`Dealer is already on ${newMode} billing`);
+    }
+
+    if (newMode === 'PREPAID') {
+      // ── Postpaid → Prepaid ──────────────────────────────────
+      // Cancel the subscription at period end so pending InvoiceItems
+      // are still charged in the current cycle. New deliveries from
+      // this point are prepaid (charged immediately at creation).
+      if (eligibility.stripeSubscriptionId && this.stripeService) {
+        try {
+          await this.stripeService.stripe.subscriptions.update(
+            eligibility.stripeSubscriptionId,
+            { cancel_at_period_end: true },
+          );
+          this.logger.log(
+            `Subscription ${eligibility.stripeSubscriptionId} for dealer ${dealerId} ` +
+            `set to cancel at period end (switching to prepaid)`,
+          );
+        } catch (err: any) {
+          this.logger.warn(
+            `Failed to cancel subscription for dealer ${dealerId}: ${err.message} ` +
+            `— proceeding with flag update anyway. Admin should cancel manually in Stripe.`,
+          );
+        }
+      }
+
+      await this.prisma.customer.update({
+        where: { id: dealerId },
+        data: {
+          postpaidEnabled: false,
+          billingMode: 'PREPAID_INSTANT',
+        },
+      });
+
+      // Clear stale failure data — the customer now has a Stripe customer
+      // + payment method, so old NO_STRIPE_CUSTOMER / NO_SAVED_CARD errors
+      // are no longer relevant.
+      await this.prisma.payment.updateMany({
+        where: {
+          delivery: { customerId: dealerId },
+          failureCode: { in: ['NO_STRIPE_CUSTOMER', 'NO_SAVED_CARD'] },
+        },
+        data: {
+          failureCode: null,
+          failureMessage: null,
+        },
+      });
+
+      this.logger.log(`Dealer ${dealerId} switched to PREPAID`);
+    } else {
+      // ── Prepaid → Postpaid ───────────────────────────────────
+      await this.setupDealerForPostpaid(dealerId);
+      this.logger.log(`Dealer ${dealerId} switched to POSTPAID`);
+    }
+  }
   async setCreditCap(dealerId: string, capCents: number | null): Promise<void> {
     if (capCents !== null && capCents < 0) {
       throw new BadRequestException("Cap cannot be negative — use null for unlimited");

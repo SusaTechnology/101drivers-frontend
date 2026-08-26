@@ -87,6 +87,26 @@ export class PostpaidBillingController {
     return { ok: true, dealerId };
   }
 
+  // ─── ADMIN: Billing Mode Switch ────────────────────────────
+
+  @Get("dealers/:dealerId/switch-check")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({ summary: "Pre-check: can the admin switch this dealer's billing mode?" })
+  async getSwitchEligibility(@Param("dealerId") dealerId: string) {
+    return this.postpaidBilling.getSwitchEligibility(dealerId);
+  }
+
+  @Post("dealers/:dealerId/switch-billing")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({ summary: "Safely switch a dealer between prepaid and postpaid billing" })
+  async switchBillingMode(
+    @Param("dealerId") dealerId: string,
+    @Body() body: { mode: 'PREPAID' | 'POSTPAID' },
+  ) {
+    await this.postpaidBilling.switchBillingMode(dealerId, body.mode);
+    return { ok: true, dealerId, mode: body.mode };
+  }
+
   // ─── ADMIN: Status / Inspect ────────────────────────────────
 
   @Get("dealers/:dealerId/status")
