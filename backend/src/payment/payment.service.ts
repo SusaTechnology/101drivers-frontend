@@ -318,6 +318,7 @@ async getAdminPaymentDetail(paymentId: string): Promise<any> {
       lockInAmount: true,
       stripeInvoiceId: true,
       stripeInvoiceItemId: true,
+      attemptCount: true,
       createdAt: true,
       updatedAt: true,
       delivery: {

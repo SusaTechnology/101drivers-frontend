@@ -543,6 +543,23 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                         </div>
                       )}
 
+                      {/* Attempt count — which retry attempt this failure was */}
+                      {payment.attemptCount != null && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1.5">
+                          <span className="font-bold">Failure attempt:</span>
+                          <span>
+                            {payment.attemptCount === 1
+                              ? '1st attempt (initial charge)'
+                              : `${payment.attemptCount}th attempt (retry #${payment.attemptCount - 1})`}
+                          </span>
+                          {payment.attemptCount >= 3 && (
+                            <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-[9px] ml-1">
+                              Max retries approaching
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
                       {/* Failure attempt info */}
                       {payment.failedAt && (
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">

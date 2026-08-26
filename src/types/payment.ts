@@ -182,6 +182,7 @@ export interface AdminPaymentDetail {
   lockInAmount: number | null;
   stripeInvoiceId: string | null;
   stripeInvoiceItemId: string | null;
+  attemptCount: number | null;
   createdAt: string;
   updatedAt: string;
   delivery: AdminPaymentDetailDelivery;

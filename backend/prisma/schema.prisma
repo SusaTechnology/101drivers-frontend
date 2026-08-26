@@ -616,6 +616,11 @@ model Payment {
   //   (all deliveries from the same weekly cycle).
   stripeInvoiceItemId     String?
   stripeInvoiceId         String?
+  // attemptCount: which retry attempt this is (from Stripe's
+  // invoice.attempt_count). 1 = first attempt, 2 = first retry, etc.
+  // Set when the invoice.payment_failed webhook fires. Lets the
+  // admin see "Failure attempt: 2 of 4" without querying Stripe.
+  attemptCount            Int?
 
   @@index([status, createdAt])
   @@index([paymentType, status])

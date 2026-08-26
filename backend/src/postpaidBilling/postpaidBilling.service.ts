@@ -644,6 +644,11 @@ export class PostpaidBillingService {
       // Also capture the next retry date from Stripe (if scheduled)
       const nextRetryAttempt = (invoice as any).next_payment_attempt || null;
 
+      // Stripe's attempt_count — which retry attempt this is (1 = initial,
+      // 2 = first retry, etc.). Stored on the Payment row so the admin
+      // can see "Failure attempt: 2 of 4" without querying Stripe.
+      const attemptCount = (invoice as any).attempt_count || 1;
+
       if (invoiceItemIds.length > 0) {
         // ── Primary path: match by stripeInvoiceItemId ──
         await this.prisma.payment.updateMany({
@@ -654,6 +659,7 @@ export class PostpaidBillingService {
             failureCode,
             failureMessage,
             stripeInvoiceId: invoiceId,
+            attemptCount,
           },
         });
       } else {
@@ -670,6 +676,7 @@ export class PostpaidBillingService {
             failedAt: new Date(),
             failureCode,
             failureMessage,
+            attemptCount,
           },
         });
         this.logger.warn(
@@ -692,9 +699,8 @@ export class PostpaidBillingService {
       //   Fraudulent:   IMMEDIATE freeze. Admin review required.
       //   Transient:    NO freeze, no banner. Just retry.
       //
-      // Count consecutive failures from Stripe's attempt count on the
-      // invoice. Stripe increments `attempt_count` on each retry.
-      const attemptCount = (invoice as any).attempt_count || 1;
+      // attemptCount was already extracted from the invoice above (line ~650).
+      // Stripe increments `attempt_count` on each retry.
       const MAX_FAILURES_BEFORE_RESTRICT = 3;
 
       // Fraud/security violations → immediate freeze regardless of count
