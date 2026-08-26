@@ -312,9 +312,12 @@ async getAdminPaymentDetail(paymentId: string): Promise<any> {
       refundedAt: true,
       failureCode: true,
       failureMessage: true,
+      failedAt: true,
       providerChargeId: true,
       providerPaymentIntentId: true,
       lockInAmount: true,
+      stripeInvoiceId: true,
+      stripeInvoiceItemId: true,
       createdAt: true,
       updatedAt: true,
       delivery: {
@@ -333,6 +336,7 @@ async getAdminPaymentDetail(paymentId: string): Promise<any> {
           customer: {
             select: {
               id: true,
+              userId: true,  // Needed so the admin payment detail can link to /admin-user-detail/$userId
               customerType: true,
               businessName: true,
               contactName: true,

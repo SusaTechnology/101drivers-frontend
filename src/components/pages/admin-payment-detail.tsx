@@ -536,6 +536,13 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                         </div>
                       )}
 
+                      {/* Stripe invoice ID — so admin can look it up in Stripe dashboard */}
+                      {payment.stripeInvoiceId && (
+                        <div className="text-xs font-mono text-slate-500 dark:text-slate-400 mt-2">
+                          Stripe Invoice: {payment.stripeInvoiceId}
+                        </div>
+                      )}
+
                       {/* Failure attempt info */}
                       {payment.failedAt && (
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
@@ -569,10 +576,10 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                       {/* Action buttons — navigate to the relevant page */}
                       <div className="mt-3 flex flex-wrap gap-2">
                         {/* Navigate to the dealer's user detail page */}
-                        {delivery?.customer?.id && (
+                        {delivery?.customer?.userId && (
                           <Link
                             to="/admin-user-detail/$userId"
-                            params={{ userId: delivery.customer.id }}
+                            params={{ userId: delivery.customer.userId }}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-950 hover:opacity-90 transition"
                           >
                             <User className="w-3.5 h-3.5" />

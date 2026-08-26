@@ -139,6 +139,7 @@ export interface AdminPaymentDetailDelivery {
   pickupPin: string | null;
   customer: {
     id: string;
+    userId: string;
     customerType: 'BUSINESS' | 'PRIVATE';
     businessName?: string;
     contactName?: string;
@@ -175,9 +176,12 @@ export interface AdminPaymentDetail {
   refundedAt: string | null;
   failureCode: string | null;
   failureMessage: string | null;
+  failedAt: string | null;
   providerChargeId: string | null;
   providerPaymentIntentId: string | null;
   lockInAmount: number | null;
+  stripeInvoiceId: string | null;
+  stripeInvoiceItemId: string | null;
   createdAt: string;
   updatedAt: string;
   delivery: AdminPaymentDetailDelivery;
