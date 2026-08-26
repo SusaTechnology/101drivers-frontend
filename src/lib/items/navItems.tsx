@@ -10,6 +10,5 @@ export const navItems = [
   { href: '/admin-insurance-reporting', label: 'Insurance' },
   { href: '/admin-reports', label: 'Reports' },
   { href: '/admin-config', label: 'Config' },
-  { href: '/admin-referral-program', label: 'Referral Program' },
   { href: '/admin-audit-logs', label: 'Audit Logs' },
 ]

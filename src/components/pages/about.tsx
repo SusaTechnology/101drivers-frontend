@@ -20,11 +20,31 @@ import {
   Menu,
 } from "lucide-react";
 import { NavBar } from "../shared/layout/navbar";
+import { SEOHead } from "../shared/SEOHead";
 
 function AboutPage() {
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
+      <SEOHead
+        title="About Us | 101 Drivers — California Vehicle Delivery Marketplace"
+        description="Learn about 101 Drivers: California's compliance-first, flat-rate vehicle delivery service for dealerships and individuals with documented proof and GPS tracking at every step."
+        canonicalUrl="https://101drivers.com/about"
+        schema={{
+          "@context": "https://schema.org",
+          "@type": "AboutPage",
+          "name": "About 101 Drivers",
+          "description": "Learn about 101 Drivers: California's compliance-first, flat-rate vehicle delivery service for dealerships and individuals.",
+          "url": "https://101drivers.com/about",
+          "mainEntity": {
+            "@type": "Organization",
+            "name": "101 Drivers",
+            "url": "https://101drivers.com/",
+            "logo": "https://101drivers.com/assets/101drivers-logo.jpg",
+            "areaServed": "California"
+          }
+        }}
+      />
       {/* Header */}
       <NavBar />
 

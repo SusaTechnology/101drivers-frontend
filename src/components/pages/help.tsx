@@ -30,6 +30,7 @@ import {
   Settings,
   Star,
 } from 'lucide-react'
+import { SEOHead } from '../shared/SEOHead'
 
 // FAQ data
 export const customerFaqs = [
@@ -173,6 +174,23 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <SEOHead
+        title={
+          isDriver
+            ? 'Driver Help & FAQs | 101 Drivers'
+            : 'Customer Help & FAQs | 101 Drivers'
+        }
+        description={
+          isDriver
+            ? 'Find answers to driver questions about earnings, weekly payouts, trip workflows, checklists, and vehicle transport requirements with 101 Drivers.'
+            : 'Frequently asked questions about booking flat-rate car pickup & delivery, live GPS tracking, pricing, and insurance coverage with 101 Drivers.'
+        }
+        canonicalUrl={
+          isDriver
+            ? 'https://101drivers.com/help-driver'
+            : 'https://101drivers.com/help-customer'
+        }
+      />
       {/* Nav bar */}
       <nav
         className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"

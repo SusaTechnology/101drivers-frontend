@@ -9,6 +9,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Handshake, AlertTriangle } from "lucide-react";
+import { SEOHead } from "../shared/SEOHead";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -594,6 +595,11 @@ export default function DriverOnboardingPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <SEOHead
+        title="Become a Driver | 101 Drivers — Vehicle Transport in California"
+        description="Apply to drive with 101 Drivers. Fast weekly payouts, insured trips, upfront route details, and flexible vehicle delivery jobs across Southern California."
+        canonicalUrl="https://101drivers.com/driver-onboarding"
+      />
       <Header />
 
       <main className="w-full max-w-[1100px] mx-auto px-6 lg:px-8 py-10 lg:py-14">

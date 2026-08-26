@@ -198,6 +198,13 @@ export default function AdminSettingsHubPage() {
   const [transitBuffer, setTransitBuffer] = useState('');
   const [deliverySettingsLoaded, setDeliverySettingsLoaded] = useState(false);
 
+  // Referral program settings state
+  const [referralReward, setReferralReward] = useState('');
+  const [referralTrips, setReferralTrips] = useState('');
+  const [referralDays, setReferralDays] = useState('');
+  const [referralMax, setReferralMax] = useState('');
+  const [referralSettingsLoaded, setReferralSettingsLoaded] = useState(false);
+
   // Fetch delivery settings
   const deliverySettingsQuery = useDataQuery<any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/delivery`,
@@ -223,6 +230,58 @@ export default function AdminSettingsHubPage() {
       toast.error('Failed to update settings', { description: error.message });
     },
   });
+
+  // Fetch referral program settings
+  const referralSettingsQuery = useDataQuery<any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/referral-program`,
+    noFilter: true,
+    onSuccess: (data) => {
+      if (data?.rewardAmount != null) {
+        setReferralReward(String(data.rewardAmount));
+        setReferralTrips(String(data.tripsRequired));
+        setReferralDays(String(data.daysToComplete));
+        setReferralMax(String(data.maxReferrals));
+        setReferralSettingsLoaded(true);
+      }
+    },
+  });
+
+  // Update referral program settings
+  const updateReferralSettingsMutation = useDataMutation<any, any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/referral-program`,
+    method: 'PATCH',
+    onSuccess: () => {
+      toast.success('Referral program settings updated');
+      referralSettingsQuery.refetch();
+    },
+    onError: (error) => {
+      toast.error('Failed to update referral settings', { description: error.message });
+    },
+  });
+
+  const handleSaveReferralSettings = () => {
+    const reward = Number(referralReward);
+    const trips = Number(referralTrips);
+    const days = Number(referralDays);
+    const max = Number(referralMax);
+    if (
+      isNaN(reward) || reward < 0 ||
+      isNaN(trips) || trips < 1 ||
+      isNaN(days) || days < 1 ||
+      isNaN(max) || max < 1
+    ) {
+      toast.error('Invalid values', {
+        description: 'Reward must be ≥ $0. Trips, days, and max must be ≥ 1.',
+      });
+      return;
+    }
+    updateReferralSettingsMutation.mutate({
+      rewardAmount: reward,
+      tripsRequired: trips,
+      daysToComplete: days,
+      maxReferrals: max,
+    });
+  };
 
   const handleSaveDeliverySettings = () => {
     const radius = Number(maxRadius);
@@ -634,6 +693,110 @@ export default function AdminSettingsHubPage() {
                     className="px-6 py-3 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center gap-2"
                   >
                     {updateDeliverySettingsMutation.isPending ? 'Saving...' : 'Save Changes'}
+                    <Check className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Referral Program Settings — live from API */}
+            <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">
+                      Referral Program
+                    </CardTitle>
+                    <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      Driver referral program policy. Changes take effect immediately for new referrals — existing referrals keep their original terms.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="chip-emerald">
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    Live
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="space-y-3">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Reward Amount ($)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={referralReward}
+                      onChange={(e) => setReferralReward(e.target.value)}
+                      placeholder="150"
+                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                    />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Paid to each side (referrer + referred driver) when the referred driver completes the required trips.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Required Deliveries
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={referralTrips}
+                      onChange={(e) => setReferralTrips(e.target.value)}
+                      placeholder="30"
+                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                    />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Number of completed deliveries the referred driver must make to unlock the reward.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Days to Complete
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={referralDays}
+                      onChange={(e) => setReferralDays(e.target.value)}
+                      placeholder="30"
+                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                    />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Window the referred driver has to complete the required deliveries.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Max Referrals per Driver
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={referralMax}
+                      onChange={(e) => setReferralMax(e.target.value)}
+                      placeholder="10"
+                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                    />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Cap on how many friends a single driver can refer.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    onClick={handleSaveReferralSettings}
+                    disabled={updateReferralSettingsMutation.isPending}
+                    className="px-6 py-3 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center gap-2"
+                  >
+                    {updateReferralSettingsMutation.isPending ? 'Saving...' : 'Save Changes'}
                     <Check className="w-4 h-4" />
                   </Button>
                 </div>

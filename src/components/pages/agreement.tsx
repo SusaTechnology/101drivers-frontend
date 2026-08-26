@@ -12,6 +12,7 @@ import {
   Handshake,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SEOHead } from '../shared/SEOHead'
 
 export default function IndependentDriverAgreement() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -161,6 +162,11 @@ export default function IndependentDriverAgreement() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <SEOHead
+        title="Independent Driver Agreement | 101 Drivers"
+        description="Read the Independent Contractor Driver Agreement for vehicle delivery professionals operating on the 101 Drivers platform in California."
+        canonicalUrl="https://101drivers.com/agreement"
+      />
       <Header />
 
       <main className="w-full max-w-[1024px] mx-auto px-6 lg:px-8 py-10 lg:py-14">

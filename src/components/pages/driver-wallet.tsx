@@ -988,7 +988,7 @@ export default function DriverWalletPage() {
                 <span className="ml-2 text-[10px] font-medium opacity-75">1-2 business days</span>
               </Button>
 
-              <Button
+              {/* <Button
                 onClick={handleInstantPayout}
                 disabled={wallet.availableBalance < 5 || instantPayoutMutation.isPending}
                 className="flex-1 h-12 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1000,7 +1000,7 @@ export default function DriverWalletPage() {
                 )}
                 Cash Out Instantly
                 <span className="ml-2 text-[10px] font-medium opacity-75">$1.50 fee</span>
-              </Button>
+              </Button> */}
             </div>
 
             {wallet.availableBalance > 0 && wallet.availableBalance < 50 && (

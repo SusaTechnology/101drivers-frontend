@@ -24,6 +24,7 @@ import {
   Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SEOHead } from '../shared/SEOHead'
 
 export default function TermsOfService() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -169,6 +170,11 @@ export default function TermsOfService() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <SEOHead
+        title="Terms of Service | 101 Drivers"
+        description="Review the Terms of Service for 101 Drivers vehicle pickup and delivery marketplace in California."
+        canonicalUrl="https://101drivers.com/terms"
+      />
       <Header />
 
       {dbContent ? (

@@ -43,6 +43,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import DOMPurify from 'dompurify'
+import { SEOHead } from '../shared/SEOHead'
 
 export default function PrivacyPolicy() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -243,6 +244,11 @@ export default function PrivacyPolicy() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <SEOHead
+        title="Privacy Policy | 101 Drivers"
+        description="Read the Privacy Policy for 101 Drivers. Learn how we handle and protect customer, dealer, and driver data across our California vehicle transport platform."
+        canonicalUrl="https://101drivers.com/privacy"
+      />
       <Header />
 
       {/* If admin has edited the content, render it from the DB (sanitized) */}

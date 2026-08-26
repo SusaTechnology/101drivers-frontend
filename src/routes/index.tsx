@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import LandingPage from '@/components/pages/homePage'
 import { isAuthenticated, getUser, startSessionKeepAlive } from '@/lib/tanstack/dataQuery'
 
 export const Route = createFileRoute('/')({
@@ -6,14 +7,11 @@ export const Route = createFileRoute('/')({
     // Start session keep-alive if authenticated
     if (isAuthenticated()) {
       startSessionKeepAlive()
-    }
-    
-    // If user is authenticated, redirect to their dashboard
-    if (isAuthenticated()) {
+      
       const user = getUser()
       const roles = user?.roles || []
       
-      // Redirect based on role
+      // Redirect authenticated users to their respective dashboard
       if (roles.includes('ADMIN')) {
         throw redirect({
           to: '/admin-dashboard',
@@ -25,24 +23,18 @@ export const Route = createFileRoute('/')({
           replace: true,
         })
       } else if (roles.includes('BUSINESS_CUSTOMER') || roles.includes('PRIVATE_CUSTOMER')) {
-        // Both business and private customers use the same dealer pages.
-        // The pages conditionally hide business-specific content (postpaid
-        // panel, business profile) based on customerType from the API.
+        // Both business and private customers use the dealer dashboard pages.
         throw redirect({
           to: '/dealer-dashboard',
           replace: true,
         })
       }
     }
-    
-    // Not authenticated - redirect to landing page
-    throw redirect({
-      to: '/home',
-      replace: true,
-    })
   },
+  component: IndexPageComponent,
 })
 
-function IndexPage() {
-  return null // This page only handles redirects
+function IndexPageComponent() {
+  return <LandingPage />
 }
+

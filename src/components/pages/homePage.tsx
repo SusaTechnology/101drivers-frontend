@@ -67,6 +67,7 @@ import { toast } from "sonner";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
 import { calculateHomeFlatQuote, HOME_FLAT_QUOTE_CONFIG } from "@/lib/pricing/home-flat-quote";
+import { SEOHead } from "../shared/SEOHead";
 
 // Types for landing page settings
 interface LandingPageSettings {
@@ -534,17 +535,13 @@ export default function LandingPage() {
     <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-8">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-          {/* Brand blurb + NAP info (local SEO) */}
+          {/* Brand blurb */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl overflow-hidden bg-black border border-slate-200">
                 <img
                   src="/assets/101drivers-logo.jpg"
                   alt="101 Drivers logo"
-                  width={40}
-                  height={40}
-                  loading="lazy"
-                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -553,43 +550,19 @@ export default function LandingPage() {
               </span>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              101 Drivers is California&apos;s flat-rate car pickup & delivery platform. We connect dealerships and individuals with vetted, insured drivers for vehicle transport across Southern California.
+              101 Drivers is a platform that connects drivers with businesses and individuals who need drivers.
             </p>
-            {/* NAP (Name, Address, Phone) — critical for local SEO.
-                Wrapped in <address> for semantic correctness. */}
-            <address className="mt-4 text-xs text-slate-500 dark:text-slate-400 not-italic leading-relaxed">
-              <strong className="text-slate-700 dark:text-slate-300">101 Drivers Inc.</strong>
-              <br />
-              Los Angeles, California
-              <br />
-              <a
-                href="tel:+13109628402"
-                className="text-lime-600 dark:text-lime-400 font-bold hover:underline"
-              >
-                (310) 962-8402
-              </a>
-              <br />
-              <a
-                href="mailto:support@101drivers.com"
-                className="text-lime-600 dark:text-lime-400 font-bold hover:underline"
-              >
-                support@101drivers.com
-              </a>
-            </address>
           </div>
 
           {/* Accounts — Business, Individual, Driver */}
-          <nav aria-label="Account types" className="md:col-span-1">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
-              Accounts
-            </h3>
+          <div>
             <ul className="space-y-2.5 text-sm">
               <li>
                 <Link
                   to="/auth/dealer-signin"
                   className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
                 >
-                  Business Account
+                  Business
                 </Link>
               </li>
               <li>
@@ -597,7 +570,7 @@ export default function LandingPage() {
                   to="/auth/individual-signup"
                   className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
                 >
-                  Individual Account
+                  Individual
                 </Link>
               </li>
               <li>
@@ -605,24 +578,21 @@ export default function LandingPage() {
                   to="/driver-signin"
                   className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
                 >
-                  Driver Account
+                  Driver
                 </Link>
               </li>
             </ul>
-          </nav>
+          </div>
 
-          {/* Help + Resources */}
-          <nav aria-label="Help and resources" className="md:col-span-1">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
-              Help &amp; Resources
-            </h3>
+          {/* Help */}
+          <div>
             <ul className="space-y-2.5 text-sm">
               <li>
                 <Link
                   to="/help-customer"
                   className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
-                  Customer Help &amp; FAQ
+                  Customer Help
                 </Link>
               </li>
               <li>
@@ -630,60 +600,30 @@ export default function LandingPage() {
                   to="/help-driver"
                   className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
-                  Driver Help &amp; FAQ
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/about"
-                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-                >
-                  About 101 Drivers
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/driver-onboarding"
-                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-                >
-                  Become a Driver
+                  Driver Help
                 </Link>
               </li>
             </ul>
-          </nav>
+          </div>
 
-          {/* Legal */}
-          <nav aria-label="Legal" className="md:col-span-1">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">
-              Legal
-            </h3>
-            <ul className="space-y-2.5 text-sm">
-              <li>
-                <Link
-                  to="/privacy"
-                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-                >
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/terms"
-                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-                >
-                  Terms of Service
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/agreement"
-                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-                >
-                  Driver Agreement
-                </Link>
-              </li>
-            </ul>
-          </nav>
+          {/* Contact */}
+          <div>
+            <Link
+              to="/help-customer"
+              className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+            >
+              Contact Us
+            </Link>
+          </div>
+        </div>
+
+        {/* Legal — pipe-separated, one line */}
+        <div className="mb-6">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            <Link to="/privacy" className="hover:text-lime-500 transition-colors">Privacy Policy</Link>
+            {" "}&bull;{" "}
+            <Link to="/terms" className="hover:text-lime-500 transition-colors">Terms of Service</Link>
+          </p>
         </div>
 
         {/* Bottom line */}
@@ -701,54 +641,74 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <SEOHead
+        title="101 Drivers — Car Pickup & Delivery Service in California | Flat Rate"
+        description="California's flat-rate car pickup & delivery service. Dealers & individuals get instant quotes, real-time GPS tracking, and insured vehicle transport across Southern California."
+        canonicalUrl="https://101drivers.com/"
+      />
       <NavBar />
       <main className="w-full">
-        {/* ── SEO: LocalBusiness structured data (JSON-LD) ──
-            Helps Google show rich results for local service searches
-            like "car delivery California" / "vehicle delivery LA".
-            Inline-rendered so it's visible to crawlers even without SSR. */}
+        {/* ── SEO: DeliveryService & LocalBusiness structured data (JSON-LD) ── */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",
-              "@type": "AutoTransporter",
+              "@type": "DeliveryService",
               name: "101 Drivers",
               description:
-                "California's premier vehicle delivery service. Flat-rate car pickup & delivery across Southern California.",
-              url: "https://101drivers.com/home",
+                "California's premier vehicle delivery service. Flat-rate car pickup & delivery across Southern California with real-time GPS tracking and full insurance.",
+              url: "https://101drivers.com/",
+              image: "https://101drivers.com/assets/101drivers-logo.jpg",
               telephone: "+1-310-962-8402",
               email: "support@101drivers.com",
-              areaServed: {
-                "@type": "State",
-                name: "California",
+              priceRange: "$$",
+              address: {
+                "@type": "PostalAddress",
+                addressLocality: "Santa Monica",
+                addressRegion: "CA",
+                addressCountry: "US",
               },
+              geo: {
+                "@type": "GeoCoordinates",
+                latitude: 34.0195,
+                longitude: -118.4912,
+              },
+              areaServed: [
+                { "@type": "AdministrativeArea", name: "Los Angeles County" },
+                { "@type": "AdministrativeArea", name: "Orange County" },
+                { "@type": "AdministrativeArea", name: "Riverside County" },
+                { "@type": "AdministrativeArea", name: "San Bernardino County" },
+                { "@type": "AdministrativeArea", name: "Ventura County" },
+                { "@type": "AdministrativeArea", name: "Santa Barbara County" },
+                { "@type": "AdministrativeArea", name: "San Diego County" },
+                { "@type": "State", name: "California" },
+              ],
               knowsAbout: [
                 "Vehicle delivery",
                 "Car pickup and delivery",
                 "Dealer vehicle transport",
                 "Flat-rate car delivery",
+                "Automotive logistics",
               ],
-              priceRange: "$$",
               sameAs: [],
             }),
           }}
         />
-        {/* ── SEO: Service structured data ──
-            Describes the car delivery service (flat-rate, insured).
-            Pairs with the LocalBusiness above for richer SERP entries. */}
+        {/* ── SEO: Service structured data ── */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "Service",
-              name: "Car Pickup & Delivery Service",
+              name: "Flat-Rate Car Pickup & Delivery Service",
               serviceType: "Vehicle delivery",
               provider: {
-                "@type": "AutoTransporter",
+                "@type": "DeliveryService",
                 name: "101 Drivers",
                 telephone: "+1-310-962-8402",
+                url: "https://101drivers.com/",
               },
               areaServed: {
                 "@type": "State",
@@ -766,10 +726,7 @@ export default function LandingPage() {
             }),
           }}
         />
-        {/* ── SEO: BreadcrumbList structured data ──
-            Helps Google show breadcrumb rich results in the SERP
-            (Home > About / Home > Help etc.). Currently just Home,
-            but sets up the schema for when we add more page depth. */}
+        {/* ── SEO: BreadcrumbList structured data ── */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -781,13 +738,12 @@ export default function LandingPage() {
                   "@type": "ListItem",
                   position: 1,
                   name: "Home",
-                  item: "https://101drivers.com/home",
+                  item: "https://101drivers.com/",
                 },
               ],
             }),
           }}
         />
-
         {/* ===== SECTION 1 — Instant Quote Entry ===== */}
         <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-8 lg:pt-12 pb-6">
           {/* Hero heading */}
@@ -1132,7 +1088,7 @@ export default function LandingPage() {
                   </div>
 
                   {/* Flat-rate formula announcement */}
-                  {quoteResult.formula && (
+                  {/* {quoteResult.formula && (
                     <div className="p-3 sm:p-4 rounded-xl bg-lime-50 dark:bg-lime-900/10 border border-lime-200 dark:border-lime-900/30">
                       <div className="flex items-start gap-2">
                         <Bolt className="h-4 w-4 text-lime-600 dark:text-lime-400 shrink-0 mt-0.5" />
@@ -1178,7 +1134,7 @@ export default function LandingPage() {
                         </span>
                       </div>
                     </>
-                  )}
+                  )} */}
 
                   {/* Disclaimer */}
                   <div className="flex gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-900/30">
@@ -1213,9 +1169,9 @@ export default function LandingPage() {
                     >
                       Continue — Sign Up
                     </a>
-                    <Button variant="outline" className="flex-1 py-3.5 rounded-2xl font-extrabold text-sm">
+                    {/* <Button variant="outline" className="flex-1 py-3.5 rounded-2xl font-extrabold text-sm">
                       Save Quote
-                    </Button>
+                    </Button> */}
                     <a
                       href="/driver-onboarding"
                       className="flex-1 font-extrabold rounded-2xl py-3.5 text-center transition shadow-lg text-sm block border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600"
@@ -1331,269 +1287,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ===== SECTION 5b — Our Services (SEO keyword content) ===== */}
-        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
-            Our Vehicle Delivery Services
-          </h2>
-          <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
-            Professional car pickup and delivery across California — built for dealerships and individuals.
-          </p>
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <Store className="h-5 w-5 text-[#00C853]" />
-              </div>
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
-                Dealership Car Delivery
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Move vehicles between dealership lots, auction sites, body shops, and customer locations. Flat-rate pricing with GPS tracking and photo proof for every delivery.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <User className="h-5 w-5 text-[#00C853]" />
-              </div>
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
-                Individual Car Transport
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Need a car moved across town or across Southern California? Get an instant quote, book in minutes, and track your vehicle in real time. No dealership account required.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <Shield className="h-5 w-5 text-[#00C853]" />
-              </div>
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
-                Insured Vehicle Transport
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Every delivery is fully insured from pickup to drop-off. GPS-stamped photos, VIN verification, and odometer readings document the condition of your vehicle at every step.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        {/* ===== SECTION 5c — Areas We Serve (local SEO) ===== */}
-        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
-            Areas We Serve in California
-          </h2>
-          <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
-            Car delivery service across Greater Los Angeles and Southern California.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            {[
-              'Santa Monica', 'Venice', 'Marina del Rey', 'Playa del Rey',
-              'Culver City', 'Westchester', 'West LA', 'Los Angeles',
-              'Beverly Hills', 'Century City', 'Brentwood', 'Pacific Palisades',
-              'El Segundo', 'Hawthorne', 'Inglewood', 'Torrance',
-              'Long Beach', 'Glendale', 'Burbank', 'Pasadena',
-              'Downey', 'Norwalk', 'El Monte', 'Pasadena',
-              'Orange County', 'Anaheim', 'Irvine', 'Santa Ana',
-              'San Fernando Valley', 'Hollywood', 'Koreatown', 'Downtown LA',
-            ].map((city) => (
-              <span
-                key={city}
-                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
-              >
-                {city}
-              </span>
-            ))}
-          </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-4">
-            Pickup zone covers Westside LA. Drop-off available anywhere in Southern California. Don&apos;t see your city? <Link to="/help-customer" className="text-lime-500 font-bold hover:underline">Contact us</Link> to check availability.
-          </p>
-        </section>
-
-        {/* ===== SECTION 5d — Why Choose 101 Drivers (internal links + trust signals) ===== */}
-        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
-            Why Choose 101 Drivers for Car Delivery
-          </h2>
-          <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
-            Transparent pricing, real-time tracking, and fully insured vehicle transport — built for California dealers and individuals.
-          </p>
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-lime-500/15">
-                <Bolt className="h-5 w-5 text-[#00C853]" />
-              </div>
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
-                Instant Flat-Rate Quotes
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Enter your pickup and drop-off addresses to get an upfront price. No hidden fees, no surprises — just a flat rate based on driving distance.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-lime-500/15">
-                <Navigation className="h-5 w-5 text-[#00C853]" />
-              </div>
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
-                Real-Time GPS Tracking
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Track your vehicle on a live map from pickup to drop-off. GPS-stamped photos at every step document the condition of your car.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-lime-500/15">
-                <Shield className="h-5 w-5 text-[#00C853]" />
-              </div>
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
-                Fully Insured Delivery
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Every vehicle is insured from pickup to drop-off. VIN verification, odometer readings, and photo proof protect your car at every mile.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-lime-500/15">
-                <CreditCard className="h-5 w-5 text-[#00C853]" />
-              </div>
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white mt-3">
-                Pay After Delivery
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                No upfront fees for business accounts. Pay only after your vehicle is successfully delivered to its destination.
-              </p>
-            </article>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-8 leading-relaxed">
-            Learn more about <Link to="/about" className="text-lime-500 font-bold hover:underline">how 101 Drivers works</Link>, read our <Link to="/help-customer" className="text-lime-500 font-bold hover:underline">customer FAQ</Link>, or check our <Link to="/terms" className="text-lime-500 font-bold hover:underline">terms of service</Link> and <Link to="/privacy" className="text-lime-500 font-bold hover:underline">privacy policy</Link>. Drivers can learn about <Link to="/help-driver" className="text-lime-500 font-bold hover:underline">driving with 101 Drivers</Link> and <Link to="/driver-onboarding" className="text-lime-500 font-bold hover:underline">apply to drive</Link>.
-          </p>
-        </section>
-
-        {/* ===== SECTION 5e — FAQ (SEO + FAQ rich results) ===== */}
-        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
-            Frequently Asked Questions
-          </h2>
-          <p className="text-base text-slate-400 dark:text-slate-500 mt-2 italic">
-            Common questions about car delivery service in California.
-          </p>
-          {/* ── SEO: FAQPage JSON-LD ──
-              Inline-rendered so crawlers see it even without SSR.
-              Mirrors the visible Q/A pairs below — structured data
-              must match visible content per Google's guidelines. */}
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
-                "@context": "https://schema.org",
-                "@type": "FAQPage",
-                mainEntity: [
-                  {
-                    "@type": "Question",
-                    name: "How much does car delivery cost in California?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "Our flat-rate pricing is $101 for the first 25 miles, then $1.80 per additional mile. Insurance and transaction fees are included — no hidden costs. Enter your pickup and drop-off addresses on our home page to get an instant quote.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "What areas does 101 Drivers serve?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "We operate strictly in California. Pickup zone covers Westside LA (Santa Monica, Venice, Marina del Rey, Culver City, Westchester). Drop-off is available anywhere in Southern California, including Los Angeles, Orange County, Long Beach, Glendale, Burbank, and beyond.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "Is my vehicle insured during delivery?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "Yes. Every delivery is fully insured from pickup to drop-off. Drivers take GPS-stamped photos, verify the VIN, and record odometer readings at both pickup and drop-off to document the condition of your vehicle at every step.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "Can I track my car during delivery?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "Yes. You receive a tracking link to monitor your vehicle on a live map in real time, from pickup to drop-off. GPS updates continuously throughout the trip.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "Do I need a dealership account to book a delivery?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "No. Both dealerships and individuals can book deliveries. Business accounts get postpaid weekly invoicing; individual accounts pay at the time of booking. Choose the account type that fits your needs.",
-                    },
-                  },
-                  {
-                    "@type": "Question",
-                    name: "How do I become a 101 Drivers driver?",
-                    acceptedAnswer: {
-                      "@type": "Answer",
-                      text: "Sign up on our driver registration page. You will need to verify your email, provide your details (license, SSN, background check), and get approved by our team before you can start accepting delivery jobs. Drivers keep 100% of their tips and choose when to work.",
-                    },
-                  },
-                ],
-              }),
-            }}
-          />
-          {/* Visible FAQ content — must match the JSON-LD above */}
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                How much does car delivery cost in California?
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Our flat-rate pricing is $101 for the first 25 miles, then $1.80 per additional mile. Insurance and transaction fees are included — no hidden costs. Enter your pickup and drop-off addresses on our home page to get an instant quote.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                What areas does 101 Drivers serve?
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                We operate strictly in California. Pickup zone covers Westside LA (Santa Monica, Venice, Marina del Rey, Culver City, Westchester). Drop-off is available anywhere in Southern California, including Los Angeles, Orange County, Long Beach, Glendale, Burbank, and beyond.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                Is my vehicle insured during delivery?
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Yes. Every delivery is fully insured from pickup to drop-off. Drivers take GPS-stamped photos, verify the VIN, and record odometer readings at both pickup and drop-off to document the condition of your vehicle at every step.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                Can I track my car during delivery?
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Yes. You receive a tracking link to monitor your vehicle on a live map in real time, from pickup to drop-off. GPS updates continuously throughout the trip.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                Do I need a dealership account to book a delivery?
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                No. Both dealerships and individuals can book deliveries. Business accounts get postpaid weekly invoicing; individual accounts pay at the time of booking. Choose the account type that fits your needs.
-              </p>
-            </article>
-            <article className="p-5 rounded-2xl bg-[#F5F5F5] dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                How do I become a 101 Drivers driver?
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                Sign up on our driver registration page. You will need to verify your email, provide your details (license, SSN, background check), and get approved by our team before you can start accepting delivery jobs. Drivers keep 100% of their tips and choose when to work.
-              </p>
-            </article>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-6">
-            Have more questions? Visit our <Link to="/help-customer" className="text-lime-500 font-bold hover:underline">customer help center</Link> or <Link to="/help-driver" className="text-lime-500 font-bold hover:underline">driver help center</Link>.
-          </p>
-        </section>
-
         {/* ===== SECTION 6 — Signup Choice (Business / Personal) ===== */}
         <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="max-w-2xl mx-auto text-center">
@@ -1642,16 +1335,16 @@ export default function LandingPage() {
                     <h3 className="text-lg font-black leading-tight text-slate-900 dark:text-white">
                       Be Your Own Boss. Drive Different Cars. Know Your Pay Upfront.
                     </h3>
-                    <p className="text-sm font-bold leading-tight text-slate-600 dark:text-white mt-2">
+                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300 mt-2">
                       Choose when you work and plan your day with full visibility.
                     </p>
                   </div>
-
+                
                 </div>
                 <div className="mt-7 space-y-2">
-                  <h4 className="text-lg font-black leading-tight text-slate-900 dark:text-white mb-4">
-                  How It Works
-                </h4>
+                  <h4 className="text-base font-black leading-tight text-slate-900 dark:text-white mb-4">
+                    How It Works
+                  </h4>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-slate-600 dark:text-slate-400">See the exact route, pickup time, and earnings before you accept any job</p>
@@ -1662,7 +1355,7 @@ export default function LandingPage() {
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Work on your own schedule - no boss, no qoutas</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Work on your own schedule - no boss, no quotas</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-lime-500 shrink-0 mt-0.5" />
