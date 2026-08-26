@@ -633,26 +633,53 @@ export class PostpaidBillingService {
         .map((l: any) => l.invoiceitem)
         .filter(Boolean);
 
+      const failureMessage =
+        (invoice as any).last_payment_error?.message ||
+        "Weekly charge failed";
+      const failureCode =
+        (invoice as any).last_payment_error?.code ||
+        (invoice as any).last_payment_error?.decline_code ||
+        null;
+
+      // Also capture the next retry date from Stripe (if scheduled)
+      const nextRetryAttempt = (invoice as any).next_payment_attempt || null;
+
       if (invoiceItemIds.length > 0) {
+        // ── Primary path: match by stripeInvoiceItemId ──
         await this.prisma.payment.updateMany({
           where: { stripeInvoiceItemId: { in: invoiceItemIds } },
           data: {
             status: EnumPaymentStatus.CHARGE_FAILED,
             failedAt: new Date(),
-            failureMessage:
-              (invoice as any).last_payment_error?.message ||
-              "Weekly charge failed",
+            failureCode,
+            failureMessage,
             stripeInvoiceId: invoiceId,
           },
         });
+      } else {
+        // ── Fallback: match by stripeInvoiceId ──
+        // If Stripe returned line items without the `invoiceitem` field
+        // (happens for some invoice types), fall back to marking ALL
+        // Payments with this stripeInvoiceId as CHARGE_FAILED.
+        // This ensures the admin always sees the failure even if the
+        // line-item matching fails.
+        await this.prisma.payment.updateMany({
+          where: { stripeInvoiceId: invoiceId },
+          data: {
+            status: EnumPaymentStatus.CHARGE_FAILED,
+            failedAt: new Date(),
+            failureCode,
+            failureMessage,
+          },
+        });
+        this.logger.warn(
+          `handleInvoicePaymentFailed: line-item IDs not found — fell back to stripeInvoiceId match for ${invoiceId}`,
+        );
       }
 
       // Freeze the dealer so they can't create more deliveries until admin
       // resolves (e.g. dealer adds a new card → admin clicks "retry" or
       // "unfreeze" in the admin UI).
-      //
-      // Idempotency: skip the UPDATE if the dealer is already frozen with
-      // the same reason. Saves a write + avoids bumping billingFrozenAt.
       if (stripeCustomerId) {
         const existing = await this.prisma.customer.findFirst({
           where: { stripeCustomerId },

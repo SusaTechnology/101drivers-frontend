@@ -73,18 +73,26 @@ import { toast } from 'sonner';
 // Status options for filter
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'All Statuses' },
-  { value: 'INVOICED', label: 'Invoiced' },
   { value: 'PAID', label: 'Paid' },
+  { value: 'CHARGE_FAILED', label: '⚠️ Charge Failed' },
+  { value: 'FAILED', label: '⚠️ Failed' },
+  { value: 'USAGE_REPORTED', label: 'Usage Reported (Awaiting Invoice)' },
+  { value: 'PENDING_STRIPE_USAGE', label: 'Pending Stripe Usage' },
+  { value: 'INVOICED', label: 'Invoiced' },
   { value: 'AUTHORIZED', label: 'Authorized' },
   { value: 'CAPTURED', label: 'Captured' },
   { value: 'VOIDED', label: 'Voided' },
   { value: 'REFUNDED', label: 'Refunded' },
 ];
 
-// Status configuration for KPI cards
+// Status configuration for KPI cards + badges
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string }> = {
-  INVOICED: { label: 'Invoiced', color: 'text-amber-600', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
   PAID: { label: 'Paid', color: 'text-green-600', bgColor: 'bg-green-50 dark:bg-green-900/20', borderColor: 'border-green-200 dark:border-green-800' },
+  CHARGE_FAILED: { label: '⚠️ Charge Failed', color: 'text-red-600', bgColor: 'bg-red-50 dark:bg-red-900/20', borderColor: 'border-red-200 dark:border-red-800' },
+  FAILED: { label: '⚠️ Failed', color: 'text-red-600', bgColor: 'bg-red-50 dark:bg-red-900/20', borderColor: 'border-red-200 dark:border-red-800' },
+  USAGE_REPORTED: { label: 'Usage Reported', color: 'text-amber-600', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
+  PENDING_STRIPE_USAGE: { label: 'Pending Usage', color: 'text-amber-600', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
+  INVOICED: { label: 'Invoiced', color: 'text-amber-600', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
   AUTHORIZED: { label: 'Authorized', color: 'text-blue-600', bgColor: 'bg-blue-50 dark:bg-blue-900/20', borderColor: 'border-blue-200 dark:border-blue-800' },
   CAPTURED: { label: 'Captured', color: 'text-indigo-600', bgColor: 'bg-indigo-50 dark:bg-indigo-900/20', borderColor: 'border-indigo-200 dark:border-indigo-800' },
   VOIDED: { label: 'Voided', color: 'text-slate-500', bgColor: 'bg-slate-100 dark:bg-slate-900/50', borderColor: 'border-slate-300 dark:border-slate-700' },
@@ -205,6 +213,7 @@ export default function AdminPaymentsPage() {
   // Quick filter toggles
   const [invoicedOnly, setInvoicedOnly] = useState(false);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const [failedOnly, setFailedOnly] = useState(false);
   
   const [page, setPage] = useState(1);
   
@@ -213,14 +222,14 @@ export default function AdminPaymentsPage() {
   useEffect(() => {
     const currentFilters = JSON.stringify({
       statusFilter, paymentTypeFilter, providerFilter, debouncedSearch,
-      dateFrom, dateTo, invoicedOnly, unpaidOnly,
+      dateFrom, dateTo, invoicedOnly, unpaidOnly, failedOnly,
     });
     
     if (prevFiltersRef.current && prevFiltersRef.current !== currentFilters && page !== 1) {
       setPage(1);
     }
     prevFiltersRef.current = currentFilters;
-  }, [statusFilter, paymentTypeFilter, providerFilter, debouncedSearch, dateFrom, dateTo, invoicedOnly, unpaidOnly, page]);
+  }, [statusFilter, paymentTypeFilter, providerFilter, debouncedSearch, dateFrom, dateTo, invoicedOnly, unpaidOnly, failedOnly, page]);
   
   // Count active filters for badge
   const activeFilterCount = useMemo(() => {
@@ -233,8 +242,9 @@ export default function AdminPaymentsPage() {
     if (dateTo) count++;
     if (invoicedOnly) count++;
     if (unpaidOnly) count++;
+    if (failedOnly) count++;
     return count;
-  }, [statusFilter, paymentTypeFilter, providerFilter, debouncedSearch, dateFrom, dateTo, invoicedOnly, unpaidOnly]);
+  }, [statusFilter, paymentTypeFilter, providerFilter, debouncedSearch, dateFrom, dateTo, invoicedOnly, unpaidOnly, failedOnly]);
   
   // Build query params
   const queryParams: AdminPaymentsQueryParams = useMemo(() => {
@@ -272,9 +282,12 @@ export default function AdminPaymentsPage() {
     if (unpaidOnly) {
       params.unpaidOnly = true;
     }
+    if (failedOnly) {
+      params.status = 'CHARGE_FAILED';
+    }
     
     return params;
-  }, [statusFilter, paymentTypeFilter, providerFilter, debouncedSearch, dateFrom, dateTo, invoicedOnly, unpaidOnly, page]);
+  }, [statusFilter, paymentTypeFilter, providerFilter, debouncedSearch, dateFrom, dateTo, invoicedOnly, unpaidOnly, failedOnly, page]);
   
   // Fetch data
   const { data, isLoading, isFetching, isError, error, refetch } = useAdminPayments(queryParams);
@@ -283,15 +296,19 @@ export default function AdminPaymentsPage() {
   const metrics = useMemo(() => {
     if (!data?.items) {
       return {
-        INVOICED: 0, PAID: 0, AUTHORIZED: 0, CAPTURED: 0, VOIDED: 0, REFUNDED: 0,
+        PAID: 0, CHARGE_FAILED: 0, FAILED: 0, USAGE_REPORTED: 0,
+        PENDING_STRIPE_USAGE: 0, INVOICED: 0, AUTHORIZED: 0,
+        CAPTURED: 0, VOIDED: 0, REFUNDED: 0,
         total: 0, totalAmount: 0,
       };
     }
-    
+
     const counts: Record<string, number> = {
-      INVOICED: 0, PAID: 0, AUTHORIZED: 0, CAPTURED: 0, VOIDED: 0, REFUNDED: 0,
+      PAID: 0, CHARGE_FAILED: 0, FAILED: 0, USAGE_REPORTED: 0,
+      PENDING_STRIPE_USAGE: 0, INVOICED: 0, AUTHORIZED: 0,
+      CAPTURED: 0, VOIDED: 0, REFUNDED: 0,
     };
-    
+
     let totalAmount = 0;
     data.items.forEach(p => {
       if (counts[p.status] !== undefined) {
@@ -299,7 +316,7 @@ export default function AdminPaymentsPage() {
       }
       totalAmount += p.amount;
     });
-    
+
     return {
       ...counts,
       total: data.items.length,
@@ -325,13 +342,14 @@ export default function AdminPaymentsPage() {
       if (dateTo) exportParams.to = dateTo;
       if (invoicedOnly) exportParams.invoicedOnly = true;
       if (unpaidOnly) exportParams.unpaidOnly = true;
+      if (failedOnly) exportParams.status = 'CHARGE_FAILED';
       
       await downloadReport('payments', exportParams, format);
       toast.success(`Exported as ${format.toUpperCase()}`);
     } catch {
       toast.error(`Failed to export ${format.toUpperCase()}`);
     }
-  }, [statusFilter, paymentTypeFilter, providerFilter, debouncedSearch, dateFrom, dateTo, invoicedOnly, unpaidOnly]);
+  }, [statusFilter, paymentTypeFilter, providerFilter, debouncedSearch, dateFrom, dateTo, invoicedOnly, unpaidOnly, failedOnly]);
   
   const resetFilters = useCallback(() => {
     setStatusFilter('all');
@@ -416,7 +434,21 @@ export default function AdminPaymentsPage() {
                   </span>
                 </div>
               </div>
-              
+
+              {/* Failure reason — shown in red when payment failed */}
+              {payment.failureMessage && (
+                <div className="flex items-start gap-2 mb-2 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                  <div className="text-xs text-red-700 dark:text-red-300">
+                    <span className="font-bold">Failure reason:</span>{' '}
+                    {payment.failureMessage}
+                    {payment.failureCode && (
+                      <span className="text-red-400 ml-1">({payment.failureCode})</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Customer info */}
               <div className="flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-400">
                 <div className="flex items-center gap-1.5">
@@ -708,19 +740,26 @@ export default function AdminPaymentsPage() {
                   Quick Filters
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  <ToggleButton 
-                    active={invoicedOnly} 
+                  <ToggleButton
+                    active={invoicedOnly}
                     onClick={() => setInvoicedOnly(!invoicedOnly)}
                     activeColor="bg-amber-500 text-white border-amber-500"
                   >
                     Invoiced Only
                   </ToggleButton>
-                  <ToggleButton 
-                    active={unpaidOnly} 
+                  <ToggleButton
+                    active={unpaidOnly}
                     onClick={() => setUnpaidOnly(!unpaidOnly)}
                     activeColor="bg-rose-500 text-white border-rose-500"
                   >
                     Unpaid Only
+                  </ToggleButton>
+                  <ToggleButton
+                    active={failedOnly}
+                    onClick={() => setFailedOnly(!failedOnly)}
+                    activeColor="bg-red-600 text-white border-red-600"
+                  >
+                    ⚠️ Failed Only
                   </ToggleButton>
                 </div>
               </div>

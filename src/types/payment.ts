@@ -1,6 +1,16 @@
 // Payment types for admin API
 
-export type PaymentStatus = 'INVOICED' | 'PAID' | 'AUTHORIZED' | 'CAPTURED' | 'VOIDED' | 'REFUNDED';
+export type PaymentStatus =
+  | 'INVOICED'
+  | 'PAID'
+  | 'AUTHORIZED'
+  | 'CAPTURED'
+  | 'VOIDED'
+  | 'REFUNDED'
+  | 'FAILED'               // Legacy prepaid failure
+  | 'PENDING_STRIPE_USAGE'  // Postpaid: delivery created, InvoiceItem not yet reported
+  | 'USAGE_REPORTED'        // Postpaid: InvoiceItem created, awaiting weekly invoice
+  | 'CHARGE_FAILED';        // Postpaid: weekly charge failed
 export type PaymentType = 'POSTPAID' | 'PREPAID';
 export type PaymentProvider = 'MANUAL' | 'STRIPE';
 export type PayoutStatus = 'ELIGIBLE' | 'PAID' | 'PENDING' | 'FAILED';
