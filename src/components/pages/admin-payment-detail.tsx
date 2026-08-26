@@ -49,6 +49,7 @@ import {
   getProviderLabel,
 } from '@/hooks/useAdminPayments';
 import { getUser } from '@/lib/tanstack/dataQuery';
+import { getStripeErrorInfo } from '@/lib/stripe-error-codes';
 import type {
   MarkInvoicedRequest,
   MarkPaidRequest,
@@ -495,26 +496,104 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                     />
                   )}
                 </div>
-                {(payment.failureCode || payment.failureMessage) && (
-                  <div className="mt-4 p-3 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/10">
-                    <div className="flex items-center gap-2 mb-1">
-                      <AlertCircle className="w-4 h-4 text-rose-500" />
-                      <span className="text-xs font-bold uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                        Failure
-                      </span>
+                {(payment.failureCode || payment.failureMessage) && (() => {
+                  const errorInfo = getStripeErrorInfo(payment.failureCode);
+                  return (
+                    <div className="mt-4 p-4 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="w-4 h-4 text-rose-500" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                          Payment Failure
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'ml-auto text-[10px] font-bold border',
+                            errorInfo.severity === 'critical' && 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+                            errorInfo.severity === 'danger' && 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+                            errorInfo.severity === 'warning' && 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+                            errorInfo.severity === 'info' && 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+                          )}
+                        >
+                          {errorInfo.severity}
+                        </Badge>
+                      </div>
+
+                      {/* Admin-specific message (from stripe-error-codes.ts) */}
+                      <div className="text-sm text-rose-600 dark:text-rose-400 font-medium">
+                        {errorInfo.adminMessage}
+                      </div>
+
+                      {/* Raw error code + dealer-facing message for context */}
+                      {payment.failureCode && (
+                        <div className="text-xs font-mono text-rose-500 dark:text-rose-400 mt-2">
+                          Stripe code: {payment.failureCode}
+                        </div>
+                      )}
+                      {payment.failureMessage && payment.failureMessage !== errorInfo.adminMessage && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">
+                          Dealer message: &ldquo;{payment.failureMessage}&rdquo;
+                        </div>
+                      )}
+
+                      {/* Failure attempt info */}
+                      {payment.failedAt && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                          Failed at: {formatPaymentDate(payment.failedAt)}
+                        </div>
+                      )}
+
+                      {/* Resolution action */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {errorInfo.willAutoRetry ? (
+                          <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px]">
+                            Stripe will auto-retry
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-[10px]">
+                            No auto-retry scheduled
+                          </Badge>
+                        )}
+                        {errorInfo.shouldRestrict && (
+                          <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-[10px]">
+                            ⚠️ Should restrict account
+                          </Badge>
+                        )}
+                        {errorInfo.resolutionAction === 'admin_review' && (
+                          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-[10px]">
+                            🔍 Admin review required
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Action buttons — navigate to the relevant page */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {/* Navigate to the dealer's user detail page */}
+                        {delivery?.customer?.id && (
+                          <Link
+                            to="/admin-user-detail/$userId"
+                            params={{ userId: delivery.customer.id }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-950 hover:opacity-90 transition"
+                          >
+                            <User className="w-3.5 h-3.5" />
+                            View dealer details
+                          </Link>
+                        )}
+                        {/* Navigate to the delivery detail page */}
+                        {delivery?.id && (
+                          <Link
+                            to="/admin-delivery-detail"
+                            search={{ deliveryId: delivery.id }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                          >
+                            <Truck className="w-3.5 h-3.5" />
+                            View delivery
+                          </Link>
+                        )}
+                      </div>
                     </div>
-                    {payment.failureCode && (
-                      <div className="text-sm font-mono text-rose-700 dark:text-rose-300">
-                        {payment.failureCode}
-                      </div>
-                    )}
-                    {payment.failureMessage && (
-                      <div className="text-sm text-rose-600 dark:text-rose-400 mt-1">
-                        {payment.failureMessage}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
 
