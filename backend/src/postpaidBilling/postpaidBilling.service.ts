@@ -677,10 +677,41 @@ export class PostpaidBillingService {
         );
       }
 
-      // Freeze the dealer so they can't create more deliveries until admin
-      // resolves (e.g. dealer adds a new card → admin clicks "retry" or
-      // "unfreeze" in the admin UI).
-      if (stripeCustomerId) {
+      // ── Graduated freeze logic ──────────────────────────────────
+      // Big companies (Uber, DoorDash, Amazon) don't freeze accounts
+      // on the first payment failure. Stripe auto-retries up to 4 times
+      // over ~2 weeks. We follow the same pattern:
+      //
+      //   1st failure:  NO freeze. Stripe will auto-retry. Dealer sees
+      //                 an amber banner: "Update your card before [date]."
+      //   2nd failure:  NO freeze. Red banner. Dealer sees: "Payment
+      //                 failed again. Please update your card."
+      //   3rd+ failure: RESTRICT (not full freeze). Dealer can't create
+      //                 NEW deliveries but can still access dashboard,
+      //                 see history, update payment, contact support.
+      //   Fraudulent:   IMMEDIATE freeze. Admin review required.
+      //   Transient:    NO freeze, no banner. Just retry.
+      //
+      // Count consecutive failures from Stripe's attempt count on the
+      // invoice. Stripe increments `attempt_count` on each retry.
+      const attemptCount = (invoice as any).attempt_count || 1;
+      const MAX_FAILURES_BEFORE_RESTRICT = 3;
+
+      // Fraud/security violations → immediate freeze regardless of count
+      const isCritical =
+        failureCode === 'fraudulent' ||
+        failureCode === 'security_violation' ||
+        failureCode === 'service_not_allowed';
+
+      // Transient errors → never freeze, never restrict
+      const isTransient =
+        failureCode === 'processing_error' ||
+        failureCode === 'offline_decline' ||
+        failureCode === 'issuer_unavailable';
+
+      const shouldRestrict = isCritical || (!isTransient && attemptCount >= MAX_FAILURES_BEFORE_RESTRICT);
+
+      if (stripeCustomerId && shouldRestrict) {
         const existing = await this.prisma.customer.findFirst({
           where: { stripeCustomerId },
           select: { id: true, billingFrozen: true, billingFrozenReason: true },
@@ -699,15 +730,22 @@ export class PostpaidBillingService {
             },
           });
           this.logger.warn(
-            `Dealer ${existing.id} (stripeCustomer ${stripeCustomerId}) FROZEN due to failed invoice ${invoiceId}`,
+            `Dealer ${existing.id} RESTRICTED after ${attemptCount} payment failure(s) on invoice ${invoiceId} (code: ${failureCode})`,
           );
         } else if (alreadyFrozenWithSameReason) {
-          // Skip silently — Stripe retry, nothing changed.
+          // Already restricted — skip silently
         } else {
           this.logger.warn(
-            `invoice.payment_failed ${invoiceId}: no Customer row found for stripeCustomer ${stripeCustomerId} — cannot freeze`,
+            `invoice.payment_failed ${invoiceId}: no Customer row found for stripeCustomer ${stripeCustomerId} — cannot restrict`,
           );
         }
+      } else if (stripeCustomerId && !shouldRestrict) {
+        // First or second failure — log but DON'T freeze
+        this.logger.log(
+          `Payment failure #${attemptCount} for invoice ${invoiceId} (code: ${failureCode}). ` +
+          `Stripe will auto-retry. Dealer NOT frozen — graduated response. ` +
+          `Will restrict after ${MAX_FAILURES_BEFORE_RESTRICT} failures.`,
+        );
       }
     } catch (err: any) {
       this.logger.error(
@@ -820,6 +858,20 @@ export class PostpaidBillingService {
     unpaidDeliveryCount: number;
     hasSavedPaymentMethod: boolean;
     nextInvoiceDate: Date | null;
+    // Per-payment failure details — so the dealer dashboard can show
+    // "Your charge of $X failed because [reason]. Stripe will retry
+    // on [date]." with an "Update payment method" button.
+    failedPayments: Array<{
+      paymentId: string;
+      amount: number;
+      failureCode: string | null;
+      failureMessage: string | null;
+      failedAt: Date | null;
+      deliveryId: string;
+      pickupAddress: string;
+      dropoffAddress: string;
+      stripeInvoiceId: string | null;
+    }>;
   }> {
     const dealer = await this.prisma.customer.findUnique({
       where: { id: dealerId },
@@ -890,6 +942,34 @@ export class PostpaidBillingService {
       }
     }
 
+    // ── Fetch failed payments for the dealer dashboard ──
+    // The dealer sees per-payment failure details (amount, reason, date)
+    // so they know exactly what happened and what to do.
+    const failedPayments = await this.prisma.payment.findMany({
+      where: {
+        delivery: { customerId: dealerId },
+        paymentType: EnumPaymentPaymentType.POSTPAID,
+        status: EnumPaymentStatus.CHARGE_FAILED,
+      },
+      select: {
+        id: true,
+        amount: true,
+        failureCode: true,
+        failureMessage: true,
+        failedAt: true,
+        stripeInvoiceId: true,
+        delivery: {
+          select: {
+            id: true,
+            pickupAddress: true,
+            dropoffAddress: true,
+          },
+        },
+      },
+      orderBy: { failedAt: 'desc' },
+      take: 10,
+    });
+
     return {
       dealerId: dealer.id,
       businessName: dealer.businessName,
@@ -904,6 +984,17 @@ export class PostpaidBillingService {
       unpaidDeliveryCount: unpaidCount,
       hasSavedPaymentMethod: Boolean(dealer.stripeDefaultPaymentMethodId),
       nextInvoiceDate,
+      failedPayments: failedPayments.map((p) => ({
+        paymentId: p.id,
+        amount: p.amount,
+        failureCode: p.failureCode,
+        failureMessage: p.failureMessage,
+        failedAt: p.failedAt,
+        deliveryId: p.delivery.id,
+        pickupAddress: p.delivery.pickupAddress,
+        dropoffAddress: p.delivery.dropoffAddress,
+        stripeInvoiceId: p.stripeInvoiceId,
+      })),
     };
   }
 
