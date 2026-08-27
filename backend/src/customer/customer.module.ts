@@ -10,9 +10,19 @@ import { CustomerApprovalEngine } from "src/domain/customer/customerApproval.eng
 import { CustomerPricingEngine } from "src/domain/customer/customerPricing.engine";
 import { NotificationEventEngine } from "src/domain/notificationEvent/notificationEvent.engine";
 import { MailService } from "src/common/mail/mail.service";
+import { PostpaidBillingModule } from "src/postpaidBilling/postpaidBilling.module";
 
 @Module({
-  imports: [CustomerModuleBase, forwardRef(() => AuthModule)],
+  imports: [
+    CustomerModuleBase,
+    forwardRef(() => AuthModule),
+    // Import PostpaidBillingModule so CustomerApprovalEngine can inject
+    // PostpaidBillingService — used for auto-setup of the Stripe
+    // customer + subscription when an admin approves a BUSINESS customer
+    // WITH postpaidEnabled=true. Atomic with rollback to prepaid if the
+    // Stripe setup fails (no half-state).
+    PostpaidBillingModule,
+  ],
   controllers: [CustomerController],
   providers: [
     CustomerService,

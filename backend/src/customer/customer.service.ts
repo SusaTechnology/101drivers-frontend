@@ -267,14 +267,27 @@ export class CustomerService extends CustomerServiceBase {
     postpaidEnabled?: boolean;
     note?: string | null;
   }): Promise<any> {
+    // Capture any postpaid setup warning so we can return it to the
+    // API caller (admin frontend shows a toast based on this).
+    let postpaidSetupWarning: string | null = null;
     await this.customerApprovalEngine.approveCustomer({
       customerId: input.customerId,
       actorUserId: input.actorUserId ?? null,
       postpaidEnabled: input.postpaidEnabled === true,
       note: input.note ?? null,
+      onPostpaidSetupWarning: (warning) => {
+        postpaidSetupWarning = warning;
+      },
     });
 
-    return this.domain.findUnique({ id: input.customerId });
+    const customer = await this.domain.findUnique({ id: input.customerId });
+    // Attach the warning to the returned object so the API can pass it
+    // through. The frontend reads `postpaidSetupWarning` from the response
+    // and shows a toast if it's present.
+    if (postpaidSetupWarning && customer) {
+      (customer as any).postpaidSetupWarning = postpaidSetupWarning;
+    }
+    return customer;
   }
 
   async rejectCustomer(input: {

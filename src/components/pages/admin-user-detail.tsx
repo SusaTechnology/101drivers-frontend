@@ -650,8 +650,19 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         actorUserId,
       },
       {
-        onSuccess: () => {
-          toast.success('Customer approved successfully');
+        onSuccess: (data: any) => {
+          // The backend may return a `postpaidSetupWarning` field if
+          // the admin approved the customer as postpaid but the Stripe
+          // auto-setup failed. In that case, the customer is approved
+          // as PREPAID instead (no half-state), and the warning explains
+          // why + how to fix it. Show a warning toast (not success).
+          if (data?.postpaidSetupWarning) {
+            toast.warning('Customer approved as Prepaid', {
+              description: data.postpaidSetupWarning,
+            });
+          } else {
+            toast.success('Customer approved successfully');
+          }
           closeDialog();
           refetch();
         },
