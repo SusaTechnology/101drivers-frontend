@@ -952,14 +952,31 @@ export class PostpaidBillingService {
    *     on old Payment rows (the underlying issue is resolved by the switch)
    *
    * Prepaid → Postpaid:
-   *   - Calls setupDealerForPostpaid (creates Stripe customer + subscription)
-   *   - Sets postpaidEnabled = true
-   *   - Sets billingMode = WEEKLY_POSTPAID
+   *   - Sets postpaidEnabled = true + billingMode = WEEKLY_POSTPAID
+   *   - If an existing Stripe subscription is found (previously cancelled at
+   *     period end when the dealer was switched to prepaid), it is REACTIVATED
+   *     by setting cancel_at_period_end = false. The Stripe customer +
+   *     subscription IDs are preserved.
+   *   - If NO existing Stripe subscription is found, the admin must click
+   *     the "Setup Postpaid" button in the admin UI to create one. The
+   *     switch itself just flips the flag — it does NOT auto-create the
+   *     Stripe customer/subscription. (This gives the admin explicit control
+   *     and matches the UI flow where the Postpaid Billing section is
+   *     highlighted after the switch to remind the admin to complete setup.)
+   *
+   * Returns a structured result so the frontend can show the right message
+   * (existing subscription reactivated vs. setup still required).
    */
   async switchBillingMode(
     dealerId: string,
     newMode: 'PREPAID' | 'POSTPAID',
-  ): Promise<void> {
+  ): Promise<{
+    mode: 'PREPAID' | 'POSTPAID';
+    stripeCustomerId: string | null;
+    stripeSubscriptionId: string | null;
+    subscriptionReactivated: boolean;
+    setupRequired: boolean;
+  }> {
     // Pre-check
     const eligibility = await this.getSwitchEligibility(dealerId);
     if (!eligibility.canSwitch) {
@@ -1016,11 +1033,99 @@ export class PostpaidBillingService {
       });
 
       this.logger.log(`Dealer ${dealerId} switched to PREPAID`);
-    } else {
-      // ── Prepaid → Postpaid ───────────────────────────────────
-      await this.setupDealerForPostpaid(dealerId);
-      this.logger.log(`Dealer ${dealerId} switched to POSTPAID`);
+
+      // Fetch the updated customer to return current Stripe refs
+      const updated = await this.prisma.customer.findUnique({
+        where: { id: dealerId },
+        select: { stripeCustomerId: true, stripeSubscriptionId: true },
+      });
+      return {
+        mode: 'PREPAID',
+        stripeCustomerId: updated?.stripeCustomerId ?? null,
+        stripeSubscriptionId: updated?.stripeSubscriptionId ?? null,
+        subscriptionReactivated: false,
+        setupRequired: false,
+      };
     }
+
+    // ── Prepaid → Postpaid ───────────────────────────────────
+    // 1. Flip the customer flags first. setupDealerForPostpaid (called
+    //    separately by the admin via the "Setup Postpaid" button) requires
+    //    postpaidEnabled=true, so we set it here before any Stripe work.
+    await this.prisma.customer.update({
+      where: { id: dealerId },
+      data: {
+        postpaidEnabled: true,
+        billingMode: EnumCustomerBillingMode.WEEKLY_POSTPAID,
+      },
+    });
+
+    let subscriptionReactivated = false;
+
+    // 2. If an existing subscription is present, REACTIVATE it. When the
+    //    dealer was previously switched to prepaid, we set
+    //    cancel_at_period_end=true on the subscription. As long as the
+    //    current billing period hasn't ended, the subscription is still
+    //    "active" and can be un-cancelled by setting cancel_at_period_end
+    //    back to false. If the period already ended and the subscription
+    //    is fully canceled, the admin will need to click "Setup Postpaid"
+    //    to create a new one.
+    if (eligibility.stripeSubscriptionId && this.stripeService) {
+      try {
+        const sub = await this.stripeService.stripe.subscriptions.retrieve(
+          eligibility.stripeSubscriptionId,
+        );
+
+        if (sub.status === 'active' && sub.cancel_at_period_end) {
+          await this.stripeService.stripe.subscriptions.update(
+            eligibility.stripeSubscriptionId,
+            { cancel_at_period_end: false },
+          );
+          subscriptionReactivated = true;
+          this.logger.log(
+            `Subscription ${eligibility.stripeSubscriptionId} for dealer ${dealerId} ` +
+            `re-activated (cancel_at_period_end=false) on switch to postpaid`,
+          );
+        } else if (sub.status === 'active') {
+          // Already active and not marked for cancellation — nothing to do
+          subscriptionReactivated = true;
+          this.logger.log(
+            `Subscription ${eligibility.stripeSubscriptionId} for dealer ${dealerId} ` +
+            `already active — no reactivation needed`,
+          );
+        } else {
+          // Subscription is canceled/expired/unpaid — admin needs to set up a new one
+          this.logger.warn(
+            `Subscription ${eligibility.stripeSubscriptionId} for dealer ${dealerId} ` +
+            `is in status ${sub.status} — admin must click "Setup Postpaid" to create a new one`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.warn(
+          `Failed to retrieve/re-activate subscription ${eligibility.stripeSubscriptionId} ` +
+          `for dealer ${dealerId}: ${err.message} — admin may need to click "Setup Postpaid" manually.`,
+        );
+      }
+    }
+
+    // Fetch the updated customer to return current Stripe refs
+    const updated = await this.prisma.customer.findUnique({
+      where: { id: dealerId },
+      select: { stripeCustomerId: true, stripeSubscriptionId: true },
+    });
+
+    this.logger.log(
+      `Dealer ${dealerId} switched to POSTPAID ` +
+      `(reactivated=${subscriptionReactivated}, setupRequired=${!subscriptionReactivated && !updated?.stripeSubscriptionId})`,
+    );
+
+    return {
+      mode: 'POSTPAID',
+      stripeCustomerId: updated?.stripeCustomerId ?? null,
+      stripeSubscriptionId: updated?.stripeSubscriptionId ?? null,
+      subscriptionReactivated,
+      setupRequired: !subscriptionReactivated,
+    };
   }
   async setCreditCap(dealerId: string, capCents: number | null): Promise<void> {
     if (capCents !== null && capCents < 0) {

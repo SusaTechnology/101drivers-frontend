@@ -112,16 +112,65 @@ export function BillingSwitchDialog({
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-start gap-2">
-                      <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                      <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                        <p className="font-bold">Switching to Postpaid — what happens:</p>
-                        <p>• New deliveries will be billed weekly via Stripe invoices</p>
-                        <p>• A Stripe customer + subscription will be created (if not already)</p>
-                        <p>• No immediate charge — the customer pays when the weekly invoice is finalized</p>
+                  <div className="space-y-2">
+                    <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-start gap-2">
+                        <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                          <p className="font-bold">Switching to Postpaid — what happens:</p>
+                          <p>• New deliveries will be billed weekly via Stripe invoices</p>
+                          <p>• No immediate charge — the customer pays when the weekly invoice is finalized</p>
+                          {eligibility.stripeSubscriptionId ? (
+                            <p>• <strong>Existing Stripe subscription will be reactivated</strong>{' '}
+                              (cancel_at_period_end will be set back to false)</p>
+                          ) : (
+                            <p>• <strong>No existing Stripe customer</strong> — after switching,{' '}
+                              you must click the <strong>Setup Postpaid</strong> button in the{' '}
+                              Postpaid Billing section to create the Stripe customer + subscription</p>
+                          )}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Reactivation banner — shown when the dealer already
+                        has a Stripe customer + subscription that will be
+                        reactivated by this switch. */}
+                    {eligibility.stripeSubscriptionId && (
+                      <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                          <div className="text-xs text-green-700 dark:text-green-300 space-y-1">
+                            <p className="font-bold">This customer already has a Stripe customer ID + subscription ID</p>
+                            <p className="font-mono text-[10px] text-green-600 dark:text-green-400">
+                              {eligibility.stripeSubscriptionId}
+                            </p>
+                            <p>The existing subscription will be reactivated and the saved card on file will be charged for the next weekly invoice.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Setup-required banner — shown when the dealer does
+                        NOT have a Stripe subscription. Reminds the admin
+                        that they'll need to click "Setup Postpaid" after
+                        the switch completes. */}
+                    {!eligibility.stripeSubscriptionId && (
+                      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                            <p className="font-bold">Setup required after switching</p>
+                            <p>
+                              This dealer has no Stripe customer or subscription yet. After you
+                              confirm the switch, the page will scroll to the <strong>Postpaid
+                              Billing</strong> section — click the <strong>Setup Postpaid</strong>{' '}
+                              button there to create the Stripe customer + subscription. New
+                              postpaid deliveries cannot be created until setup is complete.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

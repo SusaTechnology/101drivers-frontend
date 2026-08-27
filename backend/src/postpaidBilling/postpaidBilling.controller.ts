@@ -103,8 +103,8 @@ export class PostpaidBillingController {
     @Param("dealerId") dealerId: string,
     @Body() body: { mode: 'PREPAID' | 'POSTPAID' },
   ) {
-    await this.postpaidBilling.switchBillingMode(dealerId, body.mode);
-    return { ok: true, dealerId, mode: body.mode };
+    const result = await this.postpaidBilling.switchBillingMode(dealerId, body.mode);
+    return { ok: true, dealerId, ...result };
   }
 
   // ─── ADMIN: Status / Inspect ────────────────────────────────

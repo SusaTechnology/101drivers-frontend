@@ -21,6 +21,18 @@
 // cap UI is kept out for now. The backend logic (setCreditCap /
 // postpaidCreditLimitCents) remains in place; admin can still set it via
 // direct API call if needed.
+//
+// Props:
+//   • dealerId — the customer's ID (used to build the API endpoints)
+//   • highlight — when true, the card is rendered with an emphasized
+//     border + shadow + a "Setup required" banner to draw the admin's
+//     attention. Set by the parent after a successful billing-mode
+//     switch from prepaid → postpaid (only when no existing Stripe
+//     customer/subscription is present, so the admin remembers to click
+//     the "Setup Postpaid" button).
+//   • onSetupComplete — callback invoked when the admin clicks the
+//     "Setup Postpaid" button and the API call succeeds. The parent
+//     uses this to clear the highlight state.
 
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -38,6 +50,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Info,
+  Sparkles,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -82,13 +95,26 @@ interface PostpaidAdminStatus {
   }>
 }
 
-export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) {
+interface PostpaidBillingCardProps {
+  dealerId: string
+  /** When true, the card gets an emphasized border + shadow + a setup
+   * banner to draw the admin's attention. Set by the parent after a
+   * successful switch from prepaid → postpaid when no existing Stripe
+   * customer/subscription is present. */
+  highlight?: boolean
+  /** Called when the admin successfully clicks "Setup Postpaid" and the
+   * API call returns. Parent uses this to clear the highlight. */
+  onSetupComplete?: () => void
+}
+
+export default function PostpaidBillingCard({
+  dealerId,
+  highlight = false,
+  onSetupComplete,
+}: PostpaidBillingCardProps) {
   const [setupLoading, setSetupLoading] = useState(false)
   const [unfreezeLoading, setUnfreezeLoading] = useState(false)
   const [retryLoading, setRetryLoading] = useState(false)
-  const [switchDialogOpen, setSwitchDialogOpen] = useState(false)
-  const [switchLoading, setSwitchLoading] = useState(false)
-  const [switchTarget, setSwitchTarget] = useState<'PREPAID' | 'POSTPAID'>('PREPAID')
 
   const {
     data: status,
@@ -113,6 +139,7 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
         description: `Stripe Customer ${data.stripeCustomerId} • Subscription ${data.stripeSubscriptionId}`,
       })
       refetch()
+      onSetupComplete?.()
     },
     onError: (error: any) => {
       toast.error('Postpaid setup failed', {
@@ -175,49 +202,6 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
     }
   }
 
-  // ── Billing mode switch ──
-  // Fetches eligibility when the switch dialog opens
-  const { data: switchEligibility, isLoading: eligibilityLoading, refetch: refetchEligibility } = useDataQuery<{
-    canSwitch: boolean
-    blockReason: string | null
-    outstandingBalance: number
-    pendingDeliveryCount: number
-    failedChargeCount: number
-    hasSavedPaymentMethod: boolean
-    currentMode: 'PREPAID' | 'POSTPAID'
-    stripeSubscriptionId: string | null
-  }>({
-    apiEndPoint: `${API_URL}/api/postpaid-billing/dealers/${dealerId}/switch-check`,
-    noFilter: true,
-    enabled: false, // only fetch when dialog opens
-  })
-
-  const switchMutation = useDataMutation<any, any>({
-    apiEndPoint: `${API_URL}/api/postpaid-billing/dealers/${dealerId}/switch-billing`,
-    method: 'POST',
-    onSuccess: () => {
-      toast.success(`Switched to ${switchTarget === 'PREPAID' ? 'Prepaid' : 'Postpaid'}`)
-      setSwitchLoading(false)
-      setSwitchDialogOpen(false)
-      refetch()
-    },
-    onError: (error: Error) => {
-      toast.error('Switch failed', { description: error.message })
-      setSwitchLoading(false)
-    },
-  })
-
-  const openSwitchDialog = (target: 'PREPAID' | 'POSTPAID') => {
-    setSwitchTarget(target)
-    setSwitchDialogOpen(true)
-    refetchEligibility()
-  }
-
-  const handleConfirmSwitch = async () => {
-    setSwitchLoading(true)
-    switchMutation.mutate({ mode: switchTarget })
-  }
-
   if (isLoading) {
     return (
       <Card className="rounded-2xl">
@@ -233,16 +217,50 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
     return null
   }
 
+  // Has at least one CHARGE_FAILED payment? Used to enable the retry
+  // button even when the dealer isn't frozen (1-2 failures don't freeze
+  // per the graduated policy, but admin may still want to retry the
+  // open invoice).
+  const hasFailedCharge = status.unpaidPayments.some(
+    (p) => p.status === 'CHARGE_FAILED',
+  )
+
+  // Retry button is enabled when:
+  //   • dealer is on postpaid, AND
+  //   • has a Stripe subscription (retry needs an open invoice to call
+  //     Stripe.pay on), AND
+  //   • there's something to retry — either the dealer is frozen OR
+  //     there's at least one CHARGE_FAILED payment in the list.
+  const canRetry =
+    status.postpaidEnabled &&
+    Boolean(status.stripe.subscriptionId) &&
+    (status.billingFrozen || hasFailedCharge)
+
   return (
-    <Card className={cn(
-      'rounded-2xl border-slate-200 dark:border-slate-800',
-      !status.postpaidEnabled && 'opacity-60'
-    )}>
+    <Card
+      id="postpaid-billing-card"
+      className={cn(
+        'rounded-2xl transition-all duration-500',
+        // Default border
+        'border-slate-200 dark:border-slate-800',
+        // When on prepaid, dim the card
+        !status.postpaidEnabled && 'opacity-60',
+        // When highlight is on, emphasize with blue border + shadow + pulse
+        highlight &&
+          'border-blue-500 dark:border-blue-400 shadow-[0_0_0_4px_rgba(59,130,246,0.18),0_12px_32px_-8px_rgba(59,130,246,0.45)] ring-2 ring-blue-400/40 animate-[pulse_2.5s_ease-in-out_infinite]',
+      )}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
             <Settings className="h-4 w-4" />
             Postpaid Billing
+            {highlight && (
+              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] ml-1 animate-pulse">
+                <Sparkles className="w-3 h-3 mr-1" />
+                Setup required
+              </Badge>
+            )}
           </CardTitle>
           <Button
             variant="ghost"
@@ -261,8 +279,48 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Highlight banner — shown when the parent just switched
+            this dealer from prepaid to postpaid AND there's no existing
+            Stripe subscription. Reminds the admin to click "Setup
+            Postpaid" below. */}
+        {highlight && !status.stripe.subscriptionId && (
+          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-800 animate-pulse">
+            <div className="flex items-start gap-2">
+              <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-blue-800 dark:text-blue-200">
+                <p className="font-bold">Billing mode switched to Postpaid — Stripe setup needed</p>
+                <p className="mt-1">
+                  This dealer doesn't have a Stripe customer + subscription yet.
+                  Click the <strong>Setup Postpaid</strong> button below to create
+                  them. New postpaid deliveries cannot be created until setup
+                  is complete.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Highlight banner — shown when the parent just switched
+            this dealer from prepaid to postpaid AND an existing
+            subscription was reactivated. */}
+        {highlight && status.stripe.subscriptionId && (
+          <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-800">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-green-800 dark:text-green-200">
+                <p className="font-bold">Existing Stripe subscription reactivated</p>
+                <p className="mt-1">
+                  This dealer's existing Stripe customer + subscription has been
+                  reactivated. Verify the details below — the saved card on file
+                  will be charged for the next weekly invoice.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Inactive notice — shown when the dealer is on Prepaid (postpaidEnabled=false) */}
-        {!status.postpaidEnabled && (
+        {!status.postpaidEnabled && !highlight && (
           <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
             <div className="flex items-start gap-2">
               <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
@@ -382,7 +440,14 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
           <Button
             onClick={handleSetup}
             disabled={setupLoading || !status.postpaidEnabled}
-            className="rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+            className={cn(
+              'rounded-xl text-white hover:bg-blue-700',
+              // When highlighted (setup required), make the button pop
+              highlight && !status.stripe.subscriptionId
+                ? 'bg-blue-600 ring-2 ring-blue-400 ring-offset-2 shadow-lg'
+                : 'bg-blue-600',
+              !status.postpaidEnabled && 'opacity-40',
+            )}
             size="sm"
           >
             {setupLoading ? (
@@ -412,10 +477,24 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
 
           <Button
             onClick={handleRetry}
-            disabled={!status.postpaidEnabled || !status.billingFrozen || retryLoading}
+            disabled={!canRetry || retryLoading}
             variant="outline"
-            className="rounded-xl disabled:opacity-40"
+            className={cn(
+              'rounded-xl',
+              // Keep retry button visible (not dimmed) when it's actionable;
+              // only dim it when there's genuinely nothing to retry.
+              canRetry ? '' : 'opacity-40',
+            )}
             size="sm"
+            title={
+              !status.postpaidEnabled
+                ? 'Retry is only available for postpaid customers'
+                : !status.stripe.subscriptionId
+                ? 'No Stripe subscription — run Setup first'
+                : !canRetry
+                ? 'No failed charges to retry'
+                : 'Retry the most recent failed weekly invoice'
+            }
           >
             {retryLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -425,6 +504,21 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
             <span className="ml-1 font-bold">Retry Charge</span>
           </Button>
         </div>
+
+        {/* Helper hint when retry is available but not frozen */}
+        {canRetry && !status.billingFrozen && (
+          <p className="text-[11px] text-amber-600 dark:text-amber-400">
+            There are failed charges ready to retry. Click <strong>Retry Charge</strong>{' '}
+            to attempt the most recent failed weekly invoice again.
+          </p>
+        )}
+
+        {/* Helper hint when retry is not available but the dealer is on postpaid */}
+        {!canRetry && status.postpaidEnabled && status.stripe.subscriptionId && (
+          <p className="text-[11px] text-slate-400">
+            Retry is only available when there's a failed charge to retry.
+          </p>
+        )}
 
         {status.stripe.subscriptionId && !status.stripe.defaultPaymentMethodId && (
           <p className="text-[11px] text-amber-600 dark:text-amber-400">
