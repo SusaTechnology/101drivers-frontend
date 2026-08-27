@@ -414,14 +414,22 @@ export class PostpaidBillingService {
     };
 
     if (!this.stripeService) {
-      // No Stripe configured — return without DB changes, just log.
+      // No Stripe configured — record the failure so the retry cron can
+      // pick it up if Stripe becomes available later. Previously this
+      // was a silent skip — the money for the delivery would be lost.
       this.logger.warn(
-        `reportUsageToStripe called for delivery ${input.deliveryId} but StripeService is unavailable — skipping`,
+        `reportUsageToStripe called for delivery ${input.deliveryId} but StripeService is unavailable — scheduled for retry`,
       );
       const payment = await this.prisma.payment.findUnique({
         where: { deliveryId: input.deliveryId },
         select: { id: true, status: true },
       });
+      if (payment?.id) {
+        await this.scheduleUsageReportRetry(
+          payment.id,
+          "StripeService unavailable (STRIPE_SECRET_KEY not set)",
+        );
+      }
       return failure(
         "StripeService unavailable (STRIPE_SECRET_KEY not set)",
         payment?.id ?? "unknown",
@@ -539,6 +547,11 @@ export class PostpaidBillingService {
         data: {
           stripeInvoiceItemId: invoiceItem.id,
           status: EnumPaymentStatus.USAGE_REPORTED,
+          // Clear the retry state — usage was successfully reported
+          usageReportStatus: null,
+          usageReportAttempts: 0,
+          usageReportLastError: null,
+          usageReportNextRetryAt: null,
         },
       });
 
@@ -559,9 +572,375 @@ export class PostpaidBillingService {
         `Stripe InvoiceItem creation failed for delivery ${input.deliveryId}: ${msg}`,
         err?.stack,
       );
-      // Leave the Payment row in its prior status — admin can retry.
+      // Schedule a retry so the money for this delivery isn't lost.
+      // Previously this was a silent failure — admin had no way to know
+      // the InvoiceItem was never created. The retry cron will pick it
+      // up and try again with exponential backoff.
+      await this.scheduleUsageReportRetry(payment.id, msg);
       return failure(msg, payment.id, payment.status as EnumPaymentStatus);
     }
+  }
+
+  // ── Usage report retry queue (Fix #1) ──────────────────────────
+  //
+  // When `reportUsageToStripe` fails (transient Stripe outage, network
+  // blip, etc.), the delivery completes but no InvoiceItem is created
+  // — the money for that delivery would be lost (the weekly invoice
+  // doesn't include it). This helper records the failure on the
+  // Payment row with exponential backoff (1h, 2h, 4h, 8h, 24h) so the
+  // retry cron (`processUsageReportRetryQueue`) can pick it up.
+  //
+  // After 5 attempts (total elapsed ~39h), the row is marked
+  // PERMANENTLY_FAILED and the admin must manually create the
+  // InvoiceItem in the Stripe dashboard.
+
+  private static readonly USAGE_REPORT_MAX_ATTEMPTS = 5;
+  // Exponential backoff in minutes: 60, 120, 240, 480, 1440 (1h, 2h, 4h, 8h, 24h)
+  private static readonly USAGE_REPORT_BACKOFF_MINUTES = [60, 120, 240, 480, 1440];
+
+  private async scheduleUsageReportRetry(paymentId: string, errorMessage: string): Promise<void> {
+    // Read the current attempt count (default 0 for first-time failures)
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { usageReportAttempts: true, usageReportStatus: true },
+    });
+
+    const attempts = (payment?.usageReportAttempts ?? 0) + 1;
+    const isPermanent =
+      attempts >= PostpaidBillingService.USAGE_REPORT_MAX_ATTEMPTS;
+
+    const nextRetryAt = isPermanent
+      ? null
+      : new Date(
+          Date.now() +
+            PostpaidBillingService.USAGE_REPORT_BACKOFF_MINUTES[
+              Math.min(attempts - 1, PostpaidBillingService.USAGE_REPORT_BACKOFF_MINUTES.length - 1)
+            ] *
+              60 *
+              1000,
+        );
+
+    await this.prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        usageReportStatus: isPermanent ? 'PERMANENTLY_FAILED' : 'FAILED',
+        usageReportAttempts: attempts,
+        usageReportLastError: errorMessage.slice(0, 500), // cap length
+        usageReportNextRetryAt: nextRetryAt,
+      },
+    });
+
+    if (isPermanent) {
+      this.logger.error(
+        `Usage report for payment ${paymentId} PERMANENTLY_FAILED after ${attempts} attempts. ` +
+          `Admin must manually create the InvoiceItem in Stripe. Last error: ${errorMessage}`,
+      );
+    } else {
+      this.logger.warn(
+        `Usage report for payment ${paymentId} scheduled for retry #${attempts} at ${nextRetryAt?.toISOString()}. Last error: ${errorMessage}`,
+      );
+    }
+  }
+
+  /**
+   * Cron entry point — process the usage report retry queue.
+   *
+   * Finds all Payment rows with `usageReportStatus = FAILED` and
+   * `usageReportNextRetryAt <= now()`, and re-runs `reportUsageToStripe`
+   * for each. The retry uses the same `reportUsageToStripe` method,
+   * which is idempotent (skips if `stripeInvoiceItemId` is already set).
+   *
+   * On success: `usageReportStatus` is cleared (set to null) by
+   * `reportUsageToStripe` itself.
+   * On failure: `scheduleUsageReportRetry` is called again, which
+   * increments the attempt count + schedules the next retry (or
+   * marks as PERMANENTLY_FAILED if max attempts exceeded).
+   *
+   * Designed to be called by a @Cron(EVERY_HOUR) decorator. Safe to
+   * call manually for testing. Idempotent — concurrent cron runs
+   * won't double-charge because `reportUsageToStripe` checks the
+   * `stripeInvoiceItemId` first.
+   */
+  async processUsageReportRetryQueue(): Promise<{ processed: number; succeeded: number; failed: number }> {
+    const due = await this.prisma.payment.findMany({
+      where: {
+        usageReportStatus: 'FAILED',
+        usageReportNextRetryAt: { lte: new Date() },
+        // Only postpaid deliveries need usage reporting
+        paymentType: 'POSTPAID',
+        // Skip if already reported (defensive — idempotency guard in
+        // reportUsageToStripe also catches this)
+        stripeInvoiceItemId: null,
+      },
+      select: { id: true, deliveryId: true },
+      take: 50, // batch size — don't overwhelm Stripe
+    });
+
+    if (due.length === 0) {
+      return { processed: 0, succeeded: 0, failed: 0 };
+    }
+
+    this.logger.log(
+      `Usage report retry queue: processing ${due.length} payment(s)`,
+    );
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const item of due) {
+      try {
+        const result = await this.reportUsageToStripe({ deliveryId: item.deliveryId });
+        if (result.stripeInvoiceItemId) {
+          succeeded++;
+        } else {
+          // reportUsageToStripe already scheduled the next retry
+          failed++;
+        }
+      } catch (err: any) {
+        // reportUsageToStripe is non-throwing by design — this catch
+        // is a safety net for unexpected errors.
+        this.logger.error(
+          `Usage report retry threw for delivery ${item.deliveryId}: ${err.message}`,
+          err?.stack,
+        );
+        await this.scheduleUsageReportRetry(item.id, `Retry threw: ${err.message}`);
+        failed++;
+      }
+    }
+
+    this.logger.log(
+      `Usage report retry queue: ${succeeded} succeeded, ${failed} failed of ${due.length} processed`,
+    );
+
+    return { processed: due.length, succeeded, failed };
+  }
+
+  // ── Mid-trip card removal — remainder charge retry queue (Fix #7) ──
+  //
+  // When a business prepaid customer removes their card between startTrip
+  // and completeTrip, the remainder capture fails. The Payment row is
+  // marked with `remainderChargeStatus = PENDING` + `remainderAmount` +
+  // `remainderDueAt = now + 7 days`.
+  //
+  // This cron finds those rows and retries the charge. If the customer
+  // has since added a new card, the charge succeeds → mark as CAPTURED +
+  // clear the remainder fields. If still no card, leave it PENDING.
+  // After 7 days, mark as UNCOLLECTIBLE + admin must manually invoice.
+  //
+  // Designed to be called by a @Cron(EVERY_DAY_AT_6AM) decorator.
+
+  async processRemainderChargeRetryQueue(): Promise<{ processed: number; succeeded: number; failed: number; uncollectible: number }> {
+    if (!this.stripeService) {
+      return { processed: 0, succeeded: 0, failed: 0, uncollectible: 0 };
+    }
+
+    // Find all PENDING remainder charges
+    const due = await this.prisma.payment.findMany({
+      where: {
+        remainderChargeStatus: 'PENDING',
+        paymentType: 'PREPAID',
+      },
+      select: {
+        id: true,
+        deliveryId: true,
+        remainderAmount: true,
+        remainderDueAt: true,
+      },
+      take: 50,
+    });
+
+    if (due.length === 0) {
+      return { processed: 0, succeeded: 0, failed: 0, uncollectible: 0 };
+    }
+
+    let succeeded = 0;
+    let failed = 0;
+    let uncollectible = 0;
+
+    for (const item of due) {
+      const now = new Date();
+      const dueAt = item.remainderDueAt ?? new Date(0);
+
+      // Check if we've passed the 7-day uncollectible deadline
+      if (now > dueAt) {
+        await this.prisma.payment.update({
+          where: { id: item.id },
+          data: { remainderChargeStatus: 'UNCOLLECTIBLE' as any },
+        });
+        uncollectible++;
+        this.logger.warn(
+          `Remainder charge for payment ${item.id} (delivery ${item.deliveryId}) marked UNCOLLECTIBLE — past 7-day deadline. Admin must manually invoice.`,
+        );
+        continue;
+      }
+
+      // Try to charge the remainder
+      try {
+        const delivery = await this.prisma.deliveryRequest.findUnique({
+          where: { id: item.deliveryId },
+          select: {
+            id: true,
+            customer: {
+              select: {
+                id: true,
+                stripeCustomerId: true,
+                stripeDefaultPaymentMethodId: true,
+                contactEmail: true,
+                user: { select: { email: true } },
+              },
+            },
+          },
+        });
+
+        if (!delivery?.customer?.stripeCustomerId || !delivery?.customer?.stripeDefaultPaymentMethodId) {
+          // Customer still has no saved card — leave as PENDING for the next cron run
+          this.logger.log(
+            `Remainder charge for payment ${item.id}: customer still has no saved card — leaving PENDING`,
+          );
+          failed++;
+          continue;
+        }
+
+        // Attempt the remainder charge
+        const amount = item.remainderAmount ?? 0;
+        if (amount <= 0) {
+          await this.prisma.payment.update({
+            where: { id: item.id },
+            data: {
+              remainderChargeStatus: null,
+              remainderAmount: null,
+              remainderDueAt: null,
+            },
+          });
+          continue;
+        }
+
+        const pi = await this.stripeService.createPaymentIntent({
+          amount,
+          deliveryId: delivery.id,
+          stripeCustomerId: delivery.customer.stripeCustomerId,
+          paymentMethodId: delivery.customer.stripeDefaultPaymentMethodId,
+          captureMethod: 'automatic',
+          confirm: true,
+          metadata: {
+            deliveryId: delivery.id,
+            type: 'remainder-retry',
+          },
+        });
+
+        // Re-fetch to learn the true status
+        const refreshedPi = await this.stripeService.getPaymentIntent(pi.paymentIntentId);
+        if (refreshedPi.status === 'succeeded') {
+          // Successfully captured the remainder
+          await this.prisma.payment.update({
+            where: { id: item.id },
+            data: {
+              status: EnumPaymentStatus.CAPTURED,
+              capturedAt: new Date(),
+              // Clear the remainder fields
+              remainderChargeStatus: null,
+              remainderAmount: null,
+              remainderDueAt: null,
+              failureMessage: null,
+            },
+          });
+          succeeded++;
+          this.logger.log(
+            `Remainder charge retry SUCCEEDED for payment ${item.id} (delivery ${item.deliveryId}): $${amount.toFixed(2)}`,
+          );
+        } else {
+          // PI didn't succeed — mark as RETRIED but keep PENDING for next cron run
+          await this.prisma.payment.update({
+            where: { id: item.id },
+            data: { remainderChargeStatus: 'RETRIED' as any },
+          });
+          // Re-set to PENDING for the next cron run
+          await this.prisma.payment.update({
+            where: { id: item.id },
+            data: { remainderChargeStatus: 'PENDING' as any },
+          });
+          failed++;
+          this.logger.warn(
+            `Remainder charge retry failed for payment ${item.id} (delivery ${item.deliveryId}) — status: ${refreshedPi.status}`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Remainder charge retry threw for payment ${item.id} (delivery ${item.deliveryId}): ${err.message}`,
+          err?.stack,
+        );
+        failed++;
+      }
+    }
+
+    this.logger.log(
+      `Remainder charge retry queue: ${succeeded} succeeded, ${failed} failed, ${uncollectible} uncollectible of ${due.length} processed`,
+    );
+
+    return { processed: due.length, succeeded, failed, uncollectible };
+  }
+
+  // ── Multi-invoice retry (Fix #8) ──
+  //
+  // The old `retryFailedCharge` only retried the MOST RECENT open
+  // invoice. If a dealer had 3 weeks of failed invoices, only the most
+  // recent was retried — older ones were left to be auto-marked
+  // uncollectible by Stripe after 30 days.
+  //
+  // This method retries ALL open invoices for the dealer's
+  // subscription. Used by the daily auto-retry cron (replaces the
+  // single-invoice retry) + a new admin endpoint to manually trigger
+  // a bulk retry.
+
+  async retryAllFailedCharges(dealerId: string): Promise<{ invoicesRetried: number; succeeded: number; failed: number }> {
+    if (!this.stripeService) {
+      throw new Error("StripeService unavailable");
+    }
+
+    const dealer = await this.prisma.customer.findUnique({
+      where: { id: dealerId },
+      select: { stripeSubscriptionId: true },
+    });
+    if (!dealer?.stripeSubscriptionId) {
+      throw new BadRequestException("Dealer has no Stripe subscription");
+    }
+
+    // List all open invoices for this subscription
+    const invoices = await this.stripeService.stripe.invoices.list({
+      subscription: dealer.stripeSubscriptionId,
+      limit: 50,
+      status: 'open',
+    });
+
+    if (!invoices.data || invoices.data.length === 0) {
+      return { invoicesRetried: 0, succeeded: 0, failed: 0 };
+    }
+
+    this.logger.log(
+      `Bulk retry: ${invoices.data.length} open invoice(s) for dealer ${dealerId}`,
+    );
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const inv of invoices.data) {
+      try {
+        await this.stripeService.stripe.invoices.pay(inv.id);
+        succeeded++;
+        this.logger.log(
+          `Retry succeeded for invoice ${inv.id} (dealer ${dealerId})`,
+        );
+      } catch (err: any) {
+        failed++;
+        this.logger.warn(
+          `Retry failed for invoice ${inv.id} (dealer ${dealerId}): ${err.message}`,
+        );
+      }
+      // Small delay to avoid Stripe rate limits
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    return { invoicesRetried: invoices.data.length, succeeded, failed };
   }
 
   // ─── WEBHOOK HANDLERS ──────────────────────────────────────────
@@ -1637,7 +2016,21 @@ export class PostpaidBillingService {
 
     for (const dealer of frozenDealers) {
       try {
-        await this.retryFailedCharge(dealer.id);
+        // ── Fix #8: retry ALL open invoices, not just the most recent.
+        // The old `retryFailedCharge` only retried the most recent open
+        // invoice — if a dealer had 3 weeks of failed invoices, only the
+        // most recent was retried. Older ones were left to be auto-marked
+        // uncollectible by Stripe after 30 days. This meant money for
+        // older weeks was effectively written off.
+        //
+        // `retryAllFailedCharges` lists all open invoices via
+        // `stripe.invoices.list({ subscription, status: 'open' })` and
+        // retries each one (with a small delay to avoid rate limits).
+        const result = await this.retryAllFailedCharges(dealer.id);
+        this.logger.log(
+          `autoRetryFrozenDealers: dealer ${dealer.id} — ` +
+          `${result.succeeded}/${result.invoicesRetried} invoice(s) succeeded`,
+        );
       } catch (err: any) {
         // Don't let one dealer's failure abort the rest.
         this.logger.warn(

@@ -293,6 +293,14 @@ export class PaymentPayoutEngine {
                 providerPaymentIntentId: pi.paymentIntentId,
                 status: EnumPaymentStatus.AUTHORIZED,
                 failureMessage: `Remainder PI ${pi.paymentIntentId} status=${piStatus} — needs customer action`,
+                // ── Fix #7: track the pending remainder so the cron can
+                // retry the charge when the customer re-adds a card. ──
+                // We set remainderChargeStatus=PENDING + the amount +
+                // a 7-day due date. The cron (`processRemainderChargeRetryQueue`
+                // in PostpaidBillingService) finds these and retries.
+                remainderChargeStatus: 'PENDING' as any,
+                remainderAmount: remainder,
+                remainderDueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
               },
             });
             await tx.paymentEvent.create({

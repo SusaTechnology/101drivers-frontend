@@ -234,4 +234,71 @@ export class PostpaidBillingController {
       );
     }
   }
+
+  // ── CRON: usage report retry queue (Fix #1) ──────────────────────
+  //
+  // Runs every hour. Picks up Payment rows with `usageReportStatus = FAILED`
+  // and `usageReportNextRetryAt <= now()`, and retries the
+  // `reportUsageToStripe` call. Exponential backoff (1h, 2h, 4h, 8h, 24h)
+  // is handled by `scheduleUsageReportRetry` in the service.
+  //
+  // After 5 attempts (~39h total), the row is marked PERMANENTLY_FAILED
+  // and the admin must manually create the InvoiceItem in Stripe.
+  //
+  // This is the structural fix for the silent money-loss bug where a
+  // transient Stripe outage during delivery completion would lose the
+  // money for that delivery — no InvoiceItem was created, no retry was
+  // scheduled, the weekly invoice just didn't include that delivery.
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleHourlyUsageReportRetry() {
+    this.logger.log("Hourly usage report retry cron: starting");
+    try {
+      const result = await this.postpaidBilling.processUsageReportRetryQueue();
+      if (result.processed > 0) {
+        this.logger.log(
+          `Hourly usage report retry cron: processed=${result.processed}, ` +
+          `succeeded=${result.succeeded}, failed=${result.failed}`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `Hourly usage report retry cron failed: ${err?.message}`,
+        err?.stack,
+      );
+    }
+  }
+
+  // ── CRON: mid-trip remainder charge retry queue (Fix #7) ──────────
+  //
+  // Runs daily at 06:00 server time (alongside the auto-retry cron).
+  // Picks up Payment rows with `remainderChargeStatus = PENDING` and
+  // retries the remainder charge if the customer has since added a new
+  // card. Marks as UNCOLLECTIBLE after 7 days past the due date — the
+  // admin must manually invoice the customer at that point.
+  //
+  // This is the structural fix for the "customer removes card between
+  // startTrip and completeTrip" bug — the platform delivered the
+  // service but didn't get paid the remainder. The driver did the
+  // work, so we can't cancel the delivery — we have to chase the
+  // remainder.
+
+  @Cron(CronExpression.EVERY_DAY_AT_6AM)
+  async handleDailyRemainderChargeRetry() {
+    this.logger.log("Daily remainder charge retry cron: starting");
+    try {
+      const result = await this.postpaidBilling.processRemainderChargeRetryQueue();
+      if (result.processed > 0) {
+        this.logger.log(
+          `Daily remainder charge retry cron: processed=${result.processed}, ` +
+          `succeeded=${result.succeeded}, failed=${result.failed}, uncollectible=${result.uncollectible}`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `Daily remainder charge retry cron failed: ${err?.message}`,
+        err?.stack,
+      );
+    }
+  }
 }
