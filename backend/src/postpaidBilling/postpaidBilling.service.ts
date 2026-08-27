@@ -873,7 +873,30 @@ export class PostpaidBillingService {
     // exclude the row. We always exclude NO_STRIPE_CUSTOMER, and
     // conditionally exclude NO_SAVED_CARD only when the dealer now has
     // a saved PM (otherwise the failure is still actionable via Retry).
-    const staleFailureCodesToExclude: string[] = ['NO_STRIPE_CUSTOMER'];
+    //
+    // Prepaid-only failures (STRIPE_API_ERROR, STRIPE_NOT_CONFIGURED,
+    // STRIPE_LIST_PM_ERROR) are ALSO always excluded because the
+    // "Retry Charge" button retries POSTPAID Stripe invoices via
+    // stripe.invoices.pay — it cannot retry prepaid PaymentIntents.
+    // Blocking the switch doesn't help collect the money owed for
+    // these failures; the dealer would need to re-submit the delivery
+    // after fixing the underlying issue (or admin marks it
+    // uncollectible). Letting the switch proceed lets the dealer move
+    // to postpaid (where future charges will go through Stripe
+    // invoices that CAN be retried).
+    //
+    // PI_STATUS_* failures (3DS required, card declined at PI level)
+    // are also prepaid-only — we exclude them with a startsWith filter
+    // below (NOT doesn't support startsWith, so we use a separate
+    // filter on the result set).
+    const staleFailureCodesToExclude: string[] = [
+      // Structurally unfixable — no Stripe invoice exists to retry
+      'NO_STRIPE_CUSTOMER',
+      // Prepaid-only API failures — Retry Charge can't help
+      'STRIPE_API_ERROR',
+      'STRIPE_NOT_CONFIGURED',
+      'STRIPE_LIST_PM_ERROR',
+    ];
     if (dealer.stripeDefaultPaymentMethodId) {
       // Dealer now has a saved card → old NO_SAVED_CARD failures are stale
       // (the Retry Charge button will work — there's an invoice + a card).
@@ -883,7 +906,12 @@ export class PostpaidBillingService {
     const failedChargeWhere: any = {
       delivery: { customerId: dealerId },
       status: { in: ['CHARGE_FAILED', 'FAILED'] },
-      NOT: staleFailureCodesToExclude.map((code) => ({ failureCode: code })),
+      NOT: [
+        ...staleFailureCodesToExclude.map((code) => ({ failureCode: code })),
+        // PI_STATUS_* failures (prepaid-only, 3DS / card-action required)
+        // — Retry Charge can't help. Use a regex-like match via startsWith.
+        { failureCode: { startsWith: 'PI_STATUS_' } },
+      ],
     };
 
     const failedChargeCount = await this.prisma.payment.count({

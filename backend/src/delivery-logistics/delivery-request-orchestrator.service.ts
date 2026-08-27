@@ -2098,6 +2098,66 @@ private async resolveIndividualCustomerForCreate(
       }
     }
 
+    // ── Prepaid pre-check ──────────────────────────────────────────
+    // For PREPAID deliveries, the customer MUST have a saved Stripe
+    // payment method (stripeCustomerId + stripeDefaultPaymentMethodId)
+    // BEFORE we create any rows. Without this pre-check, the delivery
+    // row + Payment row would be created, then attemptStripePrepaidCharge
+    // would fail with NO_STRIPE_CUSTOMER / NO_SAVED_CARD, leaving an
+    // orphaned FAILED Payment row that:
+    //   (a) shows up on the admin payments page as a scary error
+    //   (b) blocks billing-mode switches (until my recent fix that
+    //       excludes NO_STRIPE_CUSTOMER from the switch block check)
+    //   (c) can't be retried (Retry Charge only retries POSTPAID
+    //       Stripe invoices — there's no invoice for a prepaid charge)
+    //
+    // By throwing HERE (before any DB writes), the dealer sees a clear
+    // error message telling them to save a card first, and no orphaned
+    // rows are left in the database.
+    //
+    // This is the structural fix for "NO_STRIPE_CUSTOMER should never
+    // happen" — by blocking delivery creation upfront, we never reach
+    // the code path that would mark a Payment as NO_STRIPE_CUSTOMER.
+    if (paymentType === EnumPaymentPaymentType.PREPAID) {
+      if (!customer.stripeCustomerId) {
+        throw new BadRequestException(
+          'No payment method on file. Please save a card under Payment Methods first, then place the delivery.',
+        );
+      }
+      if (!customer.stripeDefaultPaymentMethodId) {
+        // Try to auto-resolve: query Stripe for attached cards. If any
+        // exist, use the most recent AND persist it as the default.
+        // This handles the case where the dealer saved a card before
+        // the webhook that sets stripeDefaultPaymentMethodId was wired up.
+        if (this.stripeService) {
+          let attachedCards: any[] = [];
+          try {
+            attachedCards = await this.stripeService.listPaymentMethods(customer.stripeCustomerId);
+          } catch {
+            // Ignore — we'll fall through to the "no saved card" error
+          }
+          if (attachedCards && attachedCards.length > 0) {
+            try {
+              await this.prisma.customer.update({
+                where: { id: customer.id },
+                data: { stripeDefaultPaymentMethodId: attachedCards[0].id },
+              });
+              // Mutate the in-memory customer object so the charge
+              // helper below sees the resolved PM.
+              customer.stripeDefaultPaymentMethodId = attachedCards[0].id;
+            } catch {
+              // Non-fatal — fall through to the error
+            }
+          }
+        }
+        if (!customer.stripeDefaultPaymentMethodId) {
+          throw new BadRequestException(
+            'No saved payment method on file. Please save a card under Payment Methods first, then place the delivery.',
+          );
+        }
+      }
+    }
+
     // Release any CANCELLED *or* DRAFT delivery that still holds this quoteId
     // before creating the new delivery, otherwise the create below will throw
     // a 409 "Another record with the requested (quoteId) already exists" and
@@ -2555,6 +2615,45 @@ private async resolveIndividualCustomerForCreate(
       if (!eligibility.ok && eligibility.reason !== "NOT_POSTPAID") {
         const friendlyMessage = this.mapEligibilityErrorToMessage(eligibility);
         throw new BadRequestException(friendlyMessage);
+      }
+    }
+
+    // ── Prepaid pre-check ──────────────────────────────────────────
+    // (Same logic as createFromQuote — see the prepaid pre-check block
+    //  in createFromQuote for the full rationale. Briefly: block the
+    //  promotion BEFORE any charge attempt so we never create an
+    //  orphaned FAILED Payment row with NO_STRIPE_CUSTOMER / NO_SAVED_CARD.)
+    if (paymentType === EnumPaymentPaymentType.PREPAID) {
+      if (!customer.stripeCustomerId) {
+        throw new BadRequestException(
+          'No payment method on file. Please save a card under Payment Methods first, then place the delivery.',
+        );
+      }
+      if (!customer.stripeDefaultPaymentMethodId) {
+        if (this.stripeService) {
+          let attachedCards: any[] = [];
+          try {
+            attachedCards = await this.stripeService.listPaymentMethods(customer.stripeCustomerId);
+          } catch {
+            // Ignore — fall through to the error
+          }
+          if (attachedCards && attachedCards.length > 0) {
+            try {
+              await this.prisma.customer.update({
+                where: { id: customer.id },
+                data: { stripeDefaultPaymentMethodId: attachedCards[0].id },
+              });
+              customer.stripeDefaultPaymentMethodId = attachedCards[0].id;
+            } catch {
+              // Non-fatal — fall through to the error
+            }
+          }
+        }
+        if (!customer.stripeDefaultPaymentMethodId) {
+          throw new BadRequestException(
+            'No saved payment method on file. Please save a card under Payment Methods first, then place the delivery.',
+          );
+        }
       }
     }
 
