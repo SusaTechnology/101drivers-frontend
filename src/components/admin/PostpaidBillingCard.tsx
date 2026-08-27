@@ -256,9 +256,9 @@ export default function PostpaidBillingCard({
             <Settings className="h-4 w-4" />
             Postpaid Billing
             {highlight && (
-              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px] ml-1 animate-pulse">
+              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-[10px] ml-1 animate-pulse">
                 <Sparkles className="w-3 h-3 mr-1" />
-                Setup required
+                Setup complete
               </Badge>
             )}
           </CardTitle>
@@ -279,40 +279,49 @@ export default function PostpaidBillingCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Highlight banner — shown when the parent just switched
-            this dealer from prepaid to postpaid AND there's no existing
-            Stripe subscription. Reminds the admin to click "Setup
-            Postpaid" below. */}
-        {highlight && !status.stripe.subscriptionId && (
-          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-800 animate-pulse">
+        {/* Highlight banner — shown when the parent just switched this
+            dealer from prepaid to postpaid. With the AUTO-SETUP pattern,
+            the switch always either:
+              (a) reactivates an existing Stripe subscription, OR
+              (b) creates a new Stripe customer + subscription.
+            So by the time we render this banner, the dealer should ALWAYS
+            have a stripeSubscriptionId. If somehow they don't (e.g.
+            Stripe was unavailable between the switch and this status
+            refetch), we show the "needs setup" fallback below. */}
+        {highlight && status.stripe.subscriptionId && (
+          <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-800 animate-pulse">
             <div className="flex items-start gap-2">
-              <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-blue-800 dark:text-blue-200">
-                <p className="font-bold">Billing mode switched to Postpaid — Stripe setup needed</p>
+              <Sparkles className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-green-800 dark:text-green-200">
+                <p className="font-bold">Switched to Postpaid billing — setup complete</p>
                 <p className="mt-1">
-                  This dealer doesn't have a Stripe customer + subscription yet.
-                  Click the <strong>Setup Postpaid</strong> button below to create
-                  them. New postpaid deliveries cannot be created until setup
-                  is complete.
+                  A Stripe customer + $0/week subscription has been created (or
+                  reactivated) for this dealer. They can now create postpaid
+                  deliveries. Subscription ID:{' '}
+                  <span className="font-mono text-[10px]">
+                    {status.stripe.subscriptionId.slice(0, 30)}...
+                  </span>
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Highlight banner — shown when the parent just switched
-            this dealer from prepaid to postpaid AND an existing
-            subscription was reactivated. */}
-        {highlight && status.stripe.subscriptionId && (
-          <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-800">
+        {/* Defensive fallback — shown if the parent just switched but
+            the subscription ID is somehow still null (e.g. Stripe was
+            unavailable between the switch and this status refetch).
+            This should be very rare with the auto-setup pattern. */}
+        {highlight && !status.stripe.subscriptionId && (
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 animate-pulse">
             <div className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-green-800 dark:text-green-200">
-                <p className="font-bold">Existing Stripe subscription reactivated</p>
+              <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-800 dark:text-amber-200">
+                <p className="font-bold">Switched to Postpaid — Stripe setup missing</p>
                 <p className="mt-1">
-                  This dealer's existing Stripe customer + subscription has been
-                  reactivated. Verify the details below — the saved card on file
-                  will be charged for the next weekly invoice.
+                  The billing mode is postpaid but no Stripe subscription was
+                  found. Click the <strong>Setup Postpaid</strong> button below
+                  to create the Stripe customer + subscription. New postpaid
+                  deliveries cannot be created until setup is complete.
                 </p>
               </div>
             </div>

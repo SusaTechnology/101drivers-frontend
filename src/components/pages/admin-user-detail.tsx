@@ -425,24 +425,29 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         onSuccess: (data: any) => {
           // The backend returns { ok, dealerId, mode, stripeCustomerId,
           // stripeSubscriptionId, subscriptionReactivated, setupRequired }.
-          // Use this to show a precise toast and decide whether to
-          // highlight the Postpaid Billing section.
+          // With the AUTO-SETUP pattern, the switch either fully succeeds
+          // (Stripe customer + subscription created/reactivated + flags
+          // flipped) OR fully fails (no state change, error toast shown).
+          // setupRequired=true means a NEW Stripe customer + subscription
+          // was created by this switch (vs. reactivating an existing one).
           const switchedToPostpaid = billingSwitchTarget === 'POSTPAID';
           const reactivated = Boolean(data?.subscriptionReactivated);
           const setupRequired = Boolean(data?.setupRequired);
+          const newSubId = data?.stripeSubscriptionId;
 
           if (switchedToPostpaid) {
             if (reactivated) {
               toast.success('Postpaid billing reactivated', {
                 description:
-                  'Existing Stripe customer + subscription have been reactivated. ' +
-                  'Verify the details in the Postpaid Billing section below.',
+                  'Existing Stripe subscription reactivated. The dealer can now ' +
+                  'create postpaid deliveries.',
               });
             } else if (setupRequired) {
-              toast.success('Switched to Postpaid billing', {
+              toast.success('Switched to Postpaid billing — setup complete', {
                 description:
-                  'No existing Stripe subscription — click "Setup Postpaid" in the ' +
-                  'Postpaid Billing section below to complete the setup.',
+                  `A new Stripe customer + $0/week subscription was created ` +
+                  `(subscription ID: ${newSubId ? newSubId.slice(0, 20) + '...' : 'n/a'}). ` +
+                  `The dealer can now create postpaid deliveries.`,
               });
             } else {
               toast.success('Switched to Postpaid billing');
@@ -461,11 +466,15 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           // The refetch() below will refresh the user data so
           // user.customer.postpaidEnabled flips to true. The
           // PostpaidBillingCard will then re-render and (because we
-          // pass highlight=true) show the emphasized border + setup
-          // banner. The invalidateQueryKey above also forces the
-          // postpaid STATUS query to refetch immediately so the
-          // card's internal state (stripe refs, unpaid count, etc.)
+          // pass highlight=true) show the emphasized border +
+          // confirmation banner. The invalidateQueryKey above also
+          // forces the postpaid STATUS query to refetch immediately so
+          // the card's internal state (stripe refs, unpaid count, etc.)
           // is current — no 60s wait.
+          //
+          // Note: with auto-setup, the highlight is now a confirmation
+          // that setup succeeded (not a reminder to click Setup). The
+          // auto-clear after 30s still applies (see useEffect below).
           if (switchedToPostpaid) {
             setHighlightPostpaid(true);
           } else {
@@ -487,7 +496,12 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           }
         },
         onError: (error: Error) => {
-          toast.error('Billing switch failed', { description: error.message });
+          toast.error('Billing switch failed', {
+            description:
+              error.message ||
+              'The dealer remains on their current billing mode. ' +
+              'Fix the underlying issue (e.g. Stripe configuration) and try again.',
+          });
         },
       }
     );

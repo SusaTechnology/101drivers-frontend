@@ -129,24 +129,60 @@ export class PostpaidBillingService {
       throw new BadRequestException("postpaidEnabled is not true — set it via admin first");
     }
 
-    // Idempotency: if subscription already exists, just confirm the billing mode
-    // is set on the DB and return.
+    // Idempotency: if subscription already exists AND is still active (or
+    // pending), just confirm the billing mode is set on the DB and return.
+    // If the existing subscription is canceled/expired, we fall through
+    // and create a new one (the existing stripeCustomerId is reused, but
+    // a new subscription is created with a new ID).
     if (dealer.stripeSubscriptionId) {
-      this.logger.log(
-        `Dealer ${dealerId} already has subscription ${dealer.stripeSubscriptionId} — skipping Stripe calls`,
-      );
-      if (dealer.billingMode !== EnumCustomerBillingMode.WEEKLY_POSTPAID) {
-        await this.prisma.customer.update({
-          where: { id: dealerId },
-          data: { billingMode: EnumCustomerBillingMode.WEEKLY_POSTPAID },
-        });
+      let skipStripeCalls = true;
+      if (this.stripeService) {
+        try {
+          const sub = await this.stripeService.stripe.subscriptions.retrieve(
+            dealer.stripeSubscriptionId,
+          );
+          // active, past_due, trialing, unpaid → keep the existing
+          // subscription (Stripe will keep trying to charge it).
+          // canceled, incomplete_expired → create a new one.
+          if (sub.status === 'canceled' || sub.status === 'incomplete_expired') {
+            skipStripeCalls = false;
+            this.logger.log(
+              `Existing subscription ${dealer.stripeSubscriptionId} for dealer ${dealerId} ` +
+              `is ${sub.status} — will create a new subscription.`,
+            );
+          }
+        } catch (err: any) {
+          // Subscription lookup failed — assume it doesn't exist anymore
+          // and create a new one. This is safer than failing the whole
+          // setup call.
+          skipStripeCalls = false;
+          this.logger.warn(
+            `Failed to retrieve existing subscription ${dealer.stripeSubscriptionId} ` +
+            `for dealer ${dealerId}: ${err.message} — will create a new subscription.`,
+          );
+        }
       }
-      return {
-        customerId: dealer.id,
-        stripeCustomerId: dealer.stripeCustomerId!,
-        stripeSubscriptionId: dealer.stripeSubscriptionId,
-        billingMode: EnumCustomerBillingMode.WEEKLY_POSTPAID,
-      };
+
+      if (skipStripeCalls) {
+        this.logger.log(
+          `Dealer ${dealerId} already has subscription ${dealer.stripeSubscriptionId} — skipping Stripe calls`,
+        );
+        if (dealer.billingMode !== EnumCustomerBillingMode.WEEKLY_POSTPAID) {
+          await this.prisma.customer.update({
+            where: { id: dealerId },
+            data: { billingMode: EnumCustomerBillingMode.WEEKLY_POSTPAID },
+          });
+        }
+        return {
+          customerId: dealer.id,
+          stripeCustomerId: dealer.stripeCustomerId!,
+          stripeSubscriptionId: dealer.stripeSubscriptionId,
+          billingMode: EnumCustomerBillingMode.WEEKLY_POSTPAID,
+        };
+      }
+      // Fall through to create a new subscription. The existing
+      // stripeCustomerId will be reused (createOrGetCustomer is
+      // idempotent on email+metadata).
     }
 
     // 1. Create or fetch Stripe Customer
@@ -1078,21 +1114,36 @@ export class PostpaidBillingService {
    *   - Clears stale NO_STRIPE_CUSTOMER / NO_SAVED_CARD failure codes
    *     on old Payment rows (the underlying issue is resolved by the switch)
    *
-   * Prepaid → Postpaid:
+   * Prepaid → Postpaid (AUTO-SETUP, the "big system" pattern):
    *   - Sets postpaidEnabled = true + billingMode = WEEKLY_POSTPAID
    *   - If an existing Stripe subscription is found (previously cancelled at
    *     period end when the dealer was switched to prepaid), it is REACTIVATED
-   *     by setting cancel_at_period_end = false. The Stripe customer +
-   *     subscription IDs are preserved.
-   *   - If NO existing Stripe subscription is found, the admin must click
-   *     the "Setup Postpaid" button in the admin UI to create one. The
-   *     switch itself just flips the flag — it does NOT auto-create the
-   *     Stripe customer/subscription. (This gives the admin explicit control
-   *     and matches the UI flow where the Postpaid Billing section is
-   *     highlighted after the switch to remind the admin to complete setup.)
+   *     by setting cancel_at_period_end = false.
+   *   - If NO existing Stripe subscription is found, the system
+   *     ATOMICALLY creates the Stripe customer + $0/week anchor
+   *     subscription in the SAME request. If the Stripe API call fails,
+   *     the billing mode flag is ROLLED BACK — the dealer stays on
+   *     prepaid. This guarantees the invariant:
    *
-   * Returns a structured result so the frontend can show the right message
-   * (existing subscription reactivated vs. setup still required).
+   *       billingMode = WEEKLY_POSTPAID → stripeSubscriptionId IS NOT NULL
+   *
+   *     so no dealer can ever be on postpaid billing without a working
+   *     Stripe subscription. The admin no longer needs to remember to
+   *     click "Setup Postpaid" after switching — it's automatic.
+   *
+   *     Setup-upon-switch was added because the previous behavior (flag
+   *     flipped + manual "Setup Postpaid" button click) had a gap: the
+   *     admin could navigate away from the page after the switch without
+   *     setting the dealer up, leaving the dealer on postpaid billing
+   *     with no subscription. The dealer couldn't create deliveries
+   *     (canDealerCreateDelivery returns NO_SUBSCRIPTION), but the
+   *     admin's intent (postpaid) wasn't honored. With auto-setup, the
+   *     switch either fully succeeds (Stripe customer + subscription
+   *     created + flags flipped) OR fully fails (no state change).
+   *
+   * Returns a structured result so the frontend can show the right
+   * message (existing subscription reactivated vs. new setup created vs.
+   * error).
    */
   async switchBillingMode(
     dealerId: string,
@@ -1102,6 +1153,8 @@ export class PostpaidBillingService {
     stripeCustomerId: string | null;
     stripeSubscriptionId: string | null;
     subscriptionReactivated: boolean;
+    /** True when a brand-new Stripe customer + subscription was created
+     *  by this switch (vs. reactivating an existing one). */
     setupRequired: boolean;
   }> {
     // Pre-check
@@ -1176,9 +1229,14 @@ export class PostpaidBillingService {
     }
 
     // ── Prepaid → Postpaid ───────────────────────────────────
-    // 1. Flip the customer flags first. setupDealerForPostpaid (called
-    //    separately by the admin via the "Setup Postpaid" button) requires
-    //    postpaidEnabled=true, so we set it here before any Stripe work.
+    // AUTO-SETUP pattern: flip the customer flags first, then create the
+    // Stripe customer + subscription. If Stripe setup fails, ROLL BACK
+    // the flag flip so the dealer stays on prepaid — no half-state.
+    const previousBillingMode = (await this.prisma.customer.findUnique({
+      where: { id: dealerId },
+      select: { billingMode: true, postpaidEnabled: true },
+    }))!;
+
     await this.prisma.customer.update({
       where: { id: dealerId },
       data: {
@@ -1188,6 +1246,8 @@ export class PostpaidBillingService {
     });
 
     let subscriptionReactivated = false;
+    let setupRequired = false;
+    let needNewSetup = true; // true unless we successfully reactivate below
 
     // 2. If an existing subscription is present, REACTIVATE it. When the
     //    dealer was previously switched to prepaid, we set
@@ -1195,8 +1255,8 @@ export class PostpaidBillingService {
     //    current billing period hasn't ended, the subscription is still
     //    "active" and can be un-cancelled by setting cancel_at_period_end
     //    back to false. If the period already ended and the subscription
-    //    is fully canceled, the admin will need to click "Setup Postpaid"
-    //    to create a new one.
+    //    is fully canceled, we fall through to the "create new
+    //    subscription" path via setupDealerForPostpaid.
     if (eligibility.stripeSubscriptionId && this.stripeService) {
       try {
         const sub = await this.stripeService.stripe.subscriptions.retrieve(
@@ -1209,6 +1269,7 @@ export class PostpaidBillingService {
             { cancel_at_period_end: false },
           );
           subscriptionReactivated = true;
+          needNewSetup = false;
           this.logger.log(
             `Subscription ${eligibility.stripeSubscriptionId} for dealer ${dealerId} ` +
             `re-activated (cancel_at_period_end=false) on switch to postpaid`,
@@ -1216,21 +1277,63 @@ export class PostpaidBillingService {
         } else if (sub.status === 'active') {
           // Already active and not marked for cancellation — nothing to do
           subscriptionReactivated = true;
+          needNewSetup = false;
           this.logger.log(
             `Subscription ${eligibility.stripeSubscriptionId} for dealer ${dealerId} ` +
             `already active — no reactivation needed`,
           );
         } else {
-          // Subscription is canceled/expired/unpaid — admin needs to set up a new one
+          // Subscription is canceled/expired/unpaid — fall through to
+          // setupDealerForPostpaid below to create a NEW subscription.
+          // setupDealerForPostpaid is idempotent: it will reuse the
+          // existing stripeCustomerId but create a new subscription.
           this.logger.warn(
             `Subscription ${eligibility.stripeSubscriptionId} for dealer ${dealerId} ` +
-            `is in status ${sub.status} — admin must click "Setup Postpaid" to create a new one`,
+            `is in status ${sub.status} — will create a new subscription via setupDealerForPostpaid`,
           );
         }
       } catch (err: any) {
         this.logger.warn(
           `Failed to retrieve/re-activate subscription ${eligibility.stripeSubscriptionId} ` +
-          `for dealer ${dealerId}: ${err.message} — admin may need to click "Setup Postpaid" manually.`,
+          `for dealer ${dealerId}: ${err.message} — will attempt setupDealerForPostpaid.`,
+        );
+      }
+    }
+
+    // 3. If no existing subscription could be reactivated, AUTO-CREATE
+    //    the Stripe customer + $0/week anchor subscription. This is the
+    //    "big system" invariant: by the time switchBillingMode returns
+    //    successfully, the dealer MUST have a stripeSubscriptionId.
+    //
+    //    If setupDealerForPostpaid throws (Stripe API error, missing
+    //    config, etc.), we ROLL BACK the flag flip so the dealer stays
+    //    on prepaid. This prevents the half-state where the admin sees
+    //    "postpaidEnabled = true" but the dealer can't actually create
+    //    deliveries because no subscription exists.
+    if (needNewSetup) {
+      try {
+        await this.setupDealerForPostpaid(dealerId);
+        setupRequired = true;
+        this.logger.log(
+          `Auto-setup completed for dealer ${dealerId} during switch to postpaid`,
+        );
+      } catch (err: any) {
+        // Roll back the flag flip — the dealer stays on prepaid.
+        this.logger.error(
+          `Auto-setup failed for dealer ${dealerId} during switch to postpaid: ${err.message} — ` +
+          `rolling back billing mode to ${previousBillingMode.billingMode}.`,
+        );
+        await this.prisma.customer.update({
+          where: { id: dealerId },
+          data: {
+            postpaidEnabled: previousBillingMode.postpaidEnabled,
+            billingMode: previousBillingMode.billingMode,
+          },
+        });
+        throw new BadRequestException(
+          `Failed to set up postpaid billing: ${err.message}. ` +
+          `The dealer remains on prepaid billing. Fix the underlying issue ` +
+          `(e.g. Stripe configuration) and try the switch again.`,
         );
       }
     }
@@ -1243,7 +1346,8 @@ export class PostpaidBillingService {
 
     this.logger.log(
       `Dealer ${dealerId} switched to POSTPAID ` +
-      `(reactivated=${subscriptionReactivated}, setupRequired=${!subscriptionReactivated && !updated?.stripeSubscriptionId})`,
+      `(reactivated=${subscriptionReactivated}, newSetup=${setupRequired}, ` +
+      `subscriptionId=${updated?.stripeSubscriptionId ?? 'null'})`,
     );
 
     return {
@@ -1251,7 +1355,7 @@ export class PostpaidBillingService {
       stripeCustomerId: updated?.stripeCustomerId ?? null,
       stripeSubscriptionId: updated?.stripeSubscriptionId ?? null,
       subscriptionReactivated,
-      setupRequired: !subscriptionReactivated,
+      setupRequired,
     };
   }
   async setCreditCap(dealerId: string, capCents: number | null): Promise<void> {
