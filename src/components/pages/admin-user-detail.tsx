@@ -52,6 +52,8 @@ import {
   Home,
   CreditCard,
   Trash2,
+  ArrowLeftRight,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -97,10 +99,8 @@ import { useTheme } from '@/lib/theme';
 import { PhotoDialog, usePhotoUpload, downloadImageAsFile } from '@/components/ui/photo-dialog';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { CustomerPricingCard } from '@/components/admin/CustomerPricingCard';
-// Admin-side postpaid billing management card — Setup, Unfreeze, Retry,
-// and a status display (outstanding balance, frozen state, Stripe IDs).
-// Rendered alongside CustomerPricingCard for BUSINESS customers.
 import PostpaidBillingCard from '@/components/admin/PostpaidBillingCard';
+import { BillingSwitchDialog, type SwitchEligibility } from '@/components/admin/BillingSwitchDialog';
 import {
   useAdminUserDetail,
   useApproveCustomer,
@@ -117,6 +117,7 @@ import {
   useDeleteUser,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
+import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery';
 import {
   USER_ROLE_LABELS,
   CUSTOMER_TYPE_LABELS,
@@ -348,6 +349,47 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const UPLOAD_URL = import.meta.env.VITE_API_URL || '';
   const photoUpload = usePhotoUpload(`${UPLOAD_URL}/api/public/uploads/driver-selfie`);
   const pendingPhotoUrl = photoUpload.pendingUrl;
+
+  // ── Billing switch state ──
+  const [billingSwitchOpen, setBillingSwitchOpen] = useState(false);
+  const [billingSwitchTarget, setBillingSwitchTarget] = useState<'PREPAID' | 'POSTPAID'>('PREPAID');
+
+  // useDataQuery for the switch-check — uses the app's auth wrapper
+  // (no raw fetch, no 401 issues). Only enabled when the dialog is open.
+  const customerId = user?.customer?.id;
+  const { data: switchEligibility, isLoading: switchEligibilityLoading, refetch: refetchSwitchCheck } = useDataQuery<SwitchEligibility>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${customerId}/switch-check`,
+    noFilter: true,
+    enabled: false,
+  });
+
+  // useDataMutation for the actual switch — same auth wrapper.
+  const switchBillingMutation = useDataMutation<any, any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${customerId}/switch-billing`,
+    method: 'POST',
+  });
+
+  const openBillingSwitch = (target: 'PREPAID' | 'POSTPAID') => {
+    setBillingSwitchTarget(target);
+    setBillingSwitchOpen(true);
+    refetchSwitchCheck();
+  };
+
+  const handleConfirmBillingSwitch = () => {
+    switchBillingMutation.mutate(
+      { mode: billingSwitchTarget },
+      {
+        onSuccess: () => {
+          toast.success(`Switched to ${billingSwitchTarget === 'PREPAID' ? 'Prepaid' : 'Postpaid'} billing`);
+          setBillingSwitchOpen(false);
+          refetch();
+        },
+        onError: (error: Error) => {
+          toast.error('Billing switch failed', { description: error.message });
+        },
+      }
+    );
+  };
 
   const openPhotoDialog = (src: string, title: string, canUpdate: boolean) => {
     setPhotoDialogSrc(src);
@@ -731,6 +773,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
   const handleEditCustomer = (data: EditCustomerFormData) => {
     if (!user) return;
+    // postpaidEnabled is NOT sent here — billing mode is managed
+    // via the Billing Mode card (safe switch with pre-checks + dialog).
     const updateData: AdminUpdateUserRequest = {
       customer: {
         phone: data.phone || undefined,
@@ -738,7 +782,6 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         contactEmail: data.contactEmail || undefined,
         contactPhone: data.contactPhone || undefined,
         defaultPickupId: data.defaultPickupId || undefined,
-        postpaidEnabled: postpaidEnabled,
       },
     };
     adminUpdateUserMutation.mutate(
@@ -1477,27 +1520,21 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                 placeholder="Contact phone"
                               />
                             </div>
+                            {/* Payment Type — read-only. Switching is done
+                                via the Billing Mode card above the Pricing
+                                & Billing section. */}
                             <div className="space-y-2">
                               <Label className="text-xs font-bold text-slate-500">Payment Type</Label>
-                              <RadioGroup
-                                value={postpaidEnabled ? "POSTPAID" : "PREPAID"}
-                                onValueChange={(val) => setPostpaidEnabled(val === "POSTPAID")}
-                                className="flex gap-3"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <RadioGroupItem value="PREPAID" id="edit-prepaid" />
-                                  <Label htmlFor="edit-prepaid" className="text-sm font-semibold cursor-pointer">Prepaid</Label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <RadioGroupItem value="POSTPAID" id="edit-postpaid" />
-                                  <Label htmlFor="edit-postpaid" className="text-sm font-semibold cursor-pointer">Postpaid</Label>
-                                </div>
-                              </RadioGroup>
-                              {postpaidEnabled && (
-                                <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                                  Postpaid should only be enabled if terms have been negotiated with this dealership.
-                                </p>
-                              )}
+                              <div className="text-sm">
+                                {postpaidEnabled ? (
+                                  <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Postpaid</Badge>
+                                ) : (
+                                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Prepaid</Badge>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-400">
+                                To change billing mode, use the Billing Mode card above the Pricing &amp; Billing section.
+                              </p>
                             </div>
                           </div>
                           <div className="flex justify-end gap-2 pt-4">
@@ -1591,6 +1628,53 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   </Card>
                 )}
 
+                {/* ── Billing Mode card ──
+                    The ONE place where billing mode is switched.
+                    Shows the current mode + a Switch button that opens
+                    the BillingSwitchDialog (reusable component). */}
+                {user.customer?.customerType === 'BUSINESS' && (
+                  <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
+                    <CardContent className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <ArrowLeftRight className="w-5 h-5 text-slate-400" />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">
+                            Billing Mode
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Current: {user.customer.postpaidEnabled ? (
+                              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px]">Postpaid</Badge>
+                            ) : (
+                              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-[10px]">Prepaid</Badge>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      {user.customer.postpaidEnabled ? (
+                        <Button
+                          onClick={() => openBillingSwitch('PREPAID')}
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300"
+                        >
+                          <ArrowLeftRight className="w-4 h-4" />
+                          <span className="ml-1 font-bold">Switch to Prepaid</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => openBillingSwitch('POSTPAID')}
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300"
+                        >
+                          <ArrowLeftRight className="w-4 h-4" />
+                          <span className="ml-1 font-bold">Switch to Postpaid</span>
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Pricing & Billing card (items 6-9) */}
                 {user.customer && (
                   <CustomerPricingCard
@@ -1599,14 +1683,27 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   />
                 )}
 
-                {/* Postpaid billing management card — admin controls for
-                    weekly postpaid billing. Shown for any BUSINESS customer
-                    (whether postpaidEnabled=true or false) so the admin can
-                    onboard a dealer onto postpaid at any time after
-                    approval. The card itself surfaces the Setup Postpaid
-                    button and the dealer's current billing state. */}
+                {/* Postpaid Billing management card.
+                    Always shown for BUSINESS customers (whether
+                    postpaidEnabled=true or false). When on prepaid,
+                    the card is greyed out + disabled with an inactive
+                    notice — but the Stripe refs (customer ID, subscription
+                    ID) are still visible. */}
                 {user.customer?.customerType === 'BUSINESS' && user.customer.id && (
                   <PostpaidBillingCard dealerId={user.customer.id} />
+                )}
+
+                {/* ── Billing Switch Dialog (reusable component) ── */}
+                {user.customer?.customerType === 'BUSINESS' && (
+                  <BillingSwitchDialog
+                    open={billingSwitchOpen}
+                    onClose={() => setBillingSwitchOpen(false)}
+                    onConfirm={handleConfirmBillingSwitch}
+                    target={billingSwitchTarget}
+                    eligibility={switchEligibility ?? null}
+                    loadingEligibility={switchEligibilityLoading}
+                    loadingSwitch={switchBillingMutation.isPending}
+                  />
                 )}
 
                 {/* Signup Incomplete card — shown when the user is a

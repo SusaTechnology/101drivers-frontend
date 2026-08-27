@@ -491,38 +491,9 @@ function InlineEditPricing({
       </div>
       */}
 
-      {/* Postpaid toggle — replaced with a Switch button that opens
-          a confirmation dialog (safe switch with pre-checks).
-          The old Switch directly saved postpaidEnabled via the API,
-          bypassing the safe-switch logic (Stripe subscription cancellation,
-          pre-check for failed charges, etc.). */}
-      <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div>
-          <Label className="text-sm font-bold">Billing Mode</Label>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Current: <strong>{customer.postpaidEnabled ? 'Postpaid (invoiced after delivery)' : 'Prepaid (charged at creation)'}</strong>
-          </p>
-          <p className="text-[10px] text-slate-400 mt-1">
-            Switching billing modes requires confirmation — pending charges and failed payments are checked first.
-          </p>
-        </div>
-        <Button
-          onClick={() => onBillingSwitch(customer.postpaidEnabled ? 'PREPAID' : 'POSTPAID')}
-          variant="outline"
-          size="sm"
-          className={cn(
-            'rounded-xl font-bold',
-            customer.postpaidEnabled
-              ? 'border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300'
-              : 'border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300'
-          )}
-        >
-          <ArrowLeftRight className="w-4 h-4" />
-          <span className="ml-1">
-            {customer.postpaidEnabled ? 'Switch to Prepaid' : 'Switch to Postpaid'}
-          </span>
-        </Button>
-      </div>
+      {/* Billing Mode is managed by the separate Billing Mode card
+          above this card in admin-user-detail.tsx. Not rendered here
+          to avoid duplicate switch points. */}
 
       {/* Note */}
       <div className="space-y-2">
