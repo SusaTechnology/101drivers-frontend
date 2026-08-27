@@ -86,9 +86,9 @@ export function BillingSwitchDialog({
               <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-700 dark:text-red-300 font-medium">
+                  <div className="text-xs text-red-700 dark:text-red-300 font-medium whitespace-pre-line">
                     {eligibility.blockReason}
-                  </p>
+                  </div>
                 </div>
               </div>
             )}

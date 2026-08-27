@@ -836,10 +836,38 @@ export class PostpaidBillingService {
     // Block if there are unresolved failed charges
     if (failedChargeCount > 0) {
       canSwitch = false;
+
+      // Get the most recent failed payment details for context
+      const recentFailed = await this.prisma.payment.findFirst({
+        where: {
+          delivery: { customerId: dealerId },
+          status: { in: ['CHARGE_FAILED', 'FAILED'] },
+        },
+        select: {
+          amount: true,
+          failureCode: true,
+          failureMessage: true,
+          failedAt: true,
+          stripeInvoiceId: true,
+        },
+        orderBy: { failedAt: 'desc' },
+      });
+
+      // Build a helpful message with the failure reason + next steps
+      const failureReason = recentFailed?.failureCode
+        ? this.describeFailure(recentFailed.failureCode)
+        : 'a payment issue';
+      const failedAmount = recentFailed ? `$${recentFailed.amount.toFixed(2)}` : '';
+
       blockReason =
         `Cannot switch billing modes — this dealer has ${failedChargeCount} ` +
-        `failed charge(s) that must be resolved first. Retry the charge ` +
-        `or contact the dealer to update their payment method, then switch.`;
+        `failed charge(s).\n\n` +
+        `Latest failure: ${failedAmount} — ${failureReason}.\n\n` +
+        `Next steps:\n` +
+        `• Stripe will automatically retry the charge (typically within 2 days).\n` +
+        `• If the dealer's card is the problem, ask them to update it in Settings → Payment Methods.\n` +
+        `• To retry manually now, use the "Retry Charge" button in the Postpaid Billing section below.\n` +
+        `• Once the charge succeeds (auto-retry or manual), the block will clear and you can switch.`;
     }
 
     // Block switching TO postpaid if no saved card
@@ -1332,5 +1360,30 @@ export class PostpaidBillingService {
     if (!customer) return null;
     if (typeof customer === "string") return customer;
     return customer.id ?? null;
+  }
+
+  /**
+   * Translate a Stripe failure code into a plain-English description
+   * for the admin (used in the switch-check block message).
+   */
+  private describeFailure(code: string): string {
+    const map: Record<string, string> = {
+      card_declined: 'card was declined by the bank',
+      expired_card: 'card has expired',
+      incorrect_cvc: 'security code (CVC) is incorrect',
+      incorrect_number: 'card number is incorrect',
+      insufficient_funds: 'insufficient funds on the card',
+      lost_card: 'card was reported lost',
+      stolen_card: 'card was reported stolen',
+      do_not_honor: 'bank declined the charge (do not honor)',
+      processing_error: 'temporary processing error',
+      fraudulent: '⚠️ flagged as potentially fraudulent — admin review required',
+      security_violation: '⚠️ security violation flagged — admin review required',
+      no_card: 'no payment method on file',
+      generic_decline: 'card was declined',
+      issuer_unavailable: 'bank was temporarily unavailable',
+      offline_decline: 'temporary network issue',
+    };
+    return map[code] || `payment failed (${code})`;
   }
 }

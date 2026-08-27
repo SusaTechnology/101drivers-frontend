@@ -377,12 +377,12 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
           </div>
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons — disabled when on prepaid mode */}
         <div className="flex flex-wrap gap-2 pt-1">
           <Button
             onClick={handleSetup}
-            disabled={setupLoading}
-            className="rounded-xl bg-blue-600 text-white hover:bg-blue-700"
+            disabled={setupLoading || !status.postpaidEnabled}
+            className="rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
             size="sm"
           >
             {setupLoading ? (
@@ -397,9 +397,9 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
 
           <Button
             onClick={handleUnfreeze}
-            disabled={!status.billingFrozen || unfreezeLoading}
+            disabled={!status.postpaidEnabled || !status.billingFrozen || unfreezeLoading}
             variant="outline"
-            className="rounded-xl"
+            className="rounded-xl disabled:opacity-40"
             size="sm"
           >
             {unfreezeLoading ? (
@@ -412,9 +412,9 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
 
           <Button
             onClick={handleRetry}
-            disabled={!status.billingFrozen || retryLoading}
+            disabled={!status.postpaidEnabled || !status.billingFrozen || retryLoading}
             variant="outline"
-            className="rounded-xl"
+            className="rounded-xl disabled:opacity-40"
             size="sm"
           >
             {retryLoading ? (
