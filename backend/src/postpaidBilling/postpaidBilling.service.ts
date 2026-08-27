@@ -209,6 +209,42 @@ export class PostpaidBillingService {
       },
     });
 
+    // 3b. Clear stale NO_STRIPE_CUSTOMER failures now that the dealer has
+    //     a Stripe customer. These old Payment rows were CHARGE_FAILED
+    //     only because the dealer didn't have a Stripe customer at the
+    //     time of the charge. The charge can't be retroactively billed
+    //     (no invoice exists), but we clear the failureCode +
+    //     failureMessage so:
+    //       (a) getSwitchEligibility's "has failed charges" check
+    //           doesn't see them (the issue is resolved)
+    //       (b) the admin payments page doesn't show a scary "NO_STRIPE_CUSTOMER"
+    //           error for a dealer that now has a Stripe customer
+    //     The Payment status stays CHARGE_FAILED (the money was never
+    //     collected) — we just clear the failureCode so it's not used as
+    //     a "current failure" indicator.
+    try {
+      const cleared = await this.prisma.payment.updateMany({
+        where: {
+          delivery: { customerId: dealerId },
+          status: 'CHARGE_FAILED',
+          failureCode: 'NO_STRIPE_CUSTOMER',
+        },
+        data: {
+          failureCode: null,
+          failureMessage: null,
+        },
+      });
+      if (cleared.count > 0) {
+        this.logger.log(
+          `Setup: cleared ${cleared.count} stale NO_STRIPE_CUSTOMER failure(s) for dealer ${dealerId}`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `Setup: failed to clear stale NO_STRIPE_CUSTOMER failures for dealer ${dealerId}: ${err.message}`,
+      );
+    }
+
     this.logger.log(
       `Dealer ${dealerId} set up for weekly postpaid: ` +
         `stripeCustomer=${stripeCustomer.id}, subscription=${subscription.id}`,
@@ -806,12 +842,52 @@ export class PostpaidBillingService {
 
     const currentMode = dealer.postpaidEnabled ? 'POSTPAID' : 'PREPAID';
 
-    // Count failed charges (both postpaid CHARGE_FAILED + prepaid FAILED)
+    // ── Build the failed-charge where clause ───────────────────────────
+    //
+    // We count payments with status CHARGE_FAILED or FAILED, BUT we
+    // filter out STALE / UNFIXABLE failures — failures that either:
+    //
+    //   (a) Have been resolved since the failure happened:
+    //       • NO_SAVED_CARD → the dealer NOW has a stripeDefaultPaymentMethodId
+    //         (e.g., they added a card via the saved-card flow after the
+    //         failure). The Retry Charge button WILL work for these —
+    //         there's a Stripe invoice and now a card to charge.
+    //
+    //   (b) Are structurally unfixable and don't represent a money-loss
+    //       risk for switching:
+    //       • NO_STRIPE_CUSTOMER → the dealer had no Stripe customer at
+    //         the time of the charge, so the charge never reached Stripe.
+    //         There's no invoice to retry — the failure is permanent.
+    //         Switching billing modes doesn't lose money (no money was
+    //         ever going to be collected via Stripe for this delivery).
+    //         The fix is for the admin to set the dealer up (which the
+    //         switch to postpaid triggers), so the failure shouldn't
+    //         block the switch.
+    //
+    // Past failures that have since SUCCEEDED are already excluded
+    // because their status was updated to PAID by the
+    // handleInvoicePaymentSucceeded webhook (Stripe fires this when a
+    // retried invoice charge succeeds — see handleInvoicePaymentSucceeded).
+    //
+    // Prisma's NOT clause is a list of conditions that, if ANY matches,
+    // exclude the row. We always exclude NO_STRIPE_CUSTOMER, and
+    // conditionally exclude NO_SAVED_CARD only when the dealer now has
+    // a saved PM (otherwise the failure is still actionable via Retry).
+    const staleFailureCodesToExclude: string[] = ['NO_STRIPE_CUSTOMER'];
+    if (dealer.stripeDefaultPaymentMethodId) {
+      // Dealer now has a saved card → old NO_SAVED_CARD failures are stale
+      // (the Retry Charge button will work — there's an invoice + a card).
+      staleFailureCodesToExclude.push('NO_SAVED_CARD');
+    }
+
+    const failedChargeWhere: any = {
+      delivery: { customerId: dealerId },
+      status: { in: ['CHARGE_FAILED', 'FAILED'] },
+      NOT: staleFailureCodesToExclude.map((code) => ({ failureCode: code })),
+    };
+
     const failedChargeCount = await this.prisma.payment.count({
-      where: {
-        delivery: { customerId: dealerId },
-        status: { in: ['CHARGE_FAILED', 'FAILED'] },
-      },
+      where: failedChargeWhere,
     });
 
     // Count pending postpaid deliveries (USAGE_REPORTED — awaiting weekly invoice)
@@ -838,11 +914,9 @@ export class PostpaidBillingService {
       canSwitch = false;
 
       // Get the most recent failed payment details for context
+      // (uses the same filtered where clause as the count above)
       const recentFailed = await this.prisma.payment.findFirst({
-        where: {
-          delivery: { customerId: dealerId },
-          status: { in: ['CHARGE_FAILED', 'FAILED'] },
-        },
+        where: failedChargeWhere,
         select: {
           amount: true,
           failureCode: true,
@@ -857,7 +931,20 @@ export class PostpaidBillingService {
       const failedAmount = recentFailed ? `$${recentFailed.amount.toFixed(2)}` : '';
       const failureReason = this.describeFailure(failureCode);
 
-      // Build error-type-specific next steps
+      // Build error-type-specific next steps.
+      //
+      // isMissingResource: the failure was caused by the dealer missing a
+      // Stripe resource (no customer, no saved card). The fix is to
+      // set the dealer up — NOT to retry a charge (there's nothing to
+      // retry). The Retry Charge button is disabled in this case.
+      const isMissingResource =
+        failureCode === 'NO_STRIPE_CUSTOMER' ||
+        failureCode === 'NO_SAVED_CARD' ||
+        failureCode === 'no_card';
+
+      // isCardIssue: the failure was caused by a card problem (decline,
+      // expired, etc.). Retry Charge makes sense here — there's a Stripe
+      // invoice to retry.
       const isCardIssue =
         failureCode === 'card_declined' ||
         failureCode === 'expired_card' ||
@@ -865,8 +952,7 @@ export class PostpaidBillingService {
         failureCode === 'incorrect_number' ||
         failureCode === 'insufficient_funds' ||
         failureCode === 'lost_card' ||
-        failureCode === 'stolen_card' ||
-        failureCode === 'no_card';
+        failureCode === 'stolen_card';
 
       const isTransient =
         failureCode === 'processing_error' ||
@@ -886,6 +972,19 @@ export class PostpaidBillingService {
           `• Review the dealer's account and the payment details in the Stripe dashboard.\n` +
           `• Do NOT retry the charge until you've verified the dealer.\n` +
           `• Contact support if you need help investigating.`;
+      } else if (isMissingResource) {
+        // NO_STRIPE_CUSTOMER / NO_SAVED_CARD / no_card — the Retry Charge
+        // button is disabled because there's no Stripe invoice to retry.
+        // The fix is to set the dealer up (or have them add a card).
+        const isNoCustomer = failureCode === 'NO_STRIPE_CUSTOMER';
+        nextSteps =
+          `Next steps:\n` +
+          `• This failure happened because the dealer had ${isNoCustomer ? 'no Stripe customer on file' : 'no saved payment method'} at the time of the charge.\n` +
+          `• The "Retry Charge" button is disabled because there's no Stripe invoice to retry — the charge never reached Stripe.\n` +
+          (isNoCustomer
+            ? `• Admin: Click "Setup Postpaid" in the Postpaid Billing section below to create the Stripe customer + subscription.\n`
+            : `• Dealer: Ask the dealer to add a card via Settings → Payment Methods.\n`) +
+          `• Once setup is complete, this old failure won't block billing-mode switches anymore.`;
       } else if (isTransient) {
         nextSteps =
           `Next steps (no action needed):\n` +
