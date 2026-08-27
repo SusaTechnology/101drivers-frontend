@@ -783,13 +783,14 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
     const newMode = billingSwitchTarget;
 
     try {
+      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken') || '';
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${user.customer.id}/switch-billing`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token') || ''}`,
+            'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({ mode: newMode }),
         }
@@ -825,18 +826,27 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
     const customerId = user?.customer?.id;
     if (customerId) {
+      // Use the same token storage key as the rest of the app
+      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken') || '';
       fetch(`${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${customerId}/switch-check`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token') || ''}`,
+          'Authorization': `Bearer ${token}`,
         },
       })
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error(`Failed to check eligibility (${res.status})`);
+          return res.json();
+        })
         .then(data => {
           setBillingSwitchEligibility(data);
           setBillingSwitchLoadingElig(false);
         })
         .catch(err => {
           console.error('Switch-check failed:', err);
+          setBillingSwitchEligibility({
+            canSwitch: false,
+            blockReason: 'Failed to check eligibility. Please try again or contact support.',
+          });
           setBillingSwitchLoadingElig(false);
         });
     }
@@ -1673,61 +1683,11 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
                 {/* Pricing & Billing card (items 6-9) */}
                 {user.customer && (
-                  <>
-                    <CustomerPricingCard
-                      customer={user.customer}
-                      onPricingChanged={refetch}
-                    />
-
-                    {/* ── Billing Mode Switch ──
-                        The ONLY place where billing mode can be changed.
-                        Shows a Switch to Prepaid/Postpaid button depending
-                        on the current mode. Opens a confirmation dialog with
-                        the pre-check (failed charges, saved card, outstanding
-                        balance, etc.) before committing. */}
-                    {user.customer.customerType === 'BUSINESS' && (
-                      <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
-                        <CardContent className="p-4 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <ArrowLeftRight className="w-5 h-5 text-slate-400" />
-                            <div>
-                              <p className="text-sm font-bold text-slate-900 dark:text-white">
-                                Billing Mode
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Current: {user.customer.postpaidEnabled ? (
-                                  <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px]">Postpaid</Badge>
-                                ) : (
-                                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-[10px]">Prepaid</Badge>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          {user.customer.postpaidEnabled ? (
-                            <Button
-                              onClick={() => openBillingSwitchDialog('PREPAID')}
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300"
-                            >
-                              <ArrowLeftRight className="w-4 h-4" />
-                              <span className="ml-1 font-bold">Switch to Prepaid</span>
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => openBillingSwitchDialog('POSTPAID')}
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300"
-                            >
-                              <ArrowLeftRight className="w-4 h-4" />
-                              <span className="ml-1 font-bold">Switch to Postpaid</span>
-                            </Button>
-                          )}
-                        </CardContent>
-                      </Card>
-                    )}
-                  </>
+                  <CustomerPricingCard
+                    customer={user.customer}
+                    onPricingChanged={refetch}
+                    onBillingSwitch={openBillingSwitchDialog}
+                  />
                 )}
 
                 {/* Postpaid billing management card — admin controls for

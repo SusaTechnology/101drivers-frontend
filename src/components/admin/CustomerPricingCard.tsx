@@ -24,6 +24,7 @@ import {
   Calculator,
   CheckCircle,
   XCircle,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -106,6 +107,9 @@ interface AuditLogEntry {
 interface CustomerPricingCardProps {
   customer: AdminUserCustomerDetail;
   onPricingChanged?: () => void;
+  /** Called when the admin clicks the billing mode switch button.
+   * Opens the confirmation dialog in the parent (admin-user-detail). */
+  onBillingSwitch?: (target: 'PREPAID' | 'POSTPAID') => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -113,6 +117,7 @@ interface CustomerPricingCardProps {
 export function CustomerPricingCard({
   customer,
   onPricingChanged,
+  onBillingSwitch,
 }: CustomerPricingCardProps) {
   const [editMode, setEditMode] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -407,11 +412,10 @@ function InlineEditPricing({
       pathParams: { id: customer.id },
       pricingConfigId: selectedConfigId,
       // Pricing Mode Override is hidden in the UI per product decision —
-      // always send null so the backend clears any stale override. If
-      // product decides to re-enable the override picker, restore the
-      // original expression: pricingModeOverride === 'null' ? null : pricingModeOverride
+      // always send null so the backend clears any stale override.
       pricingModeOverride: null,
-      postpaidEnabled,
+      // postpaidEnabled is NOT sent here — billing mode is managed
+      // via the safe-switch button + dialog (see onBillingSwitch prop).
       actorUserId: user?.id || 'admin_user',
       note: note.trim() || undefined,
     });
@@ -487,18 +491,37 @@ function InlineEditPricing({
       </div>
       */}
 
-      {/* Postpaid toggle */}
+      {/* Postpaid toggle — replaced with a Switch button that opens
+          a confirmation dialog (safe switch with pre-checks).
+          The old Switch directly saved postpaidEnabled via the API,
+          bypassing the safe-switch logic (Stripe subscription cancellation,
+          pre-check for failed charges, etc.). */}
       <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div>
-          <Label className="text-sm font-bold">Postpaid Enabled</Label>
+          <Label className="text-sm font-bold">Billing Mode</Label>
           <p className="text-xs text-slate-500 mt-0.5">
-            Allow this customer to be invoiced after delivery (requires APPROVED status)
+            Current: <strong>{customer.postpaidEnabled ? 'Postpaid (invoiced after delivery)' : 'Prepaid (charged at creation)'}</strong>
+          </p>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Switching billing modes requires confirmation — pending charges and failed payments are checked first.
           </p>
         </div>
-        <Switch
-          checked={postpaidEnabled}
-          onCheckedChange={setPostpaidEnabled}
-        />
+        <Button
+          onClick={() => onBillingSwitch(customer.postpaidEnabled ? 'PREPAID' : 'POSTPAID')}
+          variant="outline"
+          size="sm"
+          className={cn(
+            'rounded-xl font-bold',
+            customer.postpaidEnabled
+              ? 'border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300'
+              : 'border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300'
+          )}
+        >
+          <ArrowLeftRight className="w-4 h-4" />
+          <span className="ml-1">
+            {customer.postpaidEnabled ? 'Switch to Prepaid' : 'Switch to Postpaid'}
+          </span>
+        </Button>
       </div>
 
       {/* Note */}
