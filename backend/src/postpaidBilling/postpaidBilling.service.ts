@@ -853,21 +853,68 @@ export class PostpaidBillingService {
         orderBy: { failedAt: 'desc' },
       });
 
-      // Build a helpful message with the failure reason + next steps
-      const failureReason = recentFailed?.failureCode
-        ? this.describeFailure(recentFailed.failureCode)
-        : 'a payment issue';
+      const failureCode = recentFailed?.failureCode || '';
       const failedAmount = recentFailed ? `$${recentFailed.amount.toFixed(2)}` : '';
+      const failureReason = this.describeFailure(failureCode);
+
+      // Build error-type-specific next steps
+      const isCardIssue =
+        failureCode === 'card_declined' ||
+        failureCode === 'expired_card' ||
+        failureCode === 'incorrect_cvc' ||
+        failureCode === 'incorrect_number' ||
+        failureCode === 'insufficient_funds' ||
+        failureCode === 'lost_card' ||
+        failureCode === 'stolen_card' ||
+        failureCode === 'no_card';
+
+      const isTransient =
+        failureCode === 'processing_error' ||
+        failureCode === 'issuer_unavailable' ||
+        failureCode === 'offline_decline';
+
+      const isFraud =
+        failureCode === 'fraudulent' ||
+        failureCode === 'security_violation';
+
+      let nextSteps = '';
+
+      if (isFraud) {
+        nextSteps =
+          `Next steps (admin action required):\n` +
+          `• ⚠️ This charge was flagged by Stripe as potentially fraudulent.\n` +
+          `• Review the dealer's account and the payment details in the Stripe dashboard.\n` +
+          `• Do NOT retry the charge until you've verified the dealer.\n` +
+          `• Contact support if you need help investigating.`;
+      } else if (isTransient) {
+        nextSteps =
+          `Next steps (no action needed):\n` +
+          `• This was a temporary processing error — not a card problem.\n` +
+          `• Stripe will automatically retry the charge (typically within 2 days).\n` +
+          `• No action is needed from you or the dealer.\n` +
+          `• Once the retry succeeds, the block will clear and you can switch.`;
+      } else if (isCardIssue) {
+        nextSteps =
+          `Next steps:\n` +
+          `• Admin: Use the "Retry Charge" button in the Postpaid Billing section below to retry now (if the dealer has already updated their card).\n` +
+          `• Dealer: Ask the dealer to update their card in Settings → Payment Methods.\n` +
+          `• Stripe will also automatically retry (typically within 2 days).\n` +
+          `• Once the charge succeeds (auto-retry or manual retry), the block will clear and you can switch.`;
+      } else {
+        // Unknown error — give general guidance
+        nextSteps =
+          `Next steps:\n` +
+          `• Stripe will automatically retry the charge (typically within 2 days).\n` +
+          `• Admin: Use the "Retry Charge" button in the Postpaid Billing section below to retry now.\n` +
+          `• Dealer: Ask the dealer to check their payment method in Settings → Payment Methods.\n` +
+          `• Once the charge succeeds, the block will clear and you can switch.`;
+      }
 
       blockReason =
         `Cannot switch billing modes — this dealer has ${failedChargeCount} ` +
         `failed charge(s).\n\n` +
         `Latest failure: ${failedAmount} — ${failureReason}.\n\n` +
-        `Next steps:\n` +
-        `• Stripe will automatically retry the charge (typically within 2 days).\n` +
-        `• If the dealer's card is the problem, ask them to update it in Settings → Payment Methods.\n` +
-        `• To retry manually now, use the "Retry Charge" button in the Postpaid Billing section below.\n` +
-        `• Once the charge succeeds (auto-retry or manual), the block will clear and you can switch.`;
+        nextSteps;
     }
 
     // Block switching TO postpaid if no saved card
