@@ -234,7 +234,10 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
   }
 
   return (
-    <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
+    <Card className={cn(
+      'rounded-2xl border-slate-200 dark:border-slate-800',
+      !status.postpaidEnabled && 'opacity-60'
+    )}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -258,6 +261,27 @@ export default function PostpaidBillingCard({ dealerId }: { dealerId: string }) 
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Inactive notice — shown when the dealer is on Prepaid (postpaidEnabled=false) */}
+        {!status.postpaidEnabled && (
+          <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-600 dark:text-slate-400">
+                <p className="font-bold">This section is inactive</p>
+                <p className="mt-1">
+                  The dealer is on <strong>Prepaid</strong> billing — new deliveries are charged immediately at creation.
+                  The Stripe subscription{status.stripe.subscriptionId ? ' (shown below)' : ''} has been cancelled at period end
+                  {status.stripe.subscriptionId ? ' (or will be)' : ''}.
+                  Any pending postpaid charges from the current billing cycle will still be collected.
+                </p>
+                <p className="mt-1 text-slate-400">
+                  To re-enable Postpaid billing, edit the customer profile and change Payment Type to Postpaid.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Status badges */}
         <div className="flex flex-wrap items-center gap-2">
           <Badge
