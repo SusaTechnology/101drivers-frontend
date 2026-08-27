@@ -354,8 +354,24 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const [billingSwitchOpen, setBillingSwitchOpen] = useState(false);
   const [billingSwitchTarget, setBillingSwitchTarget] = useState<'PREPAID' | 'POSTPAID'>('PREPAID');
 
-  // useDataQuery for the switch-check — uses the app's auth wrapper
-  // (no raw fetch, no 401 issues). Only enabled when the dialog is open.
+  const openPhotoDialog = (src: string, title: string, canUpdate: boolean) => {
+    setPhotoDialogSrc(src);
+    setPhotoDialogTitle(title);
+    setPhotoDialogCanUpdate(canUpdate);
+    setPhotoDialogOpen(true);
+  };
+
+  // ==================== QUERIES ====================
+
+  const {
+    data: user,
+    isLoading,
+    isError,
+    refetch,
+  } = useAdminUserDetail(userId);
+
+  // ── Billing switch hooks (MUST be after useAdminUserDetail so
+  //    user is defined for the customerId) ──
   const customerId = user?.customer?.id;
   const { data: switchEligibility, isLoading: switchEligibilityLoading, refetch: refetchSwitchCheck } = useDataQuery<SwitchEligibility>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${customerId}/switch-check`,
@@ -363,7 +379,6 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
     enabled: false,
   });
 
-  // useDataMutation for the actual switch — same auth wrapper.
   const switchBillingMutation = useDataMutation<any, any>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${customerId}/switch-billing`,
     method: 'POST',
@@ -390,22 +405,6 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
       }
     );
   };
-
-  const openPhotoDialog = (src: string, title: string, canUpdate: boolean) => {
-    setPhotoDialogSrc(src);
-    setPhotoDialogTitle(title);
-    setPhotoDialogCanUpdate(canUpdate);
-    setPhotoDialogOpen(true);
-  };
-
-  // ==================== QUERIES ====================
-
-  const {
-    data: user,
-    isLoading,
-    isError,
-    refetch,
-  } = useAdminUserDetail(userId);
 
   // ==================== MUTATIONS ====================
 
