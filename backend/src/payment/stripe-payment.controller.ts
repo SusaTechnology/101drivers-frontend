@@ -128,7 +128,19 @@ export class StripePaymentController {
     // Verify delivery exists and is completed
     const delivery = await this.prisma.deliveryRequest.findUnique({
       where: { id: deliveryId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        customer: {
+          select: {
+            id: true,
+            stripeCustomerId: true,
+            stripeDefaultPaymentMethodId: true,
+            contactEmail: true,
+            user: { select: { email: true } },
+          },
+        },
+      },
     });
 
     if (!delivery) {
@@ -137,6 +149,27 @@ export class StripePaymentController {
 
     if (delivery.status !== "COMPLETED") {
       throw new BadRequestException("Tips can only be added to completed deliveries");
+    }
+
+    // ── Pre-check: dealer MUST have a saved card ──
+    // Without this, Stripe returns a PI in `requires_payment_method`
+    // state, and the frontend would render a card-entry dialog (the
+    // bug we're fixing). Tips should be one-click — the dealer has
+    // already saved a card for delivery creation; use it for tips too.
+    //
+    // If the dealer wants to use a different card, they should change
+    // their default in Payment Methods first. This matches the
+    // delivery-creation flow (which also uses the saved card with no
+    // dialog).
+    if (!delivery.customer?.stripeCustomerId) {
+      throw new BadRequestException(
+        "No payment method on file. Please save a card under Payment Methods first, then try again.",
+      );
+    }
+    if (!delivery.customer?.stripeDefaultPaymentMethodId) {
+      throw new BadRequestException(
+        "No saved payment method on file. Please save a card under Payment Methods first, then try again.",
+      );
     }
 
     // Check if a tip already exists for this delivery
@@ -163,18 +196,47 @@ export class StripePaymentController {
     }
 
     try {
+      // ── Use the dealer's saved card + auto-confirm ──
+      // Before this fix, the PI was created without a payment method,
+      // so Stripe returned `requires_payment_method` and the frontend
+      // rendered a card-entry dialog. The dealer had to re-enter their
+      // card even though they had a saved one. With `confirm: true`,
+      // Stripe charges the saved card immediately. No dialog needed.
+      //
+      // If the customer's bank requires 3DS, Stripe returns
+      // `requires_action` and the frontend renders a 3DS confirmation
+      // modal (when it's implemented). Until then, the tip fails with
+      // a clear error.
+      //
+      // If the saved card is declined, Stripe throws and we surface
+      // a friendly error to the dealer.
       const result = await this.stripeService.createPaymentIntent({
         amount,
         deliveryId,
         metadata: { type: "tip" },
         captureMethod: 'automatic', // Tips charge immediately (post-completion)
+        stripeCustomerId: delivery.customer!.stripeCustomerId!,
+        paymentMethodId: delivery.customer!.stripeDefaultPaymentMethodId!,
+        confirm: true, // ── auto-confirm with the saved card ──
       });
+
+      // Re-fetch the PI to learn its true status after confirmation.
+      // `createPaymentIntent` returns the initial status, but with
+      // `confirm: true` Stripe may have already moved it to
+      // `succeeded` or `requires_action`.
+      const refreshedPi = await this.stripeService.getPaymentIntent(result.paymentIntentId);
+      const finalStatus = refreshedPi.status;
 
       // Upsert tip record — capture the tip row id so the frontend can PATCH
       // the same row by id after the Stripe payment confirms. Without this,
       // the frontend's `existingTip` (fetched on page load, before the tip
       // was created) is undefined and the PATCH hits /api/tips/undefined → 404.
       let tipId: string;
+      const tipStatus =
+        finalStatus === "succeeded" ? "CAPTURED" :
+        finalStatus === "requires_action" ? "AUTHORIZED" :
+        finalStatus === "requires_capture" ? "AUTHORIZED" :
+        "AUTHORIZED";
       if (existingTip) {
         const updated = await this.prisma.tip.update({
           where: { deliveryId },
@@ -182,7 +244,7 @@ export class StripePaymentController {
             amount,
             provider: "STRIPE",
             providerRef: result.paymentIntentId,
-            status: "AUTHORIZED",
+            status: tipStatus as any,
           },
           select: { id: true },
         });
@@ -194,23 +256,58 @@ export class StripePaymentController {
             deliveryId,
             provider: "STRIPE",
             providerRef: result.paymentIntentId,
-            status: "AUTHORIZED",
+            status: tipStatus as any,
           },
           select: { id: true },
         });
         tipId = created.id;
       }
 
-      return {
-        tipId,
-        paymentIntentId: result.paymentIntentId,
-        clientSecret: result.clientSecret,
-        status: "requires_payment_method",
-        amount,
-      };
+      // Return the final status so the frontend knows whether to show
+      // "Tip Sent!" directly (succeeded) or render the 3DS modal
+      // (requires_action). For `requires_payment_method` or other
+      // failure states, we throw below.
+      if (finalStatus === "succeeded") {
+        return {
+          tipId,
+          paymentIntentId: result.paymentIntentId,
+          clientSecret: result.clientSecret,
+          status: "succeeded",
+          amount,
+        };
+      }
+      if (finalStatus === "requires_action") {
+        // 3DS required — frontend should render the 3DS modal (when
+        // implemented). For now, this is a hard failure on the frontend
+        // side (the TipPaymentForm will detect this status and show
+        // a "your bank requires 3DS, please try a different card"
+        // message).
+        return {
+          tipId,
+          paymentIntentId: result.paymentIntentId,
+          clientSecret: result.clientSecret,
+          status: "requires_action",
+          amount,
+        };
+      }
+      // Other statuses (requires_payment_method, canceled, etc.) —
+      // the charge didn't go through. Throw a friendly error.
+      throw new BadRequestException(
+        `Tip payment could not be completed (Stripe status: ${finalStatus}). ` +
+          "Please try a different card or contact support.",
+      );
     } catch (err: any) {
       this.logger.error(`Tip PaymentIntent creation failed: ${err.message}`);
-      return { error: "Failed to create tip payment intent", details: err.message };
+      // Re-throw BadRequestException so the dealer sees the friendly
+      // message. Don't wrap — the original message is already
+      // dealer-readable.
+      if (err instanceof BadRequestException) throw err;
+      // Translate Stripe errors to friendly messages
+      const friendly = this.translateStripeCardError(
+        err,
+        "We could not process your tip at this time. Please try again or contact support.",
+      );
+      throw new BadRequestException(friendly);
     }
   }
 

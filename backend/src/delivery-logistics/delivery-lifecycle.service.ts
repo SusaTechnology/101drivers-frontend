@@ -654,8 +654,9 @@ async startTrip(input: {
           `Lock-in capture failed for deliveryId=${input.deliveryId}: ${err}`,
         );
         throw new ConflictException(
-          "Unable to start trip: payment authorization could not be captured. " +
-          "Please ask the customer to refresh their payment method and try again.",
+          "Unable to start trip: the customer's payment could not be captured. " +
+          "Please ask the customer to add a new card under Payment Methods " +
+          "and retry. If the issue persists, contact support.",
         );
       }
     }

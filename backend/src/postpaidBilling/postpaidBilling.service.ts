@@ -41,6 +41,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { StripeService } from "../providers/stripe/stripe.service";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import {
   FREEZE_REASONS,
   INVOICE_ITEM_DESCRIPTION_TEMPLATE,
@@ -65,6 +66,10 @@ export class PostpaidBillingService {
     private readonly configService: ConfigService,
     @Optional() @Inject(StripeService)
     private readonly stripeService?: StripeService,
+    // Inject NotificationEventEngine (optional) so we can notify admins
+    // when retry queues reach PERMANENTLY_FAILED / UNCOLLECTIBLE.
+    // @Optional guards against circular-DI issues during testing.
+    @Optional() private readonly notificationEngine?: NotificationEventEngine,
   ) {
     const priceId = this.configService.get<string>(
       POSTPAID_ENV.STRIPE_POSTPAID_PRICE_ID,
@@ -635,6 +640,31 @@ export class PostpaidBillingService {
         `Usage report for payment ${paymentId} PERMANENTLY_FAILED after ${attempts} attempts. ` +
           `Admin must manually create the InvoiceItem in Stripe. Last error: ${errorMessage}`,
       );
+      // Notify admin(s) so they don't have to actively poll the
+      // /admin/health endpoint. Best-effort — failures logged.
+      if (this.notificationEngine) {
+        try {
+          // Look up the deliveryId for this payment so the admin email
+          // has full context.
+          const paymentRow = await this.prisma.payment.findUnique({
+            where: { id: paymentId },
+            select: { deliveryId: true },
+          });
+          if (paymentRow?.deliveryId) {
+            await this.notificationEngine.notifyAdminUsageReportPermanentlyFailed({
+              paymentId,
+              deliveryId: paymentRow.deliveryId,
+              attempts,
+              lastError: errorMessage.slice(0, 500),
+            });
+          }
+        } catch (err: any) {
+          this.logger.error(
+            `Failed to send admin notification for permanently failed usage report (payment ${paymentId}): ${err.message}`,
+            err?.stack,
+          );
+        }
+      }
     } else {
       this.logger.warn(
         `Usage report for payment ${paymentId} scheduled for retry #${attempts} at ${nextRetryAt?.toISOString()}. Last error: ${errorMessage}`,
@@ -771,6 +801,22 @@ export class PostpaidBillingService {
         this.logger.warn(
           `Remainder charge for payment ${item.id} (delivery ${item.deliveryId}) marked UNCOLLECTIBLE — past 7-day deadline. Admin must manually invoice.`,
         );
+        // Notify admin(s). Best-effort — failures logged.
+        if (this.notificationEngine) {
+          try {
+            await this.notificationEngine.notifyAdminRemainderUncollectible({
+              paymentId: item.id,
+              deliveryId: item.deliveryId,
+              remainderAmount: item.remainderAmount ?? 0,
+              dueAt: dueAt.toISOString(),
+            });
+          } catch (err: any) {
+            this.logger.error(
+              `Failed to send admin notification for uncollectible remainder (payment ${item.id}): ${err.message}`,
+              err?.stack,
+            );
+          }
+        }
         continue;
       }
 

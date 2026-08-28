@@ -324,6 +324,34 @@ export class PaymentPayoutEngine {
             });
             // remainderCaptured stays false — fall through to the
             // "skip payout upgrade + skip auto-transfer" branch below.
+
+            // ── Notify customer about the outstanding balance ──
+            // The customer owes money for a completed delivery. Without
+            // this notification, they wouldn't know — the delivery just
+            // shows as completed and the remainder is silently retried.
+            // Best-effort — failures are logged but don't fail the
+            // completion flow.
+            if (this.notificationEngine) {
+              try {
+                // Defer to outside the transaction so we don't block on
+                // email sending. The notification is fire-and-forget.
+                setImmediate(() => {
+                  this.notificationEngine?.notifyRemainderChargePending({
+                    deliveryId: input.deliveryId,
+                    remainderAmount: remainder,
+                    dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                  }).catch((err: any) => {
+                    this.logger?.warn?.(
+                      `notifyRemainderChargePending failed (non-fatal) for delivery ${input.deliveryId}: ${err.message}`,
+                    );
+                  });
+                });
+              } catch (err: any) {
+                this.logger.warn(
+                  `Failed to schedule notifyRemainderChargePending for delivery ${input.deliveryId}: ${err.message}`,
+                );
+              }
+            }
           } else {
             // Update Payment row: PI #2 becomes the "current" PI; lockIn*
             // columns preserve PI #1 for audit. Set providerChargeId here

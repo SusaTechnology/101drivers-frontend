@@ -612,7 +612,9 @@ export class DeliveryRequestOrchestratorService {
       return 'The security code on your card is incorrect. Please save a new card under Payment Methods.';
     }
     if (code === 'payment_method_action_required') {
-      return 'Your bank needs you to approve this charge. Please contact your bank or use a different card.';
+      return 'Your bank requires 3D Secure authentication for this charge, ' +
+        'which our app does not support yet. Please contact support ' +
+        'so we can help you complete this payment manually.';
     }
     // Internal Stripe config issues — DO NOT leak these to the dealer.
     // The dealer can't fix our API keys; tell them to contact support.
@@ -1461,8 +1463,9 @@ private async createIndividualDeliveryForResolvedCustomer(
   // payment can't be captured.
   if (piStatus === 'requires_action') {
     const friendly =
-      'Your bank needs you to approve this charge (3D Secure). ' +
-      'Please try a different card or contact support if the issue persists.';
+      'Your bank requires 3D Secure authentication for this charge, ' +
+      'which our app does not support yet. Please contact support ' +
+      'so we can help you complete this payment manually.';
     await this.markPaymentFailed(
       payment.id,
       friendly,
@@ -2378,8 +2381,9 @@ private async resolveIndividualCustomerForCreate(
       // `requires_action` as a hard failure.
       if (chargeResult.status === 'requires_action') {
         const friendly =
-          'Your bank needs you to approve this charge (3D Secure). ' +
-          'Please try a different card or contact support if the issue persists.';
+          'Your bank requires 3D Secure authentication for this charge, ' +
+          'which our app does not support yet. Please contact support ' +
+          'so we can help you complete this payment manually.';
         await this.markPaymentFailed(
           payment.id,
           friendly,
@@ -2885,8 +2889,9 @@ private async resolveIndividualCustomerForCreate(
       // (cancel + throw) until the frontend 3DS modal is implemented.
       if (chargeResult.status === 'requires_action') {
         const friendly =
-          'Your bank needs you to approve this charge (3D Secure). ' +
-          'Please try a different card or contact support if the issue persists.';
+          'Your bank requires 3D Secure authentication for this charge, ' +
+          'which our app does not support yet. Please contact support ' +
+          'so we can help you complete this payment manually.';
         await this.markPaymentFailed(
           payment.id,
           friendly,
@@ -3622,7 +3627,11 @@ private async resolveIndividualCustomerForCreate(
     const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
     switch (eligibility.reason) {
       case "FROZEN":
-        return "Your account is frozen due to a failed weekly charge. Please update your payment method and contact support.";
+        return "Your account is frozen due to a failed weekly charge. " +
+          "Please update your payment method — we will automatically retry " +
+          "the charge within 24 hours and unfreeze your account once it " +
+          "succeeds. If you need to deliver urgently, contact support to " +
+          "retry the charge now.";
       case "NOT_APPROVED":
         return "Your business account is not yet approved for postpaid billing.";
       case "NO_PAYMENT_METHOD":
