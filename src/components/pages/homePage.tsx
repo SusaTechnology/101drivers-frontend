@@ -1296,28 +1296,55 @@ export default function LandingPage() {
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-8">
               Choose your account type to sign up
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-              {/* Business delivery — primary, slightly larger/highlighted */}
-              <Button
-                asChild
-                className="flex-1 h-16 text-base font-extrabold rounded-2xl bg-primary text-slate-950 hover:bg-primary/90 shadow-lg shadow-primary/20"
+            <div className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+              {/* ── Business delivery — default selected (dark bg + checkmark) ──
+                  Both buttons use the same card-like styling so users instantly
+                  see they're tappable. The entire box is clickable via the
+                  <Link> inside. */}
+              <Link
+                to="/auth/dealer-signup"
+                className="flex-1 group relative cursor-pointer rounded-2xl bg-slate-900 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-lg shadow-slate-900/20 hover:shadow-xl hover:shadow-slate-900/25 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
               >
-                <Link to="/auth/dealer-signup">
-                  <Building className="w-5 h-5 mr-2" />
-                  Business delivery
-                </Link>
-              </Button>
-              {/* Personal delivery — secondary, equal but outline */}
-              <Button
-                asChild
-                variant="outline"
-                className="flex-1 h-16 text-base font-extrabold rounded-2xl border-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                {/* Checkmark badge — shows this is the recommended/default option */}
+                <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-lime-400 flex items-center justify-center shadow-md">
+                  <CheckCircle className="w-4 h-4 text-slate-900" strokeWidth={3} />
+                </div>
+                <div className="p-5 sm:p-6 text-left">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                      <Building className="w-5 h-5 text-lime-400" />
+                    </div>
+                    <span className="text-lg font-extrabold text-white">
+                      Business Delivery
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-300 dark:text-slate-400 leading-relaxed">
+                    For dealerships and auto businesses. Get weekly invoiced billing, postpaid options, and volume delivery management.
+                  </p>
+                </div>
+              </Link>
+
+              {/* ── Personal delivery — same card styling, light variant ──
+                  Matches the Business button's shape, border, shadow, and
+                  cursor. Users see two clear, tappable cards side by side. */}
+              <Link
+                to="/auth/individual-signup"
+                className="flex-1 group relative cursor-pointer rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl hover:border-lime-400 dark:hover:border-lime-500 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
               >
-                <Link to="/auth/individual-signup">
-                  <UserCircle className="w-5 h-5 mr-2" />
-                  Personal delivery
-                </Link>
-              </Button>
+                <div className="p-5 sm:p-6 text-left">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                      <UserCircle className="w-5 h-5 text-slate-600 dark:text-slate-400 group-hover:text-lime-500 transition-colors" />
+                    </div>
+                    <span className="text-lg font-extrabold text-slate-900 dark:text-white">
+                      Personal Delivery
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                    For individuals who need a vehicle transported. Pay per delivery with upfront pricing and instant booking.
+                  </p>
+                </div>
+              </Link>
             </div>
           </div>
         </section>
