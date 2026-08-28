@@ -12,6 +12,9 @@ import {
   LogIn as LoginIcon,
   Menu,
   X,
+  Building,
+  UserCircle,
+  CheckCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IndividualSignupForm } from "./IndividualSignupForm";
@@ -116,20 +119,49 @@ export function IndividualSignUp() {
             </Link>
           </div>
 
-          {/* Signup type switcher — lets users navigate between the two
-              signup pages without going back to the homepage. */}
-          <div className="mb-6 flex items-center gap-2 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/50">
+          {/* Signup type switcher — card-style buttons matching the homepage.
+              Personal is the active/selected option here (dark bg + checkmark). */}
+          <div className="mb-6 flex flex-col sm:flex-row gap-3">
+            {/* Personal Delivery — selected (this is the personal signup page) */}
             <Link
               to="/auth/individual-signup"
-              className="flex-1 text-center py-2.5 px-4 rounded-xl text-sm font-bold bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+              className="flex-1 group relative cursor-pointer rounded-2xl bg-slate-900 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
             >
-              Personal Customer
+              <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-lime-400 flex items-center justify-center shadow-md">
+                <CheckCircle className="w-4 h-4 text-slate-900" strokeWidth={3} />
+              </div>
+              <div className="p-4 sm:p-5 text-left">
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                    <UserCircle className="w-4 h-4 text-lime-400" />
+                  </div>
+                  <span className="text-base font-extrabold text-white">
+                    Personal Delivery
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 dark:text-slate-400 leading-relaxed">
+                  Pay per delivery with upfront pricing
+                </p>
+              </div>
             </Link>
+            {/* Business Delivery — not selected, light card */}
             <Link
               to="/auth/dealer-signup"
-              className="flex-1 text-center py-2.5 px-4 rounded-xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+              className="flex-1 group relative cursor-pointer rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl hover:border-lime-400 dark:hover:border-lime-500 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
             >
-              Sign up as a Business
+              <div className="p-4 sm:p-5 text-left">
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                    <Building className="w-4 h-4 text-slate-600 dark:text-slate-400 group-hover:text-lime-500 transition-colors" />
+                  </div>
+                  <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Business Delivery
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Weekly invoiced billing + postpaid options
+                </p>
+              </div>
             </Link>
           </div>
 
