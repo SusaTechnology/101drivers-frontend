@@ -76,9 +76,13 @@ import {
   MapPin,
   Route as RouteIcon,
   Copy,
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
+import { useDataMutation } from '@/lib/tanstack/dataQuery';
 
 interface AdminPaymentDetailPageProps {
   paymentId: string;
@@ -97,6 +101,48 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   const [invoicedForm, setInvoicedForm] = useState({ invoiceId: '', note: '' });
   const [markPaidForm, setMarkPaidForm] = useState({ note: '' });
   const [markPayoutForm, setMarkPayoutForm] = useState({ providerTransferId: '', note: '' });
+
+  // ── Refund state ──
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundMode, setRefundMode] = useState<'full' | 'partial'>('full');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundNote, setRefundNote] = useState('');
+
+  // Refund mutation — calls POST /api/payments/stripe/refund/:paymentId
+  // with optional `amount` for partial refunds. The webhook updates the
+  // payment status + refundedAmountCents + creates the driver clawback.
+  const refundMutation = useDataMutation({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/refund/:paymentId`,
+    method: 'POST',
+    onSuccess: () => {
+      setRefundOpen(false);
+      setRefundAmount('');
+      setRefundNote('');
+      setRefundMode('full');
+      toast.success('Refund submitted', {
+        description: 'The refund has been submitted to Stripe. The payment status will update automatically when the refund is processed.',
+      });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast.error('Refund failed', {
+        description: error?.message || 'Unknown error',
+      });
+    },
+  });
+
+  const handleRefund = () => {
+    const amount = refundMode === 'partial' ? parseFloat(refundAmount) : undefined;
+    if (refundMode === 'partial' && (!amount || amount <= 0)) {
+      toast.error('Invalid amount', { description: 'Please enter a valid refund amount.' });
+      return;
+    }
+    refundMutation.mutate({
+      pathParams: { paymentId },
+      note: refundNote || undefined,
+      amount,
+    });
+  };
 
   const actorUserId = user?.id || 'system';
 
@@ -377,6 +423,26 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
               >
                 <Banknote className="w-3.5 h-3.5 mr-1" />
                 Mark Payout Paid
+              </Button>
+            )}
+            {/* ── Refund button ──
+                Shows when the payment is CAPTURED, PAID, or partially
+                REFUNDED (so the admin can issue additional partial
+                refunds). Hidden for AUTHORIZED (not captured yet),
+                FAILED, or VOIDED payments. */}
+            {['CAPTURED', 'PAID', 'REFUNDED'].includes(payment.status) && payment.providerPaymentIntentId && (
+              <Button
+                onClick={() => setRefundOpen(true)}
+                size="sm"
+                className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white"
+                disabled={refundMutation.isPending}
+              >
+                {refundMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                )}
+                {payment.status === 'REFUNDED' ? 'Additional Refund' : 'Process Refund'}
               </Button>
             )}
           </div>
@@ -1032,6 +1098,128 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                 )}
                 Mark Payout Paid
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Refund Dialog ──
+            Supports both full and partial refunds. For partial, the
+            admin enters an amount + optional note. The backend validates
+            that the amount doesn't exceed the remaining refundable balance.
+            The webhook handles updating the payment status + driver clawback. */}
+        <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-rose-600" />
+                Process Refund
+              </DialogTitle>
+              <DialogDescription>
+                Issue a refund to the customer's card via Stripe. This action
+                cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {/* Refund mode selector */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500">Refund Type</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={refundMode === 'full' ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => setRefundMode('full')}
+                  >
+                    Full (${Number(payment.amount).toFixed(2)})
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={refundMode === 'partial' ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => setRefundMode('partial')}
+                  >
+                    Partial
+                  </Button>
+                </div>
+              </div>
+
+              {/* Partial refund amount */}
+              {refundMode === 'partial' && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500">
+                    Amount to refund ($)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={Number(payment.amount).toFixed(2)}
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="rounded-xl"
+                  />
+                  {payment.status === 'REFUNDED' && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      Already refunded: ${(Number(payment.refundedAmountCents ?? 0) / 100).toFixed(2)} of ${Number(payment.amount).toFixed(2)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Refund note (optional) */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500">
+                  Note (optional — for audit trail)
+                </Label>
+                <Textarea
+                  value={refundNote}
+                  onChange={(e) => setRefundNote(e.target.value)}
+                  placeholder="Reason for refund..."
+                  className="rounded-xl"
+                  rows={2}
+                />
+              </div>
+
+              {/* Warning */}
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-900/30">
+                <p className="text-xs text-rose-700 dark:text-rose-300">
+                  <strong>What happens:</strong>
+                </p>
+                <ul className="text-xs text-rose-600 dark:text-rose-400 mt-1 space-y-0.5 ml-4 list-disc">
+                  <li>The customer receives the refund on their card (5-10 business days)</li>
+                  <li>The driver's payout will be reduced proportionally on their next payout</li>
+                  <li>If the driver has already been paid, a clawback adjustment is created</li>
+                  <li>The payment status updates automatically via Stripe webhook</li>
+                </ul>
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRefundOpen(false);
+                  setRefundAmount('');
+                  setRefundNote('');
+                  setRefundMode('full');
+                }}
+                className="rounded-xl"
+                disabled={refundMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRefund}
+                disabled={refundMutation.isPending}
+                className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                {refundMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {refundMode === 'full'
+                  ? `Confirm Full Refund ($${Number(payment.amount).toFixed(2)})`
+                  : `Confirm Partial Refund ($${refundAmount || '0.00'})`}
               </Button>
             </DialogFooter>
           </DialogContent>
