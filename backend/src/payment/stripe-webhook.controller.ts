@@ -420,14 +420,21 @@ export class StripeWebhookController {
     // ── Fix #5: Partial refund tracking ──
     // `charge.amount_refunded` is the CUMULATIVE amount refunded (in
     // cents), not the amount of THIS refund event. Stripe keeps
-    // updating this field as more refunds are issued. So we can just
-    // copy it to `refundedAmountCents` and derive the refundStatus.
+    // updating this field as more refunds are issued.
     //
-    // We also create a DriverPayoutAdjustment (Fix #6) for the
-    // driver's proportional share of the refund — see
-    // `handleDriverPayoutClawback` below.
+    // We use a transaction to atomically:
+    //   1. Read the previous `refundedAmountCents` on the Payment row
+    //   2. Compute the DELTA (this refund's amount)
+    //   3. Update the Payment row with the new cumulative amount
+    //   4. Create a DriverPayoutAdjustment for the DELTA (not cumulative)
+    //
+    // Without the delta calculation, multiple partial refunds would
+    // over-clawback the driver (the cumulative amount would be passed
+    // each time, summing to far more than the actual refund).
     const cumulativeRefundedCents = charge.amount_refunded || 0;
     const totalAmountCents = Math.round(Number(payment.amount) * 100);
+    const previousRefundedCents = payment.refundedAmountCents ?? 0;
+    const deltaRefundedCents = Math.max(0, cumulativeRefundedCents - previousRefundedCents);
     const isFullRefund = cumulativeRefundedCents >= totalAmountCents;
     const refundStatus = isFullRefund
       ? "FULL"
@@ -435,53 +442,83 @@ export class StripeWebhookController {
         ? "PARTIAL"
         : "NONE";
 
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        // Keep the legacy `status` field for backward compat — only
-        // flip to REFUNDED when fully refunded. Partial refunds keep
-        // the original status (CAPTURED) so existing code that reads
-        // `status` continues to work.
-        status: isFullRefund ? "REFUNDED" : payment.status,
-        refundedAt: isFullRefund ? new Date() : payment.refundedAt,
-        providerChargeId: charge.id,
-        // ── Fix #5: new partial-refund fields ──
-        refundedAmountCents: cumulativeRefundedCents,
-        refundStatus,
-      },
+    // ── Atomic update + clawback creation (transactional) ──
+    // Both the Payment.update and the DriverPayoutAdjustment.create
+    // happen in the same transaction. If the clawback fails (e.g.,
+    // unique constraint on stripeEventId for a duplicate webhook),
+    // the Payment update is rolled back too — no half-state.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          // Keep the legacy `status` field for backward compat — only
+          // flip to REFUNDED when fully refunded. Partial refunds keep
+          // the original status (CAPTURED) so existing code that reads
+          // `status` continues to work.
+          status: isFullRefund ? "REFUNDED" : payment.status,
+          refundedAt: isFullRefund ? new Date() : payment.refundedAt,
+          providerChargeId: charge.id,
+          // ── Fix #5: new partial-refund fields ──
+          refundedAmountCents: cumulativeRefundedCents,
+          refundStatus,
+        },
+      });
+
+      // ── Fix #6: Driver payout clawback on refund (DELTA only) ──
+      // The customer got money back, so the driver's payout should be
+      // reduced proportionally. We claw back the DELTA of this refund
+      // (not the cumulative amount) — using the previous
+      // `refundedAmountCents` we read above. This prevents over-
+      // clawback on multiple partial refunds.
+      //
+      // Idempotent via the unique constraint on `stripeEventId` — if
+      // Stripe retries this webhook, the second insert fails with
+      // P2002 and the whole transaction rolls back (no duplicate
+      // Payment.update, no duplicate clawback). The catch block below
+      // detects this and returns success (so Stripe doesn't retry).
+      if (deltaRefundedCents > 0) {
+        try {
+          await this.createDriverPayoutClawback(tx, {
+            paymentId: payment.id,
+            refundAmountCents: deltaRefundedCents,
+            reason: "REFUND",
+            stripeEventId,
+          });
+        } catch (err: any) {
+          if (
+            err?.code === "P2002" &&
+            Array.isArray(err?.meta?.target) &&
+            err.meta.target.includes("stripeEventId")
+          ) {
+            this.logger.log(
+              `DriverPayoutAdjustment for ${stripeEventId} already exists (idempotent) — skipping`,
+            );
+            // Don't rethrow — the Payment.update is also idempotent
+            // (same values), so we can let the transaction commit.
+            // The unique constraint already prevented the duplicate.
+            // But since we're in a transaction, the P2002 already
+            // aborted it — we need to rethrow to roll back cleanly,
+            // then the outer catch in the webhook handler returns 200.
+            throw err;
+          }
+          throw err;
+        }
+      }
     });
 
     await this.createPaymentEventIdempotent({
       paymentId: payment.id,
       type: "REFUND",
       status: "REFUNDED",
-      amount: cumulativeRefundedCents / 100,
-      message: `Refund ${isFullRefund ? "full" : "partial"} ($${(cumulativeRefundedCents / 100).toFixed(2)} of $${(totalAmountCents / 100).toFixed(2)})${payment.lockInChargeId === charge.id ? " (on lock-in charge)" : ""}`,
+      amount: deltaRefundedCents / 100,
+      message: `Refund ${isFullRefund ? "full" : "partial"} (delta $${(deltaRefundedCents / 100).toFixed(2)}, cumulative $${(cumulativeRefundedCents / 100).toFixed(2)} of $${(totalAmountCents / 100).toFixed(2)})${payment.lockInChargeId === charge.id ? " (on lock-in charge)" : ""}`,
       providerRef: charge.refunds?.data?.[0]?.id,
       raw: charge as any,
       stripeEventId,
     });
 
-    // ── Fix #6: Driver payout clawback on refund ──
-    // The customer got money back, so the driver's payout should be
-    // reduced proportionally. Best-effort — failures are logged but
-    // don't fail the webhook.
-    try {
-      await this.createDriverPayoutClawback({
-        paymentId: payment.id,
-        refundAmountCents: cumulativeRefundedCents,
-        reason: "REFUND",
-        stripeEventId,
-      });
-    } catch (err: any) {
-      this.logger.error(
-        `Driver payout clawback failed for payment ${payment.id} (refund): ${err.message}`,
-        err?.stack,
-      );
-    }
-
     this.logger.log(
-      `Refund processed for payment ${payment.id}: $${(cumulativeRefundedCents / 100).toFixed(2)} / $${(totalAmountCents / 100).toFixed(2)} (${refundStatus})`,
+      `Refund processed for payment ${payment.id}: delta $${(deltaRefundedCents / 100).toFixed(2)}, cumulative $${(cumulativeRefundedCents / 100).toFixed(2)} / $${(totalAmountCents / 100).toFixed(2)} (${refundStatus})`,
     );
   }
 
@@ -498,32 +535,42 @@ export class StripeWebhookController {
   //   2. Computes the proportional clawback:
   //        clawback = -(refundAmount / totalAmount) * driverNet
   //   3. Creates a DriverPayoutAdjustment row with status=PENDING
-  //   4. The adjustment is applied to the driver's NEXT payout (by
-  //      `paymentPayoutEngine.handleCompletionTx` or the payout batch
-  //      initiator).
+  //   4. The adjustment is applied to the driver's NEXT payout by
+  //      `paymentPayoutEngine.applyPendingAdjustments` (called in
+  //      `initiateDriverTransfer` just before the Stripe transfer).
   //
   // For partial refunds, the clawback is proportional to the refund
-  // amount. For full refunds, the full driverNet is clawed back.
+  // delta (not cumulative). For full refunds, the full driverNet is
+  // clawed back.
   //
   // Idempotent via `stripeEventId` — if Stripe retries the webhook,
   // the unique constraint on `stripeEventId` prevents duplicate
   // clawback rows.
-  private async createDriverPayoutClawback(input: {
-    paymentId: string;
-    refundAmountCents: number;
-    reason: string;
-    stripeEventId?: string;
-  }): Promise<void> {
+  //
+  // Accepts a transaction client (`tx`) so the clawback creation can
+  // be atomic with the Payment.update in the caller. This prevents
+  // the half-state where the Payment is updated but the clawback row
+  // is missing (e.g., due to a concurrent duplicate webhook).
+  private async createDriverPayoutClawback(
+    tx: any,
+    input: {
+      paymentId: string;
+      refundAmountCents: number;
+      reason: string;
+      stripeEventId?: string;
+    },
+  ): Promise<void> {
     if (input.refundAmountCents <= 0) return;
 
-    // Find the original payout for this payment's delivery
-    const payment = await this.prisma.payment.findUnique({
+    // Find the original payout for this payment's delivery (inside
+    // the same transaction for consistency).
+    const payment = await tx.payment.findUnique({
       where: { id: input.paymentId },
       select: { deliveryId: true, amount: true },
     });
     if (!payment?.deliveryId) return;
 
-    const payout = await this.prisma.driverPayout.findUnique({
+    const payout = await tx.driverPayout.findUnique({
       where: { deliveryId: payment.deliveryId },
       select: { id: true, driverId: true, netAmount: true, driverSharePct: true },
     });
@@ -548,40 +595,28 @@ export class StripeWebhookController {
 
     if (clawbackAmount <= 0) return;
 
-    // Create the adjustment. The unique constraint on `stripeEventId`
-    // makes this idempotent — if the webhook is retried, the insert
-    // fails with P2002 and we skip (no duplicate clawback).
-    try {
-      await this.prisma.driverPayoutAdjustment.create({
-        data: {
-          driverId: payout.driverId,
-          deliveryId: payment.deliveryId,
-          paymentId: input.paymentId,
-          originalPayoutId: payout.id,
-          amount: -clawbackAmount, // negative = deduction from driver
-          reason: input.reason,
-          status: "PENDING",
-          stripeEventId: input.stripeEventId ?? null,
-          note: `Auto-clawback: ${input.reason} of $${(input.refundAmountCents / 100).toFixed(2)} (${(refundRatio * 100).toFixed(1)}% of $${(totalAmountCents / 100).toFixed(2)})`,
-        },
-      });
-      this.logger.log(
-        `Created DriverPayoutAdjustment for driver ${payout.driverId}: -$${clawbackAmount.toFixed(2)} ` +
-          `(refund of $${(input.refundAmountCents / 100).toFixed(2)} on delivery ${payment.deliveryId})`,
-      );
-    } catch (err: any) {
-      if (
-        err?.code === "P2002" &&
-        Array.isArray(err?.meta?.target) &&
-        err.meta.target.includes("stripeEventId")
-      ) {
-        this.logger.log(
-          `DriverPayoutAdjustment for ${input.stripeEventId} already exists — skipping (idempotent)`,
-        );
-        return;
-      }
-      throw err;
-    }
+    // Create the adjustment inside the transaction. The unique
+    // constraint on `stripeEventId` makes this idempotent — if the
+    // webhook is retried, the insert fails with P2002 (which the
+    // caller catches and treats as a successful no-op).
+    await tx.driverPayoutAdjustment.create({
+      data: {
+        driverId: payout.driverId,
+        deliveryId: payment.deliveryId,
+        paymentId: input.paymentId,
+        originalPayoutId: payout.id,
+        amount: -clawbackAmount, // negative = deduction from driver
+        reason: input.reason,
+        status: "PENDING",
+        stripeEventId: input.stripeEventId ?? null,
+        note: `Auto-clawback: ${input.reason} of $${(input.refundAmountCents / 100).toFixed(2)} (${(refundRatio * 100).toFixed(1)}% of $${(totalAmountCents / 100).toFixed(2)})`,
+      },
+    });
+
+    this.logger.log(
+      `Created DriverPayoutAdjustment for driver ${payout.driverId}: -$${clawbackAmount.toFixed(2)} ` +
+        `(refund of $${(input.refundAmountCents / 100).toFixed(2)} on delivery ${payment.deliveryId})`,
+    );
   }
 
   private async handleTransferCreated(transfer: any, _stripeEventId?: string) {
@@ -781,20 +816,54 @@ export class StripeWebhookController {
     // dispute is opened. Also track the dispute ID + status (Fix #3) so
     // the charge.dispute.closed handler can revert this if the admin
     // wins the dispute.
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: "REFUNDED",
-        refundedAt: new Date(),
-        failureCode: "DISPUTE",
-        failureMessage: `Stripe dispute ${dispute.id}: ${dispute.reason || "Customer dispute"}${isOnLockInCharge ? " (on lock-in charge)" : ""}`,
-        // ── Fix #3: dispute tracking ──
-        disputeId: dispute.id,
-        disputeStatus: dispute.status || "needs_response",
-        // ── Fix #5: partial refund tracking ──
-        refundedAmountCents: disputedAmountCents,
-        refundStatus,
-      },
+    //
+    // We do this in a transaction with the clawback creation so they're
+    // atomic — no half-state where the Payment is REFUNDED but the
+    // clawback row is missing.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "REFUNDED",
+          refundedAt: new Date(),
+          failureCode: "DISPUTE",
+          failureMessage: `Stripe dispute ${dispute.id}: ${dispute.reason || "Customer dispute"}${isOnLockInCharge ? " (on lock-in charge)" : ""}`,
+          // ── Fix #3: dispute tracking ──
+          disputeId: dispute.id,
+          disputeStatus: dispute.status || "needs_response",
+          // ── Fix #5: partial refund tracking ──
+          refundedAmountCents: disputedAmountCents,
+          refundStatus,
+        },
+      });
+
+      // ── Fix #6: Create clawback for the dispute amount ──
+      // Same logic as refund clawback — driver's payout should be
+      // reduced proportionally. The reversal (if dispute is won) is
+      // handled in handleChargeDisputeClosed.
+      if (disputedAmountCents > 0) {
+        try {
+          await this.createDriverPayoutClawback(tx, {
+            paymentId: payment.id,
+            refundAmountCents: disputedAmountCents,
+            reason: "DISPUTE",
+            stripeEventId,
+          });
+        } catch (err: any) {
+          // P2002 on stripeEventId = duplicate webhook — safe to ignore
+          if (
+            err?.code === "P2002" &&
+            Array.isArray(err?.meta?.target) &&
+            err.meta.target.includes("stripeEventId")
+          ) {
+            this.logger.log(
+              `DriverPayoutAdjustment for dispute ${dispute.id} already exists (idempotent)`,
+            );
+          } else {
+            throw err;
+          }
+        }
+      }
     });
 
     // Create audit event with stripeEventId for idempotency (Fix #4)
@@ -867,22 +936,99 @@ export class StripeWebhookController {
 
     if (isWon) {
       // Dispute won — Stripe reverses the refund, customer's charge stands.
-      // Revert Payment back to CAPTURED.
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: "CAPTURED",
-          // Clear dispute tracking
-          disputeId: null,
-          disputeStatus: null,
-          // Reset refund tracking — the refund was reversed
-          refundedAmountCents: 0,
-          refundStatus: "NONE",
-          refundedAt: null,
-          // Clear the dispute-related failure code
-          failureCode: null,
-          failureMessage: null,
-        },
+      // Revert Payment back to CAPTURED + reverse the clawback adjustment
+      // (so the driver gets their payout back, since the platform got paid).
+      //
+      // We do this in a transaction so the Payment update + adjustment
+      // reversal are atomic. If either fails, the whole thing rolls back.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: "CAPTURED",
+            // Clear dispute tracking
+            disputeId: null,
+            disputeStatus: null,
+            // Reset refund tracking — the refund was reversed
+            refundedAmountCents: 0,
+            refundStatus: "NONE",
+            refundedAt: null,
+            // Clear the dispute-related failure code
+            failureCode: null,
+            failureMessage: null,
+          },
+        });
+
+        // ── Reverse the DriverPayoutAdjustment created on dispute ──
+        // Find the original clawback adjustment that was created when
+        // the dispute was opened. If it's PENDING, mark it REVERSED so
+        // it doesn't get applied to the driver's next payout. If it's
+        // already APPLIED, create a POSITIVE reversal adjustment so the
+        // driver gets their money back on their NEXT payout.
+        //
+        // We look up the adjustment by stripeEventId of the dispute.created
+        // event — but we don't have that here, so we look up by paymentId
+        // + reason='DISPUTE' + status in (PENDING, APPLIED).
+        //
+        // If no adjustment is found (e.g. the payout didn't exist when
+        // the dispute was opened, so no clawback was created), we skip
+        // the reversal — nothing to reverse.
+        const originalAdjustment = await tx.driverPayoutAdjustment.findFirst({
+          where: {
+            paymentId: payment.id,
+            reason: 'DISPUTE',
+            status: { in: ['PENDING', 'APPLIED'] },
+          },
+          select: { id: true, amount: true, driverId: true, status: true },
+        });
+
+        if (originalAdjustment) {
+          if (originalAdjustment.status === 'PENDING') {
+            // Still PENDING — just mark as REVERSED. The driver never
+            // saw the deduction.
+            await tx.driverPayoutAdjustment.update({
+              where: { id: originalAdjustment.id },
+              data: { status: 'REVERSED' },
+            });
+            this.logger.log(
+              `Dispute won — reversed PENDING clawback ${originalAdjustment.id} ` +
+              `(driver ${originalAdjustment.driverId} never saw the deduction)`,
+            );
+          } else {
+            // Already APPLIED — the driver already lost money. Create
+            // a POSITIVE reversal adjustment so the driver gets it back
+            // on their next payout.
+            const reversalAmount = -Number(originalAdjustment.amount); // flip sign
+            await tx.driverPayoutAdjustment.create({
+              data: {
+                driverId: originalAdjustment.driverId,
+                deliveryId: payment.deliveryId,
+                paymentId: payment.id,
+                originalPayoutId: null,
+                amount: reversalAmount, // positive = refund to driver
+                reason: 'DISPUTE_WON_REVERSAL',
+                status: 'PENDING',
+                reversalOfAdjustmentId: originalAdjustment.id,
+                stripeEventId, // idempotent — duplicate webhook won't create a second reversal
+                note: `Reversal of clawback ${originalAdjustment.id} — dispute won, customer's charge reinstated`,
+              },
+            });
+            // Mark the original as REVERSED (it can't be re-applied)
+            await tx.driverPayoutAdjustment.update({
+              where: { id: originalAdjustment.id },
+              data: { status: 'REVERSED' },
+            });
+            this.logger.log(
+              `Dispute won — created POSITIVE reversal adjustment for driver ${originalAdjustment.driverId} ` +
+              `(+ $${reversalAmount.toFixed(2)} on next payout)`,
+            );
+          }
+        } else {
+          this.logger.log(
+            `Dispute won — no original clawback adjustment found for payment ${payment.id} ` +
+            `(payout may not have existed at dispute time — nothing to reverse)`,
+          );
+        }
       });
 
       await this.createPaymentEventIdempotent({

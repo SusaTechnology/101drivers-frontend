@@ -492,42 +492,21 @@ export class DeliveryRequestOrchestratorService {
 
     // PI is in a state that requires customer action (3DS, re-enter card, etc.)
     //
-    // For `requires_action` (3DS / SCA challenge), we NO LONGER throw —
-    // we return the clientSecret so the frontend can render a Stripe
-    // Elements modal (`stripe.confirmCardPayment(clientSecret)`) and let
-    // the customer complete the 3DS challenge. This is the standard
-    // pattern for EU customers + some US cards (Amex, corporate cards).
+    // NOTE: The frontend 3DS confirmation modal is NOT yet implemented.
+    // Until it is, we treat `requires_action` as a hard failure (same as
+    // the pre-fix behavior) — the caller (createDeliveryFromAcceptedQuote
+    // etc.) detects `status === 'requires_action'` in the result and
+    // throws a friendly error + cancels the delivery. This avoids the
+    // half-state where the delivery is LISTED but the payment can't be
+    // captured.
     //
-    // The flow:
-    //   1. Backend returns `requires_action` + `clientSecret` + `paymentIntentId`
-    //      (does NOT throw, does NOT mark payment as failed)
-    //   2. Frontend detects this in the response, opens a 3DS modal
-    //   3. Customer completes 3DS in the modal → Stripe confirms the PI
-    //   4. Frontend calls a "confirm 3DS" endpoint, which re-fetches
-    //      the PI status and either proceeds with delivery creation
-    //      (if `succeeded` / `requires_capture`) OR cancels it (if
-    //      the customer dismissed the modal).
-    //
-    // For `requires_payment_method` (card declined or detached), we
-    // still throw — the dealer needs to save a new card first.
+    // We still return the `clientSecret` so a future frontend can use
+    // it to render `stripe.confirmCardPayment(clientSecret)` once the
+    // 3DS modal is built. The caller currently throws on this status.
     if (piStatus === 'requires_action') {
-      // Don't mark as failed — the PI is still in a recoverable state.
-      // Update the Payment row to AUTHORIZED (funds not yet captured,
-      // customer needs to complete 3DS) so the frontend can detect
-      // the pending state and re-render the 3DS modal if the customer
-      // navigates away and comes back.
-      await this.prisma.payment.update({
-        where: { id: params.paymentId },
-        data: {
-          provider: EnumPaymentProvider.STRIPE,
-          providerPaymentIntentId: result.paymentIntentId,
-          status: EnumPaymentStatus.AUTHORIZED,
-          failureMessage: `PaymentIntent requires 3DS action (status: ${piStatus}). Customer must complete authentication.`,
-        },
-      });
-      // Return the clientSecret so the frontend can render the 3DS modal.
-      // The caller (createDeliveryFromAcceptedQuote) detects this and
-      // returns a special response shape to the API.
+      // Don't mark as failed here — the caller handles marking +
+      // cancellation in a unified way. Just return the status so the
+      // caller can detect it.
       return {
         paymentIntentId: result.paymentIntentId,
         clientSecret: result.clientSecret,
@@ -1474,37 +1453,28 @@ private async createIndividualDeliveryForResolvedCustomer(
     throw err;
   }
 
-  // ── 3DS / SCA detection (Fix #2) ──
-  // Same as the business path — if the PI requires 3DS action, return
-  // the clientSecret so the frontend can render the Stripe modal.
+  // ── 3DS / SCA handling ──
+  // Same safe path as the business flows — until the frontend 3DS
+  // modal is implemented, treat `requires_action` as a hard failure
+  // (cancel delivery + throw friendly error). This avoids the half-
+  // state where the delivery is LISTED in the driver feed but the
+  // payment can't be captured.
   if (piStatus === 'requires_action') {
-    await this.prisma.paymentEvent.create({
-      data: {
-        paymentId: payment.id,
-        type: EnumPaymentEventType.AUTHORIZE,
-        status: EnumPaymentEventStatus.AUTHORIZED,
-        amount: quote.estimatedPrice,
-        message: `Payment requires 3DS authentication (PI: ${paymentIntentId}). Customer must complete the challenge.`,
-        raw: {
-          source: "individual-create-from-quote",
-          deliveryId: delivery.id,
-          paymentIntentId,
-          piStatus,
-          requires3DS: true,
-        },
-      },
-    });
-    // Return the delivery + 3DS info so the individual customer
-    // frontend can render the modal.
-    const fullDelivery = await this.prisma.deliveryRequest.findUniqueOrThrow({
-      where: { id: delivery.id },
-    });
-    return {
-      ...fullDelivery,
-      requires3DS: true,
-      paymentIntentId,
-      clientSecret: clientSecret!,
-    } as any;
+    const friendly =
+      'Your bank needs you to approve this charge (3D Secure). ' +
+      'Please try a different card or contact support if the issue persists.';
+    await this.markPaymentFailed(
+      payment.id,
+      friendly,
+      `PI_STATUS_requires_action`,
+      { paymentIntentId, status: piStatus },
+    );
+    await this.cancelDeliveryOnPaymentFailure(
+      delivery.id,
+      friendly,
+      customer.userId ?? null,
+    );
+    throw new BadRequestException(friendly);
   }
 
   await this.prisma.paymentEvent.create({
@@ -2392,48 +2362,36 @@ private async resolveIndividualCustomerForCreate(
         throw err;
       }
 
-      // ── 3DS / SCA detection (Fix #2) ──
-      // If the PI status is `requires_action`, the customer's bank needs
-      // them to complete a 3DS challenge. We do NOT throw — we return
-      // the clientSecret so the frontend can render a Stripe Elements
-      // modal and let the customer complete the challenge. The delivery
-      // is created but Payment stays in AUTHORIZED state until the
-      // frontend calls the `confirm3DS` endpoint after the customer
-      // completes authentication.
+      // ── 3DS / SCA handling ────────────────────────────────────────
+      // If the PI status is `requires_action`, the customer's bank
+      // requires 3D Secure authentication. The frontend 3DS modal is
+      // NOT yet implemented, so for now we treat this the same as the
+      // pre-fix behavior: cancel the delivery + throw a friendly error.
       //
-      // For private customers (capture_method='automatic'), 3DS is the
-      // ONLY blocking state — once they complete it, the charge succeeds
-      // immediately. For business prepaid (capture_method='manual'),
-      // 3DS completes → PI moves to `requires_capture` → normal
-      // startTrip / completeTrip capture flow continues.
+      // This is the SAFE path — no half-state (delivery is cancelled,
+      // driver feed stays clean). The frontend 3DS flow is a follow-up
+      // task that will replace this throw with a `requires3DS: true`
+      // response once the modal UI is ready.
+      //
+      // See `attemptStripePrepaidCharge` — it returns the clientSecret
+      // for the frontend to use, but until the modal exists we treat
+      // `requires_action` as a hard failure.
       if (chargeResult.status === 'requires_action') {
-        await this.prisma.paymentEvent.create({
-          data: {
-            paymentId: payment.id,
-            type: EnumPaymentEventType.AUTHORIZE,
-            status: EnumPaymentEventStatus.AUTHORIZED,
-            amount: quote.estimatedPrice,
-            message: `Payment requires 3DS authentication (PI: ${chargeResult.paymentIntentId}). Customer must complete the challenge.`,
-            raw: {
-              source: "business-create-from-quote",
-              deliveryId: delivery.id,
-              customerId: customer.id,
-              paymentType,
-              paymentIntentId: chargeResult.paymentIntentId,
-              piStatus: chargeResult.status,
-              requires3DS: true,
-            },
-          },
-        });
-        // Return the delivery + the 3DS info so the frontend can
-        // render the modal. The caller (controller) wraps this in
-        // the API response shape.
-        return {
-          ...delivery,
-          requires3DS: true,
-          paymentIntentId: chargeResult.paymentIntentId,
-          clientSecret: chargeResult.clientSecret,
-        } as any;
+        const friendly =
+          'Your bank needs you to approve this charge (3D Secure). ' +
+          'Please try a different card or contact support if the issue persists.';
+        await this.markPaymentFailed(
+          payment.id,
+          friendly,
+          `PI_STATUS_requires_action`,
+          { paymentIntentId: chargeResult.paymentIntentId, status: chargeResult.status },
+        );
+        await this.cancelDeliveryOnPaymentFailure(
+          delivery.id,
+          friendly,
+          input.createdByUserId ?? null,
+        );
+        throw new BadRequestException(friendly);
       }
 
       await this.prisma.paymentEvent.create({
@@ -2922,34 +2880,25 @@ private async resolveIndividualCustomerForCreate(
         throw err;
       }
 
-      // ── 3DS / SCA detection (Fix #2) ──
-      // Same logic as createDeliveryFromAcceptedQuote above — return
-      // the clientSecret so the frontend can render the 3DS modal.
+      // ── 3DS / SCA handling ──
+      // Same as createDeliveryFromAcceptedQuote above — safe path
+      // (cancel + throw) until the frontend 3DS modal is implemented.
       if (chargeResult.status === 'requires_action') {
-        await this.prisma.paymentEvent.create({
-          data: {
-            paymentId: payment.id,
-            type: EnumPaymentEventType.AUTHORIZE,
-            status: EnumPaymentEventStatus.AUTHORIZED,
-            amount: quote.estimatedPrice,
-            message: `Payment requires 3DS authentication (PI: ${chargeResult.paymentIntentId}). Customer must complete the challenge.`,
-            raw: {
-              source: "business-promote-draft",
-              deliveryId: delivery.id,
-              customerId: customer.id,
-              paymentType,
-              paymentIntentId: chargeResult.paymentIntentId,
-              piStatus: chargeResult.status,
-              requires3DS: true,
-            },
-          },
-        });
-        return {
-          ...delivery,
-          requires3DS: true,
-          paymentIntentId: chargeResult.paymentIntentId,
-          clientSecret: chargeResult.clientSecret,
-        } as any;
+        const friendly =
+          'Your bank needs you to approve this charge (3D Secure). ' +
+          'Please try a different card or contact support if the issue persists.';
+        await this.markPaymentFailed(
+          payment.id,
+          friendly,
+          `PI_STATUS_requires_action`,
+          { paymentIntentId: chargeResult.paymentIntentId, status: chargeResult.status },
+        );
+        await this.cancelDeliveryOnPaymentFailure(
+          delivery.id,
+          friendly,
+          input.createdByUserId ?? null,
+        );
+        throw new BadRequestException(friendly);
       }
 
       await this.prisma.paymentEvent.create({
