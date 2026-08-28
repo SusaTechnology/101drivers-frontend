@@ -476,17 +476,23 @@ export default function DriverOnboardingPage() {
   // instead of the public website nav ("How it works", "Driver Sign In").
   // This prevents the confusion where a logged-in driver sees "Driver
   // Sign In" on their own onboarding page.
+  //
+  // Uses safe-area-inset-top padding so the header doesn't go under
+  // the iPhone notch / status bar (matches the driver app layout pattern).
   const Header = () => {
     const isAuthed = isAuthenticated();
     const currentUser = getUser();
     const isDriver = currentUser?.roles?.includes("DRIVER");
 
     return (
-    <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-      <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
+    <header
+      className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
+      <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center gap-10">
           <Link to="/" className="flex items-center" aria-label="101 Drivers">
-            <div className="w-14 h-14 lg:w-16 lg:h-16 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200">
+            <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-2xl overflow-hidden bg-black flex items-center justify-center shadow-lg shadow-black/10 border border-slate-200">
               <img
                 src="/assets/101drivers-logo.jpg"
                 alt="101 Drivers"
@@ -634,7 +640,7 @@ export default function DriverOnboardingPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-full bg-slate-50 dark:bg-slate-950">
       <SEOHead
         title="Become a Driver | 101 Drivers — Vehicle Transport in California"
         description="Apply to drive with 101 Drivers. Fast weekly payouts, insured trips, upfront route details, and flexible vehicle delivery jobs across Southern California."
@@ -642,7 +648,7 @@ export default function DriverOnboardingPage() {
       />
       <Header />
 
-      <main className="w-full max-w-[1100px] mx-auto px-6 lg:px-8 py-10 lg:py-14">
+      <main className="w-full max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
         {/* Title Section (unchanged) */}
         <section className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10">
           <div className="space-y-6">
