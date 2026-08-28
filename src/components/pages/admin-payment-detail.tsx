@@ -107,6 +107,13 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   const [refundMode, setRefundMode] = useState<'full' | 'partial'>('full');
   const [refundAmount, setRefundAmount] = useState('');
   const [refundNote, setRefundNote] = useState('');
+  // ── "Refund just submitted" local state ──
+  // After a successful refund, the webhook hasn't fired yet (takes
+  // a few seconds), so the DB still shows the old status. This local
+  // state lets us show an immediate "Refund of $X submitted" banner
+  // so the admin knows it worked. After a 5-second delay, we refetch
+  // to pick up the webhook's DB update.
+  const [lastRefund, setLastRefund] = useState<{ amount: number; refundId: string } | null>(null);
 
   // Refund mutation — calls POST /api/payments/stripe/refund/:paymentId
   // with optional `amount` for partial refunds. The webhook updates the
@@ -114,15 +121,24 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   const refundMutation = useDataMutation({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/refund/:paymentId`,
     method: 'POST',
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       setRefundOpen(false);
       setRefundAmount('');
       setRefundNote('');
       setRefundMode('full');
+      // Show immediate feedback with the refund details from the API response
+      const refundAmount = data?.amount ?? Number(payment?.amount ?? 0);
+      const refundId = data?.refundId ?? '';
+      setLastRefund({ amount: refundAmount, refundId });
       toast.success('Refund submitted', {
-        description: 'The refund has been submitted to Stripe. The payment status will update automatically when the refund is processed.',
+        description: `$${refundAmount.toFixed(2)} refund submitted to Stripe. ` +
+          'The payment status will update automatically when Stripe processes it (usually a few seconds).',
       });
+      // Immediate refetch (in case webhook already fired)
       refetch();
+      // Delayed refetch to pick up the webhook's DB update
+      setTimeout(() => refetch(), 3000);
+      setTimeout(() => refetch(), 8000);
     },
     onError: (error: any) => {
       toast.error('Refund failed', {
@@ -143,6 +159,15 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
       amount,
     });
   };
+
+  // Clear the "refund just submitted" banner once the payment status
+  // has been updated by the webhook (REFUNDED or refundStatus != NONE).
+  // This means the DB caught up with the refund.
+  React.useEffect(() => {
+    if (lastRefund && payment && (payment.status === 'REFUNDED' || (payment as any).refundStatus === 'FULL')) {
+      setLastRefund(null);
+    }
+  }, [payment?.status, (payment as any)?.refundStatus]);
 
   const actorUserId = user?.id || 'system';
 
@@ -448,6 +473,28 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
           </div>
         </div>
 
+        {/* ── "Refund just submitted" banner ──
+            Shows immediately after a successful refund, BEFORE the
+            webhook updates the DB. This gives the admin visual
+            confirmation that the refund was processed. Disappears
+            when the payment status changes (after refetch picks up
+            the webhook's DB update). */}
+        {lastRefund && (
+          <div className="mt-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div className="text-sm text-emerald-700 dark:text-emerald-300">
+              <span className="font-bold">Refund of ${lastRefund.amount.toFixed(2)} submitted.</span>{' '}
+              <span className="text-emerald-600 dark:text-emerald-400">
+                Stripe refund ID: <code className="text-xs font-mono">{lastRefund.refundId.slice(0, 25)}...</code>
+              </span>
+              <span className="block mt-0.5 text-xs text-emerald-500 dark:text-emerald-400/70">
+                The payment status will update to REFUNDED automatically when the webhook fires (usually a few seconds).
+                You can see this refund in the Stripe Dashboard under the original charge.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Main grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Left column — payment + delivery */}
@@ -559,6 +606,14 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                       icon={XCircle}
                       label="Refunded"
                       value={formatPaymentDate(payment.refundedAt)}
+                    />
+                  )}
+                  {/* Show refund amount + status if there are any refunds */}
+                  {(payment as any).refundedAmountCents > 0 && (
+                    <InfoRow
+                      icon={RotateCcw}
+                      label="Refund Amount"
+                      value={`$${(Number((payment as any).refundedAmountCents) / 100).toFixed(2)} of $${Number(payment.amount).toFixed(2)} (${(payment as any).refundStatus ?? 'PARTIAL'})`}
                     />
                   )}
                 </div>

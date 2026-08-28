@@ -319,6 +319,12 @@ async getAdminPaymentDetail(paymentId: string): Promise<any> {
       stripeInvoiceId: true,
       stripeInvoiceItemId: true,
       attemptCount: true,
+      // ── Refund tracking fields (Fix #5) ──
+      refundedAmountCents: true,
+      refundStatus: true,
+      // ── Dispute tracking (Fix #3) ──
+      disputeId: true,
+      disputeStatus: true,
       createdAt: true,
       updatedAt: true,
       delivery: {
