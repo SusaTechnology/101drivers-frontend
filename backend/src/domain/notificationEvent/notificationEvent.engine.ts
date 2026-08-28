@@ -20,6 +20,12 @@ type QueueNotificationInput = {
   deliveryId?: string | null;
   driverId?: string | null;
 
+  // ── The actual recipient of this notification ──
+  // If not provided, queueAndSend will derive it from the templateCode
+  // + customerId/driverId. Explicitly setting this is preferred for
+  // clarity, but the auto-derivation ensures backward compat.
+  toUserId?: string | null;
+
   channel: EnumNotificationEventChannel;
   type: EnumNotificationEventType;
 
@@ -45,12 +51,67 @@ export class NotificationEventEngine {
   ) {}
 
   async queueAndSend(input: QueueNotificationInput) {
+    // ── Derive toUserId if not explicitly provided ──
+    // This is the KEY fix for the notification routing bug. The
+    // templateCode tells us WHO the notification is for:
+    //   *-customer, dealer-*, customer-*  → customer.userId
+    //   *-driver, driver-*, payout-*      → driver.userId
+    //   admin-*, commission-*, pricing-*   → actorUserId (admin)
+    // If we can't determine, fall back to actorUserId.
+    let toUserId = input.toUserId ?? null;
+
+    if (!toUserId) {
+      const tc = (input.templateCode || '').toLowerCase();
+
+      // Admin-facing notifications
+      const isAdminNotif =
+        tc.includes('admin') ||
+        tc.includes('commission') ||
+        tc.includes('pricing-edit') ||
+        tc.includes('usage-report') ||
+        tc.includes('remainder-uncollectible') ||
+        tc.includes('compensation') ||
+        tc.includes('lock-in-retained');
+
+      // Driver-facing notifications
+      const isDriverNotif =
+        tc.includes('driver') ||
+        tc.includes('payout') ||
+        tc.includes('booked') ||
+        tc.includes('trip-started-driver') ||
+        tc.includes('dispute-opened-driver') ||
+        tc.includes('payout-initiated') ||
+        tc.includes('payout-paid') ||
+        tc.includes('payout-failed') ||
+        tc.includes('support-');
+
+      if (isAdminNotif) {
+        toUserId = input.actorUserId ?? null;
+      } else if (isDriverNotif && input.driverId) {
+        const driver = await this.prisma.driver.findUnique({
+          where: { id: input.driverId },
+          select: { userId: true },
+        });
+        toUserId = driver?.userId ?? input.actorUserId ?? null;
+      } else if (input.customerId) {
+        // Customer/dealer-facing notification
+        const customer = await this.prisma.customer.findUnique({
+          where: { id: input.customerId },
+          select: { userId: true },
+        });
+        toUserId = customer?.userId ?? input.actorUserId ?? null;
+      } else {
+        toUserId = input.actorUserId ?? null;
+      }
+    }
+
     const created = await this.prisma.notificationEvent.create({
       data: {
         actorUserId: input.actorUserId ?? null,
         customerId: input.customerId ?? null,
         deliveryId: input.deliveryId ?? null,
         driverId: input.driverId ?? null,
+        toUserId,
         channel: input.channel,
         type: input.type,
         status: EnumNotificationEventStatus.QUEUED,
@@ -95,17 +156,13 @@ export class NotificationEventEngine {
   }
 
   /**
-   * Resolve all user IDs who should see this notification in their bell and
-   * push a `notification:created` socket event to each user's room.
+   * Resolve the user who should see this notification in their bell and
+   * push a `notification:created` socket event to that user's room.
    *
-   * Recipients:
-   *   1. actorUserId (the user who triggered the action — e.g. admin who cancelled)
-   *   2. customer.user.id (the customer the notification is about)
-   *   3. driver.user.id (the driver the notification is about)
-   *
-   * The bell's REST query already includes actorUserId; the customer/driver
-   * visibility is added in NotificationEventService.getMyNotificationEvents
-   * via an OR clause on customer.userId / driver.userId.
+   * With the toUserId fix, we push ONLY to the actual recipient —
+   * not to the actor or customer/driver who happen to be related.
+   * This prevents the bug where admin sees dealer notifications,
+   * driver sees dealer notifications, etc.
    */
   private async broadcastNotificationCreated(event: {
     id: string;
@@ -119,38 +176,17 @@ export class NotificationEventEngine {
     templateCode: string | null;
     createdAt: Date;
     payload?: Prisma.JsonValue | null;
+    toUserId: string | null;
   }) {
     if (!this.trackingGateway) {
       return;
     }
 
-    const userIds = new Set<string>();
-
-    if (event.actorUserId) {
-      userIds.add(event.actorUserId);
-    }
-
-    if (event.customerId) {
-      const customer = await this.prisma.customer.findUnique({
-        where: { id: event.customerId },
-        select: { userId: true },
-      });
-      if (customer?.userId) {
-        userIds.add(customer.userId);
-      }
-    }
-
-    if (event.driverId) {
-      const driver = await this.prisma.driver.findUnique({
-        where: { id: event.driverId },
-        select: { userId: true },
-      });
-      if (driver?.userId) {
-        userIds.add(driver.userId);
-      }
-    }
-
-    if (userIds.size === 0) {
+    // Push ONLY to the actual recipient (toUserId).
+    // If toUserId is null (old notification without the field),
+    // fall back to actorUserId so the bell still updates.
+    const userId = event.toUserId || event.actorUserId;
+    if (!userId) {
       return;
     }
 
@@ -167,12 +203,10 @@ export class NotificationEventEngine {
       payload: event.payload ?? null,
     };
 
-    for (const userId of userIds) {
-      await this.trackingGateway.emitNotificationCreated({
-        userId,
-        notification: notificationPayload,
-      });
-    }
+    await this.trackingGateway.emitNotificationCreated({
+      userId,
+      notification: notificationPayload,
+    });
   }
 
   async deliver(notificationEventId: string) {

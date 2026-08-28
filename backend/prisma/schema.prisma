@@ -28,7 +28,8 @@ model User {
   id                          String                  @id @default(cuid())
   isActive                    Boolean                 @default(true)
   lastLoginAt                 DateTime?
-  notifEvents                 NotificationEvent[]
+  notifEvents                 NotificationEvent[]      @relation("NotificationActor")
+  notifEventsReceived         NotificationEvent[]      @relation("NotificationRecipient")
   password                    String
   passwordHash                String?
   phone                       String?
@@ -1030,7 +1031,7 @@ model Tip {
 }
 
 model NotificationEvent {
-  actor        User?                        @relation(fields: [actorUserId], references: [id])
+  actor        User?                        @relation("NotificationActor", fields: [actorUserId], references: [id])
   actorUserId  String?
   body         String?
   channel      EnumNotificationEventChannel
@@ -1062,6 +1063,17 @@ model NotificationEvent {
   dismissedAt  DateTime?
   expiresAt    DateTime?
 
+  // ── Recipient routing (Fix: notification role routing) ──
+  // The actual recipient of this notification. This is the SOLE
+  // field used by the visibility query (getMyNotificationEvents).
+  // actorUserId = who TRIGGERED the event (for audit).
+  // toUserId = who SHOULD SEE the notification (for bell display).
+  // These are often different (e.g. admin approves a dealer →
+  // actorUserId = admin, toUserId = dealer's userId).
+  toUser       User?                        @relation("NotificationRecipient", fields: [toUserId], references: [id])
+  toUserId     String?
+
+  @@index([toUserId, isRead, createdAt])
   @@index([customerId, isRead, createdAt])
   @@index([driverId, isRead, createdAt])
   @@index([deliveryId, createdAt])
