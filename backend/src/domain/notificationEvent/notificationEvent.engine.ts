@@ -20,6 +20,12 @@ type QueueNotificationInput = {
   deliveryId?: string | null;
   driverId?: string | null;
 
+  // ── The actual recipient of this notification ──
+  // If not provided, queueAndSend will derive it from the templateCode
+  // + customerId/driverId. Explicitly setting this is preferred for
+  // clarity, but the auto-derivation ensures backward compat.
+  toUserId?: string | null;
+
   channel: EnumNotificationEventChannel;
   type: EnumNotificationEventType;
 
@@ -45,12 +51,67 @@ export class NotificationEventEngine {
   ) {}
 
   async queueAndSend(input: QueueNotificationInput) {
+    // ── Derive toUserId if not explicitly provided ──
+    // This is the KEY fix for the notification routing bug. The
+    // templateCode tells us WHO the notification is for:
+    //   *-customer, dealer-*, customer-*  → customer.userId
+    //   *-driver, driver-*, payout-*      → driver.userId
+    //   admin-*, commission-*, pricing-*   → actorUserId (admin)
+    // If we can't determine, fall back to actorUserId.
+    let toUserId = input.toUserId ?? null;
+
+    if (!toUserId) {
+      const tc = (input.templateCode || '').toLowerCase();
+
+      // Admin-facing notifications
+      const isAdminNotif =
+        tc.includes('admin') ||
+        tc.includes('commission') ||
+        tc.includes('pricing-edit') ||
+        tc.includes('usage-report') ||
+        tc.includes('remainder-uncollectible') ||
+        tc.includes('compensation') ||
+        tc.includes('lock-in-retained');
+
+      // Driver-facing notifications
+      const isDriverNotif =
+        tc.includes('driver') ||
+        tc.includes('payout') ||
+        tc.includes('booked') ||
+        tc.includes('trip-started-driver') ||
+        tc.includes('dispute-opened-driver') ||
+        tc.includes('payout-initiated') ||
+        tc.includes('payout-paid') ||
+        tc.includes('payout-failed') ||
+        tc.includes('support-');
+
+      if (isAdminNotif) {
+        toUserId = input.actorUserId ?? null;
+      } else if (isDriverNotif && input.driverId) {
+        const driver = await this.prisma.driver.findUnique({
+          where: { id: input.driverId },
+          select: { userId: true },
+        });
+        toUserId = driver?.userId ?? input.actorUserId ?? null;
+      } else if (input.customerId) {
+        // Customer/dealer-facing notification
+        const customer = await this.prisma.customer.findUnique({
+          where: { id: input.customerId },
+          select: { userId: true },
+        });
+        toUserId = customer?.userId ?? input.actorUserId ?? null;
+      } else {
+        toUserId = input.actorUserId ?? null;
+      }
+    }
+
     const created = await this.prisma.notificationEvent.create({
       data: {
         actorUserId: input.actorUserId ?? null,
         customerId: input.customerId ?? null,
         deliveryId: input.deliveryId ?? null,
         driverId: input.driverId ?? null,
+        toUserId,
         channel: input.channel,
         type: input.type,
         status: EnumNotificationEventStatus.QUEUED,
@@ -95,17 +156,13 @@ export class NotificationEventEngine {
   }
 
   /**
-   * Resolve all user IDs who should see this notification in their bell and
-   * push a `notification:created` socket event to each user's room.
+   * Resolve the user who should see this notification in their bell and
+   * push a `notification:created` socket event to that user's room.
    *
-   * Recipients:
-   *   1. actorUserId (the user who triggered the action — e.g. admin who cancelled)
-   *   2. customer.user.id (the customer the notification is about)
-   *   3. driver.user.id (the driver the notification is about)
-   *
-   * The bell's REST query already includes actorUserId; the customer/driver
-   * visibility is added in NotificationEventService.getMyNotificationEvents
-   * via an OR clause on customer.userId / driver.userId.
+   * With the toUserId fix, we push ONLY to the actual recipient —
+   * not to the actor or customer/driver who happen to be related.
+   * This prevents the bug where admin sees dealer notifications,
+   * driver sees dealer notifications, etc.
    */
   private async broadcastNotificationCreated(event: {
     id: string;
@@ -119,38 +176,17 @@ export class NotificationEventEngine {
     templateCode: string | null;
     createdAt: Date;
     payload?: Prisma.JsonValue | null;
+    toUserId: string | null;
   }) {
     if (!this.trackingGateway) {
       return;
     }
 
-    const userIds = new Set<string>();
-
-    if (event.actorUserId) {
-      userIds.add(event.actorUserId);
-    }
-
-    if (event.customerId) {
-      const customer = await this.prisma.customer.findUnique({
-        where: { id: event.customerId },
-        select: { userId: true },
-      });
-      if (customer?.userId) {
-        userIds.add(customer.userId);
-      }
-    }
-
-    if (event.driverId) {
-      const driver = await this.prisma.driver.findUnique({
-        where: { id: event.driverId },
-        select: { userId: true },
-      });
-      if (driver?.userId) {
-        userIds.add(driver.userId);
-      }
-    }
-
-    if (userIds.size === 0) {
+    // Push ONLY to the actual recipient (toUserId).
+    // If toUserId is null (old notification without the field),
+    // fall back to actorUserId so the bell still updates.
+    const userId = event.toUserId || event.actorUserId;
+    if (!userId) {
       return;
     }
 
@@ -167,12 +203,10 @@ export class NotificationEventEngine {
       payload: event.payload ?? null,
     };
 
-    for (const userId of userIds) {
-      await this.trackingGateway.emitNotificationCreated({
-        userId,
-        notification: notificationPayload,
-      });
-    }
+    await this.trackingGateway.emitNotificationCreated({
+      userId,
+      notification: notificationPayload,
+    });
   }
 
   async deliver(notificationEventId: string) {
@@ -1917,6 +1951,117 @@ async notifyTripCompleted(input: {
     });
   }
 
+  /**
+   * Notify the customer that a remainder charge is pending — they owe
+   * money for a completed delivery because they removed their card
+   * between trip start and trip completion.
+   *
+   * Called by handleCompletionTx in paymentPayout.engine.ts when the
+   * remainder PaymentIntent fails to capture. The system will retry
+   * the charge daily for 7 days. After 7 days, it's marked UNCOLLECTIBLE
+   * and admin contacts the customer manually.
+   *
+   * The customer needs to know:
+   *   1. They owe money for a completed delivery
+   *   2. They should add a card so the system can retry the charge
+   *   3. If they don't, the account will be flagged after 7 days
+   */
+  async notifyRemainderChargePending(input: {
+    deliveryId: string;
+    remainderAmount: number;
+    dueAt: string; // ISO date — when the system will give up retrying
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        status: true,
+        customerId: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        customer: {
+          select: {
+            id: true,
+            contactEmail: true,
+            contactName: true,
+            businessName: true,
+            user: { select: { email: true, fullName: true } },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyRemainderChargePending: delivery ${input.deliveryId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail =
+      delivery.customer?.user?.email ??
+      delivery.customer?.contactEmail ??
+      null;
+    if (!toEmail) return null;
+
+    const displayName =
+      delivery.customer?.user?.fullName ??
+      delivery.customer?.contactName ??
+      delivery.customer?.businessName ??
+      "Customer";
+
+    const amountStr = `$${Number(input.remainderAmount).toFixed(2)}`;
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const dueAtStr = new Date(input.dueAt).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+
+    return this.queueAndSend({
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.PAYMENT_FAILED, // reuse — closest existing type
+      templateCode: "remainder-charge-pending",
+      toEmail,
+      subject: `[ACTION REQUIRED] Outstanding balance — ${amountStr} for delivery #${deliveryRef}`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `Your delivery #${deliveryRef} has been completed, but we were unable to charge the remaining balance of ${amountStr} to your saved card.`,
+        "",
+        "What happened:",
+        "• The lock-in fee at trip start was captured successfully.",
+        "• Between trip start and trip completion, your saved card was removed from your account.",
+        "• The remaining balance could not be charged at trip completion.",
+        "",
+        "What you need to do:",
+        "1. Add a card under Payment Methods in your account.",
+        "2. The system will automatically retry the charge within 24 hours of you adding a card.",
+        "3. The charge must succeed by " + dueAtStr + ". After that, the balance will be marked uncollectible and you will need to contact support to arrange payment manually.",
+        "",
+        "If you have already added a new card, no further action is needed — the system will retry the charge automatically.",
+        "",
+        "---",
+        "Delivery Details",
+        `Delivery: #${deliveryRef}`,
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Outstanding balance: ${amountStr}`,
+        `Retry deadline: ${dueAtStr}`,
+        "---",
+        "",
+        "If you have any questions, please contact support.",
+      ].join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        remainderAmount: input.remainderAmount,
+        dueAt: input.dueAt,
+      },
+    });
+  }
+
   private async notifyStatusChangeInternal(input: {
     deliveryId: string;
     actorUserId?: string | null;
@@ -2781,16 +2926,29 @@ async notifyDisputeOpened(input: {
       type: EnumNotificationEventType.DISPUTE_OPENED,
       templateCode: "dispute-opened-driver",
       toEmail: driverEmail,
-      subject: "A dispute has been opened for a delivery",
+      subject: "A dispute has been opened for a delivery you completed",
       body: [
         `Hi ${driverName},`,
         "",
-        "A dispute has been opened for a delivery associated with you.",
+        "A dispute has been opened for a delivery you completed. This means the customer has asked their bank to reverse the charge.",
+        "",
         `Reason: ${input.reason}`,
-        input.legalHold === true ? "Legal hold: ON" : "",
+        input.legalHold === true ? "Legal hold: ON (your payout for this delivery is held until the dispute is resolved)" : "",
+        "",
+        "What this means for your payout:",
+        "• If you have already been paid for this delivery, a proportional clawback adjustment will be applied to your NEXT payout.",
+        "• If your payout is still pending, it will be held until the dispute is resolved.",
+        "• If the dispute is resolved in our favor (we win), the clawback will be reversed — you get your full payout back.",
+        "• If the dispute is resolved in the customer's favor (we lose), the clawback stays — you keep the money you already received, but you don't get an additional payout for this delivery.",
+        "",
+        "You don't need to do anything — we will handle the dispute response with the customer's bank. You will receive another email when the dispute is resolved.",
+        "",
+        "---",
+        "Delivery Details",
         `Pickup: ${delivery.pickupAddress}`,
         `Drop-off: ${delivery.dropoffAddress}`,
         `Status: ${delivery.status}`,
+        "---",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -3416,6 +3574,60 @@ async notifyAdminLockInRetainedOnCancel(input: {
       input.payoutType === "LOCK_IN_FEE"
         ? "lock-in fee (trip started)"
         : "trip completion payout";
+
+    // ── Special case: $0 payout (offset by adjustments) ──
+    // When a driver has pending clawbacks (from refunds/disputes on
+    // previous deliveries) that exceed the new payout amount, the
+    // transfer is $0 — the clawbacks ate it. The driver needs a clear
+    // explanation, not just "$0 payout initiated."
+    const isOffsetByAdjustments =
+      input.transferId === "OFFSET_BY_ADJUSTMENTS" ||
+      (Number(input.amount) === 0 && input.payoutType !== "LOCK_IN_FEE");
+
+    if (isOffsetByAdjustments) {
+      return this.queueAndSend({
+        driverId: driver.id,
+        deliveryId: delivery.id,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.DRIVER_PAYOUT_INITIATED,
+        templateCode: "driver-payout-offset",
+        toEmail,
+        subject: `Payout for delivery #${deliveryRef} — adjusted for previous refunds`,
+        body: [
+          `Hi ${displayName},`,
+          "",
+          `Your ${payoutLabel} for delivery #${deliveryRef} was offset by adjustments from previous refunds or disputes on your account.`,
+          "",
+          "What this means:",
+          "• You had pending clawback adjustments from refunds or disputes on your previous deliveries.",
+          "• These adjustments were deducted from this payout.",
+          "• The full payout amount was applied to those adjustments, so no new funds are moving to your Connect balance for this delivery.",
+          "",
+          "If you believe this is incorrect, please contact support.",
+          "",
+          "---",
+          "Payout Details",
+          `Delivery: #${deliveryRef}`,
+          `Pickup: ${delivery.pickupAddress}`,
+          `Drop-off: ${delivery.dropoffAddress}`,
+          `Gross amount: see your wallet for the breakdown`,
+          `Adjustments applied: see your wallet for the breakdown`,
+          `Net transfer: $0.00`,
+          `Initiated at: ${new Date().toISOString()}`,
+          "---",
+          "",
+          "Thank you for driving with 101 Drivers!",
+        ].join("\n"),
+        payload: {
+          deliveryId: delivery.id,
+          driverId: driver.id,
+          amount: input.amount,
+          transferId: input.transferId,
+          payoutType: input.payoutType ?? "TRIP_COMPLETION",
+          offsetByAdjustments: true,
+        },
+      });
+    }
 
     return this.queueAndSend({
       driverId: driver.id,
@@ -4243,6 +4455,259 @@ async notifyAdminLockInRetainedOnCancel(input: {
     lines.push(`Detected at: ${new Date().toISOString()}`);
 
     return lines;
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Payment resilience admin notifications.
+  //
+  // These fire when the retry queues reach a state where admin action
+  // is required. They complement the /admin/health endpoint (which
+  // shows queue depths) — the endpoint is for monitoring, the emails
+  // are for "you need to do something now" alerts.
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Notify admin when a usage report has PERMANENTLY_FAILED — the
+   * InvoiceItem for that delivery was never created on Stripe, so the
+   * weekly invoice won't include it. Admin must manually create the
+   * InvoiceItem in the Stripe dashboard.
+   *
+   * Called by `scheduleUsageReportRetry` in PostpaidBillingService
+   * after 5 failed retry attempts (~39h total).
+   */
+  async notifyAdminUsageReportPermanentlyFailed(input: {
+    paymentId: string;
+    deliveryId: string;
+    attempts: number;
+    lastError: string;
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        customerId: true,
+        customer: {
+          select: {
+            id: true,
+            businessName: true,
+            contactName: true,
+            contactEmail: true,
+            stripeCustomerId: true,
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyAdminUsageReportPermanentlyFailed: delivery ${input.deliveryId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const admins = await this.prisma.user.findMany({
+      where: { roles: EnumUserRoles.ADMIN },
+      select: { id: true, email: true, fullName: true, username: true },
+    });
+
+    if (admins.length === 0) {
+      this.logger.warn(
+        `notifyAdminUsageReportPermanentlyFailed: no admin users found, skipping`,
+      );
+      return null;
+    }
+
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const customerLabel =
+      delivery.customer?.businessName ??
+      delivery.customer?.contactName ??
+      "Customer";
+    const stripeCustomerRef = delivery.customer?.stripeCustomerId ?? "(none)";
+
+    const sendPromises = admins.map((admin) => {
+      const adminName = admin.fullName || admin.username || "admin";
+      return this.queueAndSend({
+        actorUserId: admin.id,
+        customerId: delivery.customerId,
+        deliveryId: delivery.id,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.ADMIN_COMMISSION_RECEIVED, // reuse — no dedicated enum
+        templateCode: "admin-usage-report-permanently-failed",
+        toEmail: admin.email,
+        subject: `[ACTION REQUIRED] Usage report permanently failed — delivery #${deliveryRef}`,
+        body: [
+          `Hi ${adminName},`,
+          "",
+          `A postpaid delivery's usage report has permanently failed after ${input.attempts} retry attempts.`,
+          "",
+          "What this means:",
+          "• The delivery was completed successfully (the customer got their service).",
+          "• But the Stripe InvoiceItem for this delivery was NEVER created on Stripe.",
+          "• The weekly invoice will NOT include this delivery — the money is lost unless you manually intervene.",
+          "",
+          "What you need to do:",
+          "1. Log into the Stripe dashboard.",
+          `2. Find customer: ${customerLabel} (Stripe customer: ${stripeCustomerRef}).`,
+          `3. Manually create an InvoiceItem for $${delivery.customer ? '' : '??'} with the delivery details below.`,
+          `4. The next weekly invoice will pick up the manually-created InvoiceItem.`,
+          "",
+          "---",
+          "Delivery Details",
+          `Delivery: #${deliveryRef} (${delivery.id})`,
+          `Customer: ${customerLabel}`,
+          `Pickup: ${delivery.pickupAddress}`,
+          `Drop-off: ${delivery.dropoffAddress}`,
+          "",
+          "---",
+          "Failure Details",
+          `Payment ID: ${input.paymentId}`,
+          `Attempts: ${input.attempts}`,
+          `Last error: ${input.lastError}`,
+          `Detected at: ${new Date().toISOString()}`,
+          "---",
+          "",
+          "After you've created the InvoiceItem in Stripe, no further action is needed — the system will pick it up on the next weekly invoice cycle.",
+        ].join("\n"),
+        payload: {
+          deliveryId: delivery.id,
+          paymentId: input.paymentId,
+          attempts: input.attempts,
+          lastError: input.lastError,
+        },
+      });
+    });
+
+    await Promise.all(sendPromises);
+    this.logger.log(
+      `notifyAdminUsageReportPermanentlyFailed: sent to ${admins.length} admin(s) for delivery ${input.deliveryId}`,
+    );
+    return true;
+  }
+
+  /**
+   * Notify admin when a remainder charge (mid-trip card removal case)
+   * has been marked UNCOLLECTIBLE — the customer removed their card
+   * between startTrip and completeTrip, the remainder capture failed,
+   * the daily retry cron tried for 7 days, and the customer never
+   * re-added a card. Admin must manually invoice the customer.
+   */
+  async notifyAdminRemainderUncollectible(input: {
+    paymentId: string;
+    deliveryId: string;
+    remainderAmount: number;
+    dueAt: string;
+  }) {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: input.deliveryId },
+      select: {
+        id: true,
+        pickupAddress: true,
+        dropoffAddress: true,
+        customerId: true,
+        customer: {
+          select: {
+            id: true,
+            businessName: true,
+            contactName: true,
+            contactEmail: true,
+            user: { select: { email: true, fullName: true } },
+          },
+        },
+      },
+    });
+
+    if (!delivery) {
+      this.logger.warn(
+        `notifyAdminRemainderUncollectible: delivery ${input.deliveryId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const admins = await this.prisma.user.findMany({
+      where: { roles: EnumUserRoles.ADMIN },
+      select: { id: true, email: true, fullName: true, username: true },
+    });
+
+    if (admins.length === 0) {
+      this.logger.warn(
+        `notifyAdminRemainderUncollectible: no admin users found, skipping`,
+      );
+      return null;
+    }
+
+    const deliveryRef = delivery.id.slice(-6).toUpperCase();
+    const customerLabel =
+      delivery.customer?.businessName ??
+      delivery.customer?.contactName ??
+      delivery.customer?.user?.fullName ??
+      "Customer";
+    const customerEmail =
+      delivery.customer?.user?.email ??
+      delivery.customer?.contactEmail ??
+      "(no email on file)";
+    const amountStr = `$${Number(input.remainderAmount).toFixed(2)}`;
+
+    const sendPromises = admins.map((admin) => {
+      const adminName = admin.fullName || admin.username || "admin";
+      return this.queueAndSend({
+        actorUserId: admin.id,
+        customerId: delivery.customerId,
+        deliveryId: delivery.id,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.ADMIN_COMMISSION_RECEIVED, // reuse
+        templateCode: "admin-remainder-uncollectible",
+        toEmail: admin.email,
+        subject: `[ACTION REQUIRED] Uncollectible remainder — ${amountStr} for prepaid delivery #${deliveryRef}`,
+        body: [
+          `Hi ${adminName},`,
+          "",
+          `A prepaid business delivery's remainder charge has been marked UNCOLLECTIBLE after 7 days of retry attempts.`,
+          "",
+          "What happened (prepaid hold + capture flow):",
+          "• At trip start, the customer's saved card was used to capture the lock-in fee (e.g. $25 of $100).",
+          "• Between trip start and trip completion, the customer removed their card from their account.",
+          "• At trip completion, the system tried to capture the remainder ($75) but the saved card was gone.",
+          "• The system retried the remainder charge daily for 7 days, but the customer never re-added a card.",
+          "",
+          "Note: This is NOT a postpaid weekly-invoice case. Postpaid deliveries are invoiced on the weekly cycle, not captured at completion. This delivery is prepaid — the customer pays upfront via Stripe hold + capture.",
+          "",
+          `What you need to do:`,
+          "1. Contact the customer to arrange payment for the remaining balance.",
+          `   Customer: ${customerLabel}`,
+          `   Email: ${customerEmail}`,
+          `   Amount owed: ${amountStr}`,
+          "2. Once payment is arranged, manually create a Stripe PaymentIntent (or Invoice) for the amount + collect it.",
+          "3. Mark the Payment row in our system as CAPTURED to clear the UNCOLLECTIBLE state. Set remainderChargeStatus to null + remainderAmount to null + remainderDueAt to null.",
+          "",
+          "---",
+          "Delivery Details",
+          `Delivery: #${deliveryRef} (${delivery.id})`,
+          `Pickup: ${delivery.pickupAddress}`,
+          `Drop-off: ${delivery.dropoffAddress}`,
+          "",
+          "---",
+          "Failure Details",
+          `Payment ID: ${input.paymentId}`,
+          `Remainder amount: ${amountStr}`,
+          `Due at: ${input.dueAt}`,
+          `Marked uncollectible at: ${new Date().toISOString()}`,
+          "---",
+        ].join("\n"),
+        payload: {
+          deliveryId: delivery.id,
+          paymentId: input.paymentId,
+          remainderAmount: input.remainderAmount,
+        },
+      });
+    });
+
+    await Promise.all(sendPromises);
+    this.logger.log(
+      `notifyAdminRemainderUncollectible: sent to ${admins.length} admin(s) for delivery ${input.deliveryId}`,
+    );
+    return true;
   }
 }
 

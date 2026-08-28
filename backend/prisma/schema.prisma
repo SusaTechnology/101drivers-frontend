@@ -28,7 +28,8 @@ model User {
   id                          String                  @id @default(cuid())
   isActive                    Boolean                 @default(true)
   lastLoginAt                 DateTime?
-  notifEvents                 NotificationEvent[]
+  notifEvents                 NotificationEvent[]      @relation("NotificationActor")
+  notifEventsReceived         NotificationEvent[]      @relation("NotificationRecipient")
   password                    String
   passwordHash                String?
   phone                       String?
@@ -117,6 +118,8 @@ model Driver {
   onboardingToken  String?
   payoutBatches    PayoutBatch[]
   payouts          DriverPayout[]
+  // ── Driver payout clawback (Fix #6) ──
+  payoutAdjustments DriverPayoutAdjustment[]
   phone            String?
   preferences      DriverPreference?
   profilePhotoUrl  String?
@@ -421,6 +424,8 @@ model DeliveryRequest {
 
   pickupPin          String?
 
+  // ── Driver payout clawback (Fix #6) ──
+  payoutAdjustments   DriverPayoutAdjustment[]
 
   @@index([status, createdAt])
   @@index([customerId, createdAt])
@@ -616,10 +621,86 @@ model Payment {
   //   (all deliveries from the same weekly cycle).
   stripeInvoiceItemId     String?
   stripeInvoiceId         String?
+  // attemptCount: which retry attempt this is (from Stripe's
+  // invoice.attempt_count). 1 = first attempt, 2 = first retry, etc.
+  // Set when the invoice.payment_failed webhook fires. Lets the
+  // admin see "Failure attempt: 2 of 4" without querying Stripe.
+  attemptCount            Int?
+
+  // ── Usage report retry queue (Fix #1) ──
+  // For postpaid deliveries, reportUsageToStripe creates a Stripe
+  // InvoiceItem on delivery completion. If that Stripe call fails
+  // (transient outage), the delivery completes but no InvoiceItem
+  // exists — the money for that delivery would be lost. This field
+  // tracks the retry state so a cron can pick it up.
+  //   null  → not a postpaid delivery, OR usage was reported successfully
+  //   PENDING  → initial state, reportUsageToStripe hasn't run yet
+  //   FAILED   → reportUsageToStripe failed, scheduled for retry
+  //   PERMANENTLY_FAILED → exhausted retries, admin must manually intervene
+  usageReportStatus       EnumUsageReportStatus?
+  usageReportAttempts     Int                    @default(0)
+  usageReportLastError    String?
+  usageReportNextRetryAt  DateTime?
+
+  // ── Partial refund tracking (Fix #5) ──
+  // refundedAmountCents tracks the cumulative amount refunded (in cents).
+  // refundStatus: NONE / PARTIAL / FULL. The `status` field above is
+  // kept for backward compat (set to REFUNDED only when FULL), but
+  // financial reports should use refundedAmountCents for accuracy.
+  refundedAmountCents     Int                    @default(0)
+  refundStatus            EnumRefundStatus       @default(NONE)
+
+  // ── Dispute tracking (Fix #3) ──
+  // disputeId: set when a charge.dispute.created webhook fires for this
+  //   payment's charge. Cleared if the dispute is won (closed with status=won).
+  // disputeStatus: the current dispute state — `warning_needs_response`,
+  //   `needs_response`, `under_review`, `won`, `lost`. Mirrors Stripe's
+  //   `dispute.status` field. Null when no dispute is open.
+  disputeId               String?
+  disputeStatus           String?
+
+  // ── Mid-trip card removal (Fix #7) ──
+  // If the customer removes their card between startTrip and completeTrip,
+  // the remainder capture fails. This field tracks the recovery state so
+  // a cron can retry the charge when the customer adds a new card.
+  //   null  → no pending remainder (happy path)
+  //   PENDING → remainder capture failed, awaiting customer to add a card
+  //   RETRIED → cron retried the charge (may still fail again)
+  //   UNCOLLECTIBLE → 7 days passed, admin must manually invoice
+  remainderChargeStatus   EnumRemainderChargeStatus?
+  remainderAmount         Float?
+  remainderDueAt          DateTime?
+
+  // ── Driver payout clawback (Fix #6) ──
+  payoutAdjustments   DriverPayoutAdjustment[]
 
   @@index([status, createdAt])
   @@index([paymentType, status])
   @@index([stripeInvoiceId])
+  @@index([usageReportStatus, usageReportNextRetryAt])
+  @@index([remainderChargeStatus])
+  @@index([disputeId])
+}
+
+// ── Usage report retry queue (Fix #1) ──
+enum EnumUsageReportStatus {
+  PENDING
+  FAILED
+  PERMANENTLY_FAILED
+}
+
+// ── Refund status (Fix #5) ──
+enum EnumRefundStatus {
+  NONE
+  PARTIAL
+  FULL
+}
+
+// ── Mid-trip card removal (Fix #7) ──
+enum EnumRemainderChargeStatus {
+  PENDING
+  RETRIED
+  UNCOLLECTIBLE
 }
 
 model PaymentEvent {
@@ -634,6 +715,13 @@ model PaymentEvent {
   status      EnumPaymentEventStatus?
   type        EnumPaymentEventType
   updatedAt   DateTime                @updatedAt
+
+  // ── Webhook idempotency (Fix #4) ──
+  // stripeEventId is set when this event was triggered by a Stripe webhook.
+  // Unique constraint ensures that if Stripe retries the same webhook event
+  // (which it does for up to 3 days), we don't insert duplicate audit rows.
+  // Null for events triggered by our own code (not from a Stripe webhook).
+  stripeEventId           String?  @unique
 
   @@index([paymentId, createdAt])
   @@index([type, createdAt])
@@ -682,6 +770,86 @@ model DriverPayout {
   @@unique([driverId, type, tierNumber])
   @@index([driverId, status, createdAt])
   @@index([type, status])
+
+  // ── Driver payout clawback (Fix #6) ──
+  // Reverse relations for DriverPayoutAdjustment. Two relations:
+  //   1. adjustmentsOriginatingFromThis — adjustments where this payout
+  //      is the original being clawed back (originalPayoutId → this).
+  //   2. adjustmentsAppliedToThis — adjustments that were applied to
+  //      this payout as a deduction (appliedToPayoutId → this).
+  adjustmentsOriginatingFromThis  DriverPayoutAdjustment[] @relation("AdjustmentOriginal")
+  adjustmentsAppliedToThis        DriverPayoutAdjustment[] @relation("AdjustmentAppliedTo")
+}
+
+// ── Driver payout clawback on refund/dispute (Fix #6) ──
+// When a customer's payment is refunded (or disputed + lost), the driver's
+// payout for that delivery should be clawed back proportionally. Otherwise
+// the platform eats the refund — driver keeps their payout, customer gets
+// their money back, platform loses twice.
+//
+// This model records the adjustment. It's applied to the driver's NEXT
+// payout as a deduction. If the driver has no upcoming payouts (e.g.
+// they're suspended), the adjustment carries forward as a "balance owed".
+//
+// Adjustments can be REVERSED — e.g. if a dispute is won, the clawback
+// is reversed (reversalOfAdjustmentId points back to the original).
+model DriverPayoutAdjustment {
+  id                  String                @id @default(cuid())
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  driverId            String
+  driver              Driver                @relation(fields: [driverId], references: [id])
+
+  deliveryId          String?
+  delivery            DeliveryRequest?      @relation(fields: [deliveryId], references: [id])
+
+  paymentId           String?
+  payment             Payment?              @relation(fields: [paymentId], references: [id])
+
+  // The original payout being adjusted (if applicable). Null for
+  // adjustments on deliveries where the payout hasn't been created yet
+  // (e.g. customer disputes before driver completes the trip).
+  originalPayoutId    String?
+  originalPayout      DriverPayout?         @relation("AdjustmentOriginal", fields: [originalPayoutId], references: [id])
+
+  // Negative amount = clawback from driver. Positive = reversal (refund to driver).
+  amount              Float
+
+  // The reason this adjustment was created: REFUND, DISPUTE_LOST, DISPUTE_WON_REVERSAL, MANUAL
+  reason              String
+
+  // Current state of this adjustment:
+  //   PENDING  → not yet applied to a payout
+  //   APPLIED  → deducted from a payout (appliedToPayoutId set)
+  //   REVERSED → clawed back but later reversed (e.g. dispute won)
+  status              EnumAdjustmentStatus @default(PENDING)
+
+  appliedToPayoutId   String?
+  appliedToPayout     DriverPayout?         @relation("AdjustmentAppliedTo", fields: [appliedToPayoutId], references: [id])
+
+  // If this adjustment reverses another adjustment (e.g. a dispute-won
+  // reversal of a dispute-lost clawback), points to the original.
+  reversalOfAdjustmentId String?
+  reversalOfAdjustment  DriverPayoutAdjustment? @relation("AdjustmentReversal", fields: [reversalOfAdjustmentId], references: [id])
+  reversedBy           DriverPayoutAdjustment[] @relation("AdjustmentReversal")
+
+  // Optional admin note
+  note                 String?
+
+  // Stripe event ID for idempotency (so we don't create duplicate
+  // adjustments if Stripe retries the webhook)
+  stripeEventId        String?  @unique
+
+  @@index([driverId, status])
+  @@index([deliveryId])
+  @@index([paymentId])
+}
+
+enum EnumAdjustmentStatus {
+  PENDING
+  APPLIED
+  REVERSED
 }
 
 model PayoutBatch {
@@ -863,7 +1031,7 @@ model Tip {
 }
 
 model NotificationEvent {
-  actor        User?                        @relation(fields: [actorUserId], references: [id])
+  actor        User?                        @relation("NotificationActor", fields: [actorUserId], references: [id])
   actorUserId  String?
   body         String?
   channel      EnumNotificationEventChannel
@@ -895,6 +1063,17 @@ model NotificationEvent {
   dismissedAt  DateTime?
   expiresAt    DateTime?
 
+  // ── Recipient routing (Fix: notification role routing) ──
+  // The actual recipient of this notification. This is the SOLE
+  // field used by the visibility query (getMyNotificationEvents).
+  // actorUserId = who TRIGGERED the event (for audit).
+  // toUserId = who SHOULD SEE the notification (for bell display).
+  // These are often different (e.g. admin approves a dealer →
+  // actorUserId = admin, toUserId = dealer's userId).
+  toUser       User?                        @relation("NotificationRecipient", fields: [toUserId], references: [id])
+  toUserId     String?
+
+  @@index([toUserId, isRead, createdAt])
   @@index([customerId, isRead, createdAt])
   @@index([driverId, isRead, createdAt])
   @@index([deliveryId, createdAt])

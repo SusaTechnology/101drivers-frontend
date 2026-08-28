@@ -49,6 +49,7 @@ import {
   getProviderLabel,
 } from '@/hooks/useAdminPayments';
 import { getUser } from '@/lib/tanstack/dataQuery';
+import { getStripeErrorInfo } from '@/lib/stripe-error-codes';
 import type {
   MarkInvoicedRequest,
   MarkPaidRequest,
@@ -75,9 +76,13 @@ import {
   MapPin,
   Route as RouteIcon,
   Copy,
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
+import { useDataMutation } from '@/lib/tanstack/dataQuery';
 
 interface AdminPaymentDetailPageProps {
   paymentId: string;
@@ -96,6 +101,73 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
   const [invoicedForm, setInvoicedForm] = useState({ invoiceId: '', note: '' });
   const [markPaidForm, setMarkPaidForm] = useState({ note: '' });
   const [markPayoutForm, setMarkPayoutForm] = useState({ providerTransferId: '', note: '' });
+
+  // ── Refund state ──
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundMode, setRefundMode] = useState<'full' | 'partial'>('full');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundNote, setRefundNote] = useState('');
+  // ── "Refund just submitted" local state ──
+  // After a successful refund, the webhook hasn't fired yet (takes
+  // a few seconds), so the DB still shows the old status. This local
+  // state lets us show an immediate "Refund of $X submitted" banner
+  // so the admin knows it worked. After a 5-second delay, we refetch
+  // to pick up the webhook's DB update.
+  const [lastRefund, setLastRefund] = useState<{ amount: number; refundId: string } | null>(null);
+
+  // Refund mutation — calls POST /api/payments/stripe/refund/:paymentId
+  // with optional `amount` for partial refunds. The webhook updates the
+  // payment status + refundedAmountCents + creates the driver clawback.
+  const refundMutation = useDataMutation({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/refund/:paymentId`,
+    method: 'POST',
+    onSuccess: (data: any) => {
+      setRefundOpen(false);
+      setRefundAmount('');
+      setRefundNote('');
+      setRefundMode('full');
+      // Show immediate feedback with the refund details from the API response
+      const refundAmount = data?.amount ?? Number(payment?.amount ?? 0);
+      const refundId = data?.refundId ?? '';
+      setLastRefund({ amount: refundAmount, refundId });
+      toast.success('Refund submitted', {
+        description: `$${refundAmount.toFixed(2)} refund submitted to Stripe. ` +
+          'The payment status will update automatically when Stripe processes it (usually a few seconds).',
+      });
+      // Immediate refetch (in case webhook already fired)
+      refetch();
+      // Delayed refetch to pick up the webhook's DB update
+      setTimeout(() => refetch(), 3000);
+      setTimeout(() => refetch(), 8000);
+    },
+    onError: (error: any) => {
+      toast.error('Refund failed', {
+        description: error?.message || 'Unknown error',
+      });
+    },
+  });
+
+  const handleRefund = () => {
+    const amount = refundMode === 'partial' ? parseFloat(refundAmount) : undefined;
+    if (refundMode === 'partial' && (!amount || amount <= 0)) {
+      toast.error('Invalid amount', { description: 'Please enter a valid refund amount.' });
+      return;
+    }
+    refundMutation.mutate({
+      pathParams: { paymentId },
+      note: refundNote || undefined,
+      amount,
+    });
+  };
+
+  // Clear the "refund just submitted" banner once the payment status
+  // has been updated by the webhook (REFUNDED or refundStatus != NONE).
+  // This means the DB caught up with the refund.
+  React.useEffect(() => {
+    if (lastRefund && payment && (payment.status === 'REFUNDED' || (payment as any).refundStatus === 'FULL')) {
+      setLastRefund(null);
+    }
+  }, [payment?.status, (payment as any)?.refundStatus]);
 
   const actorUserId = user?.id || 'system';
 
@@ -378,8 +450,50 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                 Mark Payout Paid
               </Button>
             )}
+            {/* ── Refund button ──
+                Shows when the payment is CAPTURED, PAID, or partially
+                REFUNDED (so the admin can issue additional partial
+                refunds). Hidden for AUTHORIZED (not captured yet),
+                FAILED, or VOIDED payments. */}
+            {['CAPTURED', 'PAID', 'REFUNDED'].includes(payment.status) && payment.providerPaymentIntentId && (
+              <Button
+                onClick={() => setRefundOpen(true)}
+                size="sm"
+                className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white"
+                disabled={refundMutation.isPending}
+              >
+                {refundMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                )}
+                {payment.status === 'REFUNDED' ? 'Additional Refund' : 'Process Refund'}
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* ── "Refund just submitted" banner ──
+            Shows immediately after a successful refund, BEFORE the
+            webhook updates the DB. This gives the admin visual
+            confirmation that the refund was processed. Disappears
+            when the payment status changes (after refetch picks up
+            the webhook's DB update). */}
+        {lastRefund && (
+          <div className="mt-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div className="text-sm text-emerald-700 dark:text-emerald-300">
+              <span className="font-bold">Refund of ${lastRefund.amount.toFixed(2)} submitted.</span>{' '}
+              <span className="text-emerald-600 dark:text-emerald-400">
+                Stripe refund ID: <code className="text-xs font-mono">{lastRefund.refundId.slice(0, 25)}...</code>
+              </span>
+              <span className="block mt-0.5 text-xs text-emerald-500 dark:text-emerald-400/70">
+                The payment status will update to REFUNDED automatically when the webhook fires (usually a few seconds).
+                You can see this refund in the Stripe Dashboard under the original charge.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Main grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -494,27 +608,137 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                       value={formatPaymentDate(payment.refundedAt)}
                     />
                   )}
+                  {/* Show refund amount + status if there are any refunds */}
+                  {(payment as any).refundedAmountCents > 0 && (
+                    <InfoRow
+                      icon={RotateCcw}
+                      label="Refund Amount"
+                      value={`$${(Number((payment as any).refundedAmountCents) / 100).toFixed(2)} of $${Number(payment.amount).toFixed(2)} (${(payment as any).refundStatus ?? 'PARTIAL'})`}
+                    />
+                  )}
                 </div>
-                {(payment.failureCode || payment.failureMessage) && (
-                  <div className="mt-4 p-3 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/10">
-                    <div className="flex items-center gap-2 mb-1">
-                      <AlertCircle className="w-4 h-4 text-rose-500" />
-                      <span className="text-xs font-bold uppercase tracking-wide text-rose-700 dark:text-rose-300">
-                        Failure
-                      </span>
+                {(payment.failureCode || payment.failureMessage) && (() => {
+                  const errorInfo = getStripeErrorInfo(payment.failureCode);
+                  return (
+                    <div className="mt-4 p-4 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="w-4 h-4 text-rose-500" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                          Payment Failure
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'ml-auto text-[10px] font-bold border',
+                            errorInfo.severity === 'critical' && 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+                            errorInfo.severity === 'danger' && 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+                            errorInfo.severity === 'warning' && 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+                            errorInfo.severity === 'info' && 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+                          )}
+                        >
+                          {errorInfo.severity}
+                        </Badge>
+                      </div>
+
+                      {/* Admin-specific message (from stripe-error-codes.ts) */}
+                      <div className="text-sm text-rose-600 dark:text-rose-400 font-medium">
+                        {errorInfo.adminMessage}
+                      </div>
+
+                      {/* Raw error code + dealer-facing message for context */}
+                      {payment.failureCode && (
+                        <div className="text-xs font-mono text-rose-500 dark:text-rose-400 mt-2">
+                          Stripe code: {payment.failureCode}
+                        </div>
+                      )}
+                      {payment.failureMessage && payment.failureMessage !== errorInfo.adminMessage && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">
+                          Dealer message: &ldquo;{payment.failureMessage}&rdquo;
+                        </div>
+                      )}
+
+                      {/* Stripe invoice ID — so admin can look it up in Stripe dashboard */}
+                      {payment.stripeInvoiceId && (
+                        <div className="text-xs font-mono text-slate-500 dark:text-slate-400 mt-2">
+                          Stripe Invoice: {payment.stripeInvoiceId}
+                        </div>
+                      )}
+
+                      {/* Attempt count — which retry attempt this failure was */}
+                      {payment.attemptCount != null && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1.5">
+                          <span className="font-bold">Failure attempt:</span>
+                          <span>
+                            {payment.attemptCount === 1
+                              ? '1st attempt (initial charge)'
+                              : `${payment.attemptCount}th attempt (retry #${payment.attemptCount - 1})`}
+                          </span>
+                          {payment.attemptCount >= 3 && (
+                            <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-[9px] ml-1">
+                              Max retries approaching
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Failure attempt info */}
+                      {payment.failedAt && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                          Failed at: {formatPaymentDate(payment.failedAt)}
+                        </div>
+                      )}
+
+                      {/* Resolution action */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {errorInfo.willAutoRetry ? (
+                          <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px]">
+                            Stripe will auto-retry
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-[10px]">
+                            No auto-retry scheduled
+                          </Badge>
+                        )}
+                        {errorInfo.shouldRestrict && (
+                          <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-[10px]">
+                            ⚠️ Should restrict account
+                          </Badge>
+                        )}
+                        {errorInfo.resolutionAction === 'admin_review' && (
+                          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-[10px]">
+                            🔍 Admin review required
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Action buttons — navigate to the relevant page */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {/* Navigate to the dealer's user detail page */}
+                        {delivery?.customer?.userId && (
+                          <Link
+                            to="/admin-user-detail/$userId"
+                            params={{ userId: delivery.customer.userId }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-950 hover:opacity-90 transition"
+                          >
+                            <User className="w-3.5 h-3.5" />
+                            View dealer details
+                          </Link>
+                        )}
+                        {/* Navigate to the delivery detail page */}
+                        {delivery?.id && (
+                          <Link
+                            to="/admin-delivery-detail"
+                            search={{ deliveryId: delivery.id }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                          >
+                            <Truck className="w-3.5 h-3.5" />
+                            View delivery
+                          </Link>
+                        )}
+                      </div>
                     </div>
-                    {payment.failureCode && (
-                      <div className="text-sm font-mono text-rose-700 dark:text-rose-300">
-                        {payment.failureCode}
-                      </div>
-                    )}
-                    {payment.failureMessage && (
-                      <div className="text-sm text-rose-600 dark:text-rose-400 mt-1">
-                        {payment.failureMessage}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
 
@@ -929,6 +1153,128 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                 )}
                 Mark Payout Paid
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Refund Dialog ──
+            Supports both full and partial refunds. For partial, the
+            admin enters an amount + optional note. The backend validates
+            that the amount doesn't exceed the remaining refundable balance.
+            The webhook handles updating the payment status + driver clawback. */}
+        <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-rose-600" />
+                Process Refund
+              </DialogTitle>
+              <DialogDescription>
+                Issue a refund to the customer's card via Stripe. This action
+                cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {/* Refund mode selector */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500">Refund Type</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={refundMode === 'full' ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => setRefundMode('full')}
+                  >
+                    Full (${Number(payment.amount).toFixed(2)})
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={refundMode === 'partial' ? 'default' : 'outline'}
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => setRefundMode('partial')}
+                  >
+                    Partial
+                  </Button>
+                </div>
+              </div>
+
+              {/* Partial refund amount */}
+              {refundMode === 'partial' && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500">
+                    Amount to refund ($)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={Number(payment.amount).toFixed(2)}
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="rounded-xl"
+                  />
+                  {payment.status === 'REFUNDED' && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      Already refunded: ${(Number(payment.refundedAmountCents ?? 0) / 100).toFixed(2)} of ${Number(payment.amount).toFixed(2)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Refund note (optional) */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500">
+                  Note (optional — for audit trail)
+                </Label>
+                <Textarea
+                  value={refundNote}
+                  onChange={(e) => setRefundNote(e.target.value)}
+                  placeholder="Reason for refund..."
+                  className="rounded-xl"
+                  rows={2}
+                />
+              </div>
+
+              {/* Warning */}
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-900/30">
+                <p className="text-xs text-rose-700 dark:text-rose-300">
+                  <strong>What happens:</strong>
+                </p>
+                <ul className="text-xs text-rose-600 dark:text-rose-400 mt-1 space-y-0.5 ml-4 list-disc">
+                  <li>The customer receives the refund on their card (5-10 business days)</li>
+                  <li>The driver's payout will be reduced proportionally on their next payout</li>
+                  <li>If the driver has already been paid, a clawback adjustment is created</li>
+                  <li>The payment status updates automatically via Stripe webhook</li>
+                </ul>
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRefundOpen(false);
+                  setRefundAmount('');
+                  setRefundNote('');
+                  setRefundMode('full');
+                }}
+                className="rounded-xl"
+                disabled={refundMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRefund}
+                disabled={refundMutation.isPending}
+                className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                {refundMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {refundMode === 'full'
+                  ? `Confirm Full Refund ($${Number(payment.amount).toFixed(2)})`
+                  : `Confirm Partial Refund ($${refundAmount || '0.00'})`}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -105,19 +105,27 @@ export class NotificationEventService extends NotificationEventServiceBase {
     take?: number;
     skip?: number;
   }): Promise<{ items: any[]; count: number; unreadCount: number }> {
-    // Visibility: a user sees notifications where they are
-    //   (a) the actor (they triggered it — e.g. admin cancelled a delivery), OR
-    //   (b) the customer the notification is about (customer.userId = me), OR
-    //   (c) the driver the notification is about (driver.userId = me).
-    // Previously this only filtered by actorUserId, which meant customers and
-    // drivers never saw cancel/payment notifications in their bell — only the
-    // admin who triggered the action did. The email was sent, but the in-app
-    // bell was silent for the recipient.
+    // ── Notification visibility (FIXED) ──
+    // A user sees notifications where toUserId = their user ID.
+    // This is the SOLE criterion — not actorUserId, not customer/driver
+    // relations. This prevents the bug where admins see dealer
+    // notifications, drivers see dealer notifications, etc.
+    //
+    // Backward compat: for old notifications without toUserId set,
+    // fall back to the old OR clause (actorUserId OR customer.userId
+    // OR driver.userId). New notifications will always have toUserId.
     const baseVisible: Prisma.NotificationEventWhereInput = {
       OR: [
-        { actorUserId: input.actorUserId },
-        { customer: { userId: input.actorUserId } },
-        { driver: { userId: input.actorUserId } },
+        { toUserId: input.actorUserId },
+        // Backward compat for old rows without toUserId
+        {
+          toUserId: null,
+          OR: [
+            { actorUserId: input.actorUserId },
+            { customer: { userId: input.actorUserId } },
+            { driver: { userId: input.actorUserId } },
+          ],
+        },
       ],
     };
 
@@ -157,6 +165,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       select: {
         id: true,
         actorUserId: true,
+        toUserId: true,
         customerId: true,
         driverId: true,
         openedAt: true,
@@ -199,6 +208,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       select: {
         id: true,
         actorUserId: true,
+        toUserId: true,
         customerId: true,
         driverId: true,
       },
@@ -258,6 +268,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       select: {
         id: true,
         actorUserId: true,
+        toUserId: true,
         customerId: true,
         driverId: true,
       },
@@ -288,6 +299,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
       select: {
         id: true,
         actorUserId: true,
+        toUserId: true,
         customerId: true,
         driverId: true,
         clickedAt: true,
@@ -309,41 +321,50 @@ export class NotificationEventService extends NotificationEventServiceBase {
   }
 
   /**
-   * Ownership/visibility check that matches the bell's inbox query:
-   * a user may access a notification if they are the actor (they triggered
-   * it) OR the customer the notification is about OR the driver the
-   * notification is about. Resolves customer.userId / driver.userId via
-   * Prisma relation lookups.
+   * Ownership/visibility check — matches the bell's inbox query.
+   * A user may access a notification if:
+   *   (a) toUserId = their user ID (the new primary check), OR
+   *   (b) backward compat: toUserId is null AND they match the old
+   *       actor/customer/driver OR clause.
    */
   private async ensureCanAccessNotification(
     row: {
       actorUserId: string | null;
       customerId: string | null;
       driverId: string | null;
+      toUserId: string | null;
     },
     actorUserId: string
   ): Promise<void> {
-    if (row.actorUserId && row.actorUserId === actorUserId) {
+    // Primary check: toUserId matches
+    if (row.toUserId && row.toUserId === actorUserId) {
       return;
     }
 
-    if (row.customerId) {
-      const customer = await this.prisma.customer.findUnique({
-        where: { id: row.customerId },
-        select: { userId: true },
-      });
-      if (customer?.userId === actorUserId) {
+    // Backward compat: old notification without toUserId
+    if (!row.toUserId) {
+      if (row.actorUserId && row.actorUserId === actorUserId) {
         return;
       }
-    }
 
-    if (row.driverId) {
-      const driver = await this.prisma.driver.findUnique({
-        where: { id: row.driverId },
-        select: { userId: true },
-      });
-      if (driver?.userId === actorUserId) {
-        return;
+      if (row.customerId) {
+        const customer = await this.prisma.customer.findUnique({
+          where: { id: row.customerId },
+          select: { userId: true },
+        });
+        if (customer?.userId === actorUserId) {
+          return;
+        }
+      }
+
+      if (row.driverId) {
+        const driver = await this.prisma.driver.findUnique({
+          where: { id: row.driverId },
+          select: { userId: true },
+        });
+        if (driver?.userId === actorUserId) {
+          return;
+        }
       }
     }
 

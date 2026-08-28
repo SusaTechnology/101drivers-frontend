@@ -39,6 +39,41 @@ import { PrismaService } from "../prisma/prisma.service";
 export class PostpaidBillingController {
   private readonly logger = new Logger(PostpaidBillingController.name);
 
+  // ── Cron lock (in-memory, single-process) ──
+  // Prevents overlapping runs of the same cron. If a cron takes longer
+  // than its interval (e.g. a Stripe outage causes the previous run to
+  // still be running when the next interval fires), the new run skips.
+  //
+  // This is a single-process lock — if you run multiple backend
+  // instances behind a load balancer, each instance has its own Set
+  // and they can run the same cron concurrently. For multi-instance
+  // safety, upgrade this to a DB-based lock (e.g. `SELECT FOR UPDATE`
+  // on a cron_lock row) or use Redis with `SET NX EX`.
+  //
+  // The cron methods themselves are idempotent (unique constraints +
+  // status checks), so even a concurrent run won't double-charge —
+  // it'll just do redundant work + waste Stripe API quota.
+  private static readonly runningCrons = new Set<string>();
+
+  private async withCronLock<T>(
+    cronName: string,
+    fn: () => Promise<T>,
+  ): Promise<T | void> {
+    if (PostpaidBillingController.runningCrons.has(cronName)) {
+      this.logger.warn(
+        `Cron ${cronName} already running — skipping this execution. ` +
+          `(Previous run may be taking longer than the interval. Consider tuning the batch size.)`,
+      );
+      return;
+    }
+    PostpaidBillingController.runningCrons.add(cronName);
+    try {
+      return await fn();
+    } finally {
+      PostpaidBillingController.runningCrons.delete(cronName);
+    }
+  }
+
   constructor(
     private readonly postpaidBilling: PostpaidBillingService,
     private readonly prisma: PrismaService,
@@ -85,6 +120,26 @@ export class PostpaidBillingController {
   async retryCharge(@Param("dealerId") dealerId: string) {
     await this.postpaidBilling.retryFailedCharge(dealerId);
     return { ok: true, dealerId };
+  }
+
+  // ─── ADMIN: Billing Mode Switch ────────────────────────────
+
+  @Get("dealers/:dealerId/switch-check")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({ summary: "Pre-check: can the admin switch this dealer's billing mode?" })
+  async getSwitchEligibility(@Param("dealerId") dealerId: string) {
+    return this.postpaidBilling.getSwitchEligibility(dealerId);
+  }
+
+  @Post("dealers/:dealerId/switch-billing")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({ summary: "Safely switch a dealer between prepaid and postpaid billing" })
+  async switchBillingMode(
+    @Param("dealerId") dealerId: string,
+    @Body() body: { mode: 'PREPAID' | 'POSTPAID' },
+  ) {
+    const result = await this.postpaidBilling.switchBillingMode(dealerId, body.mode);
+    return { ok: true, dealerId, ...result };
   }
 
   // ─── ADMIN: Status / Inspect ────────────────────────────────
@@ -206,12 +261,169 @@ export class PostpaidBillingController {
   async handleDailyAutoRetry() {
     this.logger.log("Daily auto-retry cron: starting");
     try {
-      await this.postpaidBilling.autoRetryFrozenDealers();
+      await this.withCronLock("dailyAutoRetry", async () => {
+        await this.postpaidBilling.autoRetryFrozenDealers();
+      });
     } catch (err: any) {
       this.logger.error(
         `Daily auto-retry cron failed: ${err?.message}`,
         err?.stack,
       );
     }
+  }
+
+  // ── CRON: usage report retry queue (Fix #1) ──────────────────────
+  //
+  // Runs every hour. Picks up Payment rows with `usageReportStatus = FAILED`
+  // and `usageReportNextRetryAt <= now()`, and retries the
+  // `reportUsageToStripe` call. Exponential backoff (1h, 2h, 4h, 8h, 24h)
+  // is handled by `scheduleUsageReportRetry` in the service.
+  //
+  // After 5 attempts (~39h total), the row is marked PERMANENTLY_FAILED
+  // and the admin must manually create the InvoiceItem in Stripe.
+  //
+  // This is the structural fix for the silent money-loss bug where a
+  // transient Stripe outage during delivery completion would lose the
+  // money for that delivery — no InvoiceItem was created, no retry was
+  // scheduled, the weekly invoice just didn't include that delivery.
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleHourlyUsageReportRetry() {
+    this.logger.log("Hourly usage report retry cron: starting");
+    try {
+      await this.withCronLock("hourlyUsageReportRetry", async () => {
+        const result = await this.postpaidBilling.processUsageReportRetryQueue();
+        if (result.processed > 0) {
+          this.logger.log(
+            `Hourly usage report retry cron: processed=${result.processed}, ` +
+            `succeeded=${result.succeeded}, failed=${result.failed}`,
+          );
+        }
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `Hourly usage report retry cron failed: ${err?.message}`,
+        err?.stack,
+      );
+    }
+  }
+
+  // ── CRON: mid-trip remainder charge retry queue (Fix #7) ──────────
+  //
+  // Runs daily at 06:00 server time (alongside the auto-retry cron).
+  // Picks up Payment rows with `remainderChargeStatus = PENDING` and
+  // retries the remainder charge if the customer has since added a new
+  // card. Marks as UNCOLLECTIBLE after 7 days past the due date — the
+  // admin must manually invoice the customer at that point.
+  //
+  // This is the structural fix for the "customer removes card between
+  // startTrip and completeTrip" bug — the platform delivered the
+  // service but didn't get paid the remainder. The driver did the
+  // work, so we can't cancel the delivery — we have to chase the
+  // remainder.
+
+  @Cron(CronExpression.EVERY_DAY_AT_6AM)
+  async handleDailyRemainderChargeRetry() {
+    this.logger.log("Daily remainder charge retry cron: starting");
+    try {
+      await this.withCronLock("dailyRemainderChargeRetry", async () => {
+        const result = await this.postpaidBilling.processRemainderChargeRetryQueue();
+        if (result.processed > 0) {
+          this.logger.log(
+            `Daily remainder charge retry cron: processed=${result.processed}, ` +
+            `succeeded=${result.succeeded}, failed=${result.failed}, uncollectible=${result.uncollectible}`,
+          );
+        }
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `Daily remainder charge retry cron failed: ${err?.message}`,
+        err?.stack,
+      );
+    }
+  }
+
+  // ── ADMIN: monitoring endpoint (Fix #11 — observability) ────────
+  //
+  // Returns queue depths + counts so the admin can monitor cron health
+  // and detect issues early. Recommended alerting thresholds:
+  //   • usageReportQueue > 50 → Stripe outage or persistent failure
+  //   • usageReportPermanentlyFailed > 0 → admin must manually intervene
+  //   • remainderQueue > 10 → many customers removing cards (UX issue)
+  //   • remainderUncollectible > 0 → admin must manually invoice
+  //   • pendingAdjustments > 20 → admin should trigger manual payout
+  //     (the cron applies them on the next driver payout, but if the
+  //     driver has been inactive, the adjustments pile up)
+  //
+  // Usage: GET /api/postpaid-billing/admin/health
+  // Auth: admin only (defaultAuthGuard + ACGuard).
+
+  @Get("admin/health")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({ summary: "Admin: monitor payment resilience queue depths + alert counts" })
+  async getAdminHealth() {
+    const now = new Date();
+    const [
+      usageReportQueue,
+      usageReportPermanentlyFailed,
+      remainderQueue,
+      remainderUncollectible,
+      pendingAdjustments,
+      appliedAdjustments,
+    ] = await Promise.all([
+      this.prisma.payment.count({
+        where: { usageReportStatus: 'FAILED', usageReportNextRetryAt: { lte: now } },
+      }),
+      this.prisma.payment.count({
+        where: { usageReportStatus: 'PERMANENTLY_FAILED' },
+      }),
+      this.prisma.payment.count({
+        where: { remainderChargeStatus: 'PENDING' },
+      }),
+      this.prisma.payment.count({
+        where: { remainderChargeStatus: 'UNCOLLECTIBLE' },
+      }),
+      this.prisma.driverPayoutAdjustment.count({
+        where: { status: 'PENDING' },
+      }),
+      this.prisma.driverPayoutAdjustment.count({
+        where: { status: 'APPLIED' },
+      }),
+    ]);
+
+    return {
+      timestamp: now.toISOString(),
+      runningCrons: Array.from(PostpaidBillingController.runningCrons),
+      queues: {
+        usageReport: {
+          pendingRetry: usageReportQueue,
+          permanentlyFailed: usageReportPermanentlyFailed,
+          // Recommended alert: usageReportPermanentlyFailed > 0
+          alert: usageReportPermanentlyFailed > 0
+            ? 'admin_intervention_required'
+            : usageReportQueue > 50
+              ? 'stripe_outage_suspected'
+              : 'ok',
+        },
+        remainderCharges: {
+          pending: remainderQueue,
+          uncollectible: remainderUncollectible,
+          // Recommended alert: uncollectible > 0 → admin must invoice
+          alert: remainderUncollectible > 0
+            ? 'admin_intervention_required'
+            : remainderQueue > 10
+              ? 'many_customers_losing_cards'
+              : 'ok',
+        },
+        driverPayoutAdjustments: {
+          pending: pendingAdjustments,
+          applied: appliedAdjustments,
+          // Recommended alert: pending > 20 → trigger manual payout
+          alert: pendingAdjustments > 20
+            ? 'trigger_manual_payout'
+            : 'ok',
+        },
+      },
+    };
   }
 }

@@ -312,9 +312,19 @@ async getAdminPaymentDetail(paymentId: string): Promise<any> {
       refundedAt: true,
       failureCode: true,
       failureMessage: true,
+      failedAt: true,
       providerChargeId: true,
       providerPaymentIntentId: true,
       lockInAmount: true,
+      stripeInvoiceId: true,
+      stripeInvoiceItemId: true,
+      attemptCount: true,
+      // ── Refund tracking fields (Fix #5) ──
+      refundedAmountCents: true,
+      refundStatus: true,
+      // ── Dispute tracking (Fix #3) ──
+      disputeId: true,
+      disputeStatus: true,
       createdAt: true,
       updatedAt: true,
       delivery: {
@@ -333,6 +343,7 @@ async getAdminPaymentDetail(paymentId: string): Promise<any> {
           customer: {
             select: {
               id: true,
+              userId: true,  // Needed so the admin payment detail can link to /admin-user-detail/$userId
               customerType: true,
               businessName: true,
               contactName: true,

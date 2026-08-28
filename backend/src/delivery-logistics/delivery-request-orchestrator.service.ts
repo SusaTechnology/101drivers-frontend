@@ -491,12 +491,33 @@ export class DeliveryRequestOrchestratorService {
     }
 
     // PI is in a state that requires customer action (3DS, re-enter card, etc.)
+    //
+    // NOTE: The frontend 3DS confirmation modal is NOT yet implemented.
+    // Until it is, we treat `requires_action` as a hard failure (same as
+    // the pre-fix behavior) — the caller (createDeliveryFromAcceptedQuote
+    // etc.) detects `status === 'requires_action'` in the result and
+    // throws a friendly error + cancels the delivery. This avoids the
+    // half-state where the delivery is LISTED but the payment can't be
+    // captured.
+    //
+    // We still return the `clientSecret` so a future frontend can use
+    // it to render `stripe.confirmCardPayment(clientSecret)` once the
+    // 3DS modal is built. The caller currently throws on this status.
+    if (piStatus === 'requires_action') {
+      // Don't mark as failed here — the caller handles marking +
+      // cancellation in a unified way. Just return the status so the
+      // caller can detect it.
+      return {
+        paymentIntentId: result.paymentIntentId,
+        clientSecret: result.clientSecret,
+        status: piStatus, // 'requires_action'
+      };
+    }
+
     const friendly =
-      piStatus === 'requires_action'
-        ? 'Your bank needs you to approve this charge (3D Secure). Please contact your bank or use a different card.'
-        : piStatus === 'requires_payment_method'
-          ? 'Your saved card was declined or detached. Please save a new card under Payment Methods and retry.'
-          : `Payment could not be completed (Stripe status: ${piStatus}). Please try a different card or contact support.`;
+      piStatus === 'requires_payment_method'
+        ? 'Your saved card was declined or detached. Please save a new card under Payment Methods and retry.'
+        : `Payment could not be completed (Stripe status: ${piStatus}). Please try a different card or contact support.`;
 
     await this.markPaymentFailed(
       params.paymentId,
@@ -591,7 +612,9 @@ export class DeliveryRequestOrchestratorService {
       return 'The security code on your card is incorrect. Please save a new card under Payment Methods.';
     }
     if (code === 'payment_method_action_required') {
-      return 'Your bank needs you to approve this charge. Please contact your bank or use a different card.';
+      return 'Your bank requires 3D Secure authentication for this charge, ' +
+        'which our app does not support yet. Please contact support ' +
+        'so we can help you complete this payment manually.';
     }
     // Internal Stripe config issues — DO NOT leak these to the dealer.
     // The dealer can't fix our API keys; tell them to contact support.
@@ -1432,6 +1455,31 @@ private async createIndividualDeliveryForResolvedCustomer(
     throw err;
   }
 
+  // ── 3DS / SCA handling ──
+  // Same safe path as the business flows — until the frontend 3DS
+  // modal is implemented, treat `requires_action` as a hard failure
+  // (cancel delivery + throw friendly error). This avoids the half-
+  // state where the delivery is LISTED in the driver feed but the
+  // payment can't be captured.
+  if (piStatus === 'requires_action') {
+    const friendly =
+      'Your bank requires 3D Secure authentication for this charge, ' +
+      'which our app does not support yet. Please contact support ' +
+      'so we can help you complete this payment manually.';
+    await this.markPaymentFailed(
+      payment.id,
+      friendly,
+      `PI_STATUS_requires_action`,
+      { paymentIntentId, status: piStatus },
+    );
+    await this.cancelDeliveryOnPaymentFailure(
+      delivery.id,
+      friendly,
+      customer.userId ?? null,
+    );
+    throw new BadRequestException(friendly);
+  }
+
   await this.prisma.paymentEvent.create({
     data: {
       paymentId: payment.id,
@@ -2098,6 +2146,66 @@ private async resolveIndividualCustomerForCreate(
       }
     }
 
+    // ── Prepaid pre-check ──────────────────────────────────────────
+    // For PREPAID deliveries, the customer MUST have a saved Stripe
+    // payment method (stripeCustomerId + stripeDefaultPaymentMethodId)
+    // BEFORE we create any rows. Without this pre-check, the delivery
+    // row + Payment row would be created, then attemptStripePrepaidCharge
+    // would fail with NO_STRIPE_CUSTOMER / NO_SAVED_CARD, leaving an
+    // orphaned FAILED Payment row that:
+    //   (a) shows up on the admin payments page as a scary error
+    //   (b) blocks billing-mode switches (until my recent fix that
+    //       excludes NO_STRIPE_CUSTOMER from the switch block check)
+    //   (c) can't be retried (Retry Charge only retries POSTPAID
+    //       Stripe invoices — there's no invoice for a prepaid charge)
+    //
+    // By throwing HERE (before any DB writes), the dealer sees a clear
+    // error message telling them to save a card first, and no orphaned
+    // rows are left in the database.
+    //
+    // This is the structural fix for "NO_STRIPE_CUSTOMER should never
+    // happen" — by blocking delivery creation upfront, we never reach
+    // the code path that would mark a Payment as NO_STRIPE_CUSTOMER.
+    if (paymentType === EnumPaymentPaymentType.PREPAID) {
+      if (!customer.stripeCustomerId) {
+        throw new BadRequestException(
+          'No payment method on file. Please save a card under Payment Methods first, then place the delivery.',
+        );
+      }
+      if (!customer.stripeDefaultPaymentMethodId) {
+        // Try to auto-resolve: query Stripe for attached cards. If any
+        // exist, use the most recent AND persist it as the default.
+        // This handles the case where the dealer saved a card before
+        // the webhook that sets stripeDefaultPaymentMethodId was wired up.
+        if (this.stripeService) {
+          let attachedCards: any[] = [];
+          try {
+            attachedCards = await this.stripeService.listPaymentMethods(customer.stripeCustomerId);
+          } catch {
+            // Ignore — we'll fall through to the "no saved card" error
+          }
+          if (attachedCards && attachedCards.length > 0) {
+            try {
+              await this.prisma.customer.update({
+                where: { id: customer.id },
+                data: { stripeDefaultPaymentMethodId: attachedCards[0].id },
+              });
+              // Mutate the in-memory customer object so the charge
+              // helper below sees the resolved PM.
+              customer.stripeDefaultPaymentMethodId = attachedCards[0].id;
+            } catch {
+              // Non-fatal — fall through to the error
+            }
+          }
+        }
+        if (!customer.stripeDefaultPaymentMethodId) {
+          throw new BadRequestException(
+            'No saved payment method on file. Please save a card under Payment Methods first, then place the delivery.',
+          );
+        }
+      }
+    }
+
     // Release any CANCELLED *or* DRAFT delivery that still holds this quoteId
     // before creating the new delivery, otherwise the create below will throw
     // a 409 "Another record with the requested (quoteId) already exists" and
@@ -2255,6 +2363,39 @@ private async resolveIndividualCustomerForCreate(
           input.createdByUserId ?? null,
         );
         throw err;
+      }
+
+      // ── 3DS / SCA handling ────────────────────────────────────────
+      // If the PI status is `requires_action`, the customer's bank
+      // requires 3D Secure authentication. The frontend 3DS modal is
+      // NOT yet implemented, so for now we treat this the same as the
+      // pre-fix behavior: cancel the delivery + throw a friendly error.
+      //
+      // This is the SAFE path — no half-state (delivery is cancelled,
+      // driver feed stays clean). The frontend 3DS flow is a follow-up
+      // task that will replace this throw with a `requires3DS: true`
+      // response once the modal UI is ready.
+      //
+      // See `attemptStripePrepaidCharge` — it returns the clientSecret
+      // for the frontend to use, but until the modal exists we treat
+      // `requires_action` as a hard failure.
+      if (chargeResult.status === 'requires_action') {
+        const friendly =
+          'Your bank requires 3D Secure authentication for this charge, ' +
+          'which our app does not support yet. Please contact support ' +
+          'so we can help you complete this payment manually.';
+        await this.markPaymentFailed(
+          payment.id,
+          friendly,
+          `PI_STATUS_requires_action`,
+          { paymentIntentId: chargeResult.paymentIntentId, status: chargeResult.status },
+        );
+        await this.cancelDeliveryOnPaymentFailure(
+          delivery.id,
+          friendly,
+          input.createdByUserId ?? null,
+        );
+        throw new BadRequestException(friendly);
       }
 
       await this.prisma.paymentEvent.create({
@@ -2558,6 +2699,45 @@ private async resolveIndividualCustomerForCreate(
       }
     }
 
+    // ── Prepaid pre-check ──────────────────────────────────────────
+    // (Same logic as createFromQuote — see the prepaid pre-check block
+    //  in createFromQuote for the full rationale. Briefly: block the
+    //  promotion BEFORE any charge attempt so we never create an
+    //  orphaned FAILED Payment row with NO_STRIPE_CUSTOMER / NO_SAVED_CARD.)
+    if (paymentType === EnumPaymentPaymentType.PREPAID) {
+      if (!customer.stripeCustomerId) {
+        throw new BadRequestException(
+          'No payment method on file. Please save a card under Payment Methods first, then place the delivery.',
+        );
+      }
+      if (!customer.stripeDefaultPaymentMethodId) {
+        if (this.stripeService) {
+          let attachedCards: any[] = [];
+          try {
+            attachedCards = await this.stripeService.listPaymentMethods(customer.stripeCustomerId);
+          } catch {
+            // Ignore — fall through to the error
+          }
+          if (attachedCards && attachedCards.length > 0) {
+            try {
+              await this.prisma.customer.update({
+                where: { id: customer.id },
+                data: { stripeDefaultPaymentMethodId: attachedCards[0].id },
+              });
+              customer.stripeDefaultPaymentMethodId = attachedCards[0].id;
+            } catch {
+              // Non-fatal — fall through to the error
+            }
+          }
+        }
+        if (!customer.stripeDefaultPaymentMethodId) {
+          throw new BadRequestException(
+            'No saved payment method on file. Please save a card under Payment Methods first, then place the delivery.',
+          );
+        }
+      }
+    }
+
     // ─── Step 4: UPDATE the DRAFT row → LISTED (in-place promotion) ───
     // NO releasePriorQuoteId call — the quoteId stays on this same row.
     // We DO set quoteId explicitly to `effectiveQuoteId` so that the row is
@@ -2702,6 +2882,28 @@ private async resolveIndividualCustomerForCreate(
           input.createdByUserId ?? null,
         );
         throw err;
+      }
+
+      // ── 3DS / SCA handling ──
+      // Same as createDeliveryFromAcceptedQuote above — safe path
+      // (cancel + throw) until the frontend 3DS modal is implemented.
+      if (chargeResult.status === 'requires_action') {
+        const friendly =
+          'Your bank requires 3D Secure authentication for this charge, ' +
+          'which our app does not support yet. Please contact support ' +
+          'so we can help you complete this payment manually.';
+        await this.markPaymentFailed(
+          payment.id,
+          friendly,
+          `PI_STATUS_requires_action`,
+          { paymentIntentId: chargeResult.paymentIntentId, status: chargeResult.status },
+        );
+        await this.cancelDeliveryOnPaymentFailure(
+          delivery.id,
+          friendly,
+          input.createdByUserId ?? null,
+        );
+        throw new BadRequestException(friendly);
       }
 
       await this.prisma.paymentEvent.create({
@@ -3425,7 +3627,11 @@ private async resolveIndividualCustomerForCreate(
     const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
     switch (eligibility.reason) {
       case "FROZEN":
-        return "Your account is frozen due to a failed weekly charge. Please update your payment method and contact support.";
+        return "Your account is frozen due to a failed weekly charge. " +
+          "Please update your payment method — we will automatically retry " +
+          "the charge within 24 hours and unfreeze your account once it " +
+          "succeeds. If you need to deliver urgently, contact support to " +
+          "retry the charge now.";
       case "NOT_APPROVED":
         return "Your business account is not yet approved for postpaid billing.";
       case "NO_PAYMENT_METHOD":

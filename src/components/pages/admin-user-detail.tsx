@@ -52,6 +52,8 @@ import {
   Home,
   CreditCard,
   Trash2,
+  ArrowLeftRight,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -97,10 +99,8 @@ import { useTheme } from '@/lib/theme';
 import { PhotoDialog, usePhotoUpload, downloadImageAsFile } from '@/components/ui/photo-dialog';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import { CustomerPricingCard } from '@/components/admin/CustomerPricingCard';
-// Admin-side postpaid billing management card — Setup, Unfreeze, Retry,
-// and a status display (outstanding balance, frozen state, Stripe IDs).
-// Rendered alongside CustomerPricingCard for BUSINESS customers.
 import PostpaidBillingCard from '@/components/admin/PostpaidBillingCard';
+import { BillingSwitchDialog, type SwitchEligibility } from '@/components/admin/BillingSwitchDialog';
 import {
   useAdminUserDetail,
   useApproveCustomer,
@@ -117,6 +117,7 @@ import {
   useDeleteUser,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
+import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery';
 import {
   USER_ROLE_LABELS,
   CUSTOMER_TYPE_LABELS,
@@ -349,6 +350,20 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const photoUpload = usePhotoUpload(`${UPLOAD_URL}/api/public/uploads/driver-selfie`);
   const pendingPhotoUrl = photoUpload.pendingUrl;
 
+  // ── Billing switch state ──
+  const [billingSwitchOpen, setBillingSwitchOpen] = useState(false);
+  const [billingSwitchTarget, setBillingSwitchTarget] = useState<'PREPAID' | 'POSTPAID'>('PREPAID');
+
+  // ── Postpaid highlight state ──
+  // When the admin switches a dealer from Prepaid → Postpaid and the
+  // dealer has no existing Stripe subscription, we set this to true.
+  // The PostpaidBillingCard uses it to render an emphasized border +
+  // shadow + a "Setup required" banner so the admin remembers to click
+  // the "Setup Postpaid" button. Cleared either when the admin clicks
+  // Setup (onSetupComplete) or after 30 seconds (whichever comes first).
+  const [highlightPostpaid, setHighlightPostpaid] = useState(false);
+  const postpaidCardRef = React.useRef<HTMLDivElement>(null);
+
   const openPhotoDialog = (src: string, title: string, canUpdate: boolean) => {
     setPhotoDialogSrc(src);
     setPhotoDialogTitle(title);
@@ -364,6 +379,133 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
     isError,
     refetch,
   } = useAdminUserDetail(userId);
+
+  // ── Billing switch hooks (MUST be after useAdminUserDetail so
+  //    user is defined for the customerId) ──
+  const customerId = user?.customer?.id;
+  const { data: switchEligibility, isLoading: switchEligibilityLoading, refetch: refetchSwitchCheck } = useDataQuery<SwitchEligibility>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${customerId}/switch-check`,
+    noFilter: true,
+    enabled: false,
+  });
+
+  // Compute the postpaid status endpoint so we can invalidate it when
+  // the billing mode switches (otherwise PostpaidBillingCard would
+  // keep showing stale data for up to 60s, since it polls on a 60s
+  // interval). invalidating the query forces an immediate refetch.
+  const postpaidStatusEndpoint = customerId
+    ? `${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${customerId}/status`
+    : '';
+
+  const switchBillingMutation = useDataMutation<any, any>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/postpaid-billing/dealers/${customerId}/switch-billing`,
+    method: 'POST',
+    // Invalidate both the admin-user-detail query (so user.customer.postpaidEnabled
+    // updates immediately) and the postpaid status query (so
+    // PostpaidBillingCard's status refetches immediately rather than
+    // waiting for the 60s poll).
+    invalidateQueryKey: postpaidStatusEndpoint
+      ? [
+          ['admin-user-detail', userId],
+          ['data', postpaidStatusEndpoint],
+        ]
+      : [['admin-user-detail', userId]],
+  });
+
+  const openBillingSwitch = (target: 'PREPAID' | 'POSTPAID') => {
+    setBillingSwitchTarget(target);
+    setBillingSwitchOpen(true);
+    refetchSwitchCheck();
+  };
+
+  const handleConfirmBillingSwitch = () => {
+    switchBillingMutation.mutate(
+      { mode: billingSwitchTarget },
+      {
+        onSuccess: (data: any) => {
+          // The backend returns { ok, dealerId, mode, stripeCustomerId,
+          // stripeSubscriptionId, subscriptionReactivated, setupRequired }.
+          // With the AUTO-SETUP pattern, the switch either fully succeeds
+          // (Stripe customer + subscription created/reactivated + flags
+          // flipped) OR fully fails (no state change, error toast shown).
+          // setupRequired=true means a NEW Stripe customer + subscription
+          // was created by this switch (vs. reactivating an existing one).
+          const switchedToPostpaid = billingSwitchTarget === 'POSTPAID';
+          const reactivated = Boolean(data?.subscriptionReactivated);
+          const setupRequired = Boolean(data?.setupRequired);
+          const newSubId = data?.stripeSubscriptionId;
+
+          if (switchedToPostpaid) {
+            if (reactivated) {
+              toast.success('Postpaid billing reactivated', {
+                description:
+                  'Existing Stripe subscription reactivated. The dealer can now ' +
+                  'create postpaid deliveries.',
+              });
+            } else if (setupRequired) {
+              toast.success('Switched to Postpaid billing — setup complete', {
+                description:
+                  `A new Stripe customer + $0/week subscription was created ` +
+                  `(subscription ID: ${newSubId ? newSubId.slice(0, 20) + '...' : 'n/a'}). ` +
+                  `The dealer can now create postpaid deliveries.`,
+              });
+            } else {
+              toast.success('Switched to Postpaid billing');
+            }
+          } else {
+            toast.success('Switched to Prepaid billing', {
+              description:
+                'New deliveries will be charged immediately. The Stripe subscription ' +
+                'will be cancelled at the end of the current billing period.',
+            });
+          }
+
+          setBillingSwitchOpen(false);
+
+          // Trigger highlight + scroll for prepaid → postpaid switches.
+          // The refetch() below will refresh the user data so
+          // user.customer.postpaidEnabled flips to true. The
+          // PostpaidBillingCard will then re-render and (because we
+          // pass highlight=true) show the emphasized border +
+          // confirmation banner. The invalidateQueryKey above also
+          // forces the postpaid STATUS query to refetch immediately so
+          // the card's internal state (stripe refs, unpaid count, etc.)
+          // is current — no 60s wait.
+          //
+          // Note: with auto-setup, the highlight is now a confirmation
+          // that setup succeeded (not a reminder to click Setup). The
+          // auto-clear after 30s still applies (see useEffect below).
+          if (switchedToPostpaid) {
+            setHighlightPostpaid(true);
+          } else {
+            setHighlightPostpaid(false);
+          }
+
+          refetch();
+
+          // Scroll to the Postpaid Billing card after a short delay
+          // so the DOM has time to update with the new state and the
+          // card's highlight is visible.
+          if (switchedToPostpaid) {
+            setTimeout(() => {
+              postpaidCardRef.current?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+              });
+            }, 350);
+          }
+        },
+        onError: (error: Error) => {
+          toast.error('Billing switch failed', {
+            description:
+              error.message ||
+              'The dealer remains on their current billing mode. ' +
+              'Fix the underlying issue (e.g. Stripe configuration) and try again.',
+          });
+        },
+      }
+    );
+  };
 
   // ==================== MUTATIONS ====================
 
@@ -465,6 +607,19 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
     }
   }, [user]);
 
+  // Auto-clear the postpaid highlight after 30 seconds. The highlight
+  // is also cleared when the admin clicks the "Setup Postpaid" button
+  // (see onSetupComplete prop) or when switching back to prepaid. This
+  // effect is a safety net so the highlight doesn't stay on forever
+  // if the admin navigates away from the action without completing setup.
+  React.useEffect(() => {
+    if (!highlightPostpaid) return;
+    const timer = setTimeout(() => {
+      setHighlightPostpaid(false);
+    }, 30_000);
+    return () => clearTimeout(timer);
+  }, [highlightPostpaid]);
+
   // ==================== HANDLERS ====================
 
   const toggleTheme = () => {
@@ -495,8 +650,19 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         actorUserId,
       },
       {
-        onSuccess: () => {
-          toast.success('Customer approved successfully');
+        onSuccess: (data: any) => {
+          // The backend may return a `postpaidSetupWarning` field if
+          // the admin approved the customer as postpaid but the Stripe
+          // auto-setup failed. In that case, the customer is approved
+          // as PREPAID instead (no half-state), and the warning explains
+          // why + how to fix it. Show a warning toast (not success).
+          if (data?.postpaidSetupWarning) {
+            toast.warning('Customer approved as Prepaid', {
+              description: data.postpaidSetupWarning,
+            });
+          } else {
+            toast.success('Customer approved successfully');
+          }
           closeDialog();
           refetch();
         },
@@ -731,6 +897,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
   const handleEditCustomer = (data: EditCustomerFormData) => {
     if (!user) return;
+    // postpaidEnabled is NOT sent here — billing mode is managed
+    // via the Billing Mode card (safe switch with pre-checks + dialog).
     const updateData: AdminUpdateUserRequest = {
       customer: {
         phone: data.phone || undefined,
@@ -738,7 +906,6 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
         contactEmail: data.contactEmail || undefined,
         contactPhone: data.contactPhone || undefined,
         defaultPickupId: data.defaultPickupId || undefined,
-        postpaidEnabled: postpaidEnabled,
       },
     };
     adminUpdateUserMutation.mutate(
@@ -1477,27 +1644,21 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                 placeholder="Contact phone"
                               />
                             </div>
+                            {/* Payment Type — read-only. Switching is done
+                                via the Billing Mode card above the Pricing
+                                & Billing section. */}
                             <div className="space-y-2">
                               <Label className="text-xs font-bold text-slate-500">Payment Type</Label>
-                              <RadioGroup
-                                value={postpaidEnabled ? "POSTPAID" : "PREPAID"}
-                                onValueChange={(val) => setPostpaidEnabled(val === "POSTPAID")}
-                                className="flex gap-3"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <RadioGroupItem value="PREPAID" id="edit-prepaid" />
-                                  <Label htmlFor="edit-prepaid" className="text-sm font-semibold cursor-pointer">Prepaid</Label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <RadioGroupItem value="POSTPAID" id="edit-postpaid" />
-                                  <Label htmlFor="edit-postpaid" className="text-sm font-semibold cursor-pointer">Postpaid</Label>
-                                </div>
-                              </RadioGroup>
-                              {postpaidEnabled && (
-                                <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                                  Postpaid should only be enabled if terms have been negotiated with this dealership.
-                                </p>
-                              )}
+                              <div className="text-sm">
+                                {postpaidEnabled ? (
+                                  <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Postpaid</Badge>
+                                ) : (
+                                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Prepaid</Badge>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-400">
+                                To change billing mode, use the Billing Mode card above the Pricing &amp; Billing section.
+                              </p>
                             </div>
                           </div>
                           <div className="flex justify-end gap-2 pt-4">
@@ -1591,6 +1752,53 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   </Card>
                 )}
 
+                {/* ── Billing Mode card ──
+                    The ONE place where billing mode is switched.
+                    Shows the current mode + a Switch button that opens
+                    the BillingSwitchDialog (reusable component). */}
+                {user.customer?.customerType === 'BUSINESS' && (
+                  <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
+                    <CardContent className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <ArrowLeftRight className="w-5 h-5 text-slate-400" />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">
+                            Billing Mode
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Current: {user.customer.postpaidEnabled ? (
+                              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-[10px]">Postpaid</Badge>
+                            ) : (
+                              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-[10px]">Prepaid</Badge>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      {user.customer.postpaidEnabled ? (
+                        <Button
+                          onClick={() => openBillingSwitch('PREPAID')}
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300"
+                        >
+                          <ArrowLeftRight className="w-4 h-4" />
+                          <span className="ml-1 font-bold">Switch to Prepaid</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => openBillingSwitch('POSTPAID')}
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300"
+                        >
+                          <ArrowLeftRight className="w-4 h-4" />
+                          <span className="ml-1 font-bold">Switch to Postpaid</span>
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Pricing & Billing card (items 6-9) */}
                 {user.customer && (
                   <CustomerPricingCard
@@ -1599,14 +1807,41 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   />
                 )}
 
-                {/* Postpaid billing management card — admin controls for
-                    weekly postpaid billing. Shown for any BUSINESS customer
-                    (whether postpaidEnabled=true or false) so the admin can
-                    onboard a dealer onto postpaid at any time after
-                    approval. The card itself surfaces the Setup Postpaid
-                    button and the dealer's current billing state. */}
+                {/* Postpaid Billing management card.
+                    Always shown for BUSINESS customers (whether
+                    postpaidEnabled=true or false). When on prepaid,
+                    the card is greyed out + disabled with an inactive
+                    notice — but the Stripe refs (customer ID, subscription
+                    ID) are still visible.
+
+                    Wrapped in a div with a ref so the page can scroll to
+                    this section after a successful prepaid → postpaid
+                    switch. The `highlight` prop is set to true after such
+                    a switch — the card then shows an emphasized border +
+                    shadow + a setup banner so the admin remembers to
+                    click the "Setup Postpaid" button (or, if an existing
+                    subscription was reactivated, a confirmation banner). */}
                 {user.customer?.customerType === 'BUSINESS' && user.customer.id && (
-                  <PostpaidBillingCard dealerId={user.customer.id} />
+                  <div ref={postpaidCardRef} className="scroll-mt-24">
+                    <PostpaidBillingCard
+                      dealerId={user.customer.id}
+                      highlight={highlightPostpaid}
+                      onSetupComplete={() => setHighlightPostpaid(false)}
+                    />
+                  </div>
+                )}
+
+                {/* ── Billing Switch Dialog (reusable component) ── */}
+                {user.customer?.customerType === 'BUSINESS' && (
+                  <BillingSwitchDialog
+                    open={billingSwitchOpen}
+                    onClose={() => setBillingSwitchOpen(false)}
+                    onConfirm={handleConfirmBillingSwitch}
+                    target={billingSwitchTarget}
+                    eligibility={switchEligibility ?? null}
+                    loadingEligibility={switchEligibilityLoading}
+                    loadingSwitch={switchBillingMutation.isPending}
+                  />
                 )}
 
                 {/* Signup Incomplete card — shown when the user is a

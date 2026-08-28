@@ -69,7 +69,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useDataMutation, useDataQuery } from "@/lib/tanstack/dataQuery";
+import { useDataMutation, useDataQuery, getUser, isAuthenticated, clearAuth } from "@/lib/tanstack/dataQuery";
 import PolicySheet from "../shared/PolicySheet";
 
 // Form validation schema (unchanged)
@@ -471,8 +471,17 @@ export default function DriverOnboardingPage() {
   // Determine if any mutation is pending
   const isPending = sendOtpMutation.isPending;
 
-  // Header component (unchanged)
-  const Header = () => (
+  // Header component — adapts to auth state. If the user is already
+  // signed in as a driver, show "Back to Dashboard" + "Sign Out"
+  // instead of the public website nav ("How it works", "Driver Sign In").
+  // This prevents the confusion where a logged-in driver sees "Driver
+  // Sign In" on their own onboarding page.
+  const Header = () => {
+    const isAuthed = isAuthenticated();
+    const currentUser = getUser();
+    const isDriver = currentUser?.roles?.includes("DRIVER");
+
+    return (
     <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
         <div className="flex items-center gap-10">
@@ -486,55 +495,85 @@ export default function DriverOnboardingPage() {
             </div>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8">
-            <a
-              href="/#how"
-              className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-            >
-              How it works
-            </a>
-            <a
-              href="/#standard"
-              className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-            >
-              Compliance
-            </a>
-            <Link
-              to="/about"
-              className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-            >
-              About
-            </Link>
-          </nav>
+          {/* Public nav — only show for non-authenticated visitors */}
+          {!isAuthed && (
+            <nav className="hidden md:flex items-center gap-8">
+              <a
+                href="/#how"
+                className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+              >
+                How it works
+              </a>
+              <a
+                href="/#standard"
+                className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+              >
+                Compliance
+              </a>
+              <Link
+                to="/about"
+                className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+              >
+                About
+              </Link>
+            </nav>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
-          <Link
-            to="/driver-signin"
-            className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-          >
-            <LogIn className="h-4 w-4" />
-            Driver Sign In
-          </Link>
+          {/* Authenticated driver — show "Back to Dashboard" + "Sign Out" */}
+          {isAuthed && isDriver ? (
+            <>
+              <Link
+                to="/driver/dashboard"
+                className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+              >
+                <Home className="h-4 w-4" />
+                Dashboard
+              </Link>
+              <button
+                onClick={() => {
+                  clearAuth();
+                  navigate({ to: "/" });
+                }}
+                className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-rose-600 hover:text-rose-700 transition-colors px-4 py-2 rounded-full border border-rose-200 dark:border-rose-800 bg-white dark:bg-slate-900"
+              >
+                <LogIn className="h-4 w-4 rotate-180" />
+                Sign Out
+              </button>
+            </>
+          ) : (
+            /* Not authenticated — show "Driver Sign In" */
+            <Link
+              to="/driver-signin"
+              className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-lime-500 transition-colors px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            >
+              <LogIn className="h-4 w-4" />
+              Driver Sign In
+            </Link>
+          )}
 
-          <Button
-            variant="outline"
-            size="icon"
-            className="md:hidden"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            <span className="sr-only">Open menu</span>
-            {mobileMenuOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
-          </Button>
+          {/* Mobile menu — only for non-authenticated visitors */}
+          {!isAuthed && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              <span className="sr-only">Open menu</span>
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
+      {/* Mobile menu — only for non-authenticated visitors */}
+      {!isAuthed && mobileMenuOpen && (
         <div className="md:hidden border-t border-slate-200 dark:border-slate-800">
           <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-col gap-3">
             <a
@@ -566,7 +605,8 @@ export default function DriverOnboardingPage() {
         </div>
       )}
     </header>
-  );
+    );
+  };
 
   // Footer component (unchanged)
   const Footer = () => (

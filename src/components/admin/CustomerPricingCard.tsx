@@ -24,6 +24,7 @@ import {
   Calculator,
   CheckCircle,
   XCircle,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -106,6 +107,9 @@ interface AuditLogEntry {
 interface CustomerPricingCardProps {
   customer: AdminUserCustomerDetail;
   onPricingChanged?: () => void;
+  /** Called when the admin clicks the billing mode switch button.
+   * Opens the confirmation dialog in the parent (admin-user-detail). */
+  onBillingSwitch?: (target: 'PREPAID' | 'POSTPAID') => void;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -113,6 +117,7 @@ interface CustomerPricingCardProps {
 export function CustomerPricingCard({
   customer,
   onPricingChanged,
+  onBillingSwitch,
 }: CustomerPricingCardProps) {
   const [editMode, setEditMode] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -407,11 +412,10 @@ function InlineEditPricing({
       pathParams: { id: customer.id },
       pricingConfigId: selectedConfigId,
       // Pricing Mode Override is hidden in the UI per product decision —
-      // always send null so the backend clears any stale override. If
-      // product decides to re-enable the override picker, restore the
-      // original expression: pricingModeOverride === 'null' ? null : pricingModeOverride
+      // always send null so the backend clears any stale override.
       pricingModeOverride: null,
-      postpaidEnabled,
+      // postpaidEnabled is NOT sent here — billing mode is managed
+      // via the safe-switch button + dialog (see onBillingSwitch prop).
       actorUserId: user?.id || 'admin_user',
       note: note.trim() || undefined,
     });
@@ -487,19 +491,9 @@ function InlineEditPricing({
       </div>
       */}
 
-      {/* Postpaid toggle */}
-      <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div>
-          <Label className="text-sm font-bold">Postpaid Enabled</Label>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Allow this customer to be invoiced after delivery (requires APPROVED status)
-          </p>
-        </div>
-        <Switch
-          checked={postpaidEnabled}
-          onCheckedChange={setPostpaidEnabled}
-        />
-      </div>
+      {/* Billing Mode is managed by the separate Billing Mode card
+          above this card in admin-user-detail.tsx. Not rendered here
+          to avoid duplicate switch points. */}
 
       {/* Note */}
       <div className="space-y-2">

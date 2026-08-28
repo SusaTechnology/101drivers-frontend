@@ -1138,14 +1138,26 @@ async approveCustomerFromUser(input: {
 }) {
   const customer = await this.getUserCustomerOrThrow(input.userId);
 
-  await this.customerService.approveCustomer({
+  // approveCustomer may return a `postpaidSetupWarning` field if the
+  // admin approved the customer as postpaid but the Stripe auto-setup
+  // failed (the customer is approved as prepaid instead). We forward
+  // this warning up to the API response so the admin frontend can show
+  // a toast with the explanation + remediation steps.
+  const approveResult: any = await this.customerService.approveCustomer({
     customerId: customer.id,
     actorUserId: input.actorUserId ?? null,
     postpaidEnabled: input.postpaidEnabled === true,
     note: input.note ?? null,
   });
 
-  return this.getAdminUserDetail(input.userId);
+  const userDetail = await this.getAdminUserDetail(input.userId);
+  // Attach the warning (if any) to the response. The frontend reads
+  // `postpaidSetupWarning` from the API response and shows a toast.
+  if (approveResult?.postpaidSetupWarning) {
+    (userDetail as any).postpaidSetupWarning =
+      approveResult.postpaidSetupWarning;
+  }
+  return userDetail;
 }
 
 async rejectCustomerFromUser(input: {

@@ -134,6 +134,12 @@ export default function StripeTipPaymentWrapper({
   const [clientSecret, setClientSecret] = useState<string>("");
   const [tipId, setTipId] = useState<string>("");
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // ── New state: tip already succeeded server-side (no dialog needed) ──
+  // When the backend confirms the tip with the saved card (status: 'succeeded'),
+  // we skip the dialog entirely and show "Tip Sent!" directly. This is the
+  // one-click tip flow — the dealer doesn't need to re-enter their card.
+  const [succeededServerSide, setSucceededServerSide] = useState(false);
+  const [succeededPaymentIntentId, setSucceededPaymentIntentId] = useState<string>("");
 
   // Fetch Stripe config
   const { data: configData } = useDataQuery<any>({
@@ -143,23 +149,69 @@ export default function StripeTipPaymentWrapper({
 
   const publishableKey = configData?.publishableKey || "";
 
-  // Create tip PaymentIntent
-  const tipIntentMutation = useDataMutation<{ clientSecret: string; tipId?: string }, { deliveryId: string; amount: number }>({
+  // Create tip PaymentIntent — backend now auto-confirms with the saved card.
+  // Response shape:
+  //   { status: 'succeeded', tipId, paymentIntentId, clientSecret, amount }
+  //     → tip charged successfully, no dialog needed (one-click)
+  //   { status: 'requires_action', tipId, paymentIntentId, clientSecret, amount }
+  //     → 3DS required, frontend renders the 3DS modal (when implemented)
+  //     → until the modal exists, show a "try a different card" error
+  //   throws → friendly error message (no saved card, card declined, etc.)
+  const tipIntentMutation = useDataMutation<{
+    clientSecret?: string;
+    tipId?: string;
+    paymentIntentId?: string;
+    status?: string;
+    amount?: number;
+  }, { deliveryId: string; amount: number }>({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/tip-intent`,
     method: "POST",
     onSuccessInvalidate: false,
     onSuccess: (data) => {
       console.log('[StripeTipPaymentWrapper] Tip intent response:', data);
-      const secret = data?.clientSecret;
       const id = data?.tipId;
-      if (secret && id) {
-        setClientSecret(secret);
-        setTipId(id);
-        setFetchError(null);
-      } else {
-        console.error('[StripeTipPaymentWrapper] Missing clientSecret or tipId in response:', data);
+      const status = data?.status;
+      const piId = data?.paymentIntentId || "";
+
+      if (!id) {
+        console.error('[StripeTipPaymentWrapper] Missing tipId in response:', data);
         setFetchError("Failed to create tip payment. Please try again.");
+        return;
       }
+
+      if (status === "succeeded") {
+        // ── One-click tip: charge already happened server-side ──
+        // No dialog needed. Show "Tip Sent!" immediately.
+        setTipId(id);
+        setSucceededPaymentIntentId(piId);
+        setSucceededServerSide(true);
+        setFetchError(null);
+        // Fire onSuccess so the parent can refetch the tip + close the dialog
+        // Use a microtask so state updates flush first
+        setTimeout(() => {
+          onSuccess?.(piId, id);
+        }, 0);
+        return;
+      }
+
+      if (status === "requires_action") {
+        // 3DS required — until the frontend 3DS modal is implemented,
+        // this is a hard failure. Show a clear error.
+        setTipId(id);
+        setClientSecret(data?.clientSecret || "");
+        setFetchError(
+          "Your bank requires 3D Secure authentication for this tip, " +
+            "which our app doesn't support yet. Please try a different card " +
+            "or contact support.",
+        );
+        return;
+      }
+
+      // Other statuses (requires_payment_method, canceled, etc.) —
+      // shouldn't happen with the new backend, but handle gracefully.
+      setFetchError(
+        "Tip payment could not be completed. Please try again or contact support.",
+      );
     },
     onError: (error: unknown) => {
       const msg = error instanceof Error ? error.message : "Failed to create tip payment.";
@@ -169,10 +221,28 @@ export default function StripeTipPaymentWrapper({
 
   // Auto-create intent when component mounts
   React.useEffect(() => {
-    if (deliveryId && tipAmount > 0 && !clientSecret && !fetchError) {
+    if (deliveryId && tipAmount > 0 && !clientSecret && !fetchError && !succeededServerSide) {
       tipIntentMutation.mutate({ deliveryId, amount: tipAmount });
     }
   }, [deliveryId, tipAmount]);
+
+  // ── One-click success state ──
+  // The backend already charged the saved card. Show "Tip Sent!" directly.
+  if (succeededServerSide) {
+    return (
+      <div className="flex flex-col items-center justify-center p-6 space-y-3">
+        <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/20 flex items-center justify-center">
+          <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <p className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
+          Tip Sent!
+        </p>
+        <p className="text-sm text-slate-500">
+          ${tipAmount.toFixed(2)} tip sent to {driverName}. Thank you!
+        </p>
+      </div>
+    );
+  }
 
   if (!publishableKey) {
     return (
@@ -209,6 +279,8 @@ export default function StripeTipPaymentWrapper({
   }
 
   // Don't render Elements until we have a valid clientSecret
+  // (Only reached for `requires_action` status — 3DS path. The happy
+  // path `succeeded` is handled by the early return above.)
   if (!clientSecret) {
     return (
       <div className="flex items-center justify-center p-8">
