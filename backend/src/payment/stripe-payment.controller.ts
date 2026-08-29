@@ -573,15 +573,38 @@ export class StripePaymentController {
     // would prevent the auto-unfreeze flow from working.
 
     // Check 1: Is this the only card on file?
+    // Query Stripe directly for the count of attached cards.
+    // If we can't query Stripe (no stripeCustomerId or API error),
+    // we check our DB default — if the card being removed IS the
+    // default and there's no other card, block.
+    let attachedCardCount = 0;
     if (customer.stripeCustomerId) {
-      const attachedCards = await this.stripeService.listPaymentMethods(
-        customer.stripeCustomerId,
-      );
-      if (attachedCards.length <= 1) {
-        throw new BadRequestException(
-          "This is your only payment method on file. Please add a new card first, then you can remove this one.",
+      try {
+        const attachedCards = await this.stripeService.listPaymentMethods(
+          customer.stripeCustomerId,
         );
+        attachedCardCount = attachedCards.length;
+      } catch (stripeErr: any) {
+        // Stripe API call failed — fall back to our DB
+        // If the card being removed is the DB default, assume it's
+        // the only card (conservative — better to block than allow)
+        this.logger.warn(
+          `Failed to list payment methods from Stripe for customer ${customerId}: ${stripeErr.message} — falling back to DB check`,
+        );
+        attachedCardCount = customer.stripeDefaultPaymentMethodId === paymentMethodId ? 1 : 0;
       }
+    } else {
+      // No Stripe customer ID — this shouldn't happen, but if it does,
+      // check if the card being removed is the DB default
+      attachedCardCount = customer.stripeDefaultPaymentMethodId === paymentMethodId ? 1 : 0;
+    }
+
+    if (attachedCardCount <= 1) {
+      throw new BadRequestException(
+        "This is your only payment method on file. " +
+        "Please add a new card first — it will become your default automatically — " +
+        "then you can remove this one.",
+      );
     }
 
     // Check 2: Are there active deliveries using this card?
