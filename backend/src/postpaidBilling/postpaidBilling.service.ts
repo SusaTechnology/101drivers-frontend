@@ -872,6 +872,11 @@ export class PostpaidBillingService {
             deliveryId: delivery.id,
             type: 'remainder-retry',
           },
+          // Stable idempotency key — the daily cron retries this same
+          // charge. Using the same key means Stripe returns the same PI
+          // instead of creating a new one → no double charge across
+          // multiple cron runs.
+          idempotencyKey: `pi-remainder-${delivery.id}`,
         });
 
         // Re-fetch to learn the true status

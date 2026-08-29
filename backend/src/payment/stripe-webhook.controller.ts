@@ -271,6 +271,37 @@ export class StripeWebhookController {
       },
     });
 
+    // ── Defensive: un-cancel delivery if payment succeeded after a timeout ──
+    // If the API call timed out during delivery creation, the delivery was
+    // marked CANCELLED. But the charge actually succeeded on Stripe's side —
+    // we just didn't receive the response. This webhook confirms it.
+    // Un-cancel the delivery and list it so the dealer gets their delivery
+    // back without having to retry. This handles the 0.01% timeout case
+    // without needing a PENDING state.
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: { id: true, status: true },
+    });
+    if (delivery?.status === 'CANCELLED') {
+      await this.prisma.deliveryRequest.update({
+        where: { id: deliveryId },
+        data: { status: 'LISTED' as any },
+      });
+      this.logger.log(
+        `Un-cancelled delivery ${deliveryId} — payment succeeded via webhook after API timeout`,
+      );
+      // Create a status history entry for audit
+      await this.prisma.deliveryStatusHistory.create({
+        data: {
+          deliveryId,
+          actorType: 'SYSTEM' as any,
+          fromStatus: 'CANCELLED' as any,
+          toStatus: 'LISTED' as any,
+          note: 'Payment confirmed by Stripe webhook after API timeout — delivery auto-recovered',
+        },
+      });
+    }
+
     await this.createPaymentEventIdempotent({
       paymentId: payment.id,
       type: "CAPTURE",

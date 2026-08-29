@@ -69,6 +69,8 @@ export class StripePaymentController {
         amount: delivery.quote?.estimatedPrice || 0,
         deliveryId,
         captureMethod: 'manual', // Hold funds, capture on delivery completion
+        // Stable idempotency key — a retry uses the same key → no double charge.
+        idempotencyKey: `pi-manual-${deliveryId}`,
       });
 
       // Update the payment record with the new PaymentIntent
@@ -218,6 +220,10 @@ export class StripePaymentController {
         stripeCustomerId: delivery.customer!.stripeCustomerId!,
         paymentMethodId: delivery.customer!.stripeDefaultPaymentMethodId!,
         confirm: true, // ── auto-confirm with the saved card ──
+        // Stable idempotency key — includes the tip amount so that
+        // changing the tip amount creates a new PI (different key),
+        // but retrying the same tip amount uses the same key → no double charge.
+        idempotencyKey: `pi-tip-${deliveryId}-${amount}`,
       });
 
       // Re-fetch the PI to learn its true status after confirmation.
