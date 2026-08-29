@@ -1136,14 +1136,41 @@ export class StripeWebhookController {
       });
 
       if (customer) {
-        // Set as default payment method (or keep existing default if one exists)
+        // Set as default payment method in OUR DB
         await this.prisma.customer.update({
           where: { id: customer.id },
           data: { stripeDefaultPaymentMethodId: paymentMethodId },
         });
         this.logger.log(
-          `Set default payment method ${paymentMethodId} for customer ${customer.id}`,
+          `Set DB default payment method ${paymentMethodId} for customer ${customer.id}`,
         );
+
+        // ── Fix 1: Also set Stripe's invoice_settings.default_payment_method ──
+        // This is the field Stripe uses for postpaid weekly invoice charges.
+        // Without this, the dealer saves a new card in our DB but Stripe
+        // keeps charging the OLD card for weekly invoices.
+        //
+        // This is the critical fix for the "frozen dealer replaces card"
+        // flow: after this update, the daily cron's invoice retry uses
+        // the NEW card → invoice succeeds → webhook auto-unfreezes.
+        //
+        // Best-effort: if this Stripe API call fails (rare — network error),
+        // the DB default is still set so prepaid works. Postpaid will retry
+        // on the next setup_intent.succeeded webhook (e.g. if the dealer
+        // saves another card). We log the error but don't fail the webhook.
+        try {
+          await this.stripeService.stripe.customers.update(
+            customerId,
+            { invoice_settings: { default_payment_method: paymentMethodId } },
+          );
+          this.logger.log(
+            `Set Stripe invoice_settings.default_payment_method ${paymentMethodId} for Stripe customer ${customerId}`,
+          );
+        } catch (stripeErr: any) {
+          this.logger.error(
+            `Failed to set Stripe invoice_settings.default_payment_method for customer ${customerId}: ${stripeErr.message} — DB default is still set, prepaid will work. Postpaid invoices may use the old card until this succeeds.`,
+          );
+        }
       } else {
         this.logger.warn(
           `No Customer record found for Stripe customer ${customerId}`,

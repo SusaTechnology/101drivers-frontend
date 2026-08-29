@@ -556,22 +556,88 @@ export class StripePaymentController {
 
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
-      select: { id: true, stripeDefaultPaymentMethodId: true },
+      select: { id: true, stripeCustomerId: true, stripeDefaultPaymentMethodId: true },
     });
 
     if (!customer) {
       throw new NotFoundException(`Customer ${customerId} not found`);
     }
 
+    // ── Fix 3: Pre-checks before card removal ──
+    // We block card deletion only when it would leave the dealer with
+    // no way to pay (only card) or when it would break an in-flight
+    // delivery (active delivery using that card).
+    //
+    // We do NOT block for outstanding postpaid balance or frozen state —
+    // a frozen dealer NEEDS to replace their card, and blocking them
+    // would prevent the auto-unfreeze flow from working.
+
+    // Check 1: Is this the only card on file?
+    if (customer.stripeCustomerId) {
+      const attachedCards = await this.stripeService.listPaymentMethods(
+        customer.stripeCustomerId,
+      );
+      if (attachedCards.length <= 1) {
+        throw new BadRequestException(
+          "This is your only payment method on file. Please add a new card first, then you can remove this one.",
+        );
+      }
+    }
+
+    // Check 2: Are there active deliveries using this card?
+    // Active = LISTED, BOOKED, or ACTIVE (not CANCELLED, COMPLETED, DRAFT)
+    const activeDeliveries = await this.prisma.deliveryRequest.count({
+      where: {
+        customerId,
+        status: { in: ['LISTED', 'BOOKED', 'ACTIVE'] },
+        payment: {
+          providerPaymentIntentId: { not: null },
+        },
+      },
+    });
+    if (activeDeliveries > 0) {
+      throw new BadRequestException(
+        `You cannot remove this card because you have ${activeDeliveries} active delivery(ies) ` +
+        "in progress. Please wait until they are completed before removing your card.",
+      );
+    }
+
+    // All checks passed — proceed with removal
     try {
       await this.stripeService.detachPaymentMethod(paymentMethodId);
 
       // Clear default if it was the removed card
       if (customer.stripeDefaultPaymentMethodId === paymentMethodId) {
-        await this.prisma.customer.update({
-          where: { id: customerId },
-          data: { stripeDefaultPaymentMethodId: null },
-        });
+        // If there are other cards, auto-set one of them as the new default
+        const remainingCards = await this.stripeService.listPaymentMethods(
+          customer.stripeCustomerId!,
+        );
+        if (remainingCards.length > 0) {
+          const newDefault = remainingCards[0].id;
+          await this.prisma.customer.update({
+            where: { id: customerId },
+            data: { stripeDefaultPaymentMethodId: newDefault },
+          });
+          // Also update Stripe's invoice_settings.default_payment_method
+          // so postpaid invoices use the new default card
+          try {
+            await this.stripeService.stripe.customers.update(
+              customer.stripeCustomerId!,
+              { invoice_settings: { default_payment_method: newDefault } },
+            );
+          } catch (stripeErr: any) {
+            this.logger.error(
+              `Failed to update Stripe invoice_settings after card removal: ${stripeErr.message}`,
+            );
+          }
+        } else {
+          // No remaining cards — clear the default (shouldn't happen
+          // because we blocked single-card deletion above, but defensive)
+          await this.prisma.customer.update({
+            where: { id: customerId },
+            data: { stripeDefaultPaymentMethodId: null },
+          });
+        }
       }
 
       return { success: true };
