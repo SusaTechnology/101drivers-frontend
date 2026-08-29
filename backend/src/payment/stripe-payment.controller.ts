@@ -616,23 +616,19 @@ export class StripePaymentController {
       );
     }
 
-    // Check 2: Are there active deliveries using this card?
-    // Active = LISTED, BOOKED, or ACTIVE (not CANCELLED, COMPLETED, DRAFT)
-    const activeDeliveries = await this.prisma.deliveryRequest.count({
-      where: {
-        customerId,
-        status: { in: ['LISTED', 'BOOKED', 'ACTIVE'] },
-        payment: {
-          providerPaymentIntentId: { not: null },
-        },
-      },
-    });
-    if (activeDeliveries > 0) {
-      throw new BadRequestException(
-        `You cannot remove this card because you have ${activeDeliveries} active delivery(ies) ` +
-        "in progress. Please wait until they are completed before removing your card.",
-      );
-    }
+    // ── Note: we do NOT block card deletion for active deliveries ──
+    // When a card is detached from a Stripe customer, existing
+    // PaymentIntents that already have the card attached are NOT
+    // affected — the PM stays locked to the PI. So:
+    //   - LISTED/BOOKED deliveries: the existing PI still works at capture
+    //   - ACTIVE deliveries: lock-in already captured, remainder creates
+    //     a new PI using the new default card
+    //   - Postpaid: invoice uses invoice_settings.default_payment_method
+    //     which we auto-update to the remaining card
+    //
+    // Since we already block single-card deletion above, when there are
+    // 2+ cards it's always safe to delete one. The backend auto-sets
+    // the next card as the new default (both DB + Stripe).
 
     // All checks passed — proceed with removal
     try {
