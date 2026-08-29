@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { CreditCard, Plus, Trash2, Loader2, CheckCircle } from 'lucide-react'
+import { CreditCard, Plus, Trash2, Loader2, CheckCircle, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { getStripe } from '@/lib/stripe'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
@@ -140,12 +148,29 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
     method: 'POST',
     onSuccess: () => {
       toast.success('Card removed')
+      setDeleteTarget(null)
       refetchCards()
     },
     onError: (error: any) => {
       toast.error('Failed to remove card', { description: stripStripePrefix(error?.message) })
+      setDeleteTarget(null)
     },
   })
+
+  // ── Confirmation dialog state ──
+  // Before actually deleting, show a confirmation dialog so the dealer
+  // knows this is permanent. If the card being deleted is the default,
+  // warn them that a different card will become the new default.
+  const [deleteTarget, setDeleteTarget] = useState<CardInfo | null>(null)
+
+  const handleConfirmDelete = () => {
+    if (deleteTarget) {
+      removeCardMutation.mutate({
+        customerId,
+        paymentMethodId: deleteTarget.id,
+      })
+    }
+  }
 
   const handleSetupSuccess = () => {
     setSetupClientSecret(null)
@@ -223,10 +248,10 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
                 variant="ghost"
                 size="icon"
                 className="w-8 h-8 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                onClick={() => removeCardMutation.mutate({ customerId, paymentMethodId: card.id })}
+                onClick={() => setDeleteTarget(card)}
                 disabled={removeCardMutation.isPending}
               >
-                {removeCardMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {removeCardMutation.isPending && deleteTarget?.id === card.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </Button>
             )}
           </div>
@@ -247,6 +272,67 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
         {saveCardMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
         <span className="ml-2 font-bold">{cards.length > 0 ? 'Replace card' : 'Add payment method'}</span>
       </Button>
+
+      {/* ── Confirmation dialog for card deletion ──
+          Shows when the dealer clicks the trash icon. If the card being
+          deleted is the default, warns that a different card will become
+          the new default automatically. */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Remove card?
+            </DialogTitle>
+            <DialogDescription>
+              {deleteTarget && (
+                <span>
+                  Are you sure you want to remove your{' '}
+                  <strong className="capitalize">{deleteTarget.brand}</strong>{' '}
+                  ending in <strong>{deleteTarget.last4}</strong>?
+                  {deleteTarget.isDefault && (
+                    <span className="block mt-2 text-amber-600 dark:text-amber-400">
+                      This is your default card. Your other card will become
+                      the new default automatically.
+                    </span>
+                  )}
+                  <span className="block mt-2 text-slate-500">
+                    This action cannot be undone. Future deliveries and
+                    invoices will use your remaining card.
+                  </span>
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              className="rounded-xl"
+              disabled={removeCardMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmDelete}
+              disabled={removeCardMutation.isPending}
+              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {removeCardMutation.isPending ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Removing...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Trash2 className="w-4 h-4" />
+                  Yes, remove it
+                </span>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
