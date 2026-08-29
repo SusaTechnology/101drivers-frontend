@@ -573,10 +573,14 @@ export class StripePaymentController {
     // would prevent the auto-unfreeze flow from working.
 
     // Check 1: Is this the only card on file?
-    // Query Stripe directly for the count of attached cards.
-    // If we can't query Stripe (no stripeCustomerId or API error),
-    // we check our DB default — if the card being removed IS the
-    // default and there's no other card, block.
+    // We query Stripe for the list of attached payment methods.
+    // This is the authoritative count — our DB only tracks the default,
+    // not all cards. If Stripe says there's only 1 (or 0), block.
+    //
+    // IMPORTANT: We must count ONLY active (non-detached) cards.
+    // Stripe's paymentMethods.list returns only attached cards
+    // (detached cards don't appear in this list), so the count is
+    // accurate.
     let attachedCardCount = 0;
     if (customer.stripeCustomerId) {
       try {
@@ -584,18 +588,23 @@ export class StripePaymentController {
           customer.stripeCustomerId,
         );
         attachedCardCount = attachedCards.length;
+        this.logger.log(
+          `remove-card: customer ${customerId} has ${attachedCardCount} card(s) on Stripe`,
+        );
       } catch (stripeErr: any) {
-        // Stripe API call failed — fall back to our DB
+        // Stripe API call failed — fall back to DB
         // If the card being removed is the DB default, assume it's
         // the only card (conservative — better to block than allow)
         this.logger.warn(
-          `Failed to list payment methods from Stripe for customer ${customerId}: ${stripeErr.message} — falling back to DB check`,
+          `remove-card: failed to list payment methods from Stripe for customer ${customerId}: ${stripeErr.message} — falling back to DB check`,
         );
         attachedCardCount = customer.stripeDefaultPaymentMethodId === paymentMethodId ? 1 : 0;
       }
     } else {
-      // No Stripe customer ID — this shouldn't happen, but if it does,
-      // check if the card being removed is the DB default
+      // No Stripe customer ID — fall back to DB
+      this.logger.warn(
+        `remove-card: customer ${customerId} has no stripeCustomerId — falling back to DB check`,
+      );
       attachedCardCount = customer.stripeDefaultPaymentMethodId === paymentMethodId ? 1 : 0;
     }
 

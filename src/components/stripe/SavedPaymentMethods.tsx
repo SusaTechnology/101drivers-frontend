@@ -211,15 +211,24 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
                 </p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-8 h-8 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-              onClick={() => removeCardMutation.mutate({ customerId, paymentMethodId: card.id })}
-              disabled={removeCardMutation.isPending}
-            >
-              {removeCardMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            </Button>
+            {/* ── Only show delete button if there's more than 1 card ──
+                If this is the only card, the trash icon is hidden.
+                The dealer must add a new card first (which auto-becomes
+                default), then they can delete this one.
+                This is a frontend guard that complements the backend
+                check — even if the backend check fails, the frontend
+                prevents the dealer from clicking delete. */}
+            {cards.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-8 h-8 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                onClick={() => removeCardMutation.mutate({ customerId, paymentMethodId: card.id })}
+                disabled={removeCardMutation.isPending}
+              >
+                {removeCardMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </Button>
+            )}
           </div>
         ))
       ) : (
