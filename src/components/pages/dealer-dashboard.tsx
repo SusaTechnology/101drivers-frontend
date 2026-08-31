@@ -402,7 +402,7 @@ export default function DealerDashboard() {
       actorUserId: user?.id || null,
       // Derive actorRole from the customer profile so audit logs correctly
       // label private-customer actions as PRIVATE_CUSTOMER.
-      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'BUSINESS_CUSTOMER',
+      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'DEALER',
       note,
     })
   }
