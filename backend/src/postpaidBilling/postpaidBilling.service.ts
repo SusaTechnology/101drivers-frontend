@@ -872,6 +872,11 @@ export class PostpaidBillingService {
             deliveryId: delivery.id,
             type: 'remainder-retry',
           },
+          // Stable idempotency key — the daily cron retries this same
+          // charge. Using the same key means Stripe returns the same PI
+          // instead of creating a new one → no double charge across
+          // multiple cron runs.
+          idempotencyKey: `pi-remainder-${delivery.id}`,
         });
 
         // Re-fetch to learn the true status
@@ -1097,6 +1102,37 @@ export class PostpaidBillingService {
       this.logger.log(
         `invoice.payment_succeeded ${invoiceId}: marked ${result.count} Payment(s) as PAID`,
       );
+
+      // ── Fix 2: Auto-unfreeze dealer if they were frozen due to CHARGE_FAILED ──
+      // When a frozen dealer replaces their card and the daily cron retries
+      // the invoice, the retry charges the NEW card (because Fix 1 updated
+      // invoice_settings.default_payment_method). If the charge succeeds,
+      // this webhook fires. We auto-clear the freeze so the dealer can
+      // create deliveries again — no admin intervention needed.
+      //
+      // The dealer is resolved from the Stripe customer ID on the invoice.
+      // We only clear the freeze if the reason was CHARGE_FAILED (not
+      // other freeze reasons like fraud).
+      const stripeCustomerId = this.resolveStripeCustomerId(invoice.customer);
+      if (stripeCustomerId) {
+        const dealer = await this.prisma.customer.findFirst({
+          where: { stripeCustomerId },
+          select: { id: true, billingFrozen: true, billingFrozenReason: true },
+        });
+        if (dealer?.billingFrozen && dealer.billingFrozenReason === FREEZE_REASONS.CHARGE_FAILED) {
+          await this.prisma.customer.update({
+            where: { id: dealer.id },
+            data: {
+              billingFrozen: false,
+              billingFrozenAt: null,
+              billingFrozenReason: null,
+            },
+          });
+          this.logger.log(
+            `Auto-unfroze dealer ${dealer.id} — invoice ${invoiceId} payment succeeded after retry`,
+          );
+        }
+      }
     } catch (err: any) {
       this.logger.error(
         `handleInvoicePaymentSucceeded failed for invoice ${invoiceId}: ${err?.message}`,

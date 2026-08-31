@@ -262,6 +262,9 @@ export class PaymentPayoutEngine {
               type: "completion-remainder",
               lockInAmount: String(lockInAmount),
             },
+            // Stable idempotency key — a retry (e.g. by the remainder cron)
+            // uses the same key → Stripe returns the same PI → no double charge.
+            idempotencyKey: `pi-remainder-${input.deliveryId}`,
           });
 
           // Re-fetch the PI to learn its true status and the resulting

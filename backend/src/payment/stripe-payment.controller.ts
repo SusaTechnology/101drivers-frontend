@@ -69,6 +69,8 @@ export class StripePaymentController {
         amount: delivery.quote?.estimatedPrice || 0,
         deliveryId,
         captureMethod: 'manual', // Hold funds, capture on delivery completion
+        // Stable idempotency key — a retry uses the same key → no double charge.
+        idempotencyKey: `pi-manual-${deliveryId}`,
       });
 
       // Update the payment record with the new PaymentIntent
@@ -218,6 +220,10 @@ export class StripePaymentController {
         stripeCustomerId: delivery.customer!.stripeCustomerId!,
         paymentMethodId: delivery.customer!.stripeDefaultPaymentMethodId!,
         confirm: true, // ── auto-confirm with the saved card ──
+        // Stable idempotency key — includes the tip amount so that
+        // changing the tip amount creates a new PI (different key),
+        // but retrying the same tip amount uses the same key → no double charge.
+        idempotencyKey: `pi-tip-${deliveryId}-${amount}`,
       });
 
       // Re-fetch the PI to learn its true status after confirmation.
@@ -341,6 +347,17 @@ export class StripePaymentController {
       throw new BadRequestException('Payment has no Stripe PaymentIntent reference.');
     }
 
+    // ── Pre-check: is this charge already fully refunded? ──
+    // If the payment is already REFUNDED with refundStatus = FULL,
+    // reject immediately — don't even call Stripe. This prevents
+    // the "Charge has already been refunded" error from Stripe
+    // when the admin double-clicks or retries a full refund.
+    if (payment.status === 'REFUNDED' && (payment as any).refundStatus === 'FULL') {
+      throw new BadRequestException(
+        'This payment has already been fully refunded. No further refunds are possible.',
+      );
+    }
+
     // 3. Validate partial refund amount if specified
     const isPartial = body?.amount !== undefined && body.amount > 0;
     if (isPartial) {
@@ -355,6 +372,13 @@ export class StripePaymentController {
           `remaining (total $${(totalCents / 100).toFixed(2)}, already refunded $${(alreadyRefundedCents / 100).toFixed(2)}).`,
         );
       }
+    } else {
+      // Full refund — check if the charge is already partially refunded.
+      // If it is, a full refund would refund the remaining balance (which
+      // Stripe handles automatically). But if the charge is ALREADY
+      // fully refunded, we already caught that above. If it's partially
+      // refunded, the "full refund" button should refund the remaining
+      // balance — which is correct. No extra check needed here.
     }
 
     try {
@@ -550,22 +574,116 @@ export class StripePaymentController {
 
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
-      select: { id: true, stripeDefaultPaymentMethodId: true },
+      select: { id: true, stripeCustomerId: true, stripeDefaultPaymentMethodId: true },
     });
 
     if (!customer) {
       throw new NotFoundException(`Customer ${customerId} not found`);
     }
 
+    // ── Fix 3: Pre-checks before card removal ──
+    // We block card deletion only when it would leave the dealer with
+    // no way to pay (only card) or when it would break an in-flight
+    // delivery (active delivery using that card).
+    //
+    // We do NOT block for outstanding postpaid balance or frozen state —
+    // a frozen dealer NEEDS to replace their card, and blocking them
+    // would prevent the auto-unfreeze flow from working.
+
+    // Check 1: Is this the only card on file?
+    // We query Stripe for the list of attached payment methods.
+    // This is the authoritative count — our DB only tracks the default,
+    // not all cards. If Stripe says there's only 1 (or 0), block.
+    //
+    // IMPORTANT: We must count ONLY active (non-detached) cards.
+    // Stripe's paymentMethods.list returns only attached cards
+    // (detached cards don't appear in this list), so the count is
+    // accurate.
+    let attachedCardCount = 0;
+    if (customer.stripeCustomerId) {
+      try {
+        const attachedCards = await this.stripeService.listPaymentMethods(
+          customer.stripeCustomerId,
+        );
+        attachedCardCount = attachedCards.length;
+        this.logger.log(
+          `remove-card: customer ${customerId} has ${attachedCardCount} card(s) on Stripe`,
+        );
+      } catch (stripeErr: any) {
+        // Stripe API call failed — fall back to DB
+        // If the card being removed is the DB default, assume it's
+        // the only card (conservative — better to block than allow)
+        this.logger.warn(
+          `remove-card: failed to list payment methods from Stripe for customer ${customerId}: ${stripeErr.message} — falling back to DB check`,
+        );
+        attachedCardCount = customer.stripeDefaultPaymentMethodId === paymentMethodId ? 1 : 0;
+      }
+    } else {
+      // No Stripe customer ID — fall back to DB
+      this.logger.warn(
+        `remove-card: customer ${customerId} has no stripeCustomerId — falling back to DB check`,
+      );
+      attachedCardCount = customer.stripeDefaultPaymentMethodId === paymentMethodId ? 1 : 0;
+    }
+
+    if (attachedCardCount <= 1) {
+      throw new BadRequestException(
+        "This is your only payment method on file. " +
+        "Please add a new card first — it will become your default automatically — " +
+        "then you can remove this one.",
+      );
+    }
+
+    // ── Note: we do NOT block card deletion for active deliveries ──
+    // When a card is detached from a Stripe customer, existing
+    // PaymentIntents that already have the card attached are NOT
+    // affected — the PM stays locked to the PI. So:
+    //   - LISTED/BOOKED deliveries: the existing PI still works at capture
+    //   - ACTIVE deliveries: lock-in already captured, remainder creates
+    //     a new PI using the new default card
+    //   - Postpaid: invoice uses invoice_settings.default_payment_method
+    //     which we auto-update to the remaining card
+    //
+    // Since we already block single-card deletion above, when there are
+    // 2+ cards it's always safe to delete one. The backend auto-sets
+    // the next card as the new default (both DB + Stripe).
+
+    // All checks passed — proceed with removal
     try {
       await this.stripeService.detachPaymentMethod(paymentMethodId);
 
       // Clear default if it was the removed card
       if (customer.stripeDefaultPaymentMethodId === paymentMethodId) {
-        await this.prisma.customer.update({
-          where: { id: customerId },
-          data: { stripeDefaultPaymentMethodId: null },
-        });
+        // If there are other cards, auto-set one of them as the new default
+        const remainingCards = await this.stripeService.listPaymentMethods(
+          customer.stripeCustomerId!,
+        );
+        if (remainingCards.length > 0) {
+          const newDefault = remainingCards[0].id;
+          await this.prisma.customer.update({
+            where: { id: customerId },
+            data: { stripeDefaultPaymentMethodId: newDefault },
+          });
+          // Also update Stripe's invoice_settings.default_payment_method
+          // so postpaid invoices use the new default card
+          try {
+            await this.stripeService.stripe.customers.update(
+              customer.stripeCustomerId!,
+              { invoice_settings: { default_payment_method: newDefault } },
+            );
+          } catch (stripeErr: any) {
+            this.logger.error(
+              `Failed to update Stripe invoice_settings after card removal: ${stripeErr.message}`,
+            );
+          }
+        } else {
+          // No remaining cards — clear the default (shouldn't happen
+          // because we blocked single-card deletion above, but defensive)
+          await this.prisma.customer.update({
+            where: { id: customerId },
+            data: { stripeDefaultPaymentMethodId: null },
+          });
+        }
       }
 
       return { success: true };

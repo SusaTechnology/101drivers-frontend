@@ -114,7 +114,9 @@ export default function AdminSupportListPage() {
   if (actorRoleFilter !== 'ALL') queryParams.append('actorRole', actorRoleFilter)
   if (searchQuery) queryParams.append('search', searchQuery)
 
-  // Fetch support requests
+  // Fetch support requests — uses the /admin endpoint which returns
+  // { items: [...], count: N } (the base /supportRequests endpoint
+  // returns a raw array, not wrapped, so items would be undefined).
   const {
     data: supportData,
     isLoading,
@@ -122,7 +124,7 @@ export default function AdminSupportListPage() {
     refetch,
     isFetching,
   } = useDataQuery<{ items: SupportRequestListItem[]; count: number }>({
-    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests?${queryParams.toString()}`,
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/supportRequests/admin?${queryParams.toString()}`,
     noFilter: true,
   })
 

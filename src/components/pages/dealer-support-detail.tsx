@@ -355,41 +355,74 @@ export default function DealerSupportDetail() {
               </CardContent>
             </Card>
 
-            {/* Conversation thread */}
+            {/* Conversation thread — WhatsApp-style chat */}
             {publicNotes.length > 0 && (
               <Card className="border-slate-200 dark:border-slate-800 rounded-3xl">
                 <CardHeader>
                   <CardTitle className="text-lg font-black">Conversation</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {publicNotes.map((note) => (
-                    <div
-                      key={note.id}
-                      className={cn(
-                        "p-4 rounded-2xl border",
-                        note.authorRole === 'ADMIN'
-                          ? "bg-lime-50/50 border-lime-200 dark:bg-lime-900/10 dark:border-lime-900/30"
-                          : "bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={cn("text-[10px] font-bold uppercase", roleColors[note.authorRole] || roleColors.GENERAL)}>
-                            {note.authorRole}
-                          </Badge>
-                          {note.authorName && (
-                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                              {note.authorName}
-                            </span>
+                <CardContent className="space-y-3">
+                  {publicNotes.map((note) => {
+                    // Explicitly check each role — no "else" fallback
+                    const isFromDealer = note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER'
+                    const isFromSupport = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
+                    const isFromDriver = note.authorRole === 'DRIVER'
+
+                    // Determine label based on who wrote it
+                    let label = 'Unknown'
+                    if (isFromDealer) label = 'You'
+                    else if (isFromSupport) label = 'Support Team'
+                    else if (isFromDriver) label = 'Driver'
+                    else label = note.authorName || note.authorRole || 'Unknown'
+
+                    return (
+                      <div
+                        key={note.id}
+                        className={cn(
+                          "flex",
+                          isFromDealer ? "justify-end" : "justify-start"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "max-w-[75%] rounded-2xl px-4 py-3 shadow-sm",
+                            isFromDealer
+                              ? "bg-lime-500 text-slate-950 rounded-br-md"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-bl-md border border-slate-200 dark:border-slate-700"
                           )}
+                        >
+                          {/* Author label */}
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={cn(
+                              "text-[10px] font-black uppercase tracking-wide",
+                              isFromDealer
+                                ? "text-slate-800/70"
+                                : "text-slate-500 dark:text-slate-400"
+                            )}>
+                              {label}
+                            </span>
+                            <span className={cn(
+                              "text-[10px]",
+                              isFromDealer
+                                ? "text-slate-700/60"
+                                : "text-slate-400 dark:text-slate-500"
+                            )}>
+                              {formatTime(note.createdAt)}
+                            </span>
+                          </div>
+                          {/* Message body */}
+                          <p className={cn(
+                            "text-sm whitespace-pre-wrap break-words",
+                            isFromDealer
+                              ? "text-slate-900"
+                              : "text-slate-700 dark:text-slate-300"
+                          )}>
+                            {note.message}
+                          </p>
                         </div>
-                        <span className="text-[11px] text-slate-500">{formatTime(note.createdAt)}</span>
                       </div>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                        {note.message}
-                      </p>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </CardContent>
               </Card>
             )}
