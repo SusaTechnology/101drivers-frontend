@@ -308,56 +308,84 @@ export default function DriverSupportDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Conversation notes */}
+            {/* Conversation notes — WhatsApp-style chat */}
             {request.notes && request.notes.length > 0 && (
               <Card className="border-slate-200 dark:border-slate-800">
                 <CardHeader>
                   <CardTitle className="text-base font-bold flex items-center gap-2">
                     <Reply className="h-4 w-4" />
-                    Conversation ({request.notes.length})
+                    Conversation ({request.notes.filter(n => !n.isInternal).length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {request.notes.map((note, index) => (
-                    <div key={note.id}>
-                      {index > 0 && <Separator className="mb-4" />}
-                      <div className={cn(
-                        "flex gap-3",
-                        note.isInternal && "opacity-60"
-                      )}>
-                        <div className={cn(
-                          "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
-                          note.authorRole === 'ADMIN' || note.authorRole === 'OPERATIONS'
-                            ? "bg-blue-500/15 text-blue-500"
-                            : "bg-lime-500/15 text-lime-500"
-                        )}>
-                          {note.authorRole === 'ADMIN' || note.authorRole === 'OPERATIONS' ? (
-                            <Headphones className="h-4 w-4" />
-                          ) : (
-                            <Truck className="h-4 w-4" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-bold text-slate-900 dark:text-white">
-                              {note.authorName || note.authorRole}
+                <CardContent className="space-y-3">
+                  {request.notes.map((note) => {
+                    if (note.isInternal) {
+                      return (
+                        <div key={note.id} className="text-center">
+                          <div className="inline-block px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30">
+                            <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400">
+                              Internal Note
                             </span>
-                            {note.isInternal && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                Internal
-                              </Badge>
-                            )}
-                            <span className="text-xs text-slate-400">
-                              {formatDate(note.createdAt)} {formatTime(note.createdAt)}
+                            <span className="text-[10px] text-amber-500 ml-2">
+                              {note.authorName || note.authorRole} • {formatTime(note.createdAt)}
+                            </span>
+                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 whitespace-pre-wrap">
+                              {note.message}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    const isFromDriver = note.authorRole === 'DRIVER'
+                    const isFromSupport = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
+
+                    return (
+                      <div
+                        key={note.id}
+                        className={cn(
+                          "flex",
+                          isFromDriver ? "justify-end" : "justify-start"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "max-w-[75%] rounded-2xl px-4 py-3 shadow-sm",
+                            isFromDriver
+                              ? "bg-lime-500 text-slate-950 rounded-br-md"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-bl-md border border-slate-200 dark:border-slate-700"
+                          )}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={cn(
+                              "text-[10px] font-black uppercase tracking-wide",
+                              isFromDriver
+                                ? "text-slate-800/70"
+                                : "text-slate-500 dark:text-slate-400"
+                            )}>
+                              {isFromSupport ? 'Support Team' : 'You'}
+                            </span>
+                            <span className={cn(
+                              "text-[10px]",
+                              isFromDriver
+                                ? "text-slate-700/60"
+                                : "text-slate-400 dark:text-slate-500"
+                            )}>
+                              {formatTime(note.createdAt)}
                             </span>
                           </div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
+                          <p className={cn(
+                            "text-sm whitespace-pre-wrap break-words",
+                            isFromDriver
+                              ? "text-slate-900"
+                              : "text-slate-700 dark:text-slate-300"
+                          )}>
                             {note.message}
                           </p>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </CardContent>
               </Card>
             )}

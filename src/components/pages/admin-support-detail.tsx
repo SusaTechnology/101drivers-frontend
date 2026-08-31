@@ -359,55 +359,87 @@ export default function AdminSupportDetailPage() {
                   </CardContent>
                 </Card>
 
-                {/* Conversation */}
+                {/* Conversation — WhatsApp-style chat */}
                 {request.notes && request.notes.length > 0 && (
                   <Card className="border-slate-200 dark:border-slate-800">
                     <CardHeader>
                       <CardTitle className="text-base font-bold flex items-center gap-2">
                         <MessageSquare className="w-4 h-4" />
-                        Conversation ({request.notes.length})
+                        Conversation ({request.notes.filter(n => !n.isInternal).length})
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      {request.notes.map((note, index) => (
-                        <div key={note.id}>
-                          {index > 0 && <Separator className="mb-4" />}
-                          <div className={cn("flex gap-3", note.isInternal && "opacity-80")}>
-                            <div className={cn(
-                              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
-                              note.authorRole === 'ADMIN' || note.authorRole === 'OPERATIONS'
-                                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
-                                : note.isInternal
-                                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
-                                  : "bg-primary/15 text-primary"
-                            )}>
-                              {note.isInternal ? (
-                                <FileText className="h-4 w-4" />
-                              ) : (
-                                actorRoleIcons[note.authorRole] || <User className="h-4 w-4" />
-                              )}
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                  {note.authorName || note.authorRole}
+                    <CardContent className="space-y-3">
+                      {request.notes.map((note) => {
+                        if (note.isInternal) {
+                          // Internal notes — shown as a centered system message
+                          return (
+                            <div key={note.id} className="text-center">
+                              <div className="inline-block px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30">
+                                <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400">
+                                  Internal Note
                                 </span>
-                                {note.isInternal && (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
-                                    Internal Note
-                                  </Badge>
-                                )}
-                                <span className="text-xs text-slate-400">
-                                  {formatDate(note.createdAt)} {formatTime(note.createdAt)}
+                                <span className="text-[10px] text-amber-500 ml-2">
+                                  {note.authorName || note.authorRole} • {formatTime(note.createdAt)}
+                                </span>
+                                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 whitespace-pre-wrap">
+                                  {note.message}
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        const isFromAdmin = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
+                        const senderLabel = isFromAdmin
+                          ? (note.authorName || 'You')
+                          : (note.authorName || 'Customer')
+
+                        return (
+                          <div
+                            key={note.id}
+                            className={cn(
+                              "flex",
+                              isFromAdmin ? "justify-end" : "justify-start"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "max-w-[75%] rounded-2xl px-4 py-3 shadow-sm",
+                                isFromAdmin
+                                  ? "bg-blue-500 text-white rounded-br-md"
+                                  : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-bl-md border border-slate-200 dark:border-slate-700"
+                              )}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={cn(
+                                  "text-[10px] font-black uppercase tracking-wide",
+                                  isFromAdmin
+                                    ? "text-white/70"
+                                    : "text-slate-500 dark:text-slate-400"
+                                )}>
+                                  {senderLabel}
+                                </span>
+                                <span className={cn(
+                                  "text-[10px]",
+                                  isFromAdmin
+                                    ? "text-white/60"
+                                    : "text-slate-400 dark:text-slate-500"
+                                )}>
+                                  {formatTime(note.createdAt)}
                                 </span>
                               </div>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
+                              <p className={cn(
+                                "text-sm whitespace-pre-wrap break-words",
+                                isFromAdmin
+                                  ? "text-white"
+                                  : "text-slate-700 dark:text-slate-300"
+                              )}>
                                 {note.message}
                               </p>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </CardContent>
                   </Card>
                 )}
