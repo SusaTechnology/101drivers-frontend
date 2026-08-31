@@ -1359,7 +1359,7 @@ export default function EditDeliveryPage() {
     return submitPricingEditMutation.mutateAsync({
       newQuoteId: params.qId,
       reason: params.reason,
-      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'DEALER',
+      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'BUSINESS_CUSTOMER',
       reactivateIfExpired: isExpired,
     });
   };

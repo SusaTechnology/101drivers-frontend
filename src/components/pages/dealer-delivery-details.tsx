@@ -396,7 +396,7 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
     transitionDeliveryMutation.mutate({
       toStatus,
       actorUserId: user?.id || null,
-      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'DEALER',
+      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'BUSINESS_CUSTOMER',
       note,
     })
   }
