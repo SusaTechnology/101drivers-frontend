@@ -85,6 +85,16 @@ model Customer {
   postpaidCreditLimitCents     Int?
   // When true, dealer is blocked from creating deliveries (set on charge failure).
   billingFrozen                Boolean                          @default(false)
+
+  // ── Referral system ──
+  // The dealer's own referral code (auto-generated, then customizable)
+  referralCode                String?                          @unique
+  // Once set to a custom value, it's locked and can't be changed
+  referralCodeLocked           Boolean                          @default(false)
+  // Referral credits received (PER_DELIVERY model) — applied to next invoice
+  referralCreditsReceived     ReferralCredit[]                  @relation("ReferralCreditsReceived")
+  // Customers referred by this dealer
+  referredCustomers           Referral[]                       @relation("ReferredByCustomerReferrals")
   billingFrozenAt              DateTime?
   billingFrozenReason          String?
 
@@ -126,6 +136,12 @@ model Driver {
   ratingsReceived  DeliveryRating[]
   referralsMade    Referral[]          @relation("ReferrerReferrals")
   referredBy       Referral?           @relation("ReferredByReferrals")
+
+  // ── Referral system ──
+  // The driver's own referral code (auto-generated, then customizable)
+  referralCode                String?                          @unique
+  // Once set to a custom value, it's locked and can't be changed
+  referralCodeLocked           Boolean                          @default(false)
   routeCache       DriverRouteCache[]
   residentialAddressLine1  String?
   residentialAddressLine2  String?
@@ -426,6 +442,9 @@ model DeliveryRequest {
 
   // ── Driver payout clawback (Fix #6) ──
   payoutAdjustments   DriverPayoutAdjustment[]
+
+  // ── Referral credits triggered by this delivery ──
+  referralCredits     ReferralCredit[]
 
   @@index([status, createdAt])
   @@index([customerId, createdAt])
@@ -1668,6 +1687,27 @@ enum EnumReferralStatus {
   EXPIRED
 }
 
+// ── Referral payout model (new) ──
+// TIERED: existing model — pay $X every N successful referrals
+// PER_DELIVERY: new model — pay $5/$10 per completed+paid delivery, $50 on driver's 5th
+enum EnumReferralPayoutModel {
+  TIERED
+  PER_DELIVERY
+}
+
+// ── Referral type: who was referred? ──
+enum EnumReferralType {
+  CUSTOMER
+  DRIVER
+}
+
+// ── Referral credit status ──
+enum EnumReferralCreditStatus {
+  PENDING
+  APPLIED
+  EXPIRED
+}
+
 // EnumReferralRewardTrigger — when does a referral "become successful"?
 //   ON_APPROVED: when admin moves the referred driver from
 //     PENDING_APPROVAL → APPROVED.
@@ -1688,6 +1728,22 @@ model Referral {
   referredDriverId String?            @unique
   referredDriver  Driver?            @relation("ReferredByReferrals", fields: [referredDriverId], references: [id])
   status          EnumReferralStatus @default(PENDING)
+
+  // ── NEW: Support for Customer referrers + per-delivery model ──
+  // referrerUserId: the User who is the referrer (for Customer referrals).
+  // For Driver referrals, referrerId (Driver) is still used.
+  // referrerUserId is set when a Customer refers someone.
+  referrerUserId         String?
+  // referredCustomerId: the Customer who was referred (for customer referrals)
+  referredCustomerId     String?                    @unique
+  referredCustomer       Customer?                  @relation("ReferredByCustomerReferrals", fields: [referredCustomerId], references: [id])
+  // referralType: was a customer or driver referred?
+  referralType           EnumReferralType?
+  // payoutModel: which payout model applies to this referral?
+  payoutModel            EnumReferralPayoutModel?  @default(TIERED)
+  // completedPaidDeliveries: count of completed+paid deliveries by the referee
+  // (used for the $50 on 5th delivery bonus in PER_DELIVERY model)
+  completedPaidDeliveries Int                       @default(0)
 
   // ── Per-referral policy snapshot (stamped at applyReferral time) ──
   // These values are FROZEN at creation so admin changes to the
@@ -1719,6 +1775,9 @@ model Referral {
   payoutId        String?            @unique
   payout          DriverPayout?      @relation(fields: [payoutId], references: [id])
 
+  // ── Referral credits created by this referral (PER_DELIVERY model) ──
+  referralCredits  ReferralCredit[]
+
   createdAt       DateTime          @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -1726,4 +1785,43 @@ model Referral {
   @@index([referredDriverId])
   @@index([referralCode])
   @@index([expiresAt])
+}
+
+// ── ReferralCredit (PER_DELIVERY model) ──
+// Created when a referred customer/driver completes a delivery and
+// the payment is captured. The credit is applied to the referrer's
+// next invoice (postpaid) or as a payout (driver referrer).
+model ReferralCredit {
+  id              String                   @id @default(cuid())
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  // The referral that generated this credit
+  referral        Referral                 @relation(fields: [referralId], references: [id])
+  referralId      String
+
+  // The customer who RECEIVES the credit (the referrer)
+  customer        Customer?                @relation("ReferralCreditsReceived", fields: [customerId], references: [id])
+  customerId      String?
+
+  // The delivery that triggered this credit
+  delivery        DeliveryRequest?         @relation(fields: [deliveryId], references: [id])
+  deliveryId      String?
+
+  // Amount in cents (e.g., 500 = $5, 1000 = $10, 5000 = $50)
+  amountCents     Int
+
+  // What triggered this credit
+  reason          String
+
+  // Status: PENDING → APPLIED (when the credit is used on an invoice)
+  status          EnumReferralCreditStatus  @default(PENDING)
+  appliedAt       DateTime?
+
+  // The Stripe invoice where this credit was applied (if postpaid)
+  stripeInvoiceId String?
+
+  @@index([customerId, status])
+  @@index([referralId])
+  @@index([deliveryId])
 }
