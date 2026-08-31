@@ -40,6 +40,13 @@ export class SupportRequestOrchestratorService {
     subject?: string | null;
     message: string;
   }): Promise<{ id: string }> {
+    // ── Increase transaction timeout for this operation ──
+    // The default Prisma interactive transaction timeout is 5 seconds.
+    // This method creates a support request + a note + sends a
+    // notification email inside the same transaction. The email
+    // send (queueAndSend) can take 5-10s if the mail server is slow.
+    // We increase the timeout to 30s so the transaction doesn't expire
+    // mid-way through.
     return this.prisma.$transaction(async (tx) => {
       if (input.deliveryId) {
         await this.assertActorCanAccessDeliveryTx(tx, {
@@ -92,6 +99,8 @@ export class SupportRequestOrchestratorService {
       });
 
       return created;
+    }, {
+      timeout: 30000, // 30 seconds — default is 5s, too short for email sending
     });
   }
 

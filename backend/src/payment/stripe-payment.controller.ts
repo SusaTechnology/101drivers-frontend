@@ -347,6 +347,17 @@ export class StripePaymentController {
       throw new BadRequestException('Payment has no Stripe PaymentIntent reference.');
     }
 
+    // ── Pre-check: is this charge already fully refunded? ──
+    // If the payment is already REFUNDED with refundStatus = FULL,
+    // reject immediately — don't even call Stripe. This prevents
+    // the "Charge has already been refunded" error from Stripe
+    // when the admin double-clicks or retries a full refund.
+    if (payment.status === 'REFUNDED' && (payment as any).refundStatus === 'FULL') {
+      throw new BadRequestException(
+        'This payment has already been fully refunded. No further refunds are possible.',
+      );
+    }
+
     // 3. Validate partial refund amount if specified
     const isPartial = body?.amount !== undefined && body.amount > 0;
     if (isPartial) {
@@ -361,6 +372,13 @@ export class StripePaymentController {
           `remaining (total $${(totalCents / 100).toFixed(2)}, already refunded $${(alreadyRefundedCents / 100).toFixed(2)}).`,
         );
       }
+    } else {
+      // Full refund — check if the charge is already partially refunded.
+      // If it is, a full refund would refund the remaining balance (which
+      // Stripe handles automatically). But if the charge is ALREADY
+      // fully refunded, we already caught that above. If it's partially
+      // refunded, the "full refund" button should refund the remaining
+      // balance — which is correct. No extra check needed here.
     }
 
     try {
