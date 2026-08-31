@@ -88,6 +88,11 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 // next invoice, frozen banner, cap usage). Only rendered when the customer
 // has postpaidEnabled=true on their profile.
 import PostpaidStatusPanel from '@/components/postpaid/PostpaidStatusPanel'
+// Referral code card — dealer-facing "Refer & Earn" with copy + QR + share URL.
+// Calls the customer-side referral endpoints (my-customer-referral-code +
+// my-customer-referral-stats + program-config). The card is conditional on
+// the program being active and the customer having a referral code.
+import { ReferralCodeCard } from '@/components/referral/ReferralCodeCard'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
 import { BUSINESS_TZ } from '@/lib/timezone'
@@ -521,6 +526,16 @@ export default function DealerDashboard() {
           surface without a manual refresh. */}
       {customerProfile?.postpaidEnabled && dealerId && (
         <PostpaidStatusPanel customerId={dealerId} />
+      )}
+
+      {/* Referral code card — "Refer & Earn" with copy + QR + share URL.
+          Renders only when dealerId is available (the user is logged in
+          as a customer). The card internally fetches its own data + adapts
+          to the program being paused. */}
+      {dealerId && (
+        <div className="px-4 pt-4 max-w-[980px] mx-auto">
+          <ReferralCodeCard referrerType="CUSTOMER" />
+        </div>
       )}
 
       {/* Stats Summary */}
