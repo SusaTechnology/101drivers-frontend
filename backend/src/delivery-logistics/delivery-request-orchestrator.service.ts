@@ -447,6 +447,10 @@ export class DeliveryRequestOrchestratorService {
         paymentMethodId: paymentMethodId ?? undefined,
         captureMethod,
         confirm: true,
+        // Stable idempotency key — derived from deliveryId, NOT a timestamp.
+        // A retry (even hours later) uses the same key → Stripe returns the
+        // same PaymentIntent instead of creating a new one → no double charge.
+        idempotencyKey: `pi-delivery-${params.deliveryId}`,
       });
     } catch (err: any) {
       // Stripe call failed — translate to a user-facing message and persist.
