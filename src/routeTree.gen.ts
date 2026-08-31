@@ -116,6 +116,7 @@ import { Route as AuthDealerSigninRouteImport } from './routes/auth/dealer-signi
 import { Route as AuthAdminSigninRouteImport } from './routes/auth/admin-signin'
 import { Route as AdminUserDetailUserIdRouteImport } from './routes/admin-user-detail/$userId'
 import { Route as TrackTokenIndexRouteImport } from './routes/track/$token/index'
+import { Route as TestReferralCodeIndexRouteImport } from './routes/test-referral/$code/index'
 import { Route as AdminPricingConfigCreateIndexRouteImport } from './routes/admin-pricing-config/create/index'
 import { Route as AdminPricingConfigEditConfigIdRouteImport } from './routes/admin-pricing-config/edit/$configId'
 
@@ -680,6 +681,11 @@ const TrackTokenIndexRoute = TrackTokenIndexRouteImport.update({
   path: '/track/$token/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TestReferralCodeIndexRoute = TestReferralCodeIndexRouteImport.update({
+  id: '/test-referral/$code/',
+  path: '/test-referral/$code/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPricingConfigCreateIndexRoute =
   AdminPricingConfigCreateIndexRouteImport.update({
     id: '/admin-pricing-config/create/',
@@ -802,6 +808,7 @@ export interface FileRoutesByFullPath {
   '/terms/': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
+  '/test-referral/$code/': typeof TestReferralCodeIndexRoute
   '/track/$token/': typeof TrackTokenIndexRoute
 }
 export interface FileRoutesByTo {
@@ -912,6 +919,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create': typeof AdminPricingConfigCreateIndexRoute
+  '/test-referral/$code': typeof TestReferralCodeIndexRoute
   '/track/$token': typeof TrackTokenIndexRoute
 }
 export interface FileRoutesById {
@@ -1024,6 +1032,7 @@ export interface FileRoutesById {
   '/terms/': typeof TermsIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
+  '/test-referral/$code/': typeof TestReferralCodeIndexRoute
   '/track/$token/': typeof TrackTokenIndexRoute
 }
 export interface FileRouteTypes {
@@ -1137,6 +1146,7 @@ export interface FileRouteTypes {
     | '/terms/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
+    | '/test-referral/$code/'
     | '/track/$token/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1247,6 +1257,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create'
+    | '/test-referral/$code'
     | '/track/$token'
   id:
     | '__root__'
@@ -1358,6 +1369,7 @@ export interface FileRouteTypes {
     | '/terms/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
+    | '/test-referral/$code/'
     | '/track/$token/'
   fileRoutesById: FileRoutesById
 }
@@ -1448,6 +1460,7 @@ export interface RootRouteChildren {
   TermsIndexRoute: typeof TermsIndexRoute
   AdminPricingConfigEditConfigIdRoute: typeof AdminPricingConfigEditConfigIdRoute
   AdminPricingConfigCreateIndexRoute: typeof AdminPricingConfigCreateIndexRoute
+  TestReferralCodeIndexRoute: typeof TestReferralCodeIndexRoute
   TrackTokenIndexRoute: typeof TrackTokenIndexRoute
 }
 
@@ -2202,6 +2215,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackTokenIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/test-referral/$code/': {
+      id: '/test-referral/$code/'
+      path: '/test-referral/$code'
+      fullPath: '/test-referral/$code/'
+      preLoaderRoute: typeof TestReferralCodeIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-pricing-config/create/': {
       id: '/admin-pricing-config/create/'
       path: '/admin-pricing-config/create'
@@ -2359,6 +2379,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsIndexRoute: TermsIndexRoute,
   AdminPricingConfigEditConfigIdRoute: AdminPricingConfigEditConfigIdRoute,
   AdminPricingConfigCreateIndexRoute: AdminPricingConfigCreateIndexRoute,
+  TestReferralCodeIndexRoute: TestReferralCodeIndexRoute,
   TrackTokenIndexRoute: TrackTokenIndexRoute,
 }
 export const routeTree = rootRouteImport

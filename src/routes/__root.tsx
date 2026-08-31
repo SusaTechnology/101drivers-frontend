@@ -59,6 +59,7 @@ const NOINDEX_PREFIXES = [
   '/insurance-portal',
   '/live-track',
   '/track/',
+  '/test-referral/',  // public referral-lookup pages — shareable but not indexable
   '/quote-details',
   '/quote-confirmation',
 ]
