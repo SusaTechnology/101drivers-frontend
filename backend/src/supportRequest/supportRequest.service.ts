@@ -256,10 +256,35 @@ export class SupportRequestService extends SupportRequestServiceBase {
       throw new NotFoundException("SupportRequest not found");
     }
 
+    // ── Determine the replier's role from their actual user roles ──
+    // Previously this used `item.actorRole` (the original request creator's
+    // role), which meant when an admin replied to a dealer's support
+    // request, the reply was stored as `authorRole: "DEALER"` instead of
+    // `authorRole: "ADMIN"`. This caused the frontend to show admin
+    // replies as if they came from the dealer.
+    //
+    // We derive the replier's role from the `actorRoles` array passed
+    // from the controller (which comes from `req.user.roles`). This is
+    // the actual authenticated user's role, not the request creator's.
+    const roles = input.actorRoles ?? [];
+    let authorRole: EnumSupportActorRole;
+    if (roles.includes('ADMIN')) {
+      authorRole = EnumSupportActorRole.ADMIN;
+    } else if (roles.includes('DRIVER')) {
+      authorRole = EnumSupportActorRole.DRIVER;
+    } else if (roles.includes('PRIVATE_CUSTOMER')) {
+      authorRole = EnumSupportActorRole.PRIVATE_CUSTOMER;
+    } else if (roles.includes('BUSINESS_CUSTOMER')) {
+      authorRole = EnumSupportActorRole.DEALER;
+    } else {
+      // Fallback: use the original request's actorRole (conservative)
+      authorRole = item.actorRole;
+    }
+
     const created = await this.orchestrator.replyToSupportRequest({
       supportRequestId: input.supportRequestId,
       actorUserId: input.actorUserId ?? null,
-      authorRole: item.actorRole,
+      authorRole,
       message: this.trimRequiredString(input.message),
       isInternal: false,
     });
