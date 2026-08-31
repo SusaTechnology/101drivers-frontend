@@ -136,6 +136,7 @@ export default function DealerSupportRequest() {
 
     const payload: CreateSupportRequestPayload = {
       deliveryId: deliveryId || undefined,
+      actorRole: isPrivateCustomer ? 'PRIVATE_CUSTOMER' : 'DEALER',
       category,
       priority,
       subject: subject.trim(),
