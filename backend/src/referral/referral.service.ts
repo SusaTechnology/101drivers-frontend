@@ -4,7 +4,13 @@ import { AppSettingService } from "../appSetting/appSetting.service";
 import {
   ReferralRewardTrigger,
   ReferralTimeLimitMode,
+  ReferralPayoutModelDto,
+  ReferralTypeDto,
 } from "../appSetting/dto/appSetting.dto";
+import {
+  generateUniqueReferralCode,
+  validateCustomReferralCode,
+} from "./referral-code";
 
 @Injectable()
 export class ReferralService {
@@ -30,7 +36,30 @@ export class ReferralService {
   }
 
   /**
+   * Resolve the customer record from the authenticated user's JWT payload.
+   * Returns the Customer.id (NOT the User.id) — used for customer-referrer
+   * endpoints so we can read/write Customer.referralCode directly.
+   */
+  async resolveCustomerId(req: any): Promise<string> {
+    const userId = (req as any).user?.id;
+    if (!userId) throw new NotFoundException("Not authenticated");
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!customer) throw new NotFoundException("Customer profile not found");
+    return customer.id;
+  }
+
+  /**
    * Get or create the driver's unique referral code.
+   *
+   * Phase 2 (V2): the code is stored on `Driver.referralCode` (a unique
+   * column added by the 20260831120000_referral_v2 migration). For
+   * backward compat, if a driver already has a code-holder `Referral` row
+   * from the legacy flow but no `Driver.referralCode`, we migrate the
+   * code onto `Driver.referralCode` on first read.
    *
    * NOTE: If the program isActive=false, we DON'T create a code-holder
    * row — the driver Wallet UI hides the "Refer a Friend" card, so the
@@ -38,16 +67,16 @@ export class ReferralService {
    * safety net.
    */
   async getMyReferralCode(driverId: string): Promise<string> {
-    const existingReferral = await this.prisma.referral.findFirst({
-      where: { referrerId: driverId },
+    // ── V2 path: read from Driver.referralCode ──
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
       select: { referralCode: true },
     });
-
-    if (existingReferral) {
-      return existingReferral.referralCode;
+    if (driver?.referralCode) {
+      return driver.referralCode;
     }
 
-    // Don't create new code-holder rows if the program is paused
+    // Don't create new codes if the program is paused
     const config = await this.appSettingService.getReferralProgramSettings();
     if (!config.isActive) {
       throw new BadRequestException(
@@ -55,15 +84,56 @@ export class ReferralService {
       );
     }
 
+    // ── Backward-compat: migrate from legacy code-holder Referral row ──
+    const legacyReferral = await this.prisma.referral.findFirst({
+      where: { referrerId: driverId },
+      select: { referralCode: true },
+    });
+    if (legacyReferral?.referralCode) {
+      // Try to migrate the code onto Driver.referralCode. If a race
+      // produced a unique-constraint violation (another driver claimed
+      // the same code in the meantime — extremely unlikely), fall
+      // back to generating a fresh code.
+      try {
+        await this.prisma.driver.update({
+          where: { id: driverId },
+          data: { referralCode: legacyReferral.referralCode },
+        });
+        return legacyReferral.referralCode;
+      } catch (err: any) {
+        // P2002 = unique constraint — code clash, generate fresh
+        if (err?.code !== "P2002") throw err;
+        // fall through to fresh generation
+      }
+    }
+
+    // ── Generate a fresh unique code ──
     const code = await this.generateUniqueCode();
 
-    await this.prisma.referral.create({
-      data: {
-        referralCode: code,
-        referrerId: driverId,
-        status: "PENDING",
-      },
+    await this.prisma.driver.update({
+      where: { id: driverId },
+      data: { referralCode: code },
     });
+
+    // Also create a code-holder Referral row for backward compat with
+    // any code that still reads from the Referral table. New code
+    // should read from Driver.referralCode directly.
+    try {
+      await this.prisma.referral.create({
+        data: {
+          referralCode: code,
+          referrerId: driverId,
+          status: "PENDING",
+          referralType: ReferralTypeDto.DRIVER,
+          payoutModel: ReferralPayoutModelDto.TIERED,
+        },
+      });
+    } catch (err: any) {
+      // P2002 = code clash on Referral.referralCode (rare). The Driver
+      // row already has the code, which is what matters for V2 — the
+      // legacy code-holder row is best-effort.
+      if (err?.code !== "P2002") throw err;
+    }
 
     return code;
   }
@@ -234,22 +304,71 @@ export class ReferralService {
       throw new BadRequestException("referralCode is required");
     }
 
-    const referral = await this.prisma.referral.findFirst({
-      where: { referralCode, status: "PENDING" },
-    });
+    // ── Phase 2 (V2): look up the referrer via the new path ──
+    // A referral code can now belong to either a Driver (Driver.referralCode)
+    // or a Customer (Customer.referralCode). The legacy path (Referral.referralCode
+    // with a code-holder row) still works for backward compat.
+    //
+    // We support BOTH a Driver referrer (referralType=DRIVER) AND a Customer
+    // referrer (referralType=CUSTOMER) referring a driver. The role matrix:
+    //   - Driver→Driver: payoutModel=TIERED (legacy) or PER_DELIVERY (new)
+    //   - Customer→Driver: payoutModel=PER_DELIVERY only (customer earns
+    //     a credit per paid delivery, driver earns the $50-on-5th bonus)
+    const upperCode = referralCode.toUpperCase();
 
-    if (!referral) {
+    const [driverReferrer, customerReferrer, legacyReferral] = await Promise.all([
+      this.prisma.driver.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true, referralCode: true, userId: true },
+      }),
+      this.prisma.customer.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true, referralCode: true, userId: true },
+      }),
+      this.prisma.referral.findFirst({
+        where: { referralCode: upperCode, status: "PENDING" },
+        select: { id: true, referrerId: true, referralCode: true },
+      }),
+    ]);
+
+    // Resolve which referrer applies. Driver-side takes precedence (it's
+    // the more specific case — a Driver.referralCode is the canonical V2
+    // storage location for a driver referrer).
+    let referrerDriverId: string | null = null;
+    let referrerUserId: string | null = null;
+    let referrerCustomerId: string | null = null;
+    let referralType: ReferralTypeDto;
+    let legacyReferralId: string | null = legacyReferral?.id ?? null;
+
+    if (driverReferrer) {
+      if (driverReferrer.id === driverId) {
+        throw new BadRequestException("You cannot use your own referral code");
+      }
+      referrerDriverId = driverReferrer.id;
+      referrerUserId = driverReferrer.userId;
+      referralType = ReferralTypeDto.DRIVER;
+    } else if (customerReferrer) {
+      referrerCustomerId = customerReferrer.id;
+      referrerUserId = customerReferrer.userId;
+      referralType = ReferralTypeDto.CUSTOMER;
+    } else if (legacyReferral) {
+      // Legacy code-holder row — referrer must be a driver (pre-V2)
+      if (legacyReferral.referrerId === driverId) {
+        throw new BadRequestException("You cannot use your own referral code");
+      }
+      referrerDriverId = legacyReferral.referrerId;
+      referralType = ReferralTypeDto.DRIVER;
+    } else {
       throw new NotFoundException("Invalid or expired referral code");
     }
 
-    if (referral.referrerId === driverId) {
-      throw new BadRequestException("You cannot use your own referral code");
-    }
-
+    // ── Per-referred-party uniqueness check ──
+    // A driver can only have ONE referral applied. If they already used a
+    // code (whether driver-referrer or customer-referrer), reject.
     const existingLink = await this.prisma.referral.findFirst({
       where: { referredDriverId: driverId },
+      select: { id: true },
     });
-
     if (existingLink) {
       throw new BadRequestException("You already used a referral code");
     }
@@ -294,6 +413,20 @@ export class ReferralService {
       );
     }
 
+    // ── Per-referrer-type gate ──
+    // The admin can disable driver-referrer or customer-referrer flows
+    // independently of the master isActive flag.
+    if (referralType === ReferralTypeDto.DRIVER && !config.driverReferralsEnabled) {
+      throw new BadRequestException(
+        "Driver-to-driver referrals are currently disabled."
+      );
+    }
+    if (referralType === ReferralTypeDto.CUSTOMER && !config.customerReferralsEnabled) {
+      throw new BadRequestException(
+        "Customer referrals are currently disabled."
+      );
+    }
+
     // Compute expiresAt + validate window
     let expiresAt: Date | null = null;
     let windowStartDate: Date | null = null;
@@ -331,16 +464,29 @@ export class ReferralService {
       select: { user: { select: { email: true } } },
     });
 
+    // ── Determine payoutModel for this referral ──
+    // For Driver→Driver: use the program's default payoutModel.
+    // For Customer→Driver: always PER_DELIVERY (a customer referrer can
+    // only earn per-delivery credits, not tier payouts).
+    const payoutModel: ReferralPayoutModelDto =
+      referralType === ReferralTypeDto.CUSTOMER
+        ? ReferralPayoutModelDto.PER_DELIVERY
+        : config.payoutModel;
+
     // ── Stamp the per-referral policy snapshot onto the new row ──
     // This freezes the policy at sign-up time so future admin changes
     // don't retroactively change pending referrals.
     await this.prisma.referral.create({
       data: {
-        referralCode,
-        referrerId: referral.referrerId,
+        referralCode: upperCode,
+        referrerId: referrerDriverId, // null when customer referrer
+        referrerUserId,
+        referredCustomerId: null,
         referredDriverId: driverId,
         referredEmail: driver?.user?.email || null,
         status: "REGISTERED",
+        referralType,
+        payoutModel,
         // Snapshot
         rewardTrigger: config.rewardTrigger,
         requiredDeliveries: config.requiredDeliveries,
@@ -351,6 +497,26 @@ export class ReferralService {
         referredRewardAmount: config.referredGetsReward ? config.referredRewardAmount : null,
       },
     });
+
+    // ── Best-effort: delete the legacy code-holder Referral row ──
+    // If the referrer was found via Driver.referralCode or Customer.referralCode,
+    // and a matching code-holder Referral row exists (status=PENDING, no
+    // referredDriverId), remove it — its job is done. Best-effort, never
+    // rethrows.
+    if (legacyReferralId) {
+      try {
+        await this.prisma.referral.deleteMany({
+          where: {
+            id: legacyReferralId,
+            referredDriverId: null,
+            referredCustomerId: null,
+            status: "PENDING",
+          },
+        });
+      } catch {
+        // ignore — best-effort cleanup
+      }
+    }
 
     return { success: true, message: "Referral code applied successfully" };
   }
@@ -405,24 +571,33 @@ export class ReferralService {
 
   /**
    * Generate a unique 8-character alphanumeric referral code.
+   *
+   * Uses the shared `generateUniqueReferralCode` helper from
+   * `./referral-code` (blocklist + regex + collision-check). The exists()
+   * predicate checks ALL existing code locations (Driver.referralCode,
+   * Customer.referralCode, and Referral.referralCode) so a code never
+   * collides across referrer types.
    */
   private async generateUniqueCode(): Promise<string> {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let code: string;
-    let exists = true;
-
-    while (exists) {
-      code = "";
-      for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      const found = await this.prisma.referral.findFirst({
-        where: { referralCode: code },
-      });
-      exists = !!found;
-    }
-
-    return code!;
+    return generateUniqueReferralCode(async (candidate) => {
+      // Check Driver.referralCode, Customer.referralCode, and Referral.referralCode
+      // (the legacy code-holder rows). All three columns are unique, so we OR them.
+      const [driver, customer, referral] = await Promise.all([
+        this.prisma.driver.findFirst({
+          where: { referralCode: candidate },
+          select: { id: true },
+        }),
+        this.prisma.customer.findFirst({
+          where: { referralCode: candidate },
+          select: { id: true },
+        }),
+        this.prisma.referral.findFirst({
+          where: { referralCode: candidate },
+          select: { id: true },
+        }),
+      ]);
+      return !!(driver || customer || referral);
+    });
   }
 
   /**
@@ -539,9 +714,13 @@ export class ReferralService {
     const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 20));
     const skip = (page - 1) * pageSize;
 
-    // Find all referrerIds that have at least one real referral
-    const referrerIds = await this.prisma.referral.findMany({
+    // Find all referrerIds that have at least one real referral.
+    // Only driver referrers (referrerId IS NOT NULL) appear in this
+    // legacy admin list — customer referrers use referrerUserId and
+    // are handled by a separate method.
+    const referrerRows = await this.prisma.referral.findMany({
       where: {
+        referrerId: { not: null },
         OR: [
           { referredDriverId: { not: null } },
           { referredEmail: { not: null } },
@@ -560,8 +739,10 @@ export class ReferralService {
       select: { referrerId: true },
     });
 
-    const total = referrerIds.length;
-    const pagedIds = referrerIds.slice(skip, skip + pageSize).map((r) => r.referrerId);
+    // Filter out nulls (defensive — should not happen given the where clause)
+    const allIds = referrerRows.map((r) => r.referrerId).filter((id): id is string => !!id);
+    const total = allIds.length;
+    const pagedIds = allIds.slice(skip, skip + pageSize);
 
     if (pagedIds.length === 0) {
       return {
@@ -723,5 +904,583 @@ export class ReferralService {
         paidAt: p.paidAt,
       })),
     };
+  }
+
+  // ============================================================
+  // CUSTOMER-REFERRER ENDPOINTS (Phase 2)
+  // ============================================================
+  // The Customer-referrer flow mirrors the Driver-referrer flow but uses
+  // Customer.referralCode (instead of Driver.referralCode) and creates
+  // ReferralCredit rows (instead of DriverPayout rows) for per-delivery
+  // payouts. Customer referrers can refer BOTH new customers (dealer or
+  // private) AND new drivers.
+
+  /**
+   * Get or create the customer's unique referral code.
+   *
+   * Phase 2 (V2): the code is stored on `Customer.referralCode` (a unique
+   * column added by the 20260831120000_referral_v2 migration).
+   */
+  async getMyCustomerReferralCode(customerId: string): Promise<string> {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { referralCode: true, referralCodeLocked: true },
+    });
+    if (!customer) {
+      throw new NotFoundException("Customer profile not found");
+    }
+    if (customer.referralCode) {
+      return customer.referralCode;
+    }
+
+    // Don't create new codes if the program is paused
+    const config = await this.appSettingService.getReferralProgramSettings();
+    if (!config.isActive) {
+      throw new BadRequestException(
+        "The referral program is currently paused. Please try again later."
+      );
+    }
+
+    const code = await this.generateUniqueCode();
+
+    await this.prisma.customer.update({
+      where: { id: customerId },
+      data: { referralCode: code },
+    });
+
+    return code;
+  }
+
+  /**
+   * Set a custom referral code for the customer (instead of the auto-generated one).
+   * Validates the code against the regex + blocklist + collision check.
+   * Once set, the code is locked and cannot be changed (referralCodeLocked=true).
+   */
+  async setMyCustomerReferralCode(customerId: string, newCode: string): Promise<string> {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { referralCode: true, referralCodeLocked: true },
+    });
+    if (!customer) {
+      throw new NotFoundException("Customer profile not found");
+    }
+    if (customer.referralCodeLocked) {
+      throw new BadRequestException(
+        "Your referral code is locked and cannot be changed. Please contact support if you need to change it."
+      );
+    }
+
+    // Validate format + blocklist
+    const validation = validateCustomReferralCode(newCode);
+    if (!validation.ok) {
+      const reason =
+        validation.reason === "EMPTY"
+          ? "Referral code is required."
+          : validation.reason === "INVALID_FORMAT"
+            ? "Referral code must be 8 characters, using only letters A–Z and digits 2–9 (no 0, 1, I, or O)."
+            : validation.reason === "BLOCKLISTED"
+              ? "This referral code is not available. Please choose another."
+              : "Invalid referral code.";
+      throw new BadRequestException(reason);
+    }
+
+    const upperCode = newCode.toUpperCase();
+
+    // Collision check across all three tables
+    const [driver, customerCollision, referral] = await Promise.all([
+      this.prisma.driver.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true },
+      }),
+      this.prisma.customer.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true },
+      }),
+      this.prisma.referral.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true },
+      }),
+    ]);
+    if (driver || customerCollision || referral) {
+      throw new BadRequestException(
+        "This referral code is already in use. Please choose another."
+      );
+    }
+
+    await this.prisma.customer.update({
+      where: { id: customerId },
+      data: { referralCode: upperCode, referralCodeLocked: true },
+    });
+
+    return upperCode;
+  }
+
+  /**
+   * Same as setMyCustomerReferralCode but for drivers.
+   */
+  async setMyDriverReferralCode(driverId: string, newCode: string): Promise<string> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { referralCode: true, referralCodeLocked: true },
+    });
+    if (!driver) {
+      throw new NotFoundException("Driver profile not found");
+    }
+    if (driver.referralCodeLocked) {
+      throw new BadRequestException(
+        "Your referral code is locked and cannot be changed. Please contact support if you need to change it."
+      );
+    }
+
+    const validation = validateCustomReferralCode(newCode);
+    if (!validation.ok) {
+      const reason =
+        validation.reason === "EMPTY"
+          ? "Referral code is required."
+          : validation.reason === "INVALID_FORMAT"
+            ? "Referral code must be 8 characters, using only letters A–Z and digits 2–9 (no 0, 1, I, or O)."
+            : validation.reason === "BLOCKLISTED"
+              ? "This referral code is not available. Please choose another."
+              : "Invalid referral code.";
+      throw new BadRequestException(reason);
+    }
+
+    const upperCode = newCode.toUpperCase();
+
+    const [driverCollision, customerCollision, referral] = await Promise.all([
+      this.prisma.driver.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true },
+      }),
+      this.prisma.customer.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true },
+      }),
+      this.prisma.referral.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true },
+      }),
+    ]);
+    if (driverCollision || customerCollision || referral) {
+      throw new BadRequestException(
+        "This referral code is already in use. Please choose another."
+      );
+    }
+
+    await this.prisma.driver.update({
+      where: { id: driverId },
+      data: { referralCode: upperCode, referralCodeLocked: true },
+    });
+
+    return upperCode;
+  }
+
+  /**
+   * Apply a referral code when a new CUSTOMER signs up (dealer or private).
+   *
+   * The referrer can be EITHER a Customer OR a Driver (both are supported
+   * via the V2 referrer lookup). The referred side is always a Customer.
+   * The payoutModel is always PER_DELIVERY — customer-referrer payouts
+   * are per-delivery credits applied to the customer's next invoice.
+   *
+   * Mirrors applyReferral() in shape but for customer referred parties.
+   */
+  async applyCustomerReferral(customerId: string, referralCode: string) {
+    if (!referralCode) {
+      throw new BadRequestException("referralCode is required");
+    }
+
+    const upperCode = referralCode.toUpperCase();
+
+    // ── Look up the referrer (same V2 path as applyReferral) ──
+    const [driverReferrer, customerReferrer, legacyReferral] = await Promise.all([
+      this.prisma.driver.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true, referralCode: true, userId: true },
+      }),
+      this.prisma.customer.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true, referralCode: true, userId: true },
+      }),
+      this.prisma.referral.findFirst({
+        where: { referralCode: upperCode, status: "PENDING" },
+        select: { id: true, referrerId: true, referralCode: true },
+      }),
+    ]);
+
+    let referrerDriverId: string | null = null;
+    let referrerUserId: string | null = null;
+    let referrerCustomerId: string | null = null;
+    let referralType: ReferralTypeDto;
+    let legacyReferralId: string | null = legacyReferral?.id ?? null;
+
+    if (driverReferrer) {
+      referrerDriverId = driverReferrer.id;
+      referrerUserId = driverReferrer.userId;
+      referralType = ReferralTypeDto.DRIVER;
+    } else if (customerReferrer) {
+      if (customerReferrer.id === customerId) {
+        throw new BadRequestException("You cannot use your own referral code");
+      }
+      referrerCustomerId = customerReferrer.id;
+      referrerUserId = customerReferrer.userId;
+      referralType = ReferralTypeDto.CUSTOMER;
+    } else if (legacyReferral) {
+      referrerDriverId = legacyReferral.referrerId;
+      referralType = ReferralTypeDto.DRIVER;
+    } else {
+      throw new NotFoundException("Invalid or expired referral code");
+    }
+
+    // ── Per-referred-party uniqueness check ──
+    const existingLink = await this.prisma.referral.findFirst({
+      where: { referredCustomerId: customerId },
+      select: { id: true },
+    });
+    if (existingLink) {
+      throw new BadRequestException("You already used a referral code");
+    }
+
+    // ── Read live config + validate program state ──
+    const config = await this.appSettingService.getReferralProgramSettings();
+    if (!config.isActive) {
+      throw new BadRequestException(
+        "The referral program is currently paused. Please try again later."
+      );
+    }
+    if (referralType === ReferralTypeDto.DRIVER && !config.driverReferralsEnabled) {
+      throw new BadRequestException(
+        "Driver-to-customer referrals are currently disabled."
+      );
+    }
+    if (referralType === ReferralTypeDto.CUSTOMER && !config.customerReferralsEnabled) {
+      throw new BadRequestException(
+        "Customer referrals are currently disabled."
+      );
+    }
+
+    // Compute expiresAt + validate window
+    let expiresAt: Date | null = null;
+    let windowStartDate: Date | null = null;
+    let windowEndDate: Date | null = null;
+    const now = new Date();
+
+    if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) {
+      windowStartDate = config.windowStartDate ? new Date(config.windowStartDate) : null;
+      windowEndDate = config.windowEndDate ? new Date(config.windowEndDate) : null;
+      if (!windowStartDate || !windowEndDate) {
+        throw new BadRequestException(
+          "Referral program window is not properly configured. Please contact support."
+        );
+      }
+      if (now < windowStartDate) {
+        throw new BadRequestException(
+          "The referral program hasn't started yet. Please try again later."
+        );
+      }
+      if (now > windowEndDate) {
+        throw new BadRequestException(
+          "The referral program has ended. Please try again later."
+        );
+      }
+      expiresAt = windowEndDate;
+    }
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { contactEmail: true, user: { select: { email: true } } },
+    });
+
+    // Customer referrals are always PER_DELIVERY (a customer earns per-delivery
+    // credits, not tier payouts). Driver referrers referring a customer also
+    // use PER_DELIVERY (the customer side of the relationship is always
+    // credit-based; the driver side gets the per-delivery referrer amount
+    // via DriverPayout).
+    const payoutModel: ReferralPayoutModelDto = ReferralPayoutModelDto.PER_DELIVERY;
+
+    await this.prisma.referral.create({
+      data: {
+        referralCode: upperCode,
+        referrerId: referrerDriverId,
+        referrerUserId,
+        referredCustomerId: customerId,
+        referredDriverId: null,
+        referredEmail: customer?.contactEmail || customer?.user?.email || null,
+        status: "REGISTERED",
+        referralType,
+        payoutModel,
+        rewardTrigger: config.rewardTrigger,
+        requiredDeliveries: config.requiredDeliveries,
+        windowStartDate,
+        windowEndDate,
+        expiresAt,
+        referredGetsReward: config.referredGetsReward,
+        referredRewardAmount: config.referredGetsReward ? config.referredRewardAmount : null,
+      },
+    });
+
+    // ── Best-effort: delete the legacy code-holder Referral row ──
+    if (legacyReferralId) {
+      try {
+        await this.prisma.referral.deleteMany({
+          where: {
+            id: legacyReferralId,
+            referredDriverId: null,
+            referredCustomerId: null,
+            status: "PENDING",
+          },
+        });
+      } catch {
+        // ignore — best-effort cleanup
+      }
+    }
+
+    return { success: true, message: "Referral code applied successfully" };
+  }
+
+  /**
+   * List all referrals made by this customer.
+   */
+  async getMyCustomerReferrals(customerId: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { userId: true },
+    });
+    if (!customer) return [];
+
+    const referrals = await this.prisma.referral.findMany({
+      where: {
+        referrerUserId: customer.userId,
+        referralType: ReferralTypeDto.CUSTOMER,
+        // Exclude code-holder rows (no referred party)
+        OR: [
+          { referredCustomerId: { not: null } },
+          { referredDriverId: { not: null } },
+          { referredEmail: { not: null } },
+        ],
+      },
+      select: {
+        id: true,
+        referralCode: true,
+        status: true,
+        referralType: true,
+        payoutModel: true,
+        completedPaidDeliveries: true,
+        expiresAt: true,
+        createdAt: true,
+        referredCustomer: {
+          select: {
+            id: true,
+            contactName: true,
+            contactEmail: true,
+            businessName: true,
+            customerType: true,
+          },
+        },
+        referredDriver: {
+          select: {
+            id: true,
+            user: { select: { fullName: true, email: true } },
+          },
+        },
+        referredEmail: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return referrals;
+  }
+
+  /**
+   * Get referral stats for a customer referrer.
+   *
+   * Returns counts + total credits earned (from ReferralCredit rows).
+   * For the customer dashboard "Refer & Earn" card.
+   */
+  async getMyCustomerReferralStats(customerId: string) {
+    // Find referrals made by this customer (via referrerUserId)
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { userId: true, referralCode: true },
+    });
+    if (!customer) {
+      throw new NotFoundException("Customer profile not found");
+    }
+
+    const referrals = await this.prisma.referral.findMany({
+      where: {
+        referrerUserId: customer.userId,
+        referralType: ReferralTypeDto.CUSTOMER,
+      },
+      select: {
+        id: true,
+        status: true,
+        completedPaidDeliveries: true,
+        payoutModel: true,
+        referredCustomer: { select: { id: true } },
+        referredDriver: { select: { id: true } },
+        referredEmail: true,
+      },
+    });
+
+    // Real referrals only (have a referred party)
+    const realReferrals = referrals.filter(
+      (r) => r.referredCustomer || r.referredDriver || r.referredEmail,
+    );
+
+    let successfulReferrals = 0;
+    let activeReferrals = 0;
+    let expiredReferrals = 0;
+    let totalPaidDeliveries = 0;
+
+    for (const r of realReferrals) {
+      if (r.status === "REWARD_PAID" || r.status === "COMPLETED") {
+        successfulReferrals++;
+      } else if (r.status === "EXPIRED" || r.status === "CLOSED") {
+        expiredReferrals++;
+      } else {
+        activeReferrals++;
+      }
+      totalPaidDeliveries += r.completedPaidDeliveries || 0;
+    }
+
+    // Sum of all ReferralCredit rows for this customer (referrer)
+    const credits = await this.prisma.referralCredit.findMany({
+      where: { customerId, status: { in: ["PENDING", "APPLIED"] } },
+      select: { amountCents: true, status: true },
+    });
+    const totalCreditsEarnedCents = credits
+      .filter((c) => c.status === "APPLIED")
+      .reduce((s, c) => s + c.amountCents, 0);
+    const pendingCreditsCents = credits
+      .filter((c) => c.status === "PENDING")
+      .reduce((s, c) => s + c.amountCents, 0);
+
+    const config = await this.appSettingService.getReferralProgramSettings();
+
+    return {
+      referralCode: customer.referralCode,
+      totalReferrals: realReferrals.length,
+      successfulReferrals,
+      activeReferrals,
+      expiredReferrals,
+      totalPaidDeliveries,
+      // Credits in cents (frontend can format as $X.XX)
+      totalCreditsEarnedCents,
+      pendingCreditsCents,
+      // Live config so the UI can show the per-delivery amount
+      perDeliveryReferrerAmountCents: config.perDeliveryReferrerAmountCents,
+      perDeliveryReferredBonusCents: config.perDeliveryReferredBonusCents,
+      perDeliveryBonusTriggerCount: config.perDeliveryBonusTriggerCount,
+      programIsActive: config.isActive,
+      customerReferralsEnabled: config.customerReferralsEnabled,
+    };
+  }
+
+  /**
+   * Public lookup: resolve a referral code to the referrer's display name.
+   * Used by the public /test-referral/:code page to confirm to the user
+   * whose code they're about to use BEFORE redirecting to signup.
+   *
+   * Returns:
+   *   - found: true if the code is valid
+   *   - referrerName: the referrer's display name (first name + last initial
+   *     for privacy; or business name for business customers; or "A 101 Drivers
+   *     driver" for drivers if they don't have a public name)
+   *   - referrerType: "DRIVER" | "CUSTOMER"
+   *   - programActive: whether the program is currently accepting new referrals
+   *
+   * No auth required — this is a public endpoint. Returns minimal info
+   * (just enough for the user to recognize whose code it is).
+   */
+  async publicResolveReferralCode(code: string): Promise<{
+    found: boolean;
+    referrerName: string | null;
+    referrerType: ReferralTypeDto | null;
+    programActive: boolean;
+  }> {
+    if (!code) return { found: false, referrerName: null, referrerType: null, programActive: false };
+
+    const upperCode = code.toUpperCase();
+
+    const [driverReferrer, customerReferrer, legacyReferral] = await Promise.all([
+      this.prisma.driver.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true, userId: true, user: { select: { fullName: true } } },
+      }),
+      this.prisma.customer.findFirst({
+        where: { referralCode: upperCode },
+        select: { id: true, userId: true, contactName: true, businessName: true, customerType: true, user: { select: { fullName: true } } },
+      }),
+      this.prisma.referral.findFirst({
+        where: { referralCode: upperCode, status: "PENDING" },
+        select: { id: true, referrerId: true },
+      }),
+    ]);
+
+    const config = await this.appSettingService.getReferralProgramSettings();
+
+    if (driverReferrer) {
+      return {
+        found: true,
+        referrerName: driverReferrer.user?.fullName
+          ? this.privacyMaskName(driverReferrer.user.fullName)
+          : "A 101 Drivers driver",
+        referrerType: ReferralTypeDto.DRIVER,
+        programActive: config.isActive && config.driverReferralsEnabled,
+      };
+    }
+
+    if (customerReferrer) {
+      const name =
+        customerReferrer.businessName ||
+        customerReferrer.contactName ||
+        customerReferrer.user?.fullName ||
+        "A 101 Drivers customer";
+      return {
+        found: true,
+        // For business customers, the business name is public (not masked).
+        // For private customers, mask the personal name.
+        referrerName:
+          customerReferrer.customerType === "BUSINESS"
+            ? name
+            : this.privacyMaskName(name),
+        referrerType: ReferralTypeDto.CUSTOMER,
+        programActive: config.isActive && config.customerReferralsEnabled,
+      };
+    }
+
+    if (legacyReferral) {
+      // Legacy code-holder row — referrer is a driver
+      const driver = legacyReferral.referrerId
+        ? await this.prisma.driver.findUnique({
+            where: { id: legacyReferral.referrerId },
+            select: { user: { select: { fullName: true } } },
+          })
+        : null;
+      return {
+        found: true,
+        referrerName: driver?.user?.fullName
+          ? this.privacyMaskName(driver.user.fullName)
+          : "A 101 Drivers driver",
+        referrerType: ReferralTypeDto.DRIVER,
+        programActive: config.isActive && config.driverReferralsEnabled,
+      };
+    }
+
+    return { found: false, referrerName: null, referrerType: null, programActive: config.isActive };
+  }
+
+  /**
+   * Privacy-mask a personal name for public display.
+   * "John Smith" → "John S."
+   * "Madonna" → "Madonna"
+   * "" → ""
+   */
+  private privacyMaskName(name: string): string {
+    if (!name) return "";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0]}.`;
   }
 }

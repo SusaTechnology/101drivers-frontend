@@ -18,6 +18,7 @@ import {
   UpdateReferralProgramSettingsBody,
   ReferralRewardTrigger,
   ReferralTimeLimitMode,
+  ReferralPayoutModelDto,
 } from "./dto/appSetting.dto";
 
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
@@ -302,6 +303,19 @@ export class AppSettingService extends AppSettingServiceBase {
       referralThreshold: 20,
       referredGetsReward: true,
       referredRewardAmount: 150,
+      // ── PER_DELIVERY defaults (Phase 2) ──
+      // Default payout model is TIERED for backward compatibility — existing
+      // referrer snapshots are TIERED, so we don't silently switch them.
+      payoutModel: ReferralPayoutModelDto.TIERED,
+      // $5 to referrer per paid delivery
+      perDeliveryReferrerAmountCents: 500,
+      // $50 bonus to the referred party
+      perDeliveryReferredBonusCents: 5000,
+      // Bonus fires on the 5th paid delivery
+      perDeliveryBonusTriggerCount: 5,
+      // Both referral types enabled by default
+      customerReferralsEnabled: true,
+      driverReferralsEnabled: true,
     };
   }
 
@@ -368,6 +382,38 @@ export class AppSettingService extends AppSettingServiceBase {
           : v.referredGetsReward === false
             ? null
             : defaults.referredRewardAmount,
+      // ── PER_DELIVERY model fields (Phase 2) ──
+      payoutModel:
+        v.payoutModel === ReferralPayoutModelDto.TIERED ||
+        v.payoutModel === ReferralPayoutModelDto.PER_DELIVERY
+          ? v.payoutModel
+          : defaults.payoutModel,
+      perDeliveryReferrerAmountCents:
+        typeof v.perDeliveryReferrerAmountCents === "number" &&
+        Number.isFinite(v.perDeliveryReferrerAmountCents) &&
+        v.perDeliveryReferrerAmountCents >= 0
+          ? Math.floor(v.perDeliveryReferrerAmountCents)
+          : defaults.perDeliveryReferrerAmountCents,
+      perDeliveryReferredBonusCents:
+        typeof v.perDeliveryReferredBonusCents === "number" &&
+        Number.isFinite(v.perDeliveryReferredBonusCents) &&
+        v.perDeliveryReferredBonusCents >= 0
+          ? Math.floor(v.perDeliveryReferredBonusCents)
+          : defaults.perDeliveryReferredBonusCents,
+      perDeliveryBonusTriggerCount:
+        typeof v.perDeliveryBonusTriggerCount === "number" &&
+        Number.isFinite(v.perDeliveryBonusTriggerCount) &&
+        v.perDeliveryBonusTriggerCount >= 1
+          ? Math.floor(v.perDeliveryBonusTriggerCount)
+          : defaults.perDeliveryBonusTriggerCount,
+      customerReferralsEnabled:
+        typeof v.customerReferralsEnabled === "boolean"
+          ? v.customerReferralsEnabled
+          : defaults.customerReferralsEnabled,
+      driverReferralsEnabled:
+        typeof v.driverReferralsEnabled === "boolean"
+          ? v.driverReferralsEnabled
+          : defaults.driverReferralsEnabled,
     };
   }
 
@@ -405,6 +451,29 @@ export class AppSettingService extends AppSettingServiceBase {
         input.referredRewardAmount !== undefined
           ? input.referredRewardAmount
           : current.referredRewardAmount,
+      // ── PER_DELIVERY model fields (Phase 2) ──
+      payoutModel:
+        input.payoutModel != null ? input.payoutModel : current.payoutModel,
+      perDeliveryReferrerAmountCents:
+        input.perDeliveryReferrerAmountCents != null
+          ? Math.floor(Number(input.perDeliveryReferrerAmountCents))
+          : current.perDeliveryReferrerAmountCents,
+      perDeliveryReferredBonusCents:
+        input.perDeliveryReferredBonusCents != null
+          ? Math.floor(Number(input.perDeliveryReferredBonusCents))
+          : current.perDeliveryReferredBonusCents,
+      perDeliveryBonusTriggerCount:
+        input.perDeliveryBonusTriggerCount != null
+          ? Math.floor(Number(input.perDeliveryBonusTriggerCount))
+          : current.perDeliveryBonusTriggerCount,
+      customerReferralsEnabled:
+        input.customerReferralsEnabled != null
+          ? input.customerReferralsEnabled
+          : current.customerReferralsEnabled,
+      driverReferralsEnabled:
+        input.driverReferralsEnabled != null
+          ? input.driverReferralsEnabled
+          : current.driverReferralsEnabled,
     };
 
     // Cross-field validation: if CALENDAR_RANGE, both dates must be set.

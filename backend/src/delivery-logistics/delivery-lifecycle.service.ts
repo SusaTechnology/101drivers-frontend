@@ -915,16 +915,45 @@ async completeTrip(input: {
       }
     }
 
-    // ── Fire the referral trigger (if this driver was referred) ──
+    // ── Fire the referral trigger (if this driver or customer was referred) ──
     // Decoupled one-line call: the referral trigger service decides
     // internally whether to fire a payout (based on the snapshotted
     // policy on the referred driver's Referral row + the live
     // program config + isActive flag). If the program is paused, the
     // trigger is a no-op. If it fails for any reason, the cron picks
     // up the slack. We don't await — keep the delivery completion fast.
+    //
+    // Phase 2: pass the deliveryId + customerId so the trigger can:
+    //   - Create a per-delivery ReferralCredit for customer-referrer
+    //     payouts (PER_DELIVERY model)
+    //   - Link the per-delivery DriverPayout / ReferralCredit to this
+    //     specific delivery (via failureMessage for DriverPayout, via
+    //     deliveryId for ReferralCredit)
+    //   - Look up the customer referral (by resolving the customer
+    //     from the delivery) — driver-referrer referral-trigger doesn't
+    //     know the customer's ID without this lookup.
     if (this.referralTrigger) {
       try {
-        await this.referralTrigger.onDeliveryCompleted(input.driverId);
+        // Resolve the customerId for this delivery (best-effort —
+        // if the lookup fails, the trigger will still process the
+        // driver-referral side; it just skips the customer-referral
+        // side).
+        let customerId: string | undefined;
+        try {
+          const delivery = await this.prisma.deliveryRequest.findUnique({
+            where: { id: input.deliveryId },
+            select: { customerId: true },
+          });
+          customerId = delivery?.customerId ?? undefined;
+        } catch {
+          // ignore — best-effort lookup
+        }
+
+        await this.referralTrigger.onDeliveryCompleted({
+          driverId: input.driverId,
+          deliveryId: input.deliveryId,
+          customerId,
+        });
       } catch (err: any) {
         this.logger.error(
           `ReferralTriggerService.onDeliveryCompleted threw for driver ${input.driverId}: ${err?.message}`,

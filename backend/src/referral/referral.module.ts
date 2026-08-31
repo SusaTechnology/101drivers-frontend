@@ -3,6 +3,7 @@ import { AuthModule } from "../auth/auth.module";
 import { AppSettingModule } from "../appSetting/appSetting.module";
 import { DriverPayoutModule } from "../driverPayout/driverPayout.module";
 import { ReferralController } from "./referral.controller";
+import { ReferralPublicController } from "./referral.public.controller";
 import { ReferralService } from "./referral.service";
 import { ReferralTriggerService } from "./referral-trigger.service";
 import { ReferralExpiryScheduler } from "./referral-expiry.scheduler";
@@ -13,7 +14,7 @@ import { ReferralExpiryScheduler } from "./referral-expiry.scheduler";
   // but the referral module's CODE only knows about the interface,
   // never the concrete ReferralPayoutProviderImpl class.
   imports: [forwardRef(() => AuthModule), AppSettingModule, DriverPayoutModule],
-  controllers: [ReferralController],
+  controllers: [ReferralController, ReferralPublicController],
   providers: [ReferralService, ReferralTriggerService, ReferralExpiryScheduler],
   exports: [ReferralService, ReferralTriggerService],
 })

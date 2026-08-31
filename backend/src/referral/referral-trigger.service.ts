@@ -9,12 +9,22 @@
  *     Fires the trigger ONLY IF the referral's snapshotted policy is
  *     rewardTrigger = ON_APPROVED.
  *
- *   onDeliveryCompleted(driverId)
- *     Called when a driver completes a delivery. Increments the
- *     referral's tripsCompleted counter, then fires the trigger
- *     ONLY IF the referral's snapshotted policy is
- *     rewardTrigger = ON_DELIVERIES_COMPLETED AND the counter has
- *     just crossed `requiredDeliveries`.
+ *   onDeliveryCompleted(input)
+ *     Called when a driver completes a delivery. Branches on the
+ *     referral's payoutModel:
+ *       - TIERED: increments `tripsCompleted`, fires the one-shot
+ *         referred-driver reward + the referrer tier payouts when
+ *         `tripsCompleted >= requiredDeliveries`.
+ *       - PER_DELIVERY: creates a per-delivery payout (DriverPayout
+ *         for driver referrer, ReferralCredit for customer referrer)
+ *         for the just-completed paid delivery. Also fires the
+ *         referred party's $50-on-5th-delivery bonus when the
+ *         `completedPaidDeliveries` counter crosses
+ *         `perDeliveryBonusTriggerCount`.
+ *
+ *     PER_DELIVERY also handles Customer referrals (Customer→Customer
+ *     and Customer→Driver): the per-delivery credit is created when
+ *     the referred customer's delivery is paid.
  *
  * Both methods are IDEMPOTENT — safe to call multiple times.
  * They check `referral.status` and `referredRewardPaidAt` before
@@ -22,10 +32,11 @@
  * will never fire again, even if the driver is re-approved or
  * completes more deliveries.
  *
- * After paying the referred driver (one-shot), the service counts
- * the referrer's successful referrals and fires TIER payouts if
- * the count has crossed a new multiple of `referralThreshold` (read
- * LIVE from the config — admin can adjust mid-program).
+ * After paying the referred driver (one-shot, TIERED only), the
+ * service counts the referrer's successful referrals and fires TIER
+ * payouts if the count has crossed a new multiple of
+ * `referralThreshold` (read LIVE from the config — admin can adjust
+ * mid-program).
  *
  * Expiry check: if `referral.expiresAt` has passed without the
  * trigger firing, the referral is marked EXPIRED and no payout
@@ -40,13 +51,26 @@
  */
 
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { EnumReferralType, EnumReferralPayoutModel } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AppSettingService } from "../appSetting/appSetting.service";
 import {
   REFERRAL_REWARD_PAYOUT_PROVIDER,
   ReferralRewardPayoutProvider,
 } from "./referral-payout-provider";
-import { ReferralRewardTrigger, ReferralTimeLimitMode } from "../appSetting/dto/appSetting.dto";
+import {
+  ReferralRewardTrigger,
+  ReferralTimeLimitMode,
+  ReferralPayoutModelDto,
+  ReferralTypeDto,
+} from "../appSetting/dto/appSetting.dto";
+
+// The Prisma-generated EnumReferralType / EnumReferralPayoutModel have the
+// same string values as our DTO enums (ReferralTypeDto / ReferralPayoutModelDto)
+// but TypeScript treats them as distinct types. We use the Prisma types in
+// handler signatures (since that's what Prisma returns) and compare using
+// the DTO enum string values (TS allows `===` comparison across two string
+// enums with identical values).
 
 @Injectable()
 export class ReferralTriggerService {
@@ -158,86 +182,549 @@ export class ReferralTriggerService {
   /**
    * Called when a driver completes a delivery.
    *
-   * Increments the referral's tripsCompleted counter, then checks if
-   * the snapshotted policy is rewardTrigger = ON_DELIVERIES_COMPLETED
-   * AND the counter has just crossed `requiredDeliveries`. If so,
-   * fires the payout (subject to isActive + expiry checks).
+   * Phase 2: takes an object input `{ driverId, deliveryId, customerId? }`
+   * (legacy callers that pass a bare driverId string are still accepted).
+   * Branches on the referral's payoutModel:
+   *
+   *   - TIERED (legacy driver→driver): increments `tripsCompleted`, fires
+   *     the one-shot referred-driver reward + the referrer tier payouts
+   *     when `tripsCompleted >= requiredDeliveries`.
+   *
+   *   - PER_DELIVERY (new): creates a per-delivery payout/credit for the
+   *     just-completed PAID delivery. Also fires the referred party's
+   *     $50-on-5th-delivery bonus when `completedPaidDeliveries` crosses
+   *     `perDeliveryBonusTriggerCount`. Handles BOTH the driver-referrer
+   *     path (DriverPayout to the referrer) and the customer-referrer
+   *     path (ReferralCredit to the referrer's customer account).
+   *
+   * Also looks up any CUSTOMER referral where the delivery's `customerId`
+   * matches `Referral.referredCustomerId` — that's how customer-referrer
+   * per-delivery credits are created (when the referred customer
+   * completes a paid delivery).
    *
    * Safe to call multiple times — idempotent.
+   *
+   * Note: the "paid" condition is implicit — this method is called AFTER
+   * the PaymentPayoutEngine creates the DriverPayout (TRIP_COMPLETION)
+   * row, so the delivery IS considered paid. We don't separately verify
+   * payment status.
    */
-  async onDeliveryCompleted(driverId: string): Promise<void> {
+  async onDeliveryCompleted(
+    input:
+      | string
+      | { driverId: string; deliveryId: string; customerId?: string },
+  ): Promise<void> {
+    // Backward compat: accept a bare driverId string from legacy callers.
+    const normalized =
+      typeof input === "string"
+        ? { driverId: input, deliveryId: "", customerId: undefined as string | undefined }
+        : input;
+
     try {
-      const referral = await this.prisma.referral.findFirst({
-        where: { referredDriverId: driverId },
-        select: {
-          id: true,
-          referrerId: true,
-          status: true,
-          rewardTrigger: true,
-          requiredDeliveries: true,
-          tripsCompleted: true,
-          expiresAt: true,
-          referredGetsReward: true,
-          referredRewardAmount: true,
-          referredRewardPaidAt: true,
-        },
-      });
-
-      if (!referral) {
-        // Driver wasn't referred — nothing to do.
-        return;
-      }
-
-      // Idempotency: already paid out
-      if (referral.status === "REWARD_PAID" || referral.referredRewardPaidAt) {
-        return;
-      }
-
-      // Wrong trigger type — this hook is for ON_DELIVERIES_COMPLETED only
-      if (referral.rewardTrigger !== ReferralRewardTrigger.ON_DELIVERIES_COMPLETED) {
-        return;
-      }
-
-      // Increment the trip counter (only if not yet completed)
-      // Use a conditional update so we don't keep incrementing past the threshold.
-      const updated = await this.prisma.referral.updateMany({
-        where: {
-          id: referral.id,
-          tripsCompleted: { lt: referral.requiredDeliveries },
-        },
-        data: { tripsCompleted: { increment: 1 } },
-      });
-
-      // If no rows updated, either:
-      //  - The referral was already at requiredDeliveries (already incremented)
-      //  - The referral was already paid out (caught above)
-      // Either way, we don't fire again.
-      if (updated.count === 0) {
-        return;
-      }
-
-      // Re-fetch to get the new tripsCompleted value
-      const refreshed = await this.prisma.referral.findUnique({
-        where: { id: referral.id },
-        select: { tripsCompleted: true, requiredDeliveries: true },
-      });
-
-      if (!refreshed) return;
-
-      // Only fire if we've just hit (or exceeded) the threshold.
-      // The updateMany above only increments if tripsCompleted < requiredDeliveries,
-      // so the new value is at most requiredDeliveries. We fire when == requiredDeliveries.
-      if (refreshed.tripsCompleted >= refreshed.requiredDeliveries) {
-        await this.fireReferralSuccess(referral.id);
-      }
+      await this.handleDriverReferralOnDelivery(normalized);
+      await this.handleCustomerReferralOnDelivery(normalized);
     } catch (err) {
       this.logger.error(
-        `onDeliveryCompleted failed for driver ${driverId}: ${(err as Error).message}`,
+        `onDeliveryCompleted failed for driver ${normalized.driverId} delivery ${normalized.deliveryId}: ${(err as Error).message}`,
         (err as Error).stack
       );
       // Don't rethrow — we don't want to break the delivery completion flow
       // if the referral trigger fails. The cron will pick up the slack.
     }
+  }
+
+  /**
+   * Handle the driver-referral side of the delivery completion.
+   * Looks up the referral where the DRIVER was referred
+   * (`referredDriverId == driverId`), and branches on payoutModel.
+   *
+   * TIERED: legacy behavior (increment tripsCompleted, fire on threshold).
+   * PER_DELIVERY: create per-delivery payout to driver referrer + maybe
+   * fire $50-on-5th-delivery bonus to the referred driver.
+   */
+  private async handleDriverReferralOnDelivery(input: {
+    driverId: string;
+    deliveryId: string;
+    customerId?: string;
+  }): Promise<void> {
+    const referral = await this.prisma.referral.findFirst({
+      where: { referredDriverId: input.driverId },
+      select: {
+        id: true,
+        referrerId: true,
+        referrerUserId: true,
+        referralType: true,
+        payoutModel: true,
+        status: true,
+        rewardTrigger: true,
+        requiredDeliveries: true,
+        tripsCompleted: true,
+        completedPaidDeliveries: true,
+        expiresAt: true,
+        referredGetsReward: true,
+        referredRewardAmount: true,
+        referredRewardPaidAt: true,
+        referredDriverId: true,
+      },
+    });
+
+    if (!referral) {
+      // Driver wasn't referred — nothing to do.
+      return;
+    }
+
+    // Idempotency: already paid out (terminal state)
+    if (referral.status === "REWARD_PAID" || referral.referredRewardPaidAt) {
+      return;
+    }
+
+    // Branch on payoutModel
+    if (referral.payoutModel === ReferralPayoutModelDto.PER_DELIVERY) {
+      await this.handlePerDeliveryDriverReferral(referral, input.deliveryId);
+      return;
+    }
+
+    // ── TIERED model (legacy) ──
+    // Wrong trigger type — this hook is for ON_DELIVERIES_COMPLETED only
+    if (referral.rewardTrigger !== ReferralRewardTrigger.ON_DELIVERIES_COMPLETED) {
+      return;
+    }
+
+    // Increment the trip counter (only if not yet completed)
+    // Use a conditional update so we don't keep incrementing past the threshold.
+    const updated = await this.prisma.referral.updateMany({
+      where: {
+        id: referral.id,
+        tripsCompleted: { lt: referral.requiredDeliveries },
+      },
+      data: { tripsCompleted: { increment: 1 } },
+    });
+
+    if (updated.count === 0) {
+      return;
+    }
+
+    // Re-fetch to get the new tripsCompleted value
+    const refreshed = await this.prisma.referral.findUnique({
+      where: { id: referral.id },
+      select: { tripsCompleted: true, requiredDeliveries: true },
+    });
+
+    if (!refreshed) return;
+
+    if (refreshed.tripsCompleted >= refreshed.requiredDeliveries) {
+      await this.fireReferralSuccess(referral.id);
+    }
+  }
+
+  /**
+   * Handle the customer-referral side of the delivery completion.
+   * Looks up the referral where the CUSTOMER who placed this delivery
+   * was referred (`referredCustomerId == customerId`), and processes
+   * the PER_DELIVERY credit creation.
+   *
+   * Only fires for PER_DELIVERY referrals — TIERED doesn't apply to
+   * customer referred parties (a customer can't be a "tier" referrer).
+   */
+  private async handleCustomerReferralOnDelivery(input: {
+    driverId: string;
+    deliveryId: string;
+    customerId?: string;
+  }): Promise<void> {
+    // Need the customerId to look up the customer referral. If the caller
+    // didn't pass it, resolve it from the delivery.
+    let customerId = input.customerId;
+    if (!customerId && input.deliveryId) {
+      const delivery = await this.prisma.deliveryRequest.findUnique({
+        where: { id: input.deliveryId },
+        select: { customerId: true },
+      });
+      customerId = delivery?.customerId;
+    }
+    if (!customerId) {
+      return;
+    }
+
+    const referral = await this.prisma.referral.findFirst({
+      where: { referredCustomerId: customerId },
+      select: {
+        id: true,
+        referrerId: true,
+        referrerUserId: true,
+        referralType: true,
+        payoutModel: true,
+        status: true,
+        completedPaidDeliveries: true,
+        expiresAt: true,
+        referredGetsReward: true,
+        referredRewardAmount: true,
+        referredRewardPaidAt: true,
+        referredCustomerId: true,
+      },
+    });
+
+    if (!referral) {
+      // Customer wasn't referred — nothing to do.
+      return;
+    }
+
+    // Idempotency: already paid out
+    if (referral.status === "REWARD_PAID" || referral.referredRewardPaidAt) {
+      return;
+    }
+
+    // Only PER_DELIVERY is supported for customer referrals
+    if (referral.payoutModel !== ReferralPayoutModelDto.PER_DELIVERY) {
+      return;
+    }
+
+    await this.handlePerDeliveryCustomerReferral(referral, input.deliveryId);
+  }
+
+  /**
+   * PER_DELIVERY handler for a referred DRIVER.
+   *
+   * For each paid delivery by the referred driver:
+   *   1. Create a per-delivery payout to the referrer.
+   *      - Driver referrer: DriverPayout (REFERRAL_REFERRER, marked via
+   *        failureMessage="PER_DELIVERY:<deliveryId>").
+   *      - Customer referrer: ReferralCredit on the referrer's Customer row.
+   *   2. Increment `completedPaidDeliveries`.
+   *   3. When `completedPaidDeliveries` hits `perDeliveryBonusTriggerCount`,
+   *      fire the one-shot $50 bonus to the referred driver (DriverPayout
+   *      REFERRAL_REFERED, linked via Referral.referredPayoutId for
+   *      idempotency).
+   *
+   * Idempotency: per-delivery payout is keyed by deliveryId (stored in
+   * failureMessage for DriverPayout, in deliveryId for ReferralCredit).
+   * Bonus payout is keyed by Referral.referredPayoutId (unique).
+   */
+  private async handlePerDeliveryDriverReferral(
+    referral: {
+      id: string;
+      referrerId: string | null;
+      referrerUserId: string | null;
+      referralType: EnumReferralType | null;
+      status: string;
+      completedPaidDeliveries: number;
+      expiresAt: Date | null;
+      referredGetsReward: boolean;
+      referredRewardAmount: number | null;
+      referredRewardPaidAt: Date | null;
+      referredDriverId: string | null;
+    },
+    deliveryId: string,
+  ): Promise<void> {
+    if (!deliveryId) {
+      // No delivery context (legacy caller). Skip PER_DELIVERY — can't
+      // create a per-delivery payout without knowing which delivery.
+      return;
+    }
+
+    // Expiry check — if past expiresAt, mark EXPIRED and bail
+    if (referral.expiresAt && referral.expiresAt < new Date()) {
+      await this.prisma.referral.update({
+        where: { id: referral.id },
+        data: { status: "EXPIRED" },
+      });
+      this.logger.log(
+        `Referral ${referral.id} expired before per-delivery payout could fire (expiresAt=${referral.expiresAt.toISOString()})`
+      );
+      return;
+    }
+
+    // Active check
+    const config = await this.appSettingService.getReferralProgramSettings();
+    if (!config.isActive) {
+      this.logger.log(
+        `Referral ${referral.id} per-delivery payout skipped — program is paused`
+      );
+      return;
+    }
+
+    // ── Step 1: Create the per-delivery referrer payout/credit ──
+    if (referral.referralType === ReferralTypeDto.DRIVER && referral.referrerId) {
+      // Driver referrer → DriverPayout
+      await this.createDriverReferrerPerDeliveryPayout({
+        referrerDriverId: referral.referrerId,
+        deliveryId,
+        amountCents: config.perDeliveryReferrerAmountCents,
+        referralId: referral.id,
+      });
+    } else if (referral.referralType === ReferralTypeDto.CUSTOMER && referral.referrerUserId) {
+      // Customer referrer → ReferralCredit on the referrer's customer account
+      const referrerCustomer = await this.prisma.customer.findUnique({
+        where: { userId: referral.referrerUserId },
+        select: { id: true },
+      });
+      if (referrerCustomer) {
+        await this.createReferralCredit({
+          referralId: referral.id,
+          customerId: referrerCustomer.id,
+          deliveryId,
+          amountCents: config.perDeliveryReferrerAmountCents,
+          reason: `Per-delivery referrer credit (delivery ${deliveryId})`,
+        });
+      }
+    }
+
+    // ── Step 2: Increment completedPaidDeliveries ──
+    const incremented = await this.prisma.referral.update({
+      where: { id: referral.id },
+      data: { completedPaidDeliveries: { increment: 1 } },
+      select: { completedPaidDeliveries: true },
+    });
+
+    // ── Step 3: Fire the $50-on-Nth-delivery bonus when the threshold is crossed ──
+    if (
+      referral.referredGetsReward &&
+      incremented.completedPaidDeliveries === config.perDeliveryBonusTriggerCount &&
+      !referral.referredRewardPaidAt &&
+      referral.referredDriverId
+    ) {
+      const bonusAmountCents = config.perDeliveryReferredBonusCents;
+      const bonusAmountDollars = bonusAmountCents / 100;
+
+      if (bonusAmountDollars > 0) {
+        await this.payoutProvider.createReferredRewardPayout({
+          referredDriverId: referral.referredDriverId,
+          amount: bonusAmountDollars,
+          referralId: referral.id,
+        });
+      }
+
+      // Mark the referral as REWARD_PAID — prevents the per-delivery
+      // bonus from firing again on subsequent deliveries.
+      await this.prisma.referral.update({
+        where: { id: referral.id },
+        data: { status: "REWARD_PAID" },
+      });
+
+      this.logger.log(
+        `Referral ${referral.id} PER_DELIVERY bonus fired on delivery #${incremented.completedPaidDeliveries} (deliveryId=${deliveryId}) — referred driver ${referral.referredDriverId} earns $${bonusAmountDollars}`
+      );
+    }
+  }
+
+  /**
+   * PER_DELIVERY handler for a referred CUSTOMER.
+   *
+   * Similar to handlePerDeliveryDriverReferral but for customer referred
+   * parties. The per-delivery referrer payout is the same (DriverPayout
+   * for driver referrer, ReferralCredit for customer referrer). The
+   * $50-on-5th-delivery bonus goes to the REFERRED customer as a
+   * ReferralCredit (not a DriverPayout, since they're not a driver).
+   */
+  private async handlePerDeliveryCustomerReferral(
+    referral: {
+      id: string;
+      referrerId: string | null;
+      referrerUserId: string | null;
+      referralType: EnumReferralType | null;
+      status: string;
+      completedPaidDeliveries: number;
+      expiresAt: Date | null;
+      referredGetsReward: boolean;
+      referredRewardAmount: number | null;
+      referredRewardPaidAt: Date | null;
+      referredCustomerId: string | null;
+    },
+    deliveryId: string,
+  ): Promise<void> {
+    if (!deliveryId) {
+      return;
+    }
+
+    // Expiry check
+    if (referral.expiresAt && referral.expiresAt < new Date()) {
+      await this.prisma.referral.update({
+        where: { id: referral.id },
+        data: { status: "EXPIRED" },
+      });
+      return;
+    }
+
+    const config = await this.appSettingService.getReferralProgramSettings();
+    if (!config.isActive) {
+      this.logger.log(
+        `Referral ${referral.id} customer per-delivery payout skipped — program is paused`
+      );
+      return;
+    }
+
+    // ── Step 1: Create the per-delivery referrer payout/credit ──
+    if (referral.referralType === ReferralTypeDto.DRIVER && referral.referrerId) {
+      // Driver referrer → DriverPayout (driver referring a customer)
+      await this.createDriverReferrerPerDeliveryPayout({
+        referrerDriverId: referral.referrerId,
+        deliveryId,
+        amountCents: config.perDeliveryReferrerAmountCents,
+        referralId: referral.id,
+      });
+    } else if (referral.referralType === ReferralTypeDto.CUSTOMER && referral.referrerUserId) {
+      // Customer referrer → ReferralCredit
+      const referrerCustomer = await this.prisma.customer.findUnique({
+        where: { userId: referral.referrerUserId },
+        select: { id: true },
+      });
+      if (referrerCustomer) {
+        await this.createReferralCredit({
+          referralId: referral.id,
+          customerId: referrerCustomer.id,
+          deliveryId,
+          amountCents: config.perDeliveryReferrerAmountCents,
+          reason: `Per-delivery referrer credit (delivery ${deliveryId})`,
+        });
+      }
+    }
+
+    // ── Step 2: Increment completedPaidDeliveries ──
+    const incremented = await this.prisma.referral.update({
+      where: { id: referral.id },
+      data: { completedPaidDeliveries: { increment: 1 } },
+      select: { completedPaidDeliveries: true },
+    });
+
+    // ── Step 3: Fire the $50-on-Nth-delivery bonus to the referred customer ──
+    if (
+      referral.referredGetsReward &&
+      incremented.completedPaidDeliveries === config.perDeliveryBonusTriggerCount &&
+      !referral.referredRewardPaidAt &&
+      referral.referredCustomerId
+    ) {
+      const bonusAmountCents = config.perDeliveryReferredBonusCents;
+
+      if (bonusAmountCents > 0) {
+        await this.createReferralCredit({
+          referralId: referral.id,
+          customerId: referral.referredCustomerId,
+          deliveryId,
+          amountCents: bonusAmountCents,
+          reason: `$50-on-${config.perDeliveryBonusTriggerCount}th-delivery bonus`,
+        });
+      }
+
+      // Mark the referral as REWARD_PAID + set referredRewardPaidAt
+      await this.prisma.referral.update({
+        where: { id: referral.id },
+        data: {
+          status: "REWARD_PAID",
+          referredRewardPaidAt: new Date(),
+        },
+      });
+
+      this.logger.log(
+        `Referral ${referral.id} PER_DELIVERY bonus fired on delivery #${incremented.completedPaidDeliveries} (deliveryId=${deliveryId}) — referred customer ${referral.referredCustomerId} earns ${bonusAmountCents}c credit`
+      );
+    }
+  }
+
+  /**
+   * Create a per-delivery DriverPayout for a driver referrer (PER_DELIVERY model).
+   *
+   * Idempotency: the `failureMessage` field stores `PER_DELIVERY:<deliveryId>`.
+   * Before creating, we check if a payout with that failureMessage already
+   * exists for this driver — if so, we skip. This is race-prone (two triggers
+   * could both pass the check before either creates), but the window is tiny
+   * and the trigger is only called once per delivery completion by the
+   * delivery-lifecycle service.
+   *
+   * Note: DriverPayout.deliveryId is @unique, so we set deliveryId=null
+   * (the TRIP_COMPLETION payout already has the deliveryId set). The link
+   * to the triggering delivery is preserved via failureMessage.
+   */
+  private async createDriverReferrerPerDeliveryPayout(input: {
+    referrerDriverId: string;
+    deliveryId: string;
+    amountCents: number;
+    referralId: string;
+  }): Promise<void> {
+    if (input.amountCents <= 0) return;
+
+    const failureMessage = `PER_DELIVERY:${input.deliveryId}`;
+    const amountDollars = input.amountCents / 100;
+
+    // Idempotency check
+    const existing = await this.prisma.driverPayout.findFirst({
+      where: {
+        driverId: input.referrerDriverId,
+        type: "REFERRAL_REFERRER",
+        failureMessage,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      // Already paid for this delivery — skip.
+      return;
+    }
+
+    await this.prisma.driverPayout.create({
+      data: {
+        driverId: input.referrerDriverId,
+        deliveryId: null,
+        type: "REFERRAL_REFERRER",
+        status: "PENDING",
+        grossAmount: amountDollars,
+        netAmount: amountDollars,
+        platformFee: 0,
+        insuranceFee: 0,
+        driverSharePct: 100,
+        tierNumber: null,
+        failureMessage,
+      },
+    });
+
+    this.logger.log(
+      `Created per-delivery referrer payout: driver=${input.referrerDriverId} delivery=${input.deliveryId} amount=$${amountDollars} referral=${input.referralId}`
+    );
+  }
+
+  /**
+   * Create a ReferralCredit row (for customer referrers and customer
+   * referred-party bonuses).
+   *
+   * Idempotency: the (referralId, deliveryId, customerId) tuple uniquely
+   * identifies a per-delivery credit. We check before creating. The
+   * schema doesn't have a unique constraint on this tuple, so we rely
+   * on the application-level check + the single-threaded trigger call
+   * per delivery completion.
+   */
+  private async createReferralCredit(input: {
+    referralId: string;
+    customerId: string;
+    deliveryId: string;
+    amountCents: number;
+    reason: string;
+  }): Promise<void> {
+    if (input.amountCents <= 0) return;
+
+    // Idempotency check
+    const existing = await this.prisma.referralCredit.findFirst({
+      where: {
+        referralId: input.referralId,
+        deliveryId: input.deliveryId,
+        customerId: input.customerId,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      return;
+    }
+
+    await this.prisma.referralCredit.create({
+      data: {
+        referralId: input.referralId,
+        customerId: input.customerId,
+        deliveryId: input.deliveryId,
+        amountCents: input.amountCents,
+        reason: input.reason,
+        status: "PENDING",
+      },
+    });
+
+    this.logger.log(
+      `Created referral credit: customer=${input.customerId} delivery=${input.deliveryId} amount=${input.amountCents}c referral=${input.referralId} reason="${input.reason}"`
+    );
   }
 
   /**
@@ -333,7 +820,13 @@ export class ReferralTriggerService {
       });
 
       // ── Check referrer tier payouts ──
-      await this.maybeFireReferrerTierPayouts(tx, referral.referrerId);
+      // Only driver referrers (referrerId IS NOT NULL) participate in
+      // tier payouts. Customer referrers (referrerUserId set, referrerId
+      // null) earn per-delivery credits, which are handled in the
+      // PER_DELIVERY branch of onDeliveryCompleted, not here.
+      if (referral.referrerId) {
+        await this.maybeFireReferrerTierPayouts(tx, referral.referrerId);
+      }
 
       this.logger.log(
         `Referral ${referralId} success fired — referrer=${referral.referrerId}`

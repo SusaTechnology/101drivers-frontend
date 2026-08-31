@@ -70,6 +70,107 @@ export class ReferralController {
     return this.referralService.applyReferral(driverId, body.referralCode);
   }
 
+  // ============================================================
+  // CUSTOMER-REFERRER ENDPOINTS (Phase 2)
+  // ============================================================
+  // Customer referrers use Customer.referralCode (not Driver.referralCode)
+  // and earn ReferralCredit rows (per-delivery credits applied to their
+  // next Stripe invoice). All endpoints require authentication; the
+  // caller's Customer profile is resolved from their JWT userId.
+
+  /**
+   * GET /referrals/my-customer-referral-code
+   * Get or create the customer's unique referral code. The code is
+   * stored on Customer.referralCode (V2 schema).
+   */
+  @common.Get("my-customer-referral-code")
+  @swagger.ApiOkResponse({ description: "Customer's referral code" })
+  async getMyCustomerReferralCode(
+    @common.Req() req: any,
+    @common.Res() res: Response,
+  ): Promise<void> {
+    const customerId = await this.referralService.resolveCustomerId(req);
+    const referralCode = await this.referralService.getMyCustomerReferralCode(customerId);
+    res.json({ referralCode });
+  }
+
+  /**
+   * POST /referrals/my-customer-referral-code
+   * Set a custom referral code for the customer (instead of the auto-generated one).
+   * Validates the code against the regex + blocklist + collision check.
+   * Once set, the code is locked and cannot be changed.
+   *
+   * Body: { referralCode: string }
+   */
+  @common.Post("my-customer-referral-code")
+  @swagger.ApiOkResponse({ description: "Customer referral code set" })
+  async setMyCustomerReferralCode(
+    @common.Body() body: { referralCode: string },
+    @common.Req() req: any,
+    @common.Res() res: Response,
+  ): Promise<void> {
+    const customerId = await this.referralService.resolveCustomerId(req);
+    const referralCode = await this.referralService.setMyCustomerReferralCode(
+      customerId,
+      body.referralCode,
+    );
+    res.json({ referralCode });
+  }
+
+  /**
+   * POST /referrals/my-driver-referral-code
+   * Set a custom referral code for the driver (instead of the auto-generated one).
+   * Validates the code against the regex + blocklist + collision check.
+   * Once set, the code is locked and cannot be changed.
+   *
+   * Body: { referralCode: string }
+   */
+  @common.Post("my-driver-referral-code")
+  @swagger.ApiOkResponse({ description: "Driver referral code set" })
+  async setMyDriverReferralCode(
+    @common.Body() body: { referralCode: string },
+    @common.Req() req: any,
+    @common.Res() res: Response,
+  ): Promise<void> {
+    const driverId = await this.referralService.resolveDriverId(req);
+    const referralCode = await this.referralService.setMyDriverReferralCode(
+      driverId,
+      body.referralCode,
+    );
+    res.json({ referralCode });
+  }
+
+  /**
+   * GET /referrals/my-customer-referrals
+   * List all referrals made by this customer (dealer or private).
+   */
+  @common.Get("my-customer-referrals")
+  @swagger.ApiOkResponse({ description: "Customer's referrals" })
+  async getMyCustomerReferrals(
+    @common.Req() req: any,
+    @common.Res() res: Response,
+  ): Promise<void> {
+    const customerId = await this.referralService.resolveCustomerId(req);
+    const referrals = await this.referralService.getMyCustomerReferrals(customerId);
+    res.json({ referrals });
+  }
+
+  /**
+   * GET /referrals/my-customer-referral-stats
+   * Get referral stats for a customer referrer (total credits earned, pending,
+   * active count, etc.).
+   */
+  @common.Get("my-customer-referral-stats")
+  @swagger.ApiOkResponse({ description: "Customer referral stats" })
+  async getMyCustomerReferralStats(
+    @common.Req() req: any,
+    @common.Res() res: Response,
+  ): Promise<void> {
+    const customerId = await this.referralService.resolveCustomerId(req);
+    const stats = await this.referralService.getMyCustomerReferralStats(customerId);
+    res.json(stats);
+  }
+
   /**
    * GET /referrals/driver-profile
    * Get driver profile info for the wallet page header.

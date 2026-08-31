@@ -173,6 +173,50 @@ export enum ReferralTimeLimitMode {
   FOREVER = "FOREVER",
 }
 
+/**
+ * Payout model for the referral program.
+ *
+ * - TIERED (legacy): the referrer earns `referrerRewardAmount` for
+ *   every `referralThreshold` SUCCESSFUL referrals. The referred
+ *   driver earns a one-shot `referredRewardAmount` when their own
+ *   referral becomes successful. Driver→Driver referrals only.
+ *
+ * - PER_DELIVERY (new): the referrer earns `perDeliveryReferrerAmountCents`
+ *   for every paid delivery completed by the referred party. The
+ *   referred party earns `perDeliveryReferredBonusCents` on the
+ *   `perDeliveryBonusTriggerCount`-th paid delivery (e.g. $50 on the
+ *   5th paid delivery). Works for Driver→Driver, Customer→Customer,
+ *   Customer→Driver, Driver→Customer referrals.
+ *
+ * The payout model is snapshotted onto each Referral row at
+ * applyReferral time, so admin changes don't retroactively change
+ * pending referrals. The threshold + amounts are read LIVE at
+ * trigger time so the admin can adjust incentives mid-program.
+ */
+export enum ReferralPayoutModelDto {
+  TIERED = "TIERED",
+  PER_DELIVERY = "PER_DELIVERY",
+}
+
+/**
+ * The role of the referrer in a referral relationship. Determines
+ * which side of the relationship earns what.
+ *
+ * - DRIVER: a driver referring another driver. Both the referrer
+ *   and the referred driver earn driver-side rewards (paid via
+ *   DriverPayout rows, settled through Stripe Connect).
+ *
+ * - CUSTOMER: a customer (dealer or private) referring another
+ *   customer. The referrer earns a credit applied to their next
+ *   invoice (ReferralCredit row, status=PENDING → APPLIED when
+ *   the next Stripe invoice is created). The referred customer
+ *   also earns a credit on their first paid delivery.
+ */
+export enum ReferralTypeDto {
+  DRIVER = "DRIVER",
+  CUSTOMER = "CUSTOMER",
+}
+
 export class ReferralProgramSettingsResponseDto {
   @ApiProperty({ description: "Master on/off switch for the referral program" })
   isActive!: boolean;
@@ -211,6 +255,51 @@ export class ReferralProgramSettingsResponseDto {
 
   @ApiPropertyOptional({ nullable: true, description: "One-shot reward amount in USD paid to the REFERRED driver when their referral becomes successful (null when referredGetsReward=false)" })
   referredRewardAmount!: number | null;
+
+  // ── PER_DELIVERY model fields (Phase 2) ───────────────────────────
+  @ApiProperty({
+    description: "Payout model: TIERED (per N successful referrals) or PER_DELIVERY (per paid delivery)",
+    enum: ReferralPayoutModelDto,
+  })
+  payoutModel!: ReferralPayoutModelDto;
+
+  @ApiProperty({
+    description:
+      "When payoutModel=PER_DELIVERY, the referrer earns this amount (in cents) for every paid delivery " +
+      "completed by the referred party. Default 500 ($5).",
+    example: 500,
+  })
+  perDeliveryReferrerAmountCents!: number;
+
+  @ApiProperty({
+    description:
+      "When payoutModel=PER_DELIVERY, the referred party earns this amount (in cents) as a one-shot bonus " +
+      "on the perDeliveryBonusTriggerCount-th paid delivery. Default 5000 ($50).",
+    example: 5000,
+  })
+  perDeliveryReferredBonusCents!: number;
+
+  @ApiProperty({
+    description:
+      "When payoutModel=PER_DELIVERY, the referred party's bonus fires on this paid-delivery count. " +
+      "Default 5 (the 5th paid delivery).",
+    example: 5,
+  })
+  perDeliveryBonusTriggerCount!: number;
+
+  @ApiProperty({
+    description:
+      "Whether customer referrals are enabled. When false, applyCustomerReferral rejects all " +
+      "codes. Independent of the master isActive flag (which gates ALL referrals).",
+  })
+  customerReferralsEnabled!: boolean;
+
+  @ApiProperty({
+    description:
+      "Whether driver referrals are enabled. When false, applyReferral (driver→driver) rejects all " +
+      "codes. Independent of the master isActive flag (which gates ALL referrals).",
+  })
+  driverReferralsEnabled!: boolean;
 }
 
 export class UpdateReferralProgramSettingsBody {
@@ -271,4 +360,50 @@ export class UpdateReferralProgramSettingsBody {
   @Min(0)
   @Max(10000)
   referredRewardAmount?: number | null;
+
+  // ── PER_DELIVERY model fields (Phase 2) ───────────────────────────
+  @ApiPropertyOptional({ description: "Payout model (TIERED vs PER_DELIVERY)", enum: ReferralPayoutModelDto })
+  @IsOptional()
+  @IsEnum(ReferralPayoutModelDto)
+  payoutModel?: ReferralPayoutModelDto;
+
+  @ApiPropertyOptional({
+    description: "PER_DELIVERY referrer amount in cents (>= 0). Default 500 ($5).",
+    example: 500,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  perDeliveryReferrerAmountCents?: number;
+
+  @ApiPropertyOptional({
+    description: "PER_DELIVERY referred bonus in cents (>= 0). Default 5000 ($50).",
+    example: 5000,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  perDeliveryReferredBonusCents?: number;
+
+  @ApiPropertyOptional({
+    description: "PER_DELIVERY bonus trigger count (>= 1). The referred party's bonus fires on this paid-delivery count. Default 5.",
+    example: 5,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  perDeliveryBonusTriggerCount?: number;
+
+  @ApiPropertyOptional({ description: "Enable customer (dealer/private) referrals independently of driver referrals." })
+  @IsOptional()
+  @IsBoolean()
+  customerReferralsEnabled?: boolean;
+
+  @ApiPropertyOptional({ description: "Enable driver→driver referrals independently of customer referrals." })
+  @IsOptional()
+  @IsBoolean()
+  driverReferralsEnabled?: boolean;
 }

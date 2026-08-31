@@ -737,7 +737,7 @@ export class AuthService {
 
     if (existingUser && existingUser.emailVerifiedAt == null) {
       // ── New flow: User exists from step 1, activate it ──────────────
-      const { userId, username, userRoles } = await this.prisma.$transaction(
+      const { userId, username, userRoles, customerId } = await this.prisma.$transaction(
         async (tx) => {
           // Activate the User
           await tx.user.update({
@@ -749,7 +749,7 @@ export class AuthService {
           });
 
           // Create the Customer row
-          await tx.customer.create({
+          const createdCustomer = await tx.customer.create({
             data: {
               customerType: EnumCustomerCustomerType.PRIVATE,
               contactName: dto.contactName || existingUser.fullName || "",
@@ -769,9 +769,27 @@ export class AuthService {
             userId: existingUser.id,
             username: existingUser.username,
             userRoles: existingUser.roles,
+            customerId: createdCustomer.id,
           };
         },
       );
+
+      // ── Apply referral code if provided ────────────────────────────
+      // Outside the transaction — non-blocking. Mirrors the driver signup
+      // flow: invalid/expired/paused codes are silently skipped. The
+      // customer account is already created at this point.
+      if (dto.referralCode && customerId) {
+        try {
+          await this.referralService.applyCustomerReferral(customerId, dto.referralCode);
+          this.logger.log(
+            `Referral ${dto.referralCode} applied for new private customer ${customerId}`
+          );
+        } catch (refErr: any) {
+          this.logger.warn(
+            `Referral application failed for private customer ${customerId} (code: ${dto.referralCode}): ${refErr.message}`
+          );
+        }
+      }
 
       return this.issueToken(
         userId,
@@ -796,7 +814,7 @@ export class AuthService {
     const hashed = await this.passwordService.hash(dto.password);
     const userPhone = dto.contactPhone ?? dto.phone ?? null;
 
-    const { userId, username, userRoles } = await this.prisma.$transaction(
+    const { userId, username, userRoles, customerId } = await this.prisma.$transaction(
       async (tx) => {
         const createdUser = await tx.user.create({
           data: {
@@ -812,7 +830,7 @@ export class AuthService {
           select: { id: true, username: true, roles: true },
         });
 
-        await tx.customer.create({
+        const createdCustomer = await tx.customer.create({
           data: {
             customerType: EnumCustomerCustomerType.PRIVATE,
             contactName: dto.contactName || dto.fullName || "",
@@ -830,9 +848,24 @@ export class AuthService {
           userId: createdUser.id,
           username: createdUser.username,
           userRoles: createdUser.roles,
+          customerId: createdCustomer.id,
         };
       },
     );
+
+    // ── Apply referral code if provided (legacy path) ──
+    if (dto.referralCode && customerId) {
+      try {
+        await this.referralService.applyCustomerReferral(customerId, dto.referralCode);
+        this.logger.log(
+          `Referral ${dto.referralCode} applied for new private customer (legacy path) ${customerId}`
+        );
+      } catch (refErr: any) {
+        this.logger.warn(
+          `Referral application failed for private customer ${customerId} (code: ${dto.referralCode}): ${refErr.message}`
+        );
+      }
+    }
 
     return this.issueToken(
       userId,
@@ -983,7 +1016,7 @@ export class AuthService {
     // deleted or never created.
     const userPhone = dto.contactPhone ?? dto.phone ?? null;
 
-    const { userId, username, userRoles } = await this.prisma.$transaction(
+    const { userId, username, userRoles, customerId } = await this.prisma.$transaction(
       async (tx) => {
         const createdUser = await tx.user.create({
           data: {
@@ -999,7 +1032,7 @@ export class AuthService {
           select: { id: true, username: true, roles: true },
         });
 
-        await tx.customer.create({
+        const createdCustomer = await tx.customer.create({
           data: {
             customerType: EnumCustomerCustomerType.BUSINESS,
             contactName: dto.contactName,
@@ -1020,9 +1053,27 @@ export class AuthService {
           userId: createdUser.id,
           username: createdUser.username,
           userRoles: createdUser.roles,
+          customerId: createdCustomer.id,
         };
       },
     );
+
+    // ── Apply referral code if provided ─────────────────────────────
+    // Outside the transaction — non-blocking. Mirrors the driver signup
+    // flow: invalid/expired/paused codes are silently skipped. The
+    // customer account is already created at this point.
+    if (dto.referralCode && customerId) {
+      try {
+        await this.referralService.applyCustomerReferral(customerId, dto.referralCode);
+        this.logger.log(
+          `Referral ${dto.referralCode} applied for new business customer ${customerId}`
+        );
+      } catch (refErr: any) {
+        this.logger.warn(
+          `Referral application failed for business customer ${customerId} (code: ${dto.referralCode}): ${refErr.message}`
+        );
+      }
+    }
 
     return this.issueToken(
       userId,

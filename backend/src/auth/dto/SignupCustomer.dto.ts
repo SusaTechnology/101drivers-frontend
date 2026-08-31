@@ -91,4 +91,17 @@ export class SignupCustomerDto {
   @IsOptional()
   @IsString()
   verificationToken?: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "Referral code used during signup. Applied to create a Referral link " +
+      "(Customer→Customer or Driver→Customer). Non-blocking: invalid/expired " +
+      "codes are silently ignored. Stored case-insensitively (uppercased on apply).",
+    example: "ABCD2345",
+  })
+  @IsOptional()
+  @IsString()
+  referralCode?: string | null;
 }

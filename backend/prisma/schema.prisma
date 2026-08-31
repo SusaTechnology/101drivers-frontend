@@ -1721,8 +1721,12 @@ enum EnumReferralRewardTrigger {
 model Referral {
   id              String             @id @default(cuid())
   referralCode    String
-  referrerId      String
-  referrer        Driver             @relation("ReferrerReferrals", fields: [referrerId], references: [id])
+  // referrerId: nullable in Phase 2 — when a Customer is the referrer
+  // (referralType=CUSTOMER), referrerId is null and referrerUserId points
+  // to the User backing the Customer. When a Driver is the referrer
+  // (referralType=DRIVER), referrerId points to the Driver row.
+  referrerId      String?
+  referrer        Driver?            @relation("ReferrerReferrals", fields: [referrerId], references: [id])
   referredEmail   String?
   referredPhone   String?
   referredDriverId String?            @unique
