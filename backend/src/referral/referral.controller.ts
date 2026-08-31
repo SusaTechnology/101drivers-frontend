@@ -235,7 +235,8 @@ export class ReferralController {
   /**
    * GET /referrals/admin/referrers
    * Paginated list of referrers with their stats.
-   * Query params: page (default 1), pageSize (default 20), search (by name).
+   * Query params: page (default 1), pageSize (default 20), search (by name),
+   * referralType ("DRIVER" or "CUSTOMER", default "DRIVER").
    */
   @common.Get("admin/referrers")
   @swagger.ApiOkResponse({ description: "Paginated list of referrers" })
@@ -248,11 +249,13 @@ export class ReferralController {
     @common.Query("page") page?: string,
     @common.Query("pageSize") pageSize?: string,
     @common.Query("search") search?: string,
+    @common.Query("referralType") referralType?: "DRIVER" | "CUSTOMER",
   ): Promise<any> {
     return this.referralService.getAdminReferrersList({
       page: page ? parseInt(page, 10) : 1,
       pageSize: pageSize ? parseInt(pageSize, 10) : 20,
       search: search || undefined,
+      referralType: referralType || undefined,
     });
   }
 
@@ -272,5 +275,176 @@ export class ReferralController {
     @common.Param("referrerId") referrerId: string,
   ): Promise<any> {
     return this.referralService.getAdminReferrerDetail(referrerId);
+  }
+
+  // ============================================================
+  // ADMIN ENDPOINTS (Phase 3) — referrals list, detail, manual override
+  // ============================================================
+
+  /**
+   * GET /referrals/admin/referrals
+   * Paginated list of ALL referrals (admin view). Supports filtering by
+   * referralType, payoutModel, status, and search by referralCode or
+   * referredEmail.
+   *
+   * Query params:
+   *   - page (default 1)
+   *   - pageSize (default 20)
+   *   - referralType ("DRIVER" or "CUSTOMER")
+   *   - payoutModel ("TIERED" or "PER_DELIVERY")
+   *   - status (any EnumReferralStatus value)
+   *   - search (matches referralCode or referredEmail, case-insensitive)
+   */
+  @common.Get("admin/referrals")
+  @swagger.ApiOkResponse({ description: "Paginated list of all referrals" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getAdminReferralsList(
+    @common.Query("page") page?: string,
+    @common.Query("pageSize") pageSize?: string,
+    @common.Query("referralType") referralType?: "DRIVER" | "CUSTOMER",
+    @common.Query("payoutModel") payoutModel?: "TIERED" | "PER_DELIVERY",
+    @common.Query("status") status?: string,
+    @common.Query("search") search?: string,
+  ): Promise<any> {
+    return this.referralService.getAdminReferralsList({
+      page: page ? parseInt(page, 10) : 1,
+      pageSize: pageSize ? parseInt(pageSize, 10) : 20,
+      referralType: referralType || undefined,
+      payoutModel: payoutModel || undefined,
+      status: status || undefined,
+      search: search || undefined,
+    });
+  }
+
+  /**
+   * GET /referrals/admin/referrals/:referralId
+   * Detail view for a single referral — full info including the
+   * associated ReferralCredit rows + DriverPayout rows.
+   */
+  @common.Get("admin/referrals/:referralId")
+  @swagger.ApiOkResponse({ description: "Referral detail with credits + payouts" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getAdminReferralDetail(
+    @common.Param("referralId") referralId: string,
+  ): Promise<any> {
+    return this.referralService.getAdminReferralDetail(referralId);
+  }
+
+  /**
+   * POST /referrals/admin/referrals/:referralId/override-status
+   * Manual override: admin sets the status of a referral.
+   *
+   * Allowed transitions:
+   *   - any non-terminal → REWARD_PAID (force-fires the one-shot referred reward)
+   *   - any → EXPIRED (admin manually expires)
+   *   - any → CLOSED (admin closes without payout)
+   *
+   * Refuses to transition FROM REWARD_PAID (would require a clawback).
+   *
+   * Body: { status: "REWARD_PAID" | "EXPIRED" | "CLOSED", reason?: string }
+   */
+  @common.Post("admin/referrals/:referralId/override-status")
+  @swagger.ApiOkResponse({ description: "Referral status overridden" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async manualOverrideReferralStatus(
+    @common.Param("referralId") referralId: string,
+    @common.Body() body: { status: "REWARD_PAID" | "EXPIRED" | "CLOSED"; reason?: string },
+  ): Promise<any> {
+    return this.referralService.manualOverrideReferralStatus(
+      referralId,
+      body.status,
+      body.reason,
+    );
+  }
+
+  // ============================================================
+  // ADMIN ENDPOINTS (Phase 3) — ReferralCredit list + manual override
+  // ============================================================
+
+  /**
+   * GET /referrals/admin/credits
+   * Paginated list of all ReferralCredit rows (admin view). Supports
+   * filtering by status, customerId, referralId.
+   *
+   * Query params:
+   *   - page (default 1)
+   *   - pageSize (default 20)
+   *   - status ("PENDING" | "APPLIED" | "EXPIRED")
+   *   - customerId
+   *   - referralId
+   */
+  @common.Get("admin/credits")
+  @swagger.ApiOkResponse({ description: "Paginated list of all ReferralCredit rows" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getAdminReferralCreditsList(
+    @common.Query("page") page?: string,
+    @common.Query("pageSize") pageSize?: string,
+    @common.Query("status") status?: "PENDING" | "APPLIED" | "EXPIRED",
+    @common.Query("customerId") customerId?: string,
+    @common.Query("referralId") referralId?: string,
+  ): Promise<any> {
+    return this.referralService.getAdminReferralCreditsList({
+      page: page ? parseInt(page, 10) : 1,
+      pageSize: pageSize ? parseInt(pageSize, 10) : 20,
+      status: status || undefined,
+      customerId: customerId || undefined,
+      referralId: referralId || undefined,
+    });
+  }
+
+  /**
+   * POST /referrals/admin/credits/:creditId/apply
+   * Manual apply: admin marks a PENDING ReferralCredit as APPLIED.
+   *
+   * Body: { stripeInvoiceId?: string }
+   */
+  @common.Post("admin/credits/:creditId/apply")
+  @swagger.ApiOkResponse({ description: "ReferralCredit applied" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async manualApplyReferralCredit(
+    @common.Param("creditId") creditId: string,
+    @common.Body() body: { stripeInvoiceId?: string },
+  ): Promise<any> {
+    return this.referralService.manualApplyReferralCredit(creditId, body.stripeInvoiceId);
+  }
+
+  /**
+   * POST /referrals/admin/credits/:creditId/expire
+   * Manual expire: admin marks a PENDING ReferralCredit as EXPIRED.
+   *
+   * Body: { reason?: string }
+   */
+  @common.Post("admin/credits/:creditId/expire")
+  @swagger.ApiOkResponse({ description: "ReferralCredit expired" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async manualExpireReferralCredit(
+    @common.Param("creditId") creditId: string,
+    @common.Body() body: { reason?: string },
+  ): Promise<any> {
+    return this.referralService.manualExpireReferralCredit(creditId, body.reason);
   }
 }

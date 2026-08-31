@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
+import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AppSettingService } from "../appSetting/appSetting.service";
 import {
@@ -11,12 +11,18 @@ import {
   generateUniqueReferralCode,
   validateCustomReferralCode,
 } from "./referral-code";
+import {
+  REFERRAL_REWARD_PAYOUT_PROVIDER,
+  ReferralRewardPayoutProvider,
+} from "./referral-payout-provider";
 
 @Injectable()
 export class ReferralService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly appSettingService: AppSettingService,
+    @Inject(forwardRef(() => REFERRAL_REWARD_PAYOUT_PROVIDER))
+    private readonly payoutProvider: ReferralRewardPayoutProvider,
   ) {}
 
   /**
@@ -336,7 +342,6 @@ export class ReferralService {
     // storage location for a driver referrer).
     let referrerDriverId: string | null = null;
     let referrerUserId: string | null = null;
-    let referrerCustomerId: string | null = null;
     let referralType: ReferralTypeDto;
     let legacyReferralId: string | null = legacyReferral?.id ?? null;
 
@@ -348,7 +353,6 @@ export class ReferralService {
       referrerUserId = driverReferrer.userId;
       referralType = ReferralTypeDto.DRIVER;
     } else if (customerReferrer) {
-      referrerCustomerId = customerReferrer.id;
       referrerUserId = customerReferrer.userId;
       referralType = ReferralTypeDto.CUSTOMER;
     } else if (legacyReferral) {
@@ -520,7 +524,6 @@ export class ReferralService {
 
     return { success: true, message: "Referral code applied successfully" };
   }
-
   /**
    * Get driver profile info for the wallet page header.
    */
@@ -622,15 +625,23 @@ export class ReferralService {
   /**
    * Program-wide stats for the admin dashboard.
    *
+   * Returns counts + $ totals, broken down by model (TIERED vs PER_DELIVERY)
+   * and by referrer type (Driver vs Customer). The admin dashboard uses
+   * these to render the summary cards.
+   *
    * Returns:
    *   - totalReferrals: count of all real referrals (excluding code-holder rows)
    *   - successfulReferrals: count where status = REWARD_PAID
    *   - activeReferrals: count in progress (PENDING/REGISTERED/etc.)
    *   - expiredReferrals: count where status = EXPIRED
-   *   - totalPaidOut: sum of all REFERRAL_REFERRER + REFERRAL_REFERRED
-   *     payouts (status = PAID)
-   *   - totalPending: sum of all REFERRAL_* payouts (status = PENDING/ELIGIBLE)
-   *   - uniqueReferrers: count of distinct referrerIds
+   *   - uniqueReferrers: count of distinct referrerIds (driver referrers)
+   *   - uniqueCustomerReferrers: count of distinct referrerUserIds (customer referrers)
+   *   - totalPaidOut: sum of all REFERRAL_* payouts (status = PAID) in dollars
+   *   - totalPending: sum of all REFERRAL_* payouts (status = PENDING/ELIGIBLE) in dollars
+   *   - totalCreditsIssuedCents: sum of all ReferralCredit amountCents (status = PENDING or APPLIED)
+   *   - totalCreditsAppliedCents: sum of all ReferralCredit amountCents (status = APPLIED)
+   *   - perModel: { TIERED: { count }, PER_DELIVERY: { count } }
+   *   - perReferrerType: { DRIVER: { count }, CUSTOMER: { count } }
    */
   async getAdminProgramStats() {
     const [
@@ -638,15 +649,22 @@ export class ReferralService {
       successfulReferrals,
       activeReferrals,
       expiredReferrals,
-      uniqueReferrersAgg,
+      uniqueDriverReferrersAgg,
+      uniqueCustomerReferrersAgg,
       paidPayouts,
       pendingPayouts,
+      creditsAgg,
+      tieredCount,
+      perDeliveryCount,
+      driverTypeCount,
+      customerTypeCount,
     ] = await Promise.all([
       this.prisma.referral.count({
         where: {
           OR: [
             { referredDriverId: { not: null } },
             { referredEmail: { not: null } },
+            { referredCustomerId: { not: null } },
           ],
         },
       }),
@@ -657,12 +675,29 @@ export class ReferralService {
         },
       }),
       this.prisma.referral.count({ where: { status: "EXPIRED" } }),
+      // Unique driver referrers (referrerId IS NOT NULL)
       this.prisma.referral.groupBy({
         by: ["referrerId"],
         where: {
+          referrerId: { not: null },
           OR: [
             { referredDriverId: { not: null } },
             { referredEmail: { not: null } },
+            { referredCustomerId: { not: null } },
+          ],
+        },
+        _count: { _all: true },
+      }),
+      // Unique customer referrers (referrerUserId IS NOT NULL, referralType = CUSTOMER)
+      this.prisma.referral.groupBy({
+        by: ["referrerUserId"],
+        where: {
+          referrerUserId: { not: null },
+          referralType: "CUSTOMER",
+          OR: [
+            { referredDriverId: { not: null } },
+            { referredEmail: { not: null } },
+            { referredCustomerId: { not: null } },
           ],
         },
         _count: { _all: true },
@@ -681,22 +716,51 @@ export class ReferralService {
         },
         select: { netAmount: true },
       }),
+      // Aggregate ReferralCredit rows by status
+      this.prisma.referralCredit.groupBy({
+        by: ["status"],
+        _sum: { amountCents: true },
+        _count: { _all: true },
+      }),
+      // Count by payout model
+      this.prisma.referral.count({ where: { payoutModel: "TIERED" } }),
+      this.prisma.referral.count({ where: { payoutModel: "PER_DELIVERY" } }),
+      // Count by referrer type
+      this.prisma.referral.count({ where: { referralType: "DRIVER" } }),
+      this.prisma.referral.count({ where: { referralType: "CUSTOMER" } }),
     ]);
 
     const totalPaidOut = paidPayouts.reduce((s, p) => s + p.netAmount, 0);
     const totalPending = pendingPayouts.reduce((s, p) => s + p.netAmount, 0);
+
+    // Aggregate credits: PENDING + APPLIED = "issued", APPLIED = "applied to invoice"
+    const creditsPending = creditsAgg.find((c) => c.status === "PENDING");
+    const creditsApplied = creditsAgg.find((c) => c.status === "APPLIED");
+    const totalCreditsIssuedCents =
+      (creditsPending?._sum.amountCents ?? 0) + (creditsApplied?._sum.amountCents ?? 0);
+    const totalCreditsAppliedCents = creditsApplied?._sum.amountCents ?? 0;
 
     return {
       totalReferrals,
       successfulReferrals,
       activeReferrals,
       expiredReferrals,
-      uniqueReferrers: uniqueReferrersAgg.length,
+      uniqueReferrers: uniqueDriverReferrersAgg.length,
+      uniqueCustomerReferrers: uniqueCustomerReferrersAgg.length,
       totalPaidOut,
       totalPending,
+      totalCreditsIssuedCents,
+      totalCreditsAppliedCents,
+      perModel: {
+        TIERED: { count: tieredCount },
+        PER_DELIVERY: { count: perDeliveryCount },
+      },
+      perReferrerType: {
+        DRIVER: { count: driverTypeCount },
+        CUSTOMER: { count: customerTypeCount },
+      },
     };
   }
-
   /**
    * Paginated list of referrers with their stats.
    *
@@ -704,20 +768,114 @@ export class ReferralService {
    * across all their referrals, $ earned from referrals.
    *
    * For the admin table on /admin-referral-program.
+   *
+   * Phase 2 (V2): supports a `referralType` filter ("DRIVER" or "CUSTOMER")
+   * to switch between driver referrers (referrerId IS NOT NULL) and
+   * customer referrers (referrerUserId IS NOT NULL, referralType=CUSTOMER).
+   * Default: "DRIVER" (legacy behavior).
    */
   async getAdminReferrersList(opts: {
     page?: number;
     pageSize?: number;
     search?: string;
+    referralType?: "DRIVER" | "CUSTOMER";
   }) {
     const page = Math.max(1, opts.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 20));
     const skip = (page - 1) * pageSize;
+    const referralType = opts.referralType ?? "DRIVER";
 
+    if (referralType === "CUSTOMER") {
+      // Customer referrers — list distinct referrerUserIds
+      const rows = await this.prisma.referral.findMany({
+        where: {
+          referrerUserId: { not: null },
+          referralType: "CUSTOMER",
+          OR: [
+            { referredDriverId: { not: null } },
+            { referredEmail: { not: null } },
+            { referredCustomerId: { not: null } },
+          ],
+          ...(opts.search
+            ? {
+                referrerUser: {
+                  fullName: { contains: opts.search, mode: "insensitive" },
+                },
+              }
+            : {}),
+        },
+        distinct: ["referrerUserId"],
+        select: { referrerUserId: true },
+      });
+      const allIds = rows
+        .map((r) => r.referrerUserId)
+        .filter((id): id is string => !!id);
+      const total = allIds.length;
+      const pagedIds = allIds.slice(skip, skip + pageSize);
+
+      if (pagedIds.length === 0) {
+        return { referrers: [], total, page, pageSize };
+      }
+
+      // For each customer referrer, get their stats
+      const referrers = await Promise.all(
+        pagedIds.map(async (referrerUserId) => {
+          const user = await this.prisma.user.findUnique({
+            where: { id: referrerUserId },
+            select: { id: true, fullName: true, email: true },
+          });
+          const customer = await this.prisma.customer.findUnique({
+            where: { userId: referrerUserId },
+            select: { id: true, businessName: true, contactName: true, customerType: true },
+          });
+
+          const referrals = await this.prisma.referral.findMany({
+            where: {
+              referrerUserId,
+              referralType: "CUSTOMER",
+              OR: [
+                { referredDriverId: { not: null } },
+                { referredEmail: { not: null } },
+                { referredCustomerId: { not: null } },
+              ],
+            },
+            select: { status: true, completedPaidDeliveries: true },
+          });
+
+          const successfulReferrals = referrals.filter((r) => r.status === "REWARD_PAID").length;
+          const totalPaidDeliveries = referrals.reduce(
+            (s, r) => s + (r.completedPaidDeliveries || 0),
+            0,
+          );
+
+          // Sum of all ReferralCredit rows applied to this customer's invoices
+          const credits = await this.prisma.referralCredit.findMany({
+            where: { customerId: customer?.id, status: "APPLIED" },
+            select: { amountCents: true },
+          });
+          const totalEarnedCents = credits.reduce((s, c) => s + c.amountCents, 0);
+
+          return {
+            referrerId: customer?.id ?? referrerUserId,
+            referrerUserId,
+            referrerName:
+              customer?.businessName || customer?.contactName || user?.fullName || "Unknown",
+            referrerEmail: user?.email || null,
+            referrerType: "CUSTOMER",
+            customerType: customer?.customerType ?? null,
+            totalReferrals: referrals.length,
+            successfulReferrals,
+            totalPaidDeliveries,
+            totalEarnedCents,
+          };
+        }),
+      );
+
+      return { referrers, total, page, pageSize };
+    }
+
+    // ── Driver referrers (legacy) ──
     // Find all referrerIds that have at least one real referral.
-    // Only driver referrers (referrerId IS NOT NULL) appear in this
-    // legacy admin list — customer referrers use referrerUserId and
-    // are handled by a separate method.
     const referrerRows = await this.prisma.referral.findMany({
       where: {
         referrerId: { not: null },
@@ -739,8 +897,9 @@ export class ReferralService {
       select: { referrerId: true },
     });
 
-    // Filter out nulls (defensive — should not happen given the where clause)
-    const allIds = referrerRows.map((r) => r.referrerId).filter((id): id is string => !!id);
+    const allIds = referrerRows
+      .map((r) => r.referrerId)
+      .filter((id): id is string => !!id);
     const total = allIds.length;
     const pagedIds = allIds.slice(skip, skip + pageSize);
 
@@ -798,13 +957,14 @@ export class ReferralService {
           referrerId,
           referrerName: driver?.user?.fullName || "Unknown",
           referrerEmail: driver?.user?.email || null,
+          referrerType: "DRIVER",
           totalReferrals: referrals.length,
           successfulReferrals,
           totalTrips,
           totalEarned,
           lastPaidTier: driver?.lastPaidReferrerTier ?? 0,
         };
-      })
+      }),
     );
 
     return {
@@ -814,7 +974,6 @@ export class ReferralService {
       pageSize,
     };
   }
-
   /**
    * Detail view for a single referrer — list of all their referrals
    * with per-referral status, trips progress, reward amount, paid date.
@@ -906,7 +1065,550 @@ export class ReferralService {
     };
   }
 
+    // ============================================================
+  // ADMIN ENDPOINTS (Phase 3) — referrals list, detail, manual override
   // ============================================================
+
+  /**
+   * Paginated list of ALL referrals (admin view). Supports filtering by
+   * referralType, payoutModel, status, and search by referralCode or
+   * referredEmail.
+   *
+   * Returns each referral with:
+   *   - id, referralCode, status, referralType, payoutModel
+   *   - referredEmail, referredDriver (with user), referredCustomer (with contactName/businessName)
+   *   - referrer (driver referrer) or referrerUser (customer referrer)
+   *   - tripsCompleted, completedPaidDeliveries
+   *   - createdAt, expiresAt
+   */
+  async getAdminReferralsList(opts: {
+    page?: number;
+    pageSize?: number;
+    referralType?: "DRIVER" | "CUSTOMER";
+    payoutModel?: "TIERED" | "PER_DELIVERY";
+    status?: string;
+    search?: string;
+  }) {
+    const page = Math.max(1, opts.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+
+    const where: any = {
+      // Exclude code-holder rows (no referred party)
+      OR: [
+        { referredDriverId: { not: null } },
+        { referredEmail: { not: null } },
+        { referredCustomerId: { not: null } },
+      ],
+    };
+    if (opts.referralType) where.referralType = opts.referralType;
+    if (opts.payoutModel) where.payoutModel = opts.payoutModel;
+    if (opts.status) where.status = opts.status;
+    if (opts.search) {
+      where.AND = [
+        {
+          OR: [
+            { referralCode: { contains: opts.search, mode: "insensitive" } },
+            { referredEmail: { contains: opts.search, mode: "insensitive" } },
+          ],
+        },
+      ];
+    }
+
+    const [referrals, total] = await Promise.all([
+      this.prisma.referral.findMany({
+        where,
+        select: {
+          id: true,
+          referralCode: true,
+          status: true,
+          referralType: true,
+          payoutModel: true,
+          referredEmail: true,
+          referredDriverId: true,
+          referredCustomerId: true,
+          referrerId: true,
+          referrerUserId: true,
+          tripsCompleted: true,
+          completedPaidDeliveries: true,
+          requiredDeliveries: true,
+          rewardTrigger: true,
+          referredGetsReward: true,
+          referredRewardAmount: true,
+          referredRewardPaidAt: true,
+          expiresAt: true,
+          createdAt: true,
+          referredDriver: {
+            select: { id: true, user: { select: { id: true, fullName: true, email: true } } },
+          },
+          referredCustomer: {
+            select: {
+              id: true,
+              contactName: true,
+              businessName: true,
+              customerType: true,
+              contactEmail: true,
+              user: { select: { id: true, fullName: true, email: true } },
+            },
+          },
+          referrer: {
+            select: { id: true, user: { select: { id: true, fullName: true, email: true } } },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.referral.count({ where }),
+    ]);
+
+    // For customer referrers, fetch the referrerUser + customer info
+    const referrerUserIds = referrals
+      .map((r) => r.referrerUserId)
+      .filter((id): id is string => !!id);
+    const referrerUsers = referrerUserIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: referrerUserIds } },
+          select: { id: true, fullName: true, email: true },
+        })
+      : [];
+    const referrerCustomers = referrerUserIds.length
+      ? await this.prisma.customer.findMany({
+          where: { userId: { in: referrerUserIds } },
+          select: {
+            userId: true,
+            businessName: true,
+            contactName: true,
+            customerType: true,
+          },
+        })
+      : [];
+    const referrerUserById = new Map(referrerUsers.map((u) => [u.id, u]));
+    const referrerCustomerByUserId = new Map(referrerCustomers.map((c) => [c.userId, c]));
+
+    return {
+      referrals: referrals.map((r) => {
+        const referrerUser = r.referrerUserId ? referrerUserById.get(r.referrerUserId) : null;
+        const referrerCustomer = r.referrerUserId
+          ? referrerCustomerByUserId.get(r.referrerUserId)
+          : null;
+        return {
+          id: r.id,
+          referralCode: r.referralCode,
+          status: r.status,
+          referralType: r.referralType,
+          payoutModel: r.payoutModel,
+          referredEmail: r.referredEmail,
+          referredDriver: r.referredDriver
+            ? {
+                id: r.referredDriver.id,
+                name: r.referredDriver.user?.fullName || null,
+                email: r.referredDriver.user?.email || null,
+              }
+            : null,
+          referredCustomer: r.referredCustomer
+            ? {
+                id: r.referredCustomer.id,
+                name:
+                  r.referredCustomer.businessName ||
+                  r.referredCustomer.contactName ||
+                  r.referredCustomer.user?.fullName ||
+                  null,
+                email:
+                  r.referredCustomer.contactEmail || r.referredCustomer.user?.email || null,
+                customerType: r.referredCustomer.customerType,
+              }
+            : null,
+          referrer: r.referrer
+            ? {
+                id: r.referrer.id,
+                name: r.referrer.user?.fullName || null,
+                email: r.referrer.user?.email || null,
+                type: "DRIVER",
+              }
+            : referrerUser
+              ? {
+                  id: referrerUser.id,
+                  name:
+                    referrerCustomer?.businessName ||
+                    referrerCustomer?.contactName ||
+                    referrerUser.fullName ||
+                    null,
+                  email: referrerUser.email || null,
+                  type: "CUSTOMER",
+                  customerType: referrerCustomer?.customerType ?? null,
+                }
+              : null,
+          tripsCompleted: r.tripsCompleted,
+          completedPaidDeliveries: r.completedPaidDeliveries,
+          requiredDeliveries: r.requiredDeliveries,
+          rewardTrigger: r.rewardTrigger,
+          referredGetsReward: r.referredGetsReward,
+          referredRewardAmount: r.referredRewardAmount,
+          referredRewardPaidAt: r.referredRewardPaidAt,
+          expiresAt: r.expiresAt,
+          createdAt: r.createdAt,
+        };
+      }),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  /**
+   * Detail view for a single referral — full info including the
+   * associated ReferralCredit rows + DriverPayout rows.
+   */
+  async getAdminReferralDetail(referralId: string) {
+    const referral = await this.prisma.referral.findUnique({
+      where: { id: referralId },
+      select: {
+        id: true,
+        referralCode: true,
+        status: true,
+        referralType: true,
+        payoutModel: true,
+        referrerId: true,
+        referrerUserId: true,
+        referredDriverId: true,
+        referredCustomerId: true,
+        referredEmail: true,
+        referredPhone: true,
+        rewardTrigger: true,
+        requiredDeliveries: true,
+        tripsCompleted: true,
+        completedPaidDeliveries: true,
+        windowStartDate: true,
+        windowEndDate: true,
+        expiresAt: true,
+        referredGetsReward: true,
+        referredRewardAmount: true,
+        referredRewardPaidAt: true,
+        referredPayoutId: true,
+        createdAt: true,
+        updatedAt: true,
+        referrer: {
+          select: { id: true, user: { select: { id: true, fullName: true, email: true } } },
+        },
+        referredDriver: {
+          select: { id: true, user: { select: { id: true, fullName: true, email: true } } },
+        },
+        referredCustomer: {
+          select: {
+            id: true,
+            contactName: true,
+            businessName: true,
+            contactEmail: true,
+            customerType: true,
+            user: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+      },
+    });
+
+    if (!referral) {
+      throw new NotFoundException("Referral not found");
+    }
+
+    // Look up the referrer user/customer if referrerUserId is set
+    let referrerUser: any = null;
+    let referrerCustomer: any = null;
+    if (referral.referrerUserId) {
+      referrerUser = await this.prisma.user.findUnique({
+        where: { id: referral.referrerUserId },
+        select: { id: true, fullName: true, email: true },
+      });
+      referrerCustomer = await this.prisma.customer.findUnique({
+        where: { userId: referral.referrerUserId },
+        select: { id: true, businessName: true, contactName: true, customerType: true },
+      });
+    }
+
+    // Pull ReferralCredit + DriverPayout rows for this referral
+    const [credits, payouts] = await Promise.all([
+      this.prisma.referralCredit.findMany({
+        where: { referralId },
+        select: {
+          id: true,
+          amountCents: true,
+          reason: true,
+          status: true,
+          appliedAt: true,
+          stripeInvoiceId: true,
+          createdAt: true,
+          customerId: true,
+          deliveryId: true,
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.driverPayout.findMany({
+        where: {
+          OR: [
+            { referredByReferral: { id: referralId } },
+            { referral: { id: referralId } },
+          ],
+        },
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          netAmount: true,
+          grossAmount: true,
+          failureMessage: true,
+          tierNumber: true,
+          createdAt: true,
+          paidAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      referral: {
+        ...referral,
+        referrerUser,
+        referrerCustomer,
+      },
+      credits,
+      payouts: payouts.map((p) => ({
+        id: p.id,
+        type: p.type,
+        status: p.status,
+        amount: p.netAmount,
+        failureMessage: p.failureMessage,
+        tierNumber: p.tierNumber,
+        isPerDelivery: p.failureMessage?.startsWith("PER_DELIVERY:") ?? false,
+        perDeliveryId: p.failureMessage?.startsWith("PER_DELIVERY:")
+          ? p.failureMessage.slice("PER_DELIVERY:".length)
+          : null,
+        createdAt: p.createdAt,
+        paidAt: p.paidAt,
+      })),
+    };
+  }
+
+  /**
+   * Manual override: admin sets the status of a referral.
+   *
+   * Allowed transitions:
+   *   - PENDING/REGISTERED/ONBOARDING_COMPLETE/TRIPPING/COMPLETED → REWARD_PAID
+   *     (force-fires the one-shot referred reward if applicable)
+   *   - any → EXPIRED (admin manually expires)
+   *   - any → CLOSED (admin closes without payout)
+   *
+   * Refuses to transition FROM REWARD_PAID (already paid out — would
+   * require a clawback, which is a separate flow).
+   *
+   * If transitioning to REWARD_PAID and the referral has a referred
+   * driver with referredGetsReward=true and no referredRewardPaidAt,
+   * fires the one-shot referred reward via the payout provider.
+   *
+   * NOTE: This is a deliberate admin escape hatch. Use sparingly —
+   * prefer fixing the underlying issue (program config, expiry window,
+   * etc.) so the trigger fires naturally next time.
+   *
+   * Returns the updated referral.
+   */
+  async manualOverrideReferralStatus(
+    referralId: string,
+    newStatus: "REWARD_PAID" | "EXPIRED" | "CLOSED",
+    reason?: string,
+  ) {
+    const referral = await this.prisma.referral.findUnique({
+      where: { id: referralId },
+      select: {
+        id: true,
+        status: true,
+        referredDriverId: true,
+        referredGetsReward: true,
+        referredRewardAmount: true,
+        referredRewardPaidAt: true,
+        referrerId: true,
+      },
+    });
+    if (!referral) {
+      throw new NotFoundException("Referral not found");
+    }
+    if (referral.status === "REWARD_PAID" && newStatus !== "REWARD_PAID") {
+      throw new BadRequestException(
+        "Cannot change status of a REWARD_PAID referral — would require a clawback. " +
+        "Use the DriverPayout adjustment flow instead."
+      );
+    }
+    if (referral.status === newStatus) {
+      return { referral, message: "Status unchanged" };
+    }
+
+    // If transitioning to REWARD_PAID, fire the referred reward payout
+    // (idempotent via referredPayoutId)
+    if (
+      newStatus === "REWARD_PAID" &&
+      referral.referredGetsReward &&
+      !referral.referredRewardPaidAt &&
+      referral.referredDriverId
+    ) {
+      const config = await this.appSettingService.getReferralProgramSettings();
+      const amount = referral.referredRewardAmount ?? config.referredRewardAmount ?? 0;
+      if (amount > 0) {
+        try {
+          // Use the payout provider directly — this is an admin override,
+          // so we DON'T fire the referrer tier payouts (that would be
+          // double-paying the referrer if the trigger already fired).
+          await this.payoutProvider.createReferredRewardPayout({
+            referredDriverId: referral.referredDriverId,
+            amount,
+            referralId: referral.id,
+          });
+        } catch (err: any) {
+          // Log but don't fail the override — the status update is the
+          // primary action.
+          console.error(
+            `[manualOverride] Failed to fire referred reward payout: ${err.message}`
+          );
+        }
+      }
+    }
+
+    const updated = await this.prisma.referral.update({
+      where: { id: referralId },
+      data: {
+        status: newStatus,
+        ...(newStatus === "REWARD_PAID" && !referral.referredRewardPaidAt
+          ? { referredRewardPaidAt: new Date() }
+          : {}),
+      },
+      select: { id: true, status: true, referredRewardPaidAt: true },
+    });
+
+    return {
+      referral: updated,
+      message: `Status changed from ${referral.status} to ${newStatus}${reason ? ` (reason: ${reason})` : ""}`,
+    };
+  }
+
+  /**
+   * Paginated list of all ReferralCredit rows (admin view). Supports
+   * filtering by status, customerId, referralId.
+   */
+  async getAdminReferralCreditsList(opts: {
+    page?: number;
+    pageSize?: number;
+    status?: "PENDING" | "APPLIED" | "EXPIRED";
+    customerId?: string;
+    referralId?: string;
+  }) {
+    const page = Math.max(1, opts.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+
+    const where: any = {};
+    if (opts.status) where.status = opts.status;
+    if (opts.customerId) where.customerId = opts.customerId;
+    if (opts.referralId) where.referralId = opts.referralId;
+
+    const [credits, total] = await Promise.all([
+      this.prisma.referralCredit.findMany({
+        where,
+        select: {
+          id: true,
+          referralId: true,
+          customerId: true,
+          deliveryId: true,
+          amountCents: true,
+          reason: true,
+          status: true,
+          appliedAt: true,
+          stripeInvoiceId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.referralCredit.count({ where }),
+    ]);
+
+    return { credits, total, page, pageSize };
+  }
+
+  /**
+   * Manual apply: admin marks a PENDING ReferralCredit as APPLIED.
+   *
+   * Used when an admin has manually applied the credit to a Stripe
+   * invoice outside of the automated flow (e.g. via the Stripe
+   * dashboard). Sets `appliedAt = now` and the provided `stripeInvoiceId`.
+   *
+   * Refuses to transition non-PENDING credits.
+   */
+  async manualApplyReferralCredit(creditId: string, stripeInvoiceId?: string) {
+    const credit = await this.prisma.referralCredit.findUnique({
+      where: { id: creditId },
+      select: { id: true, status: true },
+    });
+    if (!credit) {
+      throw new NotFoundException("ReferralCredit not found");
+    }
+    if (credit.status !== "PENDING") {
+      throw new BadRequestException(
+        `Cannot apply a credit in status ${credit.status}. Only PENDING credits can be applied.`
+      );
+    }
+    const updated = await this.prisma.referralCredit.update({
+      where: { id: creditId },
+      data: {
+        status: "APPLIED",
+        appliedAt: new Date(),
+        ...(stripeInvoiceId ? { stripeInvoiceId } : {}),
+      },
+      select: {
+        id: true,
+        status: true,
+        appliedAt: true,
+        stripeInvoiceId: true,
+      },
+    });
+    return { credit: updated };
+  }
+
+  /**
+   * Manual expire: admin marks a PENDING ReferralCredit as EXPIRED.
+   *
+   * Used when an admin wants to remove a credit that was issued in
+   * error (e.g. wrong delivery, wrong customer) without applying it
+   * to an invoice.
+   *
+   * Refuses to transition non-PENDING credits (an APPLIED credit was
+   * already used on an invoice and can't be expired; an EXPIRED credit
+   * is already in the target state).
+   */
+  async manualExpireReferralCredit(creditId: string, reason?: string) {
+    const credit = await this.prisma.referralCredit.findUnique({
+      where: { id: creditId },
+      select: { id: true, status: true, reason: true },
+    });
+    if (!credit) {
+      throw new NotFoundException("ReferralCredit not found");
+    }
+    if (credit.status !== "PENDING") {
+      throw new BadRequestException(
+        `Cannot expire a credit in status ${credit.status}. Only PENDING credits can be expired.`
+      );
+    }
+    const updated = await this.prisma.referralCredit.update({
+      where: { id: creditId },
+      data: {
+        status: "EXPIRED",
+        // Append the admin reason to the existing reason for audit trail
+        reason: reason ? `${credit.reason} [admin-expired: ${reason}]` : `${credit.reason} [admin-expired]`,
+      },
+      select: { id: true, status: true, reason: true },
+    });
+    return { credit: updated };
+  }
+
+// ============================================================
   // CUSTOMER-REFERRER ENDPOINTS (Phase 2)
   // ============================================================
   // The Customer-referrer flow mirrors the Driver-referrer flow but uses
@@ -1110,7 +1812,6 @@ export class ReferralService {
 
     let referrerDriverId: string | null = null;
     let referrerUserId: string | null = null;
-    let referrerCustomerId: string | null = null;
     let referralType: ReferralTypeDto;
     let legacyReferralId: string | null = legacyReferral?.id ?? null;
 
@@ -1122,7 +1823,6 @@ export class ReferralService {
       if (customerReferrer.id === customerId) {
         throw new BadRequestException("You cannot use your own referral code");
       }
-      referrerCustomerId = customerReferrer.id;
       referrerUserId = customerReferrer.userId;
       referralType = ReferralTypeDto.CUSTOMER;
     } else if (legacyReferral) {
