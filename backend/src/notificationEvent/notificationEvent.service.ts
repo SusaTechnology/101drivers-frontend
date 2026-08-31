@@ -105,28 +105,18 @@ export class NotificationEventService extends NotificationEventServiceBase {
     take?: number;
     skip?: number;
   }): Promise<{ items: any[]; count: number; unreadCount: number }> {
-    // ── Notification visibility (FIXED) ──
-    // A user sees notifications where toUserId = their user ID.
-    // This is the SOLE criterion — not actorUserId, not customer/driver
-    // relations. This prevents the bug where admins see dealer
-    // notifications, drivers see dealer notifications, etc.
+    // ── Notification visibility ──
+    // A user sees ONLY notifications where toUserId = their user ID.
+    // No fallbacks, no OR clauses, no actorUserId matching.
+    // This is strict and correct: each notification has exactly ONE
+    // recipient (toUserId), and only that recipient sees it.
     //
-    // Backward compat: for old notifications without toUserId set,
-    // fall back to the old OR clause (actorUserId OR customer.userId
-    // OR driver.userId). New notifications will always have toUserId.
+    // Old notifications created before the toUserId fix had toUserId=null.
+    // They will NOT appear in anyone's bell — this is intentional.
+    // Old notifications are historical; if the user already saw them,
+    // they've been read. If not, they're stale and not relevant.
     const baseVisible: Prisma.NotificationEventWhereInput = {
-      OR: [
-        { toUserId: input.actorUserId },
-        // Backward compat for old rows without toUserId
-        {
-          toUserId: null,
-          OR: [
-            { actorUserId: input.actorUserId },
-            { customer: { userId: input.actorUserId } },
-            { driver: { userId: input.actorUserId } },
-          ],
-        },
-      ],
+      toUserId: input.actorUserId,
     };
 
     const where: Prisma.NotificationEventWhereInput = {
@@ -321,11 +311,7 @@ export class NotificationEventService extends NotificationEventServiceBase {
   }
 
   /**
-   * Ownership/visibility check — matches the bell's inbox query.
-   * A user may access a notification if:
-   *   (a) toUserId = their user ID (the new primary check), OR
-   *   (b) backward compat: toUserId is null AND they match the old
-   *       actor/customer/driver OR clause.
+   * Ownership/visibility check — strict: only toUserId matches.
    */
   private async ensureCanAccessNotification(
     row: {
@@ -336,36 +322,9 @@ export class NotificationEventService extends NotificationEventServiceBase {
     },
     actorUserId: string
   ): Promise<void> {
-    // Primary check: toUserId matches
+    // Only the actual recipient (toUserId) can access the notification
     if (row.toUserId && row.toUserId === actorUserId) {
       return;
-    }
-
-    // Backward compat: old notification without toUserId
-    if (!row.toUserId) {
-      if (row.actorUserId && row.actorUserId === actorUserId) {
-        return;
-      }
-
-      if (row.customerId) {
-        const customer = await this.prisma.customer.findUnique({
-          where: { id: row.customerId },
-          select: { userId: true },
-        });
-        if (customer?.userId === actorUserId) {
-          return;
-        }
-      }
-
-      if (row.driverId) {
-        const driver = await this.prisma.driver.findUnique({
-          where: { id: row.driverId },
-          select: { userId: true },
-        });
-        if (driver?.userId === actorUserId) {
-          return;
-        }
-      }
     }
 
     throw new ForbiddenException("You are not allowed to access this notification");
