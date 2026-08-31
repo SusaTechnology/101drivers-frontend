@@ -66,6 +66,8 @@ const API_URL = import.meta.env.VITE_API_URL;
 // ────────────────────────────────────────────────────────────────────
 type RewardTrigger = 'ON_APPROVED' | 'ON_DELIVERIES_COMPLETED';
 type TimeLimitMode = 'CALENDAR_RANGE' | 'FOREVER';
+type PayoutModel = 'TIERED' | 'PER_DELIVERY';
+type ReferralType = 'DRIVER' | 'CUSTOMER';
 
 interface ReferralConfig {
   isActive: boolean;
@@ -78,6 +80,13 @@ interface ReferralConfig {
   referralThreshold: number;
   referredGetsReward: boolean;
   referredRewardAmount: number | null;
+  // ── V2 fields (Phase 2) ──
+  payoutModel: PayoutModel;
+  perDeliveryReferrerAmountCents: number;
+  perDeliveryReferredBonusCents: number;
+  perDeliveryBonusTriggerCount: number;
+  customerReferralsEnabled: boolean;
+  driverReferralsEnabled: boolean;
 }
 
 interface AdminStats {
@@ -88,16 +97,27 @@ interface AdminStats {
   uniqueReferrers: number;
   totalPaidOut: number;
   totalPending: number;
+  // ── V2 fields (Phase 3) ──
+  uniqueCustomerReferrers: number;
+  totalCreditsIssuedCents: number;
+  totalCreditsAppliedCents: number;
+  perModel: { TIERED: { count: number }; PER_DELIVERY: { count: number } };
+  perReferrerType: { DRIVER: { count: number }; CUSTOMER: { count: number } };
 }
 
 interface ReferrerRow {
   referrerId: string;
+  referrerUserId?: string | null;
   referrerName: string;
   referrerEmail: string | null;
+  referrerType: 'DRIVER' | 'CUSTOMER';
+  customerType?: 'BUSINESS' | 'PRIVATE' | null;
   totalReferrals: number;
   successfulReferrals: number;
-  totalTrips: number;
+  totalTrips?: number;
   totalEarned: number;
+  totalPaidDeliveries?: number;
+  totalEarnedCents?: number;
   lastPaidTier: number;
 }
 
@@ -128,6 +148,53 @@ interface ReferrerDetail {
     createdAt: string;
     paidAt: string | null;
   }>;
+}
+
+// ── V2 types for the new Referrals + Credits tabs ──
+interface AdminReferralRow {
+  id: string;
+  referralCode: string;
+  status: string;
+  referralType: ReferralType | null;
+  payoutModel: PayoutModel | null;
+  referredEmail: string | null;
+  referredDriver: { id: string; name: string | null; email: string | null } | null;
+  referredCustomer: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    customerType: 'BUSINESS' | 'PRIVATE' | null;
+  } | null;
+  referrer: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    type: 'DRIVER' | 'CUSTOMER';
+    customerType?: 'BUSINESS' | 'PRIVATE' | null;
+  } | null;
+  tripsCompleted: number;
+  completedPaidDeliveries: number;
+  requiredDeliveries: number;
+  rewardTrigger: string;
+  referredGetsReward: boolean;
+  referredRewardAmount: number | null;
+  referredRewardPaidAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+interface AdminReferralCreditRow {
+  id: string;
+  referralId: string;
+  customerId: string | null;
+  deliveryId: string | null;
+  amountCents: number;
+  reason: string;
+  status: 'PENDING' | 'APPLIED' | 'EXPIRED';
+  appliedAt: string | null;
+  stripeInvoiceId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -172,15 +239,57 @@ export default function AdminReferralProgramPage() {
   const [formThreshold, setFormThreshold] = useState('20');
   const [formReferredGetsReward, setFormReferredGetsReward] = useState(true);
   const [formReferredAmount, setFormReferredAmount] = useState('150');
+  // ── V2 form state (Phase 2) ──
+  const [formPayoutModel, setFormPayoutModel] = useState<PayoutModel>('TIERED');
+  // PER_DELIVERY amounts are stored in cents; we display them in dollars
+  // for the admin (e.g. $5.00 instead of 500 cents). The form converts
+  // back to cents on save. This matches how Stripe + the backend think
+  // about money (avoid floating-point issues).
+  const [formPerDeliveryReferrerDollars, setFormPerDeliveryReferrerDollars] = useState('5.00');
+  const [formPerDeliveryReferredBonusDollars, setFormPerDeliveryReferredBonusDollars] = useState('50.00');
+  const [formPerDeliveryBonusTriggerCount, setFormPerDeliveryBonusTriggerCount] = useState('5');
+  const [formCustomerReferralsEnabled, setFormCustomerReferralsEnabled] = useState(true);
+  const [formDriverReferralsEnabled, setFormDriverReferralsEnabled] = useState(true);
 
   // ── Referrers list state ──
   const [searchQuery, setSearchQuery] = useState('');
+  // V2: referralType filter — 'ALL' (default) shows both driver + customer
+  // referrers in separate requests; 'DRIVER' / 'CUSTOMER' filters to one type.
+  const [referralTypeFilter, setReferralTypeFilter] = useState<'ALL' | 'DRIVER' | 'CUSTOMER'>('ALL');
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
   // ── Detail dialog state ──
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailReferrerId, setDetailReferrerId] = useState<string | null>(null);
+
+  // ── V2: All-Referrals list state (new "Referrals" section) ──
+  const [referralsPage, setReferralsPage] = useState(1);
+  const referralsPageSize = 20;
+  const [referralsSearch, setReferralsSearch] = useState('');
+  const [referralsTypeFilter, setReferralsTypeFilter] = useState<'ALL' | 'DRIVER' | 'CUSTOMER'>('ALL');
+  const [referralsModelFilter, setReferralsModelFilter] = useState<'ALL' | 'TIERED' | 'PER_DELIVERY'>('ALL');
+  const [referralsStatusFilter, setReferralsStatusFilter] = useState<string>('ALL');
+  // Detail dialog for a single referral — shows credits + payouts + override button
+  const [referralDetailOpen, setReferralDetailOpen] = useState(false);
+  const [referralDetailId, setReferralDetailId] = useState<string | null>(null);
+  // Manual override dialog state
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideStatus, setOverrideStatus] = useState<'REWARD_PAID' | 'EXPIRED' | 'CLOSED'>('EXPIRED');
+  const [overrideReason, setOverrideReason] = useState('');
+
+  // ── V2: ReferralCredit list state (new "Credits" section) ──
+  const [creditsPage, setCreditsPage] = useState(1);
+  const creditsPageSize = 20;
+  const [creditsStatusFilter, setCreditsStatusFilter] = useState<'ALL' | 'PENDING' | 'APPLIED' | 'EXPIRED'>('ALL');
+  const [creditsCustomerIdFilter, setCreditsCustomerIdFilter] = useState('');
+  const [creditsReferralIdFilter, setCreditsReferralIdFilter] = useState('');
+  // Manual apply + expire dialog state
+  const [creditActionOpen, setCreditActionOpen] = useState(false);
+  const [creditActionType, setCreditActionType] = useState<'APPLY' | 'EXPIRE'>('APPLY');
+  const [creditActionId, setCreditActionId] = useState<string | null>(null);
+  const [creditActionStripeInvoiceId, setCreditActionStripeInvoiceId] = useState('');
+  const [creditActionReason, setCreditActionReason] = useState('');
 
   // ── Fetch config ──
   // NOTE: useDataQuery wraps TanStack Query's useQuery, which does NOT
@@ -207,6 +316,18 @@ export default function AdminReferralProgramPage() {
       setFormThreshold(String(data.referralThreshold ?? 20));
       setFormReferredGetsReward(data.referredGetsReward ?? true);
       setFormReferredAmount(String(data.referredRewardAmount ?? 150));
+      // ── V2 fields ──
+      setFormPayoutModel(data.payoutModel ?? 'TIERED');
+      // Convert cents → dollars for display (e.g. 500 → "5.00")
+      setFormPerDeliveryReferrerDollars(
+        ((data.perDeliveryReferrerAmountCents ?? 500) / 100).toFixed(2),
+      );
+      setFormPerDeliveryReferredBonusDollars(
+        ((data.perDeliveryReferredBonusCents ?? 5000) / 100).toFixed(2),
+      );
+      setFormPerDeliveryBonusTriggerCount(String(data.perDeliveryBonusTriggerCount ?? 5));
+      setFormCustomerReferralsEnabled(data.customerReferralsEnabled ?? true);
+      setFormDriverReferralsEnabled(data.driverReferralsEnabled ?? true);
     }
   }, [configQuery.data]);
 
@@ -271,6 +392,10 @@ export default function AdminReferralProgramPage() {
     const referrerAmount = Number(formReferrerAmount);
     const requiredDeliveries = Number(formRequiredDeliveries);
     const referredAmount = Number(formReferredAmount);
+    // V2 validations
+    const perDeliveryReferrerDollars = Number(formPerDeliveryReferrerDollars);
+    const perDeliveryReferredBonusDollars = Number(formPerDeliveryReferredBonusDollars);
+    const perDeliveryBonusTriggerCount = Number(formPerDeliveryBonusTriggerCount);
 
     if (isNaN(threshold) || threshold < 1) {
       toast.error('Invalid threshold', { description: 'Threshold must be ≥ 1.' });
@@ -292,6 +417,21 @@ export default function AdminReferralProgramPage() {
       toast.error('Missing dates', { description: 'Window start + end dates are required for CALENDAR_RANGE mode.' });
       return;
     }
+    // V2 validations
+    if (formPayoutModel === 'PER_DELIVERY') {
+      if (isNaN(perDeliveryReferrerDollars) || perDeliveryReferrerDollars < 0) {
+        toast.error('Invalid per-delivery referrer amount', { description: 'Must be ≥ $0.00.' });
+        return;
+      }
+      if (isNaN(perDeliveryReferredBonusDollars) || perDeliveryReferredBonusDollars < 0) {
+        toast.error('Invalid per-delivery referred bonus', { description: 'Must be ≥ $0.00.' });
+        return;
+      }
+      if (isNaN(perDeliveryBonusTriggerCount) || perDeliveryBonusTriggerCount < 1) {
+        toast.error('Invalid bonus trigger count', { description: 'Must be ≥ 1.' });
+        return;
+      }
+    }
 
     const payload = {
       isActive: formIsActive,
@@ -304,6 +444,14 @@ export default function AdminReferralProgramPage() {
       referralThreshold: threshold,
       referredGetsReward: formReferredGetsReward,
       referredRewardAmount: formReferredGetsReward ? referredAmount : null,
+      // ── V2 fields ──
+      payoutModel: formPayoutModel,
+      // Convert dollars → cents for the backend
+      perDeliveryReferrerAmountCents: Math.round(perDeliveryReferrerDollars * 100),
+      perDeliveryReferredBonusCents: Math.round(perDeliveryReferredBonusDollars * 100),
+      perDeliveryBonusTriggerCount: Math.floor(perDeliveryBonusTriggerCount),
+      customerReferralsEnabled: formCustomerReferralsEnabled,
+      driverReferralsEnabled: formDriverReferralsEnabled,
     };
 
     // ── Threshold-lowering warning (#5) ──
@@ -347,9 +495,27 @@ export default function AdminReferralProgramPage() {
   });
 
   // ── Fetch referrers list ──
+  // V2: append `referralType` to the URL when filtering. The backend
+  // supports `?referralType=DRIVER|CUSTOMER` (omitting = default DRIVER).
+  // We default to ALL → omit the param to keep the URL backward-compatible
+  // (the backend defaults to DRIVER when the param is missing).
+  const referrersApiUrl = (() => {
+    const url = new URL(`${API_URL}/api/referrals/admin/referrers`);
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('pageSize', String(pageSize));
+    if (searchQuery) {
+      url.searchParams.set('search', searchQuery);
+    }
+    if (referralTypeFilter !== 'ALL') {
+      url.searchParams.set('referralType', referralTypeFilter);
+    }
+    return url.toString();
+  })();
+
   const referrersQuery = useDataQuery<{ referrers: ReferrerRow[]; total: number; page: number; pageSize: number }>({
-    apiEndPoint: `${API_URL}/api/referrals/admin/referrers?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(searchQuery)}`,
+    apiEndPoint: referrersApiUrl,
     noFilter: true,
+    queryKey: ['admin-referrers', page, searchQuery, referralTypeFilter],
   });
 
   // ── Fetch referrer detail ──
@@ -357,6 +523,150 @@ export default function AdminReferralProgramPage() {
     apiEndPoint: `${API_URL}/api/referrals/admin/referrers/${detailReferrerId}`,
     noFilter: true,
     enabled: !!detailReferrerId,
+  });
+
+  // ── V2: Fetch all-referrals list ──
+  const referralsListApiUrl = (() => {
+    const url = new URL(`${API_URL}/api/referrals/admin/referrals`);
+    url.searchParams.set('page', String(referralsPage));
+    url.searchParams.set('pageSize', String(referralsPageSize));
+    if (referralsSearch) {
+      url.searchParams.set('search', referralsSearch);
+    }
+    if (referralsTypeFilter !== 'ALL') {
+      url.searchParams.set('referralType', referralsTypeFilter);
+    }
+    if (referralsModelFilter !== 'ALL') {
+      url.searchParams.set('payoutModel', referralsModelFilter);
+    }
+    if (referralsStatusFilter !== 'ALL') {
+      url.searchParams.set('status', referralsStatusFilter);
+    }
+    return url.toString();
+  })();
+
+  const referralsListQuery = useDataQuery<{
+    referrals: AdminReferralRow[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>({
+    apiEndPoint: referralsListApiUrl,
+    noFilter: true,
+    queryKey: [
+      'admin-referrals-list',
+      referralsPage,
+      referralsSearch,
+      referralsTypeFilter,
+      referralsModelFilter,
+      referralsStatusFilter,
+    ],
+  });
+
+  // ── V2: Fetch single referral detail (for the detail dialog) ──
+  const referralDetailQuery = useDataQuery<{
+    referral: any;
+    credits: AdminReferralCreditRow[];
+    payouts: any[];
+  }>({
+    apiEndPoint: `${API_URL}/api/referrals/admin/referrals/${referralDetailId}`,
+    noFilter: true,
+    enabled: !!referralDetailId,
+    queryKey: ['admin-referral-detail', referralDetailId],
+  });
+
+  // ── V2: Manual override referral status mutation ──
+  const overrideStatusMutation = useDataMutation<any, any>({
+    apiEndPoint: `${API_URL}/api/referrals/admin/referrals/${referralDetailId}/override-status`,
+    method: 'POST',
+    onSuccess: () => {
+      toast.success('Referral status updated', {
+        description: `Changed to ${overrideStatus}${overrideReason ? ` — ${overrideReason}` : ''}`,
+      });
+      setOverrideOpen(false);
+      setOverrideReason('');
+      // Refetch the detail + list + stats so the admin sees the change
+      referralDetailQuery.refetch();
+      referralsListQuery.refetch();
+      statsQuery.refetch();
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to override status', { description: error.message });
+    },
+  });
+
+  // ── V2: Fetch ReferralCredit list ──
+  const creditsListApiUrl = (() => {
+    const url = new URL(`${API_URL}/api/referrals/admin/credits`);
+    url.searchParams.set('page', String(creditsPage));
+    url.searchParams.set('pageSize', String(creditsPageSize));
+    if (creditsStatusFilter !== 'ALL') {
+      url.searchParams.set('status', creditsStatusFilter);
+    }
+    if (creditsCustomerIdFilter.trim()) {
+      url.searchParams.set('customerId', creditsCustomerIdFilter.trim());
+    }
+    if (creditsReferralIdFilter.trim()) {
+      url.searchParams.set('referralId', creditsReferralIdFilter.trim());
+    }
+    return url.toString();
+  })();
+
+  const creditsListQuery = useDataQuery<{
+    credits: AdminReferralCreditRow[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>({
+    apiEndPoint: creditsListApiUrl,
+    noFilter: true,
+    queryKey: [
+      'admin-referral-credits',
+      creditsPage,
+      creditsStatusFilter,
+      creditsCustomerIdFilter,
+      creditsReferralIdFilter,
+    ],
+  });
+
+  // ── V2: Manual apply ReferralCredit mutation ──
+  const applyCreditMutation = useDataMutation<any, any>({
+    apiEndPoint: `${API_URL}/api/referrals/admin/credits/${creditActionId}/apply`,
+    method: 'POST',
+    onSuccess: () => {
+      toast.success('Credit applied', {
+        description: creditActionStripeInvoiceId
+          ? `Marked APPLIED with invoice ${creditActionStripeInvoiceId}`
+          : 'Marked APPLIED',
+      });
+      setCreditActionOpen(false);
+      setCreditActionStripeInvoiceId('');
+      creditsListQuery.refetch();
+      statsQuery.refetch();
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to apply credit', { description: error.message });
+    },
+  });
+
+  // ── V2: Manual expire ReferralCredit mutation ──
+  const expireCreditMutation = useDataMutation<any, any>({
+    apiEndPoint: `${API_URL}/api/referrals/admin/credits/${creditActionId}/expire`,
+    method: 'POST',
+    onSuccess: () => {
+      toast.success('Credit expired', {
+        description: creditActionReason
+          ? `Marked EXPIRED — ${creditActionReason}`
+          : 'Marked EXPIRED',
+      });
+      setCreditActionOpen(false);
+      setCreditActionReason('');
+      creditsListQuery.refetch();
+      statsQuery.refetch();
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to expire credit', { description: error.message });
+    },
   });
 
   const openDetail = (referrerId: string) => {
@@ -369,22 +679,12 @@ export default function AdminReferralProgramPage() {
     setDetailReferrerId(null);
   };
 
-  // Debounce search
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Reset to page 1 when the search query or referralType filter changes.
+  // (The queryKey in referrersQuery already auto-refetches on these
+  // changes — no manual refetch needed.)
   useEffect(() => {
-    const t = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-      setPage(1);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
-
-  // Re-trigger referrers query when debouncedSearch or page changes
-  useEffect(() => {
-    if (debouncedSearch !== searchQuery || page !== 1) {
-      referrersQuery.refetch();
-    }
-  }, [debouncedSearch, page]);
+    setPage(1);
+  }, [searchQuery, referralTypeFilter]);
 
   const stats = statsQuery.data;
   const referrers = referrersQuery.data?.referrers ?? [];
@@ -644,6 +944,151 @@ export default function AdminReferralProgramPage() {
                   />
                 </div>
               )}
+
+              {/* ── V2 fields (Phase 2) ──────────────────────────────────
+                  These control the PER_DELIVERY model + customer-referrer
+                  enable toggles. The PER_DELIVERY-specific inputs are only
+                  relevant when payoutModel === 'PER_DELIVERY' (gate them
+                  visually like the requiredDeliveries field is gated on
+                  trigger type). */}
+
+              {/* Payout Model selector */}
+              <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Payout Model (V2)
+                </Label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2">
+                  TIERED = legacy driver→driver referrals (referral earns $X per N successful).
+                  PER_DELIVERY = new model — referrer earns per paid delivery; referred party gets a bonus on the Nth paid delivery.
+                  Applies to new referrals only — existing referrals keep their snapshotted model.
+                </p>
+                <Select
+                  value={formPayoutModel}
+                  onValueChange={(v) => setFormPayoutModel(v as PayoutModel)}
+                >
+                  <SelectTrigger className="w-full max-w-xs h-12 rounded-2xl">
+                    <SelectValue placeholder="Select payout model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TIERED">TIERED — per N successful referrals</SelectItem>
+                    <SelectItem value="PER_DELIVERY">PER_DELIVERY — per paid delivery</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* PER_DELIVERY-specific amounts (only shown when payoutModel=PER_DELIVERY) */}
+              {formPayoutModel === 'PER_DELIVERY' && (
+                <div className="space-y-4 p-4 rounded-2xl bg-emerald-50/40 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30">
+                  <p className="text-xs font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+                    PER_DELIVERY Settings
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                        Referrer per delivery ($)
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formPerDeliveryReferrerDollars}
+                        onChange={(e) => setFormPerDeliveryReferrerDollars(e.target.value)}
+                        placeholder="5.00"
+                        className="h-12 rounded-2xl"
+                      />
+                      <p className="text-[10px] text-slate-500">
+                        Paid to referrer on each paid delivery. Default $5.00.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                        Referred bonus ($)
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formPerDeliveryReferredBonusDollars}
+                        onChange={(e) => setFormPerDeliveryReferredBonusDollars(e.target.value)}
+                        placeholder="50.00"
+                        className="h-12 rounded-2xl"
+                      />
+                      <p className="text-[10px] text-slate-500">
+                        One-shot bonus to the referred party on the Nth paid delivery. Default $50.00.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                        Bonus trigger count
+                      </Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={formPerDeliveryBonusTriggerCount}
+                        onChange={(e) => setFormPerDeliveryBonusTriggerCount(e.target.value)}
+                        placeholder="5"
+                        className="h-12 rounded-2xl"
+                      />
+                      <p className="text-[10px] text-slate-500">
+                        Which paid delivery triggers the bonus. Default 5 (the 5th).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Referrer-type enable toggles — independent of the master
+                  isActive flag. Lets the admin enable customer referrals
+                  while keeping driver referrals disabled (or vice versa). */}
+              <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Referrer Type Toggles (V2)
+                </Label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Independently enable/disable driver vs customer referrer flows.
+                  When the master program is paused (isActive=false), no new
+                  referrals of either type are accepted. When unpaused but one
+                  of these is off, only the enabled type accepts new codes.
+                </p>
+
+                {/* Driver referrals toggle */}
+                <div className="flex items-center gap-4 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Driver → Driver referrals
+                    </Label>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
+                      {formDriverReferralsEnabled
+                        ? 'Enabled — drivers can refer other drivers'
+                        : 'Disabled — driver referral codes are rejected at signup'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formDriverReferralsEnabled}
+                    onCheckedChange={setFormDriverReferralsEnabled}
+                    aria-label="Toggle driver referrals"
+                  />
+                </div>
+
+                {/* Customer referrals toggle */}
+                <div className="flex items-center gap-4 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                      Customer → Customer / Driver referrals
+                    </Label>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
+                      {formCustomerReferralsEnabled
+                        ? 'Enabled — dealers + private customers can refer'
+                        : 'Disabled — customer referral codes are rejected at signup'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formCustomerReferralsEnabled}
+                    onCheckedChange={setFormCustomerReferralsEnabled}
+                    aria-label="Toggle customer referrals"
+                  />
+                </div>
+              </div>
             </div>
             </fieldset>
 
@@ -687,15 +1132,60 @@ export default function AdminReferralProgramPage() {
                 <Loader2 className="w-8 h-8 mx-auto text-slate-400 animate-spin" />
               </div>
             ) : stats ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                <StatCard label="Total Referrals" value={String(stats.totalReferrals)} icon={Users} />
-                <StatCard label="Successful" value={String(stats.successfulReferrals)} icon={Check} color="emerald" />
-                <StatCard label="Active" value={String(stats.activeReferrals)} icon={Clock} color="amber" />
-                <StatCard label="Expired" value={String(stats.expiredReferrals)} icon={X} color="red" />
-                <StatCard label="Unique Referrers" value={String(stats.uniqueReferrers)} icon={Users} />
-                <StatCard label="Total Paid Out" value={formatMoney(stats.totalPaidOut)} icon={DollarSign} color="emerald" />
-                <StatCard label="Pending" value={formatMoney(stats.totalPending)} icon={TrendingUp} color="amber" />
-              </div>
+              <>
+                {/* ── Primary stats (V1 — kept for backward compatibility) ── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+                  <StatCard label="Total Referrals" value={String(stats.totalReferrals)} icon={Users} />
+                  <StatCard label="Successful" value={String(stats.successfulReferrals)} icon={Check} color="emerald" />
+                  <StatCard label="Active" value={String(stats.activeReferrals)} icon={Clock} color="amber" />
+                  <StatCard label="Expired" value={String(stats.expiredReferrals)} icon={X} color="red" />
+                  <StatCard label="Driver Referrers" value={String(stats.uniqueReferrers)} icon={Users} />
+                  <StatCard label="Total Paid Out" value={formatMoney(stats.totalPaidOut)} icon={DollarSign} color="emerald" />
+                  <StatCard label="Pending" value={formatMoney(stats.totalPending)} icon={TrendingUp} color="amber" />
+                </div>
+
+                {/* ── V2 stats — customer referrers + ReferralCredit totals ── */}
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">
+                    V2 — Customer referrers + ReferralCredit totals
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <StatCard
+                      label="Customer Referrers"
+                      value={String(stats.uniqueCustomerReferrers ?? 0)}
+                      icon={Users}
+                    />
+                    <StatCard
+                      label="Credits Issued"
+                      value={formatMoney((stats.totalCreditsIssuedCents ?? 0) / 100)}
+                      icon={DollarSign}
+                      color="emerald"
+                    />
+                    <StatCard
+                      label="Credits Applied"
+                      value={formatMoney((stats.totalCreditsAppliedCents ?? 0) / 100)}
+                      icon={Check}
+                      color="emerald"
+                    />
+                    <StatCard
+                      label="TIERED Referrals"
+                      value={String(stats.perModel?.TIERED?.count ?? 0)}
+                      icon={TrendingUp}
+                    />
+                    <StatCard
+                      label="PER_DELIVERY Referrals"
+                      value={String(stats.perModel?.PER_DELIVERY?.count ?? 0)}
+                      icon={TrendingUp}
+                      color="emerald"
+                    />
+                    <StatCard
+                      label="Customer-type Referrals"
+                      value={String(stats.perReferrerType?.CUSTOMER?.count ?? 0)}
+                      icon={Users}
+                    />
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="py-8 text-center text-sm text-slate-500">Failed to load stats.</div>
             )}
@@ -714,15 +1204,31 @@ export default function AdminReferralProgramPage() {
                   Click a row to see per-referral breakdown.
                 </CardDescription>
               </div>
-              <div className="relative w-full max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  type="search"
-                  placeholder="Search by name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-10 pl-10 rounded-2xl"
-                />
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* V2: referralType filter (driver vs customer referrers) */}
+                <Select
+                  value={referralTypeFilter}
+                  onValueChange={(v) => setReferralTypeFilter(v as 'ALL' | 'DRIVER' | 'CUSTOMER')}
+                >
+                  <SelectTrigger className="w-[180px] h-10 rounded-2xl">
+                    <SelectValue placeholder="Filter by type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All referrers</SelectItem>
+                    <SelectItem value="DRIVER">Driver referrers</SelectItem>
+                    <SelectItem value="CUSTOMER">Customer referrers</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="relative w-full max-w-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    type="search"
+                    placeholder="Search by name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-10 pl-10 rounded-2xl"
+                  />
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -758,8 +1264,22 @@ export default function AdminReferralProgramPage() {
                         onClick={() => openDetail(r.referrerId)}
                       >
                         <TableCell>
-                          <div className="font-bold text-slate-900 dark:text-white">
-                            {r.referrerName}
+                          <div className="flex items-center gap-2">
+                            <div className="font-bold text-slate-900 dark:text-white">
+                              {r.referrerName}
+                            </div>
+                            {/* V2: show referrer type badge (DRIVER vs CUSTOMER) */}
+                            {r.referrerType === 'CUSTOMER' ? (
+                              <Badge variant="outline" className="chip-emerald">
+                                Customer
+                                {r.customerType === 'BUSINESS' && ' (dealer)'}
+                                {r.customerType === 'PRIVATE' && ' (private)'}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="chip-gray">
+                                Driver
+                              </Badge>
+                            )}
                           </div>
                           {r.referrerEmail && (
                             <div className="text-xs text-slate-500">{r.referrerEmail}</div>
@@ -771,12 +1291,23 @@ export default function AdminReferralProgramPage() {
                             {r.successfulReferrals}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">{r.totalTrips}</TableCell>
+                        {/* V2: customer referrers don't have totalTrips — show
+                            totalPaidDeliveries (PER_DELIVERY model) instead. */}
+                        <TableCell className="text-right">
+                          {r.referrerType === 'CUSTOMER'
+                            ? (r.totalPaidDeliveries ?? 0)
+                            : (r.totalTrips ?? 0)}
+                        </TableCell>
                         <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">
-                          {formatMoney(r.totalEarned)}
+                          {/* V2: customer referrers earn credits in cents;
+                              driver referrers earn dollars (from DriverPayout). */}
+                          {r.referrerType === 'CUSTOMER'
+                            ? formatMoney((r.totalEarnedCents ?? 0) / 100)
+                            : formatMoney(r.totalEarned)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {r.lastPaidTier > 0 ? (
+                          {/* V2: only driver referrers have tier payouts */}
+                          {r.referrerType === 'DRIVER' && r.lastPaidTier > 0 ? (
                             <Badge variant="outline" className="chip-gray">
                               Tier {r.lastPaidTier}
                             </Badge>
@@ -823,6 +1354,700 @@ export default function AdminReferralProgramPage() {
           </CardContent>
         </Card>
 
+        {/* ── Section 4 (V2): All Referrals Table ── */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">
+                  All Referrals (V2)
+                </CardTitle>
+                <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Every referral record — filter by type, model, status, or search by code/email.
+                  Click a row to see the full detail (credits + payouts) + manual override.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Select
+                  value={referralsTypeFilter}
+                  onValueChange={(v) => {
+                    setReferralsTypeFilter(v as any);
+                    setReferralsPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[150px] h-10 rounded-2xl">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All types</SelectItem>
+                    <SelectItem value="DRIVER">Driver referrer</SelectItem>
+                    <SelectItem value="CUSTOMER">Customer referrer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={referralsModelFilter}
+                  onValueChange={(v) => {
+                    setReferralsModelFilter(v as any);
+                    setReferralsPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[150px] h-10 rounded-2xl">
+                    <SelectValue placeholder="Model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All models</SelectItem>
+                    <SelectItem value="TIERED">TIERED</SelectItem>
+                    <SelectItem value="PER_DELIVERY">PER_DELIVERY</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={referralsStatusFilter}
+                  onValueChange={(v) => {
+                    setReferralsStatusFilter(v as any);
+                    setReferralsPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[160px] h-10 rounded-2xl">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All statuses</SelectItem>
+                    <SelectItem value="PENDING">PENDING</SelectItem>
+                    <SelectItem value="REGISTERED">REGISTERED</SelectItem>
+                    <SelectItem value="ONBOARDING_COMPLETE">ONBOARDING_COMPLETE</SelectItem>
+                    <SelectItem value="TRIPPING">TRIPPING</SelectItem>
+                    <SelectItem value="COMPLETED">COMPLETED</SelectItem>
+                    <SelectItem value="REWARD_PAID">REWARD_PAID</SelectItem>
+                    <SelectItem value="CLOSED">CLOSED</SelectItem>
+                    <SelectItem value="EXPIRED">EXPIRED</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="relative w-full max-w-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    type="search"
+                    placeholder="Search by code or email..."
+                    value={referralsSearch}
+                    onChange={(e) => {
+                      setReferralsSearch(e.target.value);
+                      setReferralsPage(1);
+                    }}
+                    className="h-10 pl-10 rounded-2xl"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {referralsListQuery.isLoading ? (
+              <div className="py-12 text-center">
+                <Loader2 className="w-8 h-8 mx-auto text-slate-400 animate-spin" />
+              </div>
+            ) : (referralsListQuery.data?.referrals ?? []).length === 0 ? (
+              <div className="py-12 text-center">
+                <Users className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                <p className="text-sm text-slate-500">No referrals match the current filters.</p>
+              </div>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Referrer</TableHead>
+                      <TableHead>Referred</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Model</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Progress</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(referralsListQuery.data?.referrals ?? []).map((r) => (
+                      <TableRow
+                        key={r.id}
+                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                        onClick={() => {
+                          setReferralDetailId(r.id);
+                          setReferralDetailOpen(true);
+                        }}
+                      >
+                        <TableCell>
+                          <span className="font-mono font-bold text-slate-900 dark:text-white tracking-wider">
+                            {r.referralCode}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-bold text-slate-900 dark:text-white">
+                            {r.referrer?.name ?? '—'}
+                          </div>
+                          {r.referrer?.type && (
+                            <Badge variant="outline" className={r.referrer.type === 'CUSTOMER' ? 'chip-emerald' : 'chip-gray'}>
+                              {r.referrer.type}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-bold text-slate-900 dark:text-white">
+                            {r.referredDriver?.name ?? r.referredCustomer?.name ?? r.referredEmail ?? '—'}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {r.referredDriver?.email ?? r.referredCustomer?.email ?? r.referredEmail ?? ''}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {r.referralType && (
+                            <Badge variant="outline" className={r.referralType === 'CUSTOMER' ? 'chip-emerald' : 'chip-gray'}>
+                              {r.referralType}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {r.payoutModel && (
+                            <Badge variant="outline" className="chip-gray">
+                              {r.payoutModel}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            r.status === 'REWARD_PAID' ? 'chip-emerald' :
+                            r.status === 'EXPIRED' || r.status === 'CLOSED' ? 'chip-red' :
+                            'chip-gray'
+                          }>
+                            {r.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {r.payoutModel === 'PER_DELIVERY' ? (
+                            <span className="text-xs text-slate-600 dark:text-slate-400">
+                              {r.completedPaidDeliveries} paid / {r.requiredDeliveries} req
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-600 dark:text-slate-400">
+                              {r.tripsCompleted} / {r.requiredDeliveries}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">
+                          {formatDate(r.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <ChevronRight className="w-4 h-4 text-slate-400" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+                  <span className="text-xs text-slate-500">
+                    Showing {(referralsPage - 1) * referralsPageSize + 1}–{Math.min(referralsPage * referralsPageSize, referralsListQuery.data?.total ?? 0)} of {referralsListQuery.data?.total ?? 0}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={referralsPage <= 1}
+                      onClick={() => setReferralsPage(referralsPage - 1)}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-xs font-bold">Page {referralsPage} of {Math.max(1, Math.ceil((referralsListQuery.data?.total ?? 0) / referralsPageSize))}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={referralsPage >= Math.ceil((referralsListQuery.data?.total ?? 0) / referralsPageSize)}
+                      onClick={() => setReferralsPage(referralsPage + 1)}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Section 5 (V2): ReferralCredits Table ── */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">
+                  Referral Credits (V2)
+                </CardTitle>
+                <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Per-delivery credits applied to customer invoices. Filter by status,
+                  customerId, or referralId. Click Apply or Expire to manually
+                  transition a PENDING credit.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Select
+                  value={creditsStatusFilter}
+                  onValueChange={(v) => {
+                    setCreditsStatusFilter(v as any);
+                    setCreditsPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[160px] h-10 rounded-2xl">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All statuses</SelectItem>
+                    <SelectItem value="PENDING">PENDING</SelectItem>
+                    <SelectItem value="APPLIED">APPLIED</SelectItem>
+                    <SelectItem value="EXPIRED">EXPIRED</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="text"
+                  placeholder="customerId filter..."
+                  value={creditsCustomerIdFilter}
+                  onChange={(e) => {
+                    setCreditsCustomerIdFilter(e.target.value);
+                    setCreditsPage(1);
+                  }}
+                  className="h-10 w-[140px] rounded-2xl"
+                />
+                <Input
+                  type="text"
+                  placeholder="referralId filter..."
+                  value={creditsReferralIdFilter}
+                  onChange={(e) => {
+                    setCreditsReferralIdFilter(e.target.value);
+                    setCreditsPage(1);
+                  }}
+                  className="h-10 w-[140px] rounded-2xl"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {creditsListQuery.isLoading ? (
+              <div className="py-12 text-center">
+                <Loader2 className="w-8 h-8 mx-auto text-slate-400 animate-spin" />
+              </div>
+            ) : (creditsListQuery.data?.credits ?? []).length === 0 ? (
+              <div className="py-12 text-center">
+                <DollarSign className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                <p className="text-sm text-slate-500">No credits match the current filters.</p>
+              </div>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Delivery</TableHead>
+                      <TableHead>Referral</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(creditsListQuery.data?.credits ?? []).map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatMoney(c.amountCents / 100)}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600 dark:text-slate-400 max-w-[260px] truncate" title={c.reason}>
+                          {c.reason}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {c.customerId ? c.customerId.slice(-8) : '—'}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {c.deliveryId ? c.deliveryId.slice(-8) : '—'}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {c.referralId.slice(-8)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            c.status === 'APPLIED' ? 'chip-emerald' :
+                            c.status === 'EXPIRED' ? 'chip-red' :
+                            'chip-amber'
+                          }>
+                            {c.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">
+                          {formatDate(c.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {c.status === 'PENDING' && (
+                            <div className="flex gap-1 justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl chip-emerald"
+                                onClick={() => {
+                                  setCreditActionType('APPLY');
+                                  setCreditActionId(c.id);
+                                  setCreditActionStripeInvoiceId('');
+                                  setCreditActionOpen(true);
+                                }}
+                              >
+                                Apply
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 rounded-xl chip-red"
+                                onClick={() => {
+                                  setCreditActionType('EXPIRE');
+                                  setCreditActionId(c.id);
+                                  setCreditActionReason('');
+                                  setCreditActionOpen(true);
+                                }}
+                              >
+                                Expire
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+                  <span className="text-xs text-slate-500">
+                    Showing {(creditsPage - 1) * creditsPageSize + 1}–{Math.min(creditsPage * creditsPageSize, creditsListQuery.data?.total ?? 0)} of {creditsListQuery.data?.total ?? 0}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={creditsPage <= 1}
+                      onClick={() => setCreditsPage(creditsPage - 1)}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-xs font-bold">Page {creditsPage} of {Math.max(1, Math.ceil((creditsListQuery.data?.total ?? 0) / creditsPageSize))}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={creditsPage >= Math.ceil((creditsListQuery.data?.total ?? 0) / creditsPageSize)}
+                      onClick={() => setCreditsPage(creditsPage + 1)}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── V2: Referral detail dialog (with credits + payouts + override) ── */}
+        <Dialog open={referralDetailOpen} onOpenChange={(o) => {
+          setReferralDetailOpen(o);
+          if (!o) setReferralDetailId(null);
+        }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                <Users className="w-5 h-5 text-slate-400" />
+                Referral Detail
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-600 dark:text-slate-400">
+                Full breakdown + manual override.
+              </DialogDescription>
+            </DialogHeader>
+            {referralDetailQuery.isLoading ? (
+              <div className="py-8 text-center">
+                <Loader2 className="w-6 h-6 mx-auto text-slate-400 animate-spin" />
+              </div>
+            ) : referralDetailQuery.data ? (
+              <div className="space-y-4">
+                {/* Referral summary */}
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-black text-slate-900 dark:text-white tracking-wider">
+                      {referralDetailQuery.data.referral?.referralCode}
+                    </span>
+                    <Badge variant="outline" className={
+                      referralDetailQuery.data.referral?.status === 'REWARD_PAID' ? 'chip-emerald' :
+                      referralDetailQuery.data.referral?.status === 'EXPIRED' || referralDetailQuery.data.referral?.status === 'CLOSED' ? 'chip-red' :
+                      'chip-gray'
+                    }>
+                      {referralDetailQuery.data.referral?.status}
+                    </Badge>
+                    {referralDetailQuery.data.referral?.referralType && (
+                      <Badge variant="outline" className={
+                        referralDetailQuery.data.referral.referralType === 'CUSTOMER' ? 'chip-emerald' : 'chip-gray'
+                      }>
+                        {referralDetailQuery.data.referral.referralType}
+                      </Badge>
+                    )}
+                    {referralDetailQuery.data.referral?.payoutModel && (
+                      <Badge variant="outline" className="chip-gray">
+                        {referralDetailQuery.data.referral.payoutModel}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500 space-y-0.5">
+                    <div>Created: {formatDate(referralDetailQuery.data.referral?.createdAt)}</div>
+                    <div>Expires: {formatDate(referralDetailQuery.data.referral?.expiresAt)}</div>
+                    <div>
+                      Progress: {referralDetailQuery.data.referral?.payoutModel === 'PER_DELIVERY'
+                        ? `${referralDetailQuery.data.referral?.completedPaidDeliveries} paid deliveries`
+                        : `${referralDetailQuery.data.referral?.tripsCompleted} / ${referralDetailQuery.data.referral?.requiredDeliveries} trips`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Credits section */}
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
+                    Referral Credits ({referralDetailQuery.data.credits?.length ?? 0})
+                  </p>
+                  {(referralDetailQuery.data.credits ?? []).length === 0 ? (
+                    <p className="text-sm text-slate-400 py-2">No credits yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(referralDetailQuery.data.credits ?? []).map((c) => (
+                        <div key={c.id} className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-900 dark:text-white">
+                              {formatMoney(c.amountCents / 100)}
+                              <span className="ml-2 text-xs font-normal text-slate-500">
+                                ({c.reason})
+                              </span>
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {formatDate(c.createdAt)} · {c.status}
+                              {c.stripeInvoiceId && ` · invoice ${c.stripeInvoiceId}`}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className={
+                            c.status === 'APPLIED' ? 'chip-emerald' :
+                            c.status === 'EXPIRED' ? 'chip-red' :
+                            'chip-amber'
+                          }>
+                            {c.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Payouts section */}
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">
+                    Driver Payouts ({referralDetailQuery.data.payouts?.length ?? 0})
+                  </p>
+                  {(referralDetailQuery.data.payouts ?? []).length === 0 ? (
+                    <p className="text-sm text-slate-400 py-2">No payouts yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(referralDetailQuery.data.payouts ?? []).map((p) => (
+                        <div key={p.id} className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-900 dark:text-white">
+                              {formatMoney(p.amount)}
+                              <span className="ml-2 text-xs font-normal text-slate-500">
+                                ({p.type}{p.tierNumber ? ` tier ${p.tierNumber}` : ''}{p.isPerDelivery ? ` · PER_DELIVERY ${p.perDeliveryId}` : ''})
+                              </span>
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {formatDate(p.createdAt)} · {p.status}
+                              {p.paidAt && ` · paid ${formatDate(p.paidAt)}`}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className={
+                            p.status === 'PAID' ? 'chip-emerald' :
+                            p.status === 'FAILED' ? 'chip-red' :
+                            'chip-amber'
+                          }>
+                            {p.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual override button */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    variant="outline"
+                    className="w-full py-3 rounded-2xl"
+                    onClick={() => {
+                      setOverrideStatus('EXPIRED');
+                      setOverrideReason('');
+                      setOverrideOpen(true);
+                    }}
+                    disabled={referralDetailQuery.data.referral?.status === 'REWARD_PAID'}
+                  >
+                    Manual Override Status
+                  </Button>
+                  {referralDetailQuery.data.referral?.status === 'REWARD_PAID' && (
+                    <p className="text-[10px] text-slate-400 text-center mt-1">
+                      REWARD_PAID referrals can't be overridden (would require a clawback).
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500 py-4 text-center">Failed to load.</p>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── V2: Manual override referral status dialog ── */}
+        <Dialog open={overrideOpen} onOpenChange={setOverrideOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-500" />
+                Override Referral Status
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                Admin escape hatch. Use sparingly — prefer fixing the underlying
+                issue (program config, expiry window) so the trigger fires
+                naturally next time.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  New status
+                </Label>
+                <Select
+                  value={overrideStatus}
+                  onValueChange={(v) => setOverrideStatus(v as any)}
+                >
+                  <SelectTrigger className="w-full h-12 rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="REWARD_PAID">REWARD_PAID (force-fire payout)</SelectItem>
+                    <SelectItem value="EXPIRED">EXPIRED (admin manually expires)</SelectItem>
+                    <SelectItem value="CLOSED">CLOSED (close without payout)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  Reason (optional, for audit trail)
+                </Label>
+                <Input
+                  type="text"
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                  placeholder="e.g. 'admin adjusted due to support ticket #1234'"
+                  className="h-12 rounded-2xl"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setOverrideOpen(false)} className="rounded-2xl">
+                Cancel
+              </Button>
+              <Button
+                onClick={() => overrideStatusMutation.mutate({ status: overrideStatus, reason: overrideReason || undefined })}
+                disabled={overrideStatusMutation.isPending}
+                className="rounded-2xl lime-btn"
+              >
+                {overrideStatusMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving...</>
+                ) : (
+                  <><Check className="w-4 h-4 mr-2" /> Override Status</>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── V2: Manual apply/expire ReferralCredit dialog ── */}
+        <Dialog open={creditActionOpen} onOpenChange={setCreditActionOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                {creditActionType === 'APPLY' ? (
+                  <><Check className="w-5 h-5 text-emerald-500" /> Apply Referral Credit</>
+                ) : (
+                  <><AlertCircle className="w-5 h-5 text-red-500" /> Expire Referral Credit</>
+                )}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                {creditActionType === 'APPLY'
+                  ? 'Mark a PENDING credit as APPLIED. Use when you have manually applied the credit to a Stripe invoice outside of the automated flow.'
+                  : 'Mark a PENDING credit as EXPIRED. Use when a credit was issued in error (wrong delivery, wrong customer) and should not be applied to an invoice.'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {creditActionType === 'APPLY' && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                    Stripe Invoice ID (optional, for audit trail)
+                  </Label>
+                  <Input
+                    type="text"
+                    value={creditActionStripeInvoiceId}
+                    onChange={(e) => setCreditActionStripeInvoiceId(e.target.value)}
+                    placeholder="in_..."
+                    className="h-12 rounded-2xl"
+                  />
+                </div>
+              )}
+              {creditActionType === 'EXPIRE' && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                    Reason (optional, appended to the credit's reason for audit trail)
+                  </Label>
+                  <Input
+                    type="text"
+                    value={creditActionReason}
+                    onChange={(e) => setCreditActionReason(e.target.value)}
+                    placeholder="e.g. 'wrong delivery, customer refunded separately'"
+                    className="h-12 rounded-2xl"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setCreditActionOpen(false)} className="rounded-2xl">
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (creditActionType === 'APPLY') {
+                    applyCreditMutation.mutate({
+                      stripeInvoiceId: creditActionStripeInvoiceId || undefined,
+                    });
+                  } else {
+                    expireCreditMutation.mutate({
+                      reason: creditActionReason || undefined,
+                    });
+                  }
+                }}
+                disabled={applyCreditMutation.isPending || expireCreditMutation.isPending}
+                className={creditActionType === 'APPLY' ? 'rounded-2xl chip-emerald' : 'rounded-2xl chip-red'}
+              >
+                {(applyCreditMutation.isPending || expireCreditMutation.isPending) ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving...</>
+                ) : creditActionType === 'APPLY' ? (
+                  <><Check className="w-4 h-4 mr-2" /> Apply Credit</>
+                ) : (
+                  <><AlertCircle className="w-4 h-4 mr-2" /> Expire Credit</>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Threshold-lowering warning dialog (#5) ── */}
         {/* ── Threshold-lowering warning dialog (#5) ── */}
         <Dialog open={thresholdWarningOpen} onOpenChange={(o) => !o && cancelThresholdLowering()}>
           <DialogContent className="max-w-md">
