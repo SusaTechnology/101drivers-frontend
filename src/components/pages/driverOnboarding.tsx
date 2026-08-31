@@ -71,6 +71,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useDataMutation, useDataQuery, getUser, isAuthenticated, clearAuth } from "@/lib/tanstack/dataQuery";
 import PolicySheet from "../shared/PolicySheet";
+import { ReferralCodeInput } from "../shared/ReferralCodeInput";
 
 // Form validation schema (unchanged)
 const onboardingSchema = z
@@ -199,6 +200,13 @@ export default function DriverOnboardingPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [openSheet, setOpenSheet] = useState<'agreement' | 'terms' | 'privacy' | null>(null);
+
+  // Referral code (validated by ReferralCodeInput via /api/referrals/public/resolve/:code).
+  // Null when empty/invalid/paused. Non-null only when the resolve endpoint returns
+  // found=true + programActive=true. Conditionally spread into the submit payload.
+  // Replaces the silent urlParams.get('ref') pickup so the user can see/edit the code
+  // and get visual confirmation that it was validated.
+  const [referralCode, setReferralCode] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -341,14 +349,18 @@ export default function DriverOnboardingPage() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlOtp = urlParams.get('otp');
-    
+
     if (urlOtp) {
       const draftStr = localStorage.getItem(DRIVER_SIGNUP_DRAFT_KEY);
       if (draftStr) {
         try {
           const draft = JSON.parse(draftStr);
           if (draft.formData) {
-            // Reconstruct the payload from draft form data
+            // Reconstruct the payload from draft form data.
+            // referralCode is sourced from the validated state captured by
+            // ReferralCodeInput (which auto-fills from ?ref= on mount) — NOT
+            // from the URL here, because the user may have edited/cleared it
+            // in the visible input before navigating away.
             const payload: DriverSignupPayload = {
               email: draft.formData.email,
               password: draft.formData.password,
@@ -360,7 +372,7 @@ export default function DriverOnboardingPage() {
               districts: draft.formData.districts,
               emailAlerts: draft.formData.alerts,
               agreementAcceptedAt: new Date().toISOString(),
-              referralCode: urlParams.get('ref') || undefined,
+              ...(referralCode ? { referralCode } : {}),
             };
             // Store payload and redirect to verify page (with OTP in URL)
             sessionStorage.setItem(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(payload));
@@ -378,6 +390,7 @@ export default function DriverOnboardingPage() {
         });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, reset]);
 
   const onSubmit = async (data: OnboardingFormData) => {
@@ -386,11 +399,11 @@ export default function DriverOnboardingPage() {
       return;
     }
 
-    // Capture referral code from URL if present
-    const urlParams = new URLSearchParams(window.location.search);
-    const referralCode = urlParams.get('ref') || undefined;
-
-    // Prepare base payload
+    // Prepare base payload.
+    // referralCode comes from the validated state captured by ReferralCodeInput
+    // (auto-fills from ?ref= on mount, validates via /api/referrals/public/resolve/:code).
+    // We no longer read urlParams.get('ref') here — the user can see/edit the code
+    // in the visible input, so the validated state is the source of truth.
     const basePayload: DriverSignupPayload = {
       email: data.email,
       password: data.password,
@@ -1145,6 +1158,13 @@ export default function DriverOnboardingPage() {
                         US phone number format. Used for operational contact.
                       </p>
                     </div>
+
+                    {/* Referral Code (optional) — auto-fills from ?ref= URL param,
+                        validates against /api/referrals/public/resolve/:code */}
+                    <ReferralCodeInput
+                      onChange={setReferralCode}
+                      disabled={isPending}
+                    />
                   </form>
                 </CardContent>
               </Card>

@@ -56,6 +56,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
 import PolicySheet from "@/components/shared/PolicySheet";
+import { ReferralCodeInput } from "@/components/shared/ReferralCodeInput";
 
 // Props
 interface DealerSignupFormProps {
@@ -185,6 +186,7 @@ interface DealerSignupPayload {
   businessAddress: string;
   businessPhone: string;
   businessWebsite: string;
+  referralCode?: string;
 }
 
 interface DealerSignupPayloadWithOtp extends DealerSignupPayload {
@@ -198,6 +200,11 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
   const [isSearching, setIsSearching] = useState(false);
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Referral code (validated by ReferralCodeInput via /api/referrals/public/resolve/:code).
+  // Null when empty/invalid/paused. Non-null only when the resolve endpoint returns
+  // found=true + programActive=true. Conditionally spread into the submit payload.
+  const [referralCode, setReferralCode] = useState<string | null>(null);
   
   // OTP flow states
   const [otpSent, setOtpSent] = useState(false);
@@ -688,6 +695,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
       businessPlaceId: selectedBusiness.placeId,
       businessAddress: selectedBusiness.address,
       businessWebsite: selectedBusiness.website || "",
+      ...(referralCode ? { referralCode } : {}),
     };
 
     if (!otpSent) {
@@ -1590,6 +1598,13 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                         optional if enabled by Admin policy).
                       </p>
                     </div>
+
+                    {/* Referral Code (optional) — auto-fills from ?ref= URL param,
+                        validates against /api/referrals/public/resolve/:code */}
+                    <ReferralCodeInput
+                      onChange={setReferralCode}
+                      disabled={isPending}
+                    />
 
                     <Button
                       type="submit"

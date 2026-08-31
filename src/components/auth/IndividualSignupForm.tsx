@@ -53,6 +53,7 @@ import { cn } from "@/lib/utils";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
 import PolicySheet from "@/components/shared/PolicySheet";
 import PendingRegistrationDialog from "@/components/auth/PendingRegistrationDialog";
+import { ReferralCodeInput } from "@/components/shared/ReferralCodeInput";
 
 // sessionStorage key for the pending signup payload (so the verify page
 // can read it and complete the registration).
@@ -101,6 +102,7 @@ interface IndividualSignupPayload {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  referralCode?: string;
 }
 
 // ── Component ───────────────────────────────────────────────────────────
@@ -111,6 +113,11 @@ export function IndividualSignupForm() {
   const [openPolicySheet, setOpenPolicySheet] = useState<
     "customer-agreement" | "customer-terms" | "customer-privacy" | null
   >(null);
+
+  // Referral code (validated by ReferralCodeInput via /api/referrals/public/resolve/:code).
+  // Null when empty/invalid/paused. Non-null only when the resolve endpoint returns
+  // found=true + programActive=true. Conditionally spread into the submit payload.
+  const [referralCode, setReferralCode] = useState<string | null>(null);
 
   // Pending verification dialog — shown when the user tries to sign up
   // with an email that has a pending (unverified) registration.
@@ -182,12 +189,18 @@ export function IndividualSignupForm() {
       toast.success("Code sent to your email", {
         description: data.message || "Please check your inbox.",
       });
-      // Store ONLY the email in sessionStorage (NOT the password or payload).
-      // The backend already has the User row with the hashed password.
-      // The verify page sends only {email, otp} — no sensitive data.
+      // Store ONLY the email + optional referralCode in sessionStorage
+      // (NOT the password or contact info — the backend has the User row
+      // with the hashed password). The verify page sends {email, otp,
+      // referralCode?} — referralCode is needed in step 2 because the
+      // backend applies the customer referral AFTER creating the Customer
+      // row (which only happens in step 2).
       sessionStorage.setItem(
         INDIVIDUAL_PENDING_PAYLOAD_KEY,
-        JSON.stringify({ email: variables.email }),
+        JSON.stringify({
+          email: variables.email,
+          ...(variables.referralCode ? { referralCode: variables.referralCode } : {}),
+        }),
       );
       // Navigate to the separate OTP entry page.
       navigate({ to: "/individual-verify-email" });
@@ -255,6 +268,7 @@ export function IndividualSignupForm() {
       contactName: data.contactName.trim(),
       contactEmail: data.contactEmail.trim().toLowerCase(),
       contactPhone: data.contactPhone,
+      ...(referralCode ? { referralCode } : {}),
     };
     sendOtpMutation.mutate(payload);
   };
@@ -644,6 +658,13 @@ export function IndividualSignupForm() {
               on the next page to complete your signup. The code expires in 15 minutes.
             </p>
           </div>
+
+          {/* Referral Code (optional) — auto-fills from ?ref= URL param,
+              validates against /api/referrals/public/resolve/:code */}
+          <ReferralCodeInput
+            onChange={setReferralCode}
+            disabled={isPending}
+          />
 
           {/* ── Submit button ───────────────────────────────────────────── */}
           <Button

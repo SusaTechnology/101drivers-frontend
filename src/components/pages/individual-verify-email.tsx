@@ -20,17 +20,22 @@ import { cn } from '@/lib/utils';
 
 const INDIVIDUAL_PENDING_PAYLOAD_KEY = 'individualPendingPayload';
 
-// Step 2 payload — ONLY email + OTP. No password, no contact info.
+// Step 2 payload — email + OTP + optional referralCode.
 // The backend reads everything else from the stored User row.
+// referralCode is passed through from step 1 (persisted in sessionStorage)
+// so the backend can apply the customer referral AFTER creating the
+// Customer row in step 2.
 interface VerifyOtpPayload {
   email: string;
   verificationToken: string;
+  referralCode?: string;
 }
 
 export default function IndividualVerifyEmailPage() {
   const [otpValue, setOtpValue] = useState('');
   const [isComplete, setIsComplete] = useState(false);
   const [email, setEmail] = useState('');
+  const [referralCode, setReferralCode] = useState<string | undefined>(undefined);
   const [countdown, setCountdown] = useState(0);
   const [registrationComplete, setRegistrationComplete] = useState(false);
 
@@ -49,18 +54,24 @@ export default function IndividualVerifyEmailPage() {
     }
   }, []);
 
-  // Load pending email from sessionStorage.
-  // Only the email is stored — NOT the password or contact info.
+  // Load pending email + optional referralCode from sessionStorage.
+  // Only the email + referralCode are stored — NOT the password or contact info.
   // The backend has the User row from step 1 and reads everything from there.
+  // referralCode is forwarded to step 2 so the backend can apply the customer
+  // referral after creating the Customer row.
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem(INDIVIDUAL_PENDING_PAYLOAD_KEY);
       if (stored) {
         const data = JSON.parse(stored);
-        // The stored data may be the full payload (legacy) or just {email}
+        // The stored data may be the full payload (legacy), {email} (V1),
+        // or {email, referralCode?} (V2).
         const email = data.email || data.contactEmail;
         if (email) {
           setEmail(email);
+          if (data.referralCode) {
+            setReferralCode(data.referralCode);
+          }
         } else {
           toast.error('No pending registration found', {
             description: 'Please start a new registration.',
@@ -167,6 +178,7 @@ export default function IndividualVerifyEmailPage() {
     const payload: VerifyOtpPayload = {
       email,
       verificationToken: otpValue,
+      ...(referralCode ? { referralCode } : {}),
     };
     verifyOtpMutation.mutate(payload);
   };
