@@ -340,6 +340,13 @@ export default function DriverSupportDetailPage() {
                     const isFromDriver = note.authorRole === 'DRIVER'
                     const isFromSupport = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
 
+                    // Explicit label — no ambiguity
+                    let label = 'Unknown'
+                    if (isFromDriver) label = 'You'
+                    else if (isFromSupport) label = 'Support Team'
+                    else if (note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER') label = 'Customer'
+                    else label = note.authorName || note.authorRole || 'Unknown'
+
                     return (
                       <div
                         key={note.id}
@@ -363,7 +370,7 @@ export default function DriverSupportDetailPage() {
                                 ? "text-slate-800/70"
                                 : "text-slate-500 dark:text-slate-400"
                             )}>
-                              {isFromSupport ? 'Support Team' : 'You'}
+                              {label}
                             </span>
                             <span className={cn(
                               "text-[10px]",

@@ -390,9 +390,18 @@ export default function AdminSupportDetailPage() {
                         }
 
                         const isFromAdmin = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
-                        const senderLabel = isFromAdmin
-                          ? (note.authorName || 'You')
-                          : (note.authorName || 'Customer')
+
+                        // Explicit label — no ambiguity
+                        let senderLabel = 'Unknown'
+                        if (isFromAdmin) {
+                          senderLabel = note.authorName || 'You (Admin)'
+                        } else if (note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER') {
+                          senderLabel = note.authorName || 'Customer'
+                        } else if (note.authorRole === 'DRIVER') {
+                          senderLabel = note.authorName || 'Driver'
+                        } else {
+                          senderLabel = note.authorName || note.authorRole || 'Unknown'
+                        }
 
                         return (
                           <div

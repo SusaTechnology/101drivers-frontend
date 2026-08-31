@@ -363,8 +363,17 @@ export default function DealerSupportDetail() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {publicNotes.map((note) => {
+                    // Explicitly check each role — no "else" fallback
                     const isFromDealer = note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER'
                     const isFromSupport = note.authorRole === 'ADMIN' || note.authorRole === 'OPS'
+                    const isFromDriver = note.authorRole === 'DRIVER'
+
+                    // Determine label based on who wrote it
+                    let label = 'Unknown'
+                    if (isFromDealer) label = 'You'
+                    else if (isFromSupport) label = 'Support Team'
+                    else if (isFromDriver) label = 'Driver'
+                    else label = note.authorName || note.authorRole || 'Unknown'
 
                     return (
                       <div
@@ -390,7 +399,7 @@ export default function DealerSupportDetail() {
                                 ? "text-slate-800/70"
                                 : "text-slate-500 dark:text-slate-400"
                             )}>
-                              {isFromSupport ? 'Support Team' : 'You'}
+                              {label}
                             </span>
                             <span className={cn(
                               "text-[10px]",
