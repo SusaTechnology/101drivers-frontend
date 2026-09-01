@@ -2183,4 +2183,113 @@ export class ReferralService {
     if (parts.length === 1) return parts[0];
     return `${parts[0]} ${parts[parts.length - 1][0]}.`;
   }
+
+  /**
+   * Public lookup by name — anyone can search for a referrer by name and
+   * get their referral code back. Used by the /test-referral (no code)
+   * public lookup page.
+   *
+   * Searches:
+   *   - Driver.referralCode where Driver.user.fullName contains the query
+   *   - Customer.referralCode where Customer.user.fullName contains the query
+   *     OR Customer.businessName contains the query (for business customers)
+   *
+   * Returns up to 10 results with privacy-masked names. Only returns
+   * referrers whose referral program is active (customerReferralsEnabled
+   * or driverReferralsEnabled depending on type).
+   *
+   * No auth required — this is a public endpoint.
+   */
+  async publicLookupByName(query: string): Promise<{
+    results: Array<{
+      code: string;
+      referrerName: string;
+      referrerType: ReferralTypeDto;
+    }>;
+  }> {
+    if (!query || query.trim().length < 2) {
+      return { results: [] };
+    }
+
+    const searchTerm = query.trim();
+    const config = await this.appSettingService.getReferralProgramSettings();
+
+    // Search drivers + customers in parallel
+    const [drivers, customers] = await Promise.all([
+      // Only search if driver referrals are enabled
+      config.driverReferralsEnabled
+        ? this.prisma.driver.findMany({
+            where: {
+              referralCode: { not: null },
+              user: {
+                fullName: { contains: searchTerm, mode: "insensitive" },
+              },
+            },
+            select: {
+              referralCode: true,
+              user: { select: { fullName: true } },
+            },
+            take: 10,
+          })
+        : [],
+      // Only search if customer referrals are enabled
+      config.customerReferralsEnabled
+        ? this.prisma.customer.findMany({
+            where: {
+              referralCode: { not: null },
+              OR: [
+                { user: { fullName: { contains: searchTerm, mode: "insensitive" } } },
+                { businessName: { contains: searchTerm, mode: "insensitive" } },
+                { contactName: { contains: searchTerm, mode: "insensitive" } },
+              ],
+            },
+            select: {
+              referralCode: true,
+              businessName: true,
+              contactName: true,
+              customerType: true,
+              user: { select: { fullName: true } },
+            },
+            take: 10,
+          })
+        : [],
+    ]);
+
+    const results: Array<{
+      code: string;
+      referrerName: string;
+      referrerType: ReferralTypeDto;
+    }> = [];
+
+    // Add driver results
+    for (const d of drivers) {
+      if (d.referralCode) {
+        results.push({
+          code: d.referralCode,
+          referrerName: d.user?.fullName
+            ? this.privacyMaskName(d.user.fullName)
+            : "A 101 Drivers driver",
+          referrerType: ReferralTypeDto.DRIVER,
+        });
+      }
+    }
+
+    // Add customer results
+    for (const c of customers) {
+      if (c.referralCode) {
+        const name =
+          c.customerType === "BUSINESS"
+            ? (c.businessName || c.contactName || c.user?.fullName || "A 101 Drivers customer")
+            : this.privacyMaskName(c.contactName || c.user?.fullName || "A 101 Drivers customer");
+        results.push({
+          code: c.referralCode,
+          referrerName: name,
+          referrerType: ReferralTypeDto.CUSTOMER,
+        });
+      }
+    }
+
+    // Limit to 10 total results
+    return { results: results.slice(0, 10) };
+  }
 }

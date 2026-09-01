@@ -45,25 +45,23 @@ type Props = {
 };
 
 /**
- * Build the share URL for the given referrer type.
+ * Build the share URL for the referral code.
  *
- * For DRIVER referrers, the link goes to /driver-onboarding?ref=CODE
- * (driver signup form picks up ?ref= silently + now via ReferralCodeInput).
+ * ALL referrer types (DRIVER + CUSTOMER) share the SAME URL format:
+ *   /test-referral/CODE
  *
- * For CUSTOMER referrers, the link goes to /auth/dealer-signup?ref=CODE
- * (dealer signup form picks up ?ref= via ReferralCodeInput). Private
- * customers can use the same link — the ReferralCodeInput auto-fills
- * regardless of which signup form the user lands on, so this single
- * URL works for both business + private customer signup.
+ * The /test-referral/:code page resolves the code, shows the referrer's
+ * name (privacy-masked), displays a QR code for easy printing, and
+ * provides 3 signup CTAs (Driver / Dealer / Customer) that deep-link
+ * to the appropriate signup form with ?ref=CODE.
+ *
+ * This means a single share link works for everyone — the test-referral
+ * page handles the routing to the correct signup form based on who
+ * the user wants to become.
  */
-function buildShareUrl(referrerType: ReferrerType, code: string): string {
+function buildShareUrl(_referrerType: ReferrerType, code: string): string {
   const base = window.location.origin;
-  if (referrerType === "DRIVER") {
-    return `${base}/driver-onboarding?ref=${encodeURIComponent(code)}`;
-  }
-  // CUSTOMER — point to dealer signup (works for both dealer + private since
-  // the ReferralCodeInput on each form auto-fills from ?ref=).
-  return `${base}/auth/dealer-signup?ref=${encodeURIComponent(code)}`;
+  return `${base}/test-referral/${encodeURIComponent(code)}`;
 }
 
 export function ReferralCodeCard({ referrerType, className }: Props) {

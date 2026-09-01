@@ -73,4 +73,49 @@ export class ReferralPublicController {
   }> {
     return this.referralService.publicResolveReferralCode(code);
   }
+
+  /**
+   * GET /api/referrals/public/lookup?name=...
+   *
+   * Public search by name — anyone can type a name and get matching
+   * referral codes back. Returns up to 10 results with privacy-masked
+   * names. Used by the /test-referral (no code) public lookup page.
+   *
+   * Only returns referrers whose referral program is active.
+   */
+  @common.Get("lookup")
+  @swagger.ApiOperation({
+    summary:
+      "Search for referral codes by referrer name. Public (no auth). Returns up to 10 results.",
+  })
+  @swagger.ApiOkResponse({
+    description: "Search results",
+    schema: {
+      type: "object",
+      properties: {
+        results: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              code: { type: "string" },
+              referrerName: { type: "string" },
+              referrerType: { type: "string", enum: ["DRIVER", "CUSTOMER"] },
+            },
+          },
+        },
+      },
+    },
+  })
+  async lookupByName(
+    @common.Query("name") name: string,
+  ): Promise<{
+    results: Array<{
+      code: string;
+      referrerName: string;
+      referrerType: ReferralTypeDto;
+    }>;
+  }> {
+    return this.referralService.publicLookupByName(name);
+  }
 }

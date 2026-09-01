@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as DriverRouteImport } from './routes/driver'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TestReferralIndexRouteImport } from './routes/test-referral/index'
 import { Route as TermsIndexRouteImport } from './routes/terms/index'
 import { Route as QuoteDetailsIndexRouteImport } from './routes/quote-details/index'
 import { Route as QuoteConfirmationIndexRouteImport } from './routes/quote-confirmation/index'
@@ -128,6 +129,11 @@ const DriverRoute = DriverRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TestReferralIndexRoute = TestReferralIndexRouteImport.update({
+  id: '/test-referral/',
+  path: '/test-referral/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsIndexRoute = TermsIndexRouteImport.update({
@@ -806,6 +812,7 @@ export interface FileRoutesByFullPath {
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
   '/quote-details/': typeof QuoteDetailsIndexRoute
   '/terms/': typeof TermsIndexRoute
+  '/test-referral/': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
   '/test-referral/$code/': typeof TestReferralCodeIndexRoute
@@ -917,6 +924,7 @@ export interface FileRoutesByTo {
   '/quote-confirmation': typeof QuoteConfirmationIndexRoute
   '/quote-details': typeof QuoteDetailsIndexRoute
   '/terms': typeof TermsIndexRoute
+  '/test-referral': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create': typeof AdminPricingConfigCreateIndexRoute
   '/test-referral/$code': typeof TestReferralCodeIndexRoute
@@ -1030,6 +1038,7 @@ export interface FileRoutesById {
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
   '/quote-details/': typeof QuoteDetailsIndexRoute
   '/terms/': typeof TermsIndexRoute
+  '/test-referral/': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
   '/test-referral/$code/': typeof TestReferralCodeIndexRoute
@@ -1144,6 +1153,7 @@ export interface FileRouteTypes {
     | '/quote-confirmation/'
     | '/quote-details/'
     | '/terms/'
+    | '/test-referral/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
     | '/test-referral/$code/'
@@ -1255,6 +1265,7 @@ export interface FileRouteTypes {
     | '/quote-confirmation'
     | '/quote-details'
     | '/terms'
+    | '/test-referral'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create'
     | '/test-referral/$code'
@@ -1367,6 +1378,7 @@ export interface FileRouteTypes {
     | '/quote-confirmation/'
     | '/quote-details/'
     | '/terms/'
+    | '/test-referral/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
     | '/test-referral/$code/'
@@ -1458,6 +1470,7 @@ export interface RootRouteChildren {
   QuoteConfirmationIndexRoute: typeof QuoteConfirmationIndexRoute
   QuoteDetailsIndexRoute: typeof QuoteDetailsIndexRoute
   TermsIndexRoute: typeof TermsIndexRoute
+  TestReferralIndexRoute: typeof TestReferralIndexRoute
   AdminPricingConfigEditConfigIdRoute: typeof AdminPricingConfigEditConfigIdRoute
   AdminPricingConfigCreateIndexRoute: typeof AdminPricingConfigCreateIndexRoute
   TestReferralCodeIndexRoute: typeof TestReferralCodeIndexRoute
@@ -1478,6 +1491,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/test-referral/': {
+      id: '/test-referral/'
+      path: '/test-referral'
+      fullPath: '/test-referral/'
+      preLoaderRoute: typeof TestReferralIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms/': {
@@ -2377,6 +2397,7 @@ const rootRouteChildren: RootRouteChildren = {
   QuoteConfirmationIndexRoute: QuoteConfirmationIndexRoute,
   QuoteDetailsIndexRoute: QuoteDetailsIndexRoute,
   TermsIndexRoute: TermsIndexRoute,
+  TestReferralIndexRoute: TestReferralIndexRoute,
   AdminPricingConfigEditConfigIdRoute: AdminPricingConfigEditConfigIdRoute,
   AdminPricingConfigCreateIndexRoute: AdminPricingConfigCreateIndexRoute,
   TestReferralCodeIndexRoute: TestReferralCodeIndexRoute,

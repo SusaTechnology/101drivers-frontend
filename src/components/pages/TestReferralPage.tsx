@@ -26,7 +26,8 @@
  */
 import { useMemo } from "react";
 import { Link } from "@tanstack/react-router";
-import { Gift, ArrowRight, Car, Building, User, AlertTriangle, CheckCircle2, X } from "lucide-react";
+import { Gift, ArrowRight, Car, Building, User, AlertTriangle, CheckCircle2, X, Printer, Search } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -177,6 +178,36 @@ export default function TestReferralPage({ code }: Props) {
               </div>
             )}
 
+            {/* ── QR code (for easy printing + in-person sharing) ── */}
+            {data?.found && (
+              <div className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Scan to share
+                </p>
+                <div className="p-3 bg-white rounded-2xl border-2 border-emerald-100 dark:border-emerald-900/30 shadow-sm">
+                  <QRCodeSVG
+                    value={`${window.location.origin}/test-referral/${upperCode}`}
+                    size={180}
+                    level="M"
+                    fgColor="#065f46"
+                    bgColor="#ffffff"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center leading-relaxed">
+                  Scan with your phone camera or print this page to share in person.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl h-8 text-xs"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="w-3.5 h-3.5 mr-1.5" />
+                  Print this page
+                </Button>
+              </div>
+            )}
+
             {/* ── CTAs ── */}
             {data?.found ? (
               <div className="space-y-3 pt-2">
@@ -235,12 +266,21 @@ export default function TestReferralPage({ code }: Props) {
         </Card>
 
         {/* ── Footer ── */}
-        <p className="text-center text-[11px] text-slate-400 dark:text-slate-500 mt-6">
-          101 Drivers · Referral Program ·{" "}
-          <Link to="/about" className="underline hover:text-slate-600 dark:hover:text-slate-300">
-            Learn more
-          </Link>
-        </p>
+        <div className="text-center mt-6 space-y-2">
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            101 Drivers · Referral Program ·{" "}
+            <Link to="/about" className="underline hover:text-slate-600 dark:hover:text-slate-300">
+              Learn more
+            </Link>
+          </p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            Don't have a code?{" "}
+            <Link to="/test-referral" className="underline text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 inline-flex items-center gap-1">
+              <Search className="w-3 h-3" />
+              Search by name
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
