@@ -337,6 +337,37 @@ async adminUsersSummary(): Promise<any> {
   return this.service.getAdminUsersSummary();
 }
 
+// ── V2 — Unified admin users endpoint (single call: summary + rows + pagination) ──
+// Replaces the separate /admin + /admin/summary endpoints with one call.
+// Key change: unified `status` param that ORs customer + driver conditions
+// so "Pending" shows both pending customers + pending drivers.
+@common.Get("admin/v2")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "read",
+  possession: "any",
+})
+async adminUsersV2(
+  @common.Query("q") q?: string,
+  @common.Query("role") role?: string,
+  @common.Query("status") status?: string,
+  @common.Query("sortBy") sortBy?: string,
+  @common.Query("sortOrder") sortOrder?: "asc" | "desc",
+  @common.Query("page") page?: string,
+  @common.Query("pageSize") pageSize?: string,
+): Promise<any> {
+  return this.service.getAdminUsersV2({
+    q: q || undefined,
+    role: role || undefined,
+    status: status || undefined,
+    sortBy: sortBy || undefined,
+    sortOrder: sortOrder || undefined,
+    page: page ? parseInt(page, 10) : 1,
+    pageSize: pageSize ? parseInt(pageSize, 10) : 25,
+  });
+}
+
 @common.Get(":id/admin-detail")
 @swagger.ApiOkResponse({ type: Object })
 @nestAccessControl.UseRoles({

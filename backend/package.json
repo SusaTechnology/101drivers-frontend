@@ -89,7 +89,8 @@
     "preset": "ts-jest",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "@app/custom-validators": "<rootDir>/src/validators"
+      "@app/custom-validators": "<rootDir>/src/validators",
+      "^src/(.*)$": "<rootDir>/src/$1"
     },
     "modulePathIgnorePatterns": [
       "<rootDir>/dist/"

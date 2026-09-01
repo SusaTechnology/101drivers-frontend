@@ -614,6 +614,353 @@ async getAdminUsersSummary(): Promise<any> {
   };
 }
 
+// ============================================================
+// V2 — Unified admin users endpoint
+// ============================================================
+// Replaces the separate /admin + /admin/summary endpoints with a
+// single call that returns summary + rows + pagination + availableStatuses.
+//
+// Key change: the `status` param is UNIFIED. Instead of separate
+// customerApprovalStatus + driverStatus params, there's ONE `status`
+// that maps to both sides:
+//   PENDING     → Customer.approvalStatus = PENDING
+//                 OR Driver.status IN (WAITLISTED, INVITED, PENDING_APPROVAL)
+//   APPROVED    → Customer.approvalStatus = APPROVED OR Driver.status = APPROVED
+//   REJECTED    → Customer.approvalStatus = REJECTED OR Driver.status = REJECTED
+//   SUSPENDED   → Customer.approvalStatus = SUSPENDED OR Driver.status = SUSPENDED
+//   INVITED     → Driver.status = INVITED (driver-only)
+//   WAITLISTED  → Driver.status = WAITLISTED (driver-only)
+//
+// When status=PENDING, the query ORs both customer + driver conditions
+// so the table shows the same count as the summary's "Pending Approvals"
+// card. No more "14 in summary, 3 in filter" mismatch.
+//
+// Driver-only statuses (INVITED, WAITLISTED) auto-force roles=DRIVER
+// server-side so the query doesn't waste time scanning customer rows.
+// The response includes `availableStatuses` so the frontend can
+// disable driver-only options when role=customer is selected.
+async getAdminUsersV2(query: {
+  q?: string;
+  role?: string;
+  status?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+}): Promise<any> {
+  const page = query.page ?? 1;
+  const pageSize = query.pageSize ?? 25;
+  const skip = (page - 1) * pageSize;
+
+  // ── Build the unified where clause ──────────────────────────────
+  // The base filter excludes unverified signups (same as V1).
+  const verifiedFilter = {
+    NOT: {
+      emailVerifiedAt: null,
+      customer: null,
+      driver: null,
+    },
+  } as Prisma.UserWhereInput;
+
+  const where: Prisma.UserWhereInput = {
+    ...verifiedFilter,
+    // Search
+    ...(query.q
+      ? {
+          OR: [
+            { email: { contains: query.q, mode: "insensitive" } },
+            { username: { contains: query.q, mode: "insensitive" } },
+            { fullName: { contains: query.q, mode: "insensitive" } },
+            { phone: { contains: query.q, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  // ── Role filter ─────────────────────────────────────────────────
+  // If status is a driver-only value (INVITED, WAITLISTED), force
+  // roles=DRIVER server-side so we don't scan customer rows that can
+  // never match.
+  const driverOnlyStatuses = ["INVITED", "WAITLISTED"];
+  const isDriverOnlyStatus = query.status
+    ? driverOnlyStatuses.includes(query.status)
+    : false;
+
+  if (query.role) {
+    where.roles = query.role as EnumUserRoles;
+  } else if (isDriverOnlyStatus) {
+    // Auto-force driver role for driver-only statuses
+    where.roles = EnumUserRoles.DRIVER;
+  }
+
+  // ── Unified status filter ───────────────────────────────────────
+  // This is the core V2 change: instead of separate customerApprovalStatus
+  // + driverStatus, we have ONE `status` that ORs both sides.
+  //
+  // The mapping:
+  //   PENDING     → customer.PENDING OR driver IN (WAITLISTED, INVITED, PENDING_APPROVAL)
+  //   APPROVED    → customer.APPROVED OR driver.APPROVED
+  //   REJECTED    → customer.REJECTED OR driver.REJECTED
+  //   SUSPENDED   → customer.SUSPENDED OR driver.SUSPENDED
+  //   INVITED     → driver.INVITED (driver-only — role auto-forced above)
+  //   WAITLISTED  → driver.WAITLISTED (driver-only — role auto-forced above)
+  //
+  // For PENDING/APPROVED/REJECTED/SUSPENDED, we build an OR condition
+  // that matches either the customer side OR the driver side. This
+  // ensures "Pending" shows both pending customers + pending drivers
+  // in one query — matching the summary card.
+  if (query.status) {
+    const status = query.status;
+
+    if (status === "PENDING") {
+      // The broadest case — matches Customer.PENDING + 3 driver statuses
+      where.OR = [
+        {
+          customer: {
+            is: { approvalStatus: EnumCustomerApprovalStatus.PENDING },
+          },
+        },
+        {
+          driver: {
+            is: {
+              status: {
+                in: [
+                  EnumDriverStatus.WAITLISTED,
+                  EnumDriverStatus.INVITED,
+                  EnumDriverStatus.PENDING_APPROVAL,
+                ],
+              },
+            },
+          },
+        },
+      ];
+    } else if (status === "APPROVED") {
+      where.OR = [
+        {
+          customer: {
+            is: { approvalStatus: EnumCustomerApprovalStatus.APPROVED },
+          },
+        },
+        {
+          driver: {
+            is: { status: EnumDriverStatus.APPROVED },
+          },
+        },
+      ];
+    } else if (status === "REJECTED") {
+      where.OR = [
+        {
+          customer: {
+            is: { approvalStatus: EnumCustomerApprovalStatus.REJECTED },
+          },
+        },
+        {
+          driver: {
+            is: { status: EnumDriverStatus.REJECTED },
+          },
+        },
+      ];
+    } else if (status === "SUSPENDED") {
+      where.OR = [
+        {
+          customer: {
+            is: { approvalStatus: EnumCustomerApprovalStatus.SUSPENDED },
+          },
+        },
+        {
+          driver: {
+            is: { status: EnumDriverStatus.SUSPENDED },
+          },
+        },
+      ];
+    } else if (status === "INVITED") {
+      // Driver-only — role already auto-forced above
+      where.driver = {
+        is: { status: EnumDriverStatus.INVITED },
+      };
+    } else if (status === "WAITLISTED") {
+      // Driver-only — role already auto-forced above
+      where.driver = {
+        is: { status: EnumDriverStatus.WAITLISTED },
+      };
+    }
+  }
+
+  // ── Run the query + count in parallel ───────────────────────────
+  const [total, rows, totalUsers, activeUsers, inactiveUsers,
+    privateCustomers, businessCustomers, drivers, admins,
+    pendingCustomers, pendingDrivers] = await Promise.all([
+    // Filtered count (matches the table)
+    this.prisma.user.count({ where }),
+    // Filtered rows
+    this.prisma.user.findMany({
+      where,
+      skip,
+      take: pageSize,
+      orderBy: {
+        [query.sortBy || "createdAt"]: query.sortOrder || "desc",
+      } as Prisma.UserOrderByWithRelationInput,
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        fullName: true,
+        phone: true,
+        roles: true,
+        isActive: true,
+        disabledAt: true,
+        disabledReason: true,
+        emailVerifiedAt: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
+        customer: {
+          select: {
+            id: true,
+            customerType: true,
+            approvalStatus: true,
+            businessName: true,
+            contactName: true,
+            contactEmail: true,
+            contactPhone: true,
+            phone: true,
+            suspendedAt: true,
+            approvedAt: true,
+            postpaidEnabled: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        driver: {
+          select: {
+            id: true,
+            status: true,
+            phone: true,
+            profilePhotoUrl: true,
+            approvedAt: true,
+            approvedByUserId: true,
+            createdAt: true,
+            updatedAt: true,
+            referredBy: {
+              select: {
+                id: true,
+                referralCode: true,
+                status: true,
+                referrer: {
+                  select: {
+                    id: true,
+                    user: { select: { fullName: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            deliveriesCreated: true,
+            adminActions: true,
+            notifEvents: true,
+            scheduleChangesRequested: true,
+            scheduleChangesDecided: true,
+          },
+        },
+      },
+    }),
+    // ── Global summary (always full platform counts, unaffected by filters) ──
+    this.prisma.user.count({ where: verifiedFilter }),
+    this.prisma.user.count({ where: { ...verifiedFilter, isActive: true } }),
+    this.prisma.user.count({ where: { ...verifiedFilter, isActive: false } }),
+    this.prisma.user.count({
+      where: { ...verifiedFilter, roles: EnumUserRoles.PRIVATE_CUSTOMER },
+    }),
+    this.prisma.user.count({
+      where: { ...verifiedFilter, roles: EnumUserRoles.BUSINESS_CUSTOMER },
+    }),
+    this.prisma.user.count({
+      where: { ...verifiedFilter, roles: EnumUserRoles.DRIVER },
+    }),
+    this.prisma.user.count({
+      where: { ...verifiedFilter, roles: EnumUserRoles.ADMIN },
+    }),
+    // Pending counts (same logic as the old summary endpoint)
+    this.prisma.customer.count({
+      where: { approvalStatus: EnumCustomerApprovalStatus.PENDING },
+    }),
+    this.prisma.driver.count({
+      where: {
+        status: {
+          in: [
+            EnumDriverStatus.WAITLISTED,
+            EnumDriverStatus.INVITED,
+            EnumDriverStatus.PENDING_APPROVAL,
+          ],
+        },
+      },
+    }),
+  ]);
+
+  // ── Build the response ──────────────────────────────────────────
+  // The summary's filteredTotal always equals pagination.totalRows —
+  // so the summary card + the table always match.
+  return {
+    // Global summary (always full platform counts — doesn't change with filters)
+    summary: {
+      totalUsers,
+      activeUsers,
+      inactiveUsers,
+      byRole: {
+        privateCustomers,
+        businessCustomers,
+        drivers,
+        admins,
+      },
+      pendingApprovals: {
+        customers: pendingCustomers,
+        drivers: pendingDrivers,
+      },
+      // The total that matches the current filter — this is what the
+      // "Showing X of Y" footer should display.
+      filteredTotal: total,
+    },
+    // The table rows
+    rows,
+    pagination: {
+      page,
+      pageSize,
+      totalRows: total,
+      totalPages: Math.ceil(total / pageSize) || 1,
+    },
+    // What filters were applied (for the "Active filters" display)
+    filtersApplied: {
+      q: query.q ?? null,
+      role: isDriverOnlyStatus && !query.role
+        ? "DRIVER" // reflect the auto-forced role
+        : query.role ?? null,
+      status: query.status ?? null,
+      // Flag: was the role auto-forced because of a driver-only status?
+      roleAutoForced: isDriverOnlyStatus && !query.role,
+      sortBy: query.sortBy ?? "createdAt",
+      sortOrder: query.sortOrder ?? "desc",
+    },
+    // Which status options are available given the current role selection.
+    // The frontend uses this to enable/disable filter options.
+    availableStatuses: {
+      // All 6 unified statuses
+      all: [
+        { value: "PENDING", label: "Pending", driverOnly: false },
+        { value: "APPROVED", label: "Approved", driverOnly: false },
+        { value: "REJECTED", label: "Rejected", driverOnly: false },
+        { value: "SUSPENDED", label: "Suspended", driverOnly: false },
+        { value: "INVITED", label: "Invited", driverOnly: true },
+        { value: "WAITLISTED", label: "Waitlisted", driverOnly: true },
+      ],
+      // Which values are driver-only (not applicable to customers)
+      driverOnly: ["INVITED", "WAITLISTED"],
+    },
+  };
+}
+
 async getAdminUserDetail(id: string): Promise<any> {
   const user = await this.prisma.user.findUniqueOrThrow({
     where: { id },

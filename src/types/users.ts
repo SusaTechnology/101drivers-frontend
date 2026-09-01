@@ -9,7 +9,20 @@ export type CustomerType = 'BUSINESS' | 'PRIVATE';
 
 export type CustomerApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 
-export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
+// V2: removed the ghost 'PENDING' value that didn't exist in the backend
+// EnumDriverStatus enum. The old value was a legacy artifact from a rename
+// and caused a duplicate "Pending" option in the admin UI.
+export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
+
+// V2: unified admin status — the single `status` param for the /admin/v2
+// endpoint. Maps to both customer + driver sides:
+//   PENDING     → Customer.PENDING OR Driver IN (WAITLISTED, INVITED, PENDING_APPROVAL)
+//   APPROVED    → Customer.APPROVED OR Driver.APPROVED
+//   REJECTED    → Customer.REJECTED OR Driver.REJECTED
+//   SUSPENDED   → Customer.SUSPENDED OR Driver.SUSPENDED
+//   INVITED     → Driver.INVITED (driver-only)
+//   WAITLISTED  → Driver.WAITLISTED (driver-only)
+export type AdminUnifiedStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED' | 'WAITLISTED';
 
 // Referral relationship status — matches the backend EnumReferralStatus enum
 // (prisma/schema.prisma).
@@ -153,6 +166,52 @@ export interface AdminUsersSummary {
   pendingApprovals: {
     customers: number;
     drivers: number;
+  };
+}
+
+// ==================== V2 — UNIFIED ADMIN USERS RESPONSE ====================
+
+export interface AdminUsersV2AvailableStatus {
+  value: AdminUnifiedStatus;
+  label: string;
+  driverOnly: boolean;
+}
+
+export interface AdminUsersV2Response {
+  summary: {
+    totalUsers: number;
+    activeUsers: number;
+    inactiveUsers: number;
+    byRole: {
+      privateCustomers: number;
+      businessCustomers: number;
+      drivers: number;
+      admins: number;
+    };
+    pendingApprovals: {
+      customers: number;
+      drivers: number;
+    };
+    filteredTotal: number;
+  };
+  rows: AdminUserRow[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalRows: number;
+    totalPages: number;
+  };
+  filtersApplied: {
+    q: string | null;
+    role: string | null;
+    status: string | null;
+    roleAutoForced: boolean;
+    sortBy: string;
+    sortOrder: 'asc' | 'desc';
+  };
+  availableStatuses: {
+    all: AdminUsersV2AvailableStatus[];
+    driverOnly: AdminUnifiedStatus[];
   };
 }
 
@@ -514,11 +573,21 @@ export const CUSTOMER_APPROVAL_STATUS_LABELS: Record<CustomerApprovalStatus, str
 export const DRIVER_STATUS_LABELS: Record<DriverStatus, string> = {
   WAITLISTED: 'Waitlisted',
   INVITED: 'Invited',
-  PENDING: 'Pending',
   PENDING_APPROVAL: 'Pending Approval',
   APPROVED: 'Approved',
   SUSPENDED: 'Suspended',
   REJECTED: 'Rejected',
+};
+
+// V2: unified status labels for the /admin/v2 endpoint's `status` filter.
+// These are the user-facing labels shown in the primary Status dropdown.
+export const ADMIN_UNIFIED_STATUS_LABELS: Record<AdminUnifiedStatus, string> = {
+  PENDING: 'Pending',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  SUSPENDED: 'Suspended',
+  INVITED: 'Invited (driver only)',
+  WAITLISTED: 'Waitlisted (driver only)',
 };
 
 // ==================== HELPER FUNCTIONS ====================

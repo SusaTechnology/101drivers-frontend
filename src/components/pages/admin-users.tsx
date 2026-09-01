@@ -45,8 +45,7 @@ import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import {
-  useAdminUsers,
-  useAdminUsersSummary,
+  useAdminUsersV2,
   useApproveCustomer,
   useRejectCustomer,
   useSuspendCustomer,
@@ -102,6 +101,7 @@ import {
   ChevronRight,
   Calendar,
   Filter,
+  SlidersHorizontal,
   X,
   Plus,
   Mail,
@@ -151,40 +151,19 @@ const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'ADMIN', label: 'Admin' },
 ];
 
-const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: 'all', label: 'All Status' },
-  { value: 'INVITED', label: 'Invited' },
-  // { value: 'PENDING', label: 'Pending Dealers' },
-  { value: 'PENDING_APPROVAL', label: 'Pending' },
-  { value: 'WAITLISTED', label: 'Waitlist' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'REJECTED', label: 'Rejected' },
-  { value: 'SUSPENDED', label: 'Suspended' },
-];
-
-const CUSTOMER_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'all', label: 'All Types' },
-  { value: 'BUSINESS', label: 'Business' },
-  { value: 'PRIVATE', label: 'Private' },
-];
-
-const CUSTOMER_STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: 'all', label: 'All Status' },
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'REJECTED', label: 'Rejected' },
-  { value: 'SUSPENDED', label: 'Suspended' },
-];
-
-const DRIVER_STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: 'all', label: 'All Status' },
-  { value: 'INVITED', label: 'Invited' },
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
-  { value: 'WAITLISTED', label: 'Waitlist' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'REJECTED', label: 'Rejected' },
-  { value: 'SUSPENDED', label: 'Suspended' },
+// V2: Unified status options — replaces the old STATUS_OPTIONS +
+// CUSTOMER_STATUS_OPTIONS + DRIVER_STATUS_OPTIONS (which had duplicate
+// "Pending" entries and didn't cover both customers + drivers).
+// The backend /admin/v2 endpoint ORs customer + driver conditions for
+// each status, so "Pending" shows BOTH pending customers + pending drivers.
+const V2_STATUS_OPTIONS: { value: string; label: string; driverOnly: boolean }[] = [
+  { value: 'all', label: 'All Status', driverOnly: false },
+  { value: 'PENDING', label: 'Pending', driverOnly: false },
+  { value: 'APPROVED', label: 'Approved', driverOnly: false },
+  { value: 'REJECTED', label: 'Rejected', driverOnly: false },
+  { value: 'SUSPENDED', label: 'Suspended', driverOnly: false },
+  { value: 'INVITED', label: 'Invited (driver only)', driverOnly: true },
+  { value: 'WAITLISTED', label: 'Waitlisted (driver only)', driverOnly: true },
 ];
 
 const SORT_BY_OPTIONS: { value: string; label: string }[] = [
@@ -345,22 +324,17 @@ export default function AdminUsersPage() {
   const actorUserId = getActorUserId();
   const navigate = useNavigate();
 
-  // ==================== FILTER STATE ====================
+  // ==================== FILTER STATE (V2 — simplified) ====================
+  // Replaced the old 14 filter states with 5 clean ones.
+  // The V2 backend endpoint handles the unified status mapping.
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [customerTypeFilter, setCustomerTypeFilter] = useState('all');
-  const [customerStatusFilter, setCustomerStatusFilter] = useState('all');
-  const [driverStatusFilter, setDriverStatusFilter] = useState('all');
-  const [hasCustomerFilter, setHasCustomerFilter] = useState('all');
-  const [hasDriverFilter, setHasDriverFilter] = useState('all');
-  const [createdFrom, setCreatedFrom] = useState('');
-  const [createdTo, setCreatedTo] = useState('');
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -372,37 +346,36 @@ export default function AdminUsersPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // ==================== QUERIES ====================
-
-  const queryParams = useMemo((): Parameters<typeof useAdminUsers>[0] => ({
-    q: searchQuery || undefined,
-    roles: roleFilter !== 'all' ? roleFilter as UserRole : (statusFilter !== 'all' && ['INVITED','WAITLISTED','PENDING_APPROVAL'].includes(statusFilter) ? 'DRIVER' as UserRole : undefined),
-    customerApprovalStatus: statusFilter !== 'all' && ['PENDING','APPROVED','REJECTED','SUSPENDED'].includes(statusFilter) ? statusFilter as CustomerApprovalStatus : (customerStatusFilter !== 'all' ? customerStatusFilter as CustomerApprovalStatus : undefined),
-    driverStatus: statusFilter !== 'all' && ['INVITED','WAITLISTED','PENDING_APPROVAL'].includes(statusFilter) ? statusFilter as DriverStatus : (driverStatusFilter !== 'all' ? driverStatusFilter as DriverStatus : undefined),
-    hasCustomer: hasCustomerFilter === 'yes' ? true : hasCustomerFilter === 'no' ? false : undefined,
-    hasDriver: hasDriverFilter === 'yes' ? true : hasDriverFilter === 'no' ? false : undefined,
-    customerType: customerTypeFilter !== 'all' ? customerTypeFilter as CustomerType : undefined,
-    createdFrom: createdFrom || undefined,
-    createdTo: createdTo || undefined,
-    sortBy: sortBy as AdminUsersQueryParams['sortBy'],
-    sortOrder,
-    page,
-    pageSize,
-  }), [searchQuery, roleFilter, statusFilter, hasCustomerFilter, hasDriverFilter, customerTypeFilter, customerStatusFilter, driverStatusFilter, createdFrom, createdTo, sortBy, sortOrder, page, pageSize]);
+  // ==================== QUERIES (V2 — single call) ====================
 
   const {
-    data: usersData,
+    data: v2Data,
     isLoading: usersLoading,
     isFetching: usersFetching,
     isError: usersError,
     refetch: refetchUsers,
-  } = useAdminUsers(queryParams);
+  } = useAdminUsersV2({
+    q: searchQuery || undefined,
+    role: roleFilter !== 'all' ? roleFilter : undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    sortBy,
+    sortOrder,
+    page,
+    pageSize,
+  });
 
-  const {
-    data: summary,
-    isLoading: summaryLoading,
-    refetch: refetchSummary,
-  } = useAdminUsersSummary();
+  // V2 response combines summary + rows + pagination in one object
+  const usersData = v2Data;
+  const summary = v2Data?.summary;
+  const summaryLoading = usersLoading;
+  const refetchSummary = refetchUsers;
+
+  // Derived values from the V2 response
+  const users = v2Data?.rows ?? [];
+  const totalUsers = v2Data?.pagination?.totalRows ?? 0;
+  const totalPages = v2Data?.pagination?.totalPages ?? 1;
+  const availableStatuses = v2Data?.availableStatuses;
+  const roleAutoForced = v2Data?.filtersApplied?.roleAutoForced ?? false;
 
   // ==================== MUTATIONS ====================
 
@@ -653,24 +626,14 @@ export default function AdminUsersPage() {
     setSearchQuery('');
     setRoleFilter('all');
     setStatusFilter('all');
-    setCustomerTypeFilter('all');
-    setCustomerStatusFilter('all');
-    setDriverStatusFilter('all');
-    setHasCustomerFilter('all');
-    setHasDriverFilter('all');
-    setCreatedFrom('');
-    setCreatedTo('');
     setPage(1);
   }, []);
 
-  const hasActiveFilters = searchQuery || roleFilter !== 'all' || statusFilter !== 'all' ||
-    customerTypeFilter !== 'all' || customerStatusFilter !== 'all' || driverStatusFilter !== 'all' ||
-    hasCustomerFilter !== 'all' || hasDriverFilter !== 'all' || createdFrom || createdTo;
+  const hasActiveFilters = searchQuery || roleFilter !== 'all' || statusFilter !== 'all';
 
   // ==================== RENDER ====================
 
-  const users = usersData?.rows ?? [];
-  const pagination = usersData?.pagination;
+  const pagination = v2Data?.pagination;
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
@@ -729,7 +692,15 @@ export default function AdminUsersPage() {
               <div className="text-[10px] font-bold uppercase tracking-widest text-rose-500">Inactive</div>
               <div className="text-xl font-black mt-1 text-rose-600">{summary.inactiveUsers}</div>
             </Card>
-            <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-amber-50 dark:bg-amber-900/20 p-3">
+            {/* V2: Clickable "Pending Approvals" card — sets status=PENDING filter */}
+            <Card
+              className="rounded-xl border-slate-200 dark:border-slate-800 bg-amber-50 dark:bg-amber-900/20 p-3 cursor-pointer hover:ring-2 hover:ring-amber-300 dark:hover:ring-amber-700 transition"
+              onClick={() => {
+                setStatusFilter('PENDING');
+                setRoleFilter('all');
+                setPage(1);
+              }}
+            >
               <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Pending Approvals</div>
               <div className="text-xl font-black mt-1 text-amber-600">
                 {summary.pendingApprovals.customers + summary.pendingApprovals.drivers}
@@ -737,6 +708,7 @@ export default function AdminUsersPage() {
               <div className="text-[10px] text-amber-600 mt-0.5">
                 {summary.pendingApprovals.customers} customers, {summary.pendingApprovals.drivers} drivers
               </div>
+              <div className="text-[9px] text-amber-500 mt-1 opacity-70">Click to filter →</div>
             </Card>
             <Card className="rounded-xl border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3">
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">By Role</div>
@@ -754,7 +726,7 @@ export default function AdminUsersPage() {
           </section>
         )}
 
-        {/* Filters */}
+        {/* V2 Filters — simplified to 3 primary + 2 advanced */}
         <Card className="rounded-2xl border-slate-200 dark:border-slate-800 mb-6">
           <CardContent className="p-4">
             {/* Primary Filters Row */}
@@ -770,7 +742,7 @@ export default function AdminUsersPage() {
                       setSearchQuery(e.target.value);
                       setPage(1);
                     }}
-                    placeholder="Name, email, username..."
+                    placeholder="Name, email, username, phone..."
                     className="pl-9 rounded-xl h-9 w-full"
                   />
                 </div>
@@ -779,7 +751,19 @@ export default function AdminUsersPage() {
               {/* Role Filter */}
               <div className="w-40">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Role</Label>
-                <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
+                <Select
+                  value={roleFilter}
+                  onValueChange={(v) => {
+                    setRoleFilter(v);
+                    setPage(1);
+                    // If switching to a customer role + current status is driver-only,
+                    // reset the status to "all" (the driver-only option doesn't apply)
+                    const isDriverOnly = V2_STATUS_OPTIONS.find(o => o.value === statusFilter)?.driverOnly;
+                    if (isDriverOnly && (v === 'PRIVATE_CUSTOMER' || v === 'BUSINESS_CUSTOMER')) {
+                      setStatusFilter('all');
+                    }
+                  }}
+                >
                   <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
                     <SelectValue />
                   </SelectTrigger>
@@ -791,224 +775,129 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
-              {/* Status Filter */}
-              <div className="w-32">
+              {/* Status Filter (V2 — unified, covers both customer + driver) */}
+              <div className="w-44">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</Label>
-                <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v) => {
+                    setStatusFilter(v);
+                    setPage(1);
+                    // If picking a driver-only status + role is a customer role,
+                    // auto-switch to Driver (with a toast)
+                    const isDriverOnly = V2_STATUS_OPTIONS.find(o => o.value === v)?.driverOnly;
+                    if (isDriverOnly && roleFilter !== 'DRIVER' && roleFilter !== 'all') {
+                      toast.info('Showing drivers only', {
+                        description: `${V2_STATUS_OPTIONS.find(o => o.value === v)?.label} is a driver-only status.`,
+                      });
+                      setRoleFilter('DRIVER');
+                    }
+                  }}
+                >
                   <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {STATUS_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
+                    {V2_STATUS_OPTIONS.map(opt => {
+                      // Disable driver-only options when a customer role is selected
+                      const isCustomerRole = roleFilter === 'PRIVATE_CUSTOMER' || roleFilter === 'BUSINESS_CUSTOMER';
+                      const isDisabled = opt.driverOnly && isCustomerRole;
+                      return (
+                        <SelectItem
+                          key={opt.value}
+                          value={opt.value}
+                          disabled={isDisabled}
+                          className={isDisabled ? 'opacity-40 cursor-not-allowed' : ''}
+                        >
+                          {opt.label}
+                          {isDisabled && ' (N/A for customers)'}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Toggle More Filters */}
+              {/* Advanced toggle */}
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="rounded-xl h-9"
-                onClick={() => setShowFilters(!showFilters)}
+                className="rounded-xl h-9 text-xs"
+                onClick={() => setShowAdvanced(!showAdvanced)}
               >
-                <Filter className="w-3.5 h-3.5 mr-1" />
-                Filters
-                {hasActiveFilters && (
-                  <span className="ml-1 w-2 h-2 rounded-full bg-primary" />
-                )}
+                <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
+                {showAdvanced ? 'Hide' : 'Sort'}
               </Button>
 
               {/* Clear Filters */}
               {hasActiveFilters && (
-                <Button variant="ghost" size="sm" className="rounded-xl h-9" onClick={clearFilters}>
+                <Button variant="ghost" size="sm" className="rounded-xl h-9 text-xs text-red-500 hover:text-red-600" onClick={clearFilters}>
                   <X className="w-3.5 h-3.5 mr-1" />
                   Clear
                 </Button>
               )}
             </div>
 
-            {/* Extended Filters */}
-            {showFilters && (
-              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                <div className="flex flex-wrap gap-3 items-end">
-                  {/* Customer Type */}
-                  <div className="w-36">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Customer Type</Label>
-                    <Select value={customerTypeFilter} onValueChange={(v) => { setCustomerTypeFilter(v); setPage(1); }}>
-                      <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CUSTOMER_TYPE_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Customer Status */}
-                  <div className="w-36">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Customer Status</Label>
-                    <Select value={customerStatusFilter} onValueChange={(v) => { setCustomerStatusFilter(v); setPage(1); }}>
-                      <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CUSTOMER_STATUS_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Driver Status */}
-                  <div className="w-36">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Driver Status</Label>
-                    <Select value={driverStatusFilter} onValueChange={(v) => { setDriverStatusFilter(v); setPage(1); }}>
-                      <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DRIVER_STATUS_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Has Customer */}
-                  <div className="w-32">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Has Customer</Label>
-                    <Select value={hasCustomerFilter} onValueChange={(v) => { setHasCustomerFilter(v); setPage(1); }}>
-                      <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Any</SelectItem>
-                        <SelectItem value="yes">Yes</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Has Driver */}
-                  <div className="w-32">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Has Driver</Label>
-                    <Select value={hasDriverFilter} onValueChange={(v) => { setHasDriverFilter(v); setPage(1); }}>
-                      <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Any</SelectItem>
-                        <SelectItem value="yes">Yes</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Created From */}
-                  <div className="w-40">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Created From</Label>
-                    <Input
-                      type="date"
-                      value={createdFrom}
-                      onChange={(e) => { setCreatedFrom(e.target.value); setPage(1); }}
-                      className="mt-1.5 rounded-xl h-9 text-sm"
-                    />
-                  </div>
-
-                  {/* Created To */}
-                  <div className="w-40">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Created To</Label>
-                    <Input
-                      type="date"
-                      value={createdTo}
-                      onChange={(e) => { setCreatedTo(e.target.value); setPage(1); }}
-                      className="mt-1.5 rounded-xl h-9 text-sm"
-                    />
-                  </div>
-
-                  {/* Sort By */}
-                  <div className="w-40">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sort By</Label>
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SORT_BY_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Sort Order */}
-                  <div className="w-28">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Order</Label>
-                    <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
-                      <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="desc">Descending</SelectItem>
-                        <SelectItem value="asc">Ascending</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Page Size */}
-                  <div className="w-28">
-                    <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Per Page</Label>
-                    <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
-                      <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAGE_SIZE_OPTIONS.map(opt => (
-                          <SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            {/* Advanced (Sort + Per Page) */}
+            {showAdvanced && (
+              <div className="flex flex-wrap gap-3 items-end mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="w-40">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sort By</Label>
+                  <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SORT_BY_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-28">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Order</Label>
+                  <Select value={sortOrder} onValueChange={(v) => { setSortOrder(v as 'asc' | 'desc'); setPage(1); }}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="desc">Newest first</SelectItem>
+                      <SelectItem value="asc">Oldest first</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-28">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Per Page</Label>
+                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZE_OPTIONS.map(n => (
+                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Users Table */}
-        <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
+        {/* V2: auto-forced role banner (shown when backend auto-switched to DRIVER) */}
+        {roleAutoForced && (
+          <div className="px-4 py-3 bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-900/40 rounded-2xl mb-4 flex items-center gap-2">
+            <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+            <span className="text-sm text-sky-700 dark:text-sky-300">
+              Showing drivers only — this status only applies to drivers, not customers.
+            </span>
+          </div>
+        )}
+
+        {/* Table */}
+        <Card className="rounded-2xl border-slate-200 dark:border-slate-800 overflow-hidden">
           <CardContent className="p-0">
-            {usersLoading ? (
-              <TableSkeleton rows={pageSize} />
-            ) : usersError ? (
-              <div className="p-8 text-center">
-                <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-3" />
-                <p className="text-rose-700 dark:text-rose-300 font-bold">Failed to load users</p>
-                <Button onClick={() => refetchUsers()} variant="outline" className="mt-4 rounded-xl">Try Again</Button>
-              </div>
-            ) : users.length === 0 ? (
-              <div className="p-8 text-center">
-                <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-600 dark:text-slate-400 font-medium">No users found</p>
-                {hasActiveFilters && (
-                  <Button variant="outline" size="sm" className="mt-4 rounded-xl" onClick={clearFilters}>
-                    Clear Filters
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <>
-              {statusFilter !== 'all' && ['INVITED','WAITLISTED','PENDING_APPROVAL'].includes(statusFilter) && (
-                <div className="px-4 py-3 bg-sky-50 dark:bg-sky-950/20 border-b border-sky-200 dark:border-sky-900/40 flex items-center gap-2">
-                  <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <span className="text-sm text-sky-700 dark:text-sky-300">Showing drivers only — this status does not apply to business customers.</span>
-                </div>
-              )}
-              <div className="overflow-x-auto">
+            <div className="overflow-x-auto">
               <Table>
                   <TableHeader>
                     <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
@@ -1287,8 +1176,6 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
                 )}
-              </>
-            )}
           </CardContent>
         </Card>
       </main>

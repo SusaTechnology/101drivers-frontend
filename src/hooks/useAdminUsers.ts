@@ -6,6 +6,7 @@ import type {
   AdminUsersSummary,
   AdminUserDetail,
   AdminUserRow,
+  AdminUsersV2Response,
   SuspendUserRequest,
   UnsuspendUserRequest,
   ApproveCustomerRequest,
@@ -83,6 +84,48 @@ export function useAdminUsersSummary() {
     noFilter: true,
     staleTime: 60 * 1000, // 1 minute
     queryKey: ['admin-users-summary'],
+  });
+}
+
+// ==================== V2 — UNIFIED ADMIN USERS ====================
+
+export interface AdminUsersV2Params {
+  q?: string;
+  role?: string;
+  status?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * V2 hook — fetches summary + rows + pagination + availableStatuses
+ * in a SINGLE API call to GET /api/users/admin/v2.
+ *
+ * Replaces the separate useAdminUsers + useAdminUsersSummary hooks.
+ * The response's `summary.filteredTotal` always equals `pagination.totalRows`,
+ * so the summary card + table always match.
+ */
+export function useAdminUsersV2(params: AdminUsersV2Params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set('q', params.q);
+  if (params.role) searchParams.set('role', params.role);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.sortBy) searchParams.set('sortBy', params.sortBy);
+  if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
+  if (params.page) searchParams.set('page', String(params.page));
+  if (params.pageSize) searchParams.set('pageSize', String(params.pageSize));
+  const queryString = searchParams.toString();
+  const apiEndPoint = `${API_BASE_URL}/api/users/admin/v2${queryString ? `?${queryString}` : ''}`;
+
+  const paramsKey = JSON.stringify(params);
+
+  return useDataQuery<AdminUsersV2Response>({
+    apiEndPoint,
+    noFilter: true,
+    staleTime: 30 * 1000,
+    queryKey: ['admin-users-v2', paramsKey],
   });
 }
 
