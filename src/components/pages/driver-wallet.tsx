@@ -32,6 +32,7 @@ import {
   PartyPopper,
   CheckCircle2,
 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Button } from '@/components/ui/button'
 import {
   useDataQuery,
@@ -200,34 +201,13 @@ export default function DriverWalletPage() {
   // Build the human-readable description string for the "Refer a Friend" card.
   // Varies based on trigger type + time mode + referred-gets-reward.
   const buildReferralDescription = () => {
-    const both = referralConfig.referredGetsReward
-    const bothAmount = referralConfig.referredRewardAmount ?? referralConfig.referrerRewardAmount
-    const earn = both
-      ? `you both earn $${bothAmount}`
-      : `you earn $${referralConfig.referrerRewardAmount}`
-    const triggerClause =
-      referralConfig.rewardTrigger === 'ON_APPROVED'
-        ? 'gets approved'
-        : `completes ${referralConfig.requiredDeliveries} deliveries`
+    // V2 spec: Drivers referring other drivers earn $50 when the referred
+    // driver completes their 5th paid delivery. No per-delivery payout for
+    // referred drivers — only the one-shot $50 bonus.
+    const bonusAmount = referralConfig.referredRewardAmount ?? 50
+    const triggerCount = referralConfig.requiredDeliveries ?? 5
 
-    // Show the full program window (start → end) so the driver knows
-    // exactly when the referral program is active. Hidden in FOREVER mode.
-    const fmtDate = (iso: string) =>
-      new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-    let windowClause = ''
-    if (referralConfig.timeLimitMode === 'CALENDAR_RANGE') {
-      const start = referralConfig.windowStartDate
-      const end = referralConfig.windowEndDate
-      if (start && end) {
-        windowClause = ` Program runs from ${fmtDate(start)} to ${fmtDate(end)}.`
-      } else if (end) {
-        windowClause = ` Program runs until ${fmtDate(end)}.`
-      } else if (start) {
-        windowClause = ` Program started on ${fmtDate(start)}.`
-      }
-    }
-
-    return `Share your unique referral link with friends who want to become drivers. When they sign up using your link and ${triggerClause}, ${earn}.${windowClause} You earn $${referralConfig.referrerRewardAmount} for every ${referralConfig.referralThreshold} successful referrals — refer as many friends as you want.`
+    return `Share your unique referral link with friends who want to become drivers. When they sign up using your link and complete ${triggerCount} paid deliveries, you earn $${bonusAmount}. Refer as many friends as you want — codes never expire.`
   }
 
   // ── Fetch real earnings data ───────────────────────────────
@@ -419,7 +399,10 @@ export default function DriverWalletPage() {
   }
 
   // ── Referral dialog handler ────────────────────────────────
-  const shareUrl = `${window.location.origin}/driver-onboarding?ref=${referralCode}`
+  // V2: share URL goes to /test-referral/CODE (not /driver-onboarding?ref=CODE)
+  // so the recipient sees the referral landing page with the referrer's name,
+  // QR code, and 3 signup CTAs (Driver / Dealer / Customer).
+  const shareUrl = `${window.location.origin}/test-referral/${referralCode}`
 
   const openReferralDialog = useCallback(async () => {
     // Copy link to clipboard immediately
@@ -730,7 +713,7 @@ export default function DriverWalletPage() {
                 </div>
                 <div className="space-y-1.5">
                   <CardTitle className="text-lg font-black">
-                    Refer a Friend &amp; Earn ${referralConfig.referrerRewardAmount}
+                    Refer a Friend &amp; Earn ${referralConfig.referredRewardAmount ?? 50}
                   </CardTitle>
                   <CardDescription className="text-sm leading-relaxed">
                     {referralConfig.isActive
@@ -1363,13 +1346,13 @@ export default function DriverWalletPage() {
               <PartyPopper className="w-6 h-6 text-blue-500 rotate-12" />
             </div>
 
-            {/* Reward amount — driven by admin-configured referral program settings */}
+            {/* Reward amount — V2: $50 bonus per referred driver on 5th delivery */}
             <div>
               <div className="text-4xl font-black bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 bg-clip-text text-transparent">
-                ${referralConfig.referrerRewardAmount}
+                ${referralConfig.referredRewardAmount ?? 50}
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Reward for every {referralConfig.referralThreshold} successful referrals
+                Bonus for each driver you refer who completes {referralConfig.requiredDeliveries ?? 5} paid deliveries
               </p>
             </div>
 
@@ -1385,13 +1368,9 @@ export default function DriverWalletPage() {
                 </DialogTitle>
                 <DialogDescription className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                   {(() => {
-                    const triggerClause = referralConfig.rewardTrigger === 'ON_APPROVED'
-                      ? 'gets approved'
-                      : `completes ${referralConfig.requiredDeliveries} deliveries`
-                    const bothClause = referralConfig.referredGetsReward
-                      ? ` you both earn $${referralConfig.referredRewardAmount ?? referralConfig.referrerRewardAmount}!`
-                      : ` you earn $${referralConfig.referrerRewardAmount}!`
-                    return `Share this link with friends. When they sign up as a driver and ${triggerClause},${bothClause}`
+                    const triggerCount = referralConfig.requiredDeliveries ?? 5
+                    const bonusAmount = referralConfig.referredRewardAmount ?? 50
+                    return `Share this link with friends. When they sign up as a driver and complete ${triggerCount} paid deliveries, you earn $${bonusAmount}!`
                   })()}
                 </DialogDescription>
               </DialogHeader>
@@ -1399,6 +1378,22 @@ export default function DriverWalletPage() {
               <div className="mt-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 break-all">
                 <p className="text-xs font-mono font-semibold text-slate-700 dark:text-slate-300 select-all">
                   {shareUrl}
+                </p>
+              </div>
+
+              {/* V2: QR code for in-person sharing + printing */}
+              <div className="flex flex-col items-center gap-2 mt-2">
+                <div className="p-3 bg-white rounded-2xl border-2 border-emerald-100 dark:border-emerald-900/30 shadow-sm">
+                  <QRCodeSVG
+                    value={shareUrl}
+                    size={160}
+                    level="M"
+                    fgColor="#065f46"
+                    bgColor="#ffffff"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Scan or print to share in person
                 </p>
               </div>
             </div>
