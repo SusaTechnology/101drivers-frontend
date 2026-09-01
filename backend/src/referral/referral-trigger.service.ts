@@ -443,30 +443,36 @@ export class ReferralTriggerService {
     }
 
     // ── Step 1: Create the per-delivery referrer payout/credit ──
-    if (referral.referralType === ReferralTypeDto.DRIVER && referral.referrerId) {
-      // Driver referrer → DriverPayout
-      await this.createDriverReferrerPerDeliveryPayout({
-        referrerDriverId: referral.referrerId,
-        deliveryId,
-        amountCents: config.perDeliveryReferrerAmountCents,
-        referralId: referral.id,
-      });
-    } else if (referral.referralType === ReferralTypeDto.CUSTOMER && referral.referrerUserId) {
-      // Customer referrer → ReferralCredit on the referrer's customer account
-      const referrerCustomer = await this.prisma.customer.findUnique({
-        where: { userId: referral.referrerUserId },
-        select: { id: true },
-      });
-      if (referrerCustomer) {
-        await this.createReferralCredit({
-          referralId: referral.id,
-          customerId: referrerCustomer.id,
-          deliveryId,
-          amountCents: config.perDeliveryReferrerAmountCents,
-          reason: `Per-delivery referrer credit (delivery ${deliveryId})`,
-        });
-      }
-    }
+    // SPEC: "Per-delivery payouts are ONLY for referred CUSTOMERS, not
+    // referred drivers. Referred drivers only get the $50-on-5th bonus."
+    //
+    // This is the handlePerDeliveryDriverReferral path → the referred
+    // party is a DRIVER. So we SKIP the per-delivery referrer payout.
+    // The only payout for referring a driver is the $50 bonus (Step 3).
+    //
+    // OLD CODE (commented out per spec — can revert if needed):
+    // if (referral.referralType === ReferralTypeDto.DRIVER && referral.referrerId) {
+    //   await this.createDriverReferrerPerDeliveryPayout({
+    //     referrerDriverId: referral.referrerId,
+    //     deliveryId,
+    //     amountCents: config.perDeliveryReferrerAmountCents,
+    //     referralId: referral.id,
+    //   });
+    // } else if (referral.referralType === ReferralTypeDto.CUSTOMER && referral.referrerUserId) {
+    //   const referrerCustomer = await this.prisma.customer.findUnique({
+    //     where: { userId: referral.referrerUserId },
+    //     select: { id: true },
+    //   });
+    //   if (referrerCustomer) {
+    //     await this.createReferralCredit({
+    //       referralId: referral.id,
+    //       customerId: referrerCustomer.id,
+    //       deliveryId,
+    //       amountCents: config.perDeliveryReferrerAmountCents,
+    //       reason: `Per-delivery referrer credit (delivery ${deliveryId})`,
+    //     });
+    //   }
+    // }
 
     // ── Step 2: Increment completedPaidDeliveries ──
     const incremented = await this.prisma.referral.update({
@@ -553,27 +559,37 @@ export class ReferralTriggerService {
     }
 
     // ── Step 1: Create the per-delivery referrer payout/credit ──
+    // SPEC: per-delivery amounts vary by referrer type:
+    //   Personal referrer: $5 (perDeliveryPersonalReferrerAmountCents)
+    //   Business referrer: $10 (perDeliveryBusinessReferrerAmountCents)
+    //   Driver referrer: $5 (perDeliveryDriverReferrerAmountCents)
     if (referral.referralType === ReferralTypeDto.DRIVER && referral.referrerId) {
       // Driver referrer → DriverPayout (driver referring a customer)
       await this.createDriverReferrerPerDeliveryPayout({
         referrerDriverId: referral.referrerId,
         deliveryId,
-        amountCents: config.perDeliveryReferrerAmountCents,
+        amountCents: config.perDeliveryDriverReferrerAmountCents ?? config.perDeliveryReferrerAmountCents ?? 500,
         referralId: referral.id,
       });
     } else if (referral.referralType === ReferralTypeDto.CUSTOMER && referral.referrerUserId) {
       // Customer referrer → ReferralCredit
+      // Determine if the referrer is a PERSONAL or BUSINESS customer
+      // to use the correct per-delivery amount.
       const referrerCustomer = await this.prisma.customer.findUnique({
         where: { userId: referral.referrerUserId },
-        select: { id: true },
+        select: { id: true, customerType: true },
       });
       if (referrerCustomer) {
+        const amountCents =
+          referrerCustomer.customerType === "BUSINESS"
+            ? (config.perDeliveryBusinessReferrerAmountCents ?? 1000)
+            : (config.perDeliveryPersonalReferrerAmountCents ?? 500);
         await this.createReferralCredit({
           referralId: referral.id,
           customerId: referrerCustomer.id,
           deliveryId,
-          amountCents: config.perDeliveryReferrerAmountCents,
-          reason: `Per-delivery referrer credit (delivery ${deliveryId})`,
+          amountCents,
+          reason: `Per-delivery referrer credit (${referrerCustomer.customerType}, delivery ${deliveryId})`,
         });
       }
     }
@@ -586,37 +602,35 @@ export class ReferralTriggerService {
     });
 
     // ── Step 3: Fire the $50-on-Nth-delivery bonus to the referred customer ──
-    if (
-      referral.referredGetsReward &&
-      incremented.completedPaidDeliveries === config.perDeliveryBonusTriggerCount &&
-      !referral.referredRewardPaidAt &&
-      referral.referredCustomerId
-    ) {
-      const bonusAmountCents = config.perDeliveryReferredBonusCents;
-
-      if (bonusAmountCents > 0) {
-        await this.createReferralCredit({
-          referralId: referral.id,
-          customerId: referral.referredCustomerId,
-          deliveryId,
-          amountCents: bonusAmountCents,
-          reason: `$50-on-${config.perDeliveryBonusTriggerCount}th-delivery bonus`,
-        });
-      }
-
-      // Mark the referral as REWARD_PAID + set referredRewardPaidAt
-      await this.prisma.referral.update({
-        where: { id: referral.id },
-        data: {
-          status: "REWARD_PAID",
-          referredRewardPaidAt: new Date(),
-        },
-      });
-
-      this.logger.log(
-        `Referral ${referral.id} PER_DELIVERY bonus fired on delivery #${incremented.completedPaidDeliveries} (deliveryId=${deliveryId}) — referred customer ${referral.referredCustomerId} earns ${bonusAmountCents}c credit`
-      );
-    }
+    // SPEC: "The $50 bonus is ONLY for referred DRIVERS, not referred customers."
+    // Referred customers only generate per-delivery payouts for the referrer.
+    // They do NOT get a $50 bonus themselves.
+    //
+    // OLD CODE (commented out per spec — can revert if needed):
+    // if (
+    //   referral.referredGetsReward &&
+    //   incremented.completedPaidDeliveries === config.perDeliveryBonusTriggerCount &&
+    //   !referral.referredRewardPaidAt &&
+    //   referral.referredCustomerId
+    // ) {
+    //   const bonusAmountCents = config.perDeliveryReferredBonusCents;
+    //   if (bonusAmountCents > 0) {
+    //     await this.createReferralCredit({
+    //       referralId: referral.id,
+    //       customerId: referral.referredCustomerId,
+    //       deliveryId,
+    //       amountCents: bonusAmountCents,
+    //       reason: `$50-on-${config.perDeliveryBonusTriggerCount}th-delivery bonus`,
+    //     });
+    //   }
+    //   await this.prisma.referral.update({
+    //     where: { id: referral.id },
+    //     data: { status: "REWARD_PAID", referredRewardPaidAt: new Date() },
+    //   });
+    //   this.logger.log(
+    //     `Referral ${referral.id} PER_DELIVERY bonus fired on delivery #${incremented.completedPaidDeliveries} (deliveryId=${deliveryId}) — referred customer ${referral.referredCustomerId} earns ${bonusAmountCents}c credit`
+    //   );
+    // }
   }
 
   /**

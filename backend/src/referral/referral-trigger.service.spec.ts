@@ -45,7 +45,10 @@ const DEFAULT_CONFIG = {
   referredGetsReward: true,
   referredRewardAmount: 150,
   payoutModel: ReferralPayoutModelDto.TIERED,
-  perDeliveryReferrerAmountCents: 500, // $5
+  perDeliveryReferrerAmountCents: 500, // $5 (old uniform — kept for backward compat)
+  perDeliveryPersonalReferrerAmountCents: 500,    // $5
+  perDeliveryBusinessReferrerAmountCents: 1000,   // $10
+  perDeliveryDriverReferrerAmountCents: 500,      // $5
   perDeliveryReferredBonusCents: 5000, // $50
   perDeliveryBonusTriggerCount: 5, // 5th delivery
   customerReferralsEnabled: true,
@@ -146,8 +149,10 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
 
   // ── Role matrix: who can refer whom ──────────────────────────────
   describe("role matrix", () => {
-    it("Driver→Driver PER_DELIVERY: creates DriverPayout to the driver referrer on each paid delivery", async () => {
-      // First call: driver-referral lookup returns the referral
+    it("Driver→Driver PER_DELIVERY: does NOT create per-delivery payout (only $50 bonus on 5th — spec)", async () => {
+      // SPEC: "Per-delivery payouts are ONLY for referred CUSTOMERS, not referred drivers."
+      // A referred driver does NOT generate a per-delivery payout for the referrer.
+      // The only payout for referring a driver is the $50 bonus on the 5th delivery.
       findFirstMock(prismaMock).mockImplementationOnce(async (args: any) => {
         if (args?.where?.referredDriverId) {
           return buildReferral({
@@ -166,21 +171,18 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
         customerId: "customer-1",
       });
 
-      // Verify a DriverPayout was created for the driver referrer
-      expect(prismaMock.driverPayout.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          driverId: "driver-referrer-1",
-          type: "REFERRAL_REFERRER",
-          failureMessage: "PER_DELIVERY:delivery-1",
-          grossAmount: 5, // $5 from perDeliveryReferrerAmountCents=500
-          netAmount: 5,
-        }),
-      });
-      // Verify no ReferralCredit was created (driver referrer path)
+      // SPEC: NO per-delivery DriverPayout should be created for a referred driver
+      expect(prismaMock.driverPayout.create).not.toHaveBeenCalled();
+      // SPEC: NO ReferralCredit should be created either
       expect(prismaMock.referralCredit.create).not.toHaveBeenCalled();
+      // The completedPaidDeliveries counter IS still incremented (for the $50 bonus trigger)
+      const incrementCall = (prismaMock.referral.update as any).mock.calls.find(
+        (call: any) => call[0]?.data?.completedPaidDeliveries?.increment === 1,
+      );
+      expect(incrementCall).toBeDefined();
     });
 
-    it("Customer→Driver PER_DELIVERY: creates ReferralCredit to the customer referrer on each paid delivery", async () => {
+    it("Customer→Driver PER_DELIVERY: does NOT create per-delivery payout (only $50 bonus on 5th — spec)", async () => {
       findFirstMock(prismaMock).mockImplementationOnce(async (args: any) => {
         if (args?.where?.referredDriverId) {
           return buildReferral({
@@ -200,22 +202,9 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
         customerId: "customer-1",
       });
 
-      // Verify the customer referrer was looked up by userId
-      expect(prismaMock.customer.findUnique).toHaveBeenCalledWith({
-        where: { userId: "user-customer-referrer-1" },
-        select: { id: true },
-      });
-      // Verify a ReferralCredit was created
-      expect(prismaMock.referralCredit.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          referralId: "referral-1",
-          customerId: "customer-referrer-1",
-          deliveryId: "delivery-1",
-          amountCents: 500,
-        }),
-      });
-      // Verify no DriverPayout was created (customer referrer path)
+      // SPEC: NO per-delivery payout for referred drivers — neither DriverPayout nor ReferralCredit
       expect(prismaMock.driverPayout.create).not.toHaveBeenCalled();
+      expect(prismaMock.referralCredit.create).not.toHaveBeenCalled();
     });
 
     it("Customer→Customer PER_DELIVERY: creates ReferralCredit to the customer referrer on each paid delivery", async () => {
@@ -242,10 +231,12 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
         customerId: "customer-referred-1",
       });
 
+      // SPEC: customer referrer lookup now also selects customerType (for amount determination)
       expect(prismaMock.customer.findUnique).toHaveBeenCalledWith({
         where: { userId: "user-customer-referrer-1" },
-        select: { id: true },
+        select: { id: true, customerType: true },
       });
+      // Verify a ReferralCredit was created with the PERSONAL amount ($5 = 500 cents)
       expect(prismaMock.referralCredit.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           referralId: "referral-1",
@@ -338,7 +329,7 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
       expect(statusUpdateCall).toBeDefined();
     });
 
-    it("Customer referred: fires $50 bonus on the 5th paid delivery via ReferralCredit to the referred customer", async () => {
+    it("Customer referred: does NOT fire $50 bonus (only referred DRIVERS get the bonus — spec)", async () => {
       findFirstMock(prismaMock).mockImplementationOnce(async () => null);
       findFirstMock(prismaMock).mockImplementationOnce(async (args: any) => {
         if (args?.where?.referredCustomerId) {
@@ -368,28 +359,28 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
         customerId: "customer-referred-1",
       });
 
-      // The bonus is a ReferralCredit to the referred customer
+      // SPEC: "The $50 bonus is ONLY for referred DRIVERS, not referred customers."
+      // Referred customers do NOT get a $50 bonus — only per-delivery payouts for the referrer.
+
+      // NO $50 bonus credit should be created
       const bonusCall = (prismaMock.referralCredit.create as any).mock.calls.find(
         (call: any) =>
           call[0]?.data?.amountCents === 5000 &&
           call[0]?.data?.customerId === "customer-referred-1",
       );
-      expect(bonusCall).toBeDefined();
-      // The per-delivery referrer credit was also created
+      expect(bonusCall).toBeUndefined();
+
+      // The per-delivery referrer credit IS still created (for the referrer, not the referred customer)
       const referrerCall = (prismaMock.referralCredit.create as any).mock.calls.find(
         (call: any) => call[0]?.data?.amountCents === 500,
       );
       expect(referrerCall).toBeDefined();
 
-      // No DriverPayout (referred side is a customer, not a driver)
-      expect(payoutProviderMock.createReferredRewardPayout).not.toHaveBeenCalled();
-
-      // Referral marked REWARD_PAID + referredRewardPaidAt set
+      // Referral should NOT be marked REWARD_PAID (no bonus was fired)
       const statusUpdateCall = (prismaMock.referral.update as any).mock.calls.find(
         (call: any) => call[0]?.data?.status === "REWARD_PAID",
       );
-      expect(statusUpdateCall).toBeDefined();
-      expect(statusUpdateCall?.[0]?.data?.referredRewardPaidAt).toBeInstanceOf(Date);
+      expect(statusUpdateCall).toBeUndefined();
     });
 
     it("does NOT fire bonus on the 4th delivery (only on the trigger count)", async () => {

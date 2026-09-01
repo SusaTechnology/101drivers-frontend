@@ -19,7 +19,7 @@
  */
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Gift, Search, ArrowRight, User, Car, Building } from "lucide-react";
+import { Gift, Search, ArrowRight, User, Car, Building, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ type LookupResponse = {
 export default function TestReferralLookupPage() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const debouncedQuery = useDebouncedValue(searchQuery.trim(), 400);
 
   const lookupQuery = useDataQuery<LookupResponse | null>({
@@ -143,9 +144,8 @@ export default function TestReferralLookupPage() {
                       {results.length} {results.length === 1 ? "result" : "results"}
                     </p>
                     {results.map((r) => (
-                      <button
+                      <div
                         key={r.code}
-                        onClick={() => handleResultClick(r.code)}
                         className="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-md transition text-left"
                       >
                         {/* Icon based on referrer type */}
@@ -157,8 +157,11 @@ export default function TestReferralLookupPage() {
                           )}
                         </div>
 
-                        {/* Name + type */}
-                        <div className="flex-1 min-w-0">
+                        {/* Name + type — clickable to navigate */}
+                        <button
+                          onClick={() => handleResultClick(r.code)}
+                          className="flex-1 min-w-0 text-left"
+                        >
                           <p className="font-bold text-slate-900 dark:text-white text-sm">
                             {r.referrerName}
                           </p>
@@ -174,10 +177,40 @@ export default function TestReferralLookupPage() {
                               {r.code}
                             </span>
                           </div>
-                        </div>
+                        </button>
 
-                        <ArrowRight className="w-4 h-4 text-slate-400 shrink-0" />
-                      </button>
+                        {/* Copy button */}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const shareUrl = `${window.location.origin}/test-referral/${r.code}`;
+                            try {
+                              await navigator.clipboard.writeText(shareUrl);
+                              setCopiedCode(r.code);
+                              setTimeout(() => setCopiedCode(null), 2000);
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                          className="shrink-0 p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                          title="Copy referral link"
+                        >
+                          {copiedCode === r.code ? (
+                            <Check className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-slate-400" />
+                          )}
+                        </button>
+
+                        {/* Navigate button */}
+                        <button
+                          onClick={() => handleResultClick(r.code)}
+                          className="shrink-0 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                          title="View referral page"
+                        >
+                          <ArrowRight className="w-4 h-4 text-slate-400" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}

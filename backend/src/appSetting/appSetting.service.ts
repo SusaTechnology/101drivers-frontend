@@ -308,6 +308,11 @@ export class AppSettingService extends AppSettingServiceBase {
       // referrer snapshots are TIERED, so we don't silently switch them.
       payoutModel: ReferralPayoutModelDto.TIERED,
       // $5 to referrer per paid delivery
+      // ── V2 spec: separate per-delivery amounts by referrer type ──
+      perDeliveryPersonalReferrerAmountCents: 500,    // $5
+      perDeliveryBusinessReferrerAmountCents: 1000,   // $10
+      perDeliveryDriverReferrerAmountCents: 500,      // $5
+      // OLD: uniform amount — kept for backward compat
       perDeliveryReferrerAmountCents: 500,
       // $50 bonus to the referred party
       perDeliveryReferredBonusCents: 5000,
@@ -388,6 +393,26 @@ export class AppSettingService extends AppSettingServiceBase {
         v.payoutModel === ReferralPayoutModelDto.PER_DELIVERY
           ? v.payoutModel
           : defaults.payoutModel,
+      // V2 spec: type-specific amounts
+      perDeliveryPersonalReferrerAmountCents:
+        typeof v.perDeliveryPersonalReferrerAmountCents === "number" &&
+        Number.isFinite(v.perDeliveryPersonalReferrerAmountCents) &&
+        v.perDeliveryPersonalReferrerAmountCents >= 0
+          ? Math.floor(v.perDeliveryPersonalReferrerAmountCents)
+          : defaults.perDeliveryPersonalReferrerAmountCents,
+      perDeliveryBusinessReferrerAmountCents:
+        typeof v.perDeliveryBusinessReferrerAmountCents === "number" &&
+        Number.isFinite(v.perDeliveryBusinessReferrerAmountCents) &&
+        v.perDeliveryBusinessReferrerAmountCents >= 0
+          ? Math.floor(v.perDeliveryBusinessReferrerAmountCents)
+          : defaults.perDeliveryBusinessReferrerAmountCents,
+      perDeliveryDriverReferrerAmountCents:
+        typeof v.perDeliveryDriverReferrerAmountCents === "number" &&
+        Number.isFinite(v.perDeliveryDriverReferrerAmountCents) &&
+        v.perDeliveryDriverReferrerAmountCents >= 0
+          ? Math.floor(v.perDeliveryDriverReferrerAmountCents)
+          : defaults.perDeliveryDriverReferrerAmountCents,
+      // OLD: uniform amount — kept for backward compat
       perDeliveryReferrerAmountCents:
         typeof v.perDeliveryReferrerAmountCents === "number" &&
         Number.isFinite(v.perDeliveryReferrerAmountCents) &&
@@ -454,6 +479,20 @@ export class AppSettingService extends AppSettingServiceBase {
       // ── PER_DELIVERY model fields (Phase 2) ──
       payoutModel:
         input.payoutModel != null ? input.payoutModel : current.payoutModel,
+      // V2 spec: type-specific amounts
+      perDeliveryPersonalReferrerAmountCents:
+        input.perDeliveryPersonalReferrerAmountCents != null
+          ? Math.floor(Number(input.perDeliveryPersonalReferrerAmountCents))
+          : current.perDeliveryPersonalReferrerAmountCents,
+      perDeliveryBusinessReferrerAmountCents:
+        input.perDeliveryBusinessReferrerAmountCents != null
+          ? Math.floor(Number(input.perDeliveryBusinessReferrerAmountCents))
+          : current.perDeliveryBusinessReferrerAmountCents,
+      perDeliveryDriverReferrerAmountCents:
+        input.perDeliveryDriverReferrerAmountCents != null
+          ? Math.floor(Number(input.perDeliveryDriverReferrerAmountCents))
+          : current.perDeliveryDriverReferrerAmountCents,
+      // OLD: uniform amount — kept for backward compat
       perDeliveryReferrerAmountCents:
         input.perDeliveryReferrerAmountCents != null
           ? Math.floor(Number(input.perDeliveryReferrerAmountCents))

@@ -366,6 +366,30 @@ export class ReferralService {
       throw new NotFoundException("Invalid or expired referral code");
     }
 
+    // ── ROLE MATRIX ENFORCEMENT (spec) ──────────────────────────────
+    // Who can refer whom:
+    //   Personal customer → personal customers ONLY
+    //   Business customer → personal customers OR drivers
+    //   Driver → personal customers OR drivers
+    //   Personal customer CANNOT refer drivers or business customers.
+    //
+    // This is the applyReferral path → the referred party is a DRIVER.
+    // So only Business customers + Drivers can be referrers here.
+    // Personal customers are BLOCKED from referring drivers.
+    if (customerReferrer) {
+      const referrerCustomer = await this.prisma.customer.findUnique({
+        where: { id: customerReferrer.id },
+        select: { customerType: true },
+      });
+      if (referrerCustomer?.customerType === "PRIVATE") {
+        throw new BadRequestException(
+          "Personal customers can only refer other personal customers, not drivers."
+        );
+      }
+      // BUSINESS customers CAN refer drivers — allowed.
+    }
+    // Driver referrers CAN refer drivers — allowed.
+
     // ── Per-referred-party uniqueness check ──
     // A driver can only have ONE referral applied. If they already used a
     // code (whether driver-referrer or customer-referrer), reject.
@@ -431,37 +455,27 @@ export class ReferralService {
       );
     }
 
-    // Compute expiresAt + validate window
-    let expiresAt: Date | null = null;
-    let windowStartDate: Date | null = null;
-    let windowEndDate: Date | null = null;
-    const now = new Date();
-
-    if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) {
-      windowStartDate = config.windowStartDate ? new Date(config.windowStartDate) : null;
-      windowEndDate = config.windowEndDate ? new Date(config.windowEndDate) : null;
-
-      if (!windowStartDate || !windowEndDate) {
-        throw new BadRequestException(
-          "Referral program window is not properly configured. Please contact support."
-        );
-      }
-
-      if (now < windowStartDate) {
-        throw new BadRequestException(
-          "The referral program hasn't started yet. Please try again later."
-        );
-      }
-
-      if (now > windowEndDate) {
-        throw new BadRequestException(
-          "The referral program has ended. Please try again later."
-        );
-      }
-
-      expiresAt = windowEndDate;
-    }
-    // else: FOREVER → expiresAt stays null
+    // SPEC: "Codes case-insensitive, never expire unless the account closes."
+    // V2: No expiry. Comment out the CALENDAR_RANGE logic — codes never expire.
+    //
+    // OLD CODE (commented out per spec — can revert if needed):
+    // let expiresAt: Date | null = null;
+    // let windowStartDate: Date | null = null;
+    // let windowEndDate: Date | null = null;
+    // const now = new Date();
+    // if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) {
+    //   windowStartDate = config.windowStartDate ? new Date(config.windowStartDate) : null;
+    //   windowEndDate = config.windowEndDate ? new Date(config.windowEndDate) : null;
+    //   if (!windowStartDate || !windowEndDate) {
+    //     throw new BadRequestException("Referral program window is not properly configured.");
+    //   }
+    //   if (now < windowStartDate) { throw new BadRequestException("The referral program hasn't started yet."); }
+    //   if (now > windowEndDate) { throw new BadRequestException("The referral program has ended."); }
+    //   expiresAt = windowEndDate;
+    // }
+    const expiresAt: Date | null = null;
+    const windowStartDate: Date | null = null;
+    const windowEndDate: Date | null = null;
 
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },
@@ -1832,6 +1846,31 @@ export class ReferralService {
       throw new NotFoundException("Invalid or expired referral code");
     }
 
+    // ── ROLE MATRIX ENFORCEMENT (spec) ──────────────────────────────
+    // Who can refer whom:
+    //   Personal customer → personal customers ONLY
+    //   Business customer → personal customers OR drivers
+    //   Driver → personal customers OR drivers
+    //
+    // Business customers are NEVER referred — they sign up directly.
+    // Only personal customers can be referred (by any referrer type).
+    //
+    // This is the applyCustomerReferral path → the referred party is a CUSTOMER.
+    // If the referred customer is BUSINESS → reject (nobody refers business customers).
+    // If the referred customer is PRIVATE → all referrer types are allowed.
+    // Additionally, if the referrer is a PRIVATE customer, they can ONLY refer
+    // private customers (which is the only allowed type here, so the check
+    // above already covers it).
+    const referredCustomer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { customerType: true },
+    });
+    if (referredCustomer?.customerType === "BUSINESS") {
+      throw new BadRequestException(
+        "Business customers cannot be referred — they sign up directly. Only personal customers can be referred."
+      );
+    }
+
     // ── Per-referred-party uniqueness check ──
     const existingLink = await this.prisma.referral.findFirst({
       where: { referredCustomerId: customerId },
@@ -1859,32 +1898,18 @@ export class ReferralService {
       );
     }
 
-    // Compute expiresAt + validate window
-    let expiresAt: Date | null = null;
-    let windowStartDate: Date | null = null;
-    let windowEndDate: Date | null = null;
-    const now = new Date();
-
-    if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) {
-      windowStartDate = config.windowStartDate ? new Date(config.windowStartDate) : null;
-      windowEndDate = config.windowEndDate ? new Date(config.windowEndDate) : null;
-      if (!windowStartDate || !windowEndDate) {
-        throw new BadRequestException(
-          "Referral program window is not properly configured. Please contact support."
-        );
-      }
-      if (now < windowStartDate) {
-        throw new BadRequestException(
-          "The referral program hasn't started yet. Please try again later."
-        );
-      }
-      if (now > windowEndDate) {
-        throw new BadRequestException(
-          "The referral program has ended. Please try again later."
-        );
-      }
-      expiresAt = windowEndDate;
-    }
+    // SPEC: "Codes never expire unless the account closes."
+    // V2: No expiry. Comment out the CALENDAR_RANGE logic.
+    //
+    // OLD CODE (commented out per spec — can revert if needed):
+    // let expiresAt: Date | null = null;
+    // let windowStartDate: Date | null = null;
+    // let windowEndDate: Date | null = null;
+    // const now = new Date();
+    // if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) { ... }
+    const expiresAt: Date | null = null;
+    const windowStartDate: Date | null = null;
+    const windowEndDate: Date | null = null;
 
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },

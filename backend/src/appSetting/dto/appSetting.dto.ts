@@ -263,13 +263,39 @@ export class ReferralProgramSettingsResponseDto {
   })
   payoutModel!: ReferralPayoutModelDto;
 
+  // ── V2 spec: separate per-delivery amounts by referrer type ──
+  // Personal referrer: $5/delivery (500 cents)
+  // Business referrer: $10/delivery (1000 cents)
+  // Driver referrer: $5/delivery (500 cents)
+  // The old single `perDeliveryReferrerAmountCents` is kept for backward
+  // compat but commented out below — the trigger service uses these
+  // type-specific fields instead.
   @ApiProperty({
-    description:
-      "When payoutModel=PER_DELIVERY, the referrer earns this amount (in cents) for every paid delivery " +
-      "completed by the referred party. Default 500 ($5).",
+    description: "PER_DELIVERY amount for PERSONAL customer referrers (cents). Default 500 ($5).",
     example: 500,
   })
-  perDeliveryReferrerAmountCents!: number;
+  perDeliveryPersonalReferrerAmountCents!: number;
+
+  @ApiProperty({
+    description: "PER_DELIVERY amount for BUSINESS customer referrers (cents). Default 1000 ($10).",
+    example: 1000,
+  })
+  perDeliveryBusinessReferrerAmountCents!: number;
+
+  @ApiProperty({
+    description: "PER_DELIVERY amount for DRIVER referrers (cents). Default 500 ($5).",
+    example: 500,
+  })
+  perDeliveryDriverReferrerAmountCents!: number;
+
+  // OLD: uniform per-delivery amount — kept for backward compat but
+  // the trigger service now uses the type-specific fields above.
+  // @ApiProperty({
+  //   description: "When payoutModel=PER_DELIVERY, the referrer earns this amount (in cents) for every paid delivery completed by the referred party. Default 500 ($5).",
+  //   example: 500,
+  // })
+  // perDeliveryReferrerAmountCents!: number;
+  perDeliveryReferrerAmountCents!: number; // kept for backward compat — unused by V2 trigger
 
   @ApiProperty({
     description:
@@ -368,7 +394,7 @@ export class UpdateReferralProgramSettingsBody {
   payoutModel?: ReferralPayoutModelDto;
 
   @ApiPropertyOptional({
-    description: "PER_DELIVERY referrer amount in cents (>= 0). Default 500 ($5).",
+    description: "PER_DELIVERY referrer amount in cents (>= 0). Default 500 ($5). OLD — kept for backward compat.",
     example: 500,
   })
   @IsOptional()
@@ -376,6 +402,19 @@ export class UpdateReferralProgramSettingsBody {
   @Min(0)
   @Max(1_000_000)
   perDeliveryReferrerAmountCents?: number;
+
+  // V2 spec: type-specific per-delivery amounts
+  @ApiPropertyOptional({ description: "PER_DELIVERY amount for PERSONAL customer referrers (cents). Default 500 ($5).", example: 500 })
+  @IsOptional() @IsInt() @Min(0) @Max(1_000_000)
+  perDeliveryPersonalReferrerAmountCents?: number;
+
+  @ApiPropertyOptional({ description: "PER_DELIVERY amount for BUSINESS customer referrers (cents). Default 1000 ($10).", example: 1000 })
+  @IsOptional() @IsInt() @Min(0) @Max(1_000_000)
+  perDeliveryBusinessReferrerAmountCents?: number;
+
+  @ApiPropertyOptional({ description: "PER_DELIVERY amount for DRIVER referrers (cents). Default 500 ($5).", example: 500 })
+  @IsOptional() @IsInt() @Min(0) @Max(1_000_000)
+  perDeliveryDriverReferrerAmountCents?: number;
 
   @ApiPropertyOptional({
     description: "PER_DELIVERY referred bonus in cents (>= 0). Default 5000 ($50).",
