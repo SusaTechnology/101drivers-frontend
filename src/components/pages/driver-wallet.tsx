@@ -122,8 +122,13 @@ export default function DriverWalletPage() {
 
   const referrals = referralHistory?.referrals || []
 
-  // ── Referral Program Config (admin-configurable, tiered model) ─
+  // ── Referral Program Config (admin-configurable, V2 PER_DELIVERY model) ─
   // Drives every dynamic value on the "Refer a Friend" card:
+  // The old config fetches the same /api/referrals/program-config endpoint.
+  // V2 fields (perDeliveryPersonalReferrerAmountCents, etc.) are available
+  // on the response but for the driver wallet we only need:
+  //   - referredRewardAmount: $50 bonus per referred driver (on 5th delivery)
+  //   - requiredDeliveries: 5 (the bonus trigger count)
   //   - isActive: master on/off. When false, the card shows a paused
   //     notice and the action button is hidden (referral history stays).
   //   - rewardTrigger: 'ON_APPROVED' | 'ON_DELIVERIES_COMPLETED'
@@ -539,7 +544,8 @@ export default function DriverWalletPage() {
             variant="outline"
             className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
           >
-            On trip {ref.tripsCompleted || 0} of {ref.requiredDeliveries || ref.tripsRequired || referralConfig.requiredDeliveries}
+            {/* V2: "Delivery X of Y" (was "On trip X of Y") */}
+            Delivery {ref.completedPaidDeliveries || ref.tripsCompleted || 0} of {ref.requiredDeliveries || referralConfig.requiredDeliveries}
           </Badge>
         )
       case 'COMPLETED':
@@ -752,8 +758,36 @@ export default function DriverWalletPage() {
               </div>
             )}
 
-            {/* Stats row — shows tier progress + total earnings from referrals.
-                Always visible (even when paused) so the driver can see their progress. */}
+            {/* V2 Stats row — Total earned + Active referrals.
+                Replaces the old TIERED stats (tier progress, per-tier count, next tier bar). */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                  Total earned
+                </p>
+                <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
+                  ${((referralStats?.totalEarned || 0) + (referralStats?.pendingReward || 0)).toFixed(2)}
+                </p>
+                {referralStats?.pendingReward > 0 && (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    ${Number(referralStats.pendingReward).toFixed(2)} pending
+                  </p>
+                )}
+              </div>
+              <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
+                  Successful referrals
+                </p>
+                <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
+                  {referralStats?.successfulReferrals ?? 0}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {referralStats?.activeReferrals ?? 0} active · {referralStats?.expiredReferrals ?? 0} expired
+                </p>
+              </div>
+            </div>
+
+            {/* OLD TIERED STATS (commented out per V2 spec — can revert if needed):
             <div className="grid grid-cols-2 gap-3">
               <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/5 border border-emerald-100 dark:border-emerald-900/20">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
@@ -787,6 +821,7 @@ export default function DriverWalletPage() {
             </div>
 
             {/* Tier progress bar — shows progress toward the next tier payout */}
+            {/* OLD (commented out per V2 spec):
             {typeof referralStats?.nextTierProgress === 'number' && (
               <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                 <div
@@ -795,6 +830,7 @@ export default function DriverWalletPage() {
                 />
               </div>
             )}
+            */}
 
             {/* Primary share button — hidden when program is paused */}
             {referralConfig.isActive ? (
