@@ -66,7 +66,8 @@ import { useCreate, useDataQuery } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
-import { calculateHomeFlatQuote, HOME_FLAT_QUOTE_CONFIG } from "@/lib/pricing/home-flat-quote";
+import { calculateHomeQuote, getAdvertisedRateSummary } from "@/lib/pricing/home-quote";
+import { usePublicDefaultPricing } from "@/hooks/pricing/usePublicDefaultPricing";
 import { SEOHead } from "../shared/SEOHead";
 
 // Types for landing page settings
@@ -104,8 +105,19 @@ export default function LandingPage() {
   const [pickupCoords, setPickupCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
-  const [quoteResult, setQuoteResult] = useState<ReturnType<typeof calculateHomeFlatQuote> | null>(null);
+  const [quoteResult, setQuoteResult] = useState<ReturnType<typeof calculateHomeQuote> | null>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+
+  // ─── Live pricing config ───────────────────────────────────────────
+  // Fetches the admin-configured default pricing config from the
+  // PUBLIC endpoint (no auth required — landing-page visitors are not
+  // logged in). Falls back to HOME_FLAT_QUOTE_CONFIG if the endpoint
+  // returns null or fails, so the home page stays resilient.
+  const { config: livePricingConfig } = usePublicDefaultPricing();
+  // Summary of the advertised rate (used by the empty-state subtitle
+  // and the JSON-LD structured data — pulls from LIVE values when
+  // available, falls back to hard-coded values otherwise).
+  const advertisedRate = getAdvertisedRateSummary(livePricingConfig);
 
   // Ref to the #estimate section so the "Instant Quote" button can
   // smooth-scroll to it after computing the price.
@@ -208,10 +220,13 @@ export default function LandingPage() {
     },
   });
   // NOTE: The home page no longer calls the backend quote-preview endpoint.
-  // The price is computed client-side via `calculateHomeFlatQuote` (see
-  // src/lib/pricing/home-flat-quote.ts) — a self-contained flat-rate
-  // formula that is decoupled from backend pricing config. The `getQuote`
-  // mutation above is retained for reference but is no longer invoked.
+  // The price is computed client-side via `calculateHomeQuote` (see
+  // src/lib/pricing/home-quote.ts), which delegates the math to the shared
+  // `calculatePricing` util and uses the LIVE admin-configured default
+  // pricing config fetched by `usePublicDefaultPricing`. If the live config
+  // is unavailable (network error, no config in DB), the adapter falls back
+  // to the hard-coded `HOME_FLAT_QUOTE_CONFIG` advertised rate. The
+  // `getQuote` mutation above is retained for reference but is no longer invoked.
 
   const handlePickupSelect = useCallback((place: google.maps.places.PlaceResult) => {
     setPickupError("");
@@ -346,12 +361,15 @@ export default function LandingPage() {
     }
   }, [pickupCoords, dropoffCoords]);
 
-  // Compute the flat-rate quote and (optionally) smooth-scroll to the
-  // #estimate section so the customer sees the price.
+  // Compute the quote using the LIVE admin-configured pricing config
+  // (fetched via usePublicDefaultPricing) and (optionally) smooth-scroll
+  // to the #estimate section so the customer sees the price.
   //
-  // This is fully client-side — no backend call. The flat-rate formula
-  // lives in src/lib/pricing/home-flat-quote.ts and is decoupled from
-  // any backend pricing config.
+  // Pricing math is delegated to the shared `calculatePricing` util
+  // (single source of truth on the frontend) via the `calculateHomeQuote`
+  // adapter. If the live config hasn't loaded yet (or the endpoint
+  // failed), the adapter falls back to HOME_FLAT_QUOTE_CONFIG so the
+  // home page stays resilient.
   const handleCalculateEstimate = useCallback(async (opts?: { scrollToEstimate?: boolean }) => {
     const scrollToEstimate = opts?.scrollToEstimate ?? false;
 
@@ -397,8 +415,10 @@ export default function LandingPage() {
         return;
       }
 
-      // Compute the flat-rate quote (pure function, no I/O).
-      const result = calculateHomeFlatQuote(miles);
+      // Compute the quote using the live config (or fallback). Pure
+      // function, no I/O — the live config was already fetched by the
+      // usePublicDefaultPricing hook above.
+      const result = calculateHomeQuote(miles, livePricingConfig);
       setQuoteResult(result);
 
       // Increment attempt counter (preserves existing rate-limit behavior).
@@ -416,12 +436,15 @@ export default function LandingPage() {
     } finally {
       setIsLoadingQuote(false);
     }
-  }, [pickupAddress, dropoffAddress, pickupInZone, pickupCoords, dropoffCoords, distance, quoteLimitReached, quoteAttempts, computeDrivingDistanceMiles]);
+  }, [pickupAddress, dropoffAddress, pickupInZone, pickupCoords, dropoffCoords, distance, quoteLimitReached, quoteAttempts, computeDrivingDistanceMiles, livePricingConfig]);
 
   // Auto-trigger estimate as soon as both addresses are set, pickup is in
   // zone, AND the driving distance has been computed. We wait for
-  // `distance` because the flat-rate quote is computed client-side from
-  // the driving distance (no backend quote-preview call anymore).
+  // `distance` because the quote is computed client-side from the
+  // driving distance using the live pricing config (or fallback). When
+  // `livePricingConfig` arrives later, the callback is re-created and
+  // this effect re-fires — so the user automatically gets the live
+  // price as soon as the config loads.
   // Note: this auto-fire does NOT scroll — only the button click scrolls,
   // so the page doesn't jump around while the user is still typing.
   useEffect(() => {
@@ -719,9 +742,13 @@ export default function LandingPage() {
               offers: {
                 "@type": "Offer",
                 priceCurrency: "USD",
-                price: "101.00",
-                description:
-                  "Flat rate: $101 covers the first 25 miles, then $1.80 per additional mile. Insurance and transaction fees included.",
+                // Price + description pull from the LIVE admin-configured
+                // pricing config when available, falling back to the
+                // hard-coded advertised rate. This keeps the SEO
+                // structured data in sync with whatever the admin set
+                // (no more duplicate hard-coded $101 / 25 / $1.80 strings).
+                price: advertisedRate.baseFee.toFixed(2),
+                description: advertisedRate.description,
               },
             }),
           }}
@@ -1049,7 +1076,7 @@ export default function LandingPage() {
                   <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">Service Price</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      Flat-rate pricing: ${HOME_FLAT_QUOTE_CONFIG.baseFee} covers the first {HOME_FLAT_QUOTE_CONFIG.flatMiles} miles, then ${HOME_FLAT_QUOTE_CONFIG.perMileRate.toFixed(2)}/mile. Enter pickup and drop-off to see your price.
+                      {advertisedRate.description} Enter pickup and drop-off to see your price.
                     </p>
                   </div>
                 </div>

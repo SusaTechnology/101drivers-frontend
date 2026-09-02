@@ -3,6 +3,7 @@ import { AuthModule } from "../auth/auth.module";
 import { PricingConfigModuleBase } from "./base/pricingConfig.module.base";
 import { PricingConfigService } from "./pricingConfig.service";
 import { PricingConfigController } from "./pricingConfig.controller";
+import { PricingConfigPublicController } from "./pricingConfig.public.controller";
 import { PricingConfigResolver } from "./pricingConfig.resolver";
 import { PricingConfigDomain } from "src/domain/pricingConfig/pricingConfig.domain";
 import { PricingConfigPolicyService } from "src/domain/pricingConfig/pricingConfigPolicy.service";
@@ -11,7 +12,7 @@ import { PricingConfigAdminEngine } from "src/domain/pricingConfig/pricingConfig
 
 @Module({
   imports: [PricingConfigModuleBase, forwardRef(() => AuthModule)],
-  controllers: [PricingConfigController],
+  controllers: [PricingConfigController, PricingConfigPublicController],
   providers: [
     PricingConfigService,
     PricingConfigResolver,

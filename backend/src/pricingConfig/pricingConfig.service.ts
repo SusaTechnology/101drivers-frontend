@@ -16,6 +16,7 @@ import { PricingConfigPolicyService } from "../domain/pricingConfig/pricingConfi
 import { PricingConfigAdminEngine } from "../domain/pricingConfig/pricingConfigAdmin.engine";
 import { PricingEngineService } from "../delivery-logistics/pricing-engine.service";
 import { SavePricingConfigBody } from "./dto/pricingConfigAdmin.dto";
+import { PublicPricingConfigDto } from "./dto/pricingConfigPublic.dto";
 
 
 @Injectable()
@@ -200,5 +201,101 @@ async previewQuote(input: {
     serviceType: input.serviceType,
     categoryOverride: input.categoryOverride ?? null,
   });
+}
+
+/**
+ * Public-facing default pricing config.
+ *
+ * Returns a SANITIZED view of the currently active default
+ * PricingConfig — only the fields the home page / public surfaces need
+ * to advertise the rate and compute a quote preview. No internal
+ * fields (driverSharePct, id, name, description, audit columns) are
+ * exposed.
+ *
+ * Lookup precedence (mirrors the PricingEngineService resolver):
+ *   1. active + isDefault
+ *   2. fallback: most-recently-created active config
+ *   3. null  →  frontend falls back to its hard-coded advertised rate
+ *
+ * This endpoint is intentionally unauthenticated (see
+ * PricingConfigPublicController) — the rate is public information
+ * already shown on the marketing site.
+ */
+async getPublicDefaultPricingConfig(): Promise<PublicPricingConfigDto | null> {
+  // 1. Try active + isDefault
+  let config = await this.prisma.pricingConfig.findFirst({
+    where: { active: true, isDefault: true },
+    include: {
+      categoryRules: {
+        orderBy: { minMiles: "asc" },
+      },
+    },
+  });
+
+  // 2. Fallback: most recently created active config
+  if (!config) {
+    config = await this.prisma.pricingConfig.findFirst({
+      where: { active: true },
+      orderBy: { createdAt: "desc" },
+      include: {
+        categoryRules: {
+          orderBy: { minMiles: "asc" },
+        },
+      },
+    });
+  }
+
+  // 3. No config at all → null (frontend will fall back to hard-coded values)
+  if (!config) {
+    return null;
+  }
+
+  return this.sanitizeForPublic(config);
+}
+
+/**
+ * Project a full PricingConfig row (with categoryRules included) into
+ * the public DTO shape. Strips internal fields and normalizes nulls.
+ */
+private sanitizeForPublic(
+  config: PrismaPricingConfig & {
+    categoryRules: PrismaPricingCategoryRule[];
+  }
+): PublicPricingConfigDto {
+  // Legacy FLAT_TIER configs are treated as PER_MILE for public display
+  // (matches resolveEffectiveMode in the shared frontend pricing util).
+  const publicMode: "PER_MILE" | "CATEGORY_ABC" =
+    config.pricingMode === "CATEGORY_ABC" ? "CATEGORY_ABC" : "PER_MILE";
+
+  return {
+    pricingMode: publicMode,
+    baseFee: Number(config.baseFee),
+    flatMiles:
+      publicMode === "PER_MILE" && config.flatMiles != null
+        ? Number(config.flatMiles)
+        : null,
+    perMileRate:
+      publicMode === "PER_MILE" && config.perMileRate != null
+        ? Number(config.perMileRate)
+        : null,
+    insuranceFee: Number(config.insuranceFee),
+    transactionFeePct:
+      config.transactionFeePct != null ? Number(config.transactionFeePct) : null,
+    transactionFeeFixed:
+      config.transactionFeeFixed != null
+        ? Number(config.transactionFeeFixed)
+        : null,
+    feePassThrough: Boolean(config.feePassThrough),
+    tierBands:
+      publicMode === "CATEGORY_ABC"
+        ? config.categoryRules.map((r) => ({
+            category: String(r.category),
+            minMiles: Number(r.minMiles),
+            maxMiles: r.maxMiles == null ? null : Number(r.maxMiles),
+            perMileRate: r.perMileRate == null ? null : Number(r.perMileRate),
+          }))
+        : [],
+    updatedAt: config.updatedAt,
+  };
 }
 }
