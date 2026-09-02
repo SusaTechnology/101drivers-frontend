@@ -9,9 +9,9 @@
  *
  * Replaces the previous mock-data version that always showed DSP-100238.
  *
- * Route: /admin-dispute-details?disputeId=xxx
+ * Route: /admin-dispute-detail?disputeId=xxx
  * Reads disputeId from the URL search params (set by the route's
- * validateSearch in src/routes/admin-dispute-details/index.tsx).
+ * validateSearch in src/routes/admin-dispute-detail/index.tsx).
  */
 import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";

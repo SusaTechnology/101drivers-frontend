@@ -113,7 +113,7 @@ export interface Compliance {
 export interface Dispute {
   id: string;
   reason: string;
-  status: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'CLOSED';
+  status: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'REJECTED' | 'CLOSED';
   legalHold: boolean;
   openedAt?: string | null;
   resolvedAt?: string | null;

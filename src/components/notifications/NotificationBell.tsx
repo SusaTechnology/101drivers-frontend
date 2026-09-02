@@ -293,7 +293,7 @@ export default function NotificationBell({ className, userType }: NotificationBe
     if (deliveryId) {
       // Delivery-related notifications
       if (effectiveUserType === 'admin') {
-        return `/admin-delivery-details?id=${deliveryId}`
+        return `/admin-delivery-detail?deliveryId=${deliveryId}`
       }
       return `/dealer-delivery-details?id=${deliveryId}`
     }
@@ -309,7 +309,7 @@ export default function NotificationBell({ className, userType }: NotificationBe
     if (disputeId && notification.type.includes('DISPUTE')) {
       // Dispute notifications - only admin has access
       if (effectiveUserType === 'admin') {
-        return `/admin-dispute-details?disputeId=${disputeId}`
+        return `/admin-dispute-detail?disputeId=${disputeId}`
       }
       return null // Dealers don't have dispute detail access
     }

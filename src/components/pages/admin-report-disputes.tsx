@@ -62,6 +62,7 @@ const STATUS_OPTIONS = [
   { value: 'OPEN', label: 'Open' },
   { value: 'UNDER_REVIEW', label: 'Under Review' },
   { value: 'RESOLVED', label: 'Resolved' },
+  { value: 'REJECTED', label: 'Rejected' },
   { value: 'CLOSED', label: 'Closed' },
 ];
 
@@ -80,6 +81,7 @@ const STATUS_COLORS: Record<string, string> = {
   OPEN: 'bg-rose-50 text-rose-700 border-rose-200',
   UNDER_REVIEW: 'bg-amber-50 text-amber-700 border-amber-200',
   RESOLVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  REJECTED: 'bg-red-50 text-red-700 border-red-200',
   CLOSED: 'bg-slate-50 text-slate-600 border-slate-200',
 };
 

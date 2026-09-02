@@ -429,7 +429,7 @@ export default function AdminDisputesPage() {
                 View
               </Button>
               <Link
-                to="/admin-dispute-details"
+                to="/admin-dispute-detail"
                 search={{ disputeId: dispute.id }}
                 className="inline-flex items-center gap-1 h-8 px-3 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
@@ -840,7 +840,7 @@ export default function AdminDisputesPage() {
                 )}
                 {(selectedDispute.status === 'OPEN' || selectedDispute.status === 'UNDER_REVIEW') && (
                   <Link
-                    to="/admin-dispute-details"
+                    to="/admin-dispute-detail"
                     search={{ disputeId: selectedDispute.id }}
                     className="inline-flex items-center gap-1 h-8 px-3 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >

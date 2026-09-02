@@ -577,7 +577,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
               Export Evidence
             </Button>
             {delivery.dispute ? (
-              <Link to="/admin-dispute-details" search={{ disputeId: delivery.dispute.id }}>
+              <Link to="/admin-dispute-detail" search={{ disputeId: delivery.dispute.id }}>
                 <Button variant="outline" className="rounded-xl">
                   <Eye className="w-4 h-4 mr-1" />
                   View Dispute

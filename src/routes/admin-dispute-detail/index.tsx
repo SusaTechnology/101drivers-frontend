@@ -1,7 +1,7 @@
 import AdminDisputeDetailsPage from "@/components/pages/admin-dispute-details";
 import { createFileRoute } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/admin-dispute-details/")({
+export const Route = createFileRoute("/admin-dispute-detail/")({
   component: RouteComponent,
   validateSearch: (search: Record<string, unknown>): { disputeId: string } => {
     return {

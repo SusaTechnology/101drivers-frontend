@@ -25,7 +25,7 @@ export type PaymentStatus = 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED';
 
 export type PayoutStatus = 'ELIGIBLE' | 'PAID' | 'FAILED';
 
-export type DisputeStatus = 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'CLOSED';
+export type DisputeStatus = 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'REJECTED' | 'CLOSED';
 
 export type TrackingStatus = 'NOT_STARTED' | 'STARTED' | 'STOPPED';
 

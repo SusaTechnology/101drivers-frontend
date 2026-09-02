@@ -80,7 +80,7 @@ import { Route as AdminNotificationPolicyIndexRouteImport } from './routes/admin
 import { Route as AdminLandingPageSettingsIndexRouteImport } from './routes/admin-landing-page-settings/index'
 import { Route as AdminInsuranceReportingIndexRouteImport } from './routes/admin-insurance-reporting/index'
 import { Route as AdminDisputesIndexRouteImport } from './routes/admin-disputes/index'
-import { Route as AdminDisputeDetailsIndexRouteImport } from './routes/admin-dispute-details/index'
+import { Route as AdminDisputeDetailIndexRouteImport } from './routes/admin-dispute-detail/index'
 import { Route as AdminDeliveryDetailIndexRouteImport } from './routes/admin-delivery-detail/index'
 import { Route as AdminDeliveriesIndexRouteImport } from './routes/admin-deliveries/index'
 import { Route as AdminDealerDetailIndexRouteImport } from './routes/admin-dealer-detail/index'
@@ -499,12 +499,11 @@ const AdminDisputesIndexRoute = AdminDisputesIndexRouteImport.update({
   path: '/admin-disputes/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminDisputeDetailsIndexRoute =
-  AdminDisputeDetailsIndexRouteImport.update({
-    id: '/admin-dispute-details/',
-    path: '/admin-dispute-details/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+const AdminDisputeDetailIndexRoute = AdminDisputeDetailIndexRouteImport.update({
+  id: '/admin-dispute-detail/',
+  path: '/admin-dispute-detail/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminDeliveryDetailIndexRoute =
   AdminDeliveryDetailIndexRouteImport.update({
     id: '/admin-delivery-detail/',
@@ -743,7 +742,7 @@ export interface FileRoutesByFullPath {
   '/admin-dealer-detail/': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries/': typeof AdminDeliveriesIndexRoute
   '/admin-delivery-detail/': typeof AdminDeliveryDetailIndexRoute
-  '/admin-dispute-details/': typeof AdminDisputeDetailsIndexRoute
+  '/admin-dispute-detail/': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes/': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
@@ -855,7 +854,7 @@ export interface FileRoutesByTo {
   '/admin-dealer-detail': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries': typeof AdminDeliveriesIndexRoute
   '/admin-delivery-detail': typeof AdminDeliveryDetailIndexRoute
-  '/admin-dispute-details': typeof AdminDisputeDetailsIndexRoute
+  '/admin-dispute-detail': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings': typeof AdminLandingPageSettingsIndexRoute
@@ -969,7 +968,7 @@ export interface FileRoutesById {
   '/admin-dealer-detail/': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries/': typeof AdminDeliveriesIndexRoute
   '/admin-delivery-detail/': typeof AdminDeliveryDetailIndexRoute
-  '/admin-dispute-details/': typeof AdminDisputeDetailsIndexRoute
+  '/admin-dispute-detail/': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes/': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
   '/admin-landing-page-settings/': typeof AdminLandingPageSettingsIndexRoute
@@ -1084,7 +1083,7 @@ export interface FileRouteTypes {
     | '/admin-dealer-detail/'
     | '/admin-deliveries/'
     | '/admin-delivery-detail/'
-    | '/admin-dispute-details/'
+    | '/admin-dispute-detail/'
     | '/admin-disputes/'
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
@@ -1196,7 +1195,7 @@ export interface FileRouteTypes {
     | '/admin-dealer-detail'
     | '/admin-deliveries'
     | '/admin-delivery-detail'
-    | '/admin-dispute-details'
+    | '/admin-dispute-detail'
     | '/admin-disputes'
     | '/admin-insurance-reporting'
     | '/admin-landing-page-settings'
@@ -1309,7 +1308,7 @@ export interface FileRouteTypes {
     | '/admin-dealer-detail/'
     | '/admin-deliveries/'
     | '/admin-delivery-detail/'
-    | '/admin-dispute-details/'
+    | '/admin-dispute-detail/'
     | '/admin-disputes/'
     | '/admin-insurance-reporting/'
     | '/admin-landing-page-settings/'
@@ -1402,7 +1401,7 @@ export interface RootRouteChildren {
   AdminDealerDetailIndexRoute: typeof AdminDealerDetailIndexRoute
   AdminDeliveriesIndexRoute: typeof AdminDeliveriesIndexRoute
   AdminDeliveryDetailIndexRoute: typeof AdminDeliveryDetailIndexRoute
-  AdminDisputeDetailsIndexRoute: typeof AdminDisputeDetailsIndexRoute
+  AdminDisputeDetailIndexRoute: typeof AdminDisputeDetailIndexRoute
   AdminDisputesIndexRoute: typeof AdminDisputesIndexRoute
   AdminInsuranceReportingIndexRoute: typeof AdminInsuranceReportingIndexRoute
   AdminLandingPageSettingsIndexRoute: typeof AdminLandingPageSettingsIndexRoute
@@ -1976,11 +1975,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDisputesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin-dispute-details/': {
-      id: '/admin-dispute-details/'
-      path: '/admin-dispute-details'
-      fullPath: '/admin-dispute-details/'
-      preLoaderRoute: typeof AdminDisputeDetailsIndexRouteImport
+    '/admin-dispute-detail/': {
+      id: '/admin-dispute-detail/'
+      path: '/admin-dispute-detail'
+      fullPath: '/admin-dispute-detail/'
+      preLoaderRoute: typeof AdminDisputeDetailIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-delivery-detail/': {
@@ -2329,7 +2328,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDealerDetailIndexRoute: AdminDealerDetailIndexRoute,
   AdminDeliveriesIndexRoute: AdminDeliveriesIndexRoute,
   AdminDeliveryDetailIndexRoute: AdminDeliveryDetailIndexRoute,
-  AdminDisputeDetailsIndexRoute: AdminDisputeDetailsIndexRoute,
+  AdminDisputeDetailIndexRoute: AdminDisputeDetailIndexRoute,
   AdminDisputesIndexRoute: AdminDisputesIndexRoute,
   AdminInsuranceReportingIndexRoute: AdminInsuranceReportingIndexRoute,
   AdminLandingPageSettingsIndexRoute: AdminLandingPageSettingsIndexRoute,

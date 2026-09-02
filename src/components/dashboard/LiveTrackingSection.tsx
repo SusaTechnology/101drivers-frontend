@@ -89,8 +89,8 @@ function DeliveryListItem({
 
   return (
     <Link
-      to="/admin-delivery-details"
-      search={{ id: item.deliveryId }}
+      to="/admin-delivery-detail"
+      search={{ deliveryId: item.deliveryId }}
       className="block"
     >
       <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
