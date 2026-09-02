@@ -102,9 +102,13 @@ check(
 );
 
 // ─────────────────────────────────────────────────────────────────────
-// 3. LIVE CATEGORY_ABC CONFIG — uses banded rates.
+// 3. CATEGORY_ABC CONFIG — LANDING PAGE STAYS FLAT.
+// The landing-page contract is: ALWAYS flat-rate, never tiered.
+// If a CATEGORY_ABC config somehow reaches the frontend (defensive —
+// the backend should return null for ABC), the adapter MUST fall back
+// to HOME_FLAT_QUOTE_CONFIG, NOT compute tiered pricing.
 // ─────────────────────────────────────────────────────────────────────
-console.log('\n=== live CATEGORY_ABC config (tiered) ===');
+console.log('\n=== CATEGORY_ABC config (landing page stays flat) ===');
 const liveAbc: PublicPricingConfig = {
   pricingMode: 'CATEGORY_ABC',
   baseFee: 50,
@@ -123,16 +127,20 @@ const liveAbc: PublicPricingConfig = {
 };
 
 const abc100 = calculateHomeQuote(100, liveAbc);
-// Expected (from calculate.ts header docs):
-//   50 + (25 × 2.0) + (25 × 1.8) + (50 × 1.75) = 50 + 50 + 45 + 87.5 = 232.5
+const legacy100 = calculateHomeFlatQuote(100);
 check(
-  'live CATEGORY_ABC 100mi total = $232.50',
-  abc100.estimatedPrice === 232.5,
-  `total=$${abc100.estimatedPrice}`,
+  'CATEGORY_ABC 100mi falls back to flat (NOT tiered $232.50)',
+  abc100.estimatedPrice !== 232.5,
+  `total=$${abc100.estimatedPrice} (tiered would be $232.50)`,
 );
 check(
-  'live CATEGORY_ABC formula label = "Tiered Rate"',
-  abc100.formula.label === 'Tiered Rate',
+  'CATEGORY_ABC 100mi matches fallback flat total',
+  abc100.estimatedPrice === legacy100.estimatedPrice,
+  `adapter=$${abc100.estimatedPrice} legacy=$${legacy100.estimatedPrice}`,
+);
+check(
+  'CATEGORY_ABC formula label stays "Flat Rate"',
+  abc100.formula.label === 'Flat Rate',
   `label=${abc100.formula.label}`,
 );
 
@@ -167,10 +175,19 @@ check(
 );
 
 const liveAbcSummary = getAdvertisedRateSummary(liveAbc);
+// Landing-page contract: ABC config falls back to flat-rate wording.
 check(
-  'live CATEGORY_ABC summary mentions "Tiered rate"',
-  liveAbcSummary.description.toLowerCase().includes('tiered'),
+  'CATEGORY_ABC summary falls back to flat-rate wording (NOT "tiered")',
+  !liveAbcSummary.description.toLowerCase().includes('tiered') &&
+    liveAbcSummary.description.toLowerCase().includes('flat rate'),
   `description="${liveAbcSummary.description}"`,
+);
+check(
+  'CATEGORY_ABC summary uses HOME_FLAT_QUOTE_CONFIG values',
+  liveAbcSummary.baseFee === HOME_FLAT_QUOTE_CONFIG.baseFee &&
+    liveAbcSummary.flatMiles === HOME_FLAT_QUOTE_CONFIG.flatMiles &&
+    liveAbcSummary.perMileRate === HOME_FLAT_QUOTE_CONFIG.perMileRate,
+  `baseFee=$${liveAbcSummary.baseFee} flatMiles=${liveAbcSummary.flatMiles} perMileRate=$${liveAbcSummary.perMileRate}`,
 );
 
 // ─────────────────────────────────────────────────────────────────────

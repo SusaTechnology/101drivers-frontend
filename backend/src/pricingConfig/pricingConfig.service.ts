@@ -250,6 +250,25 @@ async getPublicDefaultPricingConfig(): Promise<PublicPricingConfigDto | null> {
     return null;
   }
 
+  // 4. LANDING-PAGE CONTRACT: the public landing page ALWAYS advertises
+  //    flat-rate pricing ("$X covers the first Y miles, then $Z/mile").
+  //    If the admin's active default config is in CATEGORY_ABC (tiered)
+  //    mode, we return null here so the frontend falls back to its
+  //    hard-coded flat-rate constants (HOME_FLAT_QUOTE_CONFIG) instead
+  //    of leaking tiered pricing math onto the marketing surface.
+  //
+  //    This does NOT affect any other system surface — the admin
+  //    preview endpoint, the actual quote-preview endpoint, and
+  //    delivery creation all continue to use the live config's real
+  //    pricing mode. Only the public landing page is locked to flat.
+  //
+  //    Legacy FLAT_TIER configs are still treated as PER_MILE below
+  //    (matches resolveEffectiveMode in the shared frontend pricing
+  //    util), so they DO get returned as flat.
+  if (config.pricingMode === "CATEGORY_ABC") {
+    return null;
+  }
+
   return this.sanitizeForPublic(config);
 }
 
