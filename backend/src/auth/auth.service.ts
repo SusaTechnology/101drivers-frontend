@@ -19,6 +19,7 @@ import { SignupDriverDto } from "./dto/SignupDriver.dto";
 import { SignupCustomerDto } from "./dto/SignupCustomer.dto";
 import { getCookieOptionsFromRequest } from "../common/cors-cookie.util";
 import { EmailVerificationService } from "./email-verification/email-verification.service";
+import { SignupStateUtil } from "./signup-state.util";
 import { ForgotPasswordDto } from "./dto/ForgotPassword.dto";
 import { ResetPasswordDto } from "./dto/ResetPassword.dto";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
@@ -31,6 +32,9 @@ import {
   EnumEmailVerificationPurpose,
   EnumNotificationEventChannel,
   EnumNotificationEventType,
+  EnumCustomerApprovalStatus,
+  EnumAdminAuditLogAction,
+  EnumAdminAuditLogActorType,
 } from "@prisma/client";
 
 type AuthValidatedUser = {
@@ -616,6 +620,21 @@ export class AuthService {
     request: Request,
     response: Response
   ): Promise<UserInfo | VerificationRequiredResult | PendingVerificationResult> {
+    // ── California auto-approval gate ─────────────────────────────────────
+    //
+    // Business rule: PRIVATE customers located in California do NOT need
+    // admin approval — they join the platform as APPROVED immediately at
+    // signup. Everyone else (private customers in other states, and ALL
+    // business customers) follows the existing PENDING → admin approval
+    // flow, untouched.
+    //
+    // The state is self-declared via the signup form's State dropdown and
+    // persisted on the Customer row (signupState) so there is an audit
+    // trail of why an account skipped manual approval.
+    const signupState = SignupStateUtil.normalize(dto.state);
+    const autoApprove =
+      signupState === "CA"; // extend the allowlist here if more states are added later
+
     // ─── Private (individual) customer signup ─────────────────────────
     //
     // SERVER-SIDE STORAGE (no password in browser sessionStorage):
@@ -749,6 +768,10 @@ export class AuthService {
           });
 
           // Create the Customer row
+          //
+          // Approval rule: PRIVATE customers in California are auto-APPROVED
+          // at signup (no admin review needed). Everyone else defaults to
+          // PENDING and follows the existing admin approval flow.
           const createdCustomer = await tx.customer.create({
             data: {
               customerType: EnumCustomerCustomerType.PRIVATE,
@@ -756,14 +779,39 @@ export class AuthService {
               contactEmail: normalizedEmail,
               contactPhone: existingUser.phone ?? dto.contactPhone ?? dto.phone ?? null,
               phone: dto.phone ?? existingUser.phone ?? null,
-              // Private customers follow the same approval flow as business
-              // customers — approvalStatus defaults to PENDING. The admin
-              // reviews and approves. The user sees the "Sign-up Submitted"
-              // success page and cannot log in until approved.
+              signupState: signupState,
+              ...(autoApprove
+                ? {
+                    approvalStatus: EnumCustomerApprovalStatus.APPROVED,
+                    approvedAt: new Date(),
+                    // approvedByUserId stays NULL — approved by the SYSTEM,
+                    // not by an admin. The audit log below records why.
+                  }
+                : {}),
+              // Private customers in non-CA states follow the same approval
+              // flow as business customers — approvalStatus defaults to
+              // PENDING. The admin reviews and approves.
               user: { connect: { id: existingUser.id } },
             },
             select: { id: true },
           });
+
+          // Audit trail for auto-approvals — mirrors what the admin approval
+          // engine writes (DEALER_APPROVE), but with actorType=SYSTEM and no
+          // admin actor. This is how we can always answer "why is this
+          // account APPROVED without an admin action?"
+          if (autoApprove) {
+            await tx.adminAuditLog.create({
+              data: {
+                action: EnumAdminAuditLogAction.DEALER_APPROVE,
+                actorUserId: null,
+                actorType: EnumAdminAuditLogActorType.SYSTEM,
+                customerId: createdCustomer.id,
+                reason:
+                  "Auto-approved at signup: private customer in California (signupState=CA)",
+              },
+            });
+          }
 
           return {
             userId: existingUser.id,
@@ -837,12 +885,32 @@ export class AuthService {
             contactEmail: normalizedEmail,
             contactPhone: userPhone,
             phone: dto.phone ?? null,
-            // Private customers follow the same approval flow as business
-            // customers — approvalStatus defaults to PENDING.
+            signupState: signupState,
+            // Same California auto-approval rule as the primary path.
+            ...(autoApprove
+              ? {
+                  approvalStatus: EnumCustomerApprovalStatus.APPROVED,
+                  approvedAt: new Date(),
+                }
+              : {}),
+            // Private customers in non-CA states default to PENDING.
             user: { connect: { id: createdUser.id } },
           },
           select: { id: true },
         });
+
+        if (autoApprove) {
+          await tx.adminAuditLog.create({
+            data: {
+              action: EnumAdminAuditLogAction.DEALER_APPROVE,
+              actorUserId: null,
+              actorType: EnumAdminAuditLogActorType.SYSTEM,
+              customerId: createdCustomer.id,
+              reason:
+                "Auto-approved at signup: private customer in California (signupState=CA)",
+            },
+          });
+        }
 
         return {
           userId: createdUser.id,

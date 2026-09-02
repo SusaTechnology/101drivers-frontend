@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
 import { ArrowRight, Mail, RefreshCw, Loader2, CheckCircle, Clock } from 'lucide-react';
-import { useDataMutation } from '@/lib/tanstack/dataQuery';
+import { useDataMutation, setAccessToken, setUser, startSessionKeepAlive } from '@/lib/tanstack/dataQuery';
 import { cn } from '@/lib/utils';
 
 const INDIVIDUAL_PENDING_PAYLOAD_KEY = 'individualPendingPayload';
@@ -28,6 +28,10 @@ const INDIVIDUAL_PENDING_PAYLOAD_KEY = 'individualPendingPayload';
 interface VerifyOtpPayload {
   email: string;
   verificationToken: string;
+  // US state (2-letter code) from the signup form — forwarded from
+  // sessionStorage so the backend can apply the California auto-approval
+  // rule when it creates the Customer row.
+  state?: string;
   referralCode?: string;
 }
 
@@ -36,6 +40,9 @@ export default function IndividualVerifyEmailPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [email, setEmail] = useState('');
   const [referralCode, setReferralCode] = useState<string | undefined>(undefined);
+  // US state from the signup form (forwarded through sessionStorage) —
+  // sent to step 2 so the backend can apply the California auto-approval.
+  const [signupState, setSignupState] = useState<string | undefined>(undefined);
   const [countdown, setCountdown] = useState(0);
   const [registrationComplete, setRegistrationComplete] = useState(false);
 
@@ -65,12 +72,15 @@ export default function IndividualVerifyEmailPage() {
       if (stored) {
         const data = JSON.parse(stored);
         // The stored data may be the full payload (legacy), {email} (V1),
-        // or {email, referralCode?} (V2).
+        // or {email, state?, referralCode?} (V2).
         const email = data.email || data.contactEmail;
         if (email) {
           setEmail(email);
           if (data.referralCode) {
             setReferralCode(data.referralCode);
+          }
+          if (data.state) {
+            setSignupState(data.state);
           }
         } else {
           toast.error('No pending registration found', {
@@ -120,23 +130,53 @@ export default function IndividualVerifyEmailPage() {
   });
 
   // Mutation for verifying OTP and completing registration.
-  // Sends ONLY {email, verificationToken} — no password, no payload.
+  // Sends ONLY {email, verificationToken, state?} — no password, no payload.
   // The backend reads the User data from the stored row (created in step 1).
   //
-  // After verification, the account is PENDING admin approval (same as
-  // business customers). The user sees a success page — NOT auto-login.
-  // They can log in only after the admin approves their account.
+  // Two outcomes:
+  //  • customerApprovalStatus === 'APPROVED'  → private customer in
+  //    California — auto-approved by the backend at signup. The response IS
+  //    a full login payload (tokens + user), so we sign them in immediately
+  //    and send them to the dashboard. No "pending approval" screen.
+  //  • anything else (PENDING) → legacy/other-state flow: show the success
+  //    page — NOT auto-login. They can log in after the admin approves.
   const verifyOtpMutation = useDataMutation<
     any,
     VerifyOtpPayload
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/customer/private`,
     method: 'POST',
-    onSuccess: () => {
+    onSuccess: (data) => {
+      sessionStorage.removeItem(INDIVIDUAL_PENDING_PAYLOAD_KEY);
+
+      if (data?.customerApprovalStatus === 'APPROVED') {
+        // ── Auto-approved (California) → auto-login ──
+        // Same token/user handling as the sign-in pages.
+        setAccessToken(data.accessToken);
+        setUser({
+          id: data.id,
+          username: data.username,
+          fullName: data.fullName,
+          profileId: data.profileId,
+          roles: data.roles,
+          customerApprovalStatus: data.customerApprovalStatus,
+          driverStatus: data.driverStatus,
+          onboardingCompleted: data.onboardingCompleted,
+          onboardingToken: data.onboardingToken,
+          isActive: data.isActive,
+        });
+        startSessionKeepAlive();
+        toast.success('Welcome! Your account is ready.', {
+          description: 'Your account has been created and approved — no waiting required.',
+        });
+        navigate({ to: '/dealer-dashboard' });
+        return;
+      }
+
+      // ── Pending admin approval (non-CA or legacy) ──
       toast.success('Sign-up submitted successfully!', {
         description: 'Your account is pending admin approval.',
       });
-      sessionStorage.removeItem(INDIVIDUAL_PENDING_PAYLOAD_KEY);
       // Show the success page (pending approval) — same as business signup.
       // Do NOT auto-login. The user must wait for admin approval.
       setRegistrationComplete(true);
@@ -178,6 +218,7 @@ export default function IndividualVerifyEmailPage() {
     const payload: VerifyOtpPayload = {
       email,
       verificationToken: otpValue,
+      ...(signupState ? { state: signupState } : {}),
       ...(referralCode ? { referralCode } : {}),
     };
     verifyOtpMutation.mutate(payload);

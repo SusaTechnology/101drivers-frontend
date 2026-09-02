@@ -51,6 +51,10 @@ model Customer {
   approvedAt          DateTime?
   approvedBy          User?                            @relation(name: "customersApproved", fields: [approvedByUserId], references: [id])
   approvedByUserId    String?
+  // US state the customer declared at signup (2-letter code, e.g. "CA").
+  // Private customers in CA are auto-approved at signup; this preserves
+  // the audit trail of WHY an account skipped manual approval.
+  signupState         String?
   audits              AdminAuditLog[]
   businessAddress     String?
   businessName        String?
