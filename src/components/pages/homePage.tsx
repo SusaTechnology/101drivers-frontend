@@ -119,6 +119,15 @@ export default function LandingPage() {
   // available, falls back to hard-coded values otherwise).
   const advertisedRate = getAdvertisedRateSummary(livePricingConfig);
 
+  // Ref mirror of livePricingConfig so handleCalculateEstimate can read
+  // the latest config WITHOUT having it in its deps array. This prevents
+  // the auto-fire effect from re-firing (and burning a quote attempt)
+  // when the config arrives after the initial quote was already computed.
+  const livePricingConfigRef = useRef(livePricingConfig);
+  useEffect(() => {
+    livePricingConfigRef.current = livePricingConfig;
+  }, [livePricingConfig]);
+
   // Ref to the #estimate section so the "Instant Quote" button can
   // smooth-scroll to it after computing the price.
   const estimateRef = useRef<HTMLElement | null>(null);
@@ -417,8 +426,11 @@ export default function LandingPage() {
 
       // Compute the quote using the live config (or fallback). Pure
       // function, no I/O — the live config was already fetched by the
-      // usePublicDefaultPricing hook above.
-      const result = calculateHomeQuote(miles, livePricingConfig);
+      // usePublicDefaultPricing hook above. Read from the ref so this
+      // callback doesn't need livePricingConfig in its deps (which
+      // would re-fire the auto-quote effect and burn a quote attempt
+      // every time the config arrives).
+      const result = calculateHomeQuote(miles, livePricingConfigRef.current);
       setQuoteResult(result);
 
       // Increment attempt counter (preserves existing rate-limit behavior).
@@ -436,15 +448,12 @@ export default function LandingPage() {
     } finally {
       setIsLoadingQuote(false);
     }
-  }, [pickupAddress, dropoffAddress, pickupInZone, pickupCoords, dropoffCoords, distance, quoteLimitReached, quoteAttempts, computeDrivingDistanceMiles, livePricingConfig]);
+  }, [pickupAddress, dropoffAddress, pickupInZone, pickupCoords, dropoffCoords, distance, quoteLimitReached, quoteAttempts, computeDrivingDistanceMiles]);
 
   // Auto-trigger estimate as soon as both addresses are set, pickup is in
   // zone, AND the driving distance has been computed. We wait for
   // `distance` because the quote is computed client-side from the
-  // driving distance using the live pricing config (or fallback). When
-  // `livePricingConfig` arrives later, the callback is re-created and
-  // this effect re-fires — so the user automatically gets the live
-  // price as soon as the config loads.
+  // driving distance using the live pricing config (or fallback).
   // Note: this auto-fire does NOT scroll — only the button click scrolls,
   // so the page doesn't jump around while the user is still typing.
   useEffect(() => {
@@ -452,6 +461,27 @@ export default function LandingPage() {
       handleCalculateEstimate({ scrollToEstimate: false });
     }
   }, [pickupAddress, dropoffAddress, pickupInZone, distance, handleCalculateEstimate, quoteLimitReached, isLoadingQuote]);
+
+  // ─── Silent recompute when live config arrives ────────────────────
+  // When the live pricing config arrives from the backend (after the
+  // initial quote was already computed with fallback values), silently
+  // recompute the EXISTING quote with the new config. This does NOT
+  // burn a quote attempt — it only updates the displayed price to
+  // reflect the live admin-configured values. Without this, the user
+  // would see fallback values ($101/25/$1.80) until they manually
+  // clicked "Recalculate".
+  useEffect(() => {
+    if (quoteResult && distance != null) {
+      const recomputed = calculateHomeQuote(distance, livePricingConfig);
+      // Only update state if the price actually changed — avoids
+      // an infinite render loop (setQuoteResult → re-render → effect
+      // fires again with the same values).
+      if (recomputed.estimatedPrice !== quoteResult.estimatedPrice) {
+        setQuoteResult(recomputed);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [livePricingConfig]);
 
   // Dealer lead submission
   const submitDealerLead = useCreate(`${import.meta.env.VITE_API_URL}/api/dealerLeads/public`, {
