@@ -309,7 +309,7 @@ export default function NotificationBell({ className, userType }: NotificationBe
     if (disputeId && notification.type.includes('DISPUTE')) {
       // Dispute notifications - only admin has access
       if (effectiveUserType === 'admin') {
-        return `/admin-dispute-details?id=${disputeId}`
+        return `/admin-dispute-details?disputeId=${disputeId}`
       }
       return null // Dealers don't have dispute detail access
     }

@@ -3,6 +3,7 @@ import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery';
 import type {
   AdminDisputesResponse,
   AdminDisputesQueryParams,
+  DisputeListItem,
   OpenDisputeRequest,
   OpenDisputeResponse,
   AddDisputeNoteRequest,
@@ -11,6 +12,8 @@ import type {
   ChangeDisputeStatusResponse,
   ResolveDisputeRequest,
   ResolveDisputeResponse,
+  RejectDisputeRequest,
+  RejectDisputeResponse,
   CloseDisputeRequest,
   CloseDisputeResponse,
   DisputeLegalHoldRequest,
@@ -48,6 +51,20 @@ export function useAdminDisputes(params: AdminDisputesQueryParams = {}) {
     noFilter: true,
     staleTime: 30 * 1000, // 30 seconds
     queryKey: ['admin-disputes', paramsKey],
+  });
+}
+
+/**
+ * Hook for fetching a single dispute by ID (used by the detail page).
+ * Uses the standard GET /api/disputeCases/:id endpoint.
+ */
+export function useDisputeDetail(disputeId: string | undefined) {
+  return useDataQuery<DisputeListItem>({
+    apiEndPoint: `${API_BASE_URL}/api/disputeCases/${disputeId}`,
+    enabled: !!disputeId,
+    noFilter: true,
+    staleTime: 30 * 1000,
+    queryKey: ['admin-dispute-detail', disputeId],
   });
 }
 
@@ -116,6 +133,13 @@ export function getDisputeStatusColor(status: DisputeStatus): {
         text: 'text-emerald-700 dark:text-emerald-300',
         border: 'border-emerald-200 dark:border-emerald-800',
       };
+    case 'REJECTED':
+      return {
+        label: 'Rejected',
+        bg: 'bg-red-50 dark:bg-red-900/20',
+        text: 'text-red-700 dark:text-red-300',
+        border: 'border-red-200 dark:border-red-800',
+      };
     case 'CLOSED':
       return {
         label: 'Closed',
@@ -178,7 +202,8 @@ export function useChangeDisputeStatus(disputeId: string) {
 }
 
 /**
- * Hook for resolving a dispute
+ * Hook for resolving a dispute — approveRefund is required.
+ * approveRefund=true issues a Stripe refund (full or partial via refundAmount).
  */
 export function useResolveDispute(disputeId: string) {
   return useDataMutation<ResolveDisputeResponse, ResolveDisputeRequest>({
@@ -187,6 +212,23 @@ export function useResolveDispute(disputeId: string) {
     successMessage: 'Dispute resolved successfully',
     invalidateQueryKey: [
       ['admin-disputes'],
+      ['admin-dispute-detail', disputeId],
+    ],
+  });
+}
+
+/**
+ * Hook for rejecting a dispute — rejectionReason is required.
+ * Sets status to REJECTED (distinct from RESOLVED which means refund issued).
+ */
+export function useRejectDispute(disputeId: string) {
+  return useDataMutation<RejectDisputeResponse, RejectDisputeRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/disputeCases/${disputeId}/admin-reject`,
+    method: 'POST',
+    successMessage: 'Dispute rejected successfully',
+    invalidateQueryKey: [
+      ['admin-disputes'],
+      ['admin-dispute-detail', disputeId],
     ],
   });
 }
@@ -229,6 +271,7 @@ export function useDisputeActions(disputeId: string, options?: {
   const addNote = useAddDisputeNote(disputeId);
   const changeStatus = useChangeDisputeStatus(disputeId);
   const resolve = useResolveDispute(disputeId);
+  const reject = useRejectDispute(disputeId);
   const close = useCloseDispute(disputeId);
   const legalHold = useDisputeLegalHold(disputeId);
 
@@ -257,6 +300,14 @@ export function useDisputeActions(disputeId: string, options?: {
       error: resolve.error,
       reset: resolve.reset,
     },
+    reject: {
+      mutate: reject.mutate,
+      mutateAsync: reject.mutateAsync,
+      isPending: reject.isPending,
+      isError: reject.isError,
+      error: reject.error,
+      reset: reject.reset,
+    },
     close: {
       mutate: close.mutate,
       mutateAsync: close.mutateAsync,
@@ -278,6 +329,7 @@ export function useDisputeActions(disputeId: string, options?: {
       addNote.isPending ||
       changeStatus.isPending ||
       resolve.isPending ||
+      reject.isPending ||
       close.isPending ||
       legalHold.isPending,
   };

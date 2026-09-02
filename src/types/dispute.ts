@@ -1,13 +1,19 @@
 // Types for Admin Dispute API responses
 
-export type DisputeStatus = 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'CLOSED';
+export type DisputeStatus = 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'REJECTED' | 'CLOSED';
 
 // Dispute note
 export interface DisputeNote {
   id: string;
   note: string;
   createdAt: string;
-  createdByUserId: string;
+  authorUserId: string | null;
+  author?: {
+    id: string;
+    username: string;
+    email: string;
+    fullName: string | null;
+  } | null;
 }
 
 // Delivery summary within dispute
@@ -23,6 +29,14 @@ export interface DisputeDelivery {
   updatedAt: string;
 }
 
+// Admin user who resolved the dispute (if any)
+export interface DisputeResolvedBy {
+  id: string;
+  username: string;
+  email: string;
+  fullName: string | null;
+}
+
 // Dispute list item
 export interface DisputeListItem {
   id: string;
@@ -33,6 +47,11 @@ export interface DisputeListItem {
   openedAt: string | null;
   resolvedAt: string | null;
   closedAt: string | null;
+  // New audit/refund fields (nullable — only set when relevant)
+  rejectionReason?: string | null;
+  stripeRefundId?: string | null;
+  resolvedById?: string | null;
+  resolvedBy?: DisputeResolvedBy | null;
   createdAt: string;
   updatedAt: string;
   delivery: DisputeDelivery;
@@ -56,7 +75,6 @@ export type AdminDisputesResponse = DisputeListItem[];
 export interface OpenDisputeRequest {
   deliveryId: string;
   reason: string;
-  actorUserId: string;
 }
 
 export interface OpenDisputeResponse {
@@ -73,14 +91,13 @@ export interface OpenDisputeResponse {
 // Add Note
 export interface AddDisputeNoteRequest {
   note: string;
-  actorUserId: string;
 }
 
 export interface AddDisputeNoteResponse {
   id: string;
   note: string;
   createdAt: string;
-  createdByUserId: string;
+  authorUserId: string | null;
   disputeId: string;
 }
 
@@ -88,7 +105,6 @@ export interface AddDisputeNoteResponse {
 export interface ChangeDisputeStatusRequest {
   status: DisputeStatus;
   note?: string;
-  actorUserId: string;
 }
 
 export interface ChangeDisputeStatusResponse {
@@ -97,23 +113,40 @@ export interface ChangeDisputeStatusResponse {
   updatedAt: string;
 }
 
-// Resolve Dispute
+// Resolve Dispute — approveRefund is required.
+// approveRefund=true  → issue a refund (full or partial via refundAmount).
+// approveRefund=false → resolve without refund (driver-favor).
 export interface ResolveDisputeRequest {
-  resolutionNote: string;
-  actorUserId: string;
+  approveRefund: boolean;
+  refundAmount?: number | null;
+  resolutionNote?: string;
 }
 
 export interface ResolveDisputeResponse {
   id: string;
   status: DisputeStatus;
   resolvedAt: string;
+  stripeRefundId?: string | null;
+  updatedAt: string;
+}
+
+// Reject Dispute — rejectionReason is required.
+export interface RejectDisputeRequest {
+  rejectionReason: string;
+  note?: string;
+}
+
+export interface RejectDisputeResponse {
+  id: string;
+  status: DisputeStatus;
+  rejectionReason: string;
+  resolvedAt: string;
   updatedAt: string;
 }
 
 // Close Dispute
 export interface CloseDisputeRequest {
-  closingNote: string;
-  actorUserId: string;
+  closingNote?: string;
 }
 
 export interface CloseDisputeResponse {
@@ -127,7 +160,6 @@ export interface CloseDisputeResponse {
 export interface DisputeLegalHoldRequest {
   legalHold: boolean;
   note?: string;
-  actorUserId: string;
 }
 
 export interface DisputeLegalHoldResponse {

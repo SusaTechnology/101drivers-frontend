@@ -172,7 +172,7 @@ export function RecentActivity({ data, isLoading }: RecentActivityProps) {
                   </Badge>
                 }
                 linkTo="/admin-dispute-details"
-                linkParams={{ id: dispute.id }}
+                linkParams={{ disputeId: dispute.id }}
                 time={formatDashboardDateTime(dispute.createdAt)}
               />
             ))}

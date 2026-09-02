@@ -36,7 +36,6 @@ import { getUser } from '@/lib/tanstack/dataQuery';
 import {
   useAdminDisputes,
   useDisputeActions,
-  useOpenDispute,
   formatRelativeTime,
   getDisputeStatusColor,
 } from '@/hooks/useAdminDisputes';
@@ -65,6 +64,7 @@ import {
   Ban,
   Check,
   Truck,
+  DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -75,6 +75,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'OPEN', label: 'Open' },
   { value: 'UNDER_REVIEW', label: 'Under Review' },
   { value: 'RESOLVED', label: 'Resolved' },
+  { value: 'REJECTED', label: 'Rejected' },
   { value: 'CLOSED', label: 'Closed' },
 ];
 
@@ -83,6 +84,7 @@ const STATUS_CONFIG: Record<DisputeStatus, { label: string; color: string; bgCol
   OPEN: { label: 'Open', color: 'text-rose-600', bgColor: 'bg-rose-50 dark:bg-rose-900/20', borderColor: 'border-rose-200 dark:border-rose-800' },
   UNDER_REVIEW: { label: 'In Review', color: 'text-amber-600', bgColor: 'bg-amber-50 dark:bg-amber-900/20', borderColor: 'border-amber-200 dark:border-amber-800' },
   RESOLVED: { label: 'Resolved', color: 'text-emerald-600', bgColor: 'bg-emerald-50 dark:bg-emerald-900/20', borderColor: 'border-emerald-200 dark:border-emerald-800' },
+  REJECTED: { label: 'Rejected', color: 'text-red-600', bgColor: 'bg-red-50 dark:bg-red-900/20', borderColor: 'border-red-200 dark:border-red-800' },
   CLOSED: { label: 'Closed', color: 'text-slate-500', bgColor: 'bg-slate-100 dark:bg-slate-800', borderColor: 'border-slate-300 dark:border-slate-700' },
 };
 
@@ -173,9 +175,6 @@ export default function AdminDisputesPage() {
   // Fetch data
   const { data: disputes, isLoading, isFetching, isError, error, refetch } = useAdminDisputes(queryParams);
 
-  // Open dispute mutation
-  const openDisputeMutation = useOpenDispute();
-
   // Dispute actions mutation (for selected dispute)
   const disputeActions = useDisputeActions(selectedDispute?.id || '');
 
@@ -203,11 +202,11 @@ export default function AdminDisputesPage() {
   // Calculate metrics from data
   const metrics = useMemo(() => {
     if (!disputes) {
-      return { OPEN: 0, UNDER_REVIEW: 0, RESOLVED: 0, CLOSED: 0, total: 0, legalHold: 0 };
+      return { OPEN: 0, UNDER_REVIEW: 0, RESOLVED: 0, REJECTED: 0, CLOSED: 0, total: 0, legalHold: 0 };
     }
 
     const counts: Record<DisputeStatus, number> = {
-      OPEN: 0, UNDER_REVIEW: 0, RESOLVED: 0, CLOSED: 0,
+      OPEN: 0, UNDER_REVIEW: 0, RESOLVED: 0, REJECTED: 0, CLOSED: 0,
     };
 
     let legalHoldCount = 0;
@@ -282,7 +281,7 @@ export default function AdminDisputesPage() {
     switch (actionDialogType) {
       case 'note':
         disputeActions.addNote.mutate(
-          { note: actionNote, actorUserId },
+          { note: actionNote },
           {
             onSuccess: () => {
               setActionDialogOpen(false);
@@ -297,7 +296,7 @@ export default function AdminDisputesPage() {
           return;
         }
         disputeActions.changeStatus.mutate(
-          { status: newStatus as DisputeStatus, note: actionNote || undefined, actorUserId },
+          { status: newStatus as DisputeStatus, note: actionNote || undefined },
           {
             onSuccess: () => {
               setActionDialogOpen(false);
@@ -307,8 +306,10 @@ export default function AdminDisputesPage() {
         );
         break;
       case 'resolve':
+        // List page resolves WITHOUT a refund. To issue a refund, open
+        // the dispute detail page and use the Resolve dialog there.
         disputeActions.resolve.mutate(
-          { resolutionNote: actionNote, actorUserId },
+          { approveRefund: false, resolutionNote: actionNote || undefined },
           {
             onSuccess: () => {
               setActionDialogOpen(false);
@@ -319,7 +320,7 @@ export default function AdminDisputesPage() {
         break;
       case 'close':
         disputeActions.close.mutate(
-          { closingNote: actionNote, actorUserId },
+          { closingNote: actionNote || undefined },
           {
             onSuccess: () => {
               setActionDialogOpen(false);
@@ -330,7 +331,7 @@ export default function AdminDisputesPage() {
         break;
       case 'legalHold':
         disputeActions.legalHold.mutate(
-          { legalHold: !selectedDispute.legalHold, note: actionNote || undefined, actorUserId },
+          { legalHold: !selectedDispute.legalHold, note: actionNote || undefined },
           {
             onSuccess: () => {
               setActionDialogOpen(false);
@@ -427,6 +428,14 @@ export default function AdminDisputesPage() {
                 <Eye className="w-3.5 h-3.5 mr-1" />
                 View
               </Button>
+              <Link
+                to="/admin-dispute-details"
+                search={{ disputeId: dispute.id }}
+                className="inline-flex items-center gap-1 h-8 px-3 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                Details
+              </Link>
             </div>
           </div>
         </CardContent>
@@ -823,11 +832,21 @@ export default function AdminDisputesPage() {
                   <RefreshCw className="w-3.5 h-3.5 mr-1" />
                   Change Status
                 </Button>
-                {selectedDispute.status !== 'RESOLVED' && (
+                {(selectedDispute.status === 'OPEN' || selectedDispute.status === 'UNDER_REVIEW') && (
                   <Button size="sm" variant="outline" className="rounded-xl" onClick={() => openActionDialog('resolve')}>
                     <CheckCircle className="w-3.5 h-3.5 mr-1" />
-                    Resolve
+                    Resolve (no refund)
                   </Button>
+                )}
+                {(selectedDispute.status === 'OPEN' || selectedDispute.status === 'UNDER_REVIEW') && (
+                  <Link
+                    to="/admin-dispute-details"
+                    search={{ disputeId: selectedDispute.id }}
+                    className="inline-flex items-center gap-1 h-8 px-3 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <DollarSign className="w-3.5 h-3.5" />
+                    Resolve with Refund
+                  </Link>
                 )}
                 {selectedDispute.status !== 'CLOSED' && (
                   <Button size="sm" variant="outline" className="rounded-xl" onClick={() => openActionDialog('close')}>
