@@ -481,7 +481,24 @@ export class ReferralTriggerService {
       select: { completedPaidDeliveries: true },
     });
 
-    // ── Step 3: Fire the $50-on-Nth-delivery bonus when the threshold is crossed ──
+    // ── Step 3: Fire the $50 bonus to the REFERRER when the referred
+    //    driver completes their Nth paid delivery ──
+    //
+    // SPEC: "Plus fifty dollars when a recruited driver completes their
+    // fifth successful delivery and that payment clears."
+    //
+    // The $50 goes to the REFERRER (not the referred driver). How it's
+    // paid depends on the referrer's type:
+    //   - Driver referrer → DriverPayout (Stripe Connect)
+    //   - Business customer referrer → ReferralCredit (applied to next invoice)
+    //   - Personal customer referrer → can't refer drivers (blocked at signup)
+    //
+    // OLD CODE (commented out — paid the $50 to the WRONG person):
+    // await this.payoutProvider.createReferredRewardPayout({
+    //   referredDriverId: referral.referredDriverId,
+    //   amount: bonusAmountDollars,
+    //   referralId: referral.id,
+    // });
     if (
       referral.referredGetsReward &&
       incremented.completedPaidDeliveries === config.perDeliveryBonusTriggerCount &&
@@ -492,23 +509,45 @@ export class ReferralTriggerService {
       const bonusAmountDollars = bonusAmountCents / 100;
 
       if (bonusAmountDollars > 0) {
-        await this.payoutProvider.createReferredRewardPayout({
-          referredDriverId: referral.referredDriverId,
-          amount: bonusAmountDollars,
-          referralId: referral.id,
-        });
+        // Pay the $50 to the REFERRER, not the referred driver
+        if (referral.referralType === ReferralTypeDto.DRIVER && referral.referrerId) {
+          // Driver referrer → DriverPayout (Stripe Connect)
+          await this.createDriverReferrerPerDeliveryPayout({
+            referrerDriverId: referral.referrerId,
+            deliveryId,
+            amountCents: bonusAmountCents,
+            referralId: referral.id,
+          });
+          this.logger.log(
+            `Referral ${referral.id} $50 bonus fired on delivery #${incremented.completedPaidDeliveries} — DRIVER referrer ${referral.referrerId} earns $${bonusAmountDollars} via DriverPayout`
+          );
+        } else if (referral.referralType === ReferralTypeDto.CUSTOMER && referral.referrerUserId) {
+          // Business customer referrer → ReferralCredit (applied to next invoice)
+          const referrerCustomer = await this.prisma.customer.findUnique({
+            where: { userId: referral.referrerUserId },
+            select: { id: true },
+          });
+          if (referrerCustomer) {
+            await this.createReferralCredit({
+              referralId: referral.id,
+              customerId: referrerCustomer.id,
+              deliveryId,
+              amountCents: bonusAmountCents,
+              reason: `$50 bonus — referred driver completed ${config.perDeliveryBonusTriggerCount} paid deliveries`,
+            });
+            this.logger.log(
+              `Referral ${referral.id} $50 bonus fired on delivery #${incremented.completedPaidDeliveries} — CUSTOMER referrer ${referrerCustomer.id} earns ${bonusAmountCents}c credit`
+            );
+          }
+        }
       }
 
-      // Mark the referral as REWARD_PAID — prevents the per-delivery
-      // bonus from firing again on subsequent deliveries.
+      // Mark the referral as REWARD_PAID — prevents the $50 bonus
+      // from firing again on subsequent deliveries.
       await this.prisma.referral.update({
         where: { id: referral.id },
-        data: { status: "REWARD_PAID" },
+        data: { status: "REWARD_PAID", referredRewardPaidAt: new Date() },
       });
-
-      this.logger.log(
-        `Referral ${referral.id} PER_DELIVERY bonus fired on delivery #${incremented.completedPaidDeliveries} (deliveryId=${deliveryId}) — referred driver ${referral.referredDriverId} earns $${bonusAmountDollars}`
-      );
     }
   }
 

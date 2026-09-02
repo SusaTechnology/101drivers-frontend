@@ -134,8 +134,8 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
   }, [shareUrl]);
 
   // ── Stats display ─────────────────────────────────────────────────
-  // For DRIVER (TIERED model): totalEarned, successfulReferrals
-  // For CUSTOMER (PER_DELIVERY model): totalCreditsEarnedCents, successfulReferrals
+  // V2: For DRIVER referrer: totalEarned ($ from $50 bonuses), successfulReferrals
+  // For CUSTOMER referrer: totalCreditsEarnedCents, successfulReferrals
   const statsBlocks: Array<{ label: string; value: string }> = [];
   if (referrerType === "DRIVER" && statsData) {
     statsBlocks.push({
@@ -163,17 +163,21 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
     if (!configData) return "Loading referral program info…";
     if (!isActive) return "The referral program is currently paused.";
     if (referrerType === "DRIVER") {
-      // TIERED model — legacy driver referral wording
-      const amount = configData.referrerRewardAmount ?? 0;
-      const threshold = configData.referralThreshold ?? 20;
-      const perDelivery = configData.referredRewardAmount ?? 0;
-      return `Earn $${amount} for every ${threshold} drivers you refer who complete the program. They earn $${perDelivery} when they finish.`;
+      // V2 spec: Drivers referring drivers earn $50 when the referred
+      // driver completes their 5th paid delivery. No per-delivery payout
+      // for referred drivers — only the one-shot $50 bonus.
+      const bonusAmount = configData.referredRewardAmount ?? 50;
+      const triggerCount = configData.requiredDeliveries ?? 5;
+      return `Earn $${bonusAmount} when a driver you refer completes ${triggerCount} paid deliveries. Refer as many as you want — codes never expire.`;
     }
-    // CUSTOMER — PER_DELIVERY model wording
-    const perDeliveryCents = configData.perDeliveryReferrerAmountCents ?? 500;
+    // CUSTOMER — V2 spec: per-delivery payouts vary by customer type.
+    // Personal: $5/delivery. Business: $10/delivery.
+    // Plus $50 when a referred driver completes their 5th delivery.
+    const personalCents = configData.perDeliveryPersonalReferrerAmountCents ?? 500;
+    const businessCents = configData.perDeliveryBusinessReferrerAmountCents ?? 1000;
     const bonusCents = configData.perDeliveryReferredBonusCents ?? 5000;
     const triggerCount = configData.perDeliveryBonusTriggerCount ?? 5;
-    return `Earn $${(perDeliveryCents / 100).toFixed(2)} for every paid delivery your referral completes. They get a $${(bonusCents / 100).toFixed(2)} bonus on their ${triggerCount}th paid delivery.`;
+    return `Earn $${(personalCents / 100).toFixed(2)} per paid delivery from personal customers you refer, $${(businessCents / 100).toFixed(2)} per paid delivery from business customers, plus $${(bonusCents / 100).toFixed(2)} when a driver you refer completes their ${triggerCount}th paid delivery.`;
   }, [configData, isActive, referrerType]);
 
   // ── Don't render if the program config isn't loaded yet ──────────

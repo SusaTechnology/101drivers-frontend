@@ -140,19 +140,31 @@ export default function DriverWalletPage() {
   //   - referredGetsReward: does the referred driver also get paid?
   //   - referredRewardAmount: one-shot $ to the referred driver
   //
-  // Falls back to the documented policy (150/30/30/20/true/150) while
-  // the request is in flight so first paint is correct.
+  // V2 spec defaults: $50 bonus per referred driver on 5th paid delivery.
+  // OLD defaults (commented out — TIERED model, can revert if needed):
+  // const DEFAULT_REFERRAL_CONFIG = {
+  //   isActive: true,
+  //   rewardTrigger: 'ON_DELIVERIES_COMPLETED' as const,
+  //   requiredDeliveries: 30,
+  //   timeLimitMode: 'CALENDAR_RANGE' as const,
+  //   windowStartDate: null as string | null,
+  //   windowEndDate: null as string | null,
+  //   referrerRewardAmount: 150,
+  //   referralThreshold: 20,
+  //   referredGetsReward: true,
+  //   referredRewardAmount: 150 as number | null,
+  // }
   const DEFAULT_REFERRAL_CONFIG = {
     isActive: true,
     rewardTrigger: 'ON_DELIVERIES_COMPLETED' as const,
-    requiredDeliveries: 30,
-    timeLimitMode: 'CALENDAR_RANGE' as const,
+    requiredDeliveries: 5, // V2: 5th paid delivery triggers the $50 bonus
+    timeLimitMode: 'FOREVER' as const, // V2: codes never expire
     windowStartDate: null as string | null,
     windowEndDate: null as string | null,
-    referrerRewardAmount: 150,
-    referralThreshold: 20,
-    referredGetsReward: true,
-    referredRewardAmount: 150 as number | null,
+    referrerRewardAmount: 50, // V2: $50 bonus per referred driver
+    referralThreshold: 1, // V2: not tiered — 1 referral = 1 bonus
+    referredGetsReward: false, // V2: the REFERRED driver doesn't get paid — the REFERRER does
+    referredRewardAmount: 50 as number | null, // V2: $50 to the referrer
   }
   const { data: referralConfigData } = useDataQuery<any>({
     apiEndPoint: `${API_URL}/api/referrals/program-config`,
