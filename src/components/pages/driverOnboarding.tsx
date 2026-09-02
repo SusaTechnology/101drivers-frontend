@@ -1164,6 +1164,7 @@ export default function DriverOnboardingPage() {
                     <ReferralCodeInput
                       onChange={setReferralCode}
                       disabled={isPending}
+                      allowedReferrerTypes={["DRIVER", "BUSINESS"]}
                     />
                   </form>
                 </CardContent>

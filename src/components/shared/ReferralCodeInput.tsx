@@ -35,20 +35,37 @@ type ResolveResponse = {
   found: boolean;
   referrerName: string | null;
   referrerType: "DRIVER" | "CUSTOMER" | null;
+  referrerSubtype: "PERSONAL" | "BUSINESS" | null;
   programActive: boolean;
 };
 
-type ValidationState = "empty" | "validating" | "resolved" | "invalid" | "paused";
+type ValidationState = "empty" | "validating" | "resolved" | "invalid" | "paused" | "not-allowed";
+
+/**
+ * Which referrer types are allowed to refer the user on THIS form.
+ * - Driver signup: ["DRIVER", "BUSINESS"] (personal customers can't refer drivers)
+ * - Individual (personal) signup: ["DRIVER", "BUSINESS", "PERSONAL"] (all can refer personal)
+ * - Dealer (business) signup: [] (nobody can refer business customers — field still shows
+ *   but any code will show "business customers can't be referred")
+ */
+type AllowedReferrerType = "DRIVER" | "BUSINESS" | "PERSONAL";
 
 type Props = {
-  /** Called with the validated, uppercased code when resolved, or null when empty/invalid/paused. */
+  /** Called with the validated, uppercased code when resolved, or null when empty/invalid/paused/not-allowed. */
   onChange: (code: string | null) => void;
-  /** Optional controlled initial value (used when the parent already has a code in state, e.g. from a draft). */
+  /** Optional controlled initial value. */
   initialValue?: string;
   /** Disable the input (e.g. when the parent form is submitting). */
   disabled?: boolean;
   /** Optional class to override the outer wrapper. */
   className?: string;
+  /**
+   * Which referrer types are allowed on this form.
+   * If the resolved code belongs to a referrer type NOT in this list,
+   * the input shows a red X with a specific message and onChange(null) is called.
+   * Default: all types allowed (["DRIVER", "BUSINESS", "PERSONAL"]).
+   */
+  allowedReferrerTypes?: AllowedReferrerType[];
 };
 
 export function ReferralCodeInput({
@@ -56,6 +73,7 @@ export function ReferralCodeInput({
   initialValue = "",
   disabled = false,
   className,
+  allowedReferrerTypes = ["DRIVER", "BUSINESS", "PERSONAL"],
 }: Props) {
   // Local state — the raw input as the user types.
   const [inputValue, setInputValue] = useState<string>(initialValue);
@@ -99,19 +117,38 @@ export function ReferralCodeInput({
   if (!inputValue.trim()) {
     state = "empty";
   } else if (inputValue.trim().toUpperCase() !== debouncedCode) {
-    // User is still typing — show validating while we wait for the debounce.
     state = "validating";
   } else if (isFetching) {
     state = "validating";
   } else if (isError) {
-    state = "invalid"; // network error — treat as invalid (user can retry by retyping)
+    state = "invalid";
   } else if (data) {
     if (!data.found) {
       state = "invalid";
     } else if (!data.programActive) {
       state = "paused";
     } else {
-      state = "resolved";
+      // ── ROLE MATRIX CHECK ──────────────────────────────────────
+      // The code is valid + program is active. But is this referrer
+      // ALLOWED to refer the type of user signing up on THIS form?
+      //
+      // Map the referrer's type+subtype to an AllowedReferrerType:
+      //   referrerType=DRIVER → "DRIVER"
+      //   referrerType=CUSTOMER + subtype=BUSINESS → "BUSINESS"
+      //   referrerType=CUSTOMER + subtype=PERSONAL → "PERSONAL"
+      const referrerAllowedType: AllowedReferrerType =
+        data.referrerType === "DRIVER"
+          ? "DRIVER"
+          : data.referrerSubtype === "BUSINESS"
+            ? "BUSINESS"
+            : "PERSONAL";
+
+      if (!allowedReferrerTypes.includes(referrerAllowedType)) {
+        // This referrer type is NOT allowed on this form.
+        state = "not-allowed";
+      } else {
+        state = "resolved";
+      }
     }
   }
 
@@ -128,18 +165,18 @@ export function ReferralCodeInput({
   // ── Visual state ─────────────────────────────────────────────────
   const wrapperBorder = cn(
     "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-    state === "invalid" && "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20",
+    (state === "invalid" || state === "not-allowed") && "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20",
     state === "resolved" && "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/10",
     state === "paused" && "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/10",
-    state !== "invalid" && state !== "resolved" && state !== "paused" && "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30",
+    state !== "invalid" && state !== "not-allowed" && state !== "resolved" && state !== "paused" && "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30",
   );
 
   const inputBorder = cn(
     "w-full h-14 pl-12 pr-12 rounded-2xl border dark:bg-slate-800/40 input-focus-ring text-sm transition-colors font-mono tracking-wider uppercase",
-    state === "invalid" && "border-red-400 dark:border-red-600",
+    (state === "invalid" || state === "not-allowed") && "border-red-400 dark:border-red-600",
     state === "resolved" && "border-emerald-400 dark:border-emerald-700",
     state === "paused" && "border-amber-400 dark:border-amber-700",
-    state !== "invalid" && state !== "resolved" && state !== "paused" && "border-slate-200 dark:border-slate-700",
+    state !== "invalid" && state !== "not-allowed" && state !== "resolved" && state !== "paused" && "border-slate-200 dark:border-slate-700",
   );
 
   // Right-side status icon
@@ -150,13 +187,13 @@ export function ReferralCodeInput({
     if (state === "resolved") {
       return <CheckCircle2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-500" />;
     }
-    if (state === "invalid") {
+    if (state === "invalid" || state === "not-allowed") {
       return <X className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-red-500" />;
     }
     if (state === "paused") {
       return <AlertTriangle className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-500" />;
     }
-    return null; // empty
+    return null;
   };
 
   // Helper text below the input
@@ -177,7 +214,6 @@ export function ReferralCodeInput({
       );
     }
     if (state === "resolved" && !data?.referrerName) {
-      // Edge case: found=true but referrerName is null (shouldn't happen but be defensive)
       return (
         <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium flex items-center gap-1.5">
           <Gift className="w-3.5 h-3.5" />
@@ -189,6 +225,26 @@ export function ReferralCodeInput({
       return (
         <p className="text-xs text-red-500 dark:text-red-400 font-medium">
           We couldn't find that referral code. Please double-check it.
+        </p>
+      );
+    }
+    if (state === "not-allowed") {
+      // Generate a specific message based on the referrer type + what form this is
+      const referrerDesc =
+        data?.referrerSubtype === "PERSONAL"
+          ? "Personal customers"
+          : data?.referrerSubtype === "BUSINESS"
+            ? "Business customers"
+            : data?.referrerType === "DRIVER"
+              ? "Drivers"
+              : "This referrer";
+      const targetDesc = allowedReferrerTypes.length === 0
+        ? "Business customers can't be referred — they sign up directly."
+        : `${referrerDesc} can't invite ${allowedReferrerTypes.includes("DRIVER") ? "drivers" : "this type of account"}.`;
+      return (
+        <p className="text-xs text-red-500 dark:text-red-400 font-medium flex items-center gap-1.5">
+          <X className="w-3.5 h-3.5" />
+          {targetDesc} Clear the code or use a different one.
         </p>
       );
     }

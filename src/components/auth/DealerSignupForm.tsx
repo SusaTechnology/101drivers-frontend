@@ -1604,6 +1604,7 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
                     <ReferralCodeInput
                       onChange={setReferralCode}
                       disabled={isPending}
+                      allowedReferrerTypes={[]}
                     />
 
                     <Button

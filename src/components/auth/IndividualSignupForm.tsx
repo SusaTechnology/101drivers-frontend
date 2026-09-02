@@ -664,6 +664,7 @@ export function IndividualSignupForm() {
           <ReferralCodeInput
             onChange={setReferralCode}
             disabled={isPending}
+            allowedReferrerTypes={["DRIVER", "BUSINESS", "PERSONAL"]}
           />
 
           {/* ── Submit button ───────────────────────────────────────────── */}
