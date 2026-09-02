@@ -24,7 +24,7 @@
  *     customer doesn't have one yet)
  */
 import { useState, useCallback, useMemo } from "react";
-import { Gift, Copy, Share2, X, Check, ExternalLink } from "lucide-react";
+import { Gift, Copy, Share2, X, Check, ExternalLink, Settings2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { useDataQuery } from "@/lib/tanstack/dataQuery";
 import { cn } from "@/lib/utils";
+import { CustomizeCodeDialog } from "./CustomizeCodeDialog";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -78,24 +79,29 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
   const configEndpoint = `${API_URL}/api/referrals/program-config`;
 
   // ── Fetches (auth handled automatically by useDataQuery) ──────────
-  const { data: codeData } = useDataQuery<{ referralCode: string } | null>({
+  const codeQuery = useDataQuery<{ referralCode: string; referralCodeLocked?: boolean } | null>({
     apiEndPoint: codeEndpoint,
     noFilter: true,
   });
-  const { data: statsData } = useDataQuery<any>({
+  const statsQuery = useDataQuery<any>({
     apiEndPoint: statsEndpoint,
     noFilter: true,
   });
-  const { data: configData } = useDataQuery<any>({
+  const configQuery = useDataQuery<any>({
     apiEndPoint: configEndpoint,
     noFilter: true,
   });
 
+  const codeData = codeQuery.data;
+  const statsData = statsQuery.data;
+  const configData = configQuery.data;
+
   const referralCode = codeData?.referralCode ?? "";
   const isActive = configData?.isActive ?? false;
 
-  // ── Share dialog state ────────────────────────────────────────────
+  // ── Dialog state ────────────────────────────────────────────────
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [customizeDialogOpen, setCustomizeDialogOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -254,6 +260,21 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
                   </>
                 )}
               </Button>
+              {/* Customize button — opens the CustomizeCodeDialog.
+                  Only shown if the code is NOT yet locked (referralCodeLocked=false).
+                  Once locked, the button is hidden — the code can't be changed again. */}
+              {codeData?.referralCodeLocked === false && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 px-3 rounded-2xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition inline-flex items-center gap-1.5"
+                  onClick={() => setCustomizeDialogOpen(true)}
+                  title="Customize your code"
+                >
+                  <Settings2 className="w-4 h-4" />
+                  Customize
+                </Button>
+              )}
             </div>
           )}
 
@@ -381,6 +402,19 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Customize Code Dialog */}
+      <CustomizeCodeDialog
+        open={customizeDialogOpen}
+        onOpenChange={setCustomizeDialogOpen}
+        currentCode={referralCode}
+        referrerType={referrerType}
+        onSuccess={() => {
+          // Refetch the code + stats so the card shows the new code
+          codeQuery.refetch();
+          statsQuery.refetch();
+        }}
+      />
     </>
   );
 }

@@ -76,22 +76,32 @@ export function isReferralCodeBlocklisted(code: string): boolean {
 }
 
 /**
- * Validate that a user-provided custom referral code:
- *   - Matches the 8-char alphanumeric regex (no 0/1/I/O)
- *   - Is not in the blocklist
+ * Validate a user-provided CUSTOM referral code.
  *
- * Returns `{ ok: true }` or `{ ok: false, reason }`. Reason is a short
- * machine-readable string (not user-facing copy) — callers should map
- * to their own UI strings.
+ * Custom codes are more permissive than auto-generated codes:
+ *   - 4-16 characters (auto-generated are always 8)
+ *   - Full alphabet A-Z allowed (auto-generated exclude I and O)
+ *   - Case-insensitive (auto-uppercased before storage)
+ *   - Digits 2-9 only (no 0 or 1 — visual confusion with O and I)
+ *   - Must not be in the blocklist
+ *
+ * This lets users pick readable codes like "JOESGARAGE" or "ACME2026".
+ *
+ * Returns `{ ok: true }` or `{ ok: false, reason }`.
  */
 export function validateCustomReferralCode(code: string): { ok: true } | { ok: false; reason: string } {
   if (!code || typeof code !== "string") {
     return { ok: false, reason: "EMPTY" };
   }
-  if (!REFERRAL_CODE_REGEX.test(code)) {
+  const trimmed = code.trim();
+  if (trimmed.length < 4 || trimmed.length > 16) {
     return { ok: false, reason: "INVALID_FORMAT" };
   }
-  if (isReferralCodeBlocklisted(code)) {
+  // Allow letters A-Z (case-insensitive) + digits 2-9. No 0 or 1.
+  if (!/^[A-Za-z2-9]{4,16}$/.test(trimmed)) {
+    return { ok: false, reason: "INVALID_FORMAT" };
+  }
+  if (isReferralCodeBlocklisted(trimmed)) {
     return { ok: false, reason: "BLOCKLISTED" };
   }
   return { ok: true };

@@ -1693,7 +1693,7 @@ export class ReferralService {
         validation.reason === "EMPTY"
           ? "Referral code is required."
           : validation.reason === "INVALID_FORMAT"
-            ? "Referral code must be 8 characters, using only letters A–Z and digits 2–9 (no 0, 1, I, or O)."
+            ? "Referral code must be 4-16 characters, using only letters and digits 2-9 (no 0 or 1)."
             : validation.reason === "BLOCKLISTED"
               ? "This referral code is not available. Please choose another."
               : "Invalid referral code.";
@@ -1754,7 +1754,7 @@ export class ReferralService {
         validation.reason === "EMPTY"
           ? "Referral code is required."
           : validation.reason === "INVALID_FORMAT"
-            ? "Referral code must be 8 characters, using only letters A–Z and digits 2–9 (no 0, 1, I, or O)."
+            ? "Referral code must be 4-16 characters, using only letters and digits 2-9 (no 0 or 1)."
             : validation.reason === "BLOCKLISTED"
               ? "This referral code is not available. Please choose another."
               : "Invalid referral code.";

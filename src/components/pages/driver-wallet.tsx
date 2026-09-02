@@ -31,8 +31,10 @@ import {
   Banknote,
   PartyPopper,
   CheckCircle2,
+  Settings2,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import { CustomizeCodeDialog } from '@/components/referral/CustomizeCodeDialog'
 import { Button } from '@/components/ui/button'
 import {
   useDataQuery,
@@ -88,6 +90,7 @@ export default function DriverWalletPage() {
   const [routingNumber, setRoutingNumber] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
   const [referralDialogOpen, setReferralDialogOpen] = useState(false)
+  const [customizeDialogOpen, setCustomizeDialogOpen] = useState(false)
   const [countdown, setCountdown] = useState(20)
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { theme, setTheme } = useTheme()
@@ -775,6 +778,18 @@ export default function DriverWalletPage() {
                   <Copy className="w-4 h-4" />
                   Copy Code
                 </Button>
+                {/* Customize button — only shown if code is NOT locked yet */}
+                {referralCodeData?.referralCodeLocked === false && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 px-3 rounded-2xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition inline-flex items-center gap-1.5"
+                    onClick={() => setCustomizeDialogOpen(true)}
+                  >
+                    <Settings2 className="w-4 h-4" />
+                    Customize
+                  </Button>
+                )}
               </div>
             )}
 
@@ -1470,6 +1485,18 @@ export default function DriverWalletPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Customize Code Dialog */}
+      <CustomizeCodeDialog
+        open={customizeDialogOpen}
+        onOpenChange={setCustomizeDialogOpen}
+        currentCode={referralCode}
+        referrerType="DRIVER"
+        onSuccess={() => {
+          // Refetch the code so the wallet shows the new code
+          window.location.reload()
+        }}
+      />
     </div>
   )
 }
