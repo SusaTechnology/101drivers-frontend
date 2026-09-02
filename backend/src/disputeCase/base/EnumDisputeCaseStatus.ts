@@ -15,6 +15,7 @@ export enum EnumDisputeCaseStatus {
   Open = "OPEN",
   UnderReview = "UNDER_REVIEW",
   Resolved = "RESOLVED",
+  Rejected = "REJECTED",
   Closed = "CLOSED",
 }
 

@@ -19,11 +19,14 @@ import * as swagger from "@nestjs/swagger";
 import * as nestAccessControl from "nest-access-control";
 import { DisputeCaseService } from "./disputeCase.service";
 import { DisputeCaseControllerBase } from "./base/disputeCase.controller.base";
+import { UserData } from "../auth/userData.decorator";
+import { User as AuthUser } from "@prisma/client";
 
 import {
   AddDisputeNoteBody,
   CloseDisputeBody,
   OpenDisputeBody,
+  RejectDisputeBody,
   ResolveDisputeBody,
   ToggleLegalHoldBody,
   UpdateDisputeStatusBody,
@@ -63,12 +66,15 @@ async adminListDisputes(
   possession: "any",
 })
 async adminOpenDispute(
+  @UserData() user: AuthUser,
   @common.Body() body: OpenDisputeBody
 ): Promise<any> {
+  // actorUserId sourced from the JWT — body.actorUserId is intentionally
+  // ignored to prevent audit-trail spoofing.
   return this.service.adminOpenDispute({
     deliveryId: body.deliveryId,
     reason: body.reason,
-    actorUserId: body.actorUserId ?? null,
+    actorUserId: user?.id ?? null,
   });
 }
 
@@ -80,13 +86,14 @@ async adminOpenDispute(
   possession: "any",
 })
 async adminAddDisputeNote(
+  @UserData() user: AuthUser,
   @common.Param("id") id: string,
   @common.Body() body: AddDisputeNoteBody
 ): Promise<any> {
   return this.service.adminAddNote({
     disputeId: id,
     note: body.note,
-    actorUserId: body.actorUserId ?? null,
+    actorUserId: user?.id ?? null,
   });
 }
 
@@ -98,6 +105,7 @@ async adminAddDisputeNote(
   possession: "any",
 })
 async adminUpdateDisputeStatus(
+  @UserData() user: AuthUser,
   @common.Param("id") id: string,
   @common.Body() body: UpdateDisputeStatusBody
 ): Promise<any> {
@@ -105,7 +113,7 @@ async adminUpdateDisputeStatus(
     disputeId: id,
     status: body.status,
     note: body.note ?? null,
-    actorUserId: body.actorUserId ?? null,
+    actorUserId: user?.id ?? null,
   });
 }
 
@@ -117,13 +125,36 @@ async adminUpdateDisputeStatus(
   possession: "any",
 })
 async adminResolveDispute(
+  @UserData() user: AuthUser,
   @common.Param("id") id: string,
   @common.Body() body: ResolveDisputeBody
 ): Promise<any> {
   return this.service.adminResolveDispute({
     disputeId: id,
+    approveRefund: body.approveRefund === true,
+    refundAmount: body.refundAmount ?? null,
     resolutionNote: body.resolutionNote ?? null,
-    actorUserId: body.actorUserId ?? null,
+    actorUserId: user?.id ?? null,
+  });
+}
+
+@common.Post("/:id/admin-reject")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "DisputeCase",
+  action: "update",
+  possession: "any",
+})
+async adminRejectDispute(
+  @UserData() user: AuthUser,
+  @common.Param("id") id: string,
+  @common.Body() body: RejectDisputeBody
+): Promise<any> {
+  return this.service.adminRejectDispute({
+    disputeId: id,
+    rejectionReason: body.rejectionReason,
+    note: body.note ?? null,
+    actorUserId: user?.id ?? null,
   });
 }
 
@@ -135,13 +166,14 @@ async adminResolveDispute(
   possession: "any",
 })
 async adminCloseDispute(
+  @UserData() user: AuthUser,
   @common.Param("id") id: string,
   @common.Body() body: CloseDisputeBody
 ): Promise<any> {
   return this.service.adminCloseDispute({
     disputeId: id,
     closingNote: body.closingNote ?? null,
-    actorUserId: body.actorUserId ?? null,
+    actorUserId: user?.id ?? null,
   });
 }
 
@@ -153,6 +185,7 @@ async adminCloseDispute(
   possession: "any",
 })
 async adminToggleLegalHold(
+  @UserData() user: AuthUser,
   @common.Param("id") id: string,
   @common.Body() body: ToggleLegalHoldBody
 ): Promise<any> {
@@ -160,7 +193,7 @@ async adminToggleLegalHold(
     disputeId: id,
     legalHold: body.legalHold,
     note: body.note ?? null,
-    actorUserId: body.actorUserId ?? null,
+    actorUserId: user?.id ?? null,
   });
 }
  @common.UseInterceptors(AclValidateRequestInterceptor)

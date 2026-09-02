@@ -42,6 +42,7 @@ model User {
   supportRequestsRaised       SupportRequest[]        @relation(name: "supportRequestsRaised")
   supportRequestsAssigned     SupportRequest[]        @relation(name: "supportRequestsAssigned")
   supportRequestNotesAuthored SupportRequestNote[]    @relation(name: "supportRequestNotesAuthored")
+  disputesResolved            DisputeCase[]           @relation("ResolvedDisputes")
 }
 
 model Customer {
@@ -991,20 +992,26 @@ model DriverAlertPreference {
 }
 
 model DisputeCase {
-  closedAt   DateTime?
-  createdAt  DateTime              @default(now())
-  delivery   DeliveryRequest       @relation(fields: [deliveryId], references: [id])
-  deliveryId String                @unique
-  id         String                @id @default(cuid())
-  legalHold  Boolean               @default(false)
-  notes      DisputeNote[]
-  openedAt   DateTime              @default(now())
-  reason     String
-  resolvedAt DateTime?
-  status     EnumDisputeCaseStatus @default(OPEN)
-  updatedAt  DateTime              @updatedAt
+  closedAt        DateTime?
+  createdAt       DateTime              @default(now())
+  delivery        DeliveryRequest       @relation(fields: [deliveryId], references: [id])
+  deliveryId      String                @unique
+  id              String                @id @default(cuid())
+  legalHold       Boolean               @default(false)
+  notes           DisputeNote[]
+  openedAt        DateTime              @default(now())
+  reason          String
+  rejectionReason String?
+  resolvedAt      DateTime?
+  resolvedBy      User?                 @relation("ResolvedDisputes", fields: [resolvedById], references: [id])
+  resolvedById    String?
+  status          EnumDisputeCaseStatus @default(OPEN)
+  stripeRefundId  String?
+  updatedAt       DateTime              @updatedAt
 
   @@index([status, openedAt])
+  @@index([resolvedById])
+  @@index([openedAt])
 }
 
 model DisputeNote {
@@ -1516,6 +1523,7 @@ enum EnumDisputeCaseStatus {
   OPEN
   UNDER_REVIEW
   RESOLVED
+  REJECTED
   CLOSED
 }
 

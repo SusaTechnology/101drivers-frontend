@@ -93,7 +93,7 @@ class DisputeCaseCreateInput {
   })
   @IsEnum(EnumDisputeCaseStatus)
   @Field(() => EnumDisputeCaseStatus)
-  status!: "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "CLOSED";
+  status!: "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "REJECTED" | "CLOSED";
 }
 
 export { DisputeCaseCreateInput as DisputeCaseCreateInput };

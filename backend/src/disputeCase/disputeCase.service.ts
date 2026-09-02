@@ -186,12 +186,32 @@ async adminUpdateStatus(input: {
 
 async adminResolveDispute(input: {
   disputeId: string;
+  approveRefund: boolean;
+  refundAmount?: number | null;
   resolutionNote?: string | null;
   actorUserId?: string | null;
 }): Promise<any> {
   await this.disputeAdminEngine.resolveDispute({
     disputeId: input.disputeId,
+    approveRefund: input.approveRefund,
+    refundAmount: input.refundAmount ?? null,
     resolutionNote: input.resolutionNote ?? null,
+    actorUserId: input.actorUserId ?? null,
+  });
+
+  return this.domain.findUnique({ id: input.disputeId });
+}
+
+async adminRejectDispute(input: {
+  disputeId: string;
+  rejectionReason: string;
+  note?: string | null;
+  actorUserId?: string | null;
+}): Promise<any> {
+  await this.disputeAdminEngine.rejectDispute({
+    disputeId: input.disputeId,
+    rejectionReason: input.rejectionReason,
+    note: input.note ?? null,
     actorUserId: input.actorUserId ?? null,
   });
 

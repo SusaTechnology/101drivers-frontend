@@ -115,7 +115,40 @@ class DisputeCase {
   @Field(() => EnumDisputeCaseStatus, {
     nullable: true,
   })
-  status?: "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "CLOSED";
+  status?: "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "REJECTED" | "CLOSED";
+
+  @ApiProperty({
+    required: false,
+    type: String,
+  })
+  @IsString()
+  @IsOptional()
+  @Field(() => String, {
+    nullable: true,
+  })
+  rejectionReason?: string | null;
+
+  @ApiProperty({
+    required: false,
+    type: String,
+  })
+  @IsString()
+  @IsOptional()
+  @Field(() => String, {
+    nullable: true,
+  })
+  stripeRefundId?: string | null;
+
+  @ApiProperty({
+    required: false,
+    type: String,
+  })
+  @IsString()
+  @IsOptional()
+  @Field(() => String, {
+    nullable: true,
+  })
+  resolvedById?: string | null;
 
   @ApiProperty({
     required: true,

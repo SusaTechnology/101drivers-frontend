@@ -3051,6 +3051,362 @@ async notifyLegalHoldUpdated(input: {
   return true;
 }
 
+/**
+ * Notify customer (and assigned driver, if any) that a dispute was
+ * RESOLVED. Sends different copy depending on whether a refund was
+ * issued (customer-favor) or not (driver-favor / no refund).
+ *
+ * Mirrors the notifyDisputeOpened pattern: load delivery + customer +
+ * assigned driver, build email bodies, queueAndSend to each recipient.
+ */
+async notifyDisputeResolved(input: {
+  deliveryId: string;
+  actorUserId?: string | null;
+  resolutionNote?: string | null;
+  refundIssued: boolean;
+  refundAmount?: number | null;
+  stripeRefundId?: string | null;
+}) {
+  const delivery = await this.prisma.deliveryRequest.findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      status: true,
+      customerId: true,
+      pickupAddress: true,
+      dropoffAddress: true,
+      customer: {
+        select: {
+          id: true,
+          contactEmail: true,
+          contactName: true,
+          businessName: true,
+          user: {
+            select: {
+              email: true,
+              fullName: true,
+            },
+          },
+        },
+      },
+      assignments: {
+        where: { unassignedAt: null },
+        take: 1,
+        select: {
+          driver: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  email: true,
+                  fullName: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!delivery) {
+    throw new Error("Delivery not found");
+  }
+
+  const customerEmail =
+    delivery.customer?.user?.email ??
+    delivery.customer?.contactEmail ??
+    null;
+  const customerName =
+    delivery.customer?.user?.fullName ??
+    delivery.customer?.contactName ??
+    delivery.customer?.businessName ??
+    "Customer";
+
+  if (customerEmail) {
+    const refundLine = input.refundIssued
+      ? input.refundAmount != null
+        ? `A refund of $${Number(input.refundAmount).toFixed(2)} has been issued to your original payment method. Please allow 5-10 business days for it to appear.`
+        : "A full refund has been issued to your original payment method. Please allow 5-10 business days for it to appear."
+      : "No refund will be issued for this dispute.";
+
+    await this.queueAndSend({
+      actorUserId: input.actorUserId ?? null,
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DISPUTE_UPDATED,
+      templateCode: "dispute-resolved-customer",
+      toEmail: customerEmail,
+      subject: "Your delivery dispute has been resolved",
+      body: [
+        `Hi ${customerName},`,
+        "",
+        "Your delivery dispute has been resolved.",
+        refundLine,
+        input.resolutionNote ? `Note from our team: ${input.resolutionNote}` : "",
+        "",
+        "---",
+        "Delivery Details",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Status: ${delivery.status}`,
+        "---",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        status: delivery.status,
+        refundIssued: input.refundIssued,
+        refundAmount: input.refundAmount ?? null,
+        stripeRefundId: input.stripeRefundId ?? null,
+        resolutionNote: input.resolutionNote ?? null,
+      },
+    });
+  }
+
+  const assignedDriver = delivery.assignments?.[0]?.driver ?? null;
+  const driverEmail = assignedDriver?.user?.email ?? null;
+  const driverName = assignedDriver?.user?.fullName ?? "Driver";
+
+  if (driverEmail) {
+    await this.queueAndSend({
+      actorUserId: input.actorUserId ?? null,
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      driverId: assignedDriver?.id ?? null,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DISPUTE_UPDATED,
+      templateCode: "dispute-resolved-driver",
+      toEmail: driverEmail,
+      subject: "A dispute on a delivery you completed has been resolved",
+      body: [
+        `Hi ${driverName},`,
+        "",
+        "A dispute on a delivery you completed has been resolved.",
+        input.refundIssued
+          ? "The dispute was resolved in the customer's favor — a refund has been issued. A proportional clawback adjustment will be applied to your next payout."
+          : "The dispute was resolved in our favor — no refund was issued. Your payout for this delivery will be released (or the held clawback will be reversed).",
+        input.resolutionNote ? `Note: ${input.resolutionNote}` : "",
+        "",
+        "---",
+        "Delivery Details",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Status: ${delivery.status}`,
+        "---",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        status: delivery.status,
+        refundIssued: input.refundIssued,
+        refundAmount: input.refundAmount ?? null,
+        resolutionNote: input.resolutionNote ?? null,
+      },
+    });
+  }
+
+  return true;
+}
+
+/**
+ * Notify customer that a dispute was REJECTED (admin decided it had no merit).
+ * rejectionReason is required and is shared with the customer.
+ */
+async notifyDisputeRejected(input: {
+  deliveryId: string;
+  actorUserId?: string | null;
+  rejectionReason: string;
+  note?: string | null;
+}) {
+  const delivery = await this.prisma.deliveryRequest.findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      status: true,
+      customerId: true,
+      pickupAddress: true,
+      dropoffAddress: true,
+      customer: {
+        select: {
+          id: true,
+          contactEmail: true,
+          contactName: true,
+          businessName: true,
+          user: {
+            select: {
+              email: true,
+              fullName: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!delivery) {
+    throw new Error("Delivery not found");
+  }
+
+  const customerEmail =
+    delivery.customer?.user?.email ??
+    delivery.customer?.contactEmail ??
+    null;
+  const customerName =
+    delivery.customer?.user?.fullName ??
+    delivery.customer?.contactName ??
+    delivery.customer?.businessName ??
+    "Customer";
+
+  if (customerEmail) {
+    await this.queueAndSend({
+      actorUserId: input.actorUserId ?? null,
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DISPUTE_UPDATED,
+      templateCode: "dispute-rejected-customer",
+      toEmail: customerEmail,
+      subject: "Update on your delivery dispute",
+      body: [
+        `Hi ${customerName},`,
+        "",
+        "After reviewing your delivery dispute, we have determined that it does not warrant a refund.",
+        "",
+        `Reason: ${input.rejectionReason}`,
+        input.note ? `Additional note: ${input.note}` : "",
+        "",
+        "If you have additional information to share, you can reply to this email.",
+        "",
+        "---",
+        "Delivery Details",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Status: ${delivery.status}`,
+        "---",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        status: delivery.status,
+        rejectionReason: input.rejectionReason,
+        note: input.note ?? null,
+      },
+    });
+  }
+
+  return true;
+}
+
+/**
+ * Notify customer that a dispute was CLOSED (administratively closed
+ * after being resolved or rejected). Lighter-weight than the
+ * resolve/reject notifications — just confirms the dispute is now
+ * formally closed.
+ */
+async notifyDisputeClosed(input: {
+  deliveryId: string;
+  actorUserId?: string | null;
+  closingNote?: string | null;
+}) {
+  const delivery = await this.prisma.deliveryRequest.findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      status: true,
+      customerId: true,
+      pickupAddress: true,
+      dropoffAddress: true,
+      customer: {
+        select: {
+          id: true,
+          contactEmail: true,
+          contactName: true,
+          businessName: true,
+          user: {
+            select: {
+              email: true,
+              fullName: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!delivery) {
+    throw new Error("Delivery not found");
+  }
+
+  const customerEmail =
+    delivery.customer?.user?.email ??
+    delivery.customer?.contactEmail ??
+    null;
+  const customerName =
+    delivery.customer?.user?.fullName ??
+    delivery.customer?.contactName ??
+    delivery.customer?.businessName ??
+    "Customer";
+
+  if (customerEmail) {
+    await this.queueAndSend({
+      actorUserId: input.actorUserId ?? null,
+      customerId: delivery.customerId,
+      deliveryId: delivery.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DISPUTE_UPDATED,
+      templateCode: "dispute-closed-customer",
+      toEmail: customerEmail,
+      subject: "Your delivery dispute has been closed",
+      body: [
+        `Hi ${customerName},`,
+        "",
+        "Your delivery dispute has been formally closed. No further action is required from you.",
+        input.closingNote ? `Note: ${input.closingNote}` : "",
+        "",
+        "---",
+        "Delivery Details",
+        `Pickup: ${delivery.pickupAddress}`,
+        `Drop-off: ${delivery.dropoffAddress}`,
+        `Status: ${delivery.status}`,
+        "---",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      payload: {
+        deliveryId: delivery.id,
+        status: delivery.status,
+        closingNote: input.closingNote ?? null,
+      },
+    });
+  }
+
+  return true;
+}
+
+/**
+ * Notify relevant parties that a note was added to a dispute.
+ * Customer-facing only — internal admin notes shouldn't always go to
+ * the customer, so this is currently a no-op for the customer unless
+ * we later add a "shareWithCustomer" flag.
+ *
+ * For now this method exists as a placeholder so the engine has a
+ * consistent call site — it can be wired up later when product
+ * decides the rules for customer-visible notes.
+ */
+async notifyDisputeNoteAdded(_input: {
+  deliveryId: string;
+  actorUserId?: string | null;
+  note: string;
+}) {
+  // Intentional no-op for now — see method doc.
+  return true;
+}
+
 async notifyComplianceApproved(input: {
   deliveryId: string;
   actorUserId?: string | null;

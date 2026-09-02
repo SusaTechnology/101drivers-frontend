@@ -189,7 +189,15 @@ export class DeliveryLifecycleService {
     [EnumDeliveryRequestStatus.EXPIRED]: [
       EnumDeliveryRequestStatus.QUOTED,
     ],
-    [EnumDeliveryRequestStatus.DISPUTED]: [],
+    // DISPUTED is no longer terminal — when a dispute is resolved,
+    // rejected, or closed, the delivery should transition back to a
+    // sensible non-disputed state. The dispute engine owns this
+    // transition (it goes through DisputeAdminEngine which calls
+    // deliveryLifecycle.transitionStatus).
+    [EnumDeliveryRequestStatus.DISPUTED]: [
+      EnumDeliveryRequestStatus.COMPLETED,
+      EnumDeliveryRequestStatus.CLOSED,
+    ],
   };
 
   async transitionStatus(

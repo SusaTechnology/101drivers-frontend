@@ -30,6 +30,18 @@ export class DisputeCaseDomain extends BaseDomain<
     closedAt: true,
     createdAt: true,
     updatedAt: true,
+    // New audit/refund fields — exposed to the admin UI.
+    rejectionReason: true,
+    stripeRefundId: true,
+    resolvedById: true,
+    resolvedBy: {
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        fullName: true,
+      },
+    },
 
     delivery: {
       select: {

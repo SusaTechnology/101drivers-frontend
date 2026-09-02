@@ -105,7 +105,7 @@ class DisputeCaseUpdateInput {
   @Field(() => EnumDisputeCaseStatus, {
     nullable: true,
   })
-  status?: "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "CLOSED";
+  status?: "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "REJECTED" | "CLOSED";
 }
 
 export { DisputeCaseUpdateInput as DisputeCaseUpdateInput };

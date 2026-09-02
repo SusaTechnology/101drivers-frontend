@@ -4206,55 +4206,7 @@
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "read:own",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeCase",
-    "action": "read:own",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "read:own",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "DisputeCase",
-    "action": "read:own",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
-    "resource": "DisputeCase",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeCase",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
     "resource": "DisputeCase",
     "action": "create:any",
     "attributes": "*"
@@ -4266,85 +4218,13 @@
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeCase",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "DisputeCase",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
     "resource": "DisputeCase",
     "action": "delete:any",
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeCase",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "DisputeCase",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
-    "resource": "DisputeCase",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeCase",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeCase",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
     "resource": "DisputeCase",
     "action": "read:any",
     "attributes": "*"
@@ -4356,55 +4236,7 @@
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "read:own",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeNote",
-    "action": "read:own",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "read:own",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "DisputeNote",
-    "action": "read:own",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
-    "resource": "DisputeNote",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeNote",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
     "resource": "DisputeNote",
     "action": "create:any",
     "attributes": "*"
@@ -4416,85 +4248,13 @@
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeNote",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "DisputeNote",
-    "action": "update:any",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
     "resource": "DisputeNote",
     "action": "delete:any",
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeNote",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "DisputeNote",
-    "action": "delete:any",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
-    "resource": "DisputeNote",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "DisputeNote",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "DisputeNote",
-    "action": "read:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
     "resource": "DisputeNote",
     "action": "read:any",
     "attributes": "*"

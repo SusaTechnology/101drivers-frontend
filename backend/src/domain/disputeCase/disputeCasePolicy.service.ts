@@ -299,13 +299,23 @@ export class DisputeCasePolicyService {
     }
 
     const allowed: Record<EnumDisputeCaseStatus, EnumDisputeCaseStatus[]> = {
-      OPEN: [EnumDisputeCaseStatus.UNDER_REVIEW, EnumDisputeCaseStatus.RESOLVED, EnumDisputeCaseStatus.CLOSED],
-      UNDER_REVIEW: [EnumDisputeCaseStatus.RESOLVED, EnumDisputeCaseStatus.CLOSED],
+      OPEN: [
+        EnumDisputeCaseStatus.UNDER_REVIEW,
+        EnumDisputeCaseStatus.RESOLVED,
+        EnumDisputeCaseStatus.REJECTED,
+        EnumDisputeCaseStatus.CLOSED,
+      ],
+      UNDER_REVIEW: [
+        EnumDisputeCaseStatus.RESOLVED,
+        EnumDisputeCaseStatus.REJECTED,
+        EnumDisputeCaseStatus.CLOSED,
+      ],
       RESOLVED: [EnumDisputeCaseStatus.CLOSED],
+      REJECTED: [EnumDisputeCaseStatus.CLOSED],
       CLOSED: [],
     };
 
-    if (!allowed[fromStatus].includes(toStatus)) {
+    if (!allowed[fromStatus]?.includes(toStatus)) {
       throw new AppException(
         "DisputeCase status transition is invalid",
         ErrorCodes.BUSINESS_RULE_VIOLATION
@@ -330,6 +340,7 @@ export class DisputeCasePolicyService {
       value !== EnumDisputeCaseStatus.OPEN &&
       value !== EnumDisputeCaseStatus.UNDER_REVIEW &&
       value !== EnumDisputeCaseStatus.RESOLVED &&
+      value !== EnumDisputeCaseStatus.REJECTED &&
       value !== EnumDisputeCaseStatus.CLOSED
     ) {
       throw new AppException(
