@@ -779,7 +779,7 @@ export default function DriverWalletPage() {
                   Copy Code
                 </Button>
                 {/* Customize button — only shown if code is NOT locked yet */}
-                {referralCodeData?.referralCodeLocked === false && (
+                {referralCodeData?.referralCodeLocked !== true && (
                   <Button
                     variant="ghost"
                     size="sm"

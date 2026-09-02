@@ -22,8 +22,8 @@ export class ReferralController {
     @common.Res() res: Response,
   ): Promise<void> {
     const driverId = await this.referralService.resolveDriverId(req);
-    const referralCode = await this.referralService.getMyReferralCode(driverId);
-    res.json({ referralCode });
+    const result = await this.referralService.getMyReferralCode(driverId);
+    res.json(result);
   }
 
   /**
@@ -90,8 +90,8 @@ export class ReferralController {
     @common.Res() res: Response,
   ): Promise<void> {
     const customerId = await this.referralService.resolveCustomerId(req);
-    const referralCode = await this.referralService.getMyCustomerReferralCode(customerId);
-    res.json({ referralCode });
+    const result = await this.referralService.getMyCustomerReferralCode(customerId);
+    res.json(result);
   }
 
   /**

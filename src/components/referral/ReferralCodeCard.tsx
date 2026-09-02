@@ -263,7 +263,7 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
               {/* Customize button — opens the CustomizeCodeDialog.
                   Only shown if the code is NOT yet locked (referralCodeLocked=false).
                   Once locked, the button is hidden — the code can't be changed again. */}
-              {codeData?.referralCodeLocked === false && (
+              {codeData?.referralCodeLocked !== true && (
                 <Button
                   variant="ghost"
                   size="sm"

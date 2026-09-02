@@ -72,14 +72,14 @@ export class ReferralService {
    * driver won't reach this endpoint anyway. But we check here as a
    * safety net.
    */
-  async getMyReferralCode(driverId: string): Promise<string> {
+  async getMyReferralCode(driverId: string): Promise<{ referralCode: string; referralCodeLocked: boolean }> {
     // ── V2 path: read from Driver.referralCode ──
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },
-      select: { referralCode: true },
+      select: { referralCode: true, referralCodeLocked: true },
     });
     if (driver?.referralCode) {
-      return driver.referralCode;
+      return { referralCode: driver.referralCode, referralCodeLocked: driver.referralCodeLocked };
     }
 
     // Don't create new codes if the program is paused
@@ -105,7 +105,7 @@ export class ReferralService {
           where: { id: driverId },
           data: { referralCode: legacyReferral.referralCode },
         });
-        return legacyReferral.referralCode;
+        return { referralCode: legacyReferral.referralCode, referralCodeLocked: false };
       } catch (err: any) {
         // P2002 = unique constraint — code clash, generate fresh
         if (err?.code !== "P2002") throw err;
@@ -141,7 +141,7 @@ export class ReferralService {
       if (err?.code !== "P2002") throw err;
     }
 
-    return code;
+    return { referralCode: code, referralCodeLocked: false };
   }
 
   /**
@@ -1637,7 +1637,7 @@ export class ReferralService {
    * Phase 2 (V2): the code is stored on `Customer.referralCode` (a unique
    * column added by the 20260831120000_referral_v2 migration).
    */
-  async getMyCustomerReferralCode(customerId: string): Promise<string> {
+  async getMyCustomerReferralCode(customerId: string): Promise<{ referralCode: string; referralCodeLocked: boolean }> {
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
       select: { referralCode: true, referralCodeLocked: true },
@@ -1646,7 +1646,7 @@ export class ReferralService {
       throw new NotFoundException("Customer profile not found");
     }
     if (customer.referralCode) {
-      return customer.referralCode;
+      return { referralCode: customer.referralCode, referralCodeLocked: customer.referralCodeLocked };
     }
 
     // Don't create new codes if the program is paused
@@ -1664,7 +1664,7 @@ export class ReferralService {
       data: { referralCode: code },
     });
 
-    return code;
+    return { referralCode: code, referralCodeLocked: false };
   }
 
   /**
