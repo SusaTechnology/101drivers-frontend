@@ -38,7 +38,7 @@ import {
 
 interface NotificationBellProps {
   className?: string
-  userType?: 'admin' | 'dealer' // To determine navigation paths
+  userType?: 'admin' | 'dealer' | 'driver' // To determine navigation paths
 }
 
 // Parse tracking notification body into structured parts
@@ -200,9 +200,17 @@ export default function NotificationBell({ className, userType }: NotificationBe
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const navigate = useNavigate()
 
-  // Auto-detect user type from token if not provided
+  // Resolve who is viewing the bell. The stored user object has NO `userType`
+  // field — the role lives in `user.roles` (e.g. ['ADMIN']). An explicit prop
+  // wins when the caller knows the context; otherwise derive from roles.
   const user = getUser()
-  const effectiveUserType = userType || user?.userType || 'dealer'
+  const effectiveUserType: 'admin' | 'dealer' | 'driver' =
+    userType ??
+    (user?.roles?.includes('ADMIN')
+      ? 'admin'
+      : user?.roles?.includes('DRIVER')
+        ? 'driver'
+        : 'dealer')
 
   // Fetch notifications using the new API
   const {
@@ -295,6 +303,9 @@ export default function NotificationBell({ className, userType }: NotificationBe
       if (effectiveUserType === 'admin') {
         return `/admin-delivery-detail?deliveryId=${deliveryId}`
       }
+      if (effectiveUserType === 'driver') {
+        return `/driver-job-details?jobId=${deliveryId}`
+      }
       return `/dealer-delivery-details?id=${deliveryId}`
     }
 
@@ -302,6 +313,11 @@ export default function NotificationBell({ className, userType }: NotificationBe
       // Support request notifications
       if (effectiveUserType === 'admin') {
         return `/admin-support-detail?id=${supportRequestId}`
+      }
+      if (effectiveUserType === 'driver') {
+        // Driver support detail reads its id from router STATE, not search
+        // params — a bare URL can't carry it, so no deep-link action yet.
+        return null
       }
       return `/dealer-support-detail?id=${supportRequestId}`
     }

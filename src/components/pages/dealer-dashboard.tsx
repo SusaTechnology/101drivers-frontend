@@ -460,7 +460,7 @@ export default function DealerDashboard() {
               <span className={cn("text-xs font-bold transition-colors", showAll ? "text-lime-600" : "text-slate-400")}>All</span>
             </div> */}
             <Button variant={showMapView ? "default" : "outline"} size="icon" className={cn("w-10 h-10 rounded-xl", showMapView && "bg-lime-500 text-slate-950")} onClick={() => setShowMapView(!showMapView)} title="Map view"><Map className="h-5 w-5" /></Button>
-            <NotificationBell />
+            <NotificationBell userType="dealer" />
             <Button asChild variant="ghost" size="icon" className="w-10 h-10 rounded-xl" title="Help">
               <Link to="/help-customer"><HelpCircle className="h-5 w-5" /></Link>
             </Button>

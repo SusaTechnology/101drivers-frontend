@@ -20,7 +20,7 @@ export const getAdminActionItems = ({
     },
   {
     key: 'notifications',
-    component: <NotificationBell />,
+    component: <NotificationBell userType="admin" />,
   },
   {
     key: 'theme',
