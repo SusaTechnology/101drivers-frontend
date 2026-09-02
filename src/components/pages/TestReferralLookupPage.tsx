@@ -19,7 +19,7 @@
  */
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Gift, Search, ArrowRight, User, Car, Building, Copy, Check } from "lucide-react";
+import { Gift, Search, ArrowRight, User, Car, Building, Copy, Check, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,7 @@ export default function TestReferralLookupPage() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const debouncedQuery = useDebouncedValue(searchQuery.trim(), 400);
 
   const lookupQuery = useDataQuery<LookupResponse | null>({
@@ -179,13 +180,12 @@ export default function TestReferralLookupPage() {
                           </div>
                         </button>
 
-                        {/* Copy button */}
+                        {/* Copy CODE button — copies just the code (e.g. "ABCD2345") */}
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
-                            const shareUrl = `${window.location.origin}/test-referral/${r.code}`;
                             try {
-                              await navigator.clipboard.writeText(shareUrl);
+                              await navigator.clipboard.writeText(r.code);
                               setCopiedCode(r.code);
                               setTimeout(() => setCopiedCode(null), 2000);
                             } catch {
@@ -193,12 +193,35 @@ export default function TestReferralLookupPage() {
                             }
                           }}
                           className="shrink-0 p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-                          title="Copy referral link"
+                          title="Copy code"
                         >
                           {copiedCode === r.code ? (
                             <Check className="w-4 h-4 text-emerald-500" />
                           ) : (
                             <Copy className="w-4 h-4 text-slate-400" />
+                          )}
+                        </button>
+
+                        {/* Copy LINK button — copies /test-referral/CODE */}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const shareUrl = `${window.location.origin}/test-referral/${r.code}`;
+                            try {
+                              await navigator.clipboard.writeText(shareUrl);
+                              setCopiedLink(r.code);
+                              setTimeout(() => setCopiedLink(null), 2000);
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                          className="shrink-0 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition"
+                          title="Copy referral link"
+                        >
+                          {copiedLink === r.code ? (
+                            <Check className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <Link2 className="w-4 h-4 text-emerald-500" />
                           )}
                         </button>
 

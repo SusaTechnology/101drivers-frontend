@@ -59,6 +59,7 @@ export class ReferralPublicController {
         found: { type: "boolean" },
         referrerName: { type: "string", nullable: true },
         referrerType: { type: "string", enum: ["DRIVER", "CUSTOMER"], nullable: true },
+        referrerSubtype: { type: "string", enum: ["PERSONAL", "BUSINESS"], nullable: true },
         programActive: { type: "boolean" },
       },
     },
@@ -69,6 +70,7 @@ export class ReferralPublicController {
     found: boolean;
     referrerName: string | null;
     referrerType: ReferralTypeDto | null;
+    referrerSubtype: "PERSONAL" | "BUSINESS" | null;
     programActive: boolean;
   }> {
     return this.referralService.publicResolveReferralCode(code);

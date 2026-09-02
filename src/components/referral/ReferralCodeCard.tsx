@@ -96,41 +96,51 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
 
   // ── Share dialog state ────────────────────────────────────────────
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   const shareUrl = useMemo(
     () => (referralCode ? buildShareUrl(referrerType, referralCode) : ""),
     [referrerType, referralCode],
   );
 
-  const handleCopy = useCallback(async () => {
+  // Copy CODE only (e.g. "ABCD2345") — for when the user wants to share
+  // just the code verbally or in a context where a link isn't needed.
+  const handleCopyCode = useCallback(async () => {
+    if (!referralCode) return;
+    try {
+      await navigator.clipboard.writeText(referralCode);
+      setCopiedCode(true);
+      toast.success("Code copied", {
+        description: `${referralCode} — paste it anywhere.`,
+        duration: 3000,
+      });
+      setTimeout(() => setCopiedCode(false), 2500);
+    } catch {
+      toast.error("Couldn't copy automatically");
+    }
+  }, [referralCode]);
+
+  // Copy LINK (e.g. "https://101drivers.com/test-referral/ABCD2345") —
+  // for sharing via text/email/social.
+  const handleCopyLink = useCallback(async () => {
     if (!shareUrl) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
+      setCopiedLink(true);
       toast.success("Referral link copied", {
         description: "Paste it in a text or email to share with friends.",
         duration: 3000,
       });
-      setTimeout(() => setCopied(false), 2500);
+      setTimeout(() => setCopiedLink(false), 2500);
     } catch {
-      // Fallback for browsers without clipboard API (rare in 2026)
-      toast.error("Couldn't copy automatically", {
-        description: "Long-press the link below to copy it manually.",
-      });
+      toast.error("Couldn't copy automatically");
     }
   }, [shareUrl]);
 
   const handleShare = useCallback(async () => {
     if (!shareUrl) return;
     setShareDialogOpen(true);
-    // Pre-copy to clipboard so the user can immediately paste after closing
-    // the dialog (matches the driver-wallet pattern).
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      // ignore — user can use the manual Copy button in the dialog
-    }
   }, [shareUrl]);
 
   // ── Stats display ─────────────────────────────────────────────────
@@ -214,7 +224,7 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
         </CardHeader>
 
         <CardContent className="relative z-10 space-y-4">
-          {/* Referral code display + Copy button */}
+          {/* Referral code display + Copy CODE button (copies code only) */}
           {referralCode && isActive && (
             <div className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-950 border border-emerald-100 dark:border-emerald-900/30">
               <div className="flex-1 min-w-0">
@@ -225,13 +235,14 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
                   {referralCode}
                 </p>
               </div>
+              {/* Copy CODE button — copies just the code (e.g. "ABCD2345") */}
               <Button
                 variant="outline"
                 size="sm"
                 className="h-10 px-4 rounded-2xl border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 font-extrabold transition inline-flex items-center gap-2"
-                onClick={handleCopy}
+                onClick={handleCopyCode}
               >
-                {copied ? (
+                {copiedCode ? (
                   <>
                     <Check className="w-4 h-4" />
                     Copied
@@ -239,7 +250,7 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    Copy
+                    Copy Code
                   </>
                 )}
               </Button>
@@ -331,10 +342,10 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
             {/* Action buttons */}
             <div className="flex gap-2 w-full">
               <Button
-                onClick={handleCopy}
+                onClick={handleCopyLink}
                 className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold inline-flex items-center justify-center gap-2"
               >
-                {copied ? (
+                {copiedLink ? (
                   <>
                     <Check className="w-4 h-4" />
                     Copied!

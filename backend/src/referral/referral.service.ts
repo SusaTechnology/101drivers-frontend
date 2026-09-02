@@ -2122,9 +2122,10 @@ export class ReferralService {
     found: boolean;
     referrerName: string | null;
     referrerType: ReferralTypeDto | null;
+    referrerSubtype: "PERSONAL" | "BUSINESS" | null;
     programActive: boolean;
   }> {
-    if (!code) return { found: false, referrerName: null, referrerType: null, programActive: false };
+    if (!code) return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: false };
 
     const upperCode = code.toUpperCase();
 
@@ -2152,6 +2153,7 @@ export class ReferralService {
           ? this.privacyMaskName(driverReferrer.user.fullName)
           : "A 101 Drivers driver",
         referrerType: ReferralTypeDto.DRIVER,
+        referrerSubtype: null,
         programActive: config.isActive && config.driverReferralsEnabled,
       };
     }
@@ -2171,6 +2173,7 @@ export class ReferralService {
             ? name
             : this.privacyMaskName(name),
         referrerType: ReferralTypeDto.CUSTOMER,
+        referrerSubtype: customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL",
         programActive: config.isActive && config.customerReferralsEnabled,
       };
     }
@@ -2189,11 +2192,12 @@ export class ReferralService {
           ? this.privacyMaskName(driver.user.fullName)
           : "A 101 Drivers driver",
         referrerType: ReferralTypeDto.DRIVER,
+        referrerSubtype: null,
         programActive: config.isActive && config.driverReferralsEnabled,
       };
     }
 
-    return { found: false, referrerName: null, referrerType: null, programActive: config.isActive };
+    return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: config.isActive };
   }
 
   /**

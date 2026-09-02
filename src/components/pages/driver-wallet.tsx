@@ -762,10 +762,18 @@ export default function DriverWalletPage() {
                   variant="outline"
                   size="sm"
                   className="h-10 px-4 rounded-2xl border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 font-extrabold transition inline-flex items-center gap-2"
-                  onClick={openReferralDialog}
+                  onClick={async () => {
+                    // Copy CODE only (not the link) — the "Share" button below opens the dialog with the link + QR
+                    try {
+                      await navigator.clipboard.writeText(referralCode)
+                      toast.success('Code copied', { description: referralCode })
+                    } catch {
+                      toast.error('Could not copy')
+                    }
+                  }}
                 >
                   <Copy className="w-4 h-4" />
-                  Copy
+                  Copy Code
                 </Button>
               </div>
             )}
