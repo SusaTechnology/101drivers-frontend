@@ -887,3 +887,26 @@ Work Log:
 
 Stage Summary:
 - Private customers now see their own name/email/phone prefilled as recipient when creating a personal delivery; everything stays editable; business flow untouched.
+
+---
+Task ID: first-delivery-card-capture
+Agent: Main Agent
+Task: Replace the first-delivery "No saved payment method on file" dead-end error with an in-flow card capture dialog on the review page (owner feedback: first-time prepaid customers should see a credit-card step after submit, not an error)
+
+Work Log:
+- Owner feedback: first-time private customers hit "No saved payment method on file. Please save a card under Payment Methods first, then retry the delivery." when submitting their first delivery — confusing dead-end. Desired: card entry as the natural next step in the request flow; once saved, everything runs in the background (existing behavior).
+- Traced the full payment topology first: orchestrator (delivery-request-orchestrator.service.ts:442) silently charges/authorizes saved cards with confirm:true at delivery creation (PRIVATE=automatic capture, BUSINESS=manual hold); tips auto-charge saved card (stripe-payment.controller.ts:215, requires card); postpaid weekly billing is background invoices. Card-entry dialogs are only fallbacks.
+- New component src/components/stripe/SaveCardDialog.tsx: SetupIntent card-save dialog reusing the Settings flow's backend contract (POST /api/payments/stripe/save-card → clientSecret → <PaymentElement> → confirmSetup with redirect:'if_required' so 3DS resolves inline and the resolved promise can resume the flow). Includes education copy (card saved once, future deliveries automatic, manage in Settings) and a Retry state for init failures.
+- Wired dealer-review-delivery.tsx: new state showSaveCardDialog/cardSavedThisSession (hasSavedCard = savedCardExists || cardSavedThisSession); handleSubmit intercepts AFTER validation — prepaid + no card → open dialog instead of letting the backend fail; handleSaveCardSuccess closes dialog, sets cardSavedThisSession, and calls submitDelivery.mutate() to resume the SAME submission (card is already attached to the Stripe customer at confirmSetup success; orchestrator finds it via default PM or first-attached auto-resolve); cancel → info toast, stays on page. Postpaid untouched.
+- Copy fixes: review page now tells the truth — hasSavedCard ? "authorized automatically from your saved card" : "you'll add your card in the next step when you submit"; the old "Save a card in Settings to skip this step" nudge (which promised an impossible skip) reworded to set expectations for the one-time dialog.
+- Fixed mid-implementation: authFetch resolves with PARSED BODY and throws Error(message) on non-OK — dialog adapted (initial version wrongly assumed a raw Response).
+- Testing (sandbox, no Stripe keys):
+  - Scoped tsc (tsconfig.fe-check.json): 144 errors before == 144 after, 0 new (verified via git stash diff — the 4 dealer-review-delivery errors are identical at HEAD).
+  - vite build passes.
+  - Runtime API smoke test (embedded PG 5433 + backend on :6100): fresh private signup → auto-APPROVED (no regression), saved-cards returns {cards:[]} (gate data source), save-card returns clean 400 + friendly message without keys (dialog's initError/retry path). ALL 7 CHECKS PASSED.
+  - The actual Stripe card-save UX intentionally not exercised (needs real keys) — it is byte-for-byte the same machinery as the proven Settings flow (same endpoint, same element, same webhook).
+- Also fixed while booting the sandbox backend: @nestjs/platform-socket.io must be pinned to 10.2.7 (latest v11 requires @nestjs/common/internal which does not exist in pinned @nestjs/common 10.2.7).
+- PRE-EXISTING DEPLOY FINDING (not fixed here): prisma migrate deploy on a FRESH database fails at 20260101000000_add_dashboard_photo — no migration ever creates EnumDeliveryEvidenceType (schema built via db push drift). New environments/CI will need db push or a baseline migration. Production unaffected.
+
+Stage Summary:
+- First-time prepaid customers now get a natural "add your card" step at Request Delivery (dialog with one-time education copy) and their submission continues automatically after the card is saved; returning customers keep the fully silent background flow; postpaid and Settings flows untouched. backend/schema.graphql regenerated in a separate chore commit (overdue sync, vehicleStandardsConfirmed fields).

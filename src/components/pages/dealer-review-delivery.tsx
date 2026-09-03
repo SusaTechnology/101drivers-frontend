@@ -48,6 +48,7 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import StripePaymentDialog from '@/components/stripe/StripePaymentDialog';
 import PaymentFailureDialog from '@/components/stripe/PaymentFailureDialog';
+import SaveCardDialog from '@/components/stripe/SaveCardDialog';
 
 // Types for review data
 interface ReviewDeliveryData {
@@ -186,6 +187,21 @@ export default function ReviewDeliveryPage() {
     staleTime: 5 * 60 * 1000,
   });
   const savedCardExists = (savedCardsData?.cards?.length ?? 0) > 0;
+
+  // ── First-delivery card capture ──
+  // A prepaid customer submitting their FIRST delivery with no saved card
+  // used to hit a dead-end backend error ("No saved payment method on
+  // file. Please save a card under Payment Methods first..."). Now:
+  // clicking "Request Delivery" opens SaveCardDialog right here; after the
+  // card is saved, the SAME submission continues automatically — the
+  // backend finds the freshly attached card (stripeDefaultPaymentMethodId
+  // or the orchestrator's first-attached-card auto-resolve) and
+  // charges/authorizes silently in the background.
+  // cardSavedThisSession covers the just-saved case without waiting for
+  // the saved-cards query to refetch.
+  const [showSaveCardDialog, setShowSaveCardDialog] = useState(false);
+  const [cardSavedThisSession, setCardSavedThisSession] = useState(false);
+  const hasSavedCard = savedCardExists || cardSavedThisSession;
 
   // Schedule edit state
   const [availableSlots, setAvailableSlots] = useState<{ label: string; start: string; end: string }[]>([]);
@@ -664,7 +680,37 @@ export default function ReviewDeliveryPage() {
       });
       return;
     }
+    // First-time prepaid customer with no card on file: capture the card
+    // now — the natural "payment is next" step — instead of letting the
+    // backend fail with "No saved payment method on file". The submission
+    // resumes automatically once the card is saved
+    // (handleSaveCardSuccess → submitDelivery.mutate()).
+    if (reviewData?.paymentType !== 'POSTPAID' && customer?.profileId && !hasSavedCard) {
+      setShowSaveCardDialog(true);
+      return;
+    }
     submitDelivery.mutate();
+  };
+
+  // Card saved successfully in SaveCardDialog → resume the paused submission.
+  // By the time confirmSetup resolves, the card is attached to the
+  // customer's Stripe account, so create-from-quote will find it and
+  // charge/authorize silently — no card-entry dialog anywhere in the flow.
+  const handleSaveCardSuccess = () => {
+    setShowSaveCardDialog(false);
+    setCardSavedThisSession(true);
+    toast.success('Card saved!', {
+      description: 'Future deliveries are charged automatically — no card entry needed.',
+    });
+    submitDelivery.mutate();
+  };
+
+  const handleSaveCardCancel = () => {
+    setShowSaveCardDialog(false);
+    toast('Card needed to continue', {
+      description: 'Add your card to request your first delivery. It stays saved so you never enter it again.',
+      duration: 7000,
+    });
   };
 
   const handleGoBack = () => {
@@ -1316,27 +1362,34 @@ export default function ReviewDeliveryPage() {
                       <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-[10px] px-1.5 py-0">PREPAID</Badge>
                     </div>
                     <p className="text-xs text-slate-500">
-                      Payment is required before your delivery is listed. You will be prompted to enter your card after submission.
+                      {hasSavedCard
+                        ? 'Payment is authorized automatically from your saved card when you submit — no card entry needed. Manage your card in Settings → Payment method.'
+                        : "You'll add your card in the next step when you submit. It's saved to your account so future deliveries run automatically."}
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* Nudge: save card for faster future checkouts (prepaid, no saved card) */}
-              {reviewData.paymentType !== 'POSTPAID' && customer?.profileId && !savedCardExists && (
+              {/* Nudge: first-delivery card capture (prepaid, no saved card).
+                  Sets the expectation BEFORE they hit submit: the card dialog
+                  is coming, it's a one-time thing, and everything after is
+                  automatic. */}
+              {reviewData.paymentType !== 'POSTPAID' && customer?.profileId && !hasSavedCard && (
                 <div className="mt-3 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/10 p-3">
                   <div className="flex items-start gap-2">
                     <Info className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                     <div>
                       <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-                        Save a card for one-click checkout
+                        First delivery? You&apos;ll add your card when you submit.
                       </p>
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
-                        You'll enter your card after submission. Save it in{' '}
+                        It takes a second, and it&apos;s the only time — your card is
+                        saved to your account, so future deliveries are charged
+                        automatically with no card entry. Manage or replace it
+                        anytime in{' '}
                         <a href="/dealer-settings" className="underline font-bold hover:text-amber-800 dark:hover:text-amber-200">
                           Settings → Payment method
-                        </a>{' '}
-                        to skip this step on future deliveries.
+                        </a>.
                       </p>
                     </div>
                   </div>
@@ -1473,6 +1526,19 @@ export default function ReviewDeliveryPage() {
       onRetry={handlePaymentRetry}
       loading={submitDelivery.isPending}
     />
+
+    {/* First-delivery card capture — opens when a prepaid customer without
+        a saved card clicks "Request Delivery". On success the paused
+        submission resumes automatically (handleSaveCardSuccess). Postpaid
+        customers never see it. */}
+    {customer?.profileId && (
+      <SaveCardDialog
+        open={showSaveCardDialog}
+        customerId={customer.profileId}
+        onSuccess={handleSaveCardSuccess}
+        onCancel={handleSaveCardCancel}
+      />
+    )}
     </div>
   );
 }
