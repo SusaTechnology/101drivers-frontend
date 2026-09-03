@@ -28,10 +28,6 @@ const INDIVIDUAL_PENDING_PAYLOAD_KEY = 'individualPendingPayload';
 interface VerifyOtpPayload {
   email: string;
   verificationToken: string;
-  // US state (2-letter code) from the signup form — forwarded from
-  // sessionStorage so the backend can apply the California auto-approval
-  // rule when it creates the Customer row.
-  state?: string;
   referralCode?: string;
 }
 
@@ -40,9 +36,6 @@ export default function IndividualVerifyEmailPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [email, setEmail] = useState('');
   const [referralCode, setReferralCode] = useState<string | undefined>(undefined);
-  // US state from the signup form (forwarded through sessionStorage) —
-  // sent to step 2 so the backend can apply the California auto-approval.
-  const [signupState, setSignupState] = useState<string | undefined>(undefined);
   const [countdown, setCountdown] = useState(0);
   const [registrationComplete, setRegistrationComplete] = useState(false);
 
@@ -72,15 +65,12 @@ export default function IndividualVerifyEmailPage() {
       if (stored) {
         const data = JSON.parse(stored);
         // The stored data may be the full payload (legacy), {email} (V1),
-        // or {email, state?, referralCode?} (V2).
+        // or {email, referralCode?} (V2).
         const email = data.email || data.contactEmail;
         if (email) {
           setEmail(email);
           if (data.referralCode) {
             setReferralCode(data.referralCode);
-          }
-          if (data.state) {
-            setSignupState(data.state);
           }
         } else {
           toast.error('No pending registration found', {
@@ -130,16 +120,19 @@ export default function IndividualVerifyEmailPage() {
   });
 
   // Mutation for verifying OTP and completing registration.
-  // Sends ONLY {email, verificationToken, state?} — no password, no payload.
-  // The backend reads the User data from the stored row (created in step 1).
+  // Sends ONLY {email, verificationToken, referralCode?} — no password, no
+  // payload. The backend reads the User data from the stored row (created
+  // in step 1).
   //
   // Two outcomes:
-  //  • customerApprovalStatus === 'APPROVED'  → private customer in
-  //    California — auto-approved by the backend at signup. The response IS
-  //    a full login payload (tokens + user), so we sign them in immediately
-  //    and send them to the dashboard. No "pending approval" screen.
-  //  • anything else (PENDING) → legacy/other-state flow: show the success
-  //    page — NOT auto-login. They can log in after the admin approves.
+  //  • customerApprovalStatus === 'APPROVED' → the normal path for ALL
+  //    private customers — the backend auto-approves them at signup. The
+  //    response IS a full login payload (tokens + user), so we sign them in
+  //    immediately and send them to the dashboard. No "pending approval"
+  //    screen.
+  //  • anything else (PENDING) → safety net (old backend, unexpected edge):
+  //    show the success page — NOT auto-login. They can log in after the
+  //    admin approves.
   const verifyOtpMutation = useDataMutation<
     any,
     VerifyOtpPayload
@@ -150,7 +143,7 @@ export default function IndividualVerifyEmailPage() {
       sessionStorage.removeItem(INDIVIDUAL_PENDING_PAYLOAD_KEY);
 
       if (data?.customerApprovalStatus === 'APPROVED') {
-        // ── Auto-approved (California) → auto-login ──
+        // ── Auto-approved private customer → auto-login ──
         // Same token/user handling as the sign-in pages.
         setAccessToken(data.accessToken);
         setUser({
@@ -173,7 +166,7 @@ export default function IndividualVerifyEmailPage() {
         return;
       }
 
-      // ── Pending admin approval (non-CA or legacy) ──
+      // ── Pending admin approval (safety net — see comment above) ──
       toast.success('Sign-up submitted successfully!', {
         description: 'Your account is pending admin approval.',
       });
@@ -218,7 +211,6 @@ export default function IndividualVerifyEmailPage() {
     const payload: VerifyOtpPayload = {
       email,
       verificationToken: otpValue,
-      ...(signupState ? { state: signupState } : {}),
       ...(referralCode ? { referralCode } : {}),
     };
     verifyOtpMutation.mutate(payload);

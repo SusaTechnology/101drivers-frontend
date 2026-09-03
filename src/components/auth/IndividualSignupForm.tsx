@@ -37,7 +37,6 @@ import {
   Loader2,
   Info,
   Check,
-  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +71,6 @@ const individualSignupSchema = z
       .string()
       .min(1, "Mobile number is required")
       .regex(/^\d{10}$/, "Phone number must be exactly 10 digits"),
-    state: z.string().min(1, "State is required"),
     password: z
       .string()
       .min(8, "Password must be at least 8 characters")
@@ -104,41 +102,8 @@ interface IndividualSignupPayload {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
-  // US state (2-letter code). Private customers in California are
-  // auto-approved at signup — see backend SignupStateUtil.
-  state?: string;
   referralCode?: string;
 }
-
-// All US states + DC — used for the signup State dropdown.
-const US_STATES: { code: string; name: string }[] = [
-  { code: "AL", name: "Alabama" }, { code: "AK", name: "Alaska" },
-  { code: "AZ", name: "Arizona" }, { code: "AR", name: "Arkansas" },
-  { code: "CA", name: "California" }, { code: "CO", name: "Colorado" },
-  { code: "CT", name: "Connecticut" }, { code: "DE", name: "Delaware" },
-  { code: "DC", name: "District of Columbia" }, { code: "FL", name: "Florida" },
-  { code: "GA", name: "Georgia" }, { code: "HI", name: "Hawaii" },
-  { code: "ID", name: "Idaho" }, { code: "IL", name: "Illinois" },
-  { code: "IN", name: "Indiana" }, { code: "IA", name: "Iowa" },
-  { code: "KS", name: "Kansas" }, { code: "KY", name: "Kentucky" },
-  { code: "LA", name: "Louisiana" }, { code: "ME", name: "Maine" },
-  { code: "MD", name: "Maryland" }, { code: "MA", name: "Massachusetts" },
-  { code: "MI", name: "Michigan" }, { code: "MN", name: "Minnesota" },
-  { code: "MS", name: "Mississippi" }, { code: "MO", name: "Missouri" },
-  { code: "MT", name: "Montana" }, { code: "NE", name: "Nebraska" },
-  { code: "NV", name: "Nevada" }, { code: "NH", name: "New Hampshire" },
-  { code: "NJ", name: "New Jersey" }, { code: "NM", name: "New Mexico" },
-  { code: "NY", name: "New York" }, { code: "NC", name: "North Carolina" },
-  { code: "ND", name: "North Dakota" }, { code: "OH", name: "Ohio" },
-  { code: "OK", name: "Oklahoma" }, { code: "OR", name: "Oregon" },
-  { code: "PA", name: "Pennsylvania" }, { code: "RI", name: "Rhode Island" },
-  { code: "SC", name: "South Carolina" }, { code: "SD", name: "South Dakota" },
-  { code: "TN", name: "Tennessee" }, { code: "TX", name: "Texas" },
-  { code: "UT", name: "Utah" }, { code: "VT", name: "Vermont" },
-  { code: "VA", name: "Virginia" }, { code: "WA", name: "Washington" },
-  { code: "WV", name: "West Virginia" }, { code: "WI", name: "Wisconsin" },
-  { code: "WY", name: "Wyoming" },
-];
 
 // ── Component ───────────────────────────────────────────────────────────
 export function IndividualSignupForm() {
@@ -171,7 +136,6 @@ export function IndividualSignupForm() {
       contactName: "",
       contactEmail: "",
       contactPhone: "",
-      state: "",
       password: "",
       confirmPassword: "",
       acceptTerms: false,
@@ -225,16 +189,16 @@ export function IndividualSignupForm() {
       toast.success("Code sent to your email", {
         description: data.message || "Please check your inbox.",
       });
-      // Store ONLY the email + state + optional referralCode in sessionStorage
+      // Store ONLY the email + optional referralCode in sessionStorage
       // (NOT the password or contact info — the backend has the User row
-      // with the hashed password). The verify page sends {email, otp, state?,
-      // referralCode?} — state is needed in step 2 because the California
-      // auto-approval happens when the Customer row is created (step 2).
+      // with the hashed password). The verify page sends {email, otp,
+      // referralCode?} — referralCode is needed in step 2 because the
+      // backend applies the customer referral AFTER creating the Customer
+      // row (which only happens in step 2).
       sessionStorage.setItem(
         INDIVIDUAL_PENDING_PAYLOAD_KEY,
         JSON.stringify({
           email: variables.email,
-          ...(variables.state ? { state: variables.state } : {}),
           ...(variables.referralCode ? { referralCode: variables.referralCode } : {}),
         }),
       );
@@ -304,7 +268,6 @@ export function IndividualSignupForm() {
       contactName: data.contactName.trim(),
       contactEmail: data.contactEmail.trim().toLowerCase(),
       contactPhone: data.contactPhone,
-      state: data.state,
       ...(referralCode ? { referralCode } : {}),
     };
     sendOtpMutation.mutate(payload);
@@ -471,40 +434,6 @@ export function IndividualSignupForm() {
                 <p className="text-sm text-red-500 font-medium">{errors.contactPhone.message}</p>
               )}
             </div>
-          </div>
-
-          {/* State — full width. Used for the California auto-approval rule:
-              private customers in CA skip admin approval entirely. */}
-          <div className="space-y-2">
-            <Label htmlFor="state" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              State<span className="text-red-500">*</span>
-            </Label>
-            <div className="relative">
-              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <select
-                id="state"
-                {...register("state")}
-                disabled={isPending}
-                className={cn(
-                  "w-full h-14 pl-12 pr-4 rounded-2xl border bg-white dark:bg-slate-800/40 input-focus-ring text-sm transition-colors appearance-none",
-                  errors.state
-                    ? "border-red-400 dark:border-red-500"
-                    : watch("state")
-                      ? "border-green-300 dark:border-green-700"
-                      : "border-slate-200 dark:border-slate-700"
-                )}
-              >
-                <option value="">Select your state</option>
-                {US_STATES.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {errors.state && (
-              <p className="text-sm text-red-500 font-medium">{errors.state.message}</p>
-            )}
           </div>
 
           {/* ── Account Password ────────────────────────────────────────── */}

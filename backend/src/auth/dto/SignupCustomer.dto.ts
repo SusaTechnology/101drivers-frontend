@@ -82,18 +82,6 @@ export class SignupCustomerDto {
   businessWebsite?: string;
 
   @ApiProperty({
-    example: "CA",
-    required: false,
-    description:
-      "US state the customer is located in (2-letter code or full name). " +
-      "PRIVATE customers in California are auto-approved at signup; other " +
-      "states follow the normal admin approval flow.",
-  })
-  @IsOptional()
-  @IsString()
-  state?: string;
-
-  @ApiProperty({
     required: false,
     nullable: true,
     description:

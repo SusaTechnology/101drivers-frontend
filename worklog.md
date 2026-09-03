@@ -824,3 +824,45 @@ Stage Summary:
 - Admin notifications for pricing-edit failures now render as a structured step-by-step timeline in the notification bell (dealer name → what they tried → system steps with ✓/✗ → PI ids → "this needs you" action list with Stripe dashboard link), not just a wall of pre-wrapped text.
 - All components are reusable: `PriceDifferenceConfirmDialog` and `PricingEditNarrativeCard` have no caller-specific logic and can be dropped into any future page (admin edit, mobile app, ops dashboard).
 - Existing create/update flows remain untouched — the engine is still a separate code path, and the PATCH /:id lockdown still routes dealers to /edit-pricing.
+
+---
+Task ID: ca-private-autoapprove
+Agent: Main Agent
+Task: Auto-approve PRIVATE customers in California at signup (no admin review) without disturbing existing flows
+
+Work Log:
+- NOTE: workspace was reset between sessions; re-cloned repo from origin (PAT), all prior commits intact (d400b46 was HEAD).
+- Explored the flow: private signup is 2-step OTP (IndividualSignupForm → individual-verify-email → POST /api/auth/signup/customer/private). Customer row created in step 2 with approvalStatus=PENDING; login/dashboard gated on approvalStatus.
+- Key gap: signup captured NO state — so a State dropdown had to be added to the private signup form (required, all 50 states + DC).
+- Backend: Customer.signupState String? column + migration 20260903000000_customer_signup_state (additive, safe). SignupCustomer.dto: optional state field. New SignupStateUtil normalizes 'ca'/'CA'/'California' → 'CA'.
+- signupPrivateCustomer: BOTH customer-create paths (OTP flow + legacy payload flow) now set approvalStatus=APPROVED + approvedAt when state=CA, and write a DEALER_APPROVE AdminAuditLog with actorType=SYSTEM, actorUserId=null, reason "Auto-approved at signup: private customer in California".
+- Frontend: IndividualSignupForm adds required State select (MapPin icon, green-border when selected); state forwarded via sessionStorage payload. individual-verify-email sends state in step-2 body; if response customerApprovalStatus==='APPROVED' (backend issueToken always includes it), treats the response as a login: setAccessToken + setUser + startSessionKeepAlive → navigate /dealer-dashboard (private customers use dealer pages). Non-CA → unchanged pending-approval screen.
+- Backward compat: pending signups from before the deploy send no state → PENDING as before; old clients without the field unaffected; business customers untouched.
+- Verified: prisma schema valid (DB_URL dummy needed in fresh clone); backend tsc clean (only pre-existing auth.service.spec validateUser arity error, confirmed pre-existing via stash test); frontend vite build passes.
+- Committed b370e43 + pushed. Lockfile churn from npm install accidentally swept in — reverted in follow-up commit 6b1389c (package-lock.json/yarn.lock restored to d400b46 state).
+- Deployment note: migration must run (prisma migrate deploy) on go-live deploy BEFORE the new backend serves traffic.
+
+Stage Summary:
+- CA private customers: signup → OTP → immediately logged in on /dealer-dashboard, APPROVED, zero admin touch.
+- Non-CA private + all business: existing approval flow byte-identical.
+- Auditability: signupState column + SYSTEM audit log entry per auto-approval.
+
+---
+Task ID: private-autoapprove-nostate
+Agent: Main Agent
+Task: Remove the CA/state gate — ALL private customers auto-approved at signup
+
+Work Log:
+- User decision: regional availability is enforced elsewhere (address validation already restricts deliveries to California), so the signup-time state check from b370e43 is unnecessary. Private customers skip admin approval regardless of location.
+- Backend auth.service.ts: removed SignupStateUtil import + the signupState/autoApprove gate; BOTH customer-create paths (OTP flow + legacy payload flow) now ALWAYS set approvalStatus=APPROVED + approvedAt and write the SYSTEM DEALER_APPROVE AdminAuditLog (actorUserId=null). Audit reason simplified to "Auto-approved at signup: private customer (no admin review required)".
+- Removed SignupStateUtil file, removed state field from SignupCustomer.dto, removed Customer.signupState from schema.prisma + added drop migration 20260903010000_drop_customer_signup_state (DROP COLUMN IF EXISTS — pairs with the add migration from b370e43; applying both in order is a net no-op on fresh DBs; if b370e43's migration was already applied, only the drop runs).
+- Frontend IndividualSignupForm.tsx: removed the required State dropdown entirely (zod schema field, payload field, US_STATES list, JSX block, MapPin import, sessionStorage forwarding) — signup form is back to its pre-CA field set.
+- Frontend individual-verify-email.tsx: removed signupState state + step-2 body field; KEPT the auto-login path (customerApprovalStatus === 'APPROVED' → setAccessToken/setUser/startSessionKeepAlive → /dealer-dashboard) which is now the normal path for every private customer; PENDING screen kept as safety net (old backend / unexpected edge).
+- Business customers: untouched — still PENDING → admin approval (customerApproval.engine.ts, wantsPostpaid/postpaid selection intact).
+- Verified: backend `npm run build` (prisma generate + nest build) → only 2 pre-existing baseline errors (missing src/upload/upload.module + @nestjs/platform-socket.io dep — both confirmed present at HEAD via git show); frontend `vite build` passes; frontend tsc (scoped tsconfig) 144 errors before == 144 after → 0 new (stash-compared).
+- Committed + pushed to origin/master.
+
+Stage Summary:
+- Private customer signup: OTP → instantly APPROVED + auto-logged in to /dealer-dashboard, any state, zero admin touch, SYSTEM audit log per approval.
+- No state/CA artifacts left in signup (no dropdown, no signupState column, no util).
+- Business approval flow byte-identical. Deployment note: run prisma migrate deploy as usual — the add+drop migration pair nets out cleanly.
