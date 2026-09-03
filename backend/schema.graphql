@@ -839,6 +839,8 @@ type DeliveryRequest {
   vehicleColor: String
   vehicleMake: String
   vehicleModel: String
+  vehicleStandardsConfirmed: Boolean
+  vehicleStandardsConfirmedAt: DateTime
   vinVerificationCode: String
 }
 
@@ -897,6 +899,8 @@ input DeliveryRequestCreateInput {
   vehicleColor: String
   vehicleMake: String
   vehicleModel: String
+  vehicleStandardsConfirmed: Boolean
+  vehicleStandardsConfirmedAt: DateTime
   vinVerificationCode: String
 }
 
@@ -967,6 +971,8 @@ input DeliveryRequestOrderByInput {
   vehicleColor: SortOrder
   vehicleMake: SortOrder
   vehicleModel: SortOrder
+  vehicleStandardsConfirmed: SortOrder
+  vehicleStandardsConfirmedAt: SortOrder
   vinVerificationCode: SortOrder
 }
 
@@ -1025,6 +1031,8 @@ input DeliveryRequestUpdateInput {
   vehicleColor: String
   vehicleMake: String
   vehicleModel: String
+  vehicleStandardsConfirmed: Boolean
+  vehicleStandardsConfirmedAt: DateTime
   vinVerificationCode: String
 }
 
@@ -1104,6 +1112,7 @@ input DeliveryRequestWhereInput {
   vehicleColor: StringNullableFilter
   vehicleMake: StringNullableFilter
   vehicleModel: StringNullableFilter
+  vehicleStandardsConfirmed: BooleanFilter
   vinVerificationCode: StringNullableFilter
 }
 
@@ -1209,8 +1218,11 @@ type DisputeCase {
   notes(orderBy: [DisputeNoteOrderByInput!], skip: Float, take: Float, where: DisputeNoteWhereInput): [DisputeNote!]!
   openedAt: DateTime!
   reason: String!
+  rejectionReason: String
   resolvedAt: DateTime
+  resolvedById: String
   status: EnumDisputeCaseStatus
+  stripeRefundId: String
   updatedAt: DateTime!
 }
 
@@ -1821,6 +1833,7 @@ enum EnumDeliveryEvidencePhase {
 }
 
 enum EnumDeliveryEvidenceType {
+  DashboardPhoto
   DropoffPhoto
   OdometerEnd
   OdometerStart
@@ -1854,6 +1867,7 @@ enum EnumDeliveryRequestStatus {
   Active
   Booked
   Cancelled
+  Closed
   Completed
   Disputed
   Draft
@@ -1878,6 +1892,7 @@ enum EnumDeliveryStatusHistoryFromStatus {
   Active
   Booked
   Cancelled
+  Closed
   Completed
   Disputed
   Draft
@@ -1890,6 +1905,7 @@ enum EnumDeliveryStatusHistoryToStatus {
   Active
   Booked
   Cancelled
+  Closed
   Completed
   Disputed
   Draft
@@ -1901,6 +1917,7 @@ enum EnumDeliveryStatusHistoryToStatus {
 enum EnumDisputeCaseStatus {
   Closed
   Open
+  Rejected
   Resolved
   UnderReview
 }
@@ -1915,8 +1932,11 @@ enum EnumDriverPayoutStatus {
 
 enum EnumDriverStatus {
   Approved
-  Pending
+  Invited
+  PendingApproval
+  Rejected
   Suspended
+  Waitlisted
 }
 
 enum EnumNotificationEventChannel {
@@ -1931,6 +1951,7 @@ enum EnumNotificationEventStatus {
 }
 
 enum EnumNotificationEventType {
+  AdminCommissionReceived
   DealerApproved
   DealerSignup
   DeliveryAssigned
@@ -1941,6 +1962,9 @@ enum EnumNotificationEventType {
   DisputeOpened
   DisputeUpdated
   DriverApproved
+  DriverPayoutFailed
+  DriverPayoutInitiated
+  DriverPayoutPaid
   DriverSignup
   PaymentAuthorized
   PaymentCaptured
@@ -1992,10 +2016,13 @@ enum EnumPaymentProvider {
 enum EnumPaymentStatus {
   Authorized
   Captured
+  ChargeFailed
   Failed
   Invoiced
   Paid
+  PendingStripeUsage
   Refunded
+  UsageReported
   Voided
 }
 
@@ -2697,6 +2724,8 @@ type Payment {
   providerPaymentIntentId: String
   refundedAt: DateTime
   status: EnumPaymentStatus
+  stripeInvoiceId: String
+  stripeInvoiceItemId: String
   updatedAt: DateTime!
   voidedAt: DateTime
 }
@@ -2957,8 +2986,10 @@ type PricingConfig {
   description: String
   driverSharePct: Float!
   feePassThrough: Boolean!
+  flatMiles: Float
   id: String!
   insuranceFee: Float!
+  isDefault: Boolean!
   name: String
   perMileRate: Float
   pricingMode: EnumPricingConfigPricingMode
@@ -2976,6 +3007,7 @@ input PricingConfigCreateInput {
   description: String
   driverSharePct: Float!
   feePassThrough: Boolean!
+  flatMiles: Float
   insuranceFee: Float!
   name: String
   perMileRate: Float
@@ -3010,6 +3042,7 @@ input PricingConfigUpdateInput {
   description: String
   driverSharePct: Float
   feePassThrough: Boolean
+  flatMiles: Float
   insuranceFee: Float
   name: String
   perMileRate: Float
@@ -4290,8 +4323,13 @@ input UserCreateInput {
 
 type UserInfo {
   accessToken: String
+  customerApprovalStatus: String
+  driverStatus: String
   email: String
+  fullName: String
   id: String!
+  onboardingCompleted: Boolean
+  onboardingToken: String
   profileId: String
   refreshToken: String
   roles: [String!]!
