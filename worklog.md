@@ -866,3 +866,24 @@ Stage Summary:
 - Private customer signup: OTP → instantly APPROVED + auto-logged in to /dealer-dashboard, any state, zero admin touch, SYSTEM audit log per approval.
 - No state/CA artifacts left in signup (no dropdown, no signupState column, no util).
 - Business approval flow byte-identical. Deployment note: run prisma migrate deploy as usual — the add+drop migration pair nets out cleanly.
+
+---
+Task ID: recipient-autofill-private
+Agent: Main Agent
+Task: Auto-fill Recipient Information from the private customer's own profile on the create-delivery page
+
+Work Log:
+- User requirement: on a personal (private) delivery the recipient is the customer themself — the Recipient Info section should be prefilled from their profile data (editable), so they don't retype it.
+- Explored dealer-create-delivery.tsx: Recipient Information section (Step 4) has recipientName/recipientEmail/recipientPhone (+ optional recipientBusinessName). Phone input stores "(555) 123-4567" via formatUSPhone. Page already fetches the customer profile (customerDataQuery → GET /api/customers/:profileId).
+- Verified backend GET /api/customers/:id returns full row: contactName, contactEmail, contactPhone, phone + nested user (fullName/email/phone); grants.json attributes "*" so no ACL field stripping.
+- Implementation (frontend only, dealer-create-delivery.tsx):
+  - Extended the local CustomerData interface with contactName/contactEmail/phone/contactPhone + nested user.
+  - Added getValues to the useForm destructure.
+  - New useEffect (after the postpaid paymentType effect): when profile loads AND customerType === 'PRIVATE', fills recipientName (contactName || user.fullName), recipientEmail (contactEmail || user.email), recipientPhone (phone || contactPhone || user.phone → digits → formatUSPhone) — each field ONLY if still empty.
+  - Fill-only-if-empty guarantees review-page restore (reviewDeliveryData), draft restore, and user-typed values always win; values remain fully editable.
+  - Business dealers get NO prefill (their recipient is their end customer).
+- Verified: vite build passes; scoped tsc 144 baseline errors before == 144 after → 0 new.
+- NOTE: backend/src/upload/upload.module.ts stub on disk is a LOCAL TEST artifact (pre-existing broken import from commit 76afd51) — intentionally NOT committed.
+
+Stage Summary:
+- Private customers now see their own name/email/phone prefilled as recipient when creating a personal delivery; everything stays editable; business flow untouched.

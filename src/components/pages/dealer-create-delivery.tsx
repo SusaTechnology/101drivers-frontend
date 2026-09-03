@@ -256,6 +256,17 @@ interface CustomerData {
   postpaidEnabled: boolean;
   approvalStatus: string;
   customerType: 'PRIVATE' | 'BUSINESS';
+  // Profile fields used to pre-fill the Recipient Information section for
+  // private (personal) deliveries — the recipient is usually the customer.
+  contactName?: string | null;
+  contactEmail?: string | null;
+  phone?: string | null;
+  contactPhone?: string | null;
+  user?: {
+    fullName?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
 }
 
 // Helper to parse time window like "9:00 AM – 11:00 AM"
@@ -1164,6 +1175,7 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
     handleSubmit,
     watch,
     setValue,
+    getValues,
     trigger,
     setError,
     clearErrors,
@@ -1190,6 +1202,41 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
       setValue('paymentType', 'PREPAID');
     }
   }, [postpaidEnabled, setValue]);
+
+  // ── Auto-fill Recipient Information for personal (private) deliveries ──
+  // A private customer is sending their OWN vehicle, so the recipient is
+  // usually the customer themself — pre-fill name/email/phone from their
+  // profile once it loads so they don't have to retype it.
+  //
+  // Each field is filled ONLY if it is still empty, so the review-page
+  // restore, the draft restore, and anything the user has already typed
+  // always win — the customer can still change any prefilled value freely.
+  // Business dealers deliver on behalf of their shop (the recipient is
+  // their end customer), so they get NO prefill.
+  useEffect(() => {
+    const profile = customerDataQuery.data;
+    if (!profile || profile.customerType !== 'PRIVATE') return;
+
+    const profileName = (profile.contactName || profile.user?.fullName || '').trim();
+    const profileEmail = (profile.contactEmail || profile.user?.email || '').trim();
+    const profilePhoneDigits = (profile.phone || profile.contactPhone || profile.user?.phone || '')
+      .replace(/\D/g, '')
+      .slice(0, 10);
+
+    if (profileName && !(getValues('recipientName') || '').trim()) {
+      setValue('recipientName', profileName);
+    }
+    if (profileEmail && !(getValues('recipientEmail') || '').trim()) {
+      setValue('recipientEmail', profileEmail);
+    }
+    if (
+      profilePhoneDigits.length === 10 &&
+      (getValues('recipientPhone') || '').replace(/\D/g, '').length === 0
+    ) {
+      // Same "(555) 123-4567" format the phone input produces.
+      setValue('recipientPhone', formatUSPhone(profilePhoneDigits));
+    }
+  }, [customerDataQuery.data, setValue, getValues]);
 
   // Load Google Maps API
   const { isLoaded } = useJsApiLoader({
