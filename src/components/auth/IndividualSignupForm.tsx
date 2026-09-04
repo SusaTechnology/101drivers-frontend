@@ -53,7 +53,7 @@ import { cn } from "@/lib/utils";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
 import PolicySheet from "@/components/shared/PolicySheet";
 import PendingRegistrationDialog from "@/components/auth/PendingRegistrationDialog";
-import { ReferralCodeInput } from "@/components/shared/ReferralCodeInput";
+import { ReferralCodeWidget } from "@/components/shared/ReferralCodeWidget";
 
 // sessionStorage key for the pending signup payload (so the verify page
 // can read it and complete the registration).
@@ -659,9 +659,11 @@ export function IndividualSignupForm() {
             </p>
           </div>
 
-          {/* Referral Code (optional) — auto-fills from ?ref= URL param,
-              validates against /api/referrals/public/resolve/:code */}
-          <ReferralCodeInput
+          {/* Referral capture — 3-state widget (closed / typing / locked chip).
+              Deep links (?ref= in URL) land locked; validates against
+              /api/referrals/public/resolve/:code; onChange emits the code
+              only while locked. Sits directly above the green submit button. */}
+          <ReferralCodeWidget
             onChange={setReferralCode}
             disabled={isPending}
             allowedReferrerTypes={["DRIVER", "BUSINESS", "PERSONAL"]}

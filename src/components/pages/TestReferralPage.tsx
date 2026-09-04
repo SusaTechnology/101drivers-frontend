@@ -282,7 +282,7 @@ export default function TestReferralPage({ code }: Props) {
 
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center mt-3 leading-relaxed">
                   The referral code <span className="font-mono font-bold">{upperCode}</span> will be
-                  auto-filled in the signup form. You can edit or clear it before submitting.
+                  applied automatically on the signup form — no need to type it in.
                 </p>
               </div>
             ) : !isLoading && !isError ? (

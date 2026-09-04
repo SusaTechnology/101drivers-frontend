@@ -565,7 +565,25 @@ export function DealerSignIn({
                   )}
                 </Button>
 
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  {/* Referral entry — text link ONLY (per spec): tapping does
+                      not open a field here; it routes to the individual signup
+                      card, which consumes the referral_open session flag and
+                      any referral_code already in session. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem("referral_open", "1");
+                      } catch {
+                        /* sessionStorage unavailable — still route to signup */
+                      }
+                      navigate({ to: "/auth/individual-signup" });
+                    }}
+                    className="block text-sm font-semibold text-primary hover:underline underline-offset-4 transition-colors"
+                  >
+                    Have a referral code?
+                  </button>
                   <p className="text-sm text-slate-600 dark:text-slate-400">
                     Don't have an account?{" "}
                     <Button

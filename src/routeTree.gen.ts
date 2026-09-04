@@ -13,6 +13,7 @@ import { Route as DriverRouteImport } from './routes/driver'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TestReferralIndexRouteImport } from './routes/test-referral/index'
 import { Route as TermsIndexRouteImport } from './routes/terms/index'
+import { Route as SignupIndexRouteImport } from './routes/signup/index'
 import { Route as QuoteDetailsIndexRouteImport } from './routes/quote-details/index'
 import { Route as QuoteConfirmationIndexRouteImport } from './routes/quote-confirmation/index'
 import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
@@ -139,6 +140,11 @@ const TestReferralIndexRoute = TestReferralIndexRouteImport.update({
 const TermsIndexRoute = TermsIndexRouteImport.update({
   id: '/terms/',
   path: '/terms/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupIndexRoute = SignupIndexRouteImport.update({
+  id: '/signup/',
+  path: '/signup/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QuoteDetailsIndexRoute = QuoteDetailsIndexRouteImport.update({
@@ -810,6 +816,7 @@ export interface FileRoutesByFullPath {
   '/privacy/': typeof PrivacyIndexRoute
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
   '/quote-details/': typeof QuoteDetailsIndexRoute
+  '/signup/': typeof SignupIndexRoute
   '/terms/': typeof TermsIndexRoute
   '/test-referral/': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
@@ -922,6 +929,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyIndexRoute
   '/quote-confirmation': typeof QuoteConfirmationIndexRoute
   '/quote-details': typeof QuoteDetailsIndexRoute
+  '/signup': typeof SignupIndexRoute
   '/terms': typeof TermsIndexRoute
   '/test-referral': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
@@ -1036,6 +1044,7 @@ export interface FileRoutesById {
   '/privacy/': typeof PrivacyIndexRoute
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
   '/quote-details/': typeof QuoteDetailsIndexRoute
+  '/signup/': typeof SignupIndexRoute
   '/terms/': typeof TermsIndexRoute
   '/test-referral/': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
@@ -1151,6 +1160,7 @@ export interface FileRouteTypes {
     | '/privacy/'
     | '/quote-confirmation/'
     | '/quote-details/'
+    | '/signup/'
     | '/terms/'
     | '/test-referral/'
     | '/admin-pricing-config/edit/$configId'
@@ -1263,6 +1273,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/quote-confirmation'
     | '/quote-details'
+    | '/signup'
     | '/terms'
     | '/test-referral'
     | '/admin-pricing-config/edit/$configId'
@@ -1376,6 +1387,7 @@ export interface FileRouteTypes {
     | '/privacy/'
     | '/quote-confirmation/'
     | '/quote-details/'
+    | '/signup/'
     | '/terms/'
     | '/test-referral/'
     | '/admin-pricing-config/edit/$configId'
@@ -1468,6 +1480,7 @@ export interface RootRouteChildren {
   PrivacyIndexRoute: typeof PrivacyIndexRoute
   QuoteConfirmationIndexRoute: typeof QuoteConfirmationIndexRoute
   QuoteDetailsIndexRoute: typeof QuoteDetailsIndexRoute
+  SignupIndexRoute: typeof SignupIndexRoute
   TermsIndexRoute: typeof TermsIndexRoute
   TestReferralIndexRoute: typeof TestReferralIndexRoute
   AdminPricingConfigEditConfigIdRoute: typeof AdminPricingConfigEditConfigIdRoute
@@ -1504,6 +1517,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms/'
       preLoaderRoute: typeof TermsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup/': {
+      id: '/signup/'
+      path: '/signup'
+      fullPath: '/signup/'
+      preLoaderRoute: typeof SignupIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/quote-details/': {
@@ -2395,6 +2415,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyIndexRoute: PrivacyIndexRoute,
   QuoteConfirmationIndexRoute: QuoteConfirmationIndexRoute,
   QuoteDetailsIndexRoute: QuoteDetailsIndexRoute,
+  SignupIndexRoute: SignupIndexRoute,
   TermsIndexRoute: TermsIndexRoute,
   TestReferralIndexRoute: TestReferralIndexRoute,
   AdminPricingConfigEditConfigIdRoute: AdminPricingConfigEditConfigIdRoute,
