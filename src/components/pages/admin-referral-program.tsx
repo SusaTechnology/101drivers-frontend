@@ -87,6 +87,11 @@ interface ReferralConfig {
   perDeliveryBonusTriggerCount: number;
   customerReferralsEnabled: boolean;
   driverReferralsEnabled: boolean;
+  // ── V3 fields (window + business/residential programs) ──
+  referralWindowDays: number;
+  businessReferralAmountCents: number;
+  residentialReferralAmountCents: number;
+  businessReferralRollingCapCents: number;
 }
 
 interface AdminStats {
@@ -248,6 +253,11 @@ export default function AdminReferralProgramPage() {
   const [formPerDeliveryReferrerDollars, setFormPerDeliveryReferrerDollars] = useState('5.00');
   const [formPerDeliveryReferredBonusDollars, setFormPerDeliveryReferredBonusDollars] = useState('50.00');
   const [formPerDeliveryBonusTriggerCount, setFormPerDeliveryBonusTriggerCount] = useState('5');
+  // ── V3 fields (window + business/residential programs) ──
+  const [formReferralWindowDays, setFormReferralWindowDays] = useState('30');
+  const [formBusinessReferralDollars, setFormBusinessReferralDollars] = useState('10.00');
+  const [formResidentialReferralDollars, setFormResidentialReferralDollars] = useState('5.00');
+  const [formBusinessCapDollars, setFormBusinessCapDollars] = useState('300.00');
   const [formCustomerReferralsEnabled, setFormCustomerReferralsEnabled] = useState(true);
   const [formDriverReferralsEnabled, setFormDriverReferralsEnabled] = useState(true);
 
@@ -326,6 +336,11 @@ export default function AdminReferralProgramPage() {
         ((data.perDeliveryReferredBonusCents ?? 5000) / 100).toFixed(2),
       );
       setFormPerDeliveryBonusTriggerCount(String(data.perDeliveryBonusTriggerCount ?? 5));
+      // ── V3 fields ──
+      setFormReferralWindowDays(String(data.referralWindowDays ?? 30));
+      setFormBusinessReferralDollars(((data.businessReferralAmountCents ?? 1000) / 100).toFixed(2));
+      setFormResidentialReferralDollars(((data.residentialReferralAmountCents ?? 500) / 100).toFixed(2));
+      setFormBusinessCapDollars(((data.businessReferralRollingCapCents ?? 30000) / 100).toFixed(2));
       setFormCustomerReferralsEnabled(data.customerReferralsEnabled ?? true);
       setFormDriverReferralsEnabled(data.driverReferralsEnabled ?? true);
     }
@@ -450,6 +465,11 @@ export default function AdminReferralProgramPage() {
       perDeliveryReferrerAmountCents: Math.round(perDeliveryReferrerDollars * 100),
       perDeliveryReferredBonusCents: Math.round(perDeliveryReferredBonusDollars * 100),
       perDeliveryBonusTriggerCount: Math.floor(perDeliveryBonusTriggerCount),
+      // ── V3 fields ──
+      referralWindowDays: Math.max(1, Math.floor(Number(formReferralWindowDays) || 30)),
+      businessReferralAmountCents: Math.round(Number(formBusinessReferralDollars || '0') * 100),
+      residentialReferralAmountCents: Math.round(Number(formResidentialReferralDollars || '0') * 100),
+      businessReferralRollingCapCents: Math.round(Number(formBusinessCapDollars || '0') * 100),
       customerReferralsEnabled: formCustomerReferralsEnabled,
       driverReferralsEnabled: formDriverReferralsEnabled,
     };
@@ -1033,6 +1053,82 @@ export default function AdminReferralProgramPage() {
                         Which paid delivery triggers the bonus. Default 5 (the 5th).
                       </p>
                     </div>
+                  </div>
+
+                  {/* ── V3: driver-referral window ── */}
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      Driver referral window (days from signup)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={formReferralWindowDays}
+                      onChange={(e) => setFormReferralWindowDays(e.target.value)}
+                      placeholder="30"
+                      className="h-12 rounded-2xl max-w-xs"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      The referred driver must complete the bonus trigger count of paid deliveries
+                      within this many days of signing up, or the referral expires UNPAID (no partial
+                      payout). Clock starts at the driver's account creation. Default 30.
+                    </p>
+                  </div>
+
+                  {/* ── V3: business / residential referral rewards ── */}
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      Business referral reward ($) — one-time
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formBusinessReferralDollars}
+                      onChange={(e) => setFormBusinessReferralDollars(e.target.value)}
+                      placeholder="10.00"
+                      className="h-12 rounded-2xl"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      Paid to the referrer ONCE when a referred BUSINESS customer completes their first
+                      paid delivery. Default $10.00.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      Business referral rolling cap ($ / 30 days)
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formBusinessCapDollars}
+                      onChange={(e) => setFormBusinessCapDollars(e.target.value)}
+                      placeholder="300.00"
+                      className="h-12 rounded-2xl"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      Max a referrer can earn from business referrals in any trailing 30-day window.
+                      Overflow is forfeited. 0 disables the cap. Default $300.00.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                      Residential referral reward ($) — one-time
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formResidentialReferralDollars}
+                      onChange={(e) => setFormResidentialReferralDollars(e.target.value)}
+                      placeholder="5.00"
+                      className="h-12 rounded-2xl"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      Paid to the referrer ONCE when a referred PERSONAL customer completes their first
+                      paid delivery. No cap. Default $5.00.
+                    </p>
                   </div>
                 </div>
               )}

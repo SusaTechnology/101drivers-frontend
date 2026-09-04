@@ -125,6 +125,14 @@ export default function DriverWalletPage() {
 
   const referrals = referralHistory?.referrals || []
 
+  // ── V3: Referred-side progress ("show BOTH sides live progress") ──
+  // If THIS driver was referred, show their own referral progress banner:
+  // deliveries completed out of the trigger count + days remaining.
+  const { data: referredStatus } = useDataQuery<any>({
+    apiEndPoint: `${API_URL}/api/referrals/my-referred-status`,
+    noFilter: true,
+  })
+
   // ── Referral Program Config (admin-configurable, V2 PER_DELIVERY model) ─
   // Drives every dynamic value on the "Refer a Friend" card:
   // The old config fetches the same /api/referrals/program-config endpoint.
@@ -216,6 +224,13 @@ export default function DriverWalletPage() {
       typeof referralConfigData?.referredRewardAmount === 'number'
         ? referralConfigData.referredRewardAmount
         : DEFAULT_REFERRAL_CONFIG.referredRewardAmount,
+    // V3: the actual $50 trigger count lives on perDeliveryBonusTriggerCount
+    // (requiredDeliveries is the legacy TIERED field and stays at 30)
+    triggerCount:
+      typeof referralConfigData?.perDeliveryBonusTriggerCount === 'number' &&
+      referralConfigData.perDeliveryBonusTriggerCount >= 1
+        ? referralConfigData.perDeliveryBonusTriggerCount
+        : 5,
   }
 
   // Build the human-readable description string for the "Refer a Friend" card.
@@ -224,8 +239,15 @@ export default function DriverWalletPage() {
     // V2 spec: Drivers referring other drivers earn $50 when the referred
     // driver completes their 5th paid delivery. No per-delivery payout for
     // referred drivers — only the one-shot $50 bonus.
+    // V3: the trigger count comes from perDeliveryBonusTriggerCount (the
+    // my-stats endpoint also exposes it as `triggerCount`).
     const bonusAmount = referralConfig.referredRewardAmount ?? 50
-    const triggerCount = referralConfig.requiredDeliveries ?? 5
+    const triggerCount =
+      (typeof referralStats?.triggerCount === 'number' && referralStats.triggerCount >= 1
+        ? referralStats.triggerCount
+        : null) ??
+      referralConfig.triggerCount ??
+      5
 
     return `Share your unique referral link with friends who want to become drivers. When they sign up using your link and complete ${triggerCount} paid deliveries, you earn $${bonusAmount}. Refer as many friends as you want — codes never expire.`
   }
@@ -559,8 +581,23 @@ export default function DriverWalletPage() {
             variant="outline"
             className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
           >
-            {/* V2: "Delivery X of Y" (was "On trip X of Y") */}
-            Delivery {ref.completedPaidDeliveries || ref.tripsCompleted || 0} of {ref.requiredDeliveries || referralConfig.requiredDeliveries}
+            {/* V3: "Delivery X of 5" — X from the completed PAID delivery
+                counter, Y from the perDeliveryBonusTriggerCount (5). The
+                old code read requiredDeliveries (legacy TIERED field, 30). */}
+            Delivery {ref.completedPaidDeliveries ?? ref.tripsCompleted ?? 0} of {referralConfig.triggerCount}
+            {typeof ref.daysRemaining === 'number' && (
+              <span className="font-bold">· {ref.daysRemaining}d left</span>
+            )}
+          </Badge>
+        )
+      case 'EXPIRED':
+        return (
+          <Badge
+            variant="outline"
+            className="bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30 text-red-700 dark:text-red-300 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-extrabold border"
+          >
+            <AlertCircle className="w-3.5 h-3.5" />
+            Expired — window closed
           </Badge>
         )
       case 'COMPLETED':
@@ -885,6 +922,43 @@ export default function DriverWalletPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* ═══════════════════════════════════════════════════════
+            2b. Your referral progress (if THIS driver was referred)
+            V3: "show both sides live progress" — the referred driver
+            sees their own deliveries-vs-target and days remaining.
+        ═══════════════════════════════════════════════════════ */}
+        {referredStatus && referredStatus.referralCode && (
+          <Card className="border-primary/20 bg-primary/[0.03] dark:bg-primary/[0.05] shadow-lg">
+            <CardContent className="p-5 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Gift className="w-5 h-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black">
+                  Referred by {referredStatus.referrerName || 'a 101drivers user'}
+                </p>
+                {referredStatus.expiredUnpaid ? (
+                  <p className="text-xs font-semibold text-red-600 dark:text-red-400 mt-1">
+                    The {referredStatus.triggerCount ?? 5}-delivery window closed before the target was
+                    reached — this referral expired without a payout.
+                  </p>
+                ) : referredStatus.status === 'REWARD_PAID' ? (
+                  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-1">
+                    Referral complete — the reward has been paid out.
+                  </p>
+                ) : (
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
+                    {referredStatus.completedPaidDeliveries ?? 0} of{' '}
+                    {referredStatus.triggerCount ?? referralConfig.triggerCount} paid deliveries completed
+                    {typeof referredStatus.daysRemaining === 'number' &&
+                      ` · ${referredStatus.daysRemaining} day${referredStatus.daysRemaining === 1 ? '' : 's'} remaining`}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ═══════════════════════════════════════════════════════
             3. Referral History

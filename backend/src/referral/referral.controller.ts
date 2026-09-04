@@ -57,6 +57,24 @@ export class ReferralController {
   }
 
   /**
+   * GET /referrals/my-referred-status
+   * V3: the referred side's live referral status — progress toward the
+   * $50 trigger (completedPaidDeliveries of triggerCount) and days
+   * remaining before the 30-day window closes. Null when not referred.
+   * Used by the driver wallet "Referred by …" progress banner.
+   */
+  @common.Get("my-referred-status")
+  @swagger.ApiOkResponse({ description: "Referred driver's own referral progress" })
+  async getMyReferredStatus(
+    @common.Req() req: any,
+    @common.Res() res: Response,
+  ): Promise<void> {
+    const driverId = await this.referralService.resolveDriverId(req);
+    const status = await this.referralService.getMyReferredStatus(driverId);
+    res.json(status);
+  }
+
+  /**
    * POST /referrals/apply
    * Called when a new driver signs up with a referral code.
    */

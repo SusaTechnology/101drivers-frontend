@@ -179,21 +179,28 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
     if (!configData) return "Loading referral program info…";
     if (!isActive) return "The referral program is currently paused.";
     if (referrerType === "DRIVER") {
-      // V2 spec: Drivers referring drivers earn $50 when the referred
-      // driver completes their 5th paid delivery. No per-delivery payout
-      // for referred drivers — only the one-shot $50 bonus.
-      const bonusAmount = configData.referredRewardAmount ?? 50;
-      const triggerCount = configData.requiredDeliveries ?? 5;
-      return `Earn $${bonusAmount} when a driver you refer completes ${triggerCount} paid deliveries. Refer as many as you want — codes never expire.`;
+      // V3 spec: Drivers referring drivers earn $50 when the referred
+      // driver completes their 5th paid delivery — within 30 days of the
+      // driver's signup. No per-delivery payout for referred drivers.
+      // NOTE: the trigger count is perDeliveryBonusTriggerCount — the old
+      // code read requiredDeliveries (legacy TIERED field, default 30).
+      const bonusAmount = configData.perDeliveryReferredBonusCents
+        ? configData.perDeliveryReferredBonusCents / 100
+        : 50;
+      const triggerCount = configData.perDeliveryBonusTriggerCount ?? 5;
+      const windowDays = configData.referralWindowDays ?? 30;
+      return `Earn $${bonusAmount} when a driver you refer completes ${triggerCount} paid deliveries within ${windowDays} days of their signup. Refer as many as you want — codes never expire.`;
     }
-    // CUSTOMER — V2 spec: per-delivery payouts vary by customer type.
-    // Personal: $5/delivery. Business: $10/delivery.
-    // Plus $50 when a referred driver completes their 5th delivery.
-    const personalCents = configData.perDeliveryPersonalReferrerAmountCents ?? 500;
-    const businessCents = configData.perDeliveryBusinessReferrerAmountCents ?? 1000;
+    // CUSTOMER — V3 spec: one-time first-delivery rewards, keyed to the
+    // referred customer's TYPE (not the referrer's):
+    //   referred BUSINESS customer → $10 once (rolling 30-day $300 cap)
+    //   referred PERSONAL customer → $5 once (no cap)
+    // Plus $50 when a referred DRIVER completes their 5th paid delivery.
+    const businessCents = configData.businessReferralAmountCents ?? 1000;
+    const residentialCents = configData.residentialReferralAmountCents ?? 500;
     const bonusCents = configData.perDeliveryReferredBonusCents ?? 5000;
     const triggerCount = configData.perDeliveryBonusTriggerCount ?? 5;
-    return `Earn $${(personalCents / 100).toFixed(2)} per paid delivery from personal customers you refer, $${(businessCents / 100).toFixed(2)} per paid delivery from business customers, plus $${(bonusCents / 100).toFixed(2)} when a driver you refer completes their ${triggerCount}th paid delivery.`;
+    return `Earn $${(businessCents / 100).toFixed(2)} when a business customer you refer completes their first paid delivery (up to $${((configData.businessReferralRollingCapCents ?? 30000) / 100).toFixed(0)} per rolling 30 days), $${(residentialCents / 100).toFixed(2)} for personal customers — plus $${(bonusCents / 100).toFixed(2)} when a driver you refer completes their ${triggerCount}th paid delivery.`;
   }, [configData, isActive, referrerType]);
 
   // ── Don't render if the program config isn't loaded yet ──────────
@@ -296,6 +303,98 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
               ))}
             </div>
           )}
+
+          {/* V3: business-referral rolling 30-day cap meter (customer referrers) */}
+          {referrerType === "CUSTOMER" &&
+            typeof statsData?.businessReferralCapCents === "number" &&
+            statsData.businessReferralCapCents > 0 && (
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Business referral cap (30 days)
+                  </p>
+                  <p className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300">
+                    ${((statsData.businessReferralUsedCents ?? 0) / 100).toFixed(2)} / ${(
+                      statsData.businessReferralCapCents / 100
+                    ).toFixed(0)}
+                  </p>
+                </div>
+                <div className="h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        ((statsData.businessReferralUsedCents ?? 0) /
+                          statsData.businessReferralCapCents) *
+                          100,
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+          {/* V3: per-referral live progress (customer referrers) —
+              "Show the customer live progress: deliveries completed out of
+              5, days remaining." Each referred party gets a row. */}
+          {referrerType === "CUSTOMER" &&
+            Array.isArray(statsData?.perReferrals) &&
+            statsData.perReferrals.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Referral progress
+                </p>
+                {statsData.perReferrals.map(
+                  (ref: {
+                    id: string;
+                    referredName: string;
+                    status: string;
+                    category: string | null;
+                    completedPaidDeliveries: number;
+                    daysRemaining: number | null;
+                  }) => (
+                    <div
+                      key={ref.id}
+                      className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
+                          {ref.referredName}
+                        </p>
+                        <p className="text-[11px] font-semibold text-slate-400">
+                          {ref.category === "BUSINESS_REFERRAL"
+                            ? "Business customer"
+                            : ref.category === "DRIVER_REFERRAL"
+                              ? "Driver"
+                              : "Personal customer"}
+                        </p>
+                      </div>
+                      {ref.status === "REWARD_PAID" ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                          <Check className="w-3.5 h-3.5" />
+                          Reward paid
+                        </span>
+                      ) : ref.status === "EXPIRED" ? (
+                        <span className="text-[11px] font-extrabold text-red-500 whitespace-nowrap">
+                          Expired
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                          {ref.category === "DRIVER_REFERRAL"
+                            ? `${ref.completedPaidDeliveries ?? 0} of ${
+                                configData?.perDeliveryBonusTriggerCount ?? 5
+                              } deliveries`
+                            : "First delivery pending"}
+                          {typeof ref.daysRemaining === "number" &&
+                            ` · ${ref.daysRemaining}d left`}
+                        </span>
+                      )}
+                    </div>
+                  ),
+                )}
+              </div>
+            )}
 
           {/* Primary "Share" button — opens the QR dialog */}
           {isActive ? (

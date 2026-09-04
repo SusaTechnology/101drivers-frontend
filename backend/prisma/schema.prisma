@@ -1709,6 +1709,26 @@ enum EnumReferralType {
   DRIVER
 }
 
+// ── Referral category: which PAYOUT PROGRAM does this referral belong to? ──
+// Snapshotted at applyReferral/applyCustomerReferral time so a later
+// customerType change (personal → business upgrade) can never rewrite the
+// program a referral was created under. Drives the trigger engine:
+//   DRIVER_REFERRAL       → $50 to the referrer on the referred driver's
+//                           perDeliveryBonusTriggerCount-th (5th) paid
+//                           delivery, within referralWindowDays (30) of the
+//                           referred driver's signup. Expires unpaid.
+//   BUSINESS_REFERRAL     → $10 to the referrer (one-time) when the referred
+//                           business customer completes their first paid
+//                           delivery. Rolling 30-day cap of $300/referrer.
+//   RESIDENTIAL_REFERRAL  → $5 to the referrer (one-time) when the referred
+//                           personal customer completes their first paid
+//                           delivery. No cap.
+enum EnumReferralCategory {
+  DRIVER_REFERRAL
+  BUSINESS_REFERRAL
+  RESIDENTIAL_REFERRAL
+}
+
 // ── Referral credit status ──
 enum EnumReferralCreditStatus {
   PENDING
@@ -1751,6 +1771,11 @@ model Referral {
   referredCustomer       Customer?                  @relation("ReferredByCustomerReferrals", fields: [referredCustomerId], references: [id])
   // referralType: was a customer or driver referred?
   referralType           EnumReferralType?
+  // category: which payout program applies (snapshot at apply time).
+  // Null for legacy rows created before categories existed — the trigger
+  // engine falls back to legacy behavior (payoutModel + referrerType) for
+  // null-category rows.
+  category               EnumReferralCategory?
   // payoutModel: which payout model applies to this referral?
   payoutModel            EnumReferralPayoutModel?  @default(TIERED)
   // completedPaidDeliveries: count of completed+paid deliveries by the referee

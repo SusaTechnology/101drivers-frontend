@@ -313,6 +313,40 @@ export class ReferralProgramSettingsResponseDto {
   })
   perDeliveryBonusTriggerCount!: number;
 
+  // ── V3 spec: window + business/residential programs ──────────
+  @ApiProperty({
+    description:
+      "DRIVER_REFERRAL payout window in days from the referred driver's signup. " +
+      "The referrer's $50 fires only if the driver completes perDeliveryBonusTriggerCount " +
+      "paid deliveries within this window; otherwise the referral expires unpaid. Default 30.",
+    example: 30,
+  })
+  referralWindowDays!: number;
+
+  @ApiProperty({
+    description:
+      "BUSINESS_REFERRAL: one-time amount in cents paid to the referrer when a referred " +
+      "BUSINESS customer completes their first paid delivery. Default 1000 ($10).",
+    example: 1000,
+  })
+  businessReferralAmountCents!: number;
+
+  @ApiProperty({
+    description:
+      "RESIDENTIAL_REFERRAL: one-time amount in cents paid to the referrer when a referred " +
+      "PERSONAL customer completes their first paid delivery. Default 500 ($5).",
+    example: 500,
+  })
+  residentialReferralAmountCents!: number;
+
+  @ApiProperty({
+    description:
+      "BUSINESS_REFERRAL rolling cap: max cents a referrer can earn from business referrals " +
+      "in any trailing 30-day window. Default 30000 ($300). 0 disables the cap.",
+    example: 30000,
+  })
+  businessReferralRollingCapCents!: number;
+
   @ApiProperty({
     description:
       "Whether customer referrals are enabled. When false, applyCustomerReferral rejects all " +
@@ -435,6 +469,47 @@ export class UpdateReferralProgramSettingsBody {
   @Min(1)
   @Max(1000)
   perDeliveryBonusTriggerCount?: number;
+
+  // ── V3 spec: window + business/residential programs ──────────
+  @ApiPropertyOptional({
+    description: "DRIVER_REFERRAL payout window in days from the referred driver's signup (>= 1). Default 30.",
+    example: 30,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3650)
+  referralWindowDays?: number;
+
+  @ApiPropertyOptional({
+    description: "BUSINESS_REFERRAL one-time amount in cents (>= 0) paid on the referred business customer's first paid delivery. Default 1000 ($10).",
+    example: 1000,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  businessReferralAmountCents?: number;
+
+  @ApiPropertyOptional({
+    description: "RESIDENTIAL_REFERRAL one-time amount in cents (>= 0) paid on the referred personal customer's first paid delivery. Default 500 ($5).",
+    example: 500,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  residentialReferralAmountCents?: number;
+
+  @ApiPropertyOptional({
+    description: "BUSINESS_REFERRAL rolling 30-day cap in cents per referrer (>= 0; 0 disables). Default 30000 ($300).",
+    example: 30000,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100_000_000)
+  businessReferralRollingCapCents?: number;
 
   @ApiPropertyOptional({ description: "Enable customer (dealer/private) referrals independently of driver referrals." })
   @IsOptional()

@@ -301,12 +301,16 @@ export class AppSettingService extends AppSettingServiceBase {
       windowEndDate: windowEnd,
       referrerRewardAmount: 150,
       referralThreshold: 20,
-      referredGetsReward: true,
+      // V3 spec: payouts go to REFERRERS only — the referred party earns
+      // nothing themselves. Flip via admin settings if that ever changes.
+      referredGetsReward: false,
       referredRewardAmount: 150,
       // ── PER_DELIVERY defaults (Phase 2) ──
-      // Default payout model is TIERED for backward compatibility — existing
-      // referrer snapshots are TIERED, so we don't silently switch them.
-      payoutModel: ReferralPayoutModelDto.TIERED,
+      // V3 spec default is PER_DELIVERY — the unified driver referral
+      // ($50 on the 5th paid delivery) + business/residential programs
+      // are all PER_DELIVERY concepts. Legacy TIERED snapshots keep
+      // paying per their frozen policy regardless of this default.
+      payoutModel: ReferralPayoutModelDto.PER_DELIVERY,
       // $5 to referrer per paid delivery
       // ── V2 spec: separate per-delivery amounts by referrer type ──
       perDeliveryPersonalReferrerAmountCents: 500,    // $5
@@ -318,6 +322,17 @@ export class AppSettingService extends AppSettingServiceBase {
       perDeliveryReferredBonusCents: 5000,
       // Bonus fires on the 5th paid delivery
       perDeliveryBonusTriggerCount: 5,
+      // ── V3 spec: window + business/residential programs ──
+      // DRIVER_REFERRAL $50 window: 30 days from the referred driver's
+      // signup (clock anchor = account creation — documented decision).
+      referralWindowDays: 30,
+      // BUSINESS_REFERRAL: $10 one-time on the referred business
+      // customer's first paid delivery, rolling 30-day cap $300/referrer.
+      businessReferralAmountCents: 1000,
+      businessReferralRollingCapCents: 30000,
+      // RESIDENTIAL_REFERRAL: $5 one-time on the referred personal
+      // customer's first paid delivery. No cap.
+      residentialReferralAmountCents: 500,
       // Both referral types enabled by default
       customerReferralsEnabled: true,
       driverReferralsEnabled: true,
@@ -431,6 +446,31 @@ export class AppSettingService extends AppSettingServiceBase {
         v.perDeliveryBonusTriggerCount >= 1
           ? Math.floor(v.perDeliveryBonusTriggerCount)
           : defaults.perDeliveryBonusTriggerCount,
+      // ── V3 spec: window + business/residential programs ──
+      referralWindowDays:
+        typeof v.referralWindowDays === "number" &&
+        Number.isFinite(v.referralWindowDays) &&
+        v.referralWindowDays >= 1
+          ? Math.floor(v.referralWindowDays)
+          : defaults.referralWindowDays,
+      businessReferralAmountCents:
+        typeof v.businessReferralAmountCents === "number" &&
+        Number.isFinite(v.businessReferralAmountCents) &&
+        v.businessReferralAmountCents >= 0
+          ? Math.floor(v.businessReferralAmountCents)
+          : defaults.businessReferralAmountCents,
+      residentialReferralAmountCents:
+        typeof v.residentialReferralAmountCents === "number" &&
+        Number.isFinite(v.residentialReferralAmountCents) &&
+        v.residentialReferralAmountCents >= 0
+          ? Math.floor(v.residentialReferralAmountCents)
+          : defaults.residentialReferralAmountCents,
+      businessReferralRollingCapCents:
+        typeof v.businessReferralRollingCapCents === "number" &&
+        Number.isFinite(v.businessReferralRollingCapCents) &&
+        v.businessReferralRollingCapCents >= 0
+          ? Math.floor(v.businessReferralRollingCapCents)
+          : defaults.businessReferralRollingCapCents,
       customerReferralsEnabled:
         typeof v.customerReferralsEnabled === "boolean"
           ? v.customerReferralsEnabled
@@ -505,6 +545,23 @@ export class AppSettingService extends AppSettingServiceBase {
         input.perDeliveryBonusTriggerCount != null
           ? Math.floor(Number(input.perDeliveryBonusTriggerCount))
           : current.perDeliveryBonusTriggerCount,
+      // ── V3 spec: window + business/residential programs ──
+      referralWindowDays:
+        input.referralWindowDays != null
+          ? Math.floor(Number(input.referralWindowDays))
+          : current.referralWindowDays,
+      businessReferralAmountCents:
+        input.businessReferralAmountCents != null
+          ? Math.floor(Number(input.businessReferralAmountCents))
+          : current.businessReferralAmountCents,
+      residentialReferralAmountCents:
+        input.residentialReferralAmountCents != null
+          ? Math.floor(Number(input.residentialReferralAmountCents))
+          : current.residentialReferralAmountCents,
+      businessReferralRollingCapCents:
+        input.businessReferralRollingCapCents != null
+          ? Math.floor(Number(input.businessReferralRollingCapCents))
+          : current.businessReferralRollingCapCents,
       customerReferralsEnabled:
         input.customerReferralsEnabled != null
           ? input.customerReferralsEnabled

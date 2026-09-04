@@ -4,29 +4,28 @@
  * Runs DAILY at 03:00 server time. The handler internally tracks the
  * last run date and only does real work every 2 days (per spec).
  *
- * Conditional execution (per user spec):
- *   - If program isActive=false → skip entirely (no expiry processing)
- *   - If timeLimitMode=CALENDAR_RANGE and today is OUTSIDE the
- *     [windowStartDate, windowEndDate] window → skip entirely
- *   - Otherwise: scan Referral rows where expiresAt < now AND
- *     status is not yet terminal (REWARD_PAID, EXPIRED, CLOSED) and
- *     mark them EXPIRED.
- *
- * Why a cron for expiry when the trigger service already checks
- * expiry at fire-time? Because a referral might NEVER trigger
- * (e.g. driver never gets approved, never completes trips). Without
- * the cron, those rows would stay in PENDING/REGISTERED/TRIPPING
- * status forever, polluting stats. The cron sweeps them to EXPIRED.
- *
- * Why "every 2 days" instead of daily? Per user spec. We honor it
- * via a lastRunAt timestamp stored in AppSetting (REFERRAL_CRON_LAST_RUN).
+ * V3 behavior — the sweep is UNCONDITIONAL:
+ *   - No calendar-window gating (removed): each Referral row carries its
+ *     own `expiresAt` (referred driver's signup + referralWindowDays), so
+ *     rows past their deadline are marked EXPIRED whenever the cron runs.
+ *   - Pausing the program (isActive=false) blocks NEW referrals and
+ *     payouts, but does NOT stop the expiry sweep — expired referrals
+ *     can never pay out (the trigger service enforces the same rule at
+ *     fire-time as a defensive backstop).
+ *   - Why a cron at all? A referral might never trigger (e.g. driver
+ *     never completes 5 deliveries). Without the cron those rows would
+ *     stay REGISTERED/TRIPPING forever, polluting stats. The cron sweeps
+ *     them to EXPIRED ("30-day window closed before 5 deliveries →
+ *     expires unpaid — no partial payout").
+ *   - Why "every 2 days"? Per user spec. Honored via a lastRunAt
+ *     timestamp stored in AppSetting (REFERRAL_CRON_LAST_RUN). Payout
+ *     correctness doesn't depend on the throttle — the trigger service
+ *     checks expiry at fire-time.
  */
 
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { PrismaService } from "../prisma/prisma.service";
-import { AppSettingService } from "../appSetting/appSetting.service";
-import { ReferralTimeLimitMode } from "../appSetting/dto/appSetting.dto";
 
 const REFERRAL_CRON_LAST_RUN_KEY = "REFERRAL_CRON_LAST_RUN";
 const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
@@ -35,10 +34,7 @@ const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 export class ReferralExpiryScheduler {
   private readonly logger = new Logger(ReferralExpiryScheduler.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly appSettingService: AppSettingService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Daily at 03:00 — handler internally skips every other day.
@@ -49,40 +45,15 @@ export class ReferralExpiryScheduler {
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async handleExpiry(): Promise<void> {
     try {
-      const config = await this.appSettingService.getReferralProgramSettings();
-
-      // ── Conditional: skip if outside the calendar window ──
-      // Per the user spec: "the CRON should run only on the referral
-      // time span. so if today is not in the time window the CRON
-      // will not run."
-      //
-      // Note: the isActive flag does NOT affect the cron. Pausing the
-      // program (isActive=false) blocks new referrals from being
-      // created AND blocks triggers from firing payouts, but it does
-      // NOT stop the expiry sweep. This is correct: even when paused,
-      // referrals past their expiresAt should be marked EXPIRED so
-      // they don't pollute admin stats as "active" forever.
-      //
-      // For FOREVER mode, there's no calendar window — the cron
-      // always runs (subject to the 2-day throttle).
-      if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) {
-        const now = new Date();
-        const windowStart = config.windowStartDate ? new Date(config.windowStartDate) : null;
-        const windowEnd = config.windowEndDate ? new Date(config.windowEndDate) : null;
-
-        if (windowStart && now < windowStart) {
-          this.logger.log(
-            `Today (${now.toISOString()}) is before windowStartDate (${windowStart.toISOString()}) — cron skipping`
-          );
-          return;
-        }
-        if (windowEnd && now > windowEnd) {
-          this.logger.log(
-            `Today (${now.toISOString()}) is after windowEndDate (${windowEnd.toISOString()}) — cron skipping`
-          );
-          return;
-        }
-      }
+      // ── V3: ALWAYS sweep — no calendar-window gate ──
+      // The old rule ("run only inside the program's calendar window") is
+      // GONE: the V3 per-referee 30-day window lives on each Referral row
+      // (`expiresAt` = referred driver's signup + referralWindowDays), so
+      // referrals must be swept to EXPIRED regardless of any program-level
+      // calendar config. Note the isActive flag does NOT affect the sweep:
+      // even when the program is paused, referrals past their expiresAt
+      // must be marked EXPIRED — they can never pay out (the trigger
+      // service's fire-time expiry check enforces the same rule).
 
       // ── Throttle: only run every 2 days ──
       const lastRunIso = await this.getLastRun();

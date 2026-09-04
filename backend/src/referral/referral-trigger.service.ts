@@ -353,6 +353,7 @@ export class ReferralTriggerService {
         referrerUserId: true,
         referralType: true,
         payoutModel: true,
+        category: true,
         status: true,
         completedPaidDeliveries: true,
         expiresAt: true,
@@ -499,8 +500,12 @@ export class ReferralTriggerService {
     //   amount: bonusAmountDollars,
     //   referralId: referral.id,
     // });
+    // NOTE (V3): referredGetsReward is NOT part of this gate — it only
+    // controls the LEGACY referred-party reward (fireReferralSuccess /
+    // TIERED model). New referrals stamp referredGetsReward=false (V3:
+    // payouts go to referrers only), and the referrer's $50 bonus must
+    // still fire exactly at the trigger count.
     if (
-      referral.referredGetsReward &&
       incremented.completedPaidDeliveries === config.perDeliveryBonusTriggerCount &&
       !referral.referredRewardPaidAt &&
       referral.referredDriverId
@@ -552,13 +557,26 @@ export class ReferralTriggerService {
   }
 
   /**
-   * PER_DELIVERY handler for a referred CUSTOMER.
+   * PER_DELIVERY handler for a referred CUSTOMER (V3 spec).
    *
-   * Similar to handlePerDeliveryDriverReferral but for customer referred
-   * parties. The per-delivery referrer payout is the same (DriverPayout
-   * for driver referrer, ReferralCredit for customer referrer). The
-   * $50-on-5th-delivery bonus goes to the REFERRED customer as a
-   * ReferralCredit (not a DriverPayout, since they're not a driver).
+   * The referrer earns a ONE-TIME reward when the referred customer
+   * completes their FIRST paid delivery — not per-delivery:
+   *   - referred BUSINESS customer  → BUSINESS_REFERRAL: $10 one-time
+   *     (businessReferralAmountCents), subject to the rolling 30-day
+   *     $300 cap per referrer (overflow forfeited, decision D3).
+   *   - referred PERSONAL customer  → RESIDENTIAL_REFERRAL: $5 one-time
+   *     (residentialReferralAmountCents), no cap.
+   * Amounts key off the referral's CATEGORY snapshot (stamped at apply
+   * time), NOT the referrer's type. Legacy rows (category=null) are
+   * treated as RESIDENTIAL_REFERRAL.
+   *
+   * Payout vehicle by referrer type:
+   *   - Driver referrer  → DriverPayout (Stripe Connect)
+   *   - Customer referrer → ReferralCredit (applied to next invoice)
+   *
+   * The referral is marked REWARD_PAID after the first paid delivery
+   * (terminal — one-time semantics), whether the payout was created or
+   * forfeited to the cap.
    */
   private async handlePerDeliveryCustomerReferral(
     referral: {
@@ -566,7 +584,9 @@ export class ReferralTriggerService {
       referrerId: string | null;
       referrerUserId: string | null;
       referralType: EnumReferralType | null;
+      payoutModel: string | null;
       status: string;
+      category: string | null;
       completedPaidDeliveries: number;
       expiresAt: Date | null;
       referredGetsReward: boolean;
@@ -597,90 +617,176 @@ export class ReferralTriggerService {
       return;
     }
 
-    // ── Step 1: Create the per-delivery referrer payout/credit ──
-    // SPEC: per-delivery amounts vary by referrer type:
-    //   Personal referrer: $5 (perDeliveryPersonalReferrerAmountCents)
-    //   Business referrer: $10 (perDeliveryBusinessReferrerAmountCents)
-    //   Driver referrer: $5 (perDeliveryDriverReferrerAmountCents)
+    // ── V3: ONE-TIME reward on the referred customer's FIRST paid delivery ──
+    // Atomically claim the "first delivery" slot: only the trigger that
+    // moves completedPaidDeliveries 0 → 1 pays. Concurrent completions
+    // lose the claim and skip (race-safe one-time semantics).
+    const claimed = await this.prisma.referral.updateMany({
+      where: { id: referral.id, completedPaidDeliveries: 0 },
+      data: { completedPaidDeliveries: 1 },
+    });
+
+    if (claimed.count === 0) {
+      // Not the first delivery — nothing to pay (one-time semantics).
+      // Ensure the referral is terminal so we stop processing it.
+      if (referral.status !== "REWARD_PAID" && !referral.referredRewardPaidAt) {
+        await this.prisma.referral.update({
+          where: { id: referral.id },
+          data: { status: "REWARD_PAID", referredRewardPaidAt: new Date() },
+        });
+      }
+      return;
+    }
+
+    // Determine the amount by CATEGORY snapshot (V3), not referrer type.
+    // Legacy rows (category=null) fall back to RESIDENTIAL_REFERRAL.
+    const referralCategory = referral.category ?? "RESIDENTIAL_REFERRAL";
+    const amountCents =
+      referralCategory === "BUSINESS_REFERRAL"
+        ? (config.businessReferralAmountCents ?? 1000)
+        : (config.residentialReferralAmountCents ?? 500);
+
+    // ── Rolling 30-day cap (BUSINESS_REFERRAL only, decision D3) ──
+    // If the referrer's trailing-30-day business-referral earnings plus
+    // this payout would breach the cap, the payout is FORFEITED (not
+    // deferred). The referral still goes terminal.
+    if (referralCategory === "BUSINESS_REFERRAL") {
+      const capCents = config.businessReferralRollingCapCents ?? 30000;
+      if (capCents > 0) {
+        const usedCents = await this.getBusinessReferralCapUsageCents({
+          referrerId: referral.referrerId,
+          referrerUserId: referral.referrerUserId,
+        });
+        if (usedCents + amountCents > capCents) {
+          this.logger.log(
+            `Referral ${referral.id} ${referralCategory} reward FORFEITED — rolling 30-day cap: used=${usedCents}c + payout=${amountCents}c > cap=${capCents}c`
+          );
+          await this.prisma.referral.update({
+            where: { id: referral.id },
+            data: { status: "REWARD_PAID", referredRewardPaidAt: new Date() },
+          });
+          return;
+        }
+      }
+    }
+
+    // ── Create the referrer payout (vehicle by referrer type) ──
     if (referral.referralType === ReferralTypeDto.DRIVER && referral.referrerId) {
-      // Driver referrer → DriverPayout (driver referring a customer)
+      // Driver referrer → DriverPayout (Stripe Connect)
       await this.createDriverReferrerPerDeliveryPayout({
         referrerDriverId: referral.referrerId,
         deliveryId,
-        amountCents: config.perDeliveryDriverReferrerAmountCents ?? config.perDeliveryReferrerAmountCents ?? 500,
+        amountCents,
         referralId: referral.id,
       });
+      this.logger.log(
+        `Referral ${referral.id} ${referralCategory} one-time reward fired — DRIVER referrer ${referral.referrerId} earns ${amountCents}c via DriverPayout (first paid delivery ${deliveryId})`
+      );
     } else if (referral.referralType === ReferralTypeDto.CUSTOMER && referral.referrerUserId) {
-      // Customer referrer → ReferralCredit
-      // Determine if the referrer is a PERSONAL or BUSINESS customer
-      // to use the correct per-delivery amount.
+      // Customer referrer → ReferralCredit (applied to next invoice)
       const referrerCustomer = await this.prisma.customer.findUnique({
         where: { userId: referral.referrerUserId },
-        select: { id: true, customerType: true },
+        select: { id: true },
       });
       if (referrerCustomer) {
-        const amountCents =
-          referrerCustomer.customerType === "BUSINESS"
-            ? (config.perDeliveryBusinessReferrerAmountCents ?? 1000)
-            : (config.perDeliveryPersonalReferrerAmountCents ?? 500);
         await this.createReferralCredit({
           referralId: referral.id,
           customerId: referrerCustomer.id,
           deliveryId,
           amountCents,
-          reason: `Per-delivery referrer credit (${referrerCustomer.customerType}, delivery ${deliveryId})`,
+          reason: `${referralCategory} reward — referred customer's first paid delivery (${deliveryId})`,
         });
+        this.logger.log(
+          `Referral ${referral.id} ${referralCategory} one-time reward fired — CUSTOMER referrer ${referrerCustomer.id} earns ${amountCents}c credit (first paid delivery ${deliveryId})`
+        );
       }
     }
 
-    // ── Step 2: Increment completedPaidDeliveries ──
-    const incremented = await this.prisma.referral.update({
+    // One-time semantics: the referral is DONE after the first paid
+    // delivery — mark terminal so later deliveries skip instantly.
+    await this.prisma.referral.update({
       where: { id: referral.id },
-      data: { completedPaidDeliveries: { increment: 1 } },
-      select: { completedPaidDeliveries: true },
+      data: { status: "REWARD_PAID", referredRewardPaidAt: new Date() },
     });
+  }
 
-    // ── Step 3: Fire the $50-on-Nth-delivery bonus to the referred customer ──
-    // SPEC: "The $50 bonus is ONLY for referred DRIVERS, not referred customers."
-    // Referred customers only generate per-delivery payouts for the referrer.
-    // They do NOT get a $50 bonus themselves.
-    //
-    // OLD CODE (commented out per spec — can revert if needed):
-    // if (
-    //   referral.referredGetsReward &&
-    //   incremented.completedPaidDeliveries === config.perDeliveryBonusTriggerCount &&
-    //   !referral.referredRewardPaidAt &&
-    //   referral.referredCustomerId
-    // ) {
-    //   const bonusAmountCents = config.perDeliveryReferredBonusCents;
-    //   if (bonusAmountCents > 0) {
-    //     await this.createReferralCredit({
-    //       referralId: referral.id,
-    //       customerId: referral.referredCustomerId,
-    //       deliveryId,
-    //       amountCents: bonusAmountCents,
-    //       reason: `$50-on-${config.perDeliveryBonusTriggerCount}th-delivery bonus`,
-    //     });
-    //   }
-    //   await this.prisma.referral.update({
-    //     where: { id: referral.id },
-    //     data: { status: "REWARD_PAID", referredRewardPaidAt: new Date() },
-    //   });
-    //   this.logger.log(
-    //     `Referral ${referral.id} PER_DELIVERY bonus fired on delivery #${incremented.completedPaidDeliveries} (deliveryId=${deliveryId}) — referred customer ${referral.referredCustomerId} earns ${bonusAmountCents}c credit`
-    //   );
-    // }
+  /**
+   * Sum a referrer's BUSINESS_REFERRAL earnings over the trailing 30 days
+   * (rolling window for the $300 cap). Covers both payout vehicles:
+   *   - Customer referrer → ReferralCredit rows joined to BUSINESS_REFERRAL
+   *     referrals (status PENDING/APPLIED — earned but not necessarily settled).
+   *   - Driver referrer → DriverPayout REFERRAL_REFERRER rows linked via the
+   *     `PER_DELIVERY:<referralId>:<deliveryId>` failureMessage key (new V3
+   *     format rows only; legacy `PER_DELIVERY:<deliveryId>` rows can't be
+   *     attributed and are excluded).
+   */
+  private async getBusinessReferralCapUsageCents(referral: {
+    referrerId: string | null;
+    referrerUserId: string | null;
+  }): Promise<number> {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    let usedCents = 0;
+
+    if (referral.referrerUserId) {
+      const referrerCustomer = await this.prisma.customer.findUnique({
+        where: { userId: referral.referrerUserId },
+        select: { id: true },
+      });
+      if (referrerCustomer) {
+        const credits = await this.prisma.referralCredit.findMany({
+          where: {
+            customerId: referrerCustomer.id,
+            status: { in: ["PENDING", "APPLIED"] },
+            createdAt: { gte: since },
+            referral: { category: "BUSINESS_REFERRAL" },
+          },
+          select: { amountCents: true },
+        });
+        usedCents += credits.reduce((s, c) => s + c.amountCents, 0);
+      }
+    }
+
+    if (referral.referrerId) {
+      const bizReferralIds = new Set(
+        (
+          await this.prisma.referral.findMany({
+            where: { referrerId: referral.referrerId, category: "BUSINESS_REFERRAL" },
+            select: { id: true },
+          })
+        ).map((r) => r.id),
+      );
+      if (bizReferralIds.size > 0) {
+        const payouts = await this.prisma.driverPayout.findMany({
+          where: {
+            driverId: referral.referrerId,
+            type: "REFERRAL_REFERRER",
+            createdAt: { gte: since },
+            failureMessage: { startsWith: "PER_DELIVERY:" },
+            status: { in: ["PENDING", "ELIGIBLE", "PAID"] },
+          },
+          select: { failureMessage: true, grossAmount: true },
+        });
+        for (const p of payouts) {
+          const parts = (p.failureMessage ?? "").split(":");
+          if (parts.length === 3 && parts[0] === "PER_DELIVERY" && bizReferralIds.has(parts[1])) {
+            usedCents += Math.round(p.grossAmount * 100);
+          }
+        }
+      }
+    }
+
+    return usedCents;
   }
 
   /**
    * Create a per-delivery DriverPayout for a driver referrer (PER_DELIVERY model).
    *
-   * Idempotency: the `failureMessage` field stores `PER_DELIVERY:<deliveryId>`.
-   * Before creating, we check if a payout with that failureMessage already
-   * exists for this driver — if so, we skip. This is race-prone (two triggers
-   * could both pass the check before either creates), but the window is tiny
-   * and the trigger is only called once per delivery completion by the
-   * delivery-lifecycle service.
+   * Idempotency: the `failureMessage` field stores the payout key. V3 format
+   * is `PER_DELIVERY:<referralId>:<deliveryId>` — the referralId segment
+   * lets the business-referral rolling-cap calculator attribute payouts to
+   * the BUSINESS_REFERRAL program (legacy `PER_DELIVERY:<deliveryId>` rows
+   * predate V3 and are excluded from cap math). Before creating, we check
+   * if a payout with that key already exists for this driver — if so, skip.
    *
    * Note: DriverPayout.deliveryId is @unique, so we set deliveryId=null
    * (the TRIP_COMPLETION payout already has the deliveryId set). The link
@@ -694,7 +800,9 @@ export class ReferralTriggerService {
   }): Promise<void> {
     if (input.amountCents <= 0) return;
 
-    const failureMessage = `PER_DELIVERY:${input.deliveryId}`;
+    // V3 key format: PER_DELIVERY:<referralId>:<deliveryId> — the referralId
+    // segment is how the business-referral rolling cap attributes payouts.
+    const failureMessage = `PER_DELIVERY:${input.referralId}:${input.deliveryId}`;
     const amountDollars = input.amountCents / 100;
 
     // Idempotency check

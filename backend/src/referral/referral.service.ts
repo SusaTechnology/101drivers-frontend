@@ -164,6 +164,9 @@ export class ReferralService {
         status: true,
         tripsCompleted: true,
         requiredDeliveries: true,
+        completedPaidDeliveries: true,
+        category: true,
+        payoutModel: true,
         referredRewardAmount: true,
         referredRewardPaidAt: true,
         expiresAt: true,
@@ -174,7 +177,22 @@ export class ReferralService {
 
     // Filter out the code-holder rows (no referredDriverId AND no
     // referredEmail) — those are just placeholders for the referrer's code.
-    return referrals.filter((r) => r.referredDriverId || r.referredEmail);
+    // V3: attach daysRemaining — days left before the 30-day window closes
+    // (null when the referral has no window, e.g. legacy rows created
+    // before the expiry was activated).
+    const nowMs = Date.now();
+    return referrals
+      .filter((r) => r.referredDriverId || r.referredEmail)
+      .map((r) => ({
+        ...r,
+        daysRemaining:
+          r.expiresAt == null
+            ? null
+            : Math.max(
+                0,
+                Math.ceil((r.expiresAt.getTime() - nowMs) / (24 * 60 * 60 * 1000)),
+              ),
+      }));
   }
 
   /**
@@ -274,8 +292,78 @@ export class ReferralService {
       currentTier,
       nextTierReferralsNeeded,
       nextTierProgress,
+      // ── V3: unified driver referral trigger + window (wallet UI) ──
+      // The $50 fires on the triggerCount-th paid delivery, within
+      // referralWindowDays of the referred driver's signup.
+      triggerCount: config.perDeliveryBonusTriggerCount,
+      referralWindowDays: config.referralWindowDays,
+      payoutModel: config.payoutModel,
       // Program state (for the wallet UI to show paused notice)
       programIsActive: config.isActive,
+    };
+  }
+
+  /**
+   * V3: the REFERRED side's live referral status ("show both sides live
+   * progress"). Returns the referral where THIS driver is the referred
+   * party, with completed paid deliveries vs the trigger count and the
+   * days remaining before the 30-day window closes. Null when the driver
+   * wasn't referred.
+   */
+  async getMyReferredStatus(driverId: string) {
+    const referral = await this.prisma.referral.findFirst({
+      where: { referredDriverId: driverId },
+      select: {
+        id: true,
+        referralCode: true,
+        status: true,
+        category: true,
+        payoutModel: true,
+        completedPaidDeliveries: true,
+        expiresAt: true,
+        createdAt: true,
+        referrerId: true,
+        referrerUserId: true,
+        referrer: { select: { user: { select: { fullName: true } } } },
+      },
+    });
+    if (!referral) {
+      return null;
+    }
+
+    // Referrer display name: driver referrers via the Driver→User relation;
+    // customer referrers via a separate User lookup (referrerUserId).
+    let referrerName: string | null = referral.referrer?.user?.fullName ?? null;
+    if (!referrerName && referral.referrerUserId) {
+      const u = await this.prisma.user.findUnique({
+        where: { id: referral.referrerUserId },
+        select: { fullName: true },
+      });
+      referrerName = u?.fullName ?? null;
+    }
+
+    const config = await this.appSettingService.getReferralProgramSettings();
+    const daysRemaining =
+      referral.expiresAt == null
+        ? null
+        : Math.max(
+            0,
+            Math.ceil(
+              (referral.expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+            ),
+          );
+
+    return {
+      referralCode: referral.referralCode,
+      status: referral.status,
+      category: referral.category,
+      completedPaidDeliveries: referral.completedPaidDeliveries,
+      triggerCount: config.perDeliveryBonusTriggerCount,
+      daysRemaining,
+      expiresAt: referral.expiresAt,
+      referrerName,
+      // Convenience for the UI: has the window closed without success?
+      expiredUnpaid: referral.status === "EXPIRED",
     };
   }
 
@@ -297,13 +385,24 @@ export class ReferralService {
    *
    * Rejects the application if:
    *   - The program is paused (isActive=false)
-   *   - The current date is outside the calendar window
-   *     (when timeLimitMode=CALENDAR_RANGE)
+   *   - The referred driver is ALREADY APPROVED ("already in the system") —
+   *     a code may only be applied before first approval (V3 spec)
    *   - The referrer is the same as the referred driver
    *   - The driver already used a referral code
    *
+   * V3 changes:
+   *   - UNIFIED role matrix: ANY user type can refer a driver (driver,
+   *     personal customer, business customer). The old "personal customers
+   *     can only refer personal customers" restriction is gone.
+   *   - The referral gets a REAL expiry: referred driver's signup +
+   *     `referralWindowDays` (default 30). If the driver doesn't complete
+   *     `perDeliveryBonusTriggerCount` (5) paid deliveries within the
+   *     window, the referral expires UNPAID — no partial payout. Clock
+   *     anchor = the driver's account creation time (documented decision).
+   *   - Category snapshot: DRIVER_REFERRAL.
+   *
    * NO CAP on number of referrals — the referrer can refer as many
-   * drivers as they want. Reward is per-tier, not per-referral.
+   * drivers as they want.
    */
   async applyReferral(driverId: string, referralCode: string) {
     if (!referralCode) {
@@ -366,29 +465,13 @@ export class ReferralService {
       throw new NotFoundException("Invalid or expired referral code");
     }
 
-    // ── ROLE MATRIX ENFORCEMENT (spec) ──────────────────────────────
-    // Who can refer whom:
-    //   Personal customer → personal customers ONLY
-    //   Business customer → personal customers OR drivers
-    //   Driver → personal customers OR drivers
-    //   Personal customer CANNOT refer drivers or business customers.
-    //
-    // This is the applyReferral path → the referred party is a DRIVER.
-    // So only Business customers + Drivers can be referrers here.
-    // Personal customers are BLOCKED from referring drivers.
-    if (customerReferrer) {
-      const referrerCustomer = await this.prisma.customer.findUnique({
-        where: { id: customerReferrer.id },
-        select: { customerType: true },
-      });
-      if (referrerCustomer?.customerType === "PRIVATE") {
-        throw new BadRequestException(
-          "Personal customers can only refer other personal customers, not drivers."
-        );
-      }
-      // BUSINESS customers CAN refer drivers — allowed.
-    }
-    // Driver referrers CAN refer drivers — allowed.
+    // ── ROLE MATRIX ENFORCEMENT (V3 spec — UNIFIED) ─────────────────
+    // Who can refer whom (V3 spec — UNIFIED):
+    //   Any existing user can refer a driver — individual drivers, personal
+    //   customers, and business customers. No role restrictions.
+    //   (The old V2 restriction — "personal customers can only refer other
+    //   personal customers" — was removed per the unified driver referral
+    //   spec. All referrers earn the same $50-on-5th-paid-delivery payout.)
 
     // ── Per-referred-party uniqueness check ──
     // A driver can only have ONE referral applied. If they already used a
@@ -455,32 +538,42 @@ export class ReferralService {
       );
     }
 
-    // SPEC: "Codes case-insensitive, never expire unless the account closes."
-    // V2: No expiry. Comment out the CALENDAR_RANGE logic — codes never expire.
-    //
-    // OLD CODE (commented out per spec — can revert if needed):
-    // let expiresAt: Date | null = null;
-    // let windowStartDate: Date | null = null;
-    // let windowEndDate: Date | null = null;
-    // const now = new Date();
-    // if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) {
-    //   windowStartDate = config.windowStartDate ? new Date(config.windowStartDate) : null;
-    //   windowEndDate = config.windowEndDate ? new Date(config.windowEndDate) : null;
-    //   if (!windowStartDate || !windowEndDate) {
-    //     throw new BadRequestException("Referral program window is not properly configured.");
-    //   }
-    //   if (now < windowStartDate) { throw new BadRequestException("The referral program hasn't started yet."); }
-    //   if (now > windowEndDate) { throw new BadRequestException("The referral program has ended."); }
-    //   expiresAt = windowEndDate;
-    // }
-    const expiresAt: Date | null = null;
-    const windowStartDate: Date | null = null;
-    const windowEndDate: Date | null = null;
-
     const driver = await this.prisma.driver.findUnique({
       where: { id: driverId },
-      select: { user: { select: { email: true } } },
+      select: {
+        user: { select: { email: true } },
+        createdAt: true,
+        approvedAt: true,
+        status: true,
+      },
     });
+    if (!driver) {
+      throw new NotFoundException("Driver not found");
+    }
+
+    // ── "Already in the system" guard (V3 spec) ──
+    // A referral code may only be applied BEFORE the driver's first
+    // approval. An already-approved driver is an established account —
+    // no payout for them (decision D2: pre-approval application window).
+    if (driver.approvedAt != null || driver.status === "APPROVED") {
+      throw new BadRequestException(
+        "Referral codes can only be used before your account is approved. This driver was already in the system — no referral payout."
+      );
+    }
+
+    // ── V3: 30-day payout window from the referred driver's SIGNUP ──
+    // Clock anchor = the driver's account creation time (documented
+    // decision D1). The referral must reach `perDeliveryBonusTriggerCount`
+    // (5) paid deliveries before this deadline or it expires UNPAID —
+    // no partial payout. The fire-time check + ReferralExpiryScheduler
+    // both read `expiresAt`, so this single field activates the expiry
+    // machinery that previously sat dormant (expiresAt was always null).
+    const windowDays = config.referralWindowDays ?? 30;
+    const expiresAt: Date = new Date(
+      driver.createdAt.getTime() + windowDays * 24 * 60 * 60 * 1000,
+    );
+    const windowStartDate: Date | null = driver.createdAt;
+    const windowEndDate: Date | null = expiresAt;
 
     // ── Determine payoutModel for this referral ──
     // For Driver→Driver: use the program's default payoutModel.
@@ -504,6 +597,7 @@ export class ReferralService {
         referredEmail: driver?.user?.email || null,
         status: "REGISTERED",
         referralType,
+        category: "DRIVER_REFERRAL",
         payoutModel,
         // Snapshot
         rewardTrigger: config.rewardTrigger,
@@ -1796,8 +1890,18 @@ export class ReferralService {
    *
    * The referrer can be EITHER a Customer OR a Driver (both are supported
    * via the V2 referrer lookup). The referred side is always a Customer.
-   * The payoutModel is always PER_DELIVERY — customer-referrer payouts
-   * are per-delivery credits applied to the customer's next invoice.
+   *
+   * V3 changes:
+   *   - BUSINESS customers CAN now be referred (BUSINESS_REFERRAL program:
+   *     $10 one-time to the referrer on the referred customer's first paid
+   *     delivery, subject to the rolling 30-day $300 cap).
+   *   - PERSONAL customers are RESIDENTIAL_REFERRAL ($5 one-time on first
+   *     paid delivery, no cap).
+   *   - The category is snapshotted from the referred customer's type at
+   *     apply time; the trigger engine pays one-time first-delivery
+   *     rewards based on it.
+   *   - NO time window for customer referrals (the 30-day expiry applies
+   *     to DRIVER_REFERRAL only) — expiresAt stays null.
    *
    * Mirrors applyReferral() in shape but for customer referred parties.
    */
@@ -1847,29 +1951,26 @@ export class ReferralService {
     }
 
     // ── ROLE MATRIX ENFORCEMENT (spec) ──────────────────────────────
-    // Who can refer whom:
-    //   Personal customer → personal customers ONLY
-    //   Business customer → personal customers OR drivers
-    //   Driver → personal customers OR drivers
-    //
-    // Business customers are NEVER referred — they sign up directly.
-    // Only personal customers can be referred (by any referrer type).
-    //
-    // This is the applyCustomerReferral path → the referred party is a CUSTOMER.
-    // If the referred customer is BUSINESS → reject (nobody refers business customers).
-    // If the referred customer is PRIVATE → all referrer types are allowed.
-    // Additionally, if the referrer is a PRIVATE customer, they can ONLY refer
-    // private customers (which is the only allowed type here, so the check
-    // above already covers it).
+    // Who can refer whom (V3 spec — UNIFIED):
+    //   Any existing user can refer a customer — drivers, personal customers,
+    //   and business customers. The referred customer's TYPE determines the
+    //   program (snapshotted so a later type upgrade can't rewrite history):
+    //     BUSINESS customer → BUSINESS_REFERRAL ($10 first-delivery, $300
+    //                        rolling 30-day cap per referrer)
+    //     PERSONAL customer → RESIDENTIAL_REFERRAL ($5 first-delivery, no cap)
+    //   (The old V2 rule — "business customers are never referred" — was
+    //   removed per the business-referral spec.)
     const referredCustomer = await this.prisma.customer.findUnique({
       where: { id: customerId },
-      select: { customerType: true },
+      select: { customerType: true, createdAt: true },
     });
-    if (referredCustomer?.customerType === "BUSINESS") {
-      throw new BadRequestException(
-        "Business customers cannot be referred — they sign up directly. Only personal customers can be referred."
-      );
+    if (!referredCustomer) {
+      throw new NotFoundException("Customer not found");
     }
+    const category: "BUSINESS_REFERRAL" | "RESIDENTIAL_REFERRAL" =
+      referredCustomer.customerType === "BUSINESS"
+        ? "BUSINESS_REFERRAL"
+        : "RESIDENTIAL_REFERRAL";
 
     // ── Per-referred-party uniqueness check ──
     const existingLink = await this.prisma.referral.findFirst({
@@ -1898,15 +1999,10 @@ export class ReferralService {
       );
     }
 
-    // SPEC: "Codes never expire unless the account closes."
-    // V2: No expiry. Comment out the CALENDAR_RANGE logic.
-    //
-    // OLD CODE (commented out per spec — can revert if needed):
-    // let expiresAt: Date | null = null;
-    // let windowStartDate: Date | null = null;
-    // let windowEndDate: Date | null = null;
-    // const now = new Date();
-    // if (config.timeLimitMode === ReferralTimeLimitMode.CALENDAR_RANGE) { ... }
+    // V3: NO time window for customer referrals — the business/residential
+    // specs have no expiry, so the reward is claimable whenever the referred
+    // customer completes their first paid delivery. expiresAt stays null.
+    // (The 30-day window applies to DRIVER_REFERRAL only.)
     const expiresAt: Date | null = null;
     const windowStartDate: Date | null = null;
     const windowEndDate: Date | null = null;
@@ -1933,6 +2029,7 @@ export class ReferralService {
         referredEmail: customer?.contactEmail || customer?.user?.email || null,
         status: "REGISTERED",
         referralType,
+        category,
         payoutModel,
         rewardTrigger: config.rewardTrigger,
         requiredDeliveries: config.requiredDeliveries,
@@ -1990,6 +2087,7 @@ export class ReferralService {
         status: true,
         referralType: true,
         payoutModel: true,
+        category: true,
         completedPaidDeliveries: true,
         expiresAt: true,
         createdAt: true,
@@ -2013,7 +2111,19 @@ export class ReferralService {
       orderBy: { createdAt: "desc" },
     });
 
-    return referrals;
+    // V3: attach daysRemaining (null — no window — for customer referrals,
+    // but keep the shape uniform for the frontend).
+    const nowMs = Date.now();
+    return referrals.map((r) => ({
+      ...r,
+      daysRemaining:
+        r.expiresAt == null
+          ? null
+          : Math.max(
+              0,
+              Math.ceil((r.expiresAt.getTime() - nowMs) / (24 * 60 * 60 * 1000)),
+            ),
+    }));
   }
 
   /**
@@ -2042,8 +2152,12 @@ export class ReferralService {
         status: true,
         completedPaidDeliveries: true,
         payoutModel: true,
-        referredCustomer: { select: { id: true } },
-        referredDriver: { select: { id: true } },
+        category: true,
+        expiresAt: true,
+        referredCustomer: {
+          select: { id: true, contactName: true, businessName: true, customerType: true },
+        },
+        referredDriver: { select: { id: true, user: { select: { fullName: true } } } },
         referredEmail: true,
       },
     });
@@ -2083,6 +2197,49 @@ export class ReferralService {
 
     const config = await this.appSettingService.getReferralProgramSettings();
 
+    // ── V3: business-referral rolling 30-day cap usage ──
+    // Same basis as the trigger engine's cap check (ReferralCredit rows
+    // joined to BUSINESS_REFERRAL referrals, trailing 30 days). Customer
+    // referrers earn credits, so driver-payout attribution doesn't apply.
+    const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const bizCredits = await this.prisma.referralCredit.findMany({
+      where: {
+        customerId,
+        status: { in: ["PENDING", "APPLIED"] },
+        createdAt: { gte: since30d },
+        referral: { category: "BUSINESS_REFERRAL" },
+      },
+      select: { amountCents: true },
+    });
+    const businessReferralUsedCents = bizCredits.reduce((s, c) => s + c.amountCents, 0);
+
+    // ── V3: per-referral live progress list ──
+    const nowMs = Date.now();
+    const perReferrals = realReferrals.map((r) => ({
+      id: r.id,
+      category: r.category,
+      status: r.status,
+      referredName:
+        r.referredCustomer?.businessName ||
+        r.referredCustomer?.contactName ||
+        r.referredDriver?.user?.fullName ||
+        r.referredEmail ||
+        "Unknown",
+      referredType: r.referredCustomer
+        ? r.referredCustomer.customerType
+        : r.referredDriver
+          ? "DRIVER"
+          : null,
+      completedPaidDeliveries: r.completedPaidDeliveries,
+      daysRemaining:
+        r.expiresAt == null
+          ? null
+          : Math.max(
+              0,
+              Math.ceil((r.expiresAt.getTime() - nowMs) / (24 * 60 * 60 * 1000)),
+            ),
+    }));
+
     return {
       referralCode: customer.referralCode,
       totalReferrals: realReferrals.length,
@@ -2093,10 +2250,16 @@ export class ReferralService {
       // Credits in cents (frontend can format as $X.XX)
       totalCreditsEarnedCents,
       pendingCreditsCents,
+      // ── V3: live progress + cap ──
+      perReferrals,
+      businessReferralCapCents: config.businessReferralRollingCapCents,
+      businessReferralUsedCents,
       // Live config so the UI can show the per-delivery amount
       perDeliveryReferrerAmountCents: config.perDeliveryReferrerAmountCents,
       perDeliveryReferredBonusCents: config.perDeliveryReferredBonusCents,
       perDeliveryBonusTriggerCount: config.perDeliveryBonusTriggerCount,
+      businessReferralAmountCents: config.businessReferralAmountCents,
+      residentialReferralAmountCents: config.residentialReferralAmountCents,
       programIsActive: config.isActive,
       customerReferralsEnabled: config.customerReferralsEnabled,
     };
