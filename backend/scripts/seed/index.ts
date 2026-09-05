@@ -53,6 +53,9 @@ import {
   upsertDriverProfile,
   upsertUser,
 } from "./utils";
+// Shared defaults source — the seed writes the EXACT values the service
+// falls back to, so the two can never drift apart.
+import { defaultReferralProgramSettings } from "../../src/appSetting/referral-program-defaults";
 
 type DemoRefs = {
   adminUserId: string;
@@ -87,6 +90,36 @@ export async function seedAll(bcryptSalt: Salt) {
   await seedConfiguration(refs);
   await seedLeads();
   await seedDemoDeliveries(refs);
+  await seedReferralProgramSettings();
+}
+
+/**
+ * V3.1.1 — seed the referral program settings row (key
+ * REFERRAL_PROGRAM_SETTINGS) with the SAME defaults the service falls
+ * back to (defaultReferralProgramSettings — shared source, zero drift)
+ * IF AND ONLY IF the row does not exist yet.
+ *
+ * Why: with an empty DB the admin page shows code defaults merged on
+ * the fly, but nothing is physically stored — the user wants real rows
+ * in the DB that the admin can see and edit. Idempotent: existing rows
+ * (admin-edited values) are NEVER overwritten by re-seeding.
+ */
+export async function seedReferralProgramSettings() {
+  const existing = await prisma.appSetting.findUnique({
+    where: { key: "REFERRAL_PROGRAM_SETTINGS" },
+    select: { key: true },
+  });
+  if (existing) {
+    console.info("Referral program settings already present — skipping seed (admin edits preserved)");
+    return;
+  }
+  await prisma.appSetting.create({
+    data: {
+      key: "REFERRAL_PROGRAM_SETTINGS",
+      value: defaultReferralProgramSettings() as any,
+    },
+  });
+  console.info("Seeded referral program settings (V3.1 defaults incl. who-can-refer-whom matrix)");
 }
 
 async function seedCoreDemoActors(bcryptSalt: Salt): Promise<DemoRefs> {

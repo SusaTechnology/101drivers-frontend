@@ -458,25 +458,30 @@ export default function AdminReferralProgramPage() {
     const perDeliveryReferredBonusDollars = Number(formPerDeliveryReferredBonusDollars);
     const perDeliveryBonusTriggerCount = Number(formPerDeliveryBonusTriggerCount);
 
-    if (isNaN(threshold) || threshold < 1) {
-      toast.error('Invalid threshold', { description: 'Threshold must be ≥ 1.' });
-      return;
-    }
-    if (isNaN(referrerAmount) || referrerAmount < 0) {
-      toast.error('Invalid referrer amount', { description: 'Referrer reward must be ≥ $0.' });
-      return;
-    }
-    if (formTrigger === 'ON_DELIVERIES_COMPLETED' && (isNaN(requiredDeliveries) || requiredDeliveries < 1)) {
-      toast.error('Invalid required deliveries', { description: 'Required deliveries must be ≥ 1.' });
-      return;
-    }
-    if (formReferredGetsReward && (isNaN(referredAmount) || referredAmount < 0)) {
-      toast.error('Invalid referred amount', { description: 'Referred reward must be ≥ $0.' });
-      return;
-    }
-    if (formTimeMode === 'CALENDAR_RANGE' && (!formWindowStart || !formWindowEnd)) {
-      toast.error('Missing dates', { description: 'Window start + end dates are required for CALENDAR_RANGE mode.' });
-      return;
+    // ── Legacy (TIERED-only) validations ──
+    // Only enforced when the admin is editing the TIERED model — the
+    // legacy fields are hidden (and unused) in PER_DELIVERY mode.
+    if (formPayoutModel === 'TIERED') {
+      if (isNaN(threshold) || threshold < 1) {
+        toast.error('Invalid threshold', { description: 'Threshold must be ≥ 1.' });
+        return;
+      }
+      if (isNaN(referrerAmount) || referrerAmount < 0) {
+        toast.error('Invalid referrer amount', { description: 'Referrer reward must be ≥ $0.' });
+        return;
+      }
+      if (formTrigger === 'ON_DELIVERIES_COMPLETED' && (isNaN(requiredDeliveries) || requiredDeliveries < 1)) {
+        toast.error('Invalid required deliveries', { description: 'Required deliveries must be ≥ 1.' });
+        return;
+      }
+      if (formReferredGetsReward && (isNaN(referredAmount) || referredAmount < 0)) {
+        toast.error('Invalid referred amount', { description: 'Referred reward must be ≥ $0.' });
+        return;
+      }
+      if (formTimeMode === 'CALENDAR_RANGE' && (!formWindowStart || !formWindowEnd)) {
+        toast.error('Missing dates', { description: 'Window start + end dates are required for CALENDAR_RANGE mode.' });
+        return;
+      }
     }
     // V2 validations
     if (formPayoutModel === 'PER_DELIVERY') {
@@ -494,17 +499,8 @@ export default function AdminReferralProgramPage() {
       }
     }
 
-    const payload = {
+    const payload: any = {
       isActive: formIsActive,
-      rewardTrigger: formTrigger,
-      requiredDeliveries,
-      timeLimitMode: formTimeMode,
-      windowStartDate: formTimeMode === 'CALENDAR_RANGE' ? new Date(formWindowStart).toISOString() : null,
-      windowEndDate: formTimeMode === 'CALENDAR_RANGE' ? new Date(formWindowEnd).toISOString() : null,
-      referrerRewardAmount: referrerAmount,
-      referralThreshold: threshold,
-      referredGetsReward: formReferredGetsReward,
-      referredRewardAmount: formReferredGetsReward ? referredAmount : null,
       // ── V2 fields ──
       payoutModel: formPayoutModel,
       // Convert dollars → cents for the backend
@@ -522,6 +518,24 @@ export default function AdminReferralProgramPage() {
       referralRoleMatrix: formMatrix,
     };
 
+    // ── Legacy (TIERED-only) policy fields ──
+    // Sent ONLY when the admin is editing the TIERED model. Omitted
+    // keys are preserved by the backend's partial merge, and the
+    // PER_DELIVERY engine never reads them for new referrals.
+    if (formPayoutModel === 'TIERED') {
+      Object.assign(payload, {
+        rewardTrigger: formTrigger,
+        requiredDeliveries,
+        timeLimitMode: formTimeMode,
+        windowStartDate: formTimeMode === 'CALENDAR_RANGE' ? new Date(formWindowStart).toISOString() : null,
+        windowEndDate: formTimeMode === 'CALENDAR_RANGE' ? new Date(formWindowEnd).toISOString() : null,
+        referrerRewardAmount: referrerAmount,
+        referralThreshold: threshold,
+        referredGetsReward: formReferredGetsReward,
+        referredRewardAmount: formReferredGetsReward ? referredAmount : null,
+      });
+    }
+
     // ── Threshold-lowering warning (#5) ──
     // If the new threshold is LOWER than the currently-saved one,
     // warn the admin that this may trigger retroactive tier payouts.
@@ -529,7 +543,7 @@ export default function AdminReferralProgramPage() {
     // = 20 (paid 1 tier = $150). If admin lowers to 10, the next
     // trigger call fires tier 2 (25/10 = 2) → another $150 paid out
     // immediately for the same 25 referrals.
-    if (config && threshold < config.referralThreshold) {
+    if (formPayoutModel === 'TIERED' && config && threshold < config.referralThreshold) {
       setPendingSavePayload(payload);
       setThresholdWarningOpen(true);
       return;
@@ -865,6 +879,15 @@ export default function AdminReferralProgramPage() {
                 !formIsActive && 'opacity-50 pointer-events-none'
               )}
             >
+              {/* ── Legacy (TIERED-only) controls ──
+                  The V1/V2 trigger, time-window and tier controls below
+                  are read ONLY by legacy TIERED-model referrals. The V3
+                  PER_DELIVERY engine (the default) never reads them, so
+                  they are hidden unless the payout model is switched
+                  back to TIERED — keeping the default view focused on
+                  the settings that actually drive payouts. */}
+              {formPayoutModel === 'TIERED' && (
+              <>
               {/* ── Trigger type ── */}
               <div className="space-y-3">
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
@@ -979,9 +1002,16 @@ export default function AdminReferralProgramPage() {
                 </p>
               </div>
             </div>
+              </>
+              )}
 
-            {/* ── Referred driver reward ── */}
+            {/* ── Referred driver reward (legacy TIERED-only) ──
+                In PER_DELIVERY mode the referred party's $50 bonus is
+                configured in the PER_DELIVERY settings below — this
+                legacy toggle applies only to TIERED referrals. */}
             <div className="space-y-3">
+              {formPayoutModel === 'TIERED' && (
+              <>
               <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                 <div className="flex-1 min-w-0">
                   <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
@@ -1012,6 +1042,8 @@ export default function AdminReferralProgramPage() {
                   />
                 </div>
               )}
+              </>
+              )}
 
               {/* ── V2 fields (Phase 2) ──────────────────────────────────
                   These control the PER_DELIVERY model + customer-referrer
@@ -1030,6 +1062,12 @@ export default function AdminReferralProgramPage() {
                   PER_DELIVERY = new model — referrer earns per paid delivery; referred party gets a bonus on the Nth paid delivery.
                   Applies to new referrals only — existing referrals keep their snapshotted model.
                 </p>
+                {formPayoutModel === 'PER_DELIVERY' && (
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed">
+                    PER_DELIVERY is the active V3 program — the legacy trigger / time-window / tier controls are hidden.
+                    Switch to TIERED only to maintain pre-V3 referral policies.
+                  </p>
+                )}
                 <Select
                   value={formPayoutModel}
                   onValueChange={(v) => setFormPayoutModel(v as PayoutModel)}
@@ -1038,7 +1076,7 @@ export default function AdminReferralProgramPage() {
                     <SelectValue placeholder="Select payout model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="TIERED">TIERED — per N successful referrals</SelectItem>
+                    <SelectItem value="TIERED">TIERED — legacy (per N successful referrals)</SelectItem>
                     <SelectItem value="PER_DELIVERY">PER_DELIVERY — per paid delivery</SelectItem>
                   </SelectContent>
                 </Select>

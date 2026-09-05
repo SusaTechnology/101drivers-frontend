@@ -992,3 +992,22 @@ Work Log:
 
 Stage Summary:
 - "Who can refer whom" is now ONE admin-tunable matrix that every surface obeys: invite-page buttons, signup-form validation, and server-side rejection all derive from referralRoleMatrix. Default: drivers/personal cannot refer businesses (user's rule), personal→driver kept (owner-confirmed), B2B business referrals remain possible (the $10 program's source). Editing any switch on the admin page + Save changes every surface instantly — no code change.
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: User follow-ups on the referral program admin surface — (1) confirm the who-can-refer-whom matrix is NOT hardcoded behavior, (2) remove unnecessary/legacy clutter from the admin referral program page, (3) seed the referral program settings into the DB when the row is absent so admins edit real stored values.
+
+Work Log:
+- Verified the matrix is DB-driven, not hardcoded: getReferralProgramSettings reads the AppSetting row (key REFERRAL_PROGRAM_SETTINGS) first and only falls back to code defaults for missing fields; the PATCH endpoint upserts (creates the row on first save).
+- Confirmed the admin page DID carry unnecessary legacy clutter: the V1 trigger selector ("When does the referrer get paid?"), required-deliveries count, legacy CALENDAR_RANGE/FOREVER time window, tier fields (referrer reward per tier / referrals per tier) and the legacy "does the referred driver also get paid?" toggle all rendered unconditionally — while the V3 PER_DELIVERY engine never reads them (verified: handlePerDeliveryDriverReferral returns before any legacy flag is consulted).
+- Created backend/src/appSetting/referral-program-defaults.ts — a standalone, Nest-free module exporting defaultReferralProgramSettings(); appSetting.service.ts now imports and re-exports it (removed the duplicated private method; call site updated), so the service fallback can never drift from the seed.
+- Extended backend/scripts/seed/index.ts with seedReferralProgramSettings(): create-if-absent seeding of the REFERRAL_PROGRAM_SETTINGS row using the shared defaults function (idempotent — existing rows, including admin edits, are never overwritten; logs a skip message). Wired into seedAll().
+- Cleaned src/components/pages/admin-referral-program.tsx: gated ALL legacy TIERED-only controls (trigger type + required deliveries, time window, tier fields, referred-driver-reward toggle + amount) behind formPayoutModel === 'TIERED'; the default PER_DELIVERY view now shows only Program Status, Payout Model, PER_DELIVERY money settings, the Who Can Refer Whom matrix, and Referrer Type Toggles. Relabeled the TIERED option "TIERED — legacy (per N successful referrals)" and added a green note explaining legacy controls are hidden in PER_DELIVERY mode.
+- Updated handleSaveConfig: legacy validations, legacy payload keys (rewardTrigger, requiredDeliveries, timeLimitMode, window dates, tier amounts, referredGetsReward/referredRewardAmount) and the threshold-lowering warning are now sent/enforced ONLY in TIERED mode — omitted keys are preserved by the backend partial merge, and the PER_DELIVERY engine never reads them.
+- Verification: backend tsc 4 pre-existing errors only (0 new); referral+appSetting jest 78/78 PASS; frontend scoped tsc 144 == 144 baseline (0 new); vite build passes.
+
+Stage Summary:
+- The matrix was never hardcoded behavior — DB row first, code defaults as fallback — but an empty DB now gets REAL seeded values: npm run seed writes the REFERRAL_PROGRAM_SETTINGS row (create-if-absent, admin-edit-preserving) from the same defaults module the service uses, so fallback and seed cannot drift.
+- Admin page default (PER_DELIVERY) view is now clutter-free: only the controls that actually drive V3 payouts and the who-can-refer-whom grid are visible; legacy V1/V2 controls remain reachable under TIERED for maintaining pre-V3 referrals.
+- Commit: feat(referral): V3.1.1 — DB seed for referral settings, shared defaults module, admin page legacy cleanup
