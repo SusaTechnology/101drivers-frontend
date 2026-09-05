@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -12,6 +13,24 @@ import {
   MaxLength,
   Min,
 } from "class-validator";
+
+// ── V3.1 referral role matrix ────────────────────────────────────────
+// The SINGLE SOURCE OF TRUTH for "who can refer whom". Stored inside the
+// referral program settings JSON (admin-tunable from the admin referral
+// program page) and consumed by EVERYTHING: the public resolve endpoint
+// (drives which signup buttons the /test-referral/:code invite page
+// shows), the shared referral-code components (red "can't refer" message
+// on the signup forms), and the apply endpoints themselves (hard
+// server-side rejection, so hand-typed ?ref= URLs can't sneak through).
+//
+// Keys are ROLES, not account types: a customer referrer maps to the
+// PERSONAL or BUSINESS row by their customerType; drivers always map to
+// the DRIVER row.
+export type ReferralReferrerRole = "DRIVER" | "PERSONAL" | "BUSINESS";
+export type ReferralRoleMatrix = Record<
+  ReferralReferrerRole,
+  Record<ReferralReferrerRole, boolean>
+>;
 
 export class LandingPageSettingsResponseDto {
   @ApiProperty()
@@ -360,6 +379,15 @@ export class ReferralProgramSettingsResponseDto {
       "codes. Independent of the master isActive flag (which gates ALL referrals).",
   })
   driverReferralsEnabled!: boolean;
+
+  @ApiProperty({
+    description:
+      "V3.1: who can refer whom — matrix[referrerRole][referredRole] = allowed? " +
+      "Roles are DRIVER | PERSONAL | BUSINESS (a customer referrer maps to PERSONAL/BUSINESS " +
+      "by their customerType). Drives the invite-page signup buttons, the signup-form " +
+      "validation messages, AND server-side apply rejection — edit from the admin page.",
+  })
+  referralRoleMatrix!: ReferralRoleMatrix;
 }
 
 export class UpdateReferralProgramSettingsBody {
@@ -520,4 +548,14 @@ export class UpdateReferralProgramSettingsBody {
   @IsOptional()
   @IsBoolean()
   driverReferralsEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      "V3.1: full or partial matrix — matrix[referrerRole][referredRole] = allowed?. " +
+      "Missing roles/cells fall back to the current stored values (or defaults). " +
+      "Edit from the admin referral program page.",
+  })
+  @IsOptional()
+  @IsObject()
+  referralRoleMatrix?: Partial<ReferralRoleMatrix>;
 }

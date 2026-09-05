@@ -24,7 +24,10 @@
 import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
 import { ReferralService } from "./referral.service";
-import { ReferralTypeDto } from "../appSetting/dto/appSetting.dto";
+import {
+  ReferralTypeDto,
+  ReferralReferrerRole,
+} from "../appSetting/dto/appSetting.dto";
 
 @swagger.ApiTags("referrals-public")
 @common.Controller("referrals/public")
@@ -61,6 +64,18 @@ export class ReferralPublicController {
         referrerType: { type: "string", enum: ["DRIVER", "CUSTOMER"], nullable: true },
         referrerSubtype: { type: "string", enum: ["PERSONAL", "BUSINESS"], nullable: true },
         programActive: { type: "boolean" },
+        allows: {
+          type: "object",
+          nullable: true,
+          description:
+            "Which roles this referrer may refer (config-driven role matrix). " +
+            "The invite page renders its signup buttons from this.",
+          properties: {
+            DRIVER: { type: "boolean" },
+            PERSONAL: { type: "boolean" },
+            BUSINESS: { type: "boolean" },
+          },
+        },
       },
     },
   })
@@ -72,6 +87,7 @@ export class ReferralPublicController {
     referrerType: ReferralTypeDto | null;
     referrerSubtype: "PERSONAL" | "BUSINESS" | null;
     programActive: boolean;
+    allows: Record<ReferralReferrerRole, boolean> | null;
   }> {
     return this.referralService.publicResolveReferralCode(code);
   }

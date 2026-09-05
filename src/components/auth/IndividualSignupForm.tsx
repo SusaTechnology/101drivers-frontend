@@ -666,7 +666,7 @@ export function IndividualSignupForm() {
           <ReferralCodeWidget
             onChange={setReferralCode}
             disabled={isPending}
-            allowedReferrerTypes={["DRIVER", "BUSINESS", "PERSONAL"]}
+            referralTargetRole="PERSONAL"
           />
 
           {/* ── Submit button ───────────────────────────────────────────── */}

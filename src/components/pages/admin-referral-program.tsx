@@ -69,6 +69,24 @@ type TimeLimitMode = 'CALENDAR_RANGE' | 'FOREVER';
 type PayoutModel = 'TIERED' | 'PER_DELIVERY';
 type ReferralType = 'DRIVER' | 'CUSTOMER';
 
+// ── V3.1: who can refer whom — the SINGLE SOURCE OF TRUTH (lives in the
+// backend referral config; this editor is just its admin UI). matrix[
+// referrerRole][referredRole] = allowed? Drives the invite-page signup
+// buttons, the signup-form validation, AND server-side apply rejection.
+type MatrixRole = 'DRIVER' | 'PERSONAL' | 'BUSINESS';
+type RoleMatrix = Record<MatrixRole, Record<MatrixRole, boolean>>;
+const MATRIX_ROLES: MatrixRole[] = ['DRIVER', 'PERSONAL', 'BUSINESS'];
+const MATRIX_ROLE_LABEL: Record<MatrixRole, string> = {
+  DRIVER: 'Driver',
+  PERSONAL: 'Personal customer',
+  BUSINESS: 'Business customer',
+};
+const DEFAULT_ROLE_MATRIX: RoleMatrix = {
+  DRIVER: { DRIVER: true, PERSONAL: true, BUSINESS: false },
+  PERSONAL: { DRIVER: true, PERSONAL: true, BUSINESS: false },
+  BUSINESS: { DRIVER: true, PERSONAL: true, BUSINESS: true },
+};
+
 interface ReferralConfig {
   isActive: boolean;
   rewardTrigger: RewardTrigger;
@@ -92,6 +110,8 @@ interface ReferralConfig {
   businessReferralAmountCents: number;
   residentialReferralAmountCents: number;
   businessReferralRollingCapCents: number;
+  // ── V3.1: role matrix (optional — old configs fall back to defaults) ──
+  referralRoleMatrix?: RoleMatrix;
 }
 
 interface AdminStats {
@@ -260,6 +280,8 @@ export default function AdminReferralProgramPage() {
   const [formBusinessCapDollars, setFormBusinessCapDollars] = useState('300.00');
   const [formCustomerReferralsEnabled, setFormCustomerReferralsEnabled] = useState(true);
   const [formDriverReferralsEnabled, setFormDriverReferralsEnabled] = useState(true);
+  // ── V3.1: who-can-refer-whom editor state ──
+  const [formMatrix, setFormMatrix] = useState<RoleMatrix>(DEFAULT_ROLE_MATRIX);
 
   // ── Referrers list state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -343,6 +365,30 @@ export default function AdminReferralProgramPage() {
       setFormBusinessCapDollars(((data.businessReferralRollingCapCents ?? 30000) / 100).toFixed(2));
       setFormCustomerReferralsEnabled(data.customerReferralsEnabled ?? true);
       setFormDriverReferralsEnabled(data.driverReferralsEnabled ?? true);
+      // ── V3.1: hydrate the matrix cell-by-cell (old/partial configs fall
+      // back to the default policy per cell) ──
+      const m = data.referralRoleMatrix;
+      setFormMatrix(
+        m
+          ? {
+              DRIVER: {
+                DRIVER: m.DRIVER?.DRIVER ?? DEFAULT_ROLE_MATRIX.DRIVER.DRIVER,
+                PERSONAL: m.DRIVER?.PERSONAL ?? DEFAULT_ROLE_MATRIX.DRIVER.PERSONAL,
+                BUSINESS: m.DRIVER?.BUSINESS ?? DEFAULT_ROLE_MATRIX.DRIVER.BUSINESS,
+              },
+              PERSONAL: {
+                DRIVER: m.PERSONAL?.DRIVER ?? DEFAULT_ROLE_MATRIX.PERSONAL.DRIVER,
+                PERSONAL: m.PERSONAL?.PERSONAL ?? DEFAULT_ROLE_MATRIX.PERSONAL.PERSONAL,
+                BUSINESS: m.PERSONAL?.BUSINESS ?? DEFAULT_ROLE_MATRIX.PERSONAL.BUSINESS,
+              },
+              BUSINESS: {
+                DRIVER: m.BUSINESS?.DRIVER ?? DEFAULT_ROLE_MATRIX.BUSINESS.DRIVER,
+                PERSONAL: m.BUSINESS?.PERSONAL ?? DEFAULT_ROLE_MATRIX.BUSINESS.PERSONAL,
+                BUSINESS: m.BUSINESS?.BUSINESS ?? DEFAULT_ROLE_MATRIX.BUSINESS.BUSINESS,
+              },
+            }
+          : DEFAULT_ROLE_MATRIX,
+      );
     }
   }, [configQuery.data]);
 
@@ -472,6 +518,8 @@ export default function AdminReferralProgramPage() {
       businessReferralRollingCapCents: Math.round(Number(formBusinessCapDollars || '0') * 100),
       customerReferralsEnabled: formCustomerReferralsEnabled,
       driverReferralsEnabled: formDriverReferralsEnabled,
+      // ── V3.1: the who-can-refer-whom grid ──
+      referralRoleMatrix: formMatrix,
     };
 
     // ── Threshold-lowering warning (#5) ──
@@ -1132,6 +1180,73 @@ export default function AdminReferralProgramPage() {
                   </div>
                 </div>
               )}
+
+              {/* ── V3.1: Who can refer whom — the SINGLE SOURCE OF TRUTH.
+                  Drives the /test-referral/:code invite-page buttons, the
+                  signup-form validation messages, AND server-side apply
+                  rejection. Flip a switch + Save — no code change needed. */}
+              <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Who Can Refer Whom (V3.1)
+                </Label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  One switch per referrer → referred combination. This is the single source of truth:
+                  it decides which signup buttons appear on the public invite page, whether a signup form
+                  accepts a code, and whether the backend rejects the referral. Change it here and save —
+                  every surface follows instantly.
+                </p>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <table className="w-full text-xs min-w-[480px]">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/50">
+                        <th className="text-left font-black uppercase tracking-widest text-slate-500 py-3 pl-3 pr-2">
+                          Referrer ↓ refers a…
+                        </th>
+                        {MATRIX_ROLES.map((target) => (
+                          <th
+                            key={target}
+                            className="py-3 px-2 font-black uppercase tracking-widest text-slate-500 text-center"
+                          >
+                            {MATRIX_ROLE_LABEL[target]}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MATRIX_ROLES.map((referrer) => (
+                        <tr
+                          key={referrer}
+                          className="border-t border-slate-100 dark:border-slate-800"
+                        >
+                          <td className="py-3 pl-3 pr-2 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                            {MATRIX_ROLE_LABEL[referrer]}
+                          </td>
+                          {MATRIX_ROLES.map((target) => (
+                            <td key={target} className="py-3 px-2 text-center">
+                              <Switch
+                                checked={formMatrix[referrer][target]}
+                                onCheckedChange={(v) =>
+                                  setFormMatrix((prev) => ({
+                                    ...prev,
+                                    [referrer]: { ...prev[referrer], [target]: v },
+                                  }))
+                                }
+                                aria-label={`${MATRIX_ROLE_LABEL[referrer]} referring a ${MATRIX_ROLE_LABEL[target]}`}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  Reward depends on who IS referred: a referred driver pays $50 on their 5th paid delivery
+                  (within the signup window); a referred business pays $10 once (rolling 30-day cap); a
+                  referred personal customer pays $5 once (no cap).
+                </p>
+              </div>
 
               {/* Referrer-type enable toggles — independent of the master
                   isActive flag. Lets the admin enable customer referrals

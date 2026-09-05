@@ -972,3 +972,23 @@ Work Log:
 
 Stage Summary:
 - The unified matrix is now wired end-to-end: the backend (f117029) accepts all referrer-to-referred combinations, and every capture surface (invite page, customer signup, dealer signup, driver onboarding) offers/accepts every path. A personal customer's invite page now offers the driver path (the owner's customer-to-driver case), and business customers can finally be referred through the dealer form.
+
+---
+Task ID: referral-role-matrix-v31
+Agent: Main Agent
+Task: Make "who refers whom" a config-driven single source of truth — invite-page signup buttons must respect the referrer's role (user: "driver can not refer business"), the matrix must live in ONE editable place, and the rule must be enforced server-side too
+
+Work Log:
+- User feedback on the fully-unified invite page: the buttons are DOORS to signup pages, so a referrer's role must decide which doors exist (a driver's code page showed "Sign up as a Dealer" — wrong). And: don't hardcode the matrix anywhere — put it in one editable place so everything follows when it changes.
+- Single source of truth: new referralRoleMatrix (matrix[referrerRole][referredRole] = allowed?) stored INSIDE the existing referral program settings JSON (key/value AppSetting row — no schema change, no migration). Default policy: DRIVER→{DRIVER,PERSONAL} (no BUSINESS), PERSONAL→{DRIVER,PERSONAL} (no BUSINESS), BUSINESS→{DRIVER,PERSONAL,BUSINESS} (B2B = the $10/$300 program's only source). Roles not account types: customer referrers map to PERSONAL/BUSINESS by customerType.
+- Backend appSetting: default matrix + sanitizeReferralRoleMatrix (partial/corrupt blobs fall back cell-by-cell), merge-on-read + cell-wise merge-on-update (a partial API body can never wipe other rows). Response + update DTO fields (IsObject).
+- Backend referral.service: applyReferral + applyCustomerReferral now HARD-REJECT disallowed combinations with specific messages ("Drivers can't refer business customers — clear the code or use a different one.") — hand-typed ?ref= URLs can't bypass hidden buttons. publicResolveReferralCode returns `allows` (the referrer's matrix row) on every branch; swagger updated.
+- Frontend ReferralCodeInput + ReferralCodeWidget: allowedReferrerTypes prop (static, tight coupling) REPLACED by referralTargetRole — the component declares which role its form CREATES and renders the verdict from the response's `allows`; no matrix logic in the frontend. not-allowed message rebuilt ("{referrer} can't refer {target} — clear the code or use a different one."); stale "Business customers can't be referred — they sign up directly" wording deleted. Missing `allows` (old cache) treated as allowed (no false blocks).
+- Forms declare their target: DealerSignupForm="BUSINESS", driverOnboarding="DRIVER", IndividualSignupForm="PERSONAL".
+- TestReferralPage: buttons render from `allows` (Driver/Dealer/Customer doors), heading adapts (1 door vs many), zero-doors fallback note; header docs rewritten.
+- Admin referral program page: new "Who Can Refer Whom (V3.1)" 3×3 switch grid — the user's editable matrix surface — with cell-wise hydration fallback and full-grid save.
+- Tests: new referral-matrix.spec.ts (14 tests: defaults, partial/corrupt merge, cell-wise update merge, apply accept/reject for all 5 matrix behaviors incl. B2B accept + personal→business reject + driver→business reject, resolve `allows` mapping for all 4 branches). appSetting+referral suites: 78/78 PASS.
+- Verification: backend tsc 4 pre-existing errors only (0 new); frontend scoped tsc 144 == 144 baseline (0 new — two transient new errors from a stale duplicate not-allowed block were fixed); vite build passes.
+
+Stage Summary:
+- "Who can refer whom" is now ONE admin-tunable matrix that every surface obeys: invite-page buttons, signup-form validation, and server-side rejection all derive from referralRoleMatrix. Default: drivers/personal cannot refer businesses (user's rule), personal→driver kept (owner-confirmed), B2B business referrals remain possible (the $10 program's source). Editing any switch on the admin page + Save changes every surface instantly — no code change.

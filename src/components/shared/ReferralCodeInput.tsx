@@ -37,20 +37,32 @@ type ResolveResponse = {
   referrerType: "DRIVER" | "CUSTOMER" | null;
   referrerSubtype: "PERSONAL" | "BUSINESS" | null;
   programActive: boolean;
+  /** V3.1: config-driven role matrix row for this referrer's role. */
+  allows: { DRIVER: boolean; PERSONAL: boolean; BUSINESS: boolean } | null;
 };
 
 type ValidationState = "empty" | "validating" | "resolved" | "invalid" | "paused" | "not-allowed";
 
 /**
- * Which referrer types are allowed to refer the user on THIS form.
- * V3 unified matrix: any user type can refer any other, so every form
- * passes the full list — driver, personal, AND business referrers are
- * all accepted everywhere (the reward is keyed to who IS referred:
- * $50 driver / $10 business / $5 personal). The prop is kept so the
- * not-allowed messaging machinery stays available if a restriction is
- * ever reintroduced.
+ * V3.1 — the role this signup form CREATES (the referred party):
+ *   - driver onboarding → "DRIVER"
+ *   - individual (personal) signup → "PERSONAL"
+ *   - dealer (business) signup → "BUSINESS"
+ *
+ * Whether the resolved referrer's ROLE may refer this target is decided
+ * by the backend's CONFIG-DRIVEN role matrix (referralRoleMatrix — the
+ * single source of truth, admin-tunable) and arrives in the resolve
+ * response as `allows`. This component NEVER hardcodes the matrix — it
+ * only renders the verdict, so editing the matrix in admin updates
+ * every surface with no code change.
  */
-type AllowedReferrerType = "DRIVER" | "BUSINESS" | "PERSONAL";
+type ReferralTargetRole = "DRIVER" | "PERSONAL" | "BUSINESS";
+
+const TARGET_ROLE_LABEL: Record<ReferralTargetRole, string> = {
+  DRIVER: "drivers",
+  PERSONAL: "personal customers",
+  BUSINESS: "business customers",
+};
 
 type Props = {
   /** Called with the validated, uppercased code when resolved, or null when empty/invalid/paused/not-allowed. */
@@ -62,12 +74,14 @@ type Props = {
   /** Optional class to override the outer wrapper. */
   className?: string;
   /**
-   * Which referrer types are allowed on this form.
-   * If the resolved code belongs to a referrer type NOT in this list,
-   * the input shows a red X with a specific message and onChange(null) is called.
-   * Default: all types allowed (["DRIVER", "BUSINESS", "PERSONAL"]).
+   * V3.1: which role this form's signup CREATES (DRIVER | PERSONAL |
+   * BUSINESS). When set, the resolved code is checked against the
+   * backend role matrix (`allows` in the resolve response) — if the
+   * referrer's role can't refer this target, the input shows a red X
+   * with a specific message and onChange(null) is called. Omit to skip
+   * the matrix check (all referrer roles allowed).
    */
-  allowedReferrerTypes?: AllowedReferrerType[];
+  referralTargetRole?: ReferralTargetRole;
 };
 
 export function ReferralCodeInput({
@@ -75,7 +89,7 @@ export function ReferralCodeInput({
   initialValue = "",
   disabled = false,
   className,
-  allowedReferrerTypes = ["DRIVER", "BUSINESS", "PERSONAL"],
+  referralTargetRole,
 }: Props) {
   // Local state — the raw input as the user types.
   const [inputValue, setInputValue] = useState<string>(initialValue);
@@ -131,22 +145,17 @@ export function ReferralCodeInput({
       state = "paused";
     } else {
       // ── ROLE MATRIX CHECK ──────────────────────────────────────
-      // The code is valid + program is active. But is this referrer
-      // ALLOWED to refer the type of user signing up on THIS form?
-      //
-      // Map the referrer's type+subtype to an AllowedReferrerType:
-      //   referrerType=DRIVER → "DRIVER"
-      //   referrerType=CUSTOMER + subtype=BUSINESS → "BUSINESS"
-      //   referrerType=CUSTOMER + subtype=PERSONAL → "PERSONAL"
-      const referrerAllowedType: AllowedReferrerType =
-        data.referrerType === "DRIVER"
-          ? "DRIVER"
-          : data.referrerSubtype === "BUSINESS"
-            ? "BUSINESS"
-            : "PERSONAL";
+      // The code is valid + program is active. Whether THIS referrer's
+      // role may refer THIS form's target role is decided by the
+      // backend role matrix and arrives pre-computed as `allows` —
+      // no matrix logic lives in the frontend.
+      // Missing `allows` (old backend / cache) → treat as allowed.
+      const allowsTarget =
+        data.allows && referralTargetRole
+          ? data.allows[referralTargetRole]
+          : true;
 
-      if (!allowedReferrerTypes.includes(referrerAllowedType)) {
-        // This referrer type is NOT allowed on this form.
+      if (!allowsTarget) {
         state = "not-allowed";
       } else {
         state = "resolved";
@@ -231,7 +240,8 @@ export function ReferralCodeInput({
       );
     }
     if (state === "not-allowed") {
-      // Generate a specific message based on the referrer type + what form this is
+      // Config-driven role matrix said no — specific message from the
+      // referrer's role + this form's target role.
       const referrerDesc =
         data?.referrerSubtype === "PERSONAL"
           ? "Personal customers"
@@ -240,13 +250,13 @@ export function ReferralCodeInput({
             : data?.referrerType === "DRIVER"
               ? "Drivers"
               : "This referrer";
-      const targetDesc = allowedReferrerTypes.length === 0
-        ? "Business customers can't be referred — they sign up directly."
-        : `${referrerDesc} can't invite ${allowedReferrerTypes.includes("DRIVER") ? "drivers" : "this type of account"}.`;
+      const targetDesc = referralTargetRole
+        ? TARGET_ROLE_LABEL[referralTargetRole]
+        : "this type of account";
       return (
         <p className="text-xs text-red-500 dark:text-red-400 font-medium flex items-center gap-1.5">
           <X className="w-3.5 h-3.5" />
-          {targetDesc} Clear the code or use a different one.
+          {referrerDesc} can't refer {targetDesc} — clear the code or use a different one.
         </p>
       );
     }

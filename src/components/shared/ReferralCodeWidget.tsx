@@ -61,6 +61,8 @@ type ResolveResponse = {
   referrerType: "DRIVER" | "CUSTOMER" | null;
   referrerSubtype: "PERSONAL" | "BUSINESS" | null;
   programActive: boolean;
+  /** V3.1: config-driven role matrix row for this referrer's role. */
+  allows: { DRIVER: boolean; PERSONAL: boolean; BUSINESS: boolean } | null;
 };
 
 /** The three mutually exclusive widget states. */
@@ -69,7 +71,21 @@ type WidgetMode = "closed" | "typing" | "locked";
 /** Validation outcomes for the live check (drives TYPING messages + locking). */
 type ValidationState = "empty" | "validating" | "resolved" | "invalid" | "paused" | "not-allowed";
 
-type AllowedReferrerType = "DRIVER" | "BUSINESS" | "PERSONAL";
+/**
+ * V3.1 — the role the signup form hosting this widget CREATES (the
+ * referred party). Whether the resolved referrer's role may refer this
+ * target is decided by the backend's CONFIG-DRIVEN role matrix
+ * (referralRoleMatrix — single source of truth, admin-tunable) and
+ * arrives in the resolve response as `allows`. The widget NEVER
+ * hardcodes the matrix — it only renders the verdict.
+ */
+type ReferralTargetRole = "DRIVER" | "PERSONAL" | "BUSINESS";
+
+const TARGET_ROLE_LABEL: Record<ReferralTargetRole, string> = {
+  DRIVER: "drivers",
+  PERSONAL: "personal customers",
+  BUSINESS: "business customers",
+};
 
 /**
  * Slide-open row helper — module-level (NOT inline in the component) so
@@ -108,10 +124,13 @@ type Props = {
   /** Optional class to override the outer wrapper. */
   className?: string;
   /**
-   * Which referrer types are allowed on this form (same role matrix as
-   * ReferralCodeInput). Default: all types allowed.
+   * V3.1: which role this form's signup CREATES (DRIVER | PERSONAL |
+   * BUSINESS). When set, the resolved code is checked against the
+   * backend role matrix (`allows` in the resolve response) — if the
+   * referrer's role can't refer this target, the widget shows the red
+   * explanation and never locks. Omit to skip the matrix check.
    */
-  allowedReferrerTypes?: AllowedReferrerType[];
+  referralTargetRole?: ReferralTargetRole;
 };
 
 export function ReferralCodeWidget({
@@ -119,7 +138,7 @@ export function ReferralCodeWidget({
   initialValue = "",
   disabled = false,
   className,
-  allowedReferrerTypes = ["DRIVER", "BUSINESS", "PERSONAL"],
+  referralTargetRole,
 }: Props) {
   // ── Core state ─────────────────────────────────────────────────────
   const [mode, setMode] = useState<WidgetMode>("closed");
@@ -196,15 +215,13 @@ export function ReferralCodeWidget({
     } else if (!data.programActive) {
       state = "paused";
     } else {
-      // Role matrix — same mapping as ReferralCodeInput:
-      //   DRIVER → "DRIVER"; CUSTOMER+BUSINESS → "BUSINESS"; else "PERSONAL".
-      const referrerAllowedType: AllowedReferrerType =
-        data.referrerType === "DRIVER"
-          ? "DRIVER"
-          : data.referrerSubtype === "BUSINESS"
-            ? "BUSINESS"
-            : "PERSONAL";
-      if (!allowedReferrerTypes.includes(referrerAllowedType)) {
+      // V3.1 role matrix — the verdict comes pre-computed from the
+      // backend config (allows); missing allows → treat as allowed.
+      const allowsTarget =
+        data.allows && referralTargetRole
+          ? data.allows[referralTargetRole]
+          : true;
+      if (!allowsTarget) {
         state = "not-allowed";
       } else {
         state = "resolved";
@@ -290,11 +307,10 @@ export function ReferralCodeWidget({
           : data?.referrerType === "DRIVER"
             ? "Drivers"
             : "This referrer";
-    const targetDesc =
-      allowedReferrerTypes.length === 0
-        ? "Business customers can't be referred — they sign up directly."
-        : `${referrerDesc} can't invite ${allowedReferrerTypes.includes("DRIVER") ? "drivers" : "this type of account"}.`;
-    return `${targetDesc} Clear the code or use a different one.`;
+    const targetDesc = referralTargetRole
+      ? TARGET_ROLE_LABEL[referralTargetRole]
+      : "this type of account";
+    return `${referrerDesc} can't refer ${targetDesc} — clear the code or use a different one.`;
   })();
 
   // ── Visual pieces ──────────────────────────────────────────────────

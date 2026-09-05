@@ -7,15 +7,15 @@
  * the user whose code they're about to use (privacy-masked) BEFORE
  * redirecting to a signup form.
  *
- * Three signup CTAs (matching the 3 user types) — ALL shown for EVERY
- * resolved code. V3 unified role matrix: any user type can refer any
- * other (driver, business, or personal referrer → driver, business,
- * or personal referee), so the old V2 per-referrer button filtering is
- * gone. The reward the referrer earns is decided by WHO IS REFERRED
- * ($50 driver / $10 business / $5 personal), not by who shared the code.
- *   - "Become a Driver"     → /driver-onboarding?ref=CODE
- *   - "Sign up as a Dealer"  → /auth/dealer-signup?ref=CODE
- *   - "Sign up as a Customer" → /auth/individual-signup?ref=CODE
+ * Three signup CTAs (matching the 3 user types) — WHICH buttons render
+ * is decided by the backend's CONFIG-DRIVEN role matrix
+ * (referralRoleMatrix — single source of truth, admin-tunable),
+ * delivered pre-computed in the resolve response as `allows`:
+ *   - "Become a Driver"     → /driver-onboarding?ref=CODE   (needs allows.DRIVER)
+ *   - "Sign up as a Dealer"  → /auth/dealer-signup?ref=CODE (needs allows.BUSINESS)
+ *   - "Sign up as a Customer" → /auth/individual-signup?ref=CODE (needs allows.PERSONAL)
+ * The apply endpoints enforce the same matrix server-side, so the
+ * hidden doors can never be bypassed with a hand-typed ?ref= URL.
  *
  * The referral code is passed via the ?ref= query parameter, which the
  * ReferralCodeInput component auto-fills on mount in each signup form.
@@ -47,6 +47,8 @@ type ResolveResponse = {
   referrerType: "DRIVER" | "CUSTOMER" | null;
   referrerSubtype: "PERSONAL" | "BUSINESS" | null;
   programActive: boolean;
+  /** V3.1: config-driven role matrix row — which doors this referrer may open. */
+  allows: { DRIVER: boolean; PERSONAL: boolean; BUSINESS: boolean } | null;
 };
 
 type Props = {
@@ -82,6 +84,15 @@ export default function TestReferralPage({ code }: Props) {
     }),
     [upperCode],
   );
+
+  // ── V3.1: which signup doors this referrer's role may open — comes
+  // pre-computed from the backend's config-driven role matrix
+  // (referralRoleMatrix). Missing allows (old cache) → show all doors.
+  const allows = data?.found ? data.allows : null;
+  const canReferDriver = allows ? allows.DRIVER : true;
+  const canReferDealer = allows ? allows.BUSINESS : true;
+  const canReferIndividual = allows ? allows.PERSONAL : true;
+  const doorCount = [canReferDriver, canReferDealer, canReferIndividual].filter(Boolean).length;
 
   // ── SEO meta — these public referral pages are shareable but
   // individually not very useful for search engines, so the root route
@@ -214,46 +225,62 @@ export default function TestReferralPage({ code }: Props) {
               </div>
             )}
 
-            {/* ── CTAs ── V3 unified matrix: ALL three signup paths are offered
-                for every resolved code — any user type can refer any other
-                (a personal customer sharing their code can absolutely invite
-                a driver). Which reward the referrer earns is decided by what
-                the invitee signs up as, not by who shared the code. */}
+            {/* ── CTAs ── V3.1: the doors this referrer's role may open.
+                Which buttons render comes straight from the backend's
+                config-driven role matrix (`allows` on the resolve
+                response) — buttons ARE the matrix, visually. */}
             {data?.found ? (
               <div className="space-y-3 pt-2">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 text-center">
-                  Choose how you want to sign up
-                </p>
+                {doorCount > 0 ? (
+                  <>
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 text-center">
+                      {doorCount > 1
+                        ? "Choose how you want to sign up"
+                        : "Sign up to get started"}
+                    </p>
 
-                {/* Driver signup — $50 to the referrer on this driver's 5th
-                    paid delivery (within 30 days of signup). */}
-                <Link to={signupLinks.driver} className="block">
-                  <Button className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold inline-flex items-center justify-center gap-2">
-                    <Car className="w-5 h-5" />
-                    Become a Driver
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </Link>
+                    {/* Driver signup — $50 to the referrer on this driver's 5th
+                        paid delivery (within 30 days of signup). */}
+                    {canReferDriver && (
+                      <Link to={signupLinks.driver} className="block">
+                        <Button className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold inline-flex items-center justify-center gap-2">
+                          <Car className="w-5 h-5" />
+                          Become a Driver
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                      </Link>
+                    )}
 
-                {/* Dealer (Business customer) signup — $10 to the referrer on
-                    this business's first paid delivery (rolling 30-day cap). */}
-                <Link to={signupLinks.dealer} className="block">
-                  <Button variant="outline" className="w-full py-4 rounded-2xl font-extrabold inline-flex items-center justify-center gap-2">
-                    <Building className="w-5 h-5" />
-                    Sign up as a Dealer
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </Link>
+                    {/* Dealer (Business customer) signup — $10 to the referrer on
+                        this business's first paid delivery (rolling 30-day cap). */}
+                    {canReferDealer && (
+                      <Link to={signupLinks.dealer} className="block">
+                        <Button variant="outline" className="w-full py-4 rounded-2xl font-extrabold inline-flex items-center justify-center gap-2">
+                          <Building className="w-5 h-5" />
+                          Sign up as a Dealer
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                      </Link>
+                    )}
 
-                {/* Private (personal) customer signup — $5 to the referrer on
-                    this customer's first paid delivery (no cap). */}
-                <Link to={signupLinks.individual} className="block">
-                  <Button variant="outline" className="w-full py-4 rounded-2xl font-extrabold inline-flex items-center justify-center gap-2">
-                    <User className="w-5 h-5" />
-                    Sign up as a Customer
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </Link>
+                    {/* Private (personal) customer signup — $5 to the referrer on
+                        this customer's first paid delivery (no cap). */}
+                    {canReferIndividual && (
+                      <Link to={signupLinks.individual} className="block">
+                        <Button variant="outline" className="w-full py-4 rounded-2xl font-extrabold inline-flex items-center justify-center gap-2">
+                          <User className="w-5 h-5" />
+                          Sign up as a Customer
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                      </Link>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 text-center leading-relaxed py-2">
+                    This referrer's role can't refer new sign-ups under the
+                    current program rules.
+                  </p>
+                )}
 
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center mt-3 leading-relaxed">
                   The referral code <span className="font-mono font-bold">{upperCode}</span> will be

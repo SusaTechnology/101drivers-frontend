@@ -19,6 +19,8 @@ import {
   ReferralRewardTrigger,
   ReferralTimeLimitMode,
   ReferralPayoutModelDto,
+  ReferralReferrerRole,
+  ReferralRoleMatrix,
 } from "./dto/appSetting.dto";
 
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
@@ -336,7 +338,55 @@ export class AppSettingService extends AppSettingServiceBase {
       // Both referral types enabled by default
       customerReferralsEnabled: true,
       driverReferralsEnabled: true,
+      // ── V3.1: who can refer whom (SINGLE SOURCE OF TRUTH) ──
+      // matrix[referrerRole][referredRole] = allowed?
+      // Roles: DRIVER | PERSONAL | BUSINESS (customer referrers map to
+      // PERSONAL/BUSINESS by customerType; drivers always map to DRIVER).
+      // Default policy:
+      //   - DRIVER referrers can refer drivers + personal customers,
+      //     NOT businesses (owner: "a driver cannot refer a business").
+      //   - PERSONAL referrers can refer drivers (owner: "customer-to-
+      //     driver referrals are worth keeping") + personal customers,
+      //     NOT businesses (mirrors drivers).
+      //   - BUSINESS referrers can refer everyone — B2B is the source
+      //     of the $10 business-referral program ($300 rolling cap).
+      // Every cell is admin-tunable from the admin referral program page;
+      // ALL consumers (invite page buttons, signup-form validation, and
+      // the apply endpoints' hard rejection) derive from this one shape.
+      referralRoleMatrix: {
+        DRIVER: { DRIVER: true, PERSONAL: true, BUSINESS: false },
+        PERSONAL: { DRIVER: true, PERSONAL: true, BUSINESS: false },
+        BUSINESS: { DRIVER: true, PERSONAL: true, BUSINESS: true },
+      },
     };
+  }
+
+  /**
+   * V3.1 — sanitize a stored/submitted role matrix against a fallback.
+   * Every missing/malformed role row or cell falls back to the fallback
+   * matrix (defaults on read, current values on update) — a partial or
+   * corrupt blob can never break the referral flow.
+   */
+  private sanitizeReferralRoleMatrix(
+    v: unknown,
+    fallback: ReferralRoleMatrix
+  ): ReferralRoleMatrix {
+    const roles: ReferralReferrerRole[] = ["DRIVER", "PERSONAL", "BUSINESS"];
+    const input = (v && typeof v === "object" ? v : {}) as Record<
+      string,
+      Record<string, unknown> | undefined
+    >;
+    const out = {} as ReferralRoleMatrix;
+    for (const row of roles) {
+      out[row] = {} as Record<ReferralReferrerRole, boolean>;
+      for (const cell of roles) {
+        out[row][cell] =
+          typeof input[row]?.[cell] === "boolean"
+            ? (input[row]![cell] as boolean)
+            : fallback[row][cell];
+      }
+    }
+    return out;
   }
 
   /**
@@ -479,6 +529,10 @@ export class AppSettingService extends AppSettingServiceBase {
         typeof v.driverReferralsEnabled === "boolean"
           ? v.driverReferralsEnabled
           : defaults.driverReferralsEnabled,
+      referralRoleMatrix: this.sanitizeReferralRoleMatrix(
+        v.referralRoleMatrix,
+        defaults.referralRoleMatrix
+      ),
     };
   }
 
@@ -570,6 +624,15 @@ export class AppSettingService extends AppSettingServiceBase {
         input.driverReferralsEnabled != null
           ? input.driverReferralsEnabled
           : current.driverReferralsEnabled,
+      // V3.1: partial matrix input merges cell-by-cell onto current —
+      // the admin page sends the full grid, but a partial body (e.g. one
+      // row flipped via API) can never wipe the other rows.
+      referralRoleMatrix: input.referralRoleMatrix
+        ? this.sanitizeReferralRoleMatrix(
+            input.referralRoleMatrix,
+            current.referralRoleMatrix
+          )
+        : current.referralRoleMatrix,
     };
 
     // Cross-field validation: if CALENDAR_RANGE, both dates must be set.

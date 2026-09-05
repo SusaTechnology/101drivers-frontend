@@ -6,6 +6,7 @@ import {
   ReferralTimeLimitMode,
   ReferralPayoutModelDto,
   ReferralTypeDto,
+  ReferralReferrerRole,
 } from "../appSetting/dto/appSetting.dto";
 import {
   generateUniqueReferralCode,
@@ -428,7 +429,7 @@ export class ReferralService {
       }),
       this.prisma.customer.findFirst({
         where: { referralCode: upperCode },
-        select: { id: true, referralCode: true, userId: true },
+        select: { id: true, referralCode: true, userId: true, customerType: true },
       }),
       this.prisma.referral.findFirst({
         where: { referralCode: upperCode, status: "PENDING" },
@@ -443,6 +444,10 @@ export class ReferralService {
     let referrerUserId: string | null = null;
     let referralType: ReferralTypeDto;
     let legacyReferralId: string | null = legacyReferral?.id ?? null;
+    // V3.1: the REFERRER's role for the config-driven role matrix —
+    // drivers map to DRIVER; customer referrers to PERSONAL/BUSINESS by
+    // their customerType.
+    let referrerRole: "DRIVER" | "PERSONAL" | "BUSINESS" = "DRIVER";
 
     if (driverReferrer) {
       if (driverReferrer.id === driverId) {
@@ -451,9 +456,11 @@ export class ReferralService {
       referrerDriverId = driverReferrer.id;
       referrerUserId = driverReferrer.userId;
       referralType = ReferralTypeDto.DRIVER;
+      referrerRole = "DRIVER";
     } else if (customerReferrer) {
       referrerUserId = customerReferrer.userId;
       referralType = ReferralTypeDto.CUSTOMER;
+      referrerRole = customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL";
     } else if (legacyReferral) {
       // Legacy code-holder row — referrer must be a driver (pre-V2)
       if (legacyReferral.referrerId === driverId) {
@@ -461,17 +468,18 @@ export class ReferralService {
       }
       referrerDriverId = legacyReferral.referrerId;
       referralType = ReferralTypeDto.DRIVER;
+      referrerRole = "DRIVER";
     } else {
       throw new NotFoundException("Invalid or expired referral code");
     }
 
-    // ── ROLE MATRIX ENFORCEMENT (V3 spec — UNIFIED) ─────────────────
-    // Who can refer whom (V3 spec — UNIFIED):
-    //   Any existing user can refer a driver — individual drivers, personal
-    //   customers, and business customers. No role restrictions.
-    //   (The old V2 restriction — "personal customers can only refer other
-    //   personal customers" — was removed per the unified driver referral
-    //   spec. All referrers earn the same $50-on-5th-paid-delivery payout.)
+    // ── ROLE MATRIX (V3.1 — config-driven single source of truth) ──
+    // "Who can refer whom" lives in the referral program settings
+    // (referralRoleMatrix, admin-tunable) — NOT hardcoded here. The
+    // same config drives the invite-page buttons and the signup-form
+    // validation, so the UI doors and the server rule can never drift.
+    // Check happens HERE (server-side) so hand-typed ?ref= URLs can't
+    // sneak past the hidden buttons.
 
     // ── Per-referred-party uniqueness check ──
     // A driver can only have ONE referral applied. If they already used a
@@ -535,6 +543,18 @@ export class ReferralService {
     if (referralType === ReferralTypeDto.CUSTOMER && !config.customerReferralsEnabled) {
       throw new BadRequestException(
         "Customer referrals are currently disabled."
+      );
+    }
+
+    // ── V3.1 role matrix: may THIS referrer role refer a DRIVER? ──
+    const REFERRER_LABEL: Record<string, string> = {
+      DRIVER: "Drivers",
+      PERSONAL: "Personal customers",
+      BUSINESS: "Business customers",
+    };
+    if (!config.referralRoleMatrix?.[referrerRole]?.DRIVER) {
+      throw new BadRequestException(
+        `${REFERRER_LABEL[referrerRole]} can't refer drivers — clear the code or use a different one.`
       );
     }
 
@@ -1920,7 +1940,7 @@ export class ReferralService {
       }),
       this.prisma.customer.findFirst({
         where: { referralCode: upperCode },
-        select: { id: true, referralCode: true, userId: true },
+        select: { id: true, referralCode: true, userId: true, customerType: true },
       }),
       this.prisma.referral.findFirst({
         where: { referralCode: upperCode, status: "PENDING" },
@@ -1932,34 +1952,39 @@ export class ReferralService {
     let referrerUserId: string | null = null;
     let referralType: ReferralTypeDto;
     let legacyReferralId: string | null = legacyReferral?.id ?? null;
+    // V3.1: the REFERRER's role for the config-driven role matrix.
+    let referrerRole: "DRIVER" | "PERSONAL" | "BUSINESS" = "DRIVER";
 
     if (driverReferrer) {
       referrerDriverId = driverReferrer.id;
       referrerUserId = driverReferrer.userId;
       referralType = ReferralTypeDto.DRIVER;
+      referrerRole = "DRIVER";
     } else if (customerReferrer) {
       if (customerReferrer.id === customerId) {
         throw new BadRequestException("You cannot use your own referral code");
       }
       referrerUserId = customerReferrer.userId;
       referralType = ReferralTypeDto.CUSTOMER;
+      referrerRole = customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL";
     } else if (legacyReferral) {
       referrerDriverId = legacyReferral.referrerId;
       referralType = ReferralTypeDto.DRIVER;
+      referrerRole = "DRIVER";
     } else {
       throw new NotFoundException("Invalid or expired referral code");
     }
 
     // ── ROLE MATRIX ENFORCEMENT (spec) ──────────────────────────────
-    // Who can refer whom (V3 spec — UNIFIED):
-    //   Any existing user can refer a customer — drivers, personal customers,
-    //   and business customers. The referred customer's TYPE determines the
-    //   program (snapshotted so a later type upgrade can't rewrite history):
-    //     BUSINESS customer → BUSINESS_REFERRAL ($10 first-delivery, $300
-    //                        rolling 30-day cap per referrer)
-    //     PERSONAL customer → RESIDENTIAL_REFERRAL ($5 first-delivery, no cap)
-    //   (The old V2 rule — "business customers are never referred" — was
-    //   removed per the business-referral spec.)
+    // Who can refer whom — CONFIG-DRIVEN (V3.1): the matrix lives in the
+    // referral program settings (referralRoleMatrix, admin-tunable) and is
+    // the single source of truth for the invite-page buttons, the
+    // signup-form validation, AND the hard check after the config loads
+    // below. The referred customer's TYPE determines the program
+    // (snapshotted so a later type upgrade can't rewrite history):
+    //   BUSINESS customer → BUSINESS_REFERRAL ($10 first-delivery, $300
+    //                      rolling 30-day cap per referrer)
+    //   PERSONAL customer → RESIDENTIAL_REFERRAL ($5 first-delivery, no cap)
     const referredCustomer = await this.prisma.customer.findUnique({
       where: { id: customerId },
       select: { customerType: true, createdAt: true },
@@ -1997,6 +2022,27 @@ export class ReferralService {
       throw new BadRequestException(
         "Customer referrals are currently disabled."
       );
+    }
+
+    // ── V3.1 role matrix: may THIS referrer role refer THIS customer type? ──
+    {
+      const REFERRER_LABEL: Record<string, string> = {
+        DRIVER: "Drivers",
+        PERSONAL: "Personal customers",
+        BUSINESS: "Business customers",
+      };
+      const TARGET_LABEL: Record<string, string> = {
+        DRIVER: "drivers",
+        PERSONAL: "personal customers",
+        BUSINESS: "business customers",
+      };
+      const targetRole =
+        referredCustomer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL";
+      if (!config.referralRoleMatrix?.[referrerRole]?.[targetRole]) {
+        throw new BadRequestException(
+          `${REFERRER_LABEL[referrerRole]} can't refer ${TARGET_LABEL[targetRole]} — clear the code or use a different one.`
+        );
+      }
     }
 
     // V3: NO time window for customer referrals — the business/residential
@@ -2287,8 +2333,13 @@ export class ReferralService {
     referrerType: ReferralTypeDto | null;
     referrerSubtype: "PERSONAL" | "BUSINESS" | null;
     programActive: boolean;
+    // V3.1: which roles this referrer may refer, straight from the
+    // config-driven role matrix (single source of truth). The public
+    // invite page renders its signup buttons from THIS — and the apply
+    // endpoints enforce the same cells server-side.
+    allows: Record<ReferralReferrerRole, boolean> | null;
   }> {
-    if (!code) return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: false };
+    if (!code) return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: false, allows: null };
 
     const upperCode = code.toUpperCase();
 
@@ -2318,6 +2369,7 @@ export class ReferralService {
         referrerType: ReferralTypeDto.DRIVER,
         referrerSubtype: null,
         programActive: config.isActive && config.driverReferralsEnabled,
+        allows: config.referralRoleMatrix.DRIVER,
       };
     }
 
@@ -2338,6 +2390,10 @@ export class ReferralService {
         referrerType: ReferralTypeDto.CUSTOMER,
         referrerSubtype: customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL",
         programActive: config.isActive && config.customerReferralsEnabled,
+        allows:
+          config.referralRoleMatrix[
+            customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL"
+          ],
       };
     }
 
@@ -2357,10 +2413,11 @@ export class ReferralService {
         referrerType: ReferralTypeDto.DRIVER,
         referrerSubtype: null,
         programActive: config.isActive && config.driverReferralsEnabled,
+        allows: config.referralRoleMatrix.DRIVER,
       };
     }
 
-    return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: config.isActive };
+    return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: config.isActive, allows: null };
   }
 
   /**

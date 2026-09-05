@@ -1601,13 +1601,13 @@ export function DealerSignupForm({ isLoaded: isLoadedProp, embedded = false }: D
 
                     {/* Referral Code (optional) — auto-fills from ?ref= URL param,
                         validates against /api/referrals/public/resolve/:code.
-                        V3 unified matrix: business customers CAN be referred
-                        (referrer earns $10 on this business's first paid
-                        delivery) — so every referrer type is accepted. */}
+                        V3.1: this form CREATES a BUSINESS account — whether
+                        the resolved referrer's role may refer a business is
+                        decided by the backend role matrix (admin-tunable). */}
                     <ReferralCodeInput
                       onChange={setReferralCode}
                       disabled={isPending}
-                      allowedReferrerTypes={["DRIVER", "BUSINESS", "PERSONAL"]}
+                      referralTargetRole="BUSINESS"
                     />
 
                     <Button
