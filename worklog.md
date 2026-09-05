@@ -1028,3 +1028,23 @@ Stage Summary:
 - The user can now seed referral settings on the server with ONE command: cd backend && npx ts-node scripts/seed-referral-settings.ts (or npm run seed:referral) — safe create-if-absent; --force to reset to defaults.
 - Admin UI no longer references internal version numbers anywhere the admin can read.
 - Commit: feat(referral): standalone referral-settings seed script + admin UI jargon cleanup
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: User asked whether the frontend referral surfaces actually pull data from the backend and render accordingly (who-refers-whom from admin config, money + how-you-earn info correct). Full data-flow audit; fix any surface showing wrong info.
+
+Work Log:
+- Traced every user-facing referral surface to its data source:
+  * /test-referral/$code invite page: buttons render from GET /referrals/public/resolve/:code `allows` (config-driven matrix) — VERIFIED correct.
+  * Signup forms: not-allowed verdict from the same resolve response — VERIFIED correct.
+  * ReferralCodeCard (Refer a Friend card): reward copy built from GET /referrals/program-config (live passthrough of the appSetting DB row) — perDeliveryReferredBonusCents, perDeliveryBonusTriggerCount, referralWindowDays, business/residential amounts + cap — VERIFIED correct.
+  * driver-wallet "Delivery X of 5 · Nd left" badge + "Your referral progress" banner: from my-referrals / my-referred-status (referral row progress + daysRemaining) — VERIFIED correct.
+  * driver-wallet "Refer a Friend" card description: FOUND WRONG — bonusAmount read the legacy TIERED field referredRewardAmount (defaults 150 => would display "$150" instead of the real $50 bonus), and the copy claimed "codes never expire" while V3 has a 30-day payout window from the referred driver's signup.
+- FIXED driver-wallet.tsx buildReferralDescription: bonusAmount now from perDeliveryReferredBonusCents (fallback $50), windowDays from referralWindowDays (fallback 30), copy now reads "complete N paid deliveries within N days of their signup, you earn $X" and drops the misleading "codes never expire".
+- Confirmed display/engine consistency: the PER_DELIVERY trigger path reads the SAME live config (perDeliveryBonusTriggerCount, perDeliveryReferredBonusCents) at payout time, so what users see and what pays out can never disagree. Remaining referredRewardAmount usages are admin-only snapshot displays (historical referral rows) — correct.
+- Verification: frontend scoped tsc 144 == 144 baseline (0 new); vite build passes. Backend untouched this round (last verified: tsc 4 pre-existing, referral+appSetting jest 78/78).
+
+Stage Summary:
+- Every referral surface is backend-driven: admin config → DB → resolve endpoint (doors + form verdicts) and program-config endpoint (money copy + trigger/window), progress from referral rows. The one surface that showed a wrong amount (wallet card description, legacy $150) now shows the live-configured bonus and window.
+- Commit: fix(referral): wallet Refer-a-Friend card copy now reads live config (real bonus + payout window)

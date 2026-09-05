@@ -234,22 +234,32 @@ export default function DriverWalletPage() {
   }
 
   // Build the human-readable description string for the "Refer a Friend" card.
-  // Varies based on trigger type + time mode + referred-gets-reward.
+  // Every number comes from the LIVE program config (/referrals/program-config)
+  // so admin changes show up here immediately:
+  //   - bonusAmount  = perDeliveryReferredBonusCents — the referrer's one-shot
+  //     bonus when the referred driver completes their Nth paid delivery
+  //   - triggerCount = perDeliveryBonusTriggerCount (my-stats also exposes
+  //     it as `triggerCount`)
+  //   - windowDays   = referralWindowDays — the payout window counted from
+  //     the referred driver's signup (past it, the referral expires UNPAID)
   const buildReferralDescription = () => {
-    // V2 spec: Drivers referring other drivers earn $50 when the referred
-    // driver completes their 5th paid delivery. No per-delivery payout for
-    // referred drivers — only the one-shot $50 bonus.
-    // V3: the trigger count comes from perDeliveryBonusTriggerCount (the
-    // my-stats endpoint also exposes it as `triggerCount`).
-    const bonusAmount = referralConfig.referredRewardAmount ?? 50
+    const bonusAmount =
+      typeof referralConfigData?.perDeliveryReferredBonusCents === 'number' &&
+      referralConfigData.perDeliveryReferredBonusCents > 0
+        ? referralConfigData.perDeliveryReferredBonusCents / 100
+        : 50
     const triggerCount =
       (typeof referralStats?.triggerCount === 'number' && referralStats.triggerCount >= 1
         ? referralStats.triggerCount
         : null) ??
       referralConfig.triggerCount ??
       5
+    const windowDays =
+      typeof referralConfigData?.referralWindowDays === 'number' && referralConfigData.referralWindowDays >= 1
+        ? referralConfigData.referralWindowDays
+        : 30
 
-    return `Share your unique referral link with friends who want to become drivers. When they sign up using your link and complete ${triggerCount} paid deliveries, you earn $${bonusAmount}. Refer as many friends as you want — codes never expire.`
+    return `Share your unique referral link with friends who want to become drivers. When they sign up using your link and complete ${triggerCount} paid deliveries within ${windowDays} days of their signup, you earn $${bonusAmount}. Refer as many friends as you want.`
   }
 
   // ── Fetch real earnings data ───────────────────────────────
