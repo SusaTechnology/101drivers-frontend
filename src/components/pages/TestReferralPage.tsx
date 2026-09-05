@@ -7,7 +7,12 @@
  * the user whose code they're about to use (privacy-masked) BEFORE
  * redirecting to a signup form.
  *
- * Three signup CTAs (matching the 3 user types):
+ * Three signup CTAs (matching the 3 user types) — ALL shown for EVERY
+ * resolved code. V3 unified role matrix: any user type can refer any
+ * other (driver, business, or personal referrer → driver, business,
+ * or personal referee), so the old V2 per-referrer button filtering is
+ * gone. The reward the referrer earns is decided by WHO IS REFERRED
+ * ($50 driver / $10 business / $5 personal), not by who shared the code.
  *   - "Become a Driver"     → /driver-onboarding?ref=CODE
  *   - "Sign up as a Dealer"  → /auth/dealer-signup?ref=CODE
  *   - "Sign up as a Customer" → /auth/individual-signup?ref=CODE
@@ -209,56 +214,39 @@ export default function TestReferralPage({ code }: Props) {
               </div>
             )}
 
-            {/* ── CTAs ── V2: only show signup buttons the referrer is allowed to refer.
-                Role matrix:
-                  Personal customer → personal customers ONLY
-                  Business customer → personal customers OR drivers
-                  Driver → personal customers OR drivers
-                Business customers can NEVER be referred — they sign up directly. */}
+            {/* ── CTAs ── V3 unified matrix: ALL three signup paths are offered
+                for every resolved code — any user type can refer any other
+                (a personal customer sharing their code can absolutely invite
+                a driver). Which reward the referrer earns is decided by what
+                the invitee signs up as, not by who shared the code. */}
             {data?.found ? (
               <div className="space-y-3 pt-2">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-500 text-center">
-                  {(() => {
-                    // Determine which options to show based on referrer type/subtype
-                    const canReferDriver =
-                      data.referrerType === "DRIVER" ||
-                      (data.referrerType === "CUSTOMER" && data.referrerSubtype === "BUSINESS");
-                    const canReferPersonal = true; // all referrer types can refer personal customers
-                    if (canReferDriver && canReferPersonal) {
-                      return "Choose how you want to sign up";
-                    }
-                    return "Sign up to get started";
-                  })()}
+                  Choose how you want to sign up
                 </p>
 
-                {/* Driver signup — only shown if referrer can refer drivers
-                    (Business customer or Driver referrer. NOT Personal customer.) */}
-                {(() => {
-                  const canReferDriver =
-                    data.referrerType === "DRIVER" ||
-                    (data.referrerType === "CUSTOMER" && data.referrerSubtype === "BUSINESS");
-                  if (!canReferDriver) return null;
-                  return (
-                    <Link to={signupLinks.driver} className="block">
-                      <Button className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold inline-flex items-center justify-center gap-2">
-                        <Car className="w-5 h-5" />
-                        Become a Driver
-                        <ArrowRight className="w-4 h-4" />
-                      </Button>
-                    </Link>
-                  );
-                })()}
+                {/* Driver signup — $50 to the referrer on this driver's 5th
+                    paid delivery (within 30 days of signup). */}
+                <Link to={signupLinks.driver} className="block">
+                  <Button className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold inline-flex items-center justify-center gap-2">
+                    <Car className="w-5 h-5" />
+                    Become a Driver
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
 
-                {/* Dealer (Business customer) signup — NEVER shown as a referral CTA.
-                    Business customers sign up directly, they cannot be referred.
-                    OLD CODE (commented out per spec):
-                    <Link to={signupLinks.dealer} className="block">
-                      <Button variant="outline" ...>Sign up as a Dealer</Button>
-                    </Link>
-                    */}
+                {/* Dealer (Business customer) signup — $10 to the referrer on
+                    this business's first paid delivery (rolling 30-day cap). */}
+                <Link to={signupLinks.dealer} className="block">
+                  <Button variant="outline" className="w-full py-4 rounded-2xl font-extrabold inline-flex items-center justify-center gap-2">
+                    <Building className="w-5 h-5" />
+                    Sign up as a Dealer
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
 
-                {/* Private customer signup — shown for ALL referrer types
-                    (personal, business, and driver can all refer personal customers) */}
+                {/* Private (personal) customer signup — $5 to the referrer on
+                    this customer's first paid delivery (no cap). */}
                 <Link to={signupLinks.individual} className="block">
                   <Button variant="outline" className="w-full py-4 rounded-2xl font-extrabold inline-flex items-center justify-center gap-2">
                     <User className="w-5 h-5" />
@@ -266,19 +254,6 @@ export default function TestReferralPage({ code }: Props) {
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </Link>
-
-                {(() => {
-                  // Show a note explaining what's allowed if the referrer is a personal customer
-                  if (data.referrerType === "CUSTOMER" && data.referrerSubtype === "PERSONAL") {
-                    return (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center mt-2 leading-relaxed">
-                        This referrer can only refer personal customers. To become a driver or dealer,
-                        sign up directly without a referral code.
-                      </p>
-                    );
-                  }
-                  return null;
-                })()}
 
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center mt-3 leading-relaxed">
                   The referral code <span className="font-mono font-bold">{upperCode}</span> will be

@@ -954,3 +954,21 @@ Work Log:
 
 Stage Summary:
 - The referral payout system now matches the V3 spec end-to-end: $50 to any referrer (driver, personal, or business customer) when their referred driver completes 5 paid deliveries within 30 days of signup — window-closed-before-5 expires UNPAID via the now-activated fire-time check + always-on cron; referred drivers already approved are rejected; business referrals pay $10 once on first delivery under a rolling $300/30d cap (forfeit); residential pays $5 once, no cap; both sides see live progress (deliveries vs target + days remaining) in wallet/banner/dashboard; all knobs (window, amounts, cap, trigger count, model) admin-tunable. Deploy note: run `prisma migrate deploy` (new migration 20260904090000_referral_category); live programs still on stored TIERED settings must flip payoutModel to PER_DELIVERY in the admin page to activate the new math.
+
+---
+Task ID: referral-unified-matrix-wiring
+Agent: Main Agent
+Task: Finish the V3 unified role matrix wiring — /test-referral/$code must offer all three signup paths for every resolved code, and the dealer + driver signup forms must accept codes from every referrer type (owner: "Customer-to-driver referrals are worth keeping")
+
+Work Log:
+- Found 3 surfaces still enforcing the dead V2 role matrix after the V3 payout commit (f117029): TestReferralPage hid "Become a Driver" for personal-customer referrers and had the Dealer button commented out ("business customers cannot be referred"); DealerSignupForm passed allowedReferrerTypes={[]} so EVERY code was rejected on the business signup form; driverOnboarding passed ["DRIVER","BUSINESS"] so personal customers' codes were rejected on the driver form.
+- TestReferralPage.tsx: all three CTAs now render unconditionally for every resolved code (driver -> /driver-onboarding?ref=CODE, dealer -> /auth/dealer-signup?ref=CODE, personal -> /auth/individual-signup?ref=CODE); removed the canReferDriver conditionals, the amber "can only refer personal customers" note, and the commented-out dealer block; each button annotated with its V3 reward ($50 on 5th delivery / $10 first delivery capped / $5 first delivery); paused-program warning + "code applied automatically" note kept; header docs rewritten to the unified matrix.
+- DealerSignupForm.tsx: allowedReferrerTypes [] -> ["DRIVER","BUSINESS","PERSONAL"] with V3 rationale comment (business customers CAN be referred, $10).
+- driverOnboarding.tsx: ["DRIVER","BUSINESS"] -> ["DRIVER","BUSINESS","PERSONAL"] with V3 rationale comment (personal customers CAN refer drivers, $50).
+- ReferralCodeInput.tsx: header doc updated to V3; the not-allowed message machinery kept intentionally dormant (prop-driven; no form restricts anymore) so the preserved validation scaffolding survives if a restriction is ever reintroduced.
+- IndividualSignupForm already passed all three types — untouched.
+- Verification: scoped tsc (tsconfig.fe-check.json) 144 baseline == 144 after, 0 new errors; vite build passes; diff reviewed (4 files, +48/-65).
+- NOTE: live browser sandbox check skipped — spawning the embedded-PG background process twice crashed the agent shell session; static verification (tsc + build + diff review) deemed sufficient for this presentational conditional-removal change.
+
+Stage Summary:
+- The unified matrix is now wired end-to-end: the backend (f117029) accepts all referrer-to-referred combinations, and every capture surface (invite page, customer signup, dealer signup, driver onboarding) offers/accepts every path. A personal customer's invite page now offers the driver path (the owner's customer-to-driver case), and business customers can finally be referred through the dealer form.

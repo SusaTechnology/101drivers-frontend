@@ -1160,11 +1160,14 @@ export default function DriverOnboardingPage() {
                     </div>
 
                     {/* Referral Code (optional) — auto-fills from ?ref= URL param,
-                        validates against /api/referrals/public/resolve/:code */}
+                        validates against /api/referrals/public/resolve/:code.
+                        V3 unified matrix: PERSONAL customers can also refer
+                        drivers (referrer earns $50 on the 5th paid delivery)
+                        — so every referrer type is accepted. */}
                     <ReferralCodeInput
                       onChange={setReferralCode}
                       disabled={isPending}
-                      allowedReferrerTypes={["DRIVER", "BUSINESS"]}
+                      allowedReferrerTypes={["DRIVER", "BUSINESS", "PERSONAL"]}
                     />
                   </form>
                 </CardContent>

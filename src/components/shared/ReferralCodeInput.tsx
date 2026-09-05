@@ -43,10 +43,12 @@ type ValidationState = "empty" | "validating" | "resolved" | "invalid" | "paused
 
 /**
  * Which referrer types are allowed to refer the user on THIS form.
- * - Driver signup: ["DRIVER", "BUSINESS"] (personal customers can't refer drivers)
- * - Individual (personal) signup: ["DRIVER", "BUSINESS", "PERSONAL"] (all can refer personal)
- * - Dealer (business) signup: [] (nobody can refer business customers — field still shows
- *   but any code will show "business customers can't be referred")
+ * V3 unified matrix: any user type can refer any other, so every form
+ * passes the full list — driver, personal, AND business referrers are
+ * all accepted everywhere (the reward is keyed to who IS referred:
+ * $50 driver / $10 business / $5 personal). The prop is kept so the
+ * not-allowed messaging machinery stays available if a restriction is
+ * ever reintroduced.
  */
 type AllowedReferrerType = "DRIVER" | "BUSINESS" | "PERSONAL";
 
