@@ -1055,7 +1055,7 @@ export default function AdminReferralProgramPage() {
               {/* Payout Model selector */}
               <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  Payout Model (V2)
+                  Payout Model
                 </Label>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-2">
                   TIERED = legacy driver→driver referrals (referral earns $X per N successful).
@@ -1064,8 +1064,8 @@ export default function AdminReferralProgramPage() {
                 </p>
                 {formPayoutModel === 'PER_DELIVERY' && (
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed">
-                    PER_DELIVERY is the active V3 program — the legacy trigger / time-window / tier controls are hidden.
-                    Switch to TIERED only to maintain pre-V3 referral policies.
+                    PER_DELIVERY is the active program — the legacy trigger / time-window / tier controls are hidden.
+                    Switch to TIERED only to maintain older referral policies.
                   </p>
                 )}
                 <Select
@@ -1225,7 +1225,7 @@ export default function AdminReferralProgramPage() {
                   rejection. Flip a switch + Save — no code change needed. */}
               <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  Who Can Refer Whom (V3.1)
+                  Who Can Refer Whom
                 </Label>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                   One switch per referrer → referred combination. This is the single source of truth:
@@ -1291,7 +1291,7 @@ export default function AdminReferralProgramPage() {
                   while keeping driver referrals disabled (or vice versa). */}
               <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  Referrer Type Toggles (V2)
+                  Referrer Type Toggles
                 </Label>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                   Independently enable/disable driver vs customer referrer flows.
@@ -1396,7 +1396,7 @@ export default function AdminReferralProgramPage() {
                 {/* ── V2 stats — customer referrers + ReferralCredit totals ── */}
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">
-                    V2 — Customer referrers + ReferralCredit totals
+                    Customer referrers & ReferralCredit totals
                   </p>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     <StatCard
@@ -1609,7 +1609,7 @@ export default function AdminReferralProgramPage() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">
-                  All Referrals (V2)
+                  All Referrals
                 </CardTitle>
                 <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                   Every referral record — filter by type, model, status, or search by code/email.
@@ -1826,7 +1826,7 @@ export default function AdminReferralProgramPage() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">
-                  Referral Credits (V2)
+                  Referral Credits
                 </CardTitle>
                 <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                   Per-delivery credits applied to customer invoices. Filter by status,

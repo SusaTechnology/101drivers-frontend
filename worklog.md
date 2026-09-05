@@ -1011,3 +1011,20 @@ Stage Summary:
 - The matrix was never hardcoded behavior — DB row first, code defaults as fallback — but an empty DB now gets REAL seeded values: npm run seed writes the REFERRAL_PROGRAM_SETTINGS row (create-if-absent, admin-edit-preserving) from the same defaults module the service uses, so fallback and seed cannot drift.
 - Admin page default (PER_DELIVERY) view is now clutter-free: only the controls that actually drive V3 payouts and the who-can-refer-whom grid are visible; legacy V1/V2 controls remain reachable under TIERED for maintaining pre-V3 referrals.
 - Commit: feat(referral): V3.1.1 — DB seed for referral settings, shared defaults module, admin page legacy cleanup
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: User asked for (1) a standalone seed file they can run themselves on the server (money + matrix + everything, since they did not run the full seed), and (2) removal of the confusing V1/V2/V3 version jargon from the admin UI.
+
+Work Log:
+- Created backend/scripts/seed-referral-settings.ts — a STANDALONE seeder that touches ONLY the REFERRAL_PROGRAM_SETTINGS row (money amounts, who-can-refer-whom matrix, program/referrer toggles). Prints a human-readable summary of every value it writes (dollars + matrix). Default mode is create-if-absent (existing rows left untouched, admin edits preserved); --force explicitly overwrites with defaults. Requires DATABASE_URL from backend/.env; no BCRYPT_SALT or other deps.
+- Added npm alias "seed:referral" (ts-node scripts/seed-referral-settings.ts) in backend/package.json scripts (kept the prisma block untouched — it only accepts its own keys).
+- Swept user-visible version jargon from src/components/pages/admin-referral-program.tsx: "Payout Model (V2)" → "Payout Model", "Who Can Refer Whom (V3.1)" → "Who Can Refer Whom", "Referrer Type Toggles (V2)" → "Referrer Type Toggles", "V2 — Customer referrers + ReferralCredit totals" → "Customer referrers & ReferralCredit totals", "All Referrals (V2)" → "All Referrals", "Referral Credits (V2)" → "Referral Credits", and the PER_DELIVERY note reworded without "V3"/"pre-V3". Code comments keep historical context only — they are not rendered.
+- Verified the seed script: targeted tsc compile (exit 0, strict flags) and a live ts-node smoke test of the import chain — defaultReferralProgramSettings returns payoutModel PER_DELIVERY, matrix {D:{D✅,P✅,B❌},P:{D✅,P✅,B❌},B:all✅}, money cents 500/5000/1000/500/30000, window 30. No local Postgres in this environment, so the DB write itself is exercised on the user's server.
+- Verification: backend tsc 4 pre-existing (0 new); referral+appSetting jest 78/78 PASS; frontend scoped tsc 144 == 144 baseline; vite build passes. Seed script also copied to /home/z/my-project/download/seed-referral-settings.ts for direct user access.
+
+Stage Summary:
+- The user can now seed referral settings on the server with ONE command: cd backend && npx ts-node scripts/seed-referral-settings.ts (or npm run seed:referral) — safe create-if-absent; --force to reset to defaults.
+- Admin UI no longer references internal version numbers anywhere the admin can read.
+- Commit: feat(referral): standalone referral-settings seed script + admin UI jargon cleanup
