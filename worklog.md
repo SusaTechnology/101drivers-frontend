@@ -1153,3 +1153,38 @@ Work Log:
 Stage Summary:
 - Customers now receive two emails per credit: "earned" (amount + how it will arrive, tailored BUSINESS/PRIVATE) and "applied" (money on its way: card statement in 5-10 business days, or the invoice discount line). Notification failures never block credits/refunds/payouts.
 - Server step for user: cd backend && npm run db:migrate-up (enum migration; safe to skip — only the emails fail).
+---
+Task ID: 5-e-push
+Agent: git subagent
+Task: Commit + push customer referral-credit notifications
+
+Work Log:
+- git status --short (pre-stage): 8 modified files (backend/prisma/schema.prisma, backend/src/domain/notificationEvent/notificationEvent.engine.ts, backend/src/notificationEvent/base/NotificationEvent.ts, backend/src/referral/referral-credit-application.service.spec.ts, backend/src/referral/referral-credit-application.service.ts, backend/src/referral/referral-trigger.service.spec.ts, backend/src/referral/referral-trigger.service.ts, worklog.md) + 1 untracked dir (backend/prisma/migrations/20260908090000_customer_referral_credit_notifications/)
+- git add -A: 9 files staged (8 modified + 1 new migration.sql)
+- git commit: 630d26b "feat(referral): customer referral-credit emails — earned + applied (card refund / invoice discount)" — 9 files changed, 402 insertions(+)
+- git push origin master: success — 19d1a7a..630d26b  master -> master (no auth retry needed)
+- Verify: git log --oneline -2 shows 630d26b (referral emails) atop 19d1a7a (weekly auto-payout cron); git status --short is clean
+- Remote advisory noted (GitHub dependabot: 138 vulnerabilities on default branch) — informational only, not a push error
+
+Stage Summary:
+- Commit pushed to origin/master as 630d26b
+
+---
+Task ID: 5-f
+Agent: main agent (Super Z)
+Task: Fix notification enum drift — npm start failing with 15 TS2322 errors (CUSTOMER_REFERRAL_CREDIT_APPLIED not in generated literal unions)
+
+Work Log:
+- User ran `npm start` in backend: 15 TS2322 errors — Prisma EnumNotificationEventType (includes CUSTOMER_REFERRAL_CREDIT_EARNED/APPLIED since 630d26b) not assignable to the Amplication-generated literal unions
+- Diagnosis: 630d26b updated the entity model (NotificationEvent.ts) but missed 4 sibling generated files; user's error output also reflects the pre-fix intermediate state (pull clears 12 of 15 sites)
+- Fixed 4 files (members added in Prisma schema order):
+  - notificationEvent/base/EnumNotificationEventType.ts: +CustomerReferralCreditEarned, +CustomerReferralCreditApplied (GraphQL enum — unlisted values would fail GraphQL serialization at runtime when new events are fetched)
+  - notificationEvent/base/NotificationEventCreateInput.ts: +DRIVER_REFERRAL_BONUS_EARNED, +CUSTOMER_REFERRAL_CREDIT_EARNED, +CUSTOMER_REFERRAL_CREDIT_APPLIED
+  - notificationEvent/base/NotificationEventUpdateInput.ts: same 3 members
+  - notificationEvent/base/NotificationEventWhereInput.ts: same 3 members
+- Verified no spec files deleted between 19d1a7a and HEAD (same 7 suites exist at both commits)
+- Gates: backend tsc = 4 pre-existing baseline only (0 new); scoped jest src/referral src/appSetting = 101/101 passed (7 suites, 0 failures)
+
+Stage Summary:
+- All 5 generated notificationEvent type files now in sync with prisma/schema.prisma enum (33 values)
+- User side to clear the npm start errors: git pull, then npm install (regenerates Prisma client), then npm start

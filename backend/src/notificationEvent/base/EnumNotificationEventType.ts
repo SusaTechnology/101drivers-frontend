@@ -31,6 +31,8 @@ export enum EnumNotificationEventType {
   DriverPayoutFailed = "DRIVER_PAYOUT_FAILED",
   DriverPayoutInitiated = "DRIVER_PAYOUT_INITIATED",
   DriverReferralBonusEarned = "DRIVER_REFERRAL_BONUS_EARNED",
+  CustomerReferralCreditEarned = "CUSTOMER_REFERRAL_CREDIT_EARNED",
+  CustomerReferralCreditApplied = "CUSTOMER_REFERRAL_CREDIT_APPLIED",
   AdminCommissionReceived = "ADMIN_COMMISSION_RECEIVED",
   DisputeOpened = "DISPUTE_OPENED",
   DisputeUpdated = "DISPUTE_UPDATED",
