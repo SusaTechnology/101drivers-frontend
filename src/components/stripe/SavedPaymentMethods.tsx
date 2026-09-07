@@ -243,7 +243,7 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
                 This is a frontend guard that complements the backend
                 check — even if the backend check fails, the frontend
                 prevents the dealer from clicking delete. */}
-            {cards.length > 1 && (
+            {/* {cards.length > 1 && ( */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -253,7 +253,7 @@ export default function SavedPaymentMethods({ customerId }: { customerId: string
               >
                 {removeCardMutation.isPending && deleteTarget?.id === card.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
               </Button>
-            )}
+            {/* )} */}
           </div>
         ))
       ) : (
