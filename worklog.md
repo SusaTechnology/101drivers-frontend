@@ -1099,3 +1099,22 @@ Work Log:
 Stage Summary:
 - The system now has exactly ONE payout rail: Stripe Connect Express + hosted onboarding. No code path collects or exports bank details anymore; the audit script gives the owner live visibility of account types and coverage on their server (npx ts-node scripts/audit-payout-rails.ts).
 - Commit: feat(payouts): retire legacy in-app bank rail + payout-rails audit script
+
+---
+Task ID: 5-c (Phase 3 of payout-gaps plan)
+Agent: Main Agent
+Task: Customer referral credits now auto-apply — business (postpaid) credits ride the weekly Stripe invoice; personal (prepaid) credits become card statement-credits after each completed delivery.
+
+Work Log:
+- NEW referral/referral-credit-application.service.ts — the consumption side of customer referral credits (issuing was already done by the trigger). Two fail-safe paths, both catch-all + never throw (failure leaves credits PENDING for the next natural opportunity):
+  * applyPostpaidCreditsToUpcomingInvoice(dealerId, stripeCustomerId, invoiceTotalCents): FIFO oldest-first whole-credit application capped at the invoice total, NEGATIVE InvoiceItem (metadata carries creditIds) so Stripe sweeps it into the finalizing weekly invoice, credits marked APPLIED with audit-suffixed reason.
+  * refundPrepaidCreditForDelivery(deliveryId, customerId): requires PREPAID + CAPTURED payment with a PaymentIntent, refunds the customer's oldest PENDING credit to their card (refunds.create with payment_intent + stable idempotency key referral-credit-<creditId>), marks APPLIED. Driver earnings derive from the original quote — a refund NEVER touches driver pay. One credit per completed delivery; more credits ride later deliveries.
+- Hook 1: postpaidBilling.service.handleInvoiceUpcoming — calls the applier after dealer resolution (Stripe's documented last-minute window before invoice finalization). Injected @Optional.
+- Hook 2: delivery-lifecycle.service delivery-completion flow — after postpaid usage report, resolves the delivery's customer and calls the prepaid refund path. Injected @Optional with forwardRef (ReferralModule already imported).
+- Wiring: ReferralModule providers+exports; PostpaidBillingModule providers (TS-level class import only — deliberately NO module import to avoid closing the postpaid→referral→driverPayout→delivery-logistics→postpaid DI cycle); StripeModule is @Global so StripeService resolves everywhere.
+- NEW referral-credit-application.service.spec.ts (8 tests): FIFO + APPLIED marking, invoice-total cap leaves oversized credits PENDING, no-credits no-op, Stripe failure keeps PENDING + never throws, prepaid happy path (PI + amount + idempotency key + reason suffix), postpaid/no-PI guard skips, no-credit no-op, refund failure keeps PENDING.
+- Verification: backend tsc 4 pre-existing (0 new); referral+appSetting+postpaidBilling jest 108/108; delivery-logistics suite 14/14; frontend untouched this phase (tsc 143 / build green from Phase 2).
+
+Stage Summary:
+- Customers now automatically USE their referral rewards: business customers see credits on their weekly invoice; personal customers get $5/$10 back on their card after their next completed delivery. No cash payouts to customers (no Connect/KYC needed) — matches the Uber/Lyft/DoorDash credit model. Admin manual Apply/Expire remain as overrides.
+- Commit: feat(referral): auto-apply customer referral credits (weekly invoice for business, card statement-credit for personal)

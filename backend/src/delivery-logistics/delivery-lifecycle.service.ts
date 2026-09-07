@@ -30,6 +30,7 @@ import { DeliveryClosePenaltyEngine } from "../domain/deliveryRequest/deliveryCl
 import { StripeService } from "../providers/stripe/stripe.service";
 import { PostpaidBillingService } from "../postpaidBilling/postpaidBilling.service";
 import { ReferralTriggerService } from "../referral/referral-trigger.service";
+import { ReferralCreditApplicationService } from "../referral/referral-credit-application.service";
 import {
   EnumDriverPayoutStatus,
   EnumDriverPayoutType,
@@ -78,7 +79,11 @@ export class DeliveryLifecycleService {
     // construct if the ReferralModule isn't imported (e.g. in tests).
     // forwardRef breaks the circular chain.
     @Optional() @Inject(forwardRef(() => ReferralTriggerService))
-    private readonly referralTrigger?: ReferralTriggerService
+    private readonly referralTrigger?: ReferralTriggerService,
+    // Consumes customer referral credits as statement-credit refunds after
+    // PREPAID deliveries complete (see ReferralCreditApplicationService).
+    @Optional() @Inject(forwardRef(() => ReferralCreditApplicationService))
+    private readonly referralCreditApplication?: ReferralCreditApplicationService
   ) {
     this.logger.log(
       `TrackingGateway ${this.trackingGateway ? 'INJECTED' : 'NOT INJECTED (undefined)'}`
@@ -918,6 +923,33 @@ async completeTrip(input: {
       } catch (err: any) {
         this.logger.error(
           `PostpaidBillingService.reportUsageToStripe threw for delivery ${input.deliveryId}: ${err?.message}`,
+          err?.stack,
+        );
+      }
+    }
+
+    // ── Prepaid: auto-refund a pending referral credit as a statement credit ──
+    // Personal (prepaid) customers who referred someone earn invoice credits.
+    // There is no invoice on the prepaid path — so after their card was
+    // charged for this delivery, the oldest PENDING credit is refunded to
+    // their card (statement credit). One credit per completed delivery;
+    // failures leave the credit PENDING for the next delivery. NEVER blocks
+    // completion (the method is fail-safe; the try/catch is belt-and-suspenders).
+    if (this.referralCreditApplication) {
+      try {
+        const deliveryForCredit = await this.prisma.deliveryRequest.findUnique({
+          where: { id: input.deliveryId },
+          select: { customerId: true },
+        });
+        if (deliveryForCredit?.customerId) {
+          await this.referralCreditApplication.refundPrepaidCreditForDelivery({
+            deliveryId: input.deliveryId,
+            customerId: deliveryForCredit.customerId,
+          });
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `ReferralCreditApplication.refundPrepaidCreditForDelivery threw for delivery ${input.deliveryId}: ${err?.message}`,
           err?.stack,
         );
       }

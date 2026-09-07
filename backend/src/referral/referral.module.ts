@@ -8,6 +8,7 @@ import { ReferralController } from "./referral.controller";
 import { ReferralPublicController } from "./referral.public.controller";
 import { ReferralService } from "./referral.service";
 import { ReferralTriggerService } from "./referral-trigger.service";
+import { ReferralCreditApplicationService } from "./referral-credit-application.service";
 import { ReferralExpiryScheduler } from "./referral-expiry.scheduler";
 
 @Module({
@@ -23,10 +24,11 @@ import { ReferralExpiryScheduler } from "./referral-expiry.scheduler";
   providers: [
     ReferralService,
     ReferralTriggerService,
+    ReferralCreditApplicationService,
     ReferralExpiryScheduler,
     NotificationEventEngine,
     MailService,
   ],
-  exports: [ReferralService, ReferralTriggerService],
+  exports: [ReferralService, ReferralTriggerService, ReferralCreditApplicationService],
 })
 export class ReferralModule {}

@@ -42,6 +42,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { ReferralCreditApplicationService } from "../referral/referral-credit-application.service";
 import {
   FREEZE_REASONS,
   INVOICE_ITEM_DESCRIPTION_TEMPLATE,
@@ -70,6 +71,10 @@ export class PostpaidBillingService {
     // when retry queues reach PERMANENTLY_FAILED / UNCOLLECTIBLE.
     // @Optional guards against circular-DI issues during testing.
     @Optional() private readonly notificationEngine?: NotificationEventEngine,
+    // Consumes customer referral credits onto the upcoming weekly invoice
+    // (business customers). Provided by PostpaidBillingModule; optional so
+    // test harnesses without it still construct.
+    @Optional() private readonly referralCreditApplication?: ReferralCreditApplicationService,
   ) {
     const priceId = this.configService.get<string>(
       POSTPAID_ENV.STRIPE_POSTPAID_PRICE_ID,
@@ -1024,6 +1029,20 @@ export class PostpaidBillingService {
       if (!dealer) {
         this.logger.warn(`invoice.upcoming: no dealer found for stripeCustomer ${stripeCustomerId}`);
         return;
+      }
+
+      // ── Auto-apply pending referral credits to THIS invoice ──
+      // invoice.upcoming fires ~1 hour before finalization — the documented
+      // Stripe window for last-minute invoice items. The dealer's oldest
+      // PENDING referral credits are consumed (FIFO, capped at the invoice
+      // total) and a NEGATIVE InvoiceItem is created so Stripe sweeps the
+      // credit into this invoice. Fail-safe: never blocks the rest.
+      if (this.referralCreditApplication) {
+        await this.referralCreditApplication.applyPostpaidCreditsToUpcomingInvoice({
+          dealerId: dealer.id,
+          stripeCustomerId,
+          invoiceTotalCents: invoice.total ?? null,
+        });
       }
 
       const lineCount = (invoice as any).lines?.data?.length ?? 0;
