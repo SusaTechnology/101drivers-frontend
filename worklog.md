@@ -1134,3 +1134,22 @@ Work Log:
 Stage Summary:
 - Payout rails are now fully automated end to end: earnings (delivery + referral) become ELIGIBLE at the moment they're earned → driver can cash out instantly/on-demand → AND a weekly cron sweeps everything left, automatically. Weekly run is the big-company default; on-demand rails remain for drivers who want money sooner.
 - Commit: feat(payouts): weekly auto-payout cron (Monday 06:00, PAYOUT_WEEKLY_CRON_DISABLED kill switch)
+
+---
+Task ID: 5-e (customer referral-credit notifications)
+Agent: Main Agent
+Task: Customers now get TOLD about their referral money — email when a credit is earned and when its money is on the way (card refund / invoice discount).
+
+Work Log:
+- Gap found: drivers were notified (DRIVER_REFERRAL_BONUS_EARNED, Phase 1) but customers got NOTHING when they earned a referral credit or when the credit's money moved. User ask: "customer should know when they get the money."
+- Prisma: EnumNotificationEventType += CUSTOMER_REFERRAL_CREDIT_EARNED, CUSTOMER_REFERRAL_CREDIT_APPLIED; new migration 20260908090000_customer_referral_credit_notifications (ALTER TYPE ... ADD VALUE IF NOT EXISTS ×2 — safe to skip, only the emails fail); mirror union updated in src/notificationEvent/base/NotificationEvent.ts; prisma client regenerated.
+- notificationEvent.engine.ts: notifyCustomerReferralCreditEarned (resolves Customer + user email; BUSINESS → "discount on your next weekly invoice", PRIVATE → "refunded to your card after your next completed delivery") + notifyCustomerReferralCreditApplied (CARD_REFUND → "refunded to the card you paid with… 5-10 business days" / INVOICE_CREDIT → "applied as a discount on your upcoming weekly invoice"). Both queueAndSend EMAIL with customerId + toUserId routing, templateCodes customer-referral-credit-earned/-refunded/-invoiced.
+- referral-trigger.service.ts createReferralCredit (the single choke point for ALL customer credits): fires Earned after create, guarded + try/catch non-fatal.
+- referral-credit-application.service.ts: NotificationEventEngine injected @Optional; fires Applied AFTER Stripe success + APPLIED marking in BOTH paths (prepaid refund → CARD_REFUND with deliveryId; postpaid negative InvoiceItem → INVOICE_CREDIT). Non-fatal.
+- FE: no change needed — NotificationBell getNotificationStyle falls back to GENERAL for unknown types.
+- Tests: referral-credit-application.service.spec.ts +4 (invoice-applied notification, card-refund notification, SMTP-failure resilience — credit still APPLIED, engine-absent constructor path; the no-credit test now also asserts NO notification fires); referral-trigger.service.spec.ts +2 (earned-notification fires with RESIDENTIAL reason; credit survives engine failure). NOTE: first attempt used the DRIVER-referrer referral shape → 2 failures (driver referrers earn DriverPayout, not credits) — fixed to the CUSTOMER-referrer shape.
+- Verification: scoped jest referral+appSetting+postpaidBilling 114/114 (was 108) + delivery-logistics 18/18 = 132/132; backend tsc 4 pre-existing (0 new); FE tsc 143 = baseline (untouched); vite build green.
+
+Stage Summary:
+- Customers now receive two emails per credit: "earned" (amount + how it will arrive, tailored BUSINESS/PRIVATE) and "applied" (money on its way: card statement in 5-10 business days, or the invoice discount line). Notification failures never block credits/refunds/payouts.
+- Server step for user: cd backend && npm run db:migrate-up (enum migration; safe to skip — only the emails fail).

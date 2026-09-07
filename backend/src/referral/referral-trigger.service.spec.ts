@@ -265,6 +265,72 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
       });
     });
 
+    it("notifies the customer when a referral credit is earned", async () => {
+      findFirstMock(prismaMock).mockImplementationOnce(async () => null);
+      findFirstMock(prismaMock).mockImplementationOnce(async (args: any) => {
+        if (args?.where?.referredCustomerId) {
+          return buildReferral({
+            referrerId: null,
+            referrerUserId: "user-customer-referrer-1",
+            referralType: ReferralTypeDto.CUSTOMER,
+            payoutModel: ReferralPayoutModelDto.PER_DELIVERY,
+            category: "RESIDENTIAL_REFERRAL",
+            referredCustomerId: "customer-referred-1",
+            referredDriverId: null,
+          });
+        }
+        return null;
+      });
+
+      await service.onDeliveryCompleted({
+        driverId: "driver-1",
+        deliveryId: "delivery-1",
+        customerId: "customer-referred-1",
+      });
+
+      expect(
+        notificationMock.notifyCustomerReferralCreditEarned,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerId: "customer-referrer-1",
+          amountCents: 500,
+          source: expect.stringContaining("RESIDENTIAL"),
+        }),
+      );
+    });
+
+    it("credit creation survives a notification engine failure (non-fatal email)", async () => {
+      findFirstMock(prismaMock).mockImplementationOnce(async () => null);
+      findFirstMock(prismaMock).mockImplementationOnce(async (args: any) => {
+        if (args?.where?.referredCustomerId) {
+          return buildReferral({
+            referrerId: null,
+            referrerUserId: "user-customer-referrer-1",
+            referralType: ReferralTypeDto.CUSTOMER,
+            payoutModel: ReferralPayoutModelDto.PER_DELIVERY,
+            category: "RESIDENTIAL_REFERRAL",
+            referredCustomerId: "customer-referred-1",
+            referredDriverId: null,
+          });
+        }
+        return null;
+      });
+      notificationMock.notifyCustomerReferralCreditEarned.mockRejectedValue(
+        new Error("SMTP down"),
+      );
+
+      await expect(
+        service.onDeliveryCompleted({
+          driverId: "driver-1",
+          deliveryId: "delivery-1",
+          customerId: "customer-referred-1",
+        }),
+      ).resolves.toBeUndefined();
+
+      // The credit was still created despite the failed email
+      expect(prismaMock.referralCredit.create).toHaveBeenCalled();
+    });
+
     it("Driver→Customer PER_DELIVERY (V3): one-time DriverPayout to the driver referrer on the referred customer's first delivery", async () => {
       findFirstMock(prismaMock).mockImplementationOnce(async () => null);
       findFirstMock(prismaMock).mockImplementationOnce(async (args: any) => {

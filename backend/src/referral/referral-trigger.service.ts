@@ -918,6 +918,24 @@ export class ReferralTriggerService {
     this.logger.log(
       `Created referral credit: customer=${input.customerId} delivery=${input.deliveryId} amount=${input.amountCents}c referral=${input.referralId} reason="${input.reason}"`
     );
+
+    // Tell the customer they earned a referral credit (non-fatal — a
+    // failed email must NEVER break the credit that was just created).
+    if (this.notificationEngine) {
+      try {
+        await this.notificationEngine.notifyCustomerReferralCreditEarned({
+          customerId: input.customerId,
+          amountCents: input.amountCents,
+          source: input.reason,
+          referralId: input.referralId,
+          deliveryId: input.deliveryId,
+        });
+      } catch (err: any) {
+        this.logger.warn(
+          `Referral credit notification failed for customer ${input.customerId} (non-fatal): ${err?.message}`
+        );
+      }
+    }
   }
 
   /**

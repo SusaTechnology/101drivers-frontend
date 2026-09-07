@@ -15,6 +15,7 @@ import { Test } from "@nestjs/testing";
 import { ReferralCreditApplicationService } from "./referral-credit-application.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { StripeService } from "../providers/stripe/stripe.service";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { mockDeep, mockReset, DeepMockProxy } from "jest-mock-extended";
 
 const buildCredit = (overrides: Partial<any> = {}) => ({
@@ -29,16 +30,19 @@ describe("ReferralCreditApplicationService", () => {
   let service: ReferralCreditApplicationService;
   let prismaMock: DeepMockProxy<PrismaService>;
   let stripeMock: DeepMockProxy<StripeService>;
+  let notificationMock: DeepMockProxy<NotificationEventEngine>;
 
   beforeEach(async () => {
     prismaMock = mockDeep<PrismaService>();
     stripeMock = mockDeep<StripeService>();
+    notificationMock = mockDeep<NotificationEventEngine>();
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         ReferralCreditApplicationService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: StripeService, useValue: stripeMock },
+        { provide: NotificationEventEngine, useValue: notificationMock },
       ],
     }).compile();
 
@@ -53,6 +57,7 @@ describe("ReferralCreditApplicationService", () => {
   afterEach(() => {
     mockReset(prismaMock);
     mockReset(stripeMock);
+    mockReset(notificationMock);
   });
 
   // ── applyPostpaidCreditsToUpcomingInvoice ────────────────────────
@@ -111,6 +116,24 @@ describe("ReferralCreditApplicationService", () => {
       ).resolves.toBeUndefined();
 
       expect(prismaMock.referralCredit.update).not.toHaveBeenCalled();
+    });
+
+    it("notifies the dealer with INVOICE_CREDIT when credits are applied", async () => {
+      (prismaMock.referralCredit.findMany as any).mockResolvedValue([buildCredit()]);
+      (stripeMock.stripe as any) = { invoiceItems: { create: jest.fn().mockResolvedValue({ id: "ii_3" }) } };
+
+      await service.applyPostpaidCreditsToUpcomingInvoice({
+        dealerId: "dealer-1",
+        stripeCustomerId: "cus_1",
+      });
+
+      expect(notificationMock.notifyCustomerReferralCreditApplied).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerId: "dealer-1",
+          amountCents: 500,
+          method: "INVOICE_CREDIT",
+        }),
+      );
     });
 
     it("never throws on Stripe failure — credits stay PENDING", async () => {
@@ -187,6 +210,66 @@ describe("ReferralCreditApplicationService", () => {
 
       expect((stripeMock.stripe as any).refunds.create).not.toHaveBeenCalled();
       expect(prismaMock.referralCredit.update).not.toHaveBeenCalled();
+      // No credit → no refund → customer is NOT told any money moved
+      expect(notificationMock.notifyCustomerReferralCreditApplied).not.toHaveBeenCalled();
+    });
+
+    it("notifies the customer with CARD_REFUND when the refund succeeds", async () => {
+      setupCapturedPrepaid();
+      (prismaMock.referralCredit.findFirst as any).mockResolvedValue(
+        buildCredit({ amountCents: 1000 }),
+      );
+      (stripeMock.stripe as any) = { refunds: { create: jest.fn().mockResolvedValue({ id: "re_2" }) } };
+
+      await service.refundPrepaidCreditForDelivery({
+        deliveryId: "delivery-5",
+        customerId: "customer-1",
+      });
+
+      expect(notificationMock.notifyCustomerReferralCreditApplied).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customerId: "customer-1",
+          amountCents: 1000,
+          method: "CARD_REFUND",
+          deliveryId: "delivery-5",
+        }),
+      );
+    });
+
+    it("notification failure never breaks the refund — credit still APPLIED", async () => {
+      setupCapturedPrepaid();
+      (prismaMock.referralCredit.findFirst as any).mockResolvedValue(buildCredit());
+      (stripeMock.stripe as any) = { refunds: { create: jest.fn().mockResolvedValue({ id: "re_3" }) } };
+      notificationMock.notifyCustomerReferralCreditApplied.mockRejectedValue(new Error("SMTP down"));
+
+      await expect(
+        service.refundPrepaidCreditForDelivery({
+          deliveryId: "delivery-6",
+          customerId: "customer-1",
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(prismaMock.referralCredit.update).toHaveBeenCalledTimes(1);
+      expect((prismaMock.referralCredit.update as any).mock.calls[0][0].data.status).toBe("APPLIED");
+    });
+
+    it("works without a NotificationEventEngine (optional dependency)", async () => {
+      const bare = new ReferralCreditApplicationService(
+        prismaMock as any,
+        stripeMock as any,
+      );
+      setupCapturedPrepaid();
+      (prismaMock.referralCredit.findFirst as any).mockResolvedValue(buildCredit());
+      (stripeMock.stripe as any) = { refunds: { create: jest.fn().mockResolvedValue({ id: "re_4" }) } };
+
+      await expect(
+        bare.refundPrepaidCreditForDelivery({
+          deliveryId: "delivery-7",
+          customerId: "customer-1",
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(prismaMock.referralCredit.update).toHaveBeenCalledTimes(1);
     });
 
     it("refund failure keeps the credit PENDING and never throws (retries next delivery)", async () => {

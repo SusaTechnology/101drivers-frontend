@@ -1851,6 +1851,170 @@ async notifyTripCompleted(input: {
   }
 
   /**
+   * Notify a CUSTOMER that a referral credit was added to their account.
+   * Fired by ReferralTriggerService whenever a ReferralCredit row is
+   * created (per-delivery referrer rewards, one-time business/residential
+   * rewards, referred-customer bonuses). Callers MUST treat this as
+   * non-fatal (guard + try/catch) — a failed email must never break the
+   * referral flow that just created the credit.
+   */
+  async notifyCustomerReferralCreditEarned(input: {
+    customerId: string;
+    /** Credit amount in CENTS. */
+    amountCents: number;
+    /** Human label of why they earned it, e.g. "referral reward". */
+    source: string;
+    referralId?: string | null;
+    deliveryId?: string | null;
+  }) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: input.customerId },
+      select: {
+        id: true,
+        customerType: true,
+        user: { select: { id: true, email: true, fullName: true } },
+      },
+    });
+
+    if (!customer) {
+      this.logger.warn(
+        `notifyCustomerReferralCreditEarned: customer ${input.customerId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail = customer.user?.email;
+    if (!toEmail) {
+      this.logger.warn(
+        `notifyCustomerReferralCreditEarned: customer ${input.customerId} has no email, skipping`,
+      );
+      return null;
+    }
+
+    const displayName = customer.user?.fullName || "there";
+    const amountStr = `$${(Number(input.amountCents) / 100).toFixed(2)}`;
+    const howLine =
+      customer.customerType === "BUSINESS"
+        ? "We'll apply it automatically as a discount on your next weekly invoice."
+        : "We'll refund it automatically to your card after your next completed delivery.";
+
+    return this.queueAndSend({
+      customerId: customer.id,
+      toUserId: customer.user?.id ?? null,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.CUSTOMER_REFERRAL_CREDIT_EARNED,
+      templateCode: "customer-referral-credit-earned",
+      toEmail,
+      subject: `Referral reward earned — ${amountStr} credit added`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `Great news — you earned a ${amountStr} referral credit!`,
+        "",
+        `Reason: ${input.source}.`,
+        "",
+        howLine,
+        "",
+        "Refer more drivers and customers from your referral page to earn more.",
+        "",
+        "Thank you for growing the 101 Drivers community!",
+      ].join("\n"),
+      payload: {
+        customerId: customer.id,
+        amountCents: input.amountCents,
+        source: input.source,
+        referralId: input.referralId ?? null,
+        deliveryId: input.deliveryId ?? null,
+      },
+    });
+  }
+
+  /**
+   * Notify a CUSTOMER that their referral credit's money is ON ITS WAY:
+   *   - prepaid (personal): refunded to their card as a statement credit
+   *   - postpaid (business): applied as a discount line on the weekly invoice
+   * Fired by ReferralCreditApplicationService AFTER the Stripe side
+   * (refund / negative InvoiceItem) succeeds and the credits are marked
+   * APPLIED. Callers MUST treat this as non-fatal (guard + try/catch).
+   */
+  async notifyCustomerReferralCreditApplied(input: {
+    customerId: string;
+    /** Applied amount in CENTS. */
+    amountCents: number;
+    /** How the money reaches the customer. */
+    method: "CARD_REFUND" | "INVOICE_CREDIT";
+    deliveryId?: string | null;
+  }) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: input.customerId },
+      select: {
+        id: true,
+        user: { select: { id: true, email: true, fullName: true } },
+      },
+    });
+
+    if (!customer) {
+      this.logger.warn(
+        `notifyCustomerReferralCreditApplied: customer ${input.customerId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail = customer.user?.email;
+    if (!toEmail) {
+      this.logger.warn(
+        `notifyCustomerReferralCreditApplied: customer ${input.customerId} has no email, skipping`,
+      );
+      return null;
+    }
+
+    const displayName = customer.user?.fullName || "there";
+    const amountStr = `$${(Number(input.amountCents) / 100).toFixed(2)}`;
+    const isCard = input.method === "CARD_REFUND";
+
+    return this.queueAndSend({
+      customerId: customer.id,
+      toUserId: customer.user?.id ?? null,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.CUSTOMER_REFERRAL_CREDIT_APPLIED,
+      templateCode: isCard
+        ? "customer-referral-credit-refunded"
+        : "customer-referral-credit-invoiced",
+      toEmail,
+      subject: isCard
+        ? `Referral reward paid — ${amountStr} refunded to your card`
+        : `Referral reward applied — ${amountStr} off your weekly invoice`,
+      body: isCard
+        ? [
+            `Hi ${displayName},`,
+            "",
+            `Your ${amountStr} referral credit has been refunded to the card`,
+            "you paid with for your recent delivery.",
+            "",
+            "It will appear on your card statement within 5-10 business days,",
+            "depending on your bank.",
+            "",
+            "Thank you for growing the 101 Drivers community!",
+          ].join("\n")
+        : [
+            `Hi ${displayName},`,
+            "",
+            `Your ${amountStr} referral credit has been applied as a discount on`,
+            'your upcoming weekly invoice — look for the "Referral rewards credit"',
+            "line item.",
+            "",
+            "Thank you for growing the 101 Drivers community!",
+          ].join("\n"),
+      payload: {
+        customerId: customer.id,
+        amountCents: input.amountCents,
+        method: input.method,
+        deliveryId: input.deliveryId ?? null,
+      },
+    });
+  }
+
+  /**
    * Notify driver that a payout transfer failed.
    * Triggered by the `transfer.failed` webhook.
    */

@@ -32,6 +32,7 @@
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { StripeService } from "../providers/stripe/stripe.service";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 
 export const REFERRAL_CREDIT_APPLICATION_SERVICE =
   Symbol("REFERRAL_CREDIT_APPLICATION_SERVICE");
@@ -45,6 +46,9 @@ export class ReferralCreditApplicationService {
     // StripeModule is @Global so this resolves in every module context.
     // Optional keeps minimal test/module graphs working.
     @Optional() private readonly stripeService?: StripeService,
+    // @Optional + non-fatal: a failed customer email must never break a
+    // refund/invoice application that already succeeded on the Stripe side.
+    @Optional() private readonly notificationEngine?: NotificationEventEngine,
   ) {}
 
   // ── Path 1: postpaid (business) customers — ride the weekly invoice ──
@@ -126,6 +130,21 @@ export class ReferralCreditApplicationService {
         });
       }
 
+      // Tell the customer the discount is on its way (non-fatal).
+      if (this.notificationEngine) {
+        try {
+          await this.notificationEngine.notifyCustomerReferralCreditApplied({
+            customerId: input.dealerId,
+            amountCents: appliedCents,
+            method: "INVOICE_CREDIT",
+          });
+        } catch (notifyErr: any) {
+          this.logger.warn(
+            `Referral credit applied-notification failed for dealer ${input.dealerId} (non-fatal): ${notifyErr?.message}`,
+          );
+        }
+      }
+
       this.logger.log(
         `Auto-applied ${applied.length} referral credit(s) (${appliedCents}c) to dealer ${input.dealerId}'s weekly invoice via negative InvoiceItem`,
       );
@@ -205,6 +224,22 @@ export class ReferralCreditApplicationService {
           reason: `${credit.reason} [auto-refunded to card, delivery ${input.deliveryId}]`,
         },
       });
+
+      // Tell the customer the money is on its way to their card (non-fatal).
+      if (this.notificationEngine) {
+        try {
+          await this.notificationEngine.notifyCustomerReferralCreditApplied({
+            customerId: input.customerId,
+            amountCents: credit.amountCents,
+            method: "CARD_REFUND",
+            deliveryId: input.deliveryId,
+          });
+        } catch (notifyErr: any) {
+          this.logger.warn(
+            `Referral credit refund-notification failed for customer ${input.customerId} (non-fatal): ${notifyErr?.message}`,
+          );
+        }
+      }
 
       this.logger.log(
         `Refunded referral credit ${credit.id} (${credit.amountCents}c) to customer ${input.customerId}'s card as statement credit for delivery ${input.deliveryId}`,
