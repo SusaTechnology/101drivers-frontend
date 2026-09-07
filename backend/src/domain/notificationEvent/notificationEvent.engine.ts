@@ -1773,6 +1773,84 @@ async notifyTripCompleted(input: {
   }
 
   /**
+   * Notify a driver that a referral bonus has been ADDED TO THEIR BALANCE.
+   *
+   * Fired at the moment a referral DriverPayout row is created as ELIGIBLE
+   * (born-eligible referral payouts): the money is verified, owed, and now
+   * sits in the driver's available balance — they can cash it out anytime
+   * from the wallet (free withdrawal or instant payout).
+   *
+   * This is NOT the "transfer initiated/paid" email — those fire later,
+   * when the driver actually cashes out and Stripe moves the money.
+   */
+  async notifyDriverReferralBonusEarned(input: {
+    driverId: string;
+    /** Bonus amount in DOLLARS. */
+    amount: number;
+    /** Human label of why they earned it, e.g. "per-delivery referral reward". */
+    source: string;
+    referralId?: string | null;
+    deliveryId?: string | null;
+  }) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        user: { select: { email: true, fullName: true } },
+      },
+    });
+
+    if (!driver) {
+      this.logger.warn(
+        `notifyDriverReferralBonusEarned: driver ${input.driverId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail = driver.user?.email;
+    if (!toEmail) {
+      this.logger.warn(
+        `notifyDriverReferralBonusEarned: driver ${input.driverId} has no email, skipping`,
+      );
+      return null;
+    }
+
+    const displayName = driver.user?.fullName || "Driver";
+    const amountStr = `$${Number(input.amount).toFixed(2)}`;
+
+    return this.queueAndSend({
+      driverId: driver.id,
+      deliveryId: input.deliveryId ?? null,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.DRIVER_REFERRAL_BONUS_EARNED,
+      templateCode: "driver-referral-bonus-earned",
+      toEmail,
+      subject: `Referral bonus earned — ${amountStr} added to your balance`,
+      body: [
+        `Hi ${displayName},`,
+        "",
+        `Great news — you earned a ${amountStr} referral bonus!`,
+        "",
+        `Reason: ${input.source}.`,
+        "",
+        "The bonus has been added to your available balance and is ready to",
+        "cash out right now from your driver wallet:",
+        "  • Standard withdrawal — free, arrives in 1-2 business days",
+        "  • Instant payout — arrives in minutes for a small fee",
+        "",
+        "Thank you for growing the 101 Drivers community!",
+      ].join("\n"),
+      payload: {
+        driverId: driver.id,
+        amount: input.amount,
+        source: input.source,
+        referralId: input.referralId ?? null,
+        deliveryId: input.deliveryId ?? null,
+      },
+    });
+  }
+
+  /**
    * Notify driver that a payout transfer failed.
    * Triggered by the `transfer.failed` webhook.
    */

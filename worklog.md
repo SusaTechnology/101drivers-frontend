@@ -1048,3 +1048,24 @@ Work Log:
 Stage Summary:
 - Every referral surface is backend-driven: admin config → DB → resolve endpoint (doors + form verdicts) and program-config endpoint (money copy + trigger/window), progress from referral rows. The one surface that showed a wrong amount (wallet card description, legacy $150) now shows the live-configured bonus and window.
 - Commit: fix(referral): wallet Refer-a-Friend card copy now reads live config (real bonus + payout window)
+
+---
+Task ID: 5-a (Phase 1 of payout-gaps plan)
+Agent: Main Agent
+Task: Make referral payouts born-ELIGIBLE (auto-pay), add admin monitoring + fraud-cancel, backfill script, driver notification.
+
+Work Log:
+- Auditor earlier found referral money stuck: REFERRAL_* DriverPayout rows were created PENDING while every transfer path (free withdrawal, instant payout, weekly batch) only picks ELIGIBLE — nothing ever flipped them.
+- referral-trigger.service.ts createDriverReferrerPerDeliveryPayout now creates rows as ELIGIBLE (per-delivery $5/$10/$50 rewards). Guards already verified upstream (program active, amount>0, referral not expired, trigger count/window/caps). Fires notifyDriverReferralBonusEarned after create (non-fatal try/catch, @Optional injection).
+- driverPayout/referral-payout-provider.impl.ts: legacy TIERED paths (createReferrerTierPayout + createReferredRewardPayout) also born-ELIGIBLE + notification. NotificationEventEngine injected @Optional (available via DeliveryLogisticsModule exports).
+- notificationEvent.engine.ts: new notifyDriverReferralBonusEarned (email: bonus added to available balance, cash out from wallet). New enum value DRIVER_REFERRAL_BONUS_EARNED added to prisma/schema.prisma + hand-written mirror enum + generated model literal union (src/notificationEvent/base/NotificationEvent.ts).
+- NEW migration prisma/migrations/20260907090000_referral_bonus_notification_type/migration.sql: ALTER TYPE "EnumNotificationEventType" ADD VALUE IF NOT EXISTS 'DRIVER_REFERRAL_BONUS_EARNED' — MUST run on server: cd backend && npm run db:migrate-up (safe: if skipped, only the email fails and the payout is unaffected).
+- ReferralService: getAdminReferralPayouts (paginated REFERRAL_* payouts w/ driver info + PER_DELIVERY attribution parsing + status/type filters) + cancelReferralPayout (PENDING/ELIGIBLE → CANCELLED, refuses PAID/FAILED/CANCELLED + non-referral types, reason appended to failureMessage for audit). ReferralController: GET /referrals/admin/payouts + POST /referrals/admin/payouts/:id/cancel (AppSetting role-guarded).
+- admin-referral-program.tsx: new "Referral Cash Payouts" card (driver, amount, type, status badge, referral ref, created) + status filter + pagination + Cancel dialog with audit reason.
+- NEW backend/scripts/backfill-referral-payouts.ts (npm run referral:backfill): one-time PENDING→ELIGIBLE backfill for owed referral money. Dry-run by default, --apply to write; touches ONLY REFERRAL_* PENDING rows; prints per-driver summary + total owed. USER MUST RUN ONCE on server after deploy.
+- Tests: referral-trigger.service.spec.ts updated (ELIGIBLE assertions, notification fired, SMTP-failure resilience, missing-engine resilience) + NEW referral.service.payouts.spec.ts (list filters/attribution, cancel happy path + 4 guard rejections). 87/87 PASS (was 78).
+
+Stage Summary:
+- Referral money now auto-flows: trigger → ELIGIBLE row → driver available balance → existing withdrawal/instant/weekly rail → Stripe Connect transfer. Admin sees every referral payout on the referral page and can cancel fraudulent ones pre-cashout. Drivers get an email the moment a bonus is earned.
+- Server steps for user: 1) npm run db:migrate-up (enum migration), 2) npm run referral:backfill -- --apply after reviewing dry run.
+- Verification: backend tsc 4 pre-existing (0 new); referral+appSetting jest 87/87; frontend scoped tsc 144 == baseline; vite build green; backfill script strict-compile OK + smoke-run reaches DB-connection stage (expected fail without DB here).

@@ -23,9 +23,10 @@
  *     inside a transaction.
  */
 
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import {
   ReferralRewardPayoutProvider,
   ReferralPayoutResult,
@@ -37,7 +38,13 @@ import {
 export class ReferralPayoutProviderImpl implements ReferralRewardPayoutProvider {
   private readonly logger = new Logger(ReferralPayoutProviderImpl.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Available in this module's context via the DeliveryLogisticsModule
+    // import (it exports NotificationEventEngine). Optional so tests and
+    // minimal graphs still work — notification failures never block payouts.
+    @Optional() private readonly notificationEngine?: NotificationEventEngine,
+  ) {}
 
   /**
    * Create a tier payout for the referrer (type = REFERRAL_REFERRER).
@@ -64,7 +71,11 @@ export class ReferralPayoutProviderImpl implements ReferralRewardPayoutProvider 
           driverId: referrerDriverId,
           deliveryId: null,
           type: "REFERRAL_REFERRER",
-          status: "PENDING",
+          // Born-ELIGIBLE (see the trigger service for the full rationale):
+          // the tier trigger only fires after the qualifying condition is
+          // verified, so this is owed money — straight into the driver's
+          // available balance and out via the standard payout rail.
+          status: "ELIGIBLE",
           grossAmount: amount,
           netAmount: amount,
           platformFee: 0,
@@ -75,8 +86,23 @@ export class ReferralPayoutProviderImpl implements ReferralRewardPayoutProvider 
       });
 
       this.logger.log(
-        `Created referrer tier payout: driver=${referrerDriverId} tier=${tierNumber} amount=$${amount} payoutId=${payout.id}`
+        `Created referrer tier payout (ELIGIBLE): driver=${referrerDriverId} tier=${tierNumber} amount=$${amount} payoutId=${payout.id}`
       );
+
+      // Non-fatal notification — the driver should know money is waiting.
+      if (this.notificationEngine) {
+        try {
+          await this.notificationEngine.notifyDriverReferralBonusEarned({
+            driverId: referrerDriverId,
+            amount,
+            source: `referral tier ${tierNumber} reward`,
+          });
+        } catch (notifyErr: any) {
+          this.logger.warn(
+            `Referral bonus notification failed for driver ${referrerDriverId} (non-fatal): ${notifyErr?.message}`
+          );
+        }
+      }
 
       return { payoutId: payout.id };
     } catch (err: any) {
@@ -151,7 +177,8 @@ export class ReferralPayoutProviderImpl implements ReferralRewardPayoutProvider 
           driverId: referredDriverId,
           deliveryId: null,
           type: "REFERRAL_REFERRED",
-          status: "PENDING",
+          // Born-ELIGIBLE (same rationale as the tier payout above).
+          status: "ELIGIBLE",
           grossAmount: amount,
           netAmount: amount,
           platformFee: 0,
@@ -177,8 +204,24 @@ export class ReferralPayoutProviderImpl implements ReferralRewardPayoutProvider 
 
     if (!payout.alreadyExisted) {
       this.logger.log(
-        `Created referred reward payout: driver=${referredDriverId} referral=${referralId} amount=$${amount} payoutId=${payout.id}`
+        `Created referred reward payout (ELIGIBLE): driver=${referredDriverId} referral=${referralId} amount=$${amount} payoutId=${payout.id}`
       );
+
+      // Non-fatal notification.
+      if (this.notificationEngine) {
+        try {
+          await this.notificationEngine.notifyDriverReferralBonusEarned({
+            driverId: referredDriverId,
+            amount,
+            source: "referral signup reward",
+            referralId,
+          });
+        } catch (notifyErr: any) {
+          this.logger.warn(
+            `Referral bonus notification failed for driver ${referredDriverId} (non-fatal): ${notifyErr?.message}`
+          );
+        }
+      }
     }
 
     return { payoutId: payout.id };

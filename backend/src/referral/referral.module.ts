@@ -2,6 +2,8 @@ import { Module, forwardRef } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import { AppSettingModule } from "../appSetting/appSetting.module";
 import { DriverPayoutModule } from "../driverPayout/driverPayout.module";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
+import { MailService } from "../common/mail/mail.service";
 import { ReferralController } from "./referral.controller";
 import { ReferralPublicController } from "./referral.public.controller";
 import { ReferralService } from "./referral.service";
@@ -15,7 +17,16 @@ import { ReferralExpiryScheduler } from "./referral-expiry.scheduler";
   // never the concrete ReferralPayoutProviderImpl class.
   imports: [forwardRef(() => AuthModule), AppSettingModule, DriverPayoutModule],
   controllers: [ReferralController, ReferralPublicController],
-  providers: [ReferralService, ReferralTriggerService, ReferralExpiryScheduler],
+  // NotificationEventEngine + MailService are provided locally (the same
+  // pattern delivery-logistics uses) so ReferralTriggerService can send the
+  // "referral bonus earned" email when a payout is created ELIGIBLE.
+  providers: [
+    ReferralService,
+    ReferralTriggerService,
+    ReferralExpiryScheduler,
+    NotificationEventEngine,
+    MailService,
+  ],
   exports: [ReferralService, ReferralTriggerService],
 })
 export class ReferralModule {}

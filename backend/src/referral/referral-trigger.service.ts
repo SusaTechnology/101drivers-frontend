@@ -50,10 +50,11 @@
  * fires before expiry, or (b) the expiry cron marks them EXPIRED.
  */
 
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { EnumReferralType, EnumReferralPayoutModel } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { AppSettingService } from "../appSetting/appSetting.service";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import {
   REFERRAL_REWARD_PAYOUT_PROVIDER,
   ReferralRewardPayoutProvider,
@@ -81,6 +82,11 @@ export class ReferralTriggerService {
     private readonly appSettingService: AppSettingService,
     @Inject(REFERRAL_REWARD_PAYOUT_PROVIDER)
     private readonly payoutProvider: ReferralRewardPayoutProvider,
+    // Optional so the service still works in test contexts / minimal
+    // module graphs without the notification stack. All notification
+    // calls are guarded + non-fatal — a failed email NEVER blocks a payout.
+    @Optional()
+    private readonly notificationEngine?: NotificationEventEngine,
   ) {}
 
   /**
@@ -824,7 +830,15 @@ export class ReferralTriggerService {
         driverId: input.referrerDriverId,
         deliveryId: null,
         type: "REFERRAL_REFERRER",
-        status: "PENDING",
+        // Born-ELIGIBLE: by the time this row is created, every qualifying
+        // condition has ALREADY been verified by the trigger (program active,
+        // positive amount, referral not expired, trigger count/window/caps).
+        // This is a verified debt — so it goes straight into the driver's
+        // available balance and flows out via the SAME payout rail as
+        // regular earnings (free withdrawal / instant payout / weekly batch
+        // → Stripe Connect transfer). Status machine: ELIGIBLE → PAID (via
+        // batch transfer) or ELIGIBLE → CANCELLED (admin fraud reversal).
+        status: "ELIGIBLE",
         grossAmount: amountDollars,
         netAmount: amountDollars,
         platformFee: 0,
@@ -836,8 +850,26 @@ export class ReferralTriggerService {
     });
 
     this.logger.log(
-      `Created per-delivery referrer payout: driver=${input.referrerDriverId} delivery=${input.deliveryId} amount=$${amountDollars} referral=${input.referralId}`
+      `Created per-delivery referrer payout (ELIGIBLE): driver=${input.referrerDriverId} delivery=${input.deliveryId} amount=$${amountDollars} referral=${input.referralId}`
     );
+
+    // Notify the driver their referral money is in the balance. Non-fatal:
+    // a failed notification must NEVER break the payout that was just created.
+    if (this.notificationEngine) {
+      try {
+        await this.notificationEngine.notifyDriverReferralBonusEarned({
+          driverId: input.referrerDriverId,
+          amount: amountDollars,
+          source: "per-delivery referral reward",
+          referralId: input.referralId,
+          deliveryId: input.deliveryId,
+        });
+      } catch (err: any) {
+        this.logger.warn(
+          `Referral bonus notification failed for driver ${input.referrerDriverId} (non-fatal): ${err?.message}`
+        );
+      }
+    }
   }
 
   /**

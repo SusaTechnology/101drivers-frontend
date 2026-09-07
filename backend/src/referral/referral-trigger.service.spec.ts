@@ -20,6 +20,7 @@ import { Test } from "@nestjs/testing";
 import { ReferralTriggerService } from "./referral-trigger.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { AppSettingService } from "../appSetting/appSetting.service";
+import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import {
   REFERRAL_REWARD_PAYOUT_PROVIDER,
   ReferralRewardPayoutProvider,
@@ -84,11 +85,13 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
   let prismaMock: DeepMockProxy<PrismaService>;
   let appSettingMock: DeepMockProxy<AppSettingService>;
   let payoutProviderMock: DeepMockProxy<ReferralRewardPayoutProvider>;
+  let notificationMock: DeepMockProxy<NotificationEventEngine>;
 
   beforeEach(async () => {
     prismaMock = mockDeep<PrismaService>();
     appSettingMock = mockDeep<AppSettingService>();
     payoutProviderMock = mockDeep<ReferralRewardPayoutProvider>();
+    notificationMock = mockDeep<NotificationEventEngine>();
 
     // Default: program is active with PER_DELIVERY defaults
     appSettingMock.getReferralProgramSettings.mockResolvedValue(DEFAULT_CONFIG as any);
@@ -132,6 +135,7 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: AppSettingService, useValue: appSettingMock },
         { provide: REFERRAL_REWARD_PAYOUT_PROVIDER, useValue: payoutProviderMock },
+        { provide: NotificationEventEngine, useValue: notificationMock },
       ],
     }).compile();
 
@@ -145,6 +149,7 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
     mockReset(prismaMock);
     mockReset(appSettingMock);
     mockReset(payoutProviderMock);
+    mockReset(notificationMock);
   });
 
   // ── Role matrix: who can refer whom ──────────────────────────────
@@ -289,8 +294,18 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
           // V3 key format includes the referralId (for cap attribution)
           failureMessage: "PER_DELIVERY:referral-1:delivery-1",
           grossAmount: 5,
+          // Born-ELIGIBLE: referral payouts go straight into the driver's
+          // available balance (paid via the standard payout rail).
+          status: "ELIGIBLE",
         }),
       });
+      // The driver is notified their referral money is in the balance
+      expect(notificationMock.notifyDriverReferralBonusEarned).toHaveBeenCalledWith(
+        expect.objectContaining({
+          driverId: "driver-referrer-1",
+          amount: 5,
+        }),
+      );
       // Verify no ReferralCredit was created FOR the driver referrer
       const driverReferrerCreditCall = (
         prismaMock.referralCredit.create as any
@@ -342,8 +357,18 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
           type: "REFERRAL_REFERRER",
           grossAmount: 50, // $50 bonus
           netAmount: 50,
+          // Born-ELIGIBLE: the $50 bonus lands in the referrer's available
+          // balance immediately (paid via withdrawal / instant / weekly batch)
+          status: "ELIGIBLE",
         }),
       });
+      // The referrer is notified their bonus is in the balance
+      expect(notificationMock.notifyDriverReferralBonusEarned).toHaveBeenCalledWith(
+        expect.objectContaining({
+          driverId: "driver-referrer-1",
+          amount: 50,
+        }),
+      );
       // Verify the referral is marked as REWARD_PAID + referredRewardPaidAt set
       const statusUpdateCall = (prismaMock.referral.update as any).mock.calls.find(
         (call: any) => call[0]?.data?.status === "REWARD_PAID",
@@ -829,6 +854,93 @@ describe("ReferralTriggerService — PER_DELIVERY model", () => {
       expect(prismaMock.driverPayout.create).not.toHaveBeenCalled();
       expect(prismaMock.referralCredit.create).not.toHaveBeenCalled();
       expect(payoutProviderMock.createReferredRewardPayout).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Born-ELIGIBLE payout + notification resilience ──────────────
+  describe("born-ELIGIBLE payout + notification", () => {
+    it("notification failure does NOT block or break the payout (non-fatal)", async () => {
+      // 1st findFirst: driver-referral lookup → null
+      findFirstMock(prismaMock).mockImplementationOnce(async () => null);
+      // 2nd findFirst: customer-referral lookup → the referral
+      findFirstMock(prismaMock).mockImplementationOnce(async (args: any) => {
+        if (args?.where?.referredCustomerId) {
+          return buildReferral({
+            referrerId: "driver-referrer-1",
+            referralType: ReferralTypeDto.DRIVER,
+            payoutModel: ReferralPayoutModelDto.PER_DELIVERY,
+            category: "RESIDENTIAL_REFERRAL",
+            referredCustomerId: "customer-referred-1",
+            referredDriverId: null,
+          });
+        }
+        return null;
+      });
+      // Notification engine explodes
+      (notificationMock.notifyDriverReferralBonusEarned as any).mockRejectedValue(
+        new Error("SMTP down"),
+      );
+
+      await expect(
+        service.onDeliveryCompleted({
+          driverId: "driver-1",
+          deliveryId: "delivery-1",
+          customerId: "customer-referred-1",
+        }),
+      ).resolves.not.toThrow();
+
+      // The payout was STILL created (money first, email best-effort)
+      expect(prismaMock.driverPayout.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          driverId: "driver-referrer-1",
+          status: "ELIGIBLE",
+        }),
+      });
+      // And the referral still went terminal
+      const statusUpdateCall = (prismaMock.referral.update as any).mock.calls.find(
+        (call: any) => call[0]?.data?.status === "REWARD_PAID",
+      );
+      expect(statusUpdateCall).toBeDefined();
+    });
+
+    it("missing notification engine (undefined) does not break the payout", async () => {
+      // Rebuild the service WITHOUT the notification engine (@Optional path)
+      const bare = new ReferralTriggerService(
+        prismaMock as any,
+        appSettingMock as any,
+        payoutProviderMock as any,
+        undefined,
+      );
+      jest.spyOn(bare["logger"], "log").mockImplementation(() => undefined);
+
+      // 1st findFirst: driver-referral lookup → null
+      findFirstMock(prismaMock).mockImplementationOnce(async () => null);
+      // 2nd findFirst: customer-referral lookup → the referral
+      findFirstMock(prismaMock).mockImplementationOnce(async (args: any) => {
+        if (args?.where?.referredCustomerId) {
+          return buildReferral({
+            referrerId: "driver-referrer-1",
+            referralType: ReferralTypeDto.DRIVER,
+            payoutModel: ReferralPayoutModelDto.PER_DELIVERY,
+            category: "RESIDENTIAL_REFERRAL",
+            referredCustomerId: "customer-referred-1",
+            referredDriverId: null,
+          });
+        }
+        return null;
+      });
+
+      await expect(
+        bare.onDeliveryCompleted({
+          driverId: "driver-1",
+          deliveryId: "delivery-1",
+          customerId: "customer-referred-1",
+        }),
+      ).resolves.not.toThrow();
+
+      expect(prismaMock.driverPayout.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ status: "ELIGIBLE" }),
+      });
     });
   });
 });

@@ -465,4 +465,64 @@ export class ReferralController {
   ): Promise<any> {
     return this.referralService.manualExpireReferralCredit(creditId, body.reason);
   }
+
+  // ============================================================
+  // ADMIN ENDPOINTS — Referral DriverPayouts (driver cash payouts)
+  // ============================================================
+
+  /**
+   * GET /referrals/admin/payouts
+   * Paginated list of referral cash payouts (DriverPayout rows of type
+   * REFERRAL_REFERRER / REFERRAL_REFERRED). These are born-ELIGIBLE: they
+   * land in the driver's available balance immediately and are paid out via
+   * the standard rail (withdrawal / instant / weekly batch → Stripe Connect).
+   *
+   * Query params:
+   *   - page (default 1)
+   *   - pageSize (default 20)
+   *   - status ("PENDING" | "ELIGIBLE" | "PAID" | "FAILED" | "CANCELLED" | "ALL")
+   *   - type ("REFERRER" | "REFERRED")
+   */
+  @common.Get("admin/payouts")
+  @swagger.ApiOkResponse({ description: "Paginated list of referral cash payouts" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getAdminReferralPayouts(
+    @common.Query("page") page?: string,
+    @common.Query("pageSize") pageSize?: string,
+    @common.Query("status") status?: string,
+    @common.Query("type") type?: "REFERRER" | "REFERRED",
+  ): Promise<any> {
+    return this.referralService.getAdminReferralPayouts({
+      page: page ? parseInt(page, 10) : 1,
+      pageSize: pageSize ? parseInt(pageSize, 10) : 20,
+      status: status || undefined,
+      type: type || undefined,
+    });
+  }
+
+  /**
+   * POST /referrals/admin/payouts/:payoutId/cancel
+   * Fraud reversal: admin cancels a referral payout before it is cashed out.
+   * Only PENDING or ELIGIBLE payouts can be cancelled — a PAID payout needs
+   * a clawback adjustment instead.
+   *
+   * Body: { reason?: string }
+   */
+  @common.Post("admin/payouts/:payoutId/cancel")
+  @swagger.ApiOkResponse({ description: "Referral payout cancelled" })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async cancelReferralPayout(
+    @common.Param("payoutId") payoutId: string,
+    @common.Body() body: { reason?: string },
+  ): Promise<any> {
+    return this.referralService.cancelReferralPayout(payoutId, body.reason);
+  }
 }

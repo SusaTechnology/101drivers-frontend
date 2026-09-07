@@ -1736,6 +1736,131 @@ export class ReferralService {
     return { credit: updated };
   }
 
+  // ============================================================
+  // ADMIN — Referral DriverPayout list + cancel (fraud reversal)
+  // ============================================================
+
+  /**
+   * List all referral DriverPayout rows (REFERRAL_REFERRER + REFERRAL_REFERRED)
+   * for the admin referral page.
+   *
+   * Referral payouts are born-ELIGIBLE: they land in the driver's available
+   * balance immediately and flow out via the standard payout rail (free
+   * withdrawal / instant payout / weekly batch → Stripe Connect transfer).
+   * This list is where the admin monitors them and cancels fraudulent ones
+   * (ELIGIBLE → CANCELLED) before they are cashed out.
+   *
+   * Query params: page, pageSize, status, type ("REFERRER" | "REFERRED").
+   */
+  async getAdminReferralPayouts(opts: {
+    page: number;
+    pageSize: number;
+    status?: string;
+    type?: "REFERRER" | "REFERRED";
+  }) {
+    const page = Math.max(1, opts.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+
+    const where: any = {
+      type: { in: ["REFERRAL_REFERRER", "REFERRAL_REFERRED"] },
+    };
+    if (opts.status && opts.status !== "ALL") where.status = opts.status;
+    if (opts.type === "REFERRER") where.type = "REFERRAL_REFERRER";
+    if (opts.type === "REFERRED") where.type = "REFERRAL_REFERRED";
+
+    const [payouts, total] = await Promise.all([
+      this.prisma.driverPayout.findMany({
+        where,
+        include: {
+          driver: {
+            include: { user: { select: { fullName: true, email: true } } },
+          },
+        },
+        orderBy: { createdAt: "desc" as const },
+        skip,
+        take: pageSize,
+      }),
+      this.prisma.driverPayout.count({ where }),
+    ]);
+
+    // Parse the V3 attribution key for per-delivery payouts:
+    // failureMessage = "PER_DELIVERY:<referralId>:<deliveryId>"
+    const rows = payouts.map((p: any) => {
+      let referralId: string | null = null;
+      let deliveryId: string | null = null;
+      const parts = (p.failureMessage ?? "").split(":");
+      if (parts.length === 3 && parts[0] === "PER_DELIVERY") {
+        referralId = parts[1];
+        deliveryId = parts[2];
+      }
+      return {
+        id: p.id,
+        driverId: p.driverId,
+        driverName: p.driver?.user?.fullName ?? null,
+        driverEmail: p.driver?.user?.email ?? null,
+        type: p.type,
+        status: p.status,
+        grossAmount: p.grossAmount,
+        netAmount: p.netAmount,
+        tierNumber: p.tierNumber,
+        failureMessage: p.failureMessage,
+        createdAt: p.createdAt,
+        paidAt: p.paidAt,
+        providerTransferId: p.providerTransferId,
+        // Parsed attribution (null for TIERED-era rows)
+        referralId,
+        deliveryId,
+      };
+    });
+
+    return { payouts: rows, total, page, pageSize };
+  }
+
+  /**
+   * Admin cancels a referral payout (fraud reversal / manual hold-off).
+   *
+   * Allowed ONLY while the money has NOT moved:
+   *   - status PENDING or ELIGIBLE → CANCELLED
+   * Refuses PAID (money already transferred — needs a clawback adjustment,
+   * not a status flip), FAILED, and CANCELLED.
+   *
+   * The driverPayoutPolicy status machine permits PENDING → CANCELLED and
+   * ELIGIBLE → CANCELLED, so this goes through the same validation as any
+   * other payout update. The reason is appended to failureMessage for audit.
+   */
+  async cancelReferralPayout(payoutId: string, reason?: string) {
+    const payout = await this.prisma.driverPayout.findUnique({
+      where: { id: payoutId },
+      select: { id: true, type: true, status: true, failureMessage: true },
+    });
+    if (!payout) {
+      throw new NotFoundException("Referral payout not found");
+    }
+    if (payout.type !== "REFERRAL_REFERRER" && payout.type !== "REFERRAL_REFERRED") {
+      throw new BadRequestException(
+        `Payout ${payoutId} is not a referral payout (type=${payout.type}). Use the payouts report for regular delivery payouts.`
+      );
+    }
+    if (payout.status !== "PENDING" && payout.status !== "ELIGIBLE") {
+      throw new BadRequestException(
+        `Cannot cancel a referral payout in status ${payout.status}. Only PENDING or ELIGIBLE payouts can be cancelled — PAID payouts need a clawback adjustment.`
+      );
+    }
+
+    const updated = await this.prisma.driverPayout.update({
+      where: { id: payoutId },
+      data: {
+        status: "CANCELLED",
+        failureMessage: reason
+          ? `${payout.failureMessage ?? ""} [admin-cancelled: ${reason}]`.trim()
+          : `${payout.failureMessage ?? ""} [admin-cancelled]`.trim(),
+      },
+      select: { id: true, status: true, failureMessage: true },
+    });
+    return { payout: updated };
+  }
+
 // ============================================================
   // CUSTOMER-REFERRER ENDPOINTS (Phase 2)
   // ============================================================

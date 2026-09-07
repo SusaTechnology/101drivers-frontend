@@ -323,6 +323,15 @@ export default function AdminReferralProgramPage() {
   const [creditActionStripeInvoiceId, setCreditActionStripeInvoiceId] = useState('');
   const [creditActionReason, setCreditActionReason] = useState('');
 
+  // ── Referral cash payouts list state (DriverPayout REFERRAL_* rows) ──
+  const [refPayoutsPage, setRefPayoutsPage] = useState(1);
+  const refPayoutsPageSize = 20;
+  const [refPayoutsStatusFilter, setRefPayoutsStatusFilter] = useState<string>('ALL');
+  // Cancel (fraud reversal) dialog state
+  const [payoutCancelOpen, setPayoutCancelOpen] = useState(false);
+  const [payoutCancelId, setPayoutCancelId] = useState<string | null>(null);
+  const [payoutCancelReason, setPayoutCancelReason] = useState('');
+
   // ── Fetch config ──
   // NOTE: useDataQuery wraps TanStack Query's useQuery, which does NOT
   // accept onSuccess (removed in v5). We use configQuery.data directly
@@ -748,6 +757,68 @@ export default function AdminReferralProgramPage() {
     },
     onError: (error: Error) => {
       toast.error('Failed to expire credit', { description: error.message });
+    },
+  });
+
+  // ── Referral cash payouts list (DriverPayout REFERRAL_* rows) ──
+  // These payouts are born-ELIGIBLE: they land in the driver's available
+  // balance immediately and flow out via withdrawal / instant payout /
+  // weekly batch → Stripe Connect. This list is where the admin monitors
+  // them and cancels fraudulent ones before they are cashed out.
+  const refPayoutsApiUrl = (() => {
+    const url = new URL(`${API_URL}/api/referrals/admin/payouts`);
+    url.searchParams.set('page', String(refPayoutsPage));
+    url.searchParams.set('pageSize', String(refPayoutsPageSize));
+    if (refPayoutsStatusFilter !== 'ALL') {
+      url.searchParams.set('status', refPayoutsStatusFilter);
+    }
+    return url.toString();
+  })();
+
+  const refPayoutsListQuery = useDataQuery<{
+    payouts: Array<{
+      id: string;
+      driverId: string;
+      driverName: string | null;
+      driverEmail: string | null;
+      type: string;
+      status: string;
+      grossAmount: number;
+      netAmount: number;
+      tierNumber: number | null;
+      failureMessage: string | null;
+      createdAt: string;
+      paidAt: string | null;
+      providerTransferId: string | null;
+      referralId: string | null;
+      deliveryId: string | null;
+    }>;
+    total: number;
+    page: number;
+    pageSize: number;
+  }>({
+    apiEndPoint: refPayoutsApiUrl,
+    noFilter: true,
+    queryKey: ['admin-referral-payouts', refPayoutsPage, refPayoutsStatusFilter],
+  });
+
+  // ── Cancel referral payout (fraud reversal) mutation ──
+  const cancelPayoutMutation = useDataMutation<any, any>({
+    apiEndPoint: `${API_URL}/api/referrals/admin/payouts/${payoutCancelId}/cancel`,
+    method: 'POST',
+    onSuccess: () => {
+      toast.success('Referral payout cancelled', {
+        description: payoutCancelReason
+          ? `Marked CANCELLED — ${payoutCancelReason}`
+          : 'Marked CANCELLED — the driver will not be able to cash it out',
+      });
+      setPayoutCancelOpen(false);
+      setPayoutCancelReason('');
+      refPayoutsListQuery.refetch();
+      statsQuery.refetch();
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to cancel payout', { description: error.message });
     },
   });
 
@@ -1996,6 +2067,157 @@ export default function AdminReferralProgramPage() {
           </CardContent>
         </Card>
 
+        {/* ── Referral Cash Payouts (DriverPayout REFERRAL_* rows) ── */}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle className="text-2xl font-black text-slate-900 dark:text-white">
+                  Referral Cash Payouts
+                </CardTitle>
+                <CardDescription className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Cash bonuses paid to drivers. They are added to the driver's available
+                  balance the moment they are earned, and paid out through the normal payout
+                  rail (withdrawal, instant payout, or the weekly batch via Stripe Connect).
+                  Cancel a suspicious payout before the driver cashes it out — a payout that
+                  was already paid needs a clawback adjustment instead.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Select
+                  value={refPayoutsStatusFilter}
+                  onValueChange={(v) => {
+                    setRefPayoutsStatusFilter(v);
+                    setRefPayoutsPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[160px] h-10 rounded-2xl">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All statuses</SelectItem>
+                    <SelectItem value="ELIGIBLE">ELIGIBLE</SelectItem>
+                    <SelectItem value="PENDING">PENDING</SelectItem>
+                    <SelectItem value="PAID">PAID</SelectItem>
+                    <SelectItem value="CANCELLED">CANCELLED</SelectItem>
+                    <SelectItem value="FAILED">FAILED</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {refPayoutsListQuery.isLoading ? (
+              <div className="py-12 text-center">
+                <Loader2 className="w-8 h-8 mx-auto text-slate-400 animate-spin" />
+              </div>
+            ) : (refPayoutsListQuery.data?.payouts ?? []).length === 0 ? (
+              <div className="py-12 text-center">
+                <DollarSign className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+                <p className="text-sm text-slate-500">No referral cash payouts match the current filters.</p>
+              </div>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Driver</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Referral</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(refPayoutsListQuery.data?.payouts ?? []).map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">
+                            {p.driverName || 'Unknown'}
+                          </p>
+                          <p className="text-xs text-slate-500">{p.driverEmail ?? p.driverId.slice(-8)}</p>
+                        </TableCell>
+                        <TableCell className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatMoney(p.netAmount)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="chip-gray">
+                            {p.type === 'REFERRAL_REFERRER'
+                              ? p.failureMessage?.startsWith('PER_DELIVERY:')
+                                ? 'Per-delivery reward'
+                                : p.tierNumber
+                                  ? `Tier ${p.tierNumber} reward`
+                                  : 'Referrer reward'
+                              : 'Signup bonus'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            p.status === 'PAID' || p.status === 'ELIGIBLE' ? 'chip-emerald' :
+                            p.status === 'CANCELLED' || p.status === 'FAILED' ? 'chip-red' :
+                            'chip-amber'
+                          }>
+                            {p.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {p.referralId ? p.referralId.slice(-8) : '—'}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">
+                          {formatDate(p.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {(p.status === 'ELIGIBLE' || p.status === 'PENDING') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl chip-red"
+                              onClick={() => {
+                                setPayoutCancelId(p.id);
+                                setPayoutCancelReason('');
+                                setPayoutCancelOpen(true);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+                  <span className="text-xs text-slate-500">
+                    Showing {(refPayoutsPage - 1) * refPayoutsPageSize + 1}–{Math.min(refPayoutsPage * refPayoutsPageSize, refPayoutsListQuery.data?.total ?? 0)} of {refPayoutsListQuery.data?.total ?? 0}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={refPayoutsPage <= 1}
+                      onClick={() => setRefPayoutsPage(refPayoutsPage - 1)}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-xs font-bold">Page {refPayoutsPage} of {Math.max(1, Math.ceil((refPayoutsListQuery.data?.total ?? 0) / refPayoutsPageSize))}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={refPayoutsPage >= Math.ceil((refPayoutsListQuery.data?.total ?? 0) / refPayoutsPageSize)}
+                      onClick={() => setRefPayoutsPage(refPayoutsPage + 1)}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
         {/* ── V2: Referral detail dialog (with credits + payouts + override) ── */}
         <Dialog open={referralDetailOpen} onOpenChange={(o) => {
           setReferralDetailOpen(o);
@@ -2290,6 +2512,53 @@ export default function AdminReferralProgramPage() {
                   <><Check className="w-4 h-4 mr-2" /> Apply Credit</>
                 ) : (
                   <><AlertCircle className="w-4 h-4 mr-2" /> Expire Credit</>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Cancel referral payout (fraud reversal) dialog ── */}
+        <Dialog open={payoutCancelOpen} onOpenChange={setPayoutCancelOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500" /> Cancel Referral Payout
+              </DialogTitle>
+              <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                Cancels this referral bonus before the driver cashes it out — the money will
+                disappear from their available balance and can never be withdrawn. Use this for
+                fraudulent or erroneous payouts. A payout that was already paid (PAID) cannot be
+                cancelled here; it needs a clawback adjustment instead.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  Reason (optional, stored on the payout for audit trail)
+                </Label>
+                <Input
+                  type="text"
+                  value={payoutCancelReason}
+                  onChange={(e) => setPayoutCancelReason(e.target.value)}
+                  placeholder="e.g. 'fake referral — same person, second account'"
+                  className="h-12 rounded-2xl"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setPayoutCancelOpen(false)} className="rounded-2xl">
+                Keep Payout
+              </Button>
+              <Button
+                onClick={() => cancelPayoutMutation.mutate({ reason: payoutCancelReason || undefined })}
+                disabled={cancelPayoutMutation.isPending}
+                className="rounded-2xl chip-red"
+              >
+                {cancelPayoutMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Cancelling...</>
+                ) : (
+                  <><AlertCircle className="w-4 h-4 mr-2" /> Cancel Payout</>
                 )}
               </Button>
             </div>
