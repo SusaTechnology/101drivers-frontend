@@ -1069,3 +1069,33 @@ Stage Summary:
 - Referral money now auto-flows: trigger → ELIGIBLE row → driver available balance → existing withdrawal/instant/weekly rail → Stripe Connect transfer. Admin sees every referral payout on the referral page and can cancel fraudulent ones pre-cashout. Drivers get an email the moment a bonus is earned.
 - Server steps for user: 1) npm run db:migrate-up (enum migration), 2) npm run referral:backfill -- --apply after reviewing dry run.
 - Verification: backend tsc 4 pre-existing (0 new); referral+appSetting jest 87/87; frontend scoped tsc 144 == baseline; vite build green; backfill script strict-compile OK + smoke-run reaches DB-connection stage (expected fail without DB here).
+
+---
+Task ID: 5-a-push
+Agent: git subagent
+Task: Commit + push Phase 1
+
+Work Log:
+- git status --short: 15 modified + 4 untracked (Phase 1 changes: born-ELIGIBLE referral payouts, DRIVER_REFERRAL_BONUS_EARNED enum + migration 20260907090000, admin Referral Cash Payouts card + cancel endpoint, backfill script, new/updated specs, lockfiles, tsconfig.script-check.json, worklog).
+- git add -A → all changes staged (19 files total).
+- git commit (single command, multiple -m paragraphs) → 23bc18acdc01f5044d4f3ca0ca624025f31063d3 — "feat(payouts): referral payouts born-ELIGIBLE — auto-pay via standard rail + admin cancel + backfill script" (19 files changed, 1179 insertions, 326 deletions).
+- git push origin master → SUCCESS: c3b29aa..23bc18a master -> master (no auth retry needed; stderr contained only GitHub's dependabot vulnerability advisory).
+- Verify: git log --oneline -2 → 23bc18a (this commit) on top of c3b29aa (Task 4); git status --short → clean.
+
+Stage Summary:
+- Phase 1 (born-ELIGIBLE referral payouts) is committed and pushed to origin/master as 23bc18a. Working tree clean at push time; the only file changed after push is this worklog entry (uncommitted, to ride along with the next phase's commit). No other files were touched.
+
+---
+Task ID: 5-b (Phase 2 of payout-gaps plan)
+Agent: Main Agent
+Task: Payout-rails audit tooling + retire the legacy in-app bank path (Wise CSV + my-bank-account endpoints + dead wallet UI).
+
+Work Log:
+- Confirmed the driver-wallet "Payout Method" card was already commented out — but its dead machinery remained: payoutType/accountHolder/routingNumber/accountNumber state, the my-bank-account GET query + sync effect, saveBankAccountMutation, handleSavePayoutMethod, payoutTypeOptions, and the 97-line commented-out card. All removed; imports (Label, Select*, Input) cleaned up. A code note in the wallet documents that drivers connect their bank EXCLUSIVELY via Stripe hosted onboarding.
+- Backend driverPayout.controller.ts: REMOVED admin/export-wise-csv (exported drivers' routing/account numbers to CSV) and GET/POST /my-bank-account (stored bank details in OUR DB). Replaced with a RETIRED explanation comment. Express Response import dropped. Historical DriverBankAccount table left in place (non-destructive; data can be purged later if the owner wants).
+- NEW backend/scripts/audit-payout-rails.ts (read-only): 1) lists legacy DriverBankAccount rows (who, bank, last update), 2) Stripe Connect coverage (drivers w/ account, onboarding complete, gaps), 3) drivers with ELIGIBLE balance stuck behind missing payout setup, 4) live Stripe-side audit — every connected account with type (EXPRESS/STANDARD/CUSTOM), charges_enabled, payouts_enabled, driverId metadata (auto-skipped if no STRIPE_SECRET_KEY). This directly answers the owner's "audit the current setup" ask.
+- Verification: backend tsc 4 pre-existing (0 new); referral+appSetting jest 87/87; driverPayout base controller spec has the SAME 5 pre-existing Nest DI failures as before any of this work (unrelated scaffolding spec); frontend scoped tsc 143 (one BETTER than 144 baseline — dead code removal eliminated a pre-existing error); vite build green; both scripts strict-compile OK.
+
+Stage Summary:
+- The system now has exactly ONE payout rail: Stripe Connect Express + hosted onboarding. No code path collects or exports bank details anymore; the audit script gives the owner live visibility of account types and coverage on their server (npx ts-node scripts/audit-payout-rails.ts).
+- Commit: feat(payouts): retire legacy in-app bank rail + payout-rails audit script

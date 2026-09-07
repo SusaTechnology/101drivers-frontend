@@ -12,5 +12,5 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "include": ["scripts/backfill-referral-payouts.ts"]
+  "include": ["scripts/backfill-referral-payouts.ts", "scripts/audit-payout-rails.ts"]
 }
