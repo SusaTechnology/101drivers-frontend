@@ -11,6 +11,7 @@ import { DriverJobFeedService } from "./driver-job-feed.service";
 import { DeliveryLifecycleService } from "./delivery-lifecycle.service";
 import { DeliveryRequestOrchestratorService } from "./delivery-request-orchestrator.service";
 import { DeliveryExpiryScheduler } from "./delivery-expiry.scheduler";
+import { WeeklyPayoutScheduler } from "./weekly-payout.scheduler";
 
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 
@@ -46,6 +47,7 @@ import { DeliveryClosePenaltyEngine } from "src/domain/deliveryRequest/deliveryC
     DeliveryLifecycleService,
     DeliveryRequestOrchestratorService,
     DeliveryExpiryScheduler,
+    WeeklyPayoutScheduler,
     NotificationEventEngine,
     EmailVerificationService,
     MailService,

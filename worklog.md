@@ -1118,3 +1118,19 @@ Work Log:
 Stage Summary:
 - Customers now automatically USE their referral rewards: business customers see credits on their weekly invoice; personal customers get $5/$10 back on their card after their next completed delivery. No cash payouts to customers (no Connect/KYC needed) — matches the Uber/Lyft/DoorDash credit model. Admin manual Apply/Expire remain as overrides.
 - Commit: feat(referral): auto-apply customer referral credits (weekly invoice for business, card statement-credit for personal)
+
+---
+Task ID: 5-d (Phase 4 of payout-gaps plan)
+Agent: Main Agent
+Task: Weekly auto-payout cron — drivers' eligible balances (earnings + referral bonuses) cash out automatically every week, like Lyft/DoorDash default payouts.
+
+Work Log:
+- NEW delivery-logistics/weekly-payout.scheduler.ts: @Cron every Monday 06:00 → PaymentPayoutEngine.processWeeklyAutoPayouts() (the existing admin-triggered batch machinery: collects all ELIGIBLE payouts per driver → payout batch → standard Stripe Connect transfer; drivers without completed onboarding are skipped by the engine with the balance preserved).
+- Safety: kill switch env PAYOUT_WEEKLY_CRON_DISABLED=true (checked at run time, no deploy needed to disable); missing engine → no-op; catch-all so cron never throws. The admin endpoint POST /driverPayouts/admin/process-weekly-payouts still works for on-demand runs.
+- Wired into DeliveryLogisticsModule providers (where PaymentPayoutEngine is provided).
+- NEW weekly-payout.scheduler.spec.ts (4 tests): engine called + result logged, kill switch skips, missing engine no-op, engine failure contained.
+- Final phase verification: backend tsc 4 pre-existing (0 new); scoped jest across delivery-logistics + referral + appSetting + postpaidBilling = 126/126 PASS; frontend scoped tsc 143 (better than 144 baseline); vite build green.
+
+Stage Summary:
+- Payout rails are now fully automated end to end: earnings (delivery + referral) become ELIGIBLE at the moment they're earned → driver can cash out instantly/on-demand → AND a weekly cron sweeps everything left, automatically. Weekly run is the big-company default; on-demand rails remain for drivers who want money sooner.
+- Commit: feat(payouts): weekly auto-payout cron (Monday 06:00, PAYOUT_WEEKLY_CRON_DISABLED kill switch)
