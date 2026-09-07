@@ -1188,3 +1188,30 @@ Work Log:
 Stage Summary:
 - All 5 generated notificationEvent type files now in sync with prisma/schema.prisma enum (33 values)
 - User side to clear the npm start errors: git pull, then npm install (regenerates Prisma client), then npm start
+
+---
+Task ID: 5-f-push
+Agent: git subagent
+Task: Commit + push notification enum sync fix
+
+Work Log:
+- Staged 5 files: backend/src/notificationEvent/base/EnumNotificationEventType.ts, NotificationEventCreateInput.ts, NotificationEventUpdateInput.ts, NotificationEventWhereInput.ts, worklog.md
+- Committed as ad7a5f4 (ad7a5f44f9e314ba85dcc145337a8243c41c3f38): "fix(notificationEvent): sync generated enum + input unions with new referral-credit notification types" — 5 files changed, 46 insertions(+)
+- Pushed to origin/master: 630d26b..ad7a5f4 (GitHub Dependabot advisory banner noted on push; not a failure)
+
+Stage Summary:
+- notificationEvent enum sync fix pushed to origin/master as ad7a5f4; working tree clean afterward (this push-record append intentionally left uncommitted per convention)
+
+---
+Task ID: 6
+Agent: main agent (Super Z)
+Task: Admin referral page — master-switch status copy now speaks for ALL roles (drivers + customers)
+
+Work Log:
+- User asked whether the master program switch (isActive) also reaches customers; verified in code: YES — customer lookups return programActive = isActive && customerReferralsEnabled (referral.service.ts), ReferralCodeWidget/ReferralCodeInput enter "paused" state and block the flow, signup forms (Dealer/Individual/DriverOnboarding) drop the referral payload when paused, and the admin page greys out the whole config (matrix + category toggles) via <fieldset disabled={!formIsActive}>
+- Only the copy under the master switch was driver-centric: admin-referral-program.tsx
+- Changed 3 strings: Active -> "Active — everyone can refer & earn: drivers, private customers and dealers"; Paused -> "Paused — referrals are off for ALL roles (drivers + customers)"; helper line now explains all-role pause behavior (all doors closed, payouts stop, history stays visible)
+- Gates: FE tsc 143 = pre-existing baseline (0 new); vite build green
+
+Stage Summary:
+- Master-switch banner on /admin-referral-program now expresses the whole program (all roles), matching what the switch actually does

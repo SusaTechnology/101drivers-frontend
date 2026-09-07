@@ -911,12 +911,12 @@ export default function AdminReferralProgramPage() {
                       loads (formIsActive defaults to true in useState). */}
                   {config
                     ? (formIsActive
-                        ? 'Active — drivers can refer friends'
-                        : 'Paused — "Refer a Friend" card hidden from drivers')
+                        ? 'Active — everyone can refer & earn: drivers, private customers and dealers'
+                        : 'Paused — referrals are off for ALL roles (drivers + customers)')
                     : 'Loading…'}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  Pausing hides the action button but keeps referral history + accrued rewards visible to drivers.
+                  Pausing closes every Refer-a-Friend door for all roles (driver and customer pages, signup forms) and stops all reward payouts. Referral history + earned rewards stay visible.
                 </p>
               </div>
               <Switch
