@@ -261,18 +261,12 @@ export function ReferralCodeInput({
       );
     }
     if (state === "paused") {
-      // Role-aware: backend ANDs the master switch with the per-flow
-      // toggle for this referrer's type — name the paused FLOW, not the
-      // whole program (master switch may well be ON).
-      const pausedCopy =
-        data?.referrerType === "DRIVER"
-          ? "Driver referrals are currently paused — this code is valid but won't be applied. You can still sign up."
-          : data?.referrerType === "CUSTOMER"
-            ? "Customer referrals are currently paused — this code is valid but won't be applied. You can still sign up."
-            : "This referral code is valid but the referral program is currently paused. You can still sign up — the code won't be applied.";
+      // programActive is the page-level verdict from the backend: false
+      // only when the master switch is off or BOTH flow switches are off.
       return (
         <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-          {pausedCopy}
+          This referral code is valid but the referral program is currently
+          paused. You can still sign up — the code won't be applied.
         </p>
       );
     }

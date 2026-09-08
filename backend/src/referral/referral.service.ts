@@ -2447,7 +2447,17 @@ export class ReferralService {
    *     for privacy; or business name for business customers; or "A 101 Drivers
    *     driver" for drivers if they don't have a public name)
    *   - referrerType: "DRIVER" | "CUSTOMER"
-   *   - programActive: whether the program is currently accepting new referrals
+   *   - programActive: whether ANY referral signup door is open. True unless
+   *     the master switch is off (isActive=false) or BOTH flow switches are
+   *     off (driverReferralsEnabled=false AND customerReferralsEnabled=false).
+   *     Per-flow switches do NOT pause the page — they only hide their own
+   *     signup buttons (see signupDoors). The invite page shows its paused
+   *     warning from THIS flag.
+   *   - signupDoors: effective visibility of the 3 invite-page signup
+   *     buttons = flow switch AND role-matrix cell for each door:
+   *       DRIVER   = driverReferralsEnabled   && matrix.<referrer>.DRIVER
+   *       PERSONAL = customerReferralsEnabled && matrix.<referrer>.PERSONAL
+   *       BUSINESS = customerReferralsEnabled && matrix.<referrer>.BUSINESS
    *
    * No auth required — this is a public endpoint. Returns minimal info
    * (just enough for the user to recognize whose code it is).
@@ -2459,12 +2469,15 @@ export class ReferralService {
     referrerSubtype: "PERSONAL" | "BUSINESS" | null;
     programActive: boolean;
     // V3.1: which roles this referrer may refer, straight from the
-    // config-driven role matrix (single source of truth). The public
-    // invite page renders its signup buttons from THIS — and the apply
-    // endpoints enforce the same cells server-side.
+    // config-driven role matrix (single source of truth). The apply
+    // endpoints enforce the same cells server-side. The invite page
+    // renders its signup buttons from signupDoors (switches AND this).
     allows: Record<ReferralReferrerRole, boolean> | null;
+    // Effective invite-page signup-button visibility (flow switch AND
+    // matrix cell per door). Null when the code is not found.
+    signupDoors: Record<ReferralReferrerRole, boolean> | null;
   }> {
-    if (!code) return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: false, allows: null };
+    if (!code) return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: false, allows: null, signupDoors: null };
 
     const upperCode = code.toUpperCase();
 
@@ -2485,6 +2498,21 @@ export class ReferralService {
 
     const config = await this.appSettingService.getReferralProgramSettings();
 
+    // The page-level "paused" verdict: only when EVERY referral door is
+    // closed — master switch off, or both flow switches off. A single
+    // disabled flow must NOT pause the page (it only hides its own
+    // signup buttons via signupDoors below).
+    const programActive =
+      config.isActive &&
+      (config.driverReferralsEnabled || config.customerReferralsEnabled);
+
+    // Effective invite-page signup buttons: flow switch AND matrix cell.
+    const doorsFor = (matrixRow: Record<ReferralReferrerRole, boolean>) => ({
+      DRIVER: config.driverReferralsEnabled && matrixRow.DRIVER,
+      PERSONAL: config.customerReferralsEnabled && matrixRow.PERSONAL,
+      BUSINESS: config.customerReferralsEnabled && matrixRow.BUSINESS,
+    });
+
     if (driverReferrer) {
       return {
         found: true,
@@ -2493,8 +2521,9 @@ export class ReferralService {
           : "A 101 Drivers driver",
         referrerType: ReferralTypeDto.DRIVER,
         referrerSubtype: null,
-        programActive: config.isActive && config.driverReferralsEnabled,
+        programActive,
         allows: config.referralRoleMatrix.DRIVER,
+        signupDoors: doorsFor(config.referralRoleMatrix.DRIVER),
       };
     }
 
@@ -2514,11 +2543,16 @@ export class ReferralService {
             : this.privacyMaskName(name),
         referrerType: ReferralTypeDto.CUSTOMER,
         referrerSubtype: customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL",
-        programActive: config.isActive && config.customerReferralsEnabled,
+        programActive,
         allows:
           config.referralRoleMatrix[
             customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL"
           ],
+        signupDoors: doorsFor(
+          config.referralRoleMatrix[
+            customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL"
+          ],
+        ),
       };
     }
 
@@ -2537,12 +2571,13 @@ export class ReferralService {
           : "A 101 Drivers driver",
         referrerType: ReferralTypeDto.DRIVER,
         referrerSubtype: null,
-        programActive: config.isActive && config.driverReferralsEnabled,
+        programActive,
         allows: config.referralRoleMatrix.DRIVER,
+        signupDoors: doorsFor(config.referralRoleMatrix.DRIVER),
       };
     }
 
-    return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: config.isActive, allows: null };
+    return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive, allows: null, signupDoors: null };
   }
 
   /**

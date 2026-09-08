@@ -157,7 +157,13 @@ export default function DriverWalletPage() {
     referredGetsReward: false, // V2: the REFERRED driver doesn't get paid — the REFERRER does
     referredRewardAmount: 50 as number | null, // V2: $50 to the referrer
   }
-  const { data: referralConfigData } = useDataQuery<any>({
+  // Fail-closed: when the program-config fetch fails or hasn't resolved yet,
+  // treat the program as NOT active — the copy/share buttons must never be
+  // available while the real master-switch state is unknown (the admin can
+  // have the program paused; sharing a dead link is worse than a brief
+  // loading state). `referralConfigLoading` lets the UI show a neutral
+  // loading hint instead of a misleading "paused" message.
+  const { data: referralConfigData, isLoading: referralConfigLoading } = useDataQuery<any>({
     apiEndPoint: `${API_URL}/api/referrals/program-config`,
     noFilter: true,
   })
@@ -165,7 +171,7 @@ export default function DriverWalletPage() {
     isActive:
       typeof referralConfigData?.isActive === 'boolean'
         ? referralConfigData.isActive
-        : DEFAULT_REFERRAL_CONFIG.isActive,
+        : false,
     rewardTrigger:
       referralConfigData?.rewardTrigger === 'ON_APPROVED' ||
       referralConfigData?.rewardTrigger === 'ON_DELIVERIES_COMPLETED'
@@ -725,9 +731,11 @@ export default function DriverWalletPage() {
                     Refer a Friend &amp; Earn ${referralConfig.referredRewardAmount ?? 50}
                   </CardTitle>
                   <CardDescription className="text-sm leading-relaxed">
-                    {referralConfig.isActive
-                      ? buildReferralDescription()
-                      : 'The referral program is currently paused. Your accrued rewards remain yours — see Referral History below for your past referrals and earnings.'}
+                    {referralConfigLoading
+                      ? 'Loading referral program…'
+                      : referralConfig.isActive
+                        ? buildReferralDescription()
+                        : 'The referral program is currently paused. Your accrued rewards remain yours — see Referral History below for your past referrals and earnings.'}
                   </CardDescription>
                 </div>
               </div>
@@ -855,8 +863,13 @@ export default function DriverWalletPage() {
             )}
             */}
 
-            {/* Primary share button — hidden when program is paused */}
-            {referralConfig.isActive ? (
+            {/* Primary share button — hidden when program is paused
+                (fail-closed: also hidden while config is still loading) */}
+            {referralConfigLoading ? (
+              <div className="w-full py-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-center text-sm font-bold">
+                Checking referral program status…
+              </div>
+            ) : referralConfig.isActive ? (
               <Button
                 onClick={openReferralDialog}
                 className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-xl hover:shadow-emerald-600/20 transition inline-flex items-center justify-center gap-2 font-extrabold"

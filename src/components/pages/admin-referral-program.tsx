@@ -909,20 +909,21 @@ export default function AdminReferralProgramPage() {
                   {/* Use config?.isActive (the actual DB state from the query)
                       to avoid showing a stale "Active" flash before the query
                       loads (formIsActive defaults to true in useState).
-                      Reflects the Referrer Type Toggles below too — a master
-                      switch that is ON does NOT mean codes are accepted when
-                      every referrer flow is off (public resolve + apply
-                      endpoints AND isActive with the per-flow toggle). */}
+                      Written in signup-door language: the Referrer Type
+                      Toggles below control which signup buttons appear on
+                      the public invite page — the invite page is only
+                      "paused" when the master switch is off or BOTH toggles
+                      are off (server matches: publicResolveReferralCode). */}
                   {config
                     ? (!formIsActive
                         ? 'Paused — referrals are off for ALL roles (drivers + customers)'
                         : !formDriverReferralsEnabled && !formCustomerReferralsEnabled
-                          ? 'Active, but no referral doors are open — both referrer flows are disabled below, so NO new codes are accepted'
+                          ? 'Active, but all signup buttons are hidden — both toggles below are off, so no referral codes are accepted'
                           : !formDriverReferralsEnabled
-                            ? 'Active — but DRIVER referrals are disabled below: only customer-shared codes are accepted'
+                            ? 'Active — but the driver signup button is hidden (toggles below): only customer signups are accepted'
                             : !formCustomerReferralsEnabled
-                              ? 'Active — but CUSTOMER referrals are disabled below: only driver-shared codes are accepted'
-                              : 'Active — everyone can refer & earn: drivers, private customers and dealers')
+                              ? 'Active — but the customer & dealer signup buttons are hidden (toggles below): only driver signups are accepted'
+                              : 'Active — all referral signup doors are open for drivers, private customers and dealers')
                     : 'Loading…'}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
@@ -1367,36 +1368,43 @@ export default function AdminReferralProgramPage() {
                 </p>
               </div>
 
-              {/* Referrer-type enable toggles — independent of the master
-                  isActive flag. Lets the admin enable customer referrals
-                  while keeping driver referrals disabled (or vice versa). */}
+              {/* Referrer Type Toggles — control which signup buttons appear
+                  on the public invite page (/test-referral/:code). The who-
+                  refers-whom matrix above decides WHICH referrer roles may
+                  refer which targets; THESE switches are the global on/off
+                  for each signup door. Independent of the master isActive
+                  flag: when unpaused but one is off, only that door's
+                  button is hidden and codes of that type are rejected at
+                  signup. The invite page is only "paused" when the master
+                  switch is off or BOTH of these are off. */}
               <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                  Referrer Type Toggles
+                  Signup Buttons on the Invite Page
                 </Label>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Independently enable/disable driver vs customer referrer flows.
-                  When the master program is paused (isActive=false), no new
-                  referrals of either type are accepted. When unpaused but one
-                  of these is off, only the enabled type accepts new codes.
+                  Control the signup buttons shown under the referral invite
+                  page (/test-referral/:code). Turning one off hides that
+                  button and rejects codes used on that signup form; the
+                  invite page itself only shows the "paused" warning when
+                  the master program is paused or both of these are off.
                 </p>
 
                 {/* Driver referrals toggle */}
                 <div className="flex items-center gap-4 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
                   <div className="flex-1 min-w-0">
                     <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                      Driver → Driver referrals
+                      Driver signups via referral
                     </Label>
                     <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
                       {formDriverReferralsEnabled
-                        ? 'Enabled — drivers can refer other drivers'
-                        : 'Disabled — driver referral codes are rejected at signup'}
+                        ? 'Enabled — the \u201cBecome a Driver\u201d button shows on the invite page'
+                        : 'Disabled — the \u201cBecome a Driver\u201d button is hidden; driver codes are rejected at signup'}
                     </p>
                   </div>
                   <Switch
                     checked={formDriverReferralsEnabled}
                     onCheckedChange={setFormDriverReferralsEnabled}
-                    aria-label="Toggle driver referrals"
+                    aria-label="Toggle driver signups via referral"
                   />
                 </div>
 
@@ -1404,18 +1412,18 @@ export default function AdminReferralProgramPage() {
                 <div className="flex items-center gap-4 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30">
                   <div className="flex-1 min-w-0">
                     <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                      Customer → Customer / Driver referrals
+                      Customer signups via referral (personal + business)
                     </Label>
                     <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
                       {formCustomerReferralsEnabled
-                        ? 'Enabled — dealers + private customers can refer'
-                        : 'Disabled — customer referral codes are rejected at signup'}
+                        ? 'Enabled — the \u201cSign up as a Customer\u201d and \u201cSign up as a Dealer\u201d buttons show on the invite page'
+                        : 'Disabled — customer & dealer signup buttons are hidden; customer codes are rejected at signup'}
                     </p>
                   </div>
                   <Switch
                     checked={formCustomerReferralsEnabled}
                     onCheckedChange={setFormCustomerReferralsEnabled}
-                    aria-label="Toggle customer referrals"
+                    aria-label="Toggle customer signups via referral"
                   />
                 </div>
               </div>

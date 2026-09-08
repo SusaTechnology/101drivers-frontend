@@ -8,14 +8,18 @@
  * redirecting to a signup form.
  *
  * Three signup CTAs (matching the 3 user types) — WHICH buttons render
- * is decided by the backend's CONFIG-DRIVEN role matrix
- * (referralRoleMatrix — single source of truth, admin-tunable),
- * delivered pre-computed in the resolve response as `allows`:
- *   - "Become a Driver"     → /driver-onboarding?ref=CODE   (needs allows.DRIVER)
- *   - "Sign up as a Dealer"  → /auth/dealer-signup?ref=CODE (needs allows.BUSINESS)
- *   - "Sign up as a Customer" → /auth/individual-signup?ref=CODE (needs allows.PERSONAL)
- * The apply endpoints enforce the same matrix server-side, so the
- * hidden doors can never be bypassed with a hand-typed ?ref= URL.
+ * comes pre-computed from the backend as `signupDoors` on the resolve
+ * response: flow switch (driverReferralsEnabled / customerReferralsEnabled)
+ * AND role-matrix cell per door:
+ *   - "Become a Driver"      → /driver-onboarding?ref=CODE       (needs signupDoors.DRIVER)
+ *   - "Sign up as a Dealer"   → /auth/dealer-signup?ref=CODE    (needs signupDoors.BUSINESS)
+ *   - "Sign up as a Customer" → /auth/individual-signup?ref=CODE (needs signupDoors.PERSONAL)
+ * The apply endpoints enforce the same switches + matrix server-side, so
+ * the hidden doors can never be bypassed with a hand-typed ?ref= URL.
+ *
+ * The page-level paused warning comes from `programActive` — true unless
+ * the master switch is off or BOTH flow switches are off. A single
+ * disabled flow just hides its own buttons; it must NOT pause the page.
  *
  * The referral code is passed via the ?ref= query parameter, which the
  * ReferralCodeInput component auto-fills on mount in each signup form.
@@ -46,9 +50,12 @@ type ResolveResponse = {
   referrerName: string | null;
   referrerType: "DRIVER" | "CUSTOMER" | null;
   referrerSubtype: "PERSONAL" | "BUSINESS" | null;
+  /** Page-level verdict: false only when master off or BOTH flow switches off. */
   programActive: boolean;
-  /** V3.1: config-driven role matrix row — which doors this referrer may open. */
+  /** V3.1: pure role-matrix row for this referrer (server-side enforcement mirror). */
   allows: { DRIVER: boolean; PERSONAL: boolean; BUSINESS: boolean } | null;
+  /** Effective signup-button visibility: flow switch AND matrix cell per door. */
+  signupDoors?: { DRIVER: boolean; PERSONAL: boolean; BUSINESS: boolean } | null;
 };
 
 type Props = {
@@ -85,13 +92,15 @@ export default function TestReferralPage({ code }: Props) {
     [upperCode],
   );
 
-  // ── V3.1: which signup doors this referrer's role may open — comes
-  // pre-computed from the backend's config-driven role matrix
-  // (referralRoleMatrix). Missing allows (old cache) → show all doors.
-  const allows = data?.found ? data.allows : null;
-  const canReferDriver = allows ? allows.DRIVER : true;
-  const canReferDealer = allows ? allows.BUSINESS : true;
-  const canReferIndividual = allows ? allows.PERSONAL : true;
+  // ── Which signup doors are effectively open — pre-computed by the
+  // backend as flow switch AND matrix cell per door (signupDoors).
+  // Fallback chain: signupDoors (current) → allows (older backend,
+  // matrix-only) → all doors (old cache). The page-level warning is
+  // separate: programActive only goes false when EVERYTHING is closed.
+  const doors = data?.found ? (data.signupDoors ?? data.allows) : null;
+  const canReferDriver = doors ? doors.DRIVER : true;
+  const canReferDealer = doors ? doors.BUSINESS : true;
+  const canReferIndividual = doors ? doors.PERSONAL : true;
   const doorCount = [canReferDriver, canReferDealer, canReferIndividual].filter(Boolean).length;
 
   // ── SEO meta — these public referral pages are shareable but
@@ -183,23 +192,17 @@ export default function TestReferralPage({ code }: Props) {
               </div>
             )}
 
-            {/* ── Paused warning (code found but program paused) ──
-                Role-aware: the backend ANDs the master switch with the
-                per-flow toggle for this referrer's type (isActive &&
-                driverReferralsEnabled / customerReferralsEnabled), so the
-                master switch can be ON and the code still won't apply.
-                Naming the paused FLOW tells the sharer + admin exactly
-                which toggle to flip instead of implying the whole program
-                is off. */}
+            {/* ── Paused warning (code found but every signup door is closed) ──
+                programActive=false ONLY when the master switch is off or
+                BOTH flow switches are off — a single disabled flow just
+                hides its own buttons, it never pauses this page. */}
             {data?.found && !data.programActive && (
               <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 flex gap-3 items-start">
                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-                  {data.referrerType === "DRIVER"
-                    ? "Driver referrals are currently paused. You can still sign up, but the referral code won't be applied to your account. Check back later or contact the person who shared this code with you."
-                    : data.referrerType === "CUSTOMER"
-                      ? "Customer referrals are currently paused. You can still sign up, but the referral code won't be applied to your account. Check back later or contact the person who shared this code with you."
-                      : "The referral program is currently paused. You can still sign up, but the referral code won't be applied to your account. Check back later or contact the person who shared this code with you."}
+                  The referral program is currently paused. You can still sign up,
+                  but the referral code won't be applied to your account.
+                  Check back later or contact the person who shared this code with you.
                 </p>
               </div>
             )}
@@ -234,10 +237,10 @@ export default function TestReferralPage({ code }: Props) {
               </div>
             )}
 
-            {/* ── CTAs ── V3.1: the doors this referrer's role may open.
-                Which buttons render comes straight from the backend's
-                config-driven role matrix (`allows` on the resolve
-                response) — buttons ARE the matrix, visually. */}
+            {/* ── CTAs ── the signup doors still open for this referrer.
+                Which buttons render comes pre-computed from the backend
+                (`signupDoors` = flow switch AND matrix cell per door on
+                the resolve response) — buttons ARE the config, visually. */}
             {data?.found ? (
               <div className="space-y-3 pt-2">
                 {doorCount > 0 ? (
