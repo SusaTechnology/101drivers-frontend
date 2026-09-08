@@ -200,7 +200,68 @@ function ReadOnlyPricingSummary({
   customer: AdminUserCustomerDetail;
   config: AdminUserCustomerPricingConfig | null;
 }) {
+  // Personal (PRIVATE) customers can never be assigned a custom config —
+  // the backend rejects it ("Custom pricing assignment is only allowed for
+  // BUSINESS customers") — so they are ALWAYS priced by the system default
+  // config. Fetch the configs to show WHICH default applies and whether
+  // it is the flat rate (the default is kept on Flat Pricing so personal
+  // customers get the advertised flat rate).
+  const isPersonal = customer.customerType === 'PRIVATE';
+  const { data: allConfigs } = usePricingConfigs({
+    enabled: isPersonal && !config,
+  });
+  const systemDefault = allConfigs?.find((c) => c.isDefault && c.active) ?? null;
+  const defaultIsFlat = systemDefault?.pricingMode === 'PER_MILE';
+
   if (!config) {
+    if (isPersonal) {
+      const warnsNotFlat = systemDefault != null && !defaultIsFlat;
+      return (
+        <div
+          className={cn(
+            'flex items-center gap-3 p-4 rounded-2xl border',
+            warnsNotFlat
+              ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30'
+              : 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30'
+          )}
+        >
+          {warnsNotFlat ? (
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+          ) : (
+            <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+          )}
+          <div>
+            <div
+              className={cn(
+                'text-sm font-bold',
+                warnsNotFlat
+                  ? 'text-amber-800 dark:text-amber-300'
+                  : 'text-green-800 dark:text-green-300'
+              )}
+            >
+              Priced by the system default config
+            </div>
+            <div
+              className={cn(
+                'text-xs mt-0.5',
+                warnsNotFlat
+                  ? 'text-amber-700 dark:text-amber-400'
+                  : 'text-green-700 dark:text-green-400'
+              )}
+            >
+              Personal customers are always priced by the system default
+              pricing config
+              {systemDefault
+                ? defaultIsFlat
+                  ? ` — "${systemDefault.name}" is a Flat Pricing config, so personal customers get the flat rate.`
+                  : ` — but the current default ("${systemDefault.name}") uses Category A/B/C pricing instead of the flat rate.`
+                : '.'}{' '}
+              Billing is per delivery.
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
         <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />

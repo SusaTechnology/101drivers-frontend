@@ -488,6 +488,14 @@ export function PricingConfigList({
   const [bulkNote, setBulkNote] = useState<string>('');
   const [bulkResult, setBulkResult] = useState<BulkAssignPricingResponse | null>(null);
 
+  // "Set as Default" confirmation for NON-flat configs. Personal customers
+  // can never be assigned a custom config (backend rejects non-BUSINESS),
+  // so the system default config IS what every personal customer pays with.
+  // Promoting a Category A/B/C config to default therefore changes what
+  // personal customers pay — confirm first. Flat (PER_MILE) configs are
+  // promoted directly, no friction on the correct path.
+  const [pendingDefaultConfig, setPendingDefaultConfig] = useState<PricingConfig | null>(null);
+
   // State for view customers modal
   const [viewCustomersModalOpen, setViewCustomersModalOpen] = useState(false);
   const [viewingConfigCustomers, setViewingConfigCustomers] = useState<PricingCustomer[]>([]);
@@ -654,13 +662,24 @@ export function PricingConfigList({
     setBulkResult(null);
   };
 
-  // Handle set as default
-  const handleSetDefault = (configId: string) => {
+  // Handle set as default — personal customers are ALWAYS priced by the
+  // system default config, so keep them on the flat rate by asking for
+  // confirmation before promoting a NON-flat (Category A/B/C) config.
+  const confirmSetDefault = (configId: string) => {
     const user = getUser();
     setDefaultMutation.mutate({
       id: configId,
       actorUserId: user?.id || 'admin_user',
     });
+  };
+
+  const handleSetDefault = (configId: string) => {
+    const target = configs.find((c) => c.id === configId) ?? null;
+    if (target && target.pricingMode !== 'PER_MILE') {
+      setPendingDefaultConfig(target);
+      return;
+    }
+    confirmSetDefault(configId);
   };
 
   // Handle duplicate — copy all fields from the source config, force
@@ -933,6 +952,40 @@ export function PricingConfigList({
                             {React.createElement(modeBadgeStyles[selectedConfig.pricingMode].icon, { className: "w-4 h-4" })}
                             {modeBadgeStyles[selectedConfig.pricingMode].label}
                           </Badge>
+                        </div>
+                      </div>
+
+                      {/* Personal-default policy hint — personal (non-business)
+                          customers can never be assigned a custom config, so
+                          the system default config IS their pricing. Keep a
+                          Flat Pricing config as default to give them the
+                          advertised flat rate. */}
+                      <div
+                        className={cn(
+                          "flex items-start gap-2.5 p-3.5 rounded-xl border text-xs leading-relaxed",
+                          selectedConfig.isDefault && selectedConfig.pricingMode !== 'PER_MILE'
+                            ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-300"
+                            : selectedConfig.isDefault
+                            ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30 text-green-800 dark:text-green-300"
+                            : "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                        )}
+                      >
+                        {selectedConfig.isDefault && selectedConfig.pricingMode !== 'PER_MILE' ? (
+                          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                        ) : selectedConfig.isDefault ? (
+                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                        ) : (
+                          <Users className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <span className="font-bold">
+                            Personal customers are always priced by the default config.
+                          </span>{' '}
+                          {selectedConfig.isDefault
+                            ? selectedConfig.pricingMode === 'PER_MILE'
+                              ? 'This is a Flat Pricing config, so personal customers get the flat rate.'
+                              : 'This default is NOT flat — personal customers get Category A/B/C pricing instead of the flat rate. Prefer a Flat Pricing config as the default.'
+                            : 'Set a Flat Pricing config as the default so personal customers get the flat rate.'}
                         </div>
                       </div>
 
@@ -1492,6 +1545,45 @@ export function PricingConfigList({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Set-as-default confirmation for NON-flat configs — personal
+          customers are always priced by the default config, so promoting
+          a Category A/B/C config changes what personal customers pay.
+          To re-enable frictionless set-default for all modes: make
+          handleSetDefault call confirmSetDefault directly. */}
+      <AlertDialog
+        open={pendingDefaultConfig !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDefaultConfig(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Set &ldquo;{pendingDefaultConfig?.name}&rdquo; as default?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Personal customers are always priced by the system default
+              config. &ldquo;{pendingDefaultConfig?.name}&rdquo; uses Category A/B/C
+              pricing, so personal customers would no longer get the flat
+              rate. Use a Flat Pricing config as the default to keep personal
+              customers on the flat rate.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const id = pendingDefaultConfig?.id;
+                setPendingDefaultConfig(null);
+                if (id) confirmSetDefault(id);
+              }}
+            >
+              Set as Default
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
