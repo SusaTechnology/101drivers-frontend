@@ -173,7 +173,17 @@ export default function TestReferralPage({ code }: Props) {
             color: #0f172a !important;
             min-height: 0 !important;
             padding: 0 !important;
-            display: block !important;
+            /* Center the WHOLE wrapper — symmetric side margins on paper
+               (screen uses flex centering; print re-applies it here) */
+            display: flex !important;
+            justify-content: center !important;
+            align-items: flex-start !important;
+          }
+          /* Safety net: even if the layout flips back to block, the
+             content column still centers with equal left/right margins */
+          .print-referral-root > div {
+            margin-left: auto !important;
+            margin-right: auto !important;
           }
           .print-referral-root * {
             -webkit-print-color-adjust: exact;
