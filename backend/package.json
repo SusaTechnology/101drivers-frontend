@@ -10,6 +10,7 @@
     "seed": "ts-node scripts/seed.ts",
     "seed:referral": "ts-node scripts/seed-referral-settings.ts",
     "referral:backfill": "ts-node scripts/backfill-referral-payouts.ts",
+    "pricing:backfill-personal-flat": "ts-node scripts/backfill-personal-flat-pricing.ts",
     "db:migrate-save": "prisma migrate dev",
     "db:migrate-up": "prisma migrate deploy",
     "db:clean": "prisma migrate reset",
