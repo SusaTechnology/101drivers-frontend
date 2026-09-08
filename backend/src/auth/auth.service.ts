@@ -802,6 +802,11 @@ export class AuthService {
         },
       );
 
+      // ── Auto-assign Flat Pricing at registration ──────────
+      // Every new personal customer starts on Flat Pricing no matter what
+      // the default config is; admins can reassign later. Non-blocking.
+      await this.autoAssignPersonalFlatPricing(customerId);
+
       // ── Apply referral code if provided ────────────────────────────
       // Outside the transaction — non-blocking. Mirrors the driver signup
       // flow: invalid/expired/paused codes are silently skipped. The
@@ -893,6 +898,11 @@ export class AuthService {
         };
       },
     );
+
+    // ── Auto-assign Flat Pricing at registration ──────────
+    // Every new personal customer starts on Flat Pricing no matter what
+    // the default config is; admins can reassign later. Non-blocking.
+    await this.autoAssignPersonalFlatPricing(customerId);
 
     // ── Apply referral code if provided (legacy path) ──
     if (dto.referralCode && customerId) {
@@ -1315,6 +1325,77 @@ export class AuthService {
   private generateUsernameFromEmail(email: string): string {
     const base = email.split("@")[0].replace(/[^a-zA-Z0-9._-]/g, "");
     return `${base}_${Date.now()}`;
+  }
+
+  /**
+   * Auto-assign the active Flat Pricing (PER_MILE) config to a newly
+   * registered PERSONAL customer — no matter what the system default
+   * config is.
+   *
+   * Preference order:
+   *   1. the system default config — but only when it is an ACTIVE flat
+   *      config;
+   *   2. otherwise the most recently created active flat config.
+   * When no active flat config exists the customer is left unassigned and
+   * pricing falls back to the system default resolution.
+   *
+   * Non-blocking by contract: everything is wrapped in try/catch and only
+   * logged — a missing config or a race must never break account creation.
+   * Admins can reassign any config later via the admin pricing UI.
+   */
+  private async autoAssignPersonalFlatPricing(customerId: string): Promise<void> {
+    try {
+      // 1) System default — only if it is an ACTIVE FLAT config.
+      const defaultFlat = await this.prisma.pricingConfig.findFirst({
+        where: { active: true, isDefault: true, pricingMode: "PER_MILE" },
+        select: { id: true },
+      });
+
+      let flatConfigId: string | null = defaultFlat?.id ?? null;
+
+      // 2) Otherwise the most recently created active flat config.
+      if (!flatConfigId) {
+        const latestFlat = await this.prisma.pricingConfig.findFirst({
+          where: { active: true, pricingMode: "PER_MILE" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        });
+        flatConfigId = latestFlat?.id ?? null;
+      }
+
+      if (!flatConfigId) {
+        this.logger.warn(
+          `No active Flat Pricing config found — new personal customer ${customerId} stays on the system default config`
+        );
+        return;
+      }
+
+      await this.prisma.customer.update({
+        where: { id: customerId },
+        data: { pricingConfig: { connect: { id: flatConfigId } } },
+      });
+
+      // Audit trail — mirrors the auto-approve pattern (actorType=SYSTEM,
+      // no admin actor) so "why does this personal customer have this
+      // config?" is always answerable.
+      await this.prisma.adminAuditLog.create({
+        data: {
+          action: EnumAdminAuditLogAction.PRICING_UPDATE,
+          actorUserId: null,
+          actorType: EnumAdminAuditLogActorType.SYSTEM,
+          customerId,
+          reason: "Auto-assigned Flat Pricing config at registration",
+        },
+      });
+
+      this.logger.log(
+        `Auto-assigned flat pricing config ${flatConfigId} to new personal customer ${customerId}`
+      );
+    } catch (err: any) {
+      this.logger.warn(
+        `Flat pricing auto-assign failed for personal customer ${customerId}: ${err?.message}`
+      );
+    }
   }
 
   private async ensureEmailDoesNotExist(email: string) {

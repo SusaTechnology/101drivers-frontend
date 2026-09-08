@@ -8,6 +8,8 @@ import {
   forwardRef,
 } from "@nestjs/common";
 import {
+  EnumAdminAuditLogAction,
+  EnumAdminAuditLogActorType,
   EnumCustomerApprovalStatus,
   EnumCustomerCustomerType,
   EnumDeliveryRequestCreatedByRole,
@@ -1838,6 +1840,11 @@ private async resolveIndividualCustomerForCreate(
       },
     });
 
+    // Auto-assign Flat Pricing at registration (non-blocking) — every new
+    // personal customer starts on Flat Pricing no matter what the default
+    // config is; admins can reassign later.
+    await this.autoAssignPersonalFlatPricing(createdCustomer.id);
+
     return {
       kind: "READY",
       customer: createdCustomer,
@@ -1930,11 +1937,85 @@ private async resolveIndividualCustomerForCreate(
     },
   });
 
+  // Auto-assign Flat Pricing at registration (non-blocking) — every new
+  // personal customer starts on Flat Pricing no matter what the default
+  // config is; admins can reassign later.
+  await this.autoAssignPersonalFlatPricing(customer.id);
+
   return {
     kind: "READY",
     customer,
   };
 }
+
+  /**
+   * Auto-assign the active Flat Pricing (PER_MILE) config to a newly
+   * created PERSONAL customer — no matter what the system default config
+   * is. Mirrors the signup behavior in AuthService so EVERY personal
+   * customer starts on Flat Pricing regardless of which flow created the
+   * account (signup or individual delivery request).
+   *
+   * Preference order: the system default config if it is an ACTIVE flat
+   * config, otherwise the most recently created active flat config. When
+   * none exists the customer stays unassigned (system default fallback).
+   *
+   * Non-blocking by contract: wrapped in try/catch and only logged — must
+   * never break the delivery-request flow. Admins can reassign later.
+   */
+  private async autoAssignPersonalFlatPricing(customerId: string): Promise<void> {
+    const logger = new Logger(DeliveryRequestOrchestratorService.name);
+    try {
+      // 1) System default — only if it is an ACTIVE FLAT config.
+      const defaultFlat = await this.prisma.pricingConfig.findFirst({
+        where: { active: true, isDefault: true, pricingMode: "PER_MILE" },
+        select: { id: true },
+      });
+
+      let flatConfigId: string | null = defaultFlat?.id ?? null;
+
+      // 2) Otherwise the most recently created active flat config.
+      if (!flatConfigId) {
+        const latestFlat = await this.prisma.pricingConfig.findFirst({
+          where: { active: true, pricingMode: "PER_MILE" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        });
+        flatConfigId = latestFlat?.id ?? null;
+      }
+
+      if (!flatConfigId) {
+        logger.warn(
+          `No active Flat Pricing config found — new personal customer ${customerId} stays on the system default config`
+        );
+        return;
+      }
+
+      await this.prisma.customer.update({
+        where: { id: customerId },
+        data: { pricingConfig: { connect: { id: flatConfigId } } },
+      });
+
+      // Audit trail — actorType=SYSTEM so "why does this personal customer
+      // have this config?" is always answerable.
+      await this.prisma.adminAuditLog.create({
+        data: {
+          action: EnumAdminAuditLogAction.PRICING_UPDATE,
+          actorUserId: null,
+          actorType: EnumAdminAuditLogActorType.SYSTEM,
+          customerId,
+          reason: "Auto-assigned Flat Pricing config at registration",
+        },
+      });
+
+      logger.log(
+        `Auto-assigned flat pricing config ${flatConfigId} to new personal customer ${customerId}`
+      );
+    } catch (err: any) {
+      logger.warn(
+        `Flat pricing auto-assign failed for personal customer ${customerId}: ${err?.message}`
+      );
+    }
+  }
 
   private generateIndividualPin(): string {
     return String(Math.floor(1000 + Math.random() * 9000));

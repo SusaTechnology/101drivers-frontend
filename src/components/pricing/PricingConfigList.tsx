@@ -488,14 +488,6 @@ export function PricingConfigList({
   const [bulkNote, setBulkNote] = useState<string>('');
   const [bulkResult, setBulkResult] = useState<BulkAssignPricingResponse | null>(null);
 
-  // "Set as Default" confirmation for NON-flat configs. Personal customers
-  // can never be assigned a custom config (backend rejects non-BUSINESS),
-  // so the system default config IS what every personal customer pays with.
-  // Promoting a Category A/B/C config to default therefore changes what
-  // personal customers pay — confirm first. Flat (PER_MILE) configs are
-  // promoted directly, no friction on the correct path.
-  const [pendingDefaultConfig, setPendingDefaultConfig] = useState<PricingConfig | null>(null);
-
   // State for view customers modal
   const [viewCustomersModalOpen, setViewCustomersModalOpen] = useState(false);
   const [viewingConfigCustomers, setViewingConfigCustomers] = useState<PricingCustomer[]>([]);
@@ -545,10 +537,10 @@ export function PricingConfigList({
     staleTime: 30 * 1000,
   });
 
-  // Filter customers to only BUSINESS
-  const businessCustomers = customersData?.filter(
-    (c) => c.customerType === 'BUSINESS'
-  ) || [];
+  // Assignable customers — BOTH types. Personal customers are auto-assigned
+  // a Flat Pricing config at registration; admins can reassign any config
+  // (single or bulk) afterwards. Billing stays per-delivery for personal.
+  const assignableCustomers = customersData || [];
 
   // Mutation for assignment
   const assignMutation = useDataMutation<any, any>({
@@ -662,24 +654,13 @@ export function PricingConfigList({
     setBulkResult(null);
   };
 
-  // Handle set as default — personal customers are ALWAYS priced by the
-  // system default config, so keep them on the flat rate by asking for
-  // confirmation before promoting a NON-flat (Category A/B/C) config.
-  const confirmSetDefault = (configId: string) => {
+  // Handle set as default
+  const handleSetDefault = (configId: string) => {
     const user = getUser();
     setDefaultMutation.mutate({
       id: configId,
       actorUserId: user?.id || 'admin_user',
     });
-  };
-
-  const handleSetDefault = (configId: string) => {
-    const target = configs.find((c) => c.id === configId) ?? null;
-    if (target && target.pricingMode !== 'PER_MILE') {
-      setPendingDefaultConfig(target);
-      return;
-    }
-    confirmSetDefault(configId);
   };
 
   // Handle duplicate — copy all fields from the source config, force
@@ -734,7 +715,7 @@ export function PricingConfigList({
 
   // Get customer info for display in assignment modal
   const getCustomerCurrentConfig = (customerId: string): { name: string; id: string } | null => {
-    const customer = businessCustomers.find(c => c.id === customerId);
+    const customer = assignableCustomers.find(c => c.id === customerId);
     if (!customer || !customer.pricingConfigId) return null;
     const currentConfig = configs.find(c => c.id === customer.pricingConfigId);
     if (!currentConfig) return null;
@@ -955,37 +936,19 @@ export function PricingConfigList({
                         </div>
                       </div>
 
-                      {/* Personal-default policy hint — personal (non-business)
-                          customers can never be assigned a custom config, so
-                          the system default config IS their pricing. Keep a
-                          Flat Pricing config as default to give them the
-                          advertised flat rate. */}
-                      <div
-                        className={cn(
-                          "flex items-start gap-2.5 p-3.5 rounded-xl border text-xs leading-relaxed",
-                          selectedConfig.isDefault && selectedConfig.pricingMode !== 'PER_MILE'
-                            ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-300"
-                            : selectedConfig.isDefault
-                            ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30 text-green-800 dark:text-green-300"
-                            : "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
-                        )}
-                      >
-                        {selectedConfig.isDefault && selectedConfig.pricingMode !== 'PER_MILE' ? (
-                          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                        ) : selectedConfig.isDefault ? (
-                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                        ) : (
-                          <Users className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                        )}
+                      {/* Personal-pricing policy — new personal customers are
+                          auto-assigned a Flat Pricing config at registration
+                          (no matter what the default is) and admins can
+                          reassign any config afterwards. */}
+                      <div className="flex items-start gap-2.5 p-3.5 rounded-xl border bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
+                        <Users className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                         <div>
-                          <span className="font-bold">
-                            Personal customers are always priced by the default config.
+                          <span className="font-bold text-slate-700 dark:text-slate-300">
+                            New personal customers are auto-assigned a Flat Pricing config at registration.
                           </span>{' '}
-                          {selectedConfig.isDefault
-                            ? selectedConfig.pricingMode === 'PER_MILE'
-                              ? 'This is a Flat Pricing config, so personal customers get the flat rate.'
-                              : 'This default is NOT flat — personal customers get Category A/B/C pricing instead of the flat rate. Prefer a Flat Pricing config as the default.'
-                            : 'Set a Flat Pricing config as the default so personal customers get the flat rate.'}
+                          This happens no matter what the default config is. Admins can
+                          reassign a different config to any customer at any time
+                          (single or bulk assign).
                         </div>
                       </div>
 
@@ -1152,7 +1115,7 @@ export function PricingConfigList({
           <DialogHeader>
             <DialogTitle>Assign Pricing Configuration</DialogTitle>
             <DialogDescription>
-              Assign &ldquo;{selectedConfigName}&rdquo; to a business customer.
+              Assign &ldquo;{selectedConfigName}&rdquo; to a customer.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1166,16 +1129,28 @@ export function PricingConfigList({
               ) : (
                 <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a business customer" />
+                    <SelectValue placeholder="Select a customer" />
                   </SelectTrigger>
                   <SelectContent>
-                    {businessCustomers.length === 0 ? (
-                      <SelectItem value="none" disabled>No business customers found</SelectItem>
+                    {assignableCustomers.length === 0 ? (
+                      <SelectItem value="none" disabled>No customers found</SelectItem>
                     ) : (
-                      businessCustomers.map((customer) => (
+                      assignableCustomers.map((customer) => (
                         <SelectItem key={customer.id} value={customer.id}>
                           <div className="flex flex-col">
-                            <span>{customer.businessName || customer.user.fullName}</span>
+                            <span className="flex items-center gap-2">
+                              {customer.businessName || customer.user.fullName}
+                              <span
+                                className={cn(
+                                  "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                                  customer.customerType === 'BUSINESS'
+                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                    : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                )}
+                              >
+                                {customer.customerType === 'BUSINESS' ? 'Business' : 'Personal'}
+                              </span>
+                            </span>
                             <span className="text-xs text-slate-500">{customer.user.email}</span>
                           </div>
                         </SelectItem>
@@ -1247,6 +1222,12 @@ export function PricingConfigList({
                   <SelectItem value="disable">Switch to per-delivery</SelectItem>
                 </SelectContent>
               </Select>
+              {selectedCustomerId &&
+                assignableCustomers.find((c) => c.id === selectedCustomerId)?.customerType === 'PRIVATE' && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                  Personal customer — always billed per delivery; enabling postpaid will be rejected.
+                </p>
+              )}
               <p className="text-xs text-slate-500">
                 Per-delivery is the default — personal customers are always billed per delivery.
                 Enabling postpaid here only flips the flag; the full safe switch (Stripe setup) is
@@ -1358,7 +1339,7 @@ export function PricingConfigList({
           <DialogHeader>
             <DialogTitle>Bulk Assign Pricing Configuration</DialogTitle>
             <DialogDescription>
-              Assign &ldquo;{selectedConfigName}&rdquo; to multiple business customers at once.
+              Assign &ldquo;{selectedConfigName}&rdquo; to multiple customers at once.
               {' '}{bulkSelectedCustomerIds.length} selected.
             </DialogDescription>
           </DialogHeader>
@@ -1381,7 +1362,7 @@ export function PricingConfigList({
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
                   <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Failures:</div>
                   {bulkResult.failed.map((f) => {
-                    const cust = businessCustomers.find((c) => c.id === f.customerId);
+                    const cust = assignableCustomers.find((c) => c.id === f.customerId);
                     return (
                       <div
                         key={f.customerId}
@@ -1408,30 +1389,30 @@ export function PricingConfigList({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">Select Customers</label>
-                  {businessCustomers.length > 0 && (
+                  {assignableCustomers.length > 0 && (
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-7 text-xs"
                       onClick={() => {
-                        if (bulkSelectedCustomerIds.length === businessCustomers.length) {
+                        if (bulkSelectedCustomerIds.length === assignableCustomers.length) {
                           setBulkSelectedCustomerIds([]);
                         } else {
-                          setBulkSelectedCustomerIds(businessCustomers.map((c) => c.id));
+                          setBulkSelectedCustomerIds(assignableCustomers.map((c) => c.id));
                         }
                       }}
                     >
-                      {bulkSelectedCustomerIds.length === businessCustomers.length ? 'Clear all' : 'Select all'}
+                      {bulkSelectedCustomerIds.length === assignableCustomers.length ? 'Clear all' : 'Select all'}
                     </Button>
                   )}
                 </div>
                 {customersLoading ? (
                   <Skeleton className="h-32 w-full" />
-                ) : businessCustomers.length === 0 ? (
-                  <p className="text-sm text-slate-500 py-4 text-center">No business customers found</p>
+                ) : assignableCustomers.length === 0 ? (
+                  <p className="text-sm text-slate-500 py-4 text-center">No customers found</p>
                 ) : (
                   <div className="max-h-[240px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-                    {businessCustomers.map((customer) => {
+                    {assignableCustomers.map((customer) => {
                       const isSelected = bulkSelectedCustomerIds.includes(customer.id);
                       const currentConfigName = getCustomerCurrentConfig(customer.id)?.name;
                       return (
@@ -1545,45 +1526,6 @@ export function PricingConfigList({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Set-as-default confirmation for NON-flat configs — personal
-          customers are always priced by the default config, so promoting
-          a Category A/B/C config changes what personal customers pay.
-          To re-enable frictionless set-default for all modes: make
-          handleSetDefault call confirmSetDefault directly. */}
-      <AlertDialog
-        open={pendingDefaultConfig !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingDefaultConfig(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Set &ldquo;{pendingDefaultConfig?.name}&rdquo; as default?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Personal customers are always priced by the system default
-              config. &ldquo;{pendingDefaultConfig?.name}&rdquo; uses Category A/B/C
-              pricing, so personal customers would no longer get the flat
-              rate. Use a Flat Pricing config as the default to keep personal
-              customers on the flat rate.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const id = pendingDefaultConfig?.id;
-                setPendingDefaultConfig(null);
-                if (id) confirmSetDefault(id);
-              }}
-            >
-              Set as Default
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

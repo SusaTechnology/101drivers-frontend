@@ -41,19 +41,23 @@ export class CustomerPricingEngine {
       throw new NotFoundException("Customer not found");
     }
 
-    if (customer.customerType !== EnumCustomerCustomerType.BUSINESS) {
-      throw new BadRequestException(
-        "Custom pricing assignment is only allowed for BUSINESS customers"
-      );
-    }
+    // Pricing configs can be assigned to BOTH customer types. Personal
+    // (PRIVATE) customers are auto-assigned the active Flat Pricing config
+    // at registration, and admins can reassign any config afterwards —
+    // the old "BUSINESS only" rejection was removed for that reason.
 
-    if (
-      input.postpaidEnabled === true &&
-      customer.approvalStatus !== EnumCustomerApprovalStatus.APPROVED
-    ) {
-      throw new BadRequestException(
-        "postpaidEnabled can only be enabled for APPROVED BUSINESS customers"
-      );
+    if (input.postpaidEnabled === true) {
+      if (customer.customerType !== EnumCustomerCustomerType.BUSINESS) {
+        throw new BadRequestException(
+          "postpaidEnabled can only be enabled for BUSINESS customers — personal customers are always billed per delivery"
+        );
+      }
+
+      if (customer.approvalStatus !== EnumCustomerApprovalStatus.APPROVED) {
+        throw new BadRequestException(
+          "postpaidEnabled can only be enabled for APPROVED BUSINESS customers"
+        );
+      }
     }
 
     if (input.pricingConfigId) {
