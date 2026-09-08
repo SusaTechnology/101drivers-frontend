@@ -469,8 +469,15 @@ export function PricingConfigList({
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedConfigName, setSelectedConfigName] = useState<string>('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  // Pricing Mode Override UI is HIDDEN per product decision (not necessary
+  // for now) — the state stays 'null' so the payload always sends null,
+  // which also clears any legacy override on save.
   const [pricingModeOverride, setPricingModeOverride] = useState<string>('null');
-  const [postpaidEnabled, setPostpaidEnabled] = useState<boolean>(true);
+  // Billing is tri-state: null = leave the customer's existing billing
+  // untouched. Per-delivery is the system default (new customers start
+  // per-delivery; PERSONAL customers are ALWAYS per-delivery — enforced
+  // backend-side). true/false = explicit admin change.
+  const [postpaidEnabled, setPostpaidEnabled] = useState<boolean | null>(null);
   const [note, setNote] = useState<string>('');
 
   // State for BULK assignment modal (Item 14)
@@ -544,7 +551,7 @@ export function PricingConfigList({
       setAssignModalOpen(false);
       setSelectedCustomerId('');
       setPricingModeOverride('null');
-      setPostpaidEnabled(true);
+      setPostpaidEnabled(null);
       setNote('');
     },
     onError: (error: any) => {
@@ -585,7 +592,10 @@ export function PricingConfigList({
     const payload = {
       pricingConfigId: selectedConfigId,
       pricingModeOverride: pricingModeOverride === 'null' ? null : pricingModeOverride,
-      postpaidEnabled,
+      // Tri-state — only send when the admin explicitly chose enable/disable.
+      // undefined is dropped in JSON, so the backend leaves billing untouched
+      // (per-delivery default) unless the admin changes it manually.
+      postpaidEnabled: postpaidEnabled === null ? undefined : postpaidEnabled,
       actorUserId: user?.id || 'admin_user',
       note: note.trim() || undefined,
     };
@@ -1139,7 +1149,12 @@ export function PricingConfigList({
               </div>
             )}
 
-            {/* Pricing Mode Override */}
+            {/* Pricing Mode Override — HIDDEN per product decision (not
+                necessary for now). The assigned config's own mode is used.
+                The state above stays 'null', so the payload always sends
+                null — which also clears any legacy override on save.
+                To re-enable: uncomment this block. */}
+            {/*
             <div className="space-y-2">
               <label className="text-sm font-medium">Pricing Mode Override</label>
               <Select value={pricingModeOverride} onValueChange={setPricingModeOverride}>
@@ -1156,20 +1171,34 @@ export function PricingConfigList({
                 Override the pricing mode for this customer. Leave as &ldquo;No override&rdquo; to use the configuration&rsquo;s mode.
               </p>
             </div>
+            */}
 
-            {/* Postpaid Enabled */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="postpaid"
-                checked={postpaidEnabled}
-                onCheckedChange={(checked) => setPostpaidEnabled(checked === true)}
-              />
-              <label
-                htmlFor="postpaid"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            {/* Billing — tri-state. Default "leave as-is": per-delivery is
+                the system default and PERSONAL customers are always
+                per-delivery (backend-enforced). Only an explicit admin
+                choice changes billing here. */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Billing (postpaid vs per-delivery)</label>
+              <Select
+                value={postpaidEnabled === null ? 'leave' : postpaidEnabled ? 'enable' : 'disable'}
+                onValueChange={(v) => {
+                  setPostpaidEnabled(v === 'leave' ? null : v === 'enable');
+                }}
               >
-                Postpaid Enabled
-              </label>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="leave">Leave as-is (per-delivery default)</SelectItem>
+                  <SelectItem value="enable">Enable postpaid (APPROVED BUSINESS only)</SelectItem>
+                  <SelectItem value="disable">Switch to per-delivery</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">
+                Per-delivery is the default — personal customers are always billed per delivery.
+                Enabling postpaid here only flips the flag; the full safe switch (Stripe setup) is
+                done via the Billing Mode card on the customer&apos;s detail page.
+              </p>
             </div>
 
             {/* Note */}
@@ -1384,7 +1413,11 @@ export function PricingConfigList({
                 )}
               </div>
 
-              {/* Pricing Mode Override */}
+              {/* Pricing Mode Override — HIDDEN per product decision (not
+                  necessary for now). The state stays 'null', so the bulk
+                  payload always sends null, clearing any legacy overrides.
+                  To re-enable: uncomment this block. */}
+              {/*
               <div className="space-y-2">
                 <label className="text-sm font-medium">Pricing Mode Override (applies to all)</label>
                 <Select value={bulkPricingModeOverride} onValueChange={setBulkPricingModeOverride}>
@@ -1398,6 +1431,7 @@ export function PricingConfigList({
                   </SelectContent>
                 </Select>
               </div>
+              */}
 
               {/* Postpaid — tri-state: null = leave existing, true = enable, false = disable */}
               <div className="space-y-2">
