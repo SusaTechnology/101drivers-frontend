@@ -908,11 +908,21 @@ export default function AdminReferralProgramPage() {
                 <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
                   {/* Use config?.isActive (the actual DB state from the query)
                       to avoid showing a stale "Active" flash before the query
-                      loads (formIsActive defaults to true in useState). */}
+                      loads (formIsActive defaults to true in useState).
+                      Reflects the Referrer Type Toggles below too — a master
+                      switch that is ON does NOT mean codes are accepted when
+                      every referrer flow is off (public resolve + apply
+                      endpoints AND isActive with the per-flow toggle). */}
                   {config
-                    ? (formIsActive
-                        ? 'Active — everyone can refer & earn: drivers, private customers and dealers'
-                        : 'Paused — referrals are off for ALL roles (drivers + customers)')
+                    ? (!formIsActive
+                        ? 'Paused — referrals are off for ALL roles (drivers + customers)'
+                        : !formDriverReferralsEnabled && !formCustomerReferralsEnabled
+                          ? 'Active, but no referral doors are open — both referrer flows are disabled below, so NO new codes are accepted'
+                          : !formDriverReferralsEnabled
+                            ? 'Active — but DRIVER referrals are disabled below: only customer-shared codes are accepted'
+                            : !formCustomerReferralsEnabled
+                              ? 'Active — but CUSTOMER referrals are disabled below: only driver-shared codes are accepted'
+                              : 'Active — everyone can refer & earn: drivers, private customers and dealers')
                     : 'Loading…'}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">

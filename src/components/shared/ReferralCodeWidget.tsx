@@ -346,11 +346,19 @@ export function ReferralCodeWidget({
       );
     }
     if (state === "paused") {
+      // Role-aware: backend ANDs the master switch with the per-flow
+      // toggle for this referrer's type — name the paused FLOW, not the
+      // whole program (master switch may well be ON).
+      const pausedCopy =
+        data?.referrerType === "DRIVER"
+          ? "Driver referrals are currently paused — this code is valid but won't be applied. You can still sign up."
+          : data?.referrerType === "CUSTOMER"
+            ? "Customer referrals are currently paused — this code is valid but won't be applied. You can still sign up."
+            : "This referral code is valid but the referral program is currently paused. You can still sign up — the code won't be applied.";
       return (
         <p className="flex items-start gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          This referral code is valid but the referral program is currently
-          paused. You can still sign up — the code won't be applied.
+          {pausedCopy}
         </p>
       );
     }

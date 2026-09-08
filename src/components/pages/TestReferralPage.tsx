@@ -183,14 +183,23 @@ export default function TestReferralPage({ code }: Props) {
               </div>
             )}
 
-            {/* ── Paused warning (code found but program paused) ── */}
+            {/* ── Paused warning (code found but program paused) ──
+                Role-aware: the backend ANDs the master switch with the
+                per-flow toggle for this referrer's type (isActive &&
+                driverReferralsEnabled / customerReferralsEnabled), so the
+                master switch can be ON and the code still won't apply.
+                Naming the paused FLOW tells the sharer + admin exactly
+                which toggle to flip instead of implying the whole program
+                is off. */}
             {data?.found && !data.programActive && (
               <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 flex gap-3 items-start">
                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-                  The referral program is currently paused. You can still sign up,
-                  but the referral code won't be applied to your account.
-                  Check back later or contact the person who shared this code with you.
+                  {data.referrerType === "DRIVER"
+                    ? "Driver referrals are currently paused. You can still sign up, but the referral code won't be applied to your account. Check back later or contact the person who shared this code with you."
+                    : data.referrerType === "CUSTOMER"
+                      ? "Customer referrals are currently paused. You can still sign up, but the referral code won't be applied to your account. Check back later or contact the person who shared this code with you."
+                      : "The referral program is currently paused. You can still sign up, but the referral code won't be applied to your account. Check back later or contact the person who shared this code with you."}
                 </p>
               </div>
             )}
