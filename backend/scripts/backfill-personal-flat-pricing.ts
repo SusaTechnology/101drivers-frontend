@@ -36,23 +36,38 @@ import * as dotenv from "dotenv";
 import {
   EnumAdminAuditLogAction,
   EnumAdminAuditLogActorType,
-  EnumPricingConfigPricingMode,
   PrismaClient,
 } from "@prisma/client";
 
-interface PersonalCustomerRow {
-  id: string;
-  pricingConfigId: string | null;
-  createdAt: Date;
-  user: { email: string; fullName: string } | null;
-  pricingConfig: {
-    id: string;
-    name: string | null;
-    pricingMode: EnumPricingConfigPricingMode;
-    isDefault: boolean;
-    active: boolean;
-  } | null;
+// The row type is DERIVED from the actual Prisma query rather than
+// hand-written, so the script compiles against any schema version of the
+// generated client (e.g. User.fullName is String? on some deployments and
+// String on others — a hand-written interface broke exactly on that).
+async function loadPersonalCustomers(prisma: PrismaClient) {
+  return prisma.customer.findMany({
+    where: { customerType: "PRIVATE" },
+    select: {
+      id: true,
+      pricingConfigId: true,
+      createdAt: true,
+      user: { select: { email: true, fullName: true } },
+      pricingConfig: {
+        select: {
+          id: true,
+          name: true,
+          pricingMode: true,
+          isDefault: true,
+          active: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
 }
+
+type PersonalCustomerRow = Awaited<
+  ReturnType<typeof loadPersonalCustomers>
+>[number];
 
 function label(row: PersonalCustomerRow): string {
   const name = row.user?.fullName ?? "(no name)";
@@ -108,25 +123,7 @@ async function main(): Promise<void> {
     console.log("─".repeat(72));
 
     // ── 2) Load every PERSONAL customer ──
-    const personal: PersonalCustomerRow[] = await prisma.customer.findMany({
-      where: { customerType: "PRIVATE" },
-      select: {
-        id: true,
-        pricingConfigId: true,
-        createdAt: true,
-        user: { select: { email: true, fullName: true } },
-        pricingConfig: {
-          select: {
-            id: true,
-            name: true,
-            pricingMode: true,
-            isDefault: true,
-            active: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "asc" },
-    });
+    const personal = await loadPersonalCustomers(prisma);
 
     const alreadyFlat = personal.filter((c) => c.pricingConfigId === flat!.id);
     const unassigned = personal.filter((c) => c.pricingConfigId === null);
