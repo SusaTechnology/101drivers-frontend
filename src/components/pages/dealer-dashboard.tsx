@@ -523,18 +523,23 @@ export default function DealerDashboard() {
           cap usage, and a frozen banner if the dealer's weekly charge
           failed. The panel polls /api/postpaid-billing/me/status every
           minute so changes (e.g. admin unfreeze, new invoice payment)
-          surface without a manual refresh. */}
+          surface without a manual refresh.
+          `collapsible` adds a collapse toggle (chevron in the panel
+          header) so the dealer can fold it to a one-line strip to save
+          screen space; the choice persists via localStorage and the
+          default is expanded. */}
       {customerProfile?.postpaidEnabled && dealerId && (
-        <PostpaidStatusPanel customerId={dealerId} />
+        <PostpaidStatusPanel customerId={dealerId} collapsible />
       )}
 
       {/* Referral code card — "Refer & Earn" with copy + QR + share URL.
           Renders only when dealerId is available (the user is logged in
           as a customer). The card internally fetches its own data + adapts
-          to the program being paused. */}
+          to the program being paused. `collapsible` adds a collapse
+          toggle so the dealer can fold it to a one-line strip. */}
       {dealerId && (
         <div className="px-4 pt-4 max-w-[980px] mx-auto">
-          <ReferralCodeCard referrerType="CUSTOMER" />
+          <ReferralCodeCard referrerType="CUSTOMER" collapsible />
         </div>
       )}
 

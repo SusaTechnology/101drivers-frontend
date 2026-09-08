@@ -24,6 +24,8 @@ import { toast } from 'sonner'
 import {
   AlertTriangle,
   CheckCircle,
+  ChevronDown,
+  ChevronUp,
   CreditCard,
   Calendar,
   DollarSign,
@@ -41,6 +43,7 @@ import {
   getResolutionButtonText,
   shouldShowDealer,
 } from '@/lib/stripe-error-codes'
+import { usePersistentCollapsed } from '@/hooks/usePersistentCollapsed'
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -73,8 +76,21 @@ interface PostpaidStatus {
   failedPayments: FailedPayment[]
 }
 
-export default function PostpaidStatusPanel({ customerId }: { customerId: string }) {
+export default function PostpaidStatusPanel({
+  customerId,
+  collapsible = false,
+}: {
+  customerId: string
+  /** Show a collapse toggle so the dealer can fold the panel away to
+   *  save screen space. Default false (always expanded). */
+  collapsible?: boolean
+}) {
   const [isRefreshing, setIsRefreshing] = useState(false)
+  // Persisted collapse state — default is expanded; the dealer's choice
+  // to hide the panel survives page reloads.
+  const [collapsed, toggleCollapsed] = usePersistentCollapsed(
+    'dealer-postpaid-panel-collapsed',
+  )
 
   const { data: status, isLoading, refetch } = useDataQuery<PostpaidStatus>({
     apiEndPoint: `${API_URL}/api/postpaid-billing/me/status`,
@@ -127,6 +143,64 @@ export default function PostpaidStatusPanel({ customerId }: { customerId: string
   // If failed payments exist but not frozen → amber "action needed" alert
   const isFrozen = status.billingFrozen
   const hasFailures = visibleFailedPayments.length > 0
+
+  // ── Status badges (shared) ──
+  // Rendered in the expanded header AND in the collapsed one-line strip
+  // so the live state (Restricted / Action needed / Active) stays
+  // glanceable even when the dealer has folded the panel away.
+  const statusBadges = (
+    <>
+      {isFrozen && <Badge variant="destructive">Restricted</Badge>}
+      {!isFrozen && hasFailures && (
+        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          Action needed
+        </Badge>
+      )}
+      {!isFrozen && !hasFailures && (
+        <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+          <CheckCircle className="w-3 h-3 mr-1" />
+          Active
+        </Badge>
+      )}
+      {!status.hasSavedPaymentMethod && (
+        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+          No card on file
+        </Badge>
+      )}
+    </>
+  )
+
+  // ── Collapsed one-line strip ──
+  // Folds away the alert banners, failed-charge list and balance grid to
+  // save screen space. The 60s status poll keeps running so the badges
+  // below stay live — a frozen/action-needed state is still visible.
+  if (collapsible && collapsed) {
+    return (
+      <div className="px-4 py-3">
+        <Card className="max-w-[980px] mx-auto border-slate-200 dark:border-slate-800 rounded-2xl">
+          <CardContent className="p-3">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-expanded={false}
+              title="Expand postpaid billing details"
+              className="w-full flex items-center gap-2 text-left group cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4 text-blue-500 shrink-0" />
+              <span className="text-sm font-bold text-slate-900 dark:text-white shrink-0">
+                Weekly Postpaid
+              </span>
+              {statusBadges}
+              <span className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0">
+                Show
+                <ChevronDown className="w-4 h-4" />
+              </span>
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="px-4 py-3 space-y-2">
@@ -286,40 +360,36 @@ export default function PostpaidStatusPanel({ customerId }: { customerId: string
                 <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                   Weekly Postpaid
                 </Badge>
-                {isFrozen && (
-                  <Badge variant="destructive">Restricted</Badge>
-                )}
-                {!isFrozen && hasFailures && (
-                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                    Action needed
-                  </Badge>
-                )}
-                {!isFrozen && !hasFailures && (
-                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Active
-                  </Badge>
-                )}
-                {!status.hasSavedPaymentMethod && (
-                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                    No card on file
-                  </Badge>
+                {statusBadges}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing}
+                  className="h-7 text-xs"
+                >
+                  {isRefreshing ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  <span className="ml-1">Refresh</span>
+                </Button>
+                {collapsible && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleCollapsed}
+                    aria-expanded={true}
+                    title="Collapse postpaid billing panel"
+                    className="h-7 w-7 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </Button>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleManualRefresh}
-                disabled={isRefreshing}
-                className="h-7 text-xs"
-              >
-                {isRefreshing ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3" />
-                )}
-                <span className="ml-1">Refresh</span>
-              </Button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

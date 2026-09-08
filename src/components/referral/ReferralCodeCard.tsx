@@ -24,13 +24,14 @@
  *     customer doesn't have one yet)
  */
 import { useState, useCallback, useMemo } from "react";
-import { Gift, Copy, Share2, X, Check, ExternalLink, Settings2 } from "lucide-react";
+import { Gift, Copy, Share2, X, Check, ExternalLink, Settings2, ChevronDown, ChevronUp } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useDataQuery } from "@/lib/tanstack/dataQuery";
+import { usePersistentCollapsed } from "@/hooks/usePersistentCollapsed";
 import { cn } from "@/lib/utils";
 import { CustomizeCodeDialog } from "./CustomizeCodeDialog";
 
@@ -43,6 +44,10 @@ type Props = {
   referrerType: ReferrerType;
   /** Optional className to override the outer wrapper. */
   className?: string;
+  /** Render a collapse toggle so the user can fold the card away to
+   *  save screen space. Default false (always expanded). The collapsed
+   *  state persists per referrer type in localStorage. */
+  collapsible?: boolean;
 };
 
 /**
@@ -65,7 +70,7 @@ function buildShareUrl(_referrerType: ReferrerType, code: string): string {
   return `${base}/test-referral/${encodeURIComponent(code)}`;
 }
 
-export function ReferralCodeCard({ referrerType, className }: Props) {
+export function ReferralCodeCard({ referrerType, className, collapsible = false }: Props) {
   // ── Endpoints switch based on referrer type ──────────────────────
   const codeEndpoint =
     referrerType === "DRIVER"
@@ -104,6 +109,13 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
   const [customizeDialogOpen, setCustomizeDialogOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // ── Collapse state (opt-in via `collapsible`) ────────────────────
+  // Persisted per referrer type so dealer/driver preferences don't
+  // collide. Default: expanded (shown) until the user collapses it.
+  const [collapsed, toggleCollapsed] = usePersistentCollapsed(
+    `referral-card-collapsed-${referrerType.toLowerCase()}`,
+  );
 
   const shareUrl = useMemo(
     () => (referralCode ? buildShareUrl(referrerType, referralCode) : ""),
@@ -209,6 +221,52 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
     return null;
   }
 
+  // ── Collapsed one-line strip (opt-in) ────────────────────────────
+  // Folds away the description, code box, stats and progress rows to
+  // save screen space, while keeping the code + program state
+  // glanceable. Click anywhere on the strip to expand again.
+  if (collapsible && collapsed) {
+    return (
+      <Card
+        className={cn(
+          "border-emerald-200 dark:border-emerald-800/40 shadow-sm relative overflow-hidden",
+          className,
+        )}
+      >
+        <CardContent className="p-3">
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={false}
+            title="Expand Refer & Earn"
+            className="w-full flex items-center gap-3 text-left group cursor-pointer"
+          >
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+              <Gift className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <span className="text-sm font-black text-slate-900 dark:text-white shrink-0">
+              Refer a Friend &amp; Earn
+            </span>
+            {referralCode && isActive && (
+              <span className="hidden sm:inline text-xs font-mono font-bold text-emerald-700 dark:text-emerald-300 tracking-wider truncate">
+                {referralCode}
+              </span>
+            )}
+            {!isActive && (
+              <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 shrink-0">
+                Paused
+              </span>
+            )}
+            <span className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-slate-400 group-hover:text-emerald-600 shrink-0">
+              Show
+              <ChevronDown className="w-4 h-4" />
+            </span>
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <>
       <Card
@@ -233,6 +291,18 @@ export function ReferralCodeCard({ referrerType, className }: Props) {
                 {rewardDescription}
               </CardDescription>
             </div>
+            {collapsible && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleCollapsed}
+                aria-expanded={true}
+                title="Collapse Refer & Earn"
+                className="h-8 w-8 rounded-xl flex-shrink-0 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/10"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </CardHeader>
 
