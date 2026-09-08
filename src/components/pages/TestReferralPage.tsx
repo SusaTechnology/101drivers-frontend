@@ -33,7 +33,7 @@
  *
  * No auth required — this is a public page.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { Gift, ArrowRight, Car, Building, User, AlertTriangle, CheckCircle2, X, Printer, Search } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -80,6 +80,32 @@ export default function TestReferralPage({ code }: Props) {
   const isLoading = resolveQuery.isLoading;
   const isError = resolveQuery.isError;
 
+  // ── Print handling: force the light palette onto PAPER only ──
+  // darkMode is class-based (tailwind darkMode:"class"), so during print
+  // we temporarily drop the .dark class from <html> and restore it right
+  // after. The on-screen UI is untouched — this only affects the printout
+  // and avoids a toner-black page with unreadable text.
+  useEffect(() => {
+    const html = document.documentElement;
+    const beforePrint = () => {
+      html.dataset.printDarkWas = html.classList.contains("dark") ? "1" : "0";
+      html.classList.remove("dark");
+    };
+    const afterPrint = () => {
+      if (html.dataset.printDarkWas === "1") {
+        html.classList.add("dark");
+      }
+      delete html.dataset.printDarkWas;
+    };
+    window.addEventListener("beforeprint", beforePrint);
+    window.addEventListener("afterprint", afterPrint);
+    return () => {
+      window.removeEventListener("beforeprint", beforePrint);
+      window.removeEventListener("afterprint", afterPrint);
+      afterPrint(); // safety net if unmounted mid-print
+    };
+  }, []);
+
   // Build the signup deep-link URLs with the ?ref= param
   const signupLinks = useMemo(
     () => ({
@@ -112,15 +138,94 @@ export default function TestReferralPage({ code }: Props) {
     ? "Sign up with a friend's referral code and earn rewards when you complete paid deliveries."
     : "Resolve a 101drivers referral code to see whose code it is and where to sign up.";
 
+  // Full absolute signup URLs — used ONLY by the print-only URL lines
+  // (paper can't click buttons, so the typed link is the fallback).
+  const fullSignupUrls = useMemo(
+    () => ({
+      driver: `${window.location.origin}${signupLinks.driver}`,
+      dealer: `${window.location.origin}${signupLinks.dealer}`,
+      individual: `${window.location.origin}${signupLinks.individual}`,
+    }),
+    [signupLinks],
+  );
+
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex items-center justify-center px-4 py-8">
+    <div className="print-referral-root min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white flex items-center justify-center px-4 py-8">
+      {/* ── Print stylesheet — scoped to this page, screen UI untouched ──
+          Everything below lives inside @media print / the .print-referral-root
+          subtree: one-page Letter layout, compacted spacing, smaller QR,
+          bordered buttons readable without background graphics, and
+          print-only URL lines (paper can't click). */}
+      <style>{`
+        .print-only { display: none; }
+        .print-url {
+          font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+          color: #475569;
+          word-break: break-all;
+          text-align: center;
+          margin-top: 3px;
+        }
+        @media print {
+          @page { size: letter portrait; margin: 12mm; }
+          html, body { background: #ffffff !important; }
+          .print-referral-root {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+          }
+          .print-referral-root * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            box-shadow: none !important;
+          }
+          .print-hide { display: none !important; }
+          .print-only { display: block !important; }
+          /* Card: visible border, never split across pages */
+          .print-card {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            border: 1px solid #cbd5e1 !important;
+          }
+          /* Compact vertical rhythm so everything fits ONE page */
+          .print-referral-root .py-8 { padding-top: 0 !important; padding-bottom: 0 !important; }
+          .print-referral-root .mb-6 { margin-bottom: 10px !important; }
+          .print-referral-root .mt-6 { margin-top: 10px !important; }
+          .print-referral-root .mb-3 { margin-bottom: 6px !important; }
+          .print-referral-root .space-y-4 > * + * { margin-top: 8px !important; }
+          .print-referral-root .space-y-3 > * + * { margin-top: 6px !important; }
+          .print-referral-root .p-4 { padding: 8px !important; }
+          .print-referral-root .pt-2 { padding-top: 4px !important; }
+          .print-referral-root .mt-3 { margin-top: 4px !important; }
+          .print-referral-root .mt-1 { margin-top: 2px !important; }
+          .print-referral-root .gap-3 { gap: 6px !important; }
+          /* QR: slightly smaller on paper */
+          .print-qr { padding: 6px !important; }
+          .print-qr svg { width: 140px !important; height: 140px !important; }
+          /* Buttons → bordered boxes, readable even with background
+             graphics turned off in the print dialog */
+          .print-referral-root button {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            border: 1.5px solid #0f172a !important;
+            box-shadow: none !important;
+          }
+          /* Brand mark stays recognizable even without background graphics */
+          .print-logo { border: 1.5px solid #10b981 !important; }
+          /* Small helper text a touch darker for paper legibility */
+          .print-referral-root .text-slate-400,
+          .print-referral-root .text-slate-500 { color: #475569 !important; }
+        }
+      `}</style>
+
       <SEOHead title={seoTitle} description={seoDescription} />
 
       <div className="w-full max-w-md">
         {/* ── Header — minimal logo + title ── */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center gap-2 mb-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500 flex items-center justify-center">
+            <div className="print-logo w-10 h-10 rounded-2xl bg-emerald-500 flex items-center justify-center">
               <Gift className="w-5 h-5 text-white" />
             </div>
             <span className="text-2xl font-black tracking-tight">101 Drivers</span>
@@ -130,7 +235,7 @@ export default function TestReferralPage({ code }: Props) {
           </p>
         </div>
 
-        <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+        <Card className="print-card border-slate-200 dark:border-slate-800 shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl font-black text-center flex items-center justify-center gap-2">
               {isLoading ? (
@@ -210,7 +315,7 @@ export default function TestReferralPage({ code }: Props) {
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   Scan to share
                 </p>
-                <div className="p-3 bg-white rounded-2xl border-2 border-emerald-100 dark:border-emerald-900/30 shadow-sm">
+                <div className="print-qr p-3 bg-white rounded-2xl border-2 border-emerald-100 dark:border-emerald-900/30 shadow-sm">
                   <QRCodeSVG
                     value={`${window.location.origin}/test-referral/${upperCode}`}
                     size={180}
@@ -225,7 +330,7 @@ export default function TestReferralPage({ code }: Props) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-xl h-8 text-xs"
+                  className="print-hide rounded-xl h-8 text-xs"
                   onClick={() => window.print()}
                 >
                   <Printer className="w-3.5 h-3.5 mr-1.5" />
@@ -257,6 +362,7 @@ export default function TestReferralPage({ code }: Props) {
                           Become a Driver
                           <ArrowRight className="w-4 h-4" />
                         </Button>
+                        <span className="print-only print-url">or visit: {fullSignupUrls.driver}</span>
                       </Link>
                     )}
 
@@ -269,6 +375,7 @@ export default function TestReferralPage({ code }: Props) {
                           Sign up as a Dealer
                           <ArrowRight className="w-4 h-4" />
                         </Button>
+                        <span className="print-only print-url">or visit: {fullSignupUrls.dealer}</span>
                       </Link>
                     )}
 
@@ -281,6 +388,7 @@ export default function TestReferralPage({ code }: Props) {
                           Sign up as a Customer
                           <ArrowRight className="w-4 h-4" />
                         </Button>
+                        <span className="print-only print-url">or visit: {fullSignupUrls.individual}</span>
                       </Link>
                     )}
                   </>
@@ -322,12 +430,15 @@ export default function TestReferralPage({ code }: Props) {
               Learn more
             </Link>
           </p>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+          <p className="print-hide text-[11px] text-slate-400 dark:text-slate-500">
             Don't have a code?{" "}
             <Link to="/test-referral" className="underline text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 inline-flex items-center gap-1">
               <Search className="w-3 h-3" />
               Search by name
             </Link>
+          </p>
+          <p className="print-only print-url">
+            Referral link: {window.location.origin}/test-referral/{upperCode}
           </p>
         </div>
       </div>
