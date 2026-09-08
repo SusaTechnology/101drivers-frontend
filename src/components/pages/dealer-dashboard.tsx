@@ -331,12 +331,27 @@ export default function DealerDashboard() {
   )
 
 
+  // ── "Today" window (dealer's local calendar day) ──
+  // A delivery counts toward today's revenue when its pickup happens
+  // today (pickupWindowStart, falling back to createdAt when missing)
+  // and it is actually in motion or finished (ACTIVE / COMPLETED).
+  // Previously this summed ALL active+completed deliveries with no date
+  // filter, so the "Today" tile showed lifetime value — misleading.
+  const isToday = (d: { pickupWindowStart?: string | null; createdAt?: string | null }) => {
+    const now = new Date()
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const when = new Date(d.pickupWindowStart || d.createdAt || 0).getTime()
+    return when >= dayStart && when < dayStart + 24 * 60 * 60 * 1000
+  }
+
   const stats = useMemo(() => ({
     active: deliveries.filter(d => d.status === 'ACTIVE').length,
     listed: deliveries.filter(d => ['LISTED', 'QUOTED'].includes(d.status)).length,
     booked: deliveries.filter(d => d.status === 'BOOKED').length,
     expired: deliveries.filter(d => d.status === 'EXPIRED').length,
-    todayRevenue: deliveries.filter(d => ['ACTIVE', 'COMPLETED'].includes(d.status)).reduce((sum, d) => sum + (d.price || 0), 0),
+    todayRevenue: deliveries
+      .filter(d => ['ACTIVE', 'COMPLETED'].includes(d.status) && isToday(d))
+      .reduce((sum, d) => sum + (d.price || 0), 0),
   }), [deliveries])
 
   const filteredDeliveries = useMemo(() => {
