@@ -8,18 +8,18 @@
  * redirecting to a signup form.
  *
  * Three signup CTAs (matching the 3 user types) — WHICH buttons render
- * comes pre-computed from the backend as `signupDoors` on the resolve
- * response: flow switch (driverReferralsEnabled / customerReferralsEnabled)
- * AND role-matrix cell per door:
- *   - "Become a Driver"      → /driver-onboarding?ref=CODE       (needs signupDoors.DRIVER)
- *   - "Sign up as a Dealer"   → /auth/dealer-signup?ref=CODE    (needs signupDoors.BUSINESS)
- *   - "Sign up as a Customer" → /auth/individual-signup?ref=CODE (needs signupDoors.PERSONAL)
- * The apply endpoints enforce the same switches + matrix server-side, so
- * the hidden doors can never be bypassed with a hand-typed ?ref= URL.
+ * is decided by the backend's who-refers-whom matrix
+ * (referralRoleMatrix — single source of truth, admin-tunable),
+ * delivered pre-computed in the resolve response as `allows`:
+ *   - "Become a Driver"      → /driver-onboarding?ref=CODE       (needs allows.DRIVER)
+ *   - "Sign up as a Dealer"   → /auth/dealer-signup?ref=CODE    (needs allows.BUSINESS)
+ *   - "Sign up as a Customer" → /auth/individual-signup?ref=CODE (needs allows.PERSONAL)
+ * The apply endpoints enforce the same matrix server-side, so the
+ * hidden doors can never be bypassed with a hand-typed ?ref= URL.
  *
- * The page-level paused warning comes from `programActive` — true unless
- * the master switch is off or BOTH flow switches are off. A single
- * disabled flow just hides its own buttons; it must NOT pause the page.
+ * The page-level paused warning comes from `programActive` — which
+ * mirrors the admin master switch (isActive) ONLY. Nothing else pauses
+ * this page.
  *
  * The referral code is passed via the ?ref= query parameter, which the
  * ReferralCodeInput component auto-fills on mount in each signup form.
@@ -50,12 +50,10 @@ type ResolveResponse = {
   referrerName: string | null;
   referrerType: "DRIVER" | "CUSTOMER" | null;
   referrerSubtype: "PERSONAL" | "BUSINESS" | null;
-  /** Page-level verdict: false only when master off or BOTH flow switches off. */
+  /** Mirrors the admin master switch (isActive) — the only paused source. */
   programActive: boolean;
-  /** V3.1: pure role-matrix row for this referrer (server-side enforcement mirror). */
+  /** V3.1: who-refers-whom matrix row — decides which signup buttons render. */
   allows: { DRIVER: boolean; PERSONAL: boolean; BUSINESS: boolean } | null;
-  /** Effective signup-button visibility: flow switch AND matrix cell per door. */
-  signupDoors?: { DRIVER: boolean; PERSONAL: boolean; BUSINESS: boolean } | null;
 };
 
 type Props = {
@@ -92,15 +90,15 @@ export default function TestReferralPage({ code }: Props) {
     [upperCode],
   );
 
-  // ── Which signup doors are effectively open — pre-computed by the
-  // backend as flow switch AND matrix cell per door (signupDoors).
-  // Fallback chain: signupDoors (current) → allows (older backend,
-  // matrix-only) → all doors (old cache). The page-level warning is
-  // separate: programActive only goes false when EVERYTHING is closed.
-  const doors = data?.found ? (data.signupDoors ?? data.allows) : null;
-  const canReferDriver = doors ? doors.DRIVER : true;
-  const canReferDealer = doors ? doors.BUSINESS : true;
-  const canReferIndividual = doors ? doors.PERSONAL : true;
+  // ── V3.1: which signup doors this referrer's role may open — comes
+  // pre-computed from the backend's who-refers-whom matrix
+  // (referralRoleMatrix). Missing allows (old cache) → show all doors.
+  // The page-level warning is separate: programActive mirrors the
+  // admin master switch only.
+  const allows = data?.found ? data.allows : null;
+  const canReferDriver = allows ? allows.DRIVER : true;
+  const canReferDealer = allows ? allows.BUSINESS : true;
+  const canReferIndividual = allows ? allows.PERSONAL : true;
   const doorCount = [canReferDriver, canReferDealer, canReferIndividual].filter(Boolean).length;
 
   // ── SEO meta — these public referral pages are shareable but
@@ -192,10 +190,9 @@ export default function TestReferralPage({ code }: Props) {
               </div>
             )}
 
-            {/* ── Paused warning (code found but every signup door is closed) ──
-                programActive=false ONLY when the master switch is off or
-                BOTH flow switches are off — a single disabled flow just
-                hides its own buttons, it never pauses this page. */}
+            {/* ── Paused warning (code found but program paused) ──
+                programActive mirrors the admin MASTER switch only —
+                nothing else pauses this page. */}
             {data?.found && !data.programActive && (
               <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 flex gap-3 items-start">
                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
@@ -237,10 +234,10 @@ export default function TestReferralPage({ code }: Props) {
               </div>
             )}
 
-            {/* ── CTAs ── the signup doors still open for this referrer.
-                Which buttons render comes pre-computed from the backend
-                (`signupDoors` = flow switch AND matrix cell per door on
-                the resolve response) — buttons ARE the config, visually. */}
+            {/* ── CTAs ── V3.1: the doors this referrer's role may open.
+                Which buttons render comes straight from the backend's
+                who-refers-whom matrix (`allows` on the resolve
+                response) — buttons ARE the matrix, visually. */}
             {data?.found ? (
               <div className="space-y-3 pt-2">
                 {doorCount > 0 ? (

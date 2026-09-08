@@ -38,19 +38,16 @@ export class ReferralPublicController {
    * GET /api/referrals/public/resolve/:code
    *
    * Resolve a referral code to its referrer's display name + type.
-   * Returns `{ found, referrerName, referrerType, programActive, signupDoors }`.
+   * Returns `{ found, referrerName, referrerType, programActive, allows }`.
    *
    * If the code is invalid or not found, returns `found=false` (no
    * error) — the public test-referral page handles the not-found UI.
    *
-   * `programActive` is the page-level paused verdict: false only when
-   * the master switch is off (isActive=false) or BOTH flow switches are
-   * off. A single disabled flow does NOT pause the page — it just hides
-   * its own signup buttons via `signupDoors` (flow switch AND role-matrix
-   * cell per door). The frontend shows the "Referral program is paused"
-   * notice from `programActive` and renders the signup buttons from
-   * `signupDoors`. The apply endpoints enforce the same switches +
-   * matrix server-side, so hidden doors can't be bypassed with a
+   * `programActive` mirrors the admin master switch (isActive) — it is
+   * the ONLY source of the invite page's "paused" warning. Which signup
+   * buttons appear is governed purely by `allows` (the who-refers-whom
+   * matrix row for this referrer); the apply endpoints enforce the same
+   * matrix server-side, so a hidden button can't be bypassed with a
    * hand-typed ?ref= URL.
    */
   @common.Get("resolve/:code")
@@ -72,22 +69,9 @@ export class ReferralPublicController {
           type: "object",
           nullable: true,
           description:
-            "Which roles this referrer may refer (config-driven role matrix, pure). " +
-            "The apply endpoints enforce these cells server-side.",
-          properties: {
-            DRIVER: { type: "boolean" },
-            PERSONAL: { type: "boolean" },
-            BUSINESS: { type: "boolean" },
-          },
-        },
-        signupDoors: {
-          type: "object",
-          nullable: true,
-          description:
-            "Effective visibility of the 3 invite-page signup buttons: " +
-            "flow switch (driverReferralsEnabled / customerReferralsEnabled) " +
-            "AND role-matrix cell per door. The invite page renders its " +
-            "signup buttons from this.",
+            "Which roles this referrer may refer (who-refers-whom matrix). " +
+            "The invite page renders its 3 signup buttons from this and the " +
+            "apply endpoints enforce the same cells server-side.",
           properties: {
             DRIVER: { type: "boolean" },
             PERSONAL: { type: "boolean" },
@@ -106,7 +90,6 @@ export class ReferralPublicController {
     referrerSubtype: "PERSONAL" | "BUSINESS" | null;
     programActive: boolean;
     allows: Record<ReferralReferrerRole, boolean> | null;
-    signupDoors: Record<ReferralReferrerRole, boolean> | null;
   }> {
     return this.referralService.publicResolveReferralCode(code);
   }
@@ -117,8 +100,6 @@ export class ReferralPublicController {
    * Public search by name — anyone can type a name and get matching
    * referral codes back. Returns up to 10 results with privacy-masked
    * names. Used by the /test-referral (no code) public lookup page.
-   *
-   * Only returns referrers whose referral program is active.
    */
   @common.Get("lookup")
   @swagger.ApiOperation({

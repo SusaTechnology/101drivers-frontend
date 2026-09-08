@@ -532,21 +532,10 @@ export class ReferralService {
       );
     }
 
-    // ── Per-referrer-type gate ──
-    // The admin can disable driver-referrer or customer-referrer flows
-    // independently of the master isActive flag.
-    if (referralType === ReferralTypeDto.DRIVER && !config.driverReferralsEnabled) {
-      throw new BadRequestException(
-        "Driver-to-driver referrals are currently disabled."
-      );
-    }
-    if (referralType === ReferralTypeDto.CUSTOMER && !config.customerReferralsEnabled) {
-      throw new BadRequestException(
-        "Customer referrals are currently disabled."
-      );
-    }
-
     // ── V3.1 role matrix: may THIS referrer role refer a DRIVER? ──
+    // The who-refers-whom matrix is the SINGLE source of truth for which
+    // referral directions work — it also drives the invite-page signup
+    // buttons, so a hidden button and a rejected code always agree.
     const REFERRER_LABEL: Record<string, string> = {
       DRIVER: "Drivers",
       PERSONAL: "Personal customers",
@@ -2138,18 +2127,8 @@ export class ReferralService {
         "The referral program is currently paused. Please try again later."
       );
     }
-    if (referralType === ReferralTypeDto.DRIVER && !config.driverReferralsEnabled) {
-      throw new BadRequestException(
-        "Driver-to-customer referrals are currently disabled."
-      );
-    }
-    if (referralType === ReferralTypeDto.CUSTOMER && !config.customerReferralsEnabled) {
-      throw new BadRequestException(
-        "Customer referrals are currently disabled."
-      );
-    }
-
     // ── V3.1 role matrix: may THIS referrer role refer THIS customer type? ──
+    // Single source of truth (mirrors the invite-page signup buttons).
     {
       const REFERRER_LABEL: Record<string, string> = {
         DRIVER: "Drivers",
@@ -2432,7 +2411,6 @@ export class ReferralService {
       businessReferralAmountCents: config.businessReferralAmountCents,
       residentialReferralAmountCents: config.residentialReferralAmountCents,
       programIsActive: config.isActive,
-      customerReferralsEnabled: config.customerReferralsEnabled,
     };
   }
 
@@ -2447,17 +2425,17 @@ export class ReferralService {
    *     for privacy; or business name for business customers; or "A 101 Drivers
    *     driver" for drivers if they don't have a public name)
    *   - referrerType: "DRIVER" | "CUSTOMER"
-   *   - programActive: whether ANY referral signup door is open. True unless
-   *     the master switch is off (isActive=false) or BOTH flow switches are
-   *     off (driverReferralsEnabled=false AND customerReferralsEnabled=false).
-   *     Per-flow switches do NOT pause the page — they only hide their own
-   *     signup buttons (see signupDoors). The invite page shows its paused
-   *     warning from THIS flag.
-   *   - signupDoors: effective visibility of the 3 invite-page signup
-   *     buttons = flow switch AND role-matrix cell for each door:
-   *       DRIVER   = driverReferralsEnabled   && matrix.<referrer>.DRIVER
-   *       PERSONAL = customerReferralsEnabled && matrix.<referrer>.PERSONAL
-   *       BUSINESS = customerReferralsEnabled && matrix.<referrer>.BUSINESS
+   *   - programActive: whether the referral PROGRAM is running — the master
+   *     switch in the admin config (isActive). This is the ONLY thing that
+   *     triggers the invite page's "paused" warning. Which signup buttons
+   *     appear is a separate concern governed purely by the who-refers-whom
+   *     matrix (see `allows`).
+   *   - allows: the who-refers-whom matrix row for this referrer — the
+   *     SINGLE source of truth for the 3 invite-page signup buttons:
+   *       DRIVER cell   → "Become a Driver" button
+   *       PERSONAL cell → "Sign up as a Customer" button
+   *       BUSINESS cell → "Sign up as a Dealer" button
+   *     The apply endpoints enforce the same cells server-side.
    *
    * No auth required — this is a public endpoint. Returns minimal info
    * (just enough for the user to recognize whose code it is).
@@ -2469,15 +2447,12 @@ export class ReferralService {
     referrerSubtype: "PERSONAL" | "BUSINESS" | null;
     programActive: boolean;
     // V3.1: which roles this referrer may refer, straight from the
-    // config-driven role matrix (single source of truth). The apply
-    // endpoints enforce the same cells server-side. The invite page
-    // renders its signup buttons from signupDoors (switches AND this).
+    // config-driven role matrix (single source of truth). The invite
+    // page renders its signup buttons from THIS — and the apply
+    // endpoints enforce the same cells server-side.
     allows: Record<ReferralReferrerRole, boolean> | null;
-    // Effective invite-page signup-button visibility (flow switch AND
-    // matrix cell per door). Null when the code is not found.
-    signupDoors: Record<ReferralReferrerRole, boolean> | null;
   }> {
-    if (!code) return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: false, allows: null, signupDoors: null };
+    if (!code) return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive: false, allows: null };
 
     const upperCode = code.toUpperCase();
 
@@ -2498,20 +2473,10 @@ export class ReferralService {
 
     const config = await this.appSettingService.getReferralProgramSettings();
 
-    // The page-level "paused" verdict: only when EVERY referral door is
-    // closed — master switch off, or both flow switches off. A single
-    // disabled flow must NOT pause the page (it only hides its own
-    // signup buttons via signupDoors below).
-    const programActive =
-      config.isActive &&
-      (config.driverReferralsEnabled || config.customerReferralsEnabled);
-
-    // Effective invite-page signup buttons: flow switch AND matrix cell.
-    const doorsFor = (matrixRow: Record<ReferralReferrerRole, boolean>) => ({
-      DRIVER: config.driverReferralsEnabled && matrixRow.DRIVER,
-      PERSONAL: config.customerReferralsEnabled && matrixRow.PERSONAL,
-      BUSINESS: config.customerReferralsEnabled && matrixRow.BUSINESS,
-    });
+    // Page-level "paused" verdict = the MASTER switch only. Per-flow
+    // switches no longer exist as gates: the who-refers-whom matrix
+    // (returned as `allows`) alone decides which signup buttons show.
+    const programActive = config.isActive;
 
     if (driverReferrer) {
       return {
@@ -2523,7 +2488,6 @@ export class ReferralService {
         referrerSubtype: null,
         programActive,
         allows: config.referralRoleMatrix.DRIVER,
-        signupDoors: doorsFor(config.referralRoleMatrix.DRIVER),
       };
     }
 
@@ -2548,11 +2512,6 @@ export class ReferralService {
           config.referralRoleMatrix[
             customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL"
           ],
-        signupDoors: doorsFor(
-          config.referralRoleMatrix[
-            customerReferrer.customerType === "BUSINESS" ? "BUSINESS" : "PERSONAL"
-          ],
-        ),
       };
     }
 
@@ -2573,11 +2532,10 @@ export class ReferralService {
         referrerSubtype: null,
         programActive,
         allows: config.referralRoleMatrix.DRIVER,
-        signupDoors: doorsFor(config.referralRoleMatrix.DRIVER),
       };
     }
 
-    return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive, allows: null, signupDoors: null };
+    return { found: false, referrerName: null, referrerType: null, referrerSubtype: null, programActive, allows: null };
   }
 
   /**
@@ -2603,9 +2561,10 @@ export class ReferralService {
    *   - Customer.referralCode where Customer.user.fullName contains the query
    *     OR Customer.businessName contains the query (for business customers)
    *
-   * Returns up to 10 results with privacy-masked names. Only returns
-   * referrers whose referral program is active (customerReferralsEnabled
-   * or driverReferralsEnabled depending on type).
+   * Returns up to 10 results with privacy-masked names. Search is NOT
+   * gated by config switches — the who-refers-whom matrix governs which
+   * signup doors exist, and the master isActive switch governs whether
+   * codes apply; both are enforced at resolve/apply time.
    *
    * No auth required — this is a public endpoint.
    */
@@ -2621,13 +2580,11 @@ export class ReferralService {
     }
 
     const searchTerm = query.trim();
-    const config = await this.appSettingService.getReferralProgramSettings();
 
-    // Search drivers + customers in parallel
+    // Search drivers + customers in parallel — no config gating here:
+    // the invite page + apply endpoints enforce the matrix/pause.
     const [drivers, customers] = await Promise.all([
-      // Only search if driver referrals are enabled
-      config.driverReferralsEnabled
-        ? this.prisma.driver.findMany({
+      this.prisma.driver.findMany({
             where: {
               referralCode: { not: null },
               user: {
@@ -2639,11 +2596,8 @@ export class ReferralService {
               user: { select: { fullName: true } },
             },
             take: 10,
-          })
-        : [],
-      // Only search if customer referrals are enabled
-      config.customerReferralsEnabled
-        ? this.prisma.customer.findMany({
+          }),
+      this.prisma.customer.findMany({
             where: {
               referralCode: { not: null },
               OR: [
@@ -2660,8 +2614,7 @@ export class ReferralService {
               user: { select: { fullName: true } },
             },
             take: 10,
-          })
-        : [],
+          }),
     ]);
 
     const results: Array<{
