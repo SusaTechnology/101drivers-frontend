@@ -121,8 +121,8 @@ export default function LandingPage() {
 
   // Ref mirror of livePricingConfig so handleCalculateEstimate can read
   // the latest config WITHOUT having it in its deps array. This prevents
-  // the auto-fire effect from re-firing (and burning a quote attempt)
-  // when the config arrives after the initial quote was already computed.
+  // the auto-fire effect from re-firing when the config arrives after
+  // the initial quote was already computed.
   const livePricingConfigRef = useRef(livePricingConfig);
   useEffect(() => {
     livePricingConfigRef.current = livePricingConfig;
@@ -132,13 +132,35 @@ export default function LandingPage() {
   // smooth-scroll to it after computing the price.
   const estimateRef = useRef<HTMLElement | null>(null);
 
-  // Rate limit quote calculations to 3 per session
+  // Signature of the last quoted input combination
+  // (pickupAddress || dropoffAddress || distance). Guarantees each exact
+  // route is quoted exactly ONCE: without it, the auto-quote effect
+  // re-fired whenever isLoadingQuote flipped back to false or the
+  // callback identity changed — a loop that burned ALL THREE quota
+  // attempts on the very first quote, after which the price froze for
+  // the rest of the session (pin moved, price didn't). With the guard,
+  // one route change = exactly one quote = exactly one attempt, so the
+  // user genuinely gets 3 free quotes per session.
+  const lastQuotedKeyRef = useRef<string | null>(null);
+
+  // Rate limit quote calculations to 3 per session (kept by design).
+  // Stored in sessionStorage so the quota resets when the tab closes.
+  // Key is "quoteAttemptsV2" (not the legacy "quoteAttempts") so sessions
+  // created by the old buggy build — whose counter was already exhausted
+  // by the re-fire loop — start with a clean slate.
   const QUOTE_MAX_ATTEMPTS = 3;
   const [quoteAttempts, setQuoteAttempts] = useState<number>(() => {
-    const stored = sessionStorage.getItem("quoteAttempts");
+    const stored = sessionStorage.getItem("quoteAttemptsV2");
     return stored ? parseInt(stored, 10) : 0;
   });
   const quoteLimitReached = quoteAttempts >= QUOTE_MAX_ATTEMPTS;
+
+  // Bumped every time the route inputs change (address selected/cleared).
+  // In-flight Google Directions callbacks compare against this counter
+  // and discard their result if the user moved on to a different route
+  // mid-request — otherwise a slow stale response could repopulate
+  // `distance` for the OLD route and trigger a quote for the wrong miles.
+  const routeVersionRef = useRef(0);
 
   // Error states for validation
   const [pickupError, setPickupError] = useState("");
@@ -205,37 +227,17 @@ export default function LandingPage() {
     libraries: GOOGLE_MAPS_LIBRARIES, 
   });
 
-  const getQuote = useCreate(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/individual/quote-preview`, {
-    fetchWithoutRefresh: true,
-    publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint
-    onSuccess: (data) => {
-      setQuoteResult(data);
-      setIsLoadingQuote(false);
-      // Increment attempt counter
-      const newCount = quoteAttempts + 1;
-      setQuoteAttempts(newCount);
-      sessionStorage.setItem("quoteAttempts", String(newCount));
-      setDistance(data.distanceMiles);
-      if (data.pickupLat && data.pickupLng) {
-        setPickupCoords({ lat: data.pickupLat, lng: data.pickupLng });
-      }
-      if (data.dropoffLat && data.dropoffLng) {
-        setDropoffCoords({ lat: data.dropoffLat, lng: data.dropoffLng });
-      }
-    },
-    onError: (error) => {
-      console.error("Failed to get quote:", error);
-      setIsLoadingQuote(false);
-    },
-  });
-  // NOTE: The home page no longer calls the backend quote-preview endpoint.
-  // The price is computed client-side via `calculateHomeQuote` (see
-  // src/lib/pricing/home-quote.ts), which delegates the math to the shared
-  // `calculatePricing` util and uses the LIVE admin-configured default
-  // pricing config fetched by `usePublicDefaultPricing`. If the live config
-  // is unavailable (network error, no config in DB), the adapter falls back
-  // to the hard-coded `HOME_FLAT_QUOTE_CONFIG` advertised rate. The
-  // `getQuote` mutation above is retained for reference but is no longer invoked.
+  // NOTE: The home page no longer calls the backend quote-preview endpoint
+  // (the legacy `getQuote` mutation was removed — it was never invoked and
+  // only existed for reference). The price is computed client-side via
+  // `calculateHomeQuote` (see src/lib/pricing/home-quote.ts), which
+  // delegates the math to the shared `calculatePricing` util and uses the
+  // LIVE admin-configured default pricing config fetched by
+  // `usePublicDefaultPricing`. If the live config is unavailable (network
+  // error, no config in DB), the adapter falls back to the hard-coded
+  // `HOME_FLAT_QUOTE_CONFIG` advertised rate. The price actually charged
+  // for a booked delivery is always recomputed server-side by the backend
+  // pricing engine — the home-page number is an instant estimate only.
 
   const handlePickupSelect = useCallback((place: google.maps.places.PlaceResult) => {
     setPickupError("");
@@ -258,6 +260,8 @@ export default function LandingPage() {
           setDropoffCoords(null);
           setQuoteResult(null);
           setDistance(null);
+          lastQuotedKeyRef.current = null;
+          routeVersionRef.current += 1;
           toast.error("Outside service area", {
             description: "Pickup must be in our Westside LA zone. See the green area on the map.",
           });
@@ -268,9 +272,23 @@ export default function LandingPage() {
       setPickupCoords({ lat, lng });
       setPickupAddress(address);
       setPickupInZone(true);
+      // Invalidate the previously computed driving distance so the
+      // auto-quote effect only ever fires with a distance that matches the
+      // CURRENT addresses (prevents a stale-price recalc from the old miles).
+      setDistance(null);
+      lastQuotedKeyRef.current = null;
+      routeVersionRef.current += 1; // discard in-flight Directions results
+      // Quota exhausted: drop the previous quote so the "Free Previews
+      // Used" gate shows instead of a stale price for an unquotable route.
+      if (quoteLimitReached && quoteResult) {
+        setQuoteResult(null);
+        toast.info("Free quotes used", {
+          description: `You've used all ${QUOTE_MAX_ATTEMPTS} free quote calculations. Sign up for a dealer account to get unlimited quotes.`,
+        });
+      }
       console.log('Pickup address set:', address, 'Coords:', { lat, lng });
     }
-  }, [zones]);
+  }, [zones, quoteLimitReached, quoteResult]);
 
   const handleDropoffSelect = useCallback((place: google.maps.places.PlaceResult) => {
     setDropoffError("");
@@ -280,9 +298,23 @@ export default function LandingPage() {
       setDropoffCoords({ lat, lng });
       const address = place.formatted_address || '';
       setDropoffAddress(address);
+      // Invalidate the previously computed driving distance so the
+      // auto-quote effect only ever fires with a distance that matches the
+      // CURRENT addresses (prevents a stale-price recalc from the old miles).
+      setDistance(null);
+      lastQuotedKeyRef.current = null;
+      routeVersionRef.current += 1; // discard in-flight Directions results
+      // Quota exhausted: drop the previous quote so the "Free Previews
+      // Used" gate shows instead of a stale price for an unquotable route.
+      if (quoteLimitReached && quoteResult) {
+        setQuoteResult(null);
+        toast.info("Free quotes used", {
+          description: `You've used all ${QUOTE_MAX_ATTEMPTS} free quote calculations. Sign up for a dealer account to get unlimited quotes.`,
+        });
+      }
       console.log('Dropoff address set:', address, 'Coords:', { lat, lng });
     }
-  }, []);
+  }, [quoteLimitReached, quoteResult]);
 
   // Handle clearing pickup address
   const handlePickupClear = useCallback(() => {
@@ -292,6 +324,8 @@ export default function LandingPage() {
     setDistance(null);
     setQuoteResult(null);
     setPickupInZone(null);
+    lastQuotedKeyRef.current = null;
+    routeVersionRef.current += 1;
   }, []);
 
   // Handle clearing dropoff address
@@ -302,6 +336,8 @@ export default function LandingPage() {
     setDistance(null);
     setQuoteResult(null);
     setPickupInZone(null);
+    lastQuotedKeyRef.current = null;
+    routeVersionRef.current += 1;
   }, []);
 
   // Double-check zone after quote result (server-side validation)
@@ -314,9 +350,11 @@ export default function LandingPage() {
 
   const calculateDistance = () => {
     if (!pickupCoords || !dropoffCoords) return;
-    // P0 FIX: Don't burn Google Directions API calls when quote limit is reached
+    // Quota exhausted — stop spending Google Directions calls on the
+    // quote distance state (RouteMap still renders the route itself).
     if (quoteLimitReached) return;
 
+    const versionAtStart = routeVersionRef.current;
     const directionsService = new google.maps.DirectionsService();
     directionsService.route(
       {
@@ -325,6 +363,9 @@ export default function LandingPage() {
         travelMode: google.maps.TravelMode.DRIVING,
       },
       (result, status) => {
+        // Discard stale responses — the user changed the route while this
+        // request was in flight, so this distance no longer matches it.
+        if (routeVersionRef.current !== versionAtStart) return;
         if (status === 'OK' && result) {
           const distanceInMeters = result.routes[0].legs[0].distance?.value;
           if (distanceInMeters) {
@@ -404,6 +445,7 @@ export default function LandingPage() {
     setIsLoadingQuote(true);
 
     try {
+      const versionAtStart = routeVersionRef.current;
       // Use the already-computed driving distance if available;
       // otherwise compute it inline so the button click is
       // responsive even if the auto-fire effect hasn't run yet.
@@ -411,6 +453,9 @@ export default function LandingPage() {
       if (miles == null && pickupCoords && dropoffCoords) {
         try {
           miles = await computeDrivingDistanceMiles(pickupCoords, dropoffCoords);
+          // The user changed the route while this lookup was in flight —
+          // discard the stale result instead of quoting the old route.
+          if (routeVersionRef.current !== versionAtStart) return;
           setDistance(miles);
         } catch (e) {
           console.error('Inline distance computation failed:', e);
@@ -428,15 +473,22 @@ export default function LandingPage() {
       // function, no I/O — the live config was already fetched by the
       // usePublicDefaultPricing hook above. Read from the ref so this
       // callback doesn't need livePricingConfig in its deps (which
-      // would re-fire the auto-quote effect and burn a quote attempt
-      // every time the config arrives).
+      // would re-fire the auto-quote effect every time the config
+      // arrives — the signature guard makes that harmless, but skipping
+      // the dep keeps the callback identity stable).
       const result = calculateHomeQuote(miles, livePricingConfigRef.current);
       setQuoteResult(result);
 
-      // Increment attempt counter (preserves existing rate-limit behavior).
+      // Mark this exact route+distance as quoted so the auto-fire effect
+      // doesn't re-quote the same combination right after a manual click —
+      // one successful quote must cost exactly ONE attempt.
+      lastQuotedKeyRef.current = `${pickupAddress}||${dropoffAddress}||${miles}`;
+
+      // Consume one attempt of the 3-per-session quota. Only successful
+      // quotes consume an attempt — failed distance lookups are free.
       const newCount = quoteAttempts + 1;
       setQuoteAttempts(newCount);
-      sessionStorage.setItem("quoteAttempts", String(newCount));
+      sessionStorage.setItem("quoteAttemptsV2", String(newCount));
 
       // Smooth-scroll to the Service Price section so the user sees the price.
       // Slight delay so the quote result is painted before the scroll fires.
@@ -454,22 +506,33 @@ export default function LandingPage() {
   // zone, AND the driving distance has been computed. We wait for
   // `distance` because the quote is computed client-side from the
   // driving distance using the live pricing config (or fallback).
+  //
+  // The lastQuotedKeyRef signature guard makes this fire exactly ONCE per
+  // (pickup, dropoff, distance) combination: without it, the effect would
+  // re-fire whenever isLoadingQuote flipped back to false or the callback
+  // identity changed, re-quoting identical inputs in a loop. When the user
+  // changes an address, the select handlers reset `distance` to null, so
+  // this effect stays idle until the fresh Directions distance arrives —
+  // guaranteeing the displayed price always reflects the CURRENT addresses.
   // Note: this auto-fire does NOT scroll — only the button click scrolls,
   // so the page doesn't jump around while the user is still typing.
   useEffect(() => {
-    if (pickupAddress && dropoffAddress && pickupInZone === true && !quoteLimitReached && !isLoadingQuote && distance != null) {
+    if (pickupAddress && dropoffAddress && pickupInZone === true && distance != null && !isLoadingQuote && !quoteLimitReached) {
+      const signature = `${pickupAddress}||${dropoffAddress}||${distance}`;
+      if (lastQuotedKeyRef.current === signature) return;
+      lastQuotedKeyRef.current = signature;
       handleCalculateEstimate({ scrollToEstimate: false });
     }
-  }, [pickupAddress, dropoffAddress, pickupInZone, distance, handleCalculateEstimate, quoteLimitReached, isLoadingQuote]);
+  }, [pickupAddress, dropoffAddress, pickupInZone, distance, isLoadingQuote, quoteLimitReached, handleCalculateEstimate]);
 
   // ─── Silent recompute when live config arrives ────────────────────
   // When the live pricing config arrives from the backend (after the
   // initial quote was already computed with fallback values), silently
-  // recompute the EXISTING quote with the new config. This does NOT
-  // burn a quote attempt — it only updates the displayed price to
-  // reflect the live admin-configured values. Without this, the user
-  // would see fallback values ($101/25/$1.80) until they manually
-  // clicked "Recalculate".
+  // recompute the EXISTING quote with the new config. This only updates
+  // the displayed price to reflect the live admin-configured values;
+  // it does not consume anything or touch the signature guard.
+  // Without this, the user would see fallback values ($101/25/$1.80)
+  // until they manually clicked "Recalculate".
   useEffect(() => {
     if (quoteResult && distance != null) {
       const recomputed = calculateHomeQuote(distance, livePricingConfig);
@@ -841,6 +904,8 @@ export default function LandingPage() {
                       setPickupError("This address is outside California. Please enter a pickup address inside CA.");
                       setDistance(null);
                       setQuoteResult(null);
+                      lastQuotedKeyRef.current = null;
+                      routeVersionRef.current += 1;
                       toast.error("Outside California", {
                         description: "Pickup must be inside California. Please enter a CA address.",
                       });
@@ -888,6 +953,8 @@ export default function LandingPage() {
                       setDropoffError("This address is outside California. Please enter a drop-off address inside CA.");
                       setDistance(null);
                       setQuoteResult(null);
+                      lastQuotedKeyRef.current = null;
+                      routeVersionRef.current += 1;
                       toast.error("Outside California", {
                         description: "Drop-off must be inside California. Please enter a CA address.",
                       });

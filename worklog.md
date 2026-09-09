@@ -1215,3 +1215,20 @@ Work Log:
 
 Stage Summary:
 - Master-switch banner on /admin-referral-program now expresses the whole program (all roles), matching what the switch actually does
+
+---
+Task ID: 14
+Agent: main agent (Super Z)
+Task: Make the $48 close-penalty fee admin-configurable — UI on the admin-config hub (admin-settings is a dead page)
+
+Work Log:
+- Mapped the money flow again: CLOSE_PENALTY_FEE_DOLLARS = 48 was hardcoded in backend/src/domain/deliveryRequest/deliveryClosePenalty.engine.ts (preview + apply)
+- Discovered a PARALLEL implementation already on origin/master (7b221f2) that put the editor on admin-settings.tsx — user explicitly rejected that page ("admin setting is dead page. we use admin-config page")
+- Backend: DELIVERY_SETTINGS AppSetting now carries closePenaltyFeeDollars — engine reads it LIVE in preview + apply via new public getClosePenaltyFeeDollars() (union of both implementations: 48 fallback for missing/invalid config, stored 0 disables penalty entirely with no zero-dollar Payment/Payout rows, amounts rounded to 2 decimals for exact Stripe cents); service getDeliverySettings/updateDeliverySettings extended + sanitized (finite, >= 0); DTO validated 0..10000 (Min/Max); seed row includes closePenaltyFeeDollars: 48
+- Frontend: NEW Delivery Policies page at /admin-delivery-policies (Config Hub card "Delivery Policies", Truck icon) with penalty fee + maximum radius + transit buffer fields (radius/buffer were stranded on the dead page); admin-settings.tsx penalty field REMOVED (dead page); admin cancel dialog toast now renders the live preview amount instead of hardcoded "$48"; stale $48 comments updated
+- Reconciled histories: rebased local commit onto 7b221f2 (watch out: during rebase --theirs = the rebased commit, --ours = upstream — initially resolved backwards, fixed by direct edits to the union)
+- Gates: backend tsc 4 pre-existing (0 new); scoped jest appSetting + domain/deliveryRequest 9/9 PASS; FE tsc 143 = baseline (0 new); vite build green (routeTree.gen.ts regenerated with the new route)
+- Committed as b6870c7; pushed to origin/master: 7b221f2..b6870c7; worklog append intentionally left uncommitted per convention
+
+Stage Summary:
+- Close/cancel penalty fee is now admin-configurable from Admin → Config Hub → Delivery Policies (live read by the engine, 0 = disabled, $48 fallback); dead admin-settings page no longer offers the field
