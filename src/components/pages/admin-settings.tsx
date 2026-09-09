@@ -205,6 +205,10 @@ export default function AdminSettingsHubPage() {
   const [referralDays, setReferralDays] = useState('');
   const [referralMax, setReferralMax] = useState('');
   const [referralSettingsLoaded, setReferralSettingsLoaded] = useState(false);
+  // NOTE: the close/cancel penalty fee used to be editable here, but this
+  // page is dead — it now lives on the Delivery Policies page
+  // (Admin → Config Hub → Delivery Policies), same closePenaltyFeeDollars
+  // DELIVERY_SETTINGS field.
 
   // Fetch delivery settings
   const deliverySettingsQuery = useDataQuery<any>({
@@ -214,7 +218,6 @@ export default function AdminSettingsHubPage() {
       if (data?.maximumRadiusMiles != null) {
         setMaxRadius(String(data.maximumRadiusMiles));
         setTransitBuffer(String(data.transitBufferMinutes));
-        setClosePenalty(String(data.closePenaltyFeeDollars ?? 48));
         setDeliverySettingsLoaded(true);
       }
     },
@@ -288,19 +291,13 @@ export default function AdminSettingsHubPage() {
   const handleSaveDeliverySettings = () => {
     const radius = Number(maxRadius);
     const buffer = Number(transitBuffer);
-    const penalty = Number(closePenalty);
     if (isNaN(radius) || radius < 1 || isNaN(buffer) || buffer < 1) {
       toast.error('Invalid values', { description: 'Radius and buffer must be positive numbers.' });
-      return;
-    }
-    if (isNaN(penalty) || penalty < 0 || penalty > 10000) {
-      toast.error('Invalid penalty', { description: 'Close penalty must be between 0 and 10000 (0 disables it).' });
       return;
     }
     updateDeliverySettingsMutation.mutate({
       maximumRadiusMiles: radius,
       transitBufferMinutes: buffer,
-      closePenaltyFeeDollars: Math.round(penalty * 100) / 100,
     });
   };
 
@@ -690,24 +687,6 @@ export default function AdminSettingsHubPage() {
                     />
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
                       After completing a delivery, the driver becomes available again after this buffer.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
-                      Close Penalty Fee ($)
-                    </Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={closePenalty}
-                      onChange={(e) => setClosePenalty(e.target.value)}
-                      placeholder="48"
-                      className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
-                    />
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      Charged when a BOOKED/ACTIVE delivery is closed or cancelled after a driver committed (vehicle not moved). Driver receives 100% of it. Set 0 to disable.
                     </p>
                   </div>
                 </div>

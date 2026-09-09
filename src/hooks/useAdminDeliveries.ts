@@ -448,8 +448,8 @@ export function useForceCancel(deliveryId: string) {
  *
  * Shows whether a driver has committed to the delivery (status is BOOKED or
  * ACTIVE), the penalty amount, and a human-readable summary. Used by the
- * admin cancel dialog to let the admin decide whether to apply the $48
- * penalty.
+ * admin cancel dialog to let the admin decide whether to apply the
+ * configured close penalty (amount comes from Delivery Policies settings).
  */
 export interface ClosePenaltyPreview {
   driverCommitted: boolean;

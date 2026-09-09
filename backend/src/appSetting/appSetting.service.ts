@@ -239,26 +239,63 @@ export class AppSettingService extends AppSettingServiceBase {
   }
 
   // ============================================================
-  // DELIVERY SETTINGS (max radius + transit buffer)
+  // DELIVERY SETTINGS (max radius + transit buffer + close penalty)
   // ============================================================
 
-  async getDeliverySettings(): Promise<{ maximumRadiusMiles: number; transitBufferMinutes: number; closePenaltyFeeDollars: number }> {
+  /** Default close/cancel penalty fee (dollars) — matches the delivery
+   * close-penalty engine's built-in fallback so service and engine can
+   * never disagree about the default. */
+  static readonly DEFAULT_CLOSE_PENALTY_FEE_DOLLARS = 48;
+
+  async getDeliverySettings(): Promise<{
+    maximumRadiusMiles: number;
+    transitBufferMinutes: number;
+    closePenaltyFeeDollars: number;
+  }> {
     const row = await this.prisma.appSetting.findUnique({
       where: { key: DELIVERY_SETTINGS_KEY },
       select: { value: true },
     });
 
-    const defaults = { maximumRadiusMiles: 25, transitBufferMinutes: 60, closePenaltyFeeDollars: 48 };
+    const defaults = {
+      maximumRadiusMiles: 25,
+      transitBufferMinutes: 60,
+      closePenaltyFeeDollars:
+        AppSettingService.DEFAULT_CLOSE_PENALTY_FEE_DOLLARS,
+    };
     const value = row?.value && typeof row.value === "object" ? row.value : {};
-    return { ...defaults, ...value };
+    const merged = { ...defaults, ...value };
+
+    // Sanitize the penalty fee: must be a finite number >= 0, otherwise
+    // fall back to the default (protects against a hand-edited DB row).
+    if (
+      typeof merged.closePenaltyFeeDollars !== "number" ||
+      !Number.isFinite(merged.closePenaltyFeeDollars) ||
+      merged.closePenaltyFeeDollars < 0
+    ) {
+      merged.closePenaltyFeeDollars =
+        AppSettingService.DEFAULT_CLOSE_PENALTY_FEE_DOLLARS;
+    }
+
+    return merged;
   }
 
-  async updateDeliverySettings(input: { maximumRadiusMiles?: number; transitBufferMinutes?: number; closePenaltyFeeDollars?: number }): Promise<{ maximumRadiusMiles: number; transitBufferMinutes: number; closePenaltyFeeDollars: number }> {
+  async updateDeliverySettings(input: {
+    maximumRadiusMiles?: number;
+    transitBufferMinutes?: number;
+    closePenaltyFeeDollars?: number;
+  }): Promise<{
+    maximumRadiusMiles: number;
+    transitBufferMinutes: number;
+    closePenaltyFeeDollars: number;
+  }> {
     const current = await this.getDeliverySettings();
     const next = {
       maximumRadiusMiles: input.maximumRadiusMiles ?? current.maximumRadiusMiles,
-      transitBufferMinutes: input.transitBufferMinutes ?? current.transitBufferMinutes,
-      closePenaltyFeeDollars: input.closePenaltyFeeDollars ?? current.closePenaltyFeeDollars,
+      transitBufferMinutes:
+        input.transitBufferMinutes ?? current.transitBufferMinutes,
+      closePenaltyFeeDollars:
+        input.closePenaltyFeeDollars ?? current.closePenaltyFeeDollars,
     };
 
     await this.prisma.appSetting.upsert({

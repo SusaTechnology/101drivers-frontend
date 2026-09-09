@@ -132,6 +132,11 @@ export class DeliverySettingsResponseDto {
   @ApiProperty()
   transitBufferMinutes!: number;
 
+  /**
+   * The close/cancel penalty fee in DOLLARS, applied to the customer when a
+   * delivery in BOOKED/ACTIVE status is closed/cancelled after a driver has
+   * committed (and paid out to the driver 100%). Default: 48.
+   */
   @ApiProperty()
   closePenaltyFeeDollars!: number;
 }

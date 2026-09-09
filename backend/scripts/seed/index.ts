@@ -619,15 +619,23 @@ async function seedConfiguration(refs: DemoRefs) {
     },
   });
 
-  // ── Delivery scheduling settings (max radius + transit buffer) ──
+  // ── Delivery scheduling settings (max radius + transit buffer + close penalty) ──
   await prisma.appSetting.upsert({
     where: { key: "DELIVERY_SETTINGS" },
     update: {
-      value: { maximumRadiusMiles: 25, transitBufferMinutes: 60 },
+      value: {
+        maximumRadiusMiles: 25,
+        transitBufferMinutes: 60,
+        closePenaltyFeeDollars: 48,
+      },
     },
     create: {
       key: "DELIVERY_SETTINGS",
-      value: { maximumRadiusMiles: 25, transitBufferMinutes: 60 },
+      value: {
+        maximumRadiusMiles: 25,
+        transitBufferMinutes: 60,
+        closePenaltyFeeDollars: 48,
+      },
     },
   });
 

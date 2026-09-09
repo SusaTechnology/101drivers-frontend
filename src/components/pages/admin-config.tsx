@@ -29,6 +29,7 @@ import {
   Power,
   Lock,
   Gift,
+  Truck,
 } from 'lucide-react'
 import { InsurancePortalPasswordDialog } from '../shared/InsurancePortalPasswordDialog'
 import {
@@ -140,6 +141,17 @@ const configCards = [
       { icon: Gift, label: "Rewards" },
       { icon: Users, label: "Referrers" },
       { icon: Power, label: "Activate" },
+    ]
+  },
+  {
+    href: "/admin-delivery-policies",
+    icon: Truck,
+    title: "Delivery Policies",
+    description: "Configure the close/cancel penalty fee charged when a driver has committed to a delivery (paid out 100% to the driver), plus job-feed radius and transit buffer defaults.",
+    chips: [
+      { icon: AlertCircle, label: "Penalty fee" },
+      { icon: MapPin, label: "Radius" },
+      { icon: Clock, label: "Buffer" },
     ]
   },
   {

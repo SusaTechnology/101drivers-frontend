@@ -488,9 +488,8 @@ export interface ForceCancelRequest {
   actorUserId: string;
   reason: string;
   /**
-   * Whether to apply the close penalty fee (admin-configurable amount,
-   * defaults to $48). The admin UI should call
-   * GET /api/deliveryRequests/:id/close-penalty-preview first to show
+   * Whether to apply the configured close penalty fee. The admin UI should
+   * call GET /api/deliveryRequests/:id/close-penalty-preview first to show
    * the admin the choice, then pass the admin's decision here.
    * Default: false (admin must explicitly opt in).
    */

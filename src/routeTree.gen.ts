@@ -82,6 +82,7 @@ import { Route as AdminLandingPageSettingsIndexRouteImport } from './routes/admi
 import { Route as AdminInsuranceReportingIndexRouteImport } from './routes/admin-insurance-reporting/index'
 import { Route as AdminDisputesIndexRouteImport } from './routes/admin-disputes/index'
 import { Route as AdminDisputeDetailIndexRouteImport } from './routes/admin-dispute-detail/index'
+import { Route as AdminDeliveryPoliciesIndexRouteImport } from './routes/admin-delivery-policies/index'
 import { Route as AdminDeliveryDetailIndexRouteImport } from './routes/admin-delivery-detail/index'
 import { Route as AdminDeliveriesIndexRouteImport } from './routes/admin-deliveries/index'
 import { Route as AdminDealerDetailIndexRouteImport } from './routes/admin-dealer-detail/index'
@@ -510,6 +511,12 @@ const AdminDisputeDetailIndexRoute = AdminDisputeDetailIndexRouteImport.update({
   path: '/admin-dispute-detail/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDeliveryPoliciesIndexRoute =
+  AdminDeliveryPoliciesIndexRouteImport.update({
+    id: '/admin-delivery-policies/',
+    path: '/admin-delivery-policies/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminDeliveryDetailIndexRoute =
   AdminDeliveryDetailIndexRouteImport.update({
     id: '/admin-delivery-detail/',
@@ -748,6 +755,7 @@ export interface FileRoutesByFullPath {
   '/admin-dealer-detail/': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries/': typeof AdminDeliveriesIndexRoute
   '/admin-delivery-detail/': typeof AdminDeliveryDetailIndexRoute
+  '/admin-delivery-policies/': typeof AdminDeliveryPoliciesIndexRoute
   '/admin-dispute-detail/': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes/': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
@@ -861,6 +869,7 @@ export interface FileRoutesByTo {
   '/admin-dealer-detail': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries': typeof AdminDeliveriesIndexRoute
   '/admin-delivery-detail': typeof AdminDeliveryDetailIndexRoute
+  '/admin-delivery-policies': typeof AdminDeliveryPoliciesIndexRoute
   '/admin-dispute-detail': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting': typeof AdminInsuranceReportingIndexRoute
@@ -976,6 +985,7 @@ export interface FileRoutesById {
   '/admin-dealer-detail/': typeof AdminDealerDetailIndexRoute
   '/admin-deliveries/': typeof AdminDeliveriesIndexRoute
   '/admin-delivery-detail/': typeof AdminDeliveryDetailIndexRoute
+  '/admin-delivery-policies/': typeof AdminDeliveryPoliciesIndexRoute
   '/admin-dispute-detail/': typeof AdminDisputeDetailIndexRoute
   '/admin-disputes/': typeof AdminDisputesIndexRoute
   '/admin-insurance-reporting/': typeof AdminInsuranceReportingIndexRoute
@@ -1092,6 +1102,7 @@ export interface FileRouteTypes {
     | '/admin-dealer-detail/'
     | '/admin-deliveries/'
     | '/admin-delivery-detail/'
+    | '/admin-delivery-policies/'
     | '/admin-dispute-detail/'
     | '/admin-disputes/'
     | '/admin-insurance-reporting/'
@@ -1205,6 +1216,7 @@ export interface FileRouteTypes {
     | '/admin-dealer-detail'
     | '/admin-deliveries'
     | '/admin-delivery-detail'
+    | '/admin-delivery-policies'
     | '/admin-dispute-detail'
     | '/admin-disputes'
     | '/admin-insurance-reporting'
@@ -1319,6 +1331,7 @@ export interface FileRouteTypes {
     | '/admin-dealer-detail/'
     | '/admin-deliveries/'
     | '/admin-delivery-detail/'
+    | '/admin-delivery-policies/'
     | '/admin-dispute-detail/'
     | '/admin-disputes/'
     | '/admin-insurance-reporting/'
@@ -1413,6 +1426,7 @@ export interface RootRouteChildren {
   AdminDealerDetailIndexRoute: typeof AdminDealerDetailIndexRoute
   AdminDeliveriesIndexRoute: typeof AdminDeliveriesIndexRoute
   AdminDeliveryDetailIndexRoute: typeof AdminDeliveryDetailIndexRoute
+  AdminDeliveryPoliciesIndexRoute: typeof AdminDeliveryPoliciesIndexRoute
   AdminDisputeDetailIndexRoute: typeof AdminDisputeDetailIndexRoute
   AdminDisputesIndexRoute: typeof AdminDisputesIndexRoute
   AdminInsuranceReportingIndexRoute: typeof AdminInsuranceReportingIndexRoute
@@ -2002,6 +2016,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDisputeDetailIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-delivery-policies/': {
+      id: '/admin-delivery-policies/'
+      path: '/admin-delivery-policies'
+      fullPath: '/admin-delivery-policies/'
+      preLoaderRoute: typeof AdminDeliveryPoliciesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-delivery-detail/': {
       id: '/admin-delivery-detail/'
       path: '/admin-delivery-detail'
@@ -2348,6 +2369,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDealerDetailIndexRoute: AdminDealerDetailIndexRoute,
   AdminDeliveriesIndexRoute: AdminDeliveriesIndexRoute,
   AdminDeliveryDetailIndexRoute: AdminDeliveryDetailIndexRoute,
+  AdminDeliveryPoliciesIndexRoute: AdminDeliveryPoliciesIndexRoute,
   AdminDisputeDetailIndexRoute: AdminDisputeDetailIndexRoute,
   AdminDisputesIndexRoute: AdminDisputesIndexRoute,
   AdminInsuranceReportingIndexRoute: AdminInsuranceReportingIndexRoute,
