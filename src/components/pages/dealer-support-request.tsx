@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
+import { WhatsAppUrgentCallout } from '@/components/shared/WhatsAppSupportButton'
 import {
   CATEGORIES_BY_ROLE,
   PRIORITY_OPTIONS,
@@ -280,6 +281,13 @@ export default function DealerSupportRequest() {
             </p>
           </div>
         </section>
+
+        {/* Urgent? — WhatsApp live chat with Operations (skips the ticket queue) */}
+        <WhatsAppUrgentCallout
+          title="Urgent delivery problem? Message us on WhatsApp"
+          description="If your issue is time-sensitive (active delivery, pickup problem, driver unreachable), skip the queue — open WhatsApp and write to us. Our operations team replies directly, usually within minutes. For everything else, submit this form and we'll get back to you by email."
+          className="mb-6"
+        />
 
         {/* Delivery context (if applicable) */}
         {deliveryId && deliveryData && (

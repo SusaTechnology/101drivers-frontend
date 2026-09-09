@@ -34,6 +34,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { WhatsAppUrgentCallout } from '@/components/shared/WhatsAppSupportButton'
 import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import {
@@ -293,6 +294,13 @@ export default function DealerSupportList() {
             New Request
           </Link>
         </section>
+
+        {/* Urgent? — WhatsApp live chat with Operations (skips the ticket queue) */}
+        <WhatsAppUrgentCallout
+          title="Urgent delivery problem? Message us on WhatsApp"
+          description="If your issue is time-sensitive (active delivery, pickup problem, driver unreachable), skip the queue — open WhatsApp and write to us. Our operations team replies directly, usually within minutes. Otherwise, submit a request and track it here."
+          className="mb-6"
+        />
 
         {/* Filters */}
         <Card className="border-slate-200 dark:border-slate-800 rounded-3xl mb-6">
