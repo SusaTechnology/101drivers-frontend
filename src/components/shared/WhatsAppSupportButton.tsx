@@ -41,7 +41,13 @@ interface WhatsAppSupportButtonProps {
 }
 
 /**
- * Green WhatsApp CTA that opens a chat with 101 Drivers Support.
+ * Green-on-light WhatsApp CTA that opens a chat with 101 Drivers Support.
+ *
+ * Contrast-corrected per product feedback: the label and icon are GREEN
+ * (emerald-700 on the white button in light mode = 5:1 contrast; brand
+ * #25D366 on slate-900 in dark mode = ~10:1) instead of white — white
+ * text washed out on bright backgrounds. The green border + icon keep
+ * the WhatsApp identity in both modes.
  *
  * Rendered as a real <a target="_blank"> so middle-click / long-press
  * "open in new tab" still works. rel="noopener noreferrer" because the
@@ -65,7 +71,9 @@ export function WhatsAppSupportButton({
         type="button"
         size={size}
         className={cn(
-          'bg-[#25D366] hover:bg-[#1DA851] text-white font-bold rounded-xl shadow-md shadow-[#25D366]/25',
+          'bg-white dark:bg-slate-900 border border-[#25D366] text-emerald-700 dark:text-[#25D366]',
+          'hover:bg-[#25D366]/10 hover:border-[#25D366]',
+          'font-bold rounded-xl',
           buttonClassName,
         )}
       >

@@ -735,7 +735,7 @@ export default function LandingPage() {
               href="https://wa.me/message/YQXTDFV6STKUP1"
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-[#25D366] transition-colors"
+              className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-[#25D366] hover:opacity-80 transition-opacity"
             >
               <WhatsAppIcon className="h-4 w-4" />
               WhatsApp Us
