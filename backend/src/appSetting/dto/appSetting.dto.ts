@@ -131,6 +131,9 @@ export class DeliverySettingsResponseDto {
 
   @ApiProperty()
   transitBufferMinutes!: number;
+
+  @ApiProperty()
+  closePenaltyFeeDollars!: number;
 }
 
 export class UpdateDeliverySettingsBody {
@@ -143,6 +146,13 @@ export class UpdateDeliverySettingsBody {
   @IsOptional()
   @IsNumber()
   transitBufferMinutes?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(10000)
+  closePenaltyFeeDollars?: number;
 }
 
 // ============================================================

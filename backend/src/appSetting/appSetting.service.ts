@@ -242,22 +242,23 @@ export class AppSettingService extends AppSettingServiceBase {
   // DELIVERY SETTINGS (max radius + transit buffer)
   // ============================================================
 
-  async getDeliverySettings(): Promise<{ maximumRadiusMiles: number; transitBufferMinutes: number }> {
+  async getDeliverySettings(): Promise<{ maximumRadiusMiles: number; transitBufferMinutes: number; closePenaltyFeeDollars: number }> {
     const row = await this.prisma.appSetting.findUnique({
       where: { key: DELIVERY_SETTINGS_KEY },
       select: { value: true },
     });
 
-    const defaults = { maximumRadiusMiles: 25, transitBufferMinutes: 60 };
+    const defaults = { maximumRadiusMiles: 25, transitBufferMinutes: 60, closePenaltyFeeDollars: 48 };
     const value = row?.value && typeof row.value === "object" ? row.value : {};
     return { ...defaults, ...value };
   }
 
-  async updateDeliverySettings(input: { maximumRadiusMiles?: number; transitBufferMinutes?: number }): Promise<{ maximumRadiusMiles: number; transitBufferMinutes: number }> {
+  async updateDeliverySettings(input: { maximumRadiusMiles?: number; transitBufferMinutes?: number; closePenaltyFeeDollars?: number }): Promise<{ maximumRadiusMiles: number; transitBufferMinutes: number; closePenaltyFeeDollars: number }> {
     const current = await this.getDeliverySettings();
     const next = {
       maximumRadiusMiles: input.maximumRadiusMiles ?? current.maximumRadiusMiles,
       transitBufferMinutes: input.transitBufferMinutes ?? current.transitBufferMinutes,
+      closePenaltyFeeDollars: input.closePenaltyFeeDollars ?? current.closePenaltyFeeDollars,
     };
 
     await this.prisma.appSetting.upsert({

@@ -25,8 +25,12 @@
  *   • Dealer close: auto-applies the penalty if the status is BOOKED/ACTIVE.
  *
  * LOOSE COUPLING:
- *   • The penalty amount is a single constant (CLOSE_PENALTY_FEE_DOLLARS)
- *     at the top of this file. Change it in one place.
+ *   • The penalty amount is admin-configurable: it lives in the
+ *     DELIVERY_SETTINGS AppSetting (closePenaltyFeeDollars, edited from
+ *     Admin → Settings → Delivery Settings) and is read LIVE at
+ *     preview/apply time. If the setting is missing or invalid it falls
+ *     back to CLOSE_PENALTY_FEE_DOLLARS (48) below. Setting it to 0
+ *     disables the penalty entirely.
  *   • This engine is injected into DeliveryLifecycleService and
  *     AdminDeliveryEngine. They call `applyClosePenalty` inside their
  *     existing transactions. No other service knows about the penalty.
@@ -56,13 +60,15 @@ import { StripeService } from "../../providers/stripe/stripe.service";
 import { businessNow } from "../../delivery-logistics/business-time";
 
 /**
- * The base penalty fee applied when a delivery is closed/cancelled after
- * a driver has committed to it (BOOKED/ACTIVE) but the vehicle couldn't
- * be moved.
- *
- * Per product spec: $48. Change this single constant to adjust the fee.
+ * FALLBACK close penalty fee — used only when the DELIVERY_SETTINGS
+ * AppSetting has no valid closePenaltyFeeDollars value (e.g. a fresh
+ * database before the admin ever saved Delivery Settings). The live
+ * value is admin-configurable from Admin → Settings → Delivery Settings.
  */
 export const CLOSE_PENALTY_FEE_DOLLARS = 48;
+
+/** AppSetting key that stores the live close penalty configuration. */
+const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
 
 /**
  * Preview result — returned to the admin UI so the admin can decide
@@ -123,6 +129,32 @@ export class DeliveryClosePenaltyEngine {
   ) {}
 
   /**
+   * Live penalty amount in dollars — read from DELIVERY_SETTINGS.
+   * Invalid/missing values fall back to CLOSE_PENALTY_FEE_DOLLARS.
+   * A stored 0 disables the penalty. Rounded to 2 decimals so a value
+   * like 49.99 converts to exact cents for Stripe partial captures.
+   */
+  async getClosePenaltyFeeDollars(): Promise<number> {
+    try {
+      const row = await this.prisma.appSetting.findUnique({
+        where: { key: DELIVERY_SETTINGS_KEY },
+        select: { value: true },
+      });
+      const raw = (row?.value as Record<string, unknown> | null)
+        ?.closePenaltyFeeDollars;
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 0) {
+        return Math.round(n * 100) / 100;
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `Failed to read close penalty setting — falling back to $${CLOSE_PENALTY_FEE_DOLLARS}: ${err?.message}`
+      );
+    }
+    return CLOSE_PENALTY_FEE_DOLLARS;
+  }
+
+  /**
    * Preview what would happen if the penalty is applied.
    *
    * Called by the admin UI BEFORE the admin confirms the cancel — so the
@@ -180,24 +212,39 @@ export class DeliveryClosePenaltyEngine {
       };
     }
 
+    // Live admin-configured amount (0 = penalty disabled).
+    const penaltyDollars = await this.getClosePenaltyFeeDollars();
+
+    if (penaltyDollars <= 0) {
+      return {
+        driverCommitted: true,
+        penaltyAmountDollars: 0,
+        penaltyAmountCents: 0,
+        driverId,
+        outcome: "no_penalty",
+        summary:
+          "A driver has committed to this delivery, but the close penalty is currently disabled ($0) in Delivery Settings. No penalty fee will be applied.",
+      };
+    }
+
     if (!driverId) {
       return {
         driverCommitted: true,
-        penaltyAmountDollars: CLOSE_PENALTY_FEE_DOLLARS,
-        penaltyAmountCents: CLOSE_PENALTY_FEE_DOLLARS * 100,
+        penaltyAmountDollars: penaltyDollars,
+        penaltyAmountCents: Math.round(penaltyDollars * 100),
         driverId: null,
         outcome: "no_driver",
-        summary: `A driver has committed to this delivery (status: ${delivery.status}), but there is no active driver assignment. The $${CLOSE_PENALTY_FEE_DOLLARS} penalty fee can be applied to the customer, but no driver payout will be created.`,
+        summary: `A driver has committed to this delivery (status: ${delivery.status}), but there is no active driver assignment. The $${penaltyDollars.toFixed(2)} penalty fee can be applied to the customer, but no driver payout will be created.`,
       };
     }
 
     return {
       driverCommitted: true,
-      penaltyAmountDollars: CLOSE_PENALTY_FEE_DOLLARS,
-      penaltyAmountCents: CLOSE_PENALTY_FEE_DOLLARS * 100,
+      penaltyAmountDollars: penaltyDollars,
+      penaltyAmountCents: Math.round(penaltyDollars * 100),
       driverId,
       outcome: "apply_penalty",
-      summary: `A driver has committed to this delivery (status: ${delivery.status}). A $${CLOSE_PENALTY_FEE_DOLLARS} penalty fee will be applied to the customer and paid to the driver.`,
+      summary: `A driver has committed to this delivery (status: ${delivery.status}). A $${penaltyDollars.toFixed(2)} penalty fee will be applied to the customer and paid to the driver.`,
     };
   }
 
@@ -253,8 +300,17 @@ export class DeliveryClosePenaltyEngine {
       };
     }
 
-    const penaltyDollars = CLOSE_PENALTY_FEE_DOLLARS;
-    const penaltyCents = penaltyDollars * 100;
+    // Live admin-configured amount (preview already resolved it; 0 = disabled).
+    const penaltyDollars = preview.penaltyAmountDollars ?? CLOSE_PENALTY_FEE_DOLLARS;
+    if (penaltyDollars <= 0) {
+      return {
+        applied: false,
+        penaltyAmountDollars: 0,
+        driverPayoutId: null,
+        paymentStatus: null,
+      };
+    }
+    const penaltyCents = Math.round(penaltyDollars * 100);
 
     // ── Load payment + assignment in the transaction ──────────────────
     const delivery = await tx.deliveryRequest.findUnique({

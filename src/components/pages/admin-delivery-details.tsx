@@ -296,7 +296,7 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
           });
         } else if (applyPenalty && penaltyPreview?.driverCommitted) {
           toast.success('Delivery cancelled with penalty', {
-            description: `$48 penalty applied to the customer and paid to the driver.`,
+            description: `$${(penaltyPreview?.penaltyAmountDollars ?? 48).toFixed(2)} penalty applied to the customer and paid to the driver.`,
           });
         } else {
           toast.success('Delivery cancelled successfully');
@@ -1552,8 +1552,8 @@ export default function AdminDeliveryDetailsPage({ deliveryId }: { deliveryId: s
             {/* Close penalty preview — fetched when the dialog opens.
                 Shows the admin whether a driver has committed to the
                 delivery (status is BOOKED or ACTIVE) and lets them choose
-                whether to apply the $48 penalty fee to the customer +
-                pay it to the driver. */}
+                whether to apply the admin-configured close penalty fee
+                to the customer + pay it to the driver. */}
             {penaltyPreviewLoading ? (
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
