@@ -67,6 +67,7 @@ import { toast } from "sonner";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
 import { calculateHomeQuote, getAdvertisedRateSummary } from "@/lib/pricing/home-quote";
+import { WhatsAppIcon } from "@/components/shared/WhatsAppSupportButton";
 import { usePublicDefaultPricing } from "@/hooks/pricing/usePublicDefaultPricing";
 import { SEOHead } from "../shared/SEOHead";
 
@@ -730,6 +731,18 @@ export default function LandingPage() {
             >
               Contact Us
             </Link>
+            <a
+              href="https://wa.me/message/YQXTDFV6STKUP1"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-[#25D366] transition-colors"
+            >
+              <WhatsAppIcon className="h-4 w-4" />
+              WhatsApp Us
+            </a>
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Urgent? Message us — we reply fast
+            </p>
           </div>
         </div>
 

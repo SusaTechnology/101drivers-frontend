@@ -33,6 +33,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { WhatsAppUrgentCallout } from '@/components/shared/WhatsAppSupportButton'
 import {
   Card,
   CardContent,
@@ -319,6 +320,12 @@ export default function DriverIssueReportPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Urgent? — WhatsApp live chat with Operations (skips the ticket queue) */}
+        <WhatsAppUrgentCallout
+          title="Urgent and on the clock? Message us on WhatsApp"
+          description="Submitting this report emails Operations, but if you need help RIGHT NOW (stuck at pickup, unsafe situation, time-sensitive delivery), open WhatsApp and write to us — our team replies there directly, usually within minutes. Include your delivery number."
+        />
 
         {/* Issue type */}
         <Card className="border-slate-200 dark:border-slate-800 shadow-lg">

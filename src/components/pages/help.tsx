@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { WhatsAppSupportButton } from '@/components/shared/WhatsAppSupportButton'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -350,12 +351,20 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
                     Need help? Reach out to our team
                   </p>
-                  <a href="mailto:ops@101drivers.techbee.et?subject=Customer Support Request">
-                    <Button size="sm" variant="outline" className="w-full text-xs font-bold rounded-xl">
-                      <Mail className="h-3 w-3 mr-1" />
-                      Email Us
-                    </Button>
-                  </a>
+                  <div className="space-y-2">
+                    <WhatsAppSupportButton
+                      size="sm"
+                      label="WhatsApp Us — Fastest"
+                      className="w-full [&>button]:w-full"
+                      buttonClassName="text-xs"
+                    />
+                    <a href="mailto:ops@101drivers.techbee.et?subject=Customer Support Request" className="block">
+                      <Button size="sm" variant="outline" className="w-full text-xs font-bold rounded-xl">
+                        <Mail className="h-3 w-3 mr-1" />
+                        Email Us
+                      </Button>
+                    </a>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -422,14 +431,22 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
                   </div>
                   <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-1">Report an Issue</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                    Having trouble? Let us know
+                    Urgent? WhatsApp us. Otherwise, email
                   </p>
-                  <a href="mailto:ops@101drivers.techbee.et?subject=Driver Support Request">
-                    <Button size="sm" variant="outline" className="w-full text-xs font-bold rounded-xl">
-                      <Mail className="h-3 w-3 mr-1" />
-                      Email Us
-                    </Button>
-                  </a>
+                  <div className="space-y-2">
+                    <WhatsAppSupportButton
+                      size="sm"
+                      label="WhatsApp Us — Fastest"
+                      className="w-full [&>button]:w-full"
+                      buttonClassName="text-xs"
+                    />
+                    <a href="mailto:ops@101drivers.techbee.et?subject=Driver Support Request" className="block">
+                      <Button size="sm" variant="outline" className="w-full text-xs font-bold rounded-xl">
+                        <Mail className="h-3 w-3 mr-1" />
+                        Email Us
+                      </Button>
+                    </a>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -443,10 +460,18 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
               <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">
                 Still need help?
               </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
-                Our operations team is available to assist you with any questions or issues.
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2 max-w-md mx-auto">
+                If your issue is <span className="font-extrabold text-slate-900 dark:text-white">urgent</span>, the fastest way to reach us is WhatsApp — write to us there and our operations team will reply directly, usually within minutes.
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
+                For non-urgent questions, email or call us and we'll get back to you the same business day.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <WhatsAppSupportButton
+                  label="Chat on WhatsApp"
+                  className="w-full sm:w-auto [&>button]:w-full"
+                  buttonClassName="px-6"
+                />
                 <a href="mailto:ops@101drivers.techbee.et?subject=Support Request from Help Center">
                   <Button className="bg-lime-500 hover:bg-lime-600 text-slate-950 font-bold rounded-xl px-6">
                     <Mail className="h-4 w-4 mr-2" />
