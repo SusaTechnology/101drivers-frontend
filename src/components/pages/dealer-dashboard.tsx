@@ -82,7 +82,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getUser, useDataQuery, useDataMutation, authFetch, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useDataMutation, authFetch, clearAuth, stopSessionKeepAlive, serverLogout } from '@/lib/tanstack/dataQuery'
 import NotificationBell from '@/components/notifications/NotificationBell'
 // Postpaid billing panel — dealer-facing read-only summary (outstanding,
 // next invoice, frozen banner, cap usage). Only rendered when the customer
@@ -209,6 +209,9 @@ export default function DealerDashboard() {
   }
 
   const handleSignOut = () => {
+    // Ask the backend to clear the httpOnly refresh-token cookie (best effort),
+    // otherwise the 7-day cookie would survive logout in the browser.
+    serverLogout()
     clearAuth()
     stopSessionKeepAlive()
     toast.success('Signed out successfully')

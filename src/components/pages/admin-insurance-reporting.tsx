@@ -30,7 +30,7 @@ import {
   useInsuranceMileageReport,
   formatReportMiles,
 } from '@/hooks/useAdminReports';
-import { getAccessToken } from '@/lib/tanstack/dataQuery';
+import { authFetch } from '@/lib/tanstack/dataQuery';
 import { useCustomerLookup } from '@/hooks/useAdminDashboard';
 import { useDriverLookup } from '@/hooks/useAdminDeliveries';
 import type { InsuranceMileageReportParams } from '@/types/report';
@@ -324,18 +324,9 @@ function AdminExportDialog({ open, onOpenChange, pageFilters, totalRows }: any) 
 
     setColumnsLoading(true)
     // Step 1: fetch the portal password using the admin's JWT.
-    fetch(`${API_BASE}/api/insurance-portal/password`, {
-      credentials: 'include',
-      headers: (() => {
-        const token = getAccessToken()
-        return token ? { Authorization: `Bearer ${token}` } : {}
-      })(),
-    })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`Failed to fetch portal password (${r.status})`)
-        return r.json()
-      })
-      .then(({ password, isSet }: { password: string; isSet: boolean }) => {
+    // authFetch refreshes an expired access token on 401 and retries.
+    authFetch<{ password: string; isSet: boolean }>(`${API_BASE}/api/insurance-portal/password`)
+      .then(({ password, isSet }) => {
         if (!isSet || !password) {
           throw new Error('Insurance portal password is not set. Set it from Admin → Config first.')
         }
@@ -366,13 +357,10 @@ function AdminExportDialog({ open, onOpenChange, pageFilters, totalRows }: any) 
     setIsExporting(true)
     try {
       // Re-fetch the portal password (the dialog may have been open a while).
-      const token = getAccessToken()
-      const pwdRes = await fetch(`${API_BASE}/api/insurance-portal/password`, {
-        credentials: 'include',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-      if (!pwdRes.ok) throw new Error('Failed to fetch portal password')
-      const { password } = await pwdRes.json()
+      // authFetch refreshes an expired access token on 401 and retries.
+      const { password } = await authFetch<{ password: string }>(
+        `${API_BASE}/api/insurance-portal/password`
+      )
       if (!password) throw new Error('Insurance portal password is not set.')
 
       const params = new URLSearchParams()

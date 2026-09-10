@@ -23,7 +23,7 @@ import {
   Plus,
   AlertCircle,
 } from 'lucide-react';
-import { getUser, getAccessToken } from '@/lib/tanstack/dataQuery';
+import { getUser, authFetch } from '@/lib/tanstack/dataQuery';
 import { BUSINESS_TZ } from '@/lib/timezone';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -51,25 +51,10 @@ export default function DealerDrafts() {
   const { data: drafts, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['draftDeliveries', customerId],
     queryFn: async () => {
-      const token = getAccessToken();
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/deliveryRequests?where[status]=DRAFT&where[customer][id]=${customerId}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          credentials: 'include',
-        }
+      // authFetch refreshes an expired access token on 401 and retries.
+      return authFetch(
+        `${import.meta.env.VITE_API_URL}/api/deliveryRequests?where[status]=DRAFT&where[customer][id]=${customerId}`
       );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const msg = Array.isArray(errorData?.message)
-          ? errorData.message.join('; ')
-          : errorData?.message || `Failed to fetch drafts (status ${response.status})`;
-        throw new Error(msg);
-      }
-      return response.json();
     },
     enabled: !!customerId,
     staleTime: 30 * 1000,
@@ -78,26 +63,10 @@ export default function DealerDrafts() {
   // Delete draft mutation
   const deleteMutation = useMutation({
     mutationFn: async (draftId: string) => {
-      const token = getAccessToken();
-      const response = await fetch(
+      return authFetch(
         `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          credentials: 'include',
-        }
+        { method: 'DELETE' }
       );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const msg = Array.isArray(errorData?.message)
-          ? errorData.message.join('; ')
-          : errorData?.message || `Failed to delete draft (status ${response.status})`;
-        throw new Error(msg);
-      }
-      return response.json();
     },
     onSuccess: () => {
       toast.success('Draft deleted successfully');

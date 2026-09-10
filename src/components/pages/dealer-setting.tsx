@@ -51,7 +51,7 @@ import {
   usePatch,
   useDelete,
   useDataMutation,
-  getAccessToken,
+  authFetch,
 } from '@/lib/tanstack/dataQuery'
 import { useQuery } from '@tanstack/react-query'
 
@@ -254,19 +254,10 @@ const confirmDelete = () => {
   } = useQuery<SavedAddress[]>({
     queryKey: ['savedAddresses', customerId],
     queryFn: async () => {
-      const token = getAccessToken();
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/savedAddresses?where[customer][id]=${customerId}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          credentials: 'include',
-        }
+      const response = await authFetch(
+        `${import.meta.env.VITE_API_URL}/api/savedAddresses?where[customer][id]=${customerId}`
       );
-      if (!response.ok) throw new Error('Failed to fetch saved addresses');
-      return response.json();
+      return response;
     },
     enabled: !!customerId,
     staleTime: 5 * 60 * 1000,
@@ -294,19 +285,10 @@ const confirmDelete = () => {
   } = useQuery<SavedVehicle[]>({
     queryKey: ['savedVehicles', customerId],
     queryFn: async () => {
-      const token = getAccessToken();
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/savedVehicles?where[customer][id]=${customerId}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          credentials: 'include',
-        }
+      const response = await authFetch(
+        `${import.meta.env.VITE_API_URL}/api/savedVehicles?where[customer][id]=${customerId}`
       );
-      if (!response.ok) throw new Error('Failed to fetch saved vehicles');
-      return response.json();
+      return response;
     },
     enabled: !!customerId,
     staleTime: 5 * 60 * 1000,

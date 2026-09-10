@@ -58,6 +58,7 @@ import {
   useDataMutation,
   isAuthenticated,
   getUser,
+  authFetchRaw,
 } from "@/lib/tanstack/dataQuery";
 
 // ==================== CONSTANTS ====================
@@ -347,13 +348,11 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
           body: JSON.stringify({ ...payload, token }),
         });
       } else {
-        // Auth-based: use useDataMutation style
-        res = await fetch(`${API_URL}/api/drivers/onboarding-complete`, {
+        // Auth-based: authFetchRaw attaches a fresh token and refreshes +
+        // retries automatically on 401 when the access token has expired.
+        res = await authFetchRaw(`${API_URL}/api/drivers/onboarding-complete`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       }

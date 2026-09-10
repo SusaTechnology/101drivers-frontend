@@ -43,7 +43,7 @@ import LocationAutocomplete from "@/components/map/LocationAutocomplete";
 import RouteMap from "@/components/map/RouteMap";
 import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
-import { getUser, getAccessToken } from "@/lib/tanstack/dataQuery";
+import { getUser, authFetch } from "@/lib/tanstack/dataQuery";
 import { BUSINESS_TZ } from '@/lib/timezone';
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -192,20 +192,10 @@ export default function EditDraftPage() {
       }
 
       try {
-        const token = getAccessToken();
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-            },
-            credentials: 'include',
-          }
+        // authFetch refreshes an expired access token on 401 and retries.
+        const draft = await authFetch<any>(
+          `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`
         );
-
-        if (!response.ok) throw new Error('Failed to fetch draft');
-        const draft = await response.json();
 
         // Populate form
         setValue('serviceType', draft.serviceType);
@@ -276,27 +266,13 @@ export default function EditDraftPage() {
   // Mutations
   const updateDraftMutation = useMutation({
     mutationFn: async (payload: any) => {
-      const token = getAccessToken();
-      const response = await fetch(
+      return authFetch(
         `${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`,
         {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          credentials: 'include',
           body: JSON.stringify(payload),
         }
       );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const msg = Array.isArray(errorData?.message)
-          ? errorData.message.join('; ')
-          : errorData?.message || `Failed to update draft (status ${response.status})`;
-        throw new Error(msg);
-      }
-      return response.json();
     },
     onSuccess: () => {
       toast.success("Draft updated successfully");
@@ -309,38 +285,20 @@ export default function EditDraftPage() {
 
   const submitForQuoteMutation = useMutation({
     mutationFn: async (payload: any) => {
-      const token = getAccessToken();
-      const response = await fetch(
+      return authFetch(
         `${import.meta.env.VITE_API_URL}/api/deliveryRequests/create-from-quote`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          credentials: 'include',
           body: JSON.stringify(payload),
         }
       );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const msg = Array.isArray(errorData?.message)
-          ? errorData.message.join('; ')
-          : errorData?.message || `Failed to submit for quote (status ${response.status})`;
-        throw new Error(msg);
-      }
-      return response.json();
     },
     onSuccess: () => {
       toast.success("Delivery requested successfully!");
       // Optionally delete the draft after successful submission
       if (draftId) {
-        fetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`, {
+        authFetch(`${import.meta.env.VITE_API_URL}/api/deliveryRequests/${draftId}`, {
           method: 'DELETE',
-          headers: {
-            ...(getAccessToken() ? { 'Authorization': `Bearer ${getAccessToken()}` } : {}),
-          },
-          credentials: 'include',
         }).catch(() => {}); // Ignore delete errors
       }
       queryClient.invalidateQueries({ queryKey: ['draftDeliveries'] });

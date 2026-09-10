@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Loader2, Eye, EyeOff, CheckCircle2, AlertCircle } from "lucide-react";
-import { getAccessToken } from "@/lib/tanstack/dataQuery";
+import { authFetch } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -57,11 +57,11 @@ export function InsurancePortalPasswordDialog({
     }
     let cancelled = false;
 
-    const token = getAccessToken();
-    fetch(`${API_BASE}/api/insurance-portal/password`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((r) => (r.ok ? r.json() : null))
+    // authFetch refreshes the token on 401 and retries, so the dialog works
+    // even if the access token expired while the page was open.
+    authFetch<{ password?: string; isSet?: boolean }>(
+      `${API_BASE}/api/insurance-portal/password`
+    )
       .then((data) => {
         if (cancelled || !data) return;
         setPassword(data.password ?? "");
@@ -90,17 +90,11 @@ export function InsurancePortalPasswordDialog({
       return;
     }
     setIsSaving(true);
-    const token = getAccessToken();
-    fetch(`${API_BASE}/api/insurance-portal/password`, {
+    authFetch(`${API_BASE}/api/insurance-portal/password`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
       body: JSON.stringify({ password }),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error();
+      .then(() => {
         toast.success("Insurance portal password updated");
         setIsSet(true);
         onOpenChange(false);

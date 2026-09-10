@@ -92,7 +92,7 @@ import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, clearAuth, stopSessionKeepAlive, serverLogout } from '@/lib/tanstack/dataQuery'
 import { useSocketConnected } from '@/hooks/useSocket'
 import { getSocket } from '@/lib/socket'
 import { trackSeenDeliveries, registerRefetch } from '@/lib/driver-feed-tracker'
@@ -409,6 +409,9 @@ export default function DriverMapPage() {
   }
 
   const handleSignOut = () => {
+    // Ask the backend to clear the httpOnly refresh-token cookie (best effort),
+    // otherwise the 7-day cookie would survive logout in the browser.
+    serverLogout()
     clearAuth()
     stopSessionKeepAlive()
     toast.success('Signed out successfully')

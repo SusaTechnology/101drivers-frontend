@@ -16,7 +16,7 @@ import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
-import { getAccessToken } from '@/lib/tanstack/dataQuery'
+import { authFetch } from '@/lib/tanstack/dataQuery'
 import { useQueryClient } from '@tanstack/react-query'
 import { driverFaqs, customerFaqs } from '@/components/pages/help'
 
@@ -279,13 +279,11 @@ export default function AdminContentPage() {
   const handleSave = () => {
     setIsSaving(true)
     const body = activeSection.type === 'richtext' ? { content } : { content: faqs }
-    const token = getAccessToken()
-    fetch(`${API_BASE}/api/content/${activeKey}`, {
+    // authFetch refreshes an expired access token on 401 and retries.
+    authFetch(`${API_BASE}/api/content/${activeKey}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
       body: JSON.stringify(body),
-    }).then(res => {
-      if (!res.ok) throw new Error()
+    }).then(() => {
       toast.success('Content saved successfully')
       // Invalidate the React Query cache for this key so that the next
       // tab switch refetches fresh data instead of showing stale cache.

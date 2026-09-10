@@ -112,16 +112,11 @@ export function startSessionKeepAlive() {
     
     try {
       console.log('🔄 Proactive token refresh...');
-      if (!refreshTokenPromise) {
-        refreshTokenPromise = refreshAccessToken();
-      }
-      await refreshTokenPromise;
-      refreshTokenPromise = null;
+      await refreshShared();
     } catch (error) {
       console.error('Proactive refresh failed:', error);
       // Don't clear auth on proactive refresh failure
       // The next API call will handle it if needed
-      refreshTokenPromise = null;
     }
   }, TOKEN_REFRESH_INTERVAL);
 }
@@ -146,8 +141,10 @@ if (typeof window !== 'undefined') {
   // Also refresh token when tab becomes visible (user returns to app)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && isAuthenticated()) {
-      // Silently refresh token when user comes back to the tab
-      refreshAccessToken().catch(() => {
+      // Silently refresh token when user comes back to the tab.
+      // Goes through the shared helper so it deduplicates with any
+      // in-flight reactive refresh instead of racing it.
+      refreshShared().catch(() => {
         // Ignore errors - user might need to re-login on next action
       });
     }
@@ -191,16 +188,33 @@ export interface MutationParams<TData = any, TVariables = any> {
 
 // ==================== BASE FETCH ====================
 
+/**
+ * Run a single deduplicated token refresh.
+ *
+ * All refresh call sites (ensureAuth, 401 retry in baseFetch, file uploads,
+ * authFetchRaw, keep-alive interval) go through this helper so that concurrent
+ * callers share one in-flight request. The shared promise is ALWAYS cleared in
+ * `finally` — previously a failed refresh left a rejected promise in
+ * `refreshTokenPromise`, which poisoned every later caller with the stale
+ * error even after the cooldown had passed.
+ */
+async function refreshShared(): Promise<string> {
+  try {
+    if (!refreshTokenPromise) {
+      refreshTokenPromise = refreshAccessToken();
+    }
+    return await refreshTokenPromise;
+  } finally {
+    refreshTokenPromise = null;
+  }
+}
+
 async function ensureAuth(): Promise<string | null> {
   let token = getAccessToken();
   const user = getUser();
 
   if (!token || !user) {
-    if (!refreshTokenPromise) {
-      refreshTokenPromise = refreshAccessToken();
-    }
-    token = await refreshTokenPromise;
-    refreshTokenPromise = null;
+    token = await refreshShared();
   }
 
   return token;
@@ -212,8 +226,12 @@ async function baseFetch<T>(
   requiresAuth = true,
   skipTokenRefresh = false,
 ): Promise<T> {
+  // Never force a JSON content-type on multipart bodies — the browser must
+  // set `multipart/form-data; boundary=...` itself or the server cannot parse
+  // the request (this is what previously forced uploads into useFileUpload).
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: HeadersInit = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...options.headers,
   };
 
@@ -243,38 +261,34 @@ async function baseFetch<T>(
   try {
     const response = await fetch(url, finalOptions);
 
-    // Handle 401/403 with token refresh ONLY if not a public endpoint
-    if ((response.status === 401 || response.status === 403) && !skipTokenRefresh) {
-      try {
-        if (!refreshTokenPromise) {
-          refreshTokenPromise = refreshAccessToken();
-        }
+    // Handle 401 with token refresh ONLY if not a public endpoint.
+    // 401 = token expired/invalid → a fresh token can fix it.
+    // 403 = authenticated but NOT ALLOWED (role/permission) — refreshing the
+    // token cannot change that, and if the refresh cookie happens to be
+    // missing/expired the 401 from the refresh endpoint would incorrectly log
+    // the user out with "Session expired" instead of surfacing the real
+    // permission error. So 403 is surfaced directly, never retried.
+    if (response.status === 401 && !skipTokenRefresh) {
+      const newToken = await refreshShared();
 
-        const newToken = await refreshTokenPromise;
-        refreshTokenPromise = null;
+      // Retry with new token
+      //@ts-ignore
+      headers.Authorization = `Bearer ${newToken}`;
+      const retryResponse = await fetch(url, {
+        ...finalOptions,
+        headers,
+      });
 
-        // Retry with new token
-        //@ts-ignore
-        headers.Authorization = `Bearer ${newToken}`;
-        const retryResponse = await fetch(url, {
-          ...finalOptions,
-          headers,
-        });
-
-        if (!retryResponse.ok) {
-          throw await parseError(retryResponse);
-        }
-
-        // Handle 204 No Content
-        if (retryResponse.status === 204) {
-          return null as T;
-        }
-
-        return retryResponse.json();
-      } catch (refreshError) {
-        refreshTokenPromise = null;
-        throw refreshError;
+      if (!retryResponse.ok) {
+        throw await parseError(retryResponse);
       }
+
+      // Handle 204 No Content
+      if (retryResponse.status === 204) {
+        return null as T;
+      }
+
+      return retryResponse.json();
     }
 
     if (!response.ok) {
@@ -332,18 +346,26 @@ async function refreshAccessToken(): Promise<string> {
     const newAccessToken = data.accessToken;
     setAccessToken(newAccessToken);
 
-    // If the refresh response includes user data (id, username, roles), update it
-    if (data.id && data.username && data.roles && data.profileId) {
+    // If the refresh response includes user data, refresh the stored user so
+    // role/approval-status changes made server-side propagate into the UI.
+    // NOTE: profileId is null for admins (resolveAuthMeta only resolves a
+    // profile for customers/drivers), so it must NOT be required here —
+    // the old strict `data.profileId` check silently skipped the user
+    // refresh for every admin session. Merge over the previous user object
+    // so nothing is lost, with the fresh backend values winning.
+    if (data.id && data.username && data.roles) {
+      const prev = getUser();
       setUser({
+        ...prev,
         id: data.id,
         username: data.username,
-        fullName: data.fullName,
-        profileId: data.profileId,
+        fullName: data.fullName ?? prev?.fullName ?? null,
+        profileId: data.profileId ?? prev?.profileId ?? null,
         roles: data.roles,
-        customerApprovalStatus: data.customerApprovalStatus,
-        driverStatus: data.driverStatus,
-        onboardingCompleted: data.onboardingCompleted,
-        onboardingToken: data.onboardingToken,
+        customerApprovalStatus: data.customerApprovalStatus ?? null,
+        driverStatus: data.driverStatus ?? null,
+        onboardingCompleted: data.onboardingCompleted ?? prev?.onboardingCompleted ?? false,
+        onboardingToken: data.onboardingToken ?? null,
         isActive: data.isActive,
       });
     }
@@ -671,21 +693,32 @@ export function useFileUpload<TData = any>(
 
   return useMutation<TData, Error, FormData>({
     mutationFn: async (formData) => {
-      // Get valid token (handles refresh)
+      // Get valid token (handles refresh when token/user is missing)
       const token = await ensureAuth();
       if (!token) {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch(apiEndPoint, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          // Do NOT set Content-Type – browser will set with boundary
-        },
-        body: formData,
-        credentials: 'include',
-      });
+      const doUpload = (authToken: string) =>
+        fetch(apiEndPoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            // Do NOT set Content-Type – browser will set with boundary
+          },
+          body: formData,
+          credentials: 'include',
+        });
+
+      let response = await doUpload(token);
+
+      // Access token may have expired since it was issued (15 min TTL).
+      // ensureAuth cannot detect that client-side, so handle the 401 here:
+      // refresh once and retry, exactly like baseFetch does for JSON calls.
+      if (response.status === 401) {
+        const newToken = await refreshShared();
+        response = await doUpload(newToken);
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -722,14 +755,73 @@ export function useFileUpload<TData = any>(
   });
 }
 
-// ==================== AUTHENTICATED FETCH HELPER ====================
+// ==================== AUTHENTICATED FETCH HELPERS ====================
 /**
  * Helper function for making authenticated fetch calls outside of React hooks.
  * Use this for imperative API calls (e.g., in event handlers that need immediate feedback).
+ * Returns the parsed JSON body; on 401 the token is refreshed once and the
+ * request retried before failing.
  */
 export async function authFetch<T = any>(
   url: string,
   options: RequestInit = {},
 ): Promise<T> {
   return baseFetch<T>(url, options, true);
+}
+
+/**
+ * Like authFetch, but returns the raw Response so callers can read headers
+ * and consume the body themselves (blobs, CSV/XLSX/PDF downloads, etc.).
+ * On 401 the token is refreshed once and the request retried.
+ */
+export async function authFetchRaw(
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const token = await ensureAuth();
+
+  const buildInit = (authToken: string | null): RequestInit => {
+    const headers: Record<string, string> = {
+      ...((options.headers as Record<string, string> | undefined) ?? {}),
+    };
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
+    return {
+      ...options,
+      headers,
+      credentials: options.credentials ?? (url.includes('/auth/') ? 'include' : 'omit'),
+    };
+  };
+
+  let response = await fetch(url, buildInit(token));
+
+  if (response.status === 401) {
+    const newToken = await refreshShared();
+    response = await fetch(url, buildInit(newToken));
+  }
+
+  return response;
+}
+
+/**
+ * Best-effort server-side logout: asks the backend to clear the httpOnly
+ * refresh-token cookie. Errors are swallowed — local cleanup must proceed
+ * regardless. Used by every sign-out path so the 7-day refresh cookie does
+ * not survive logout in the browser.
+ */
+export async function serverLogout(): Promise<void> {
+  try {
+    const token = getAccessToken();
+    await fetch(`${import.meta.env.VITE_API_URL}/api/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+  } catch {
+    // Ignore — the local clearAuth() still runs.
+  }
 }

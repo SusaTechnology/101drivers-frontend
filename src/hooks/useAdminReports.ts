@@ -1,5 +1,5 @@
 // Hooks for admin reports API
-import { useDataQuery, getAccessToken } from '@/lib/tanstack/dataQuery';
+import { useDataQuery, authFetchRaw } from '@/lib/tanstack/dataQuery';
 import type {
   DeliveriesReportResponse,
   DeliveriesReportParams,
@@ -130,23 +130,20 @@ export function getReportExportUrl(reportType: string, params: Record<string, un
 }
 
 /**
- * Download report file - fetches with credentials and triggers browser download
+ * Download report file - fetches with credentials and triggers browser download.
+ * Uses authFetchRaw so an expired access token is refreshed once and the
+ * download retried automatically instead of failing with a 401.
  */
 export async function downloadReport(reportType: string, params: Record<string, unknown>, format: string): Promise<void> {
   const url = getReportExportUrl(reportType, params, format);
   
-  // Get the access token for authentication
-  const token = getAccessToken();
-  
   try {
-    const response = await fetch(url, {
+    const response = await authFetchRaw(url, {
       method: 'GET',
-      credentials: 'include', // Include cookies for auth
       headers: {
         'Accept': format === 'pdf' ? 'application/pdf' : 
                   format === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 
                   'text/csv',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       },
     });
     

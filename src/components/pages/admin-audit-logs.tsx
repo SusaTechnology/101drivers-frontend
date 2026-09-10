@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
-import { getAccessToken, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { authFetch, useDataQuery } from '@/lib/tanstack/dataQuery'
 import { Navbar } from '../shared/layout/testNavbar'
 import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
@@ -1383,25 +1383,16 @@ export default function AdminAuditLogsPage() {
   } = useQuery({
     queryKey: ['auditLogs', filters, page, pageSize],
     queryFn: async () => {
-      const token = getAccessToken()
       const searchRequest = buildSearchRequest()
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/adminAuditLogs/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify(searchRequest),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || `Request failed with status ${response.status}`)
-      }
-
-      return response.json() as Promise<AuditLog[]>
+      // authFetch refreshes an expired access token on 401 and retries.
+      return authFetch<AuditLog[]>(
+        `${import.meta.env.VITE_API_URL}/api/adminAuditLogs/search`,
+        {
+          method: 'POST',
+          body: JSON.stringify(searchRequest),
+        }
+      )
     },
     staleTime: 30000, // 30 seconds
   })
