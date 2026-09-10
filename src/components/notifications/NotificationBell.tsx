@@ -541,14 +541,15 @@ export default function NotificationBell({ className, userType }: NotificationBe
 
                   {/* Content */}
                   <div className="flex-grow min-w-0">
-                    <div className="flex justify-between items-start mb-1">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white truncate pr-2">
+                    <div className="flex justify-between items-start gap-2 mb-1">
+                      {/* Subject wraps onto the next line when long — never truncated or clipped at the right edge */}
+                      <p className="min-w-0 flex-1 text-sm font-semibold text-slate-900 dark:text-white break-words">
                         {notification.subject}
                       </p>
                       <Badge
                         variant="outline"
                         className={cn(
-                          'ml-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded shrink-0',
+                          'text-[10px] uppercase font-bold px-2 py-0.5 rounded shrink-0',
                           colorStyle.badge === 'green' && 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800',
                           colorStyle.badge === 'blue' && 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800',
                           colorStyle.badge === 'amber' && 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800',
@@ -560,17 +561,20 @@ export default function NotificationBell({ className, userType }: NotificationBe
                       </Badge>
                     </div>
 
-                    {/* Body text */}
+                    {/* Body text — wraps (and breaks long words/URLs) instead of
+                        being cut at the right edge; clamped to 2 lines until
+                        the user explicitly expands it */}
                     <p
                       className={cn(
-                        'text-xs text-slate-600 dark:text-slate-400 mb-1 leading-snug',
+                        'text-xs text-slate-600 dark:text-slate-400 mb-1 leading-snug break-words',
+                        isExpanded && 'whitespace-pre-wrap',
                         !isExpanded && 'line-clamp-2'
                       )}
                     >
                       {notification.body}
                     </p>
 
-                    {isExpanded && (
+                    {(isExpanded || (notification.body?.length ?? 0) > 120) && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -578,7 +582,7 @@ export default function NotificationBell({ className, userType }: NotificationBe
                         }}
                         className="text-[10px] font-semibold text-primary hover:underline mt-1"
                       >
-                        Show less
+                        {isExpanded ? 'Show less' : 'Show more'}
                       </button>
                     )}
 

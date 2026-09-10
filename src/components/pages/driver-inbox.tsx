@@ -622,10 +622,10 @@ export default function DriverInboxPage() {
                           )}
                         </div>
 
-                        <p className="mt-2 text-sm font-extrabold text-slate-900 dark:text-white">
+                        <p className="mt-2 text-sm font-extrabold text-slate-900 dark:text-white break-words">
                           {notification.subject}
                         </p>
-                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400 line-clamp-2 break-words">
                           {notification.body}
                         </p>
 
