@@ -8,7 +8,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useDataQuery, useCreate, authFetch, getUser } from '@/lib/tanstack/dataQuery'
@@ -480,8 +479,13 @@ export default function NotificationBell({ className, userType }: NotificationBe
           )}
         </div>
 
-        {/* Notifications list */}
-        <ScrollArea className="max-h-[400px] overflow-y-auto">
+        {/* Notifications list — plain scroll container. NOTE: Radix ScrollArea's
+            viewport uses `display: table` internally, whose intrinsic width grows
+            to the widest unbreakable line (e.g. a long tracking URL) — every row
+            then lays out that wide and gets clipped at the panel edge ("text cut
+            on the right, no padding, no wrapping"). A plain overflow-y-auto div
+            constrains children to the panel width so wrapping actually works. */}
+        <div className="max-h-[400px] overflow-y-auto overscroll-contain">
           {isLoading && (
             <div className="p-4 space-y-3">
               {[1, 2, 3].map((i) => (
@@ -542,8 +546,10 @@ export default function NotificationBell({ className, userType }: NotificationBe
                   {/* Content */}
                   <div className="flex-grow min-w-0">
                     <div className="flex justify-between items-start gap-2 mb-1">
-                      {/* Subject wraps onto the next line when long — never truncated or clipped at the right edge */}
-                      <p className="min-w-0 flex-1 text-sm font-semibold text-slate-900 dark:text-white break-words">
+                      {/* Subject wraps onto the next line when long — never truncated or clipped at the right edge.
+                          overflow-wrap:anywhere (not just break-words) so long tokens also count as breakable
+                          for intrinsic width sizing. */}
+                      <p className="min-w-0 flex-1 text-sm font-semibold text-slate-900 dark:text-white break-words [overflow-wrap:anywhere]">
                         {notification.subject}
                       </p>
                       <Badge
@@ -566,7 +572,7 @@ export default function NotificationBell({ className, userType }: NotificationBe
                         the user explicitly expands it */}
                     <p
                       className={cn(
-                        'text-xs text-slate-600 dark:text-slate-400 mb-1 leading-snug break-words',
+                        'text-xs text-slate-600 dark:text-slate-400 mb-1 leading-snug break-words [overflow-wrap:anywhere]',
                         isExpanded && 'whitespace-pre-wrap',
                         !isExpanded && 'line-clamp-2'
                       )}
@@ -623,7 +629,7 @@ export default function NotificationBell({ className, userType }: NotificationBe
                 </div>
               )
             })}
-        </ScrollArea>
+        </div>
 
         {/* Footer */}
         <div className="p-3 bg-slate-50 dark:bg-slate-900/50 text-center border-t border-slate-100 dark:border-slate-800">
