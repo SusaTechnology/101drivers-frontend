@@ -94,6 +94,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
+import { performSignOut } from '@/lib/tanstack/dataQuery';
 
 // Form schemas
 const quietHoursSchema = z.object({
@@ -358,6 +359,7 @@ export default function AdminNotificationPolicyPage() {
   };
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success("Signed out successfully");
     navigate({ to: "/auth/admin-signin" });
   };

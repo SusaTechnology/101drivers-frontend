@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, performSignOut } from '@/lib/tanstack/dataQuery'
 
 // ── Helpers ─────────────────────────────────────────────────────────
 import { BUSINESS_TZ, formatTime, formatDate, formatTimeRange } from '@/lib/timezone'
@@ -114,6 +114,7 @@ export default function DriverBookedLaterPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

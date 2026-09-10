@@ -35,7 +35,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WhatsAppUrgentCallout } from '@/components/shared/WhatsAppSupportButton'
-import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, performSignOut } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import {
   STATUS_OPTIONS,
@@ -147,6 +147,7 @@ export default function DealerSupportList() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/auth/dealer-signin' })
   }

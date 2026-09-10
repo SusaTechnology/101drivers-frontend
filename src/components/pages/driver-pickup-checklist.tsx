@@ -55,7 +55,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { getUser, useCreate, useDataQuery, useFileUpload } from '@/lib/tanstack/dataQuery'
+import { getUser, useCreate, useDataQuery, useFileUpload, performSignOut } from '@/lib/tanstack/dataQuery'
 import { savePhoto, getPhotosForDelivery, clearDeliveryPhotos } from '@/lib/pickup-photo-store'
 import { compressPhoto, compressPhotos, buildCompressedUploadPayload } from '@/lib/image-compress'
 import { BUSINESS_TZ } from '@/lib/timezone'
@@ -490,6 +490,7 @@ export default function DriverPickupChecklistPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

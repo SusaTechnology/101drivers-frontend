@@ -62,7 +62,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { getUser, useDataQuery, useCreate, authFetch } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useCreate, authFetch, performSignOut } from '@/lib/tanstack/dataQuery'
 import {
   NOTIFICATION_TYPE_STYLES,
   type NotificationEventItem,
@@ -235,6 +235,7 @@ export default function DriverInboxPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

@@ -72,6 +72,7 @@ import { Badge as UIBadge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import DriverBottomNav from '../layout/DriverBottomNav'
+import { performSignOut } from '@/lib/tanstack/dataQuery';
 
 // Menu sections data
 const MENU_SECTIONS = [
@@ -191,6 +192,7 @@ export default function DriverMenuPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

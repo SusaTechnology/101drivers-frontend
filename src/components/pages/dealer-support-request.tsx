@@ -34,7 +34,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getUser, useDataQuery, useCreate } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useCreate, performSignOut } from '@/lib/tanstack/dataQuery'
 import { WhatsAppUrgentCallout } from '@/components/shared/WhatsAppSupportButton'
 import {
   CATEGORIES_BY_ROLE,
@@ -120,6 +120,7 @@ export default function DealerSupportRequest() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/auth/dealer-signin' })
   }

@@ -76,6 +76,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { performSignOut } from '@/lib/tanstack/dataQuery';
 
 // Form schema for pricing rule
 const pricingRuleSchema = z.object({
@@ -224,6 +225,7 @@ export default function AdminPricingRulePage() {
   };
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success("Signed out successfully");
     navigate({ to: "/auth/admin-signin" });
   };

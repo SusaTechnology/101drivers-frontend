@@ -40,6 +40,7 @@ import {
   useDataQuery,
   useDataMutation,
   getUser,
+  performSignOut,
 } from '@/lib/tanstack/dataQuery'
 import {
   Card,
@@ -368,6 +369,7 @@ export default function DriverWalletPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

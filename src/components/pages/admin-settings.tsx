@@ -4,7 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { useTheme } from '@/lib/theme';
 import { toast } from "sonner";
-import { useDataQuery, useDataMutation } from "@/lib/tanstack/dataQuery";
+import { useDataQuery, useDataMutation, performSignOut } from "@/lib/tanstack/dataQuery";
 import {
   Menu,
   X,
@@ -324,6 +324,7 @@ export default function AdminSettingsHubPage() {
   };
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success("Signed out successfully");
     navigate({ to: "/auth/admin-signin" });
   };

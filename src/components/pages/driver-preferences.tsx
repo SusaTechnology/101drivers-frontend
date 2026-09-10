@@ -50,7 +50,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { getUser, useDataQuery, useFileUpload, usePatch } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, useFileUpload, usePatch, performSignOut } from '@/lib/tanstack/dataQuery'
 import { GoogleMap, Marker } from '@react-google-maps/api'
 import { useJsApiLoader } from '@react-google-maps/api'
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config'
@@ -441,6 +441,7 @@ export default function DriverPreferencesPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

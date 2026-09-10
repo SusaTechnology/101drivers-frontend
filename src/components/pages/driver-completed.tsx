@@ -22,7 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getUser, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { getUser, useDataQuery, performSignOut } from '@/lib/tanstack/dataQuery'
 import { BUSINESS_TZ } from '@/lib/timezone'
 import DriverBottomNav from '@/components/layout/DriverBottomNav'
 
@@ -104,6 +104,7 @@ export default function DriverCompletedPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

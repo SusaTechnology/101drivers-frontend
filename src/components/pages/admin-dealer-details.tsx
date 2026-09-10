@@ -93,6 +93,7 @@ import { Brand } from '@/lib/items/brand'
 import { navItems } from '@/lib/items/navItems'
 import { getAdminActionItems } from '@/lib/items/adminActionItems'
 import { Navbar } from '../shared/layout/testNavbar'
+import { performSignOut } from '@/lib/tanstack/dataQuery';
 
 // Form schemas
 const dealerProfileSchema = z.object({
@@ -234,6 +235,7 @@ export default function AdminDealerDetailsPage() {
   
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/auth/admin-signin' })
   }

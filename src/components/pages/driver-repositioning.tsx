@@ -86,6 +86,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { performSignOut } from '@/lib/tanstack/dataQuery';
 
 // Zone data
 const HOT_ZONES = [
@@ -164,6 +165,7 @@ export default function DriverRepositioningPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

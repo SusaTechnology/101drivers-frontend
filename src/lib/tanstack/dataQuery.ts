@@ -825,3 +825,18 @@ export async function serverLogout(): Promise<void> {
     // Ignore — the local clearAuth() still runs.
   }
 }
+
+/**
+ * Full client-side sign-out shared by every role's pages.
+ *
+ * Order matters: the server logout must be fired while the access token is
+ * still in state (it clears the httpOnly 7-day refresh cookie server-side);
+ * the local session (token, user, keep-alive interval, socket) is wiped right
+ * after. The server call is fire-and-forget — it must never block or fail the
+ * UI redirect, and errors are already swallowed inside serverLogout().
+ */
+export function performSignOut(): void {
+  void serverLogout();
+  stopSessionKeepAlive();
+  clearAuth();
+}

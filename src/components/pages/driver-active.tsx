@@ -96,6 +96,7 @@ import {
   useDataMutation,
   useFileUpload,
   useCreate,
+  performSignOut,
 } from '@/lib/tanstack/dataQuery'
 import PostTripCompletion from '@/components/shared/PostTripCompletion'
 
@@ -773,6 +774,7 @@ const DROPOFF_REF_IMAGES = [
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

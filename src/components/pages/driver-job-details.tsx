@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { getUser, useCreate, useDataQuery } from '@/lib/tanstack/dataQuery'
+import { getUser, useCreate, useDataQuery, performSignOut } from '@/lib/tanstack/dataQuery'
 import {
   useJsApiLoader,
   GoogleMap,
@@ -357,6 +357,7 @@ export default function DriverJobDetailsPage() {
   }
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success('Signed out successfully')
     navigate({ to: '/driver-signin' })
   }

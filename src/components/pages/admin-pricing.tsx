@@ -92,6 +92,7 @@ import { useAdminActions } from "@/hooks/useAdminActions";
 import { navItems } from '@/lib/items/navItems'
 import { Navbar } from "../shared/layout/testNavbar";
 import { Brand } from "@/lib/items/brand";
+import { performSignOut } from '@/lib/tanstack/dataQuery';
 // Filter form schema
 const filterSchema = z.object({
   search: z.string().optional(),
@@ -239,6 +240,7 @@ export default function AdminPricingPage() {
   };
 
   const handleSignOut = () => {
+    performSignOut()
     toast.success("Signed out successfully");
     navigate({ to: "/auth/admin-signin" });
   };
