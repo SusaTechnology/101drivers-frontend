@@ -530,7 +530,10 @@ export default function AdminUsersPage() {
           toast.success('Invite resent successfully');
           closeDialog();
         },
-        onError: () => toast.error('Failed to resend invite'),
+        onError: (error: any) =>
+          toast.error('Failed to resend invite', {
+            description: error?.message || 'Please try again.',
+          }),
       }
     );
   }, [selectedUser, actorUserId, resendInviteDriverMutation, closeDialog]);

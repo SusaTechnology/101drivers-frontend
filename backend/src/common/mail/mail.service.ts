@@ -53,6 +53,13 @@ export class MailService {
         user,
         pass,
       },
+      // Guard against hung SMTP connections. Without these, a slow or
+      // misbehaving SMTP server could stall sendMail() for minutes and pile
+      // up stuck sockets (delivery now runs in the background, so these
+      // timeouts bound how long each background send can occupy resources).
+      connectionTimeout: 15_000, // TCP connect + TLS handshake
+      greetingTimeout: 15_000, // wait for the server's 220 banner
+      socketTimeout: 30_000, // max idle time between SMTP replies
     });
 
     this.logger.log("SMTP transporter configured successfully");

@@ -752,7 +752,10 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           closeDialog();
           refetch();
         },
-        onError: () => toast.error('Failed to resend invite'),
+        onError: (error: any) =>
+          toast.error('Failed to resend invite', {
+            description: error?.message || 'Please try again.',
+          }),
       }
     );
   }, [user, resendInviteDriverMutation, closeDialog, refetch]);

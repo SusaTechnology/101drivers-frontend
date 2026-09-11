@@ -136,23 +136,30 @@ export class NotificationEventEngine {
       );
     });
 
-    try {
-      await this.deliver(created.id);
-
-      return this.prisma.notificationEvent.findUniqueOrThrow({
-        where: { id: created.id },
-      });
-    } catch (error) {
+    // Fire-and-forget delivery. The event row is already persisted (status
+    // QUEUED) and the socket broadcast has been dispatched above, so the
+    // HTTP request that triggered this notification can return immediately.
+    //
+    // Previously deliver() was awaited inline, which meant every action that
+    // sends an email (Resend Invite, Invite Driver, approvals, ...) blocked
+    // on a live SMTP round-trip with no timeout configured. When the SMTP
+    // server was slow, the request hung until the gateway timed out and the
+    // caller saw a failure even though the email eventually went out — this
+    // was the intermittent "Resend Invite shows an error" report.
+    //
+    // deliver() itself persists the final SENT/FAILED status on the event
+    // row, so state is never lost; only latency moved off the request path.
+    // No caller inspects the awaited return value, and delivery errors were
+    // already swallowed before this change.
+    void this.deliver(created.id).catch((error) => {
       this.logger.error(
         `Notification delivery failed for event ${created.id}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
+    });
 
-      return this.prisma.notificationEvent.findUniqueOrThrow({
-        where: { id: created.id },
-      });
-    }
+    return created;
   }
 
   /**
