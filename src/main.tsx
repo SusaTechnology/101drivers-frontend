@@ -10,6 +10,10 @@ import "./styles.css";
 import reportWebVitals from "./reportWebVitals.ts";
 // import { ThemeProvider } from '@/lib/theme';
 import { Providers, queryClient } from "./lib/tanstack/provider.tsx";
+import {
+  RouteErrorScreen,
+  reloadOnceForStaleBuild,
+} from "./components/shared/RouteErrorScreen.tsx";
 // import { GoogleMapsProvider } from "./lib/map/GoogleMapsProvider.tsx";
 // Create a new router instance
 const router = createRouter({
@@ -19,6 +23,21 @@ const router = createRouter({
   scrollRestoration: true,
   defaultStructuralSharing: true,
   defaultPreloadStaleTime: 0,
+  // Replaces TanStack Router's bare-bones default crash screen (the white
+  // page with a tiny icon users described as "the page goes blank and says
+  // something") with a branded screen that offers recovery and auto-reloads
+  // once when a deploy swaps out the JS chunks under an open tab.
+  defaultErrorComponent: RouteErrorScreen,
+});
+
+// Vite emits this event when a lazy chunk or its CSS preload fails — the
+// typical case is a new deploy replacing hashed /assets files while a tab
+// with the old build is open. One reload picks up the new build; the guard
+// inside reloadOnceForStaleBuild() prevents infinite reload loops if the
+// site is genuinely broken.
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
+  reloadOnceForStaleBuild();
 });
 
 // Register the router instance for type safety

@@ -1,7 +1,12 @@
 // 101 Drivers Service Worker for PWA
-const CACHE_NAME = '101-drivers-v3';
-const STATIC_CACHE_NAME = '101-drivers-static-v3';
-const DYNAMIC_CACHE_NAME = '101-drivers-dynamic-v3';
+// v4: only cache successful (2xx) responses. Earlier versions cached ANY
+// response — including 404/500 error pages returned mid-deploy — which
+// poisoned the cache: a broken asset or HTML error page kept being served
+// even after the deploy was fixed, causing persistent white-screen crashes
+// until the user manually cleared site data.
+const CACHE_NAME = '101-drivers-v4';
+const STATIC_CACHE_NAME = '101-drivers-static-v4';
+const DYNAMIC_CACHE_NAME = '101-drivers-dynamic-v4';
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -132,10 +137,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache the new response
-          const responseClone = response.clone();
-          caches.open(DYNAMIC_CACHE_NAME)
-            .then((cache) => cache.put(request, responseClone));
+          // Cache the new response — but ONLY if it is a real page.
+          // Caching 404/502/503 error pages here is what used to keep the
+          // app broken after a failed deploy until site data was cleared.
+          if (response && response.ok) {
+            const responseClone = response.clone();
+            caches.open(DYNAMIC_CACHE_NAME)
+              .then((cache) => cache.put(request, responseClone));
+          }
           return response;
         })
         .catch(() => {
@@ -155,6 +164,7 @@ self.addEventListener('fetch', (event) => {
           // Return cached response and update cache in background
           fetch(request)
             .then((response) => {
+              if (!(response && response.ok)) return;
               caches.open(DYNAMIC_CACHE_NAME)
                 .then((cache) => cache.put(request, response));
             })
@@ -165,10 +175,13 @@ self.addEventListener('fetch', (event) => {
         // Not in cache, fetch from network
         return fetch(request)
           .then((response) => {
-            // Cache the response
-            const responseClone = response.clone();
-            caches.open(DYNAMIC_CACHE_NAME)
-              .then((cache) => cache.put(request, responseClone));
+            // Cache the response — successful responses only, so a 404/500
+            // returned during a deploy window can never poison the cache.
+            if (response && response.ok) {
+              const responseClone = response.clone();
+              caches.open(DYNAMIC_CACHE_NAME)
+                .then((cache) => cache.put(request, responseClone));
+            }
             return response;
           });
       })
