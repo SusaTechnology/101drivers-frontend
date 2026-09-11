@@ -64,6 +64,7 @@ export function WhatsAppSupportButton({
       href={WHATSAPP_SUPPORT_URL}
       target="_blank"
       rel="noopener noreferrer"
+      title="Opens WhatsApp in a new tab. On a phone it opens the app; on a PC or iPad it opens WhatsApp Web in your browser."
       aria-label={`${label} — opens WhatsApp in a new tab`}
       className={cn('inline-flex', className)}
     >
@@ -83,6 +84,18 @@ export function WhatsAppSupportButton({
     </a>
   );
 }
+
+/**
+ * Help text for people on devices where WhatsApp has no installable app
+ * (PCs, laptops, iPads). wa.me short links on those devices route into
+ * WhatsApp's browser flow (WhatsApp Web), which needs the visitor's own
+ * WhatsApp account linked via a one-time QR scan — that is a WhatsApp
+ * product constraint, not a broken link. Ops reported a user spending
+ * 15 minutes stuck on exactly this, so the callout now explains it
+ * up front instead of letting people guess.
+ */
+export const WHATSAPP_DEVICE_HINT =
+  'Best on a phone with WhatsApp installed. On a PC or iPad the chat opens in your browser (WhatsApp Web) — the first time, WhatsApp asks you to link it by scanning a QR code with your phone.';
 
 /**
  * Green call-out banner for pages where users might be stuck with an
@@ -123,6 +136,9 @@ export function WhatsAppUrgentCallout({
             className="mt-3"
             buttonClassName="text-xs"
           />
+          <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 mt-2">
+            {WHATSAPP_DEVICE_HINT}
+          </p>
         </div>
       </div>
     </div>
