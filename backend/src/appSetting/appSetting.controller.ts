@@ -9,6 +9,7 @@ import { Request } from "express";
 import { plainToClass } from "class-transformer";
 import { ApiNestedQuery } from "../decorators/api-nested-query.decorator";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
+import { AdminGuard } from "../auth/adminAuth.guard";
 import { AclValidateRequestInterceptor } from "../interceptors/aclValidateRequest.interceptor";
 import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.interceptor";
 import { AppSettingCreateInput } from "./base/AppSettingCreateInput";
@@ -23,6 +24,8 @@ import {
   UpdateDeliverySettingsBody,
   ReferralProgramSettingsResponseDto,
   UpdateReferralProgramSettingsBody,
+  WhatsappSupportSettingsResponseDto,
+  UpdateWhatsappSupportSettingsBody,
 } from "./dto/appSetting.dto";
 
 @swagger.ApiTags("appSettings")
@@ -133,6 +136,39 @@ export class AppSettingController extends AppSettingControllerBase {
     @common.Body() body: { isActive: boolean }
   ): Promise<ReferralProgramSettingsResponseDto> {
     return this.service.setReferralProgramActive(body.isActive);
+  }
+
+  // ============================================================
+  // WHATSAPP SUPPORT LINK (admin-only update, public read exists on
+  // AppSettingPublicController — the link is shown to logged-out
+  // visitors, so reading it needs no auth; rotating it is admin-only)
+  // ============================================================
+  @common.Get("whatsapp-support")
+  @swagger.ApiOkResponse({ type: WhatsappSupportSettingsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getWhatsappSupportSettings(): Promise<WhatsappSupportSettingsResponseDto> {
+    return this.service.getWhatsappSupportSettings();
+  }
+
+  @common.Patch("whatsapp-support")
+  @swagger.ApiOkResponse({ type: WhatsappSupportSettingsResponseDto })
+  @common.UseGuards(AdminGuard)
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async updateWhatsappSupportSettings(
+    @common.Body() body: UpdateWhatsappSupportSettingsBody
+  ): Promise<WhatsappSupportSettingsResponseDto> {
+    // AdminGuard enforces the ADMIN role on top of the ACL grant —
+    // rotating the support link must never be reachable by other roles
+    // (AppSetting update:any is granted broadly by the generated ACL).
+    return this.service.updateWhatsappSupportSettings(body);
   }
 
  @common.UseInterceptors(AclValidateRequestInterceptor)

@@ -32,6 +32,8 @@ import {
   Truck,
 } from 'lucide-react'
 import { InsurancePortalPasswordDialog } from '../shared/InsurancePortalPasswordDialog'
+import { WhatsAppSupportLinkDialog } from '../shared/WhatsAppSupportLinkDialog'
+import { WhatsAppIcon } from '../shared/WhatsAppSupportButton'
 import {
   Card,
   CardContent,
@@ -165,12 +167,26 @@ const configCards = [
       { icon: Lock, label: "Password" },
       { icon: Shield, label: "Portal Access" },
     ]
+  },
+  {
+    // No href — this card opens a dialog instead of navigating
+    href: null,
+    onClick: "openWhatsAppDialog",
+    icon: WhatsAppIcon,
+    title: "WhatsApp Support Link",
+    description: "Set the WhatsApp click-to-chat link used by every \"Message us on WhatsApp\" button across the app (help center, support flows, urgent callouts). Rotate it here — no code changes or redeploy needed.",
+    chips: [
+      { icon: WhatsAppIcon, label: "Chat link" },
+      { icon: Edit3, label: "Editable" },
+      { icon: Power, label: "Instant" },
+    ]
   }
 ]
 
 export default function AdminConfigHubPage() {
   const { actionItems, signOut } = useAdminActions();
   const [portalPasswordOpen, setPortalPasswordOpen] = useState(false);
+  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark font-sans antialiased text-slate-900 dark:text-white">
@@ -336,6 +352,9 @@ export default function AdminConfigHubPage() {
                   if (card.onClick === "openPortalPasswordDialog") {
                     setPortalPasswordOpen(true);
                   }
+                  if (card.onClick === "openWhatsAppDialog") {
+                    setWhatsAppOpen(true);
+                  }
                 }}
                 className={`${cardClass} text-left w-full`}
               >
@@ -350,6 +369,12 @@ export default function AdminConfigHubPage() {
       <InsurancePortalPasswordDialog
         open={portalPasswordOpen}
         onOpenChange={setPortalPasswordOpen}
+      />
+
+      {/* WhatsApp Support Link Dialog */}
+      <WhatsAppSupportLinkDialog
+        open={whatsAppOpen}
+        onOpenChange={setWhatsAppOpen}
       />
 
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">

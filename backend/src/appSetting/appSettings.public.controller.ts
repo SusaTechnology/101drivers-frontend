@@ -3,7 +3,11 @@ import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
 
 import { AppSettingService } from "./appSetting.service";
-import { LandingPageSettingsResponseDto, ReferralProgramSettingsResponseDto } from "./dto/appSetting.dto";
+import {
+  LandingPageSettingsResponseDto,
+  ReferralProgramSettingsResponseDto,
+  WhatsappSupportSettingsResponseDto,
+} from "./dto/appSetting.dto";
 
 @swagger.ApiTags("appSettings-public")
 @common.Controller("appSettings/public")
@@ -40,5 +44,26 @@ export class AppSettingPublicController {
   @swagger.ApiOkResponse({ type: ReferralProgramSettingsResponseDto })
   async getReferralProgramSettings(): Promise<ReferralProgramSettingsResponseDto> {
     return this.service.getReferralProgramSettings();
+  }
+
+  /**
+   * GET /api/appSettings/public/whatsapp-support
+   *
+   * Public WhatsApp support link (admin-editable from the Config Hub).
+   * Backs every "Message us on WhatsApp" button in the app so the link
+   * can be rotated without a frontend redeploy.
+   *
+   * The link itself is shown to logged-out visitors on the help page,
+   * so it is not secret — this endpoint is intentionally public (no
+   * auth guard on this controller), following the same convention as
+   * the landing-page and referral-program endpoints above.
+   */
+  @common.Get("whatsapp-support")
+  @swagger.ApiOperation({
+    summary: "Public WhatsApp support link (admin-editable)",
+  })
+  @swagger.ApiOkResponse({ type: WhatsappSupportSettingsResponseDto })
+  async getWhatsappSupportSettings(): Promise<WhatsappSupportSettingsResponseDto> {
+    return this.service.getWhatsappSupportSettings();
   }
 }

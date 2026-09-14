@@ -1,4 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+} from "@nestjs/common";
 import {
   AppSetting as PrismaAppSetting,
   Prisma,
@@ -21,6 +24,8 @@ import {
   ReferralPayoutModelDto,
   ReferralReferrerRole,
   ReferralRoleMatrix,
+  WhatsappSupportSettingsResponseDto,
+  UpdateWhatsappSupportSettingsBody,
 } from "./dto/appSetting.dto";
 // Default policy lives in a standalone module so the DB seed shares the
 // EXACT same values — service fallback and seeded row can never drift.
@@ -30,6 +35,24 @@ export { defaultReferralProgramSettings };
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
 const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
 const REFERRAL_PROGRAM_SETTINGS_KEY = "REFERRAL_PROGRAM_SETTINGS";
+const WHATSAPP_SUPPORT_SETTINGS_KEY = "WHATSAPP_SUPPORT_SETTINGS";
+
+/**
+ * Fallback WhatsApp click-to-chat link — used when no admin has ever
+ * saved a value in AppSetting. MUST stay in sync with the frontend
+ * fallback constant in src/components/shared/WhatsAppSupportButton.tsx
+ * (both originate from the originally hardcoded wa.me link).
+ */
+export const DEFAULT_WHATSAPP_SUPPORT_URL = "https://wa.me/message/YQXTDFV6STKUP1";
+
+/** Hosts the support link is allowed to point at. wa.me short links
+ * (number or /message/ code), the api.whatsapp.com send flow, and
+ * chat.whatsapp.com group invites all open a WhatsApp chat. */
+const WHATSAPP_ALLOWED_HOSTS = [
+  "wa.me",
+  "api.whatsapp.com",
+  "chat.whatsapp.com",
+];
 
 type LandingPageSettingsValue = {
   fundraisingEnabled: boolean;
@@ -700,5 +723,75 @@ export class AppSettingService extends AppSettingServiceBase {
     if (value == null) return null;
     const trimmed = `${value}`.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  // ============================================================
+  // WHATSAPP SUPPORT LINK (admin-editable, public read)
+  // Backs every "Message us on WhatsApp" button. Ops rotates the
+  // link from the admin Config Hub — no frontend redeploy needed.
+  // ============================================================
+
+  private normalizeWhatsappSupportUrl(raw: string): string {
+    const trimmed = (raw ?? "").trim();
+
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      throw new BadRequestException(
+        "supportUrl must be a valid absolute URL, e.g. https://wa.me/15551234567",
+      );
+    }
+
+    if (parsed.protocol !== "https:") {
+      throw new BadRequestException(
+        "supportUrl must start with https:// (WhatsApp links are never served over http)",
+      );
+    }
+
+    if (!WHATSAPP_ALLOWED_HOSTS.includes(parsed.hostname.toLowerCase())) {
+      throw new BadRequestException(
+        "supportUrl must point to wa.me, api.whatsapp.com, or chat.whatsapp.com",
+      );
+    }
+
+    return parsed.toString();
+  }
+
+  async getWhatsappSupportSettings(): Promise<WhatsappSupportSettingsResponseDto> {
+    const row = await this.prisma.appSetting.findUnique({
+      where: { key: WHATSAPP_SUPPORT_SETTINGS_KEY },
+      select: { value: true },
+    });
+
+    const stored =
+      row?.value &&
+      typeof row.value === "object" &&
+      typeof (row.value as { supportUrl?: unknown }).supportUrl === "string"
+        ? ((row.value as { supportUrl: string }).supportUrl || "").trim()
+        : "";
+
+    return {
+      supportUrl: stored || DEFAULT_WHATSAPP_SUPPORT_URL,
+    };
+  }
+
+  async updateWhatsappSupportSettings(
+    input: UpdateWhatsappSupportSettingsBody,
+  ): Promise<WhatsappSupportSettingsResponseDto> {
+    const supportUrl = this.normalizeWhatsappSupportUrl(input.supportUrl);
+
+    await this.prisma.appSetting.upsert({
+      where: { key: WHATSAPP_SUPPORT_SETTINGS_KEY },
+      create: {
+        key: WHATSAPP_SUPPORT_SETTINGS_KEY,
+        value: { supportUrl } as any,
+      },
+      update: {
+        value: { supportUrl } as any,
+      },
+    });
+
+    return { supportUrl };
   }
 }

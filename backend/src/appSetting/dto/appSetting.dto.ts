@@ -574,3 +574,24 @@ export class UpdateReferralProgramSettingsBody {
   @IsObject()
   referralRoleMatrix?: Partial<ReferralRoleMatrix>;
 }
+// ── WhatsApp support link ────────────────────────────────────────────
+// Single admin-editable field backing EVERY "Message us on WhatsApp"
+// button in the app (help center, support flows, urgent callouts).
+// Stored in AppSetting under WHATSAPP_SUPPORT_SETTINGS so operations
+// can rotate the link from the Config Hub without a frontend redeploy.
+// Read publicly by the frontend via GET /api/appSettings/public/whatsapp-support.
+export class WhatsappSupportSettingsResponseDto {
+  @ApiProperty({ example: "https://wa.me/message/YQXTDFV6STKUP1" })
+  supportUrl!: string;
+}
+
+export class UpdateWhatsappSupportSettingsBody {
+  @ApiProperty({ example: "https://wa.me/message/YQXTDFV6STKUP1" })
+  @IsString()
+  @IsUrl(
+    { require_tld: false, protocols: ["https"] },
+    { message: "supportUrl must be a valid https:// URL" },
+  )
+  @MaxLength(500)
+  supportUrl!: string;
+}

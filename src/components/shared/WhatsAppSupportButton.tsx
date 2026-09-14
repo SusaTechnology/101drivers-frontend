@@ -1,17 +1,40 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useDataQuery } from '@/lib/tanstack/dataQuery';
 
 /**
- * WhatsApp click-to-chat link for the operations team.
- *
- * This is a wa.me short link — on mobile it opens the WhatsApp app
- * directly into a chat with 101 Drivers Support; on desktop it opens
- * WhatsApp Web. No phone number is exposed in the markup (the link is
- * issued by WhatsApp Business and can be rotated from the Meta portal
- * without a code change).
+ * Fallback WhatsApp click-to-chat link — used while the public settings
+ * fetch is loading, if it fails, or when no admin has ever saved a value.
+ * MUST stay in sync with DEFAULT_WHATSAPP_SUPPORT_URL in
+ * backend/src/appSetting/appSetting.service.ts (both originate from the
+ * originally hardcoded link).
  */
 export const WHATSAPP_SUPPORT_URL = 'https://wa.me/message/YQXTDFV6STKUP1';
+
+/**
+ * Admin-editable support link.
+ *
+ * Fetches GET /api/appSettings/public/whatsapp-support (no auth — the
+ * link is shown to logged-out visitors too). Operations can rotate the
+ * link from Admin > Config Hub > WhatsApp Support Link, and every
+ * button in the app picks up the new link on the next fetch — no code
+ * change or frontend redeploy needed.
+ *
+ * Always returns a usable URL: falls back to WHATSAPP_SUPPORT_URL while
+ * loading or on error so the button never renders dead.
+ */
+export function useWhatsAppSupportUrl(): string {
+  const { data } = useDataQuery<{ supportUrl: string }>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/appSettings/public/whatsapp-support`,
+    noFilter: true,
+    fetchWithoutRefresh: true,
+    publicEndpoint: true, // public endpoint — no token refresh on 401
+    staleTime: 5 * 60 * 1000,
+  });
+
+  return data?.supportUrl || WHATSAPP_SUPPORT_URL;
+}
 
 /**
  * Official WhatsApp glyph (simple-icons path). lucide-react does not
@@ -59,9 +82,13 @@ export function WhatsAppSupportButton({
   buttonClassName,
   size = 'default',
 }: WhatsAppSupportButtonProps) {
+  // Admin-editable link (public endpoint) with hardcoded fallback so the
+  // CTA still works while loading or if the settings fetch fails.
+  const supportUrl = useWhatsAppSupportUrl();
+
   return (
     <a
-      href={WHATSAPP_SUPPORT_URL}
+      href={supportUrl}
       target="_blank"
       rel="noopener noreferrer"
       title="Opens WhatsApp in a new tab. On a phone it opens the app; on a PC or iPad it opens WhatsApp Web in your browser."
