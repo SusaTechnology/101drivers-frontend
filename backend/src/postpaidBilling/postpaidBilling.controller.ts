@@ -122,6 +122,28 @@ export class PostpaidBillingController {
     return { ok: true, dealerId };
   }
 
+  // ─── ADMIN: Backfill missing usage reports ──────────────────
+
+  @Post("dealers/:dealerId/backfill-usage")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({ summary: "Re-report completed deliveries whose usage was never sent to Stripe (stuck AUTHORIZED) — adds them to the next weekly invoice" })
+  async backfillUsage(@Param("dealerId") dealerId: string) {
+    // Reuses the cron lock — the admin trigger and the daily backfill
+    // cron must never run concurrently (reportUsageToStripe is
+    // idempotent, but avoid redundant Stripe calls).
+    const result = await this.withCronLock("missingUsageBackfill", () =>
+      this.postpaidBilling.backfillMissingUsageReports({ dealerId }),
+    );
+    if (!result) {
+      // Lock was held (e.g. the 03:00 cron is mid-run) — tell the admin
+      // nothing happened instead of returning misleading zero counts.
+      throw new BadRequestException(
+        "A usage backfill is already running — try again in a few minutes.",
+      );
+    }
+    return { ok: true, dealerId, ...result };
+  }
+
   // ─── ADMIN: Billing Mode Switch ────────────────────────────
 
   @Get("dealers/:dealerId/switch-check")
@@ -185,6 +207,14 @@ export class PostpaidBillingController {
       0,
     );
 
+    // Stranded usage reports — completed deliveries whose payment is
+    // stuck in a pre-report state (never sent to Stripe). These freeze
+    // the outstanding balance at a constant number; the admin can heal
+    // them via POST /dealers/:id/backfill-usage.
+    const missingUsage = await this.postpaidBilling.getMissingUsageReportStats(
+      dealerId,
+    );
+
     return {
       dealerId: dealer.id,
       businessName: dealer.businessName,
@@ -198,6 +228,11 @@ export class PostpaidBillingController {
       outstandingCents,
       outstandingDollars: Number((outstandingCents / 100).toFixed(2)),
       unpaidDeliveryCount: unpaidPayments.length,
+      missingUsageReports: {
+        count: missingUsage.count,
+        totalCents: missingUsage.totalCents,
+        totalDollars: Number((missingUsage.totalCents / 100).toFixed(2)),
+      },
       stripe: {
         customerId: dealer.stripeCustomerId,
         subscriptionId: dealer.stripeSubscriptionId,
@@ -308,6 +343,36 @@ export class PostpaidBillingController {
     }
   }
 
+  // ── CRON: missing usage report backfill ──────────────────────────
+  //
+  // Runs daily at 03:00 server time. Finds POSTPAID payments stuck in
+  // AUTHORIZED/INVOICED whose delivery COMPLETED but whose usage was
+  // never reported to Stripe — these never enter the hourly retry
+  // queue (silent skips don't set usageReportStatus), so without this
+  // sweep they'd freeze the dealer's outstanding balance forever.
+  // Re-reports them so they join the normal weekly invoice lifecycle.
+
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async handleDailyMissingUsageBackfill() {
+    this.logger.log("Daily missing-usage backfill cron: starting");
+    try {
+      await this.withCronLock("dailyMissingUsageBackfill", async () => {
+        const result = await this.postpaidBilling.backfillMissingUsageReports();
+        if (result.found > 0) {
+          this.logger.log(
+            `Daily missing-usage backfill cron: found=${result.found}, ` +
+            `processed=${result.processed}, succeeded=${result.succeeded}, failed=${result.failed}`,
+          );
+        }
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `Daily missing-usage backfill cron failed: ${err?.message}`,
+        err?.stack,
+      );
+    }
+  }
+
   // ── CRON: mid-trip remainder charge retry queue (Fix #7) ──────────
   //
   // Runs daily at 06:00 server time (alongside the auto-retry cron).
@@ -363,6 +428,7 @@ export class PostpaidBillingController {
   @ApiOperation({ summary: "Admin: monitor payment resilience queue depths + alert counts" })
   async getAdminHealth() {
     const now = new Date();
+    const missingUsage = await this.postpaidBilling.getMissingUsageReportStats();
     const [
       usageReportQueue,
       usageReportPermanentlyFailed,
@@ -404,6 +470,14 @@ export class PostpaidBillingController {
             : usageReportQueue > 50
               ? 'stripe_outage_suspected'
               : 'ok',
+        },
+        missingUsageReports: {
+          count: missingUsage.count,
+          totalCents: missingUsage.totalCents,
+          // Completed deliveries that never reached Stripe — the daily
+          // backfill cron heals these automatically; an admin can also
+          // trigger POST /dealers/:id/backfill-usage immediately.
+          alert: missingUsage.count > 0 ? "backfill_available" : "ok",
         },
         remainderCharges: {
           pending: remainderQueue,

@@ -71,4 +71,15 @@ export type IPostpaidBillingService = {
     nextInvoiceDate: Date | null;
   }>;
   autoRetryFrozenDealers(): Promise<void>;
+  // Heal stranded postpaid payments (delivery COMPLETED, status stuck in
+  // AUTHORIZED/INVOICED, usage never reported to Stripe). Runs daily via
+  // @Cron and on demand via POST /dealers/:id/backfill-usage.
+  backfillMissingUsageReports(input?: {
+    dealerId?: string;
+    limit?: number;
+  }): Promise<{ found: number; processed: number; succeeded: number; failed: number }>;
+  // Count + sum of the stranded rows — admin status/health visibility.
+  getMissingUsageReportStats(
+    dealerId?: string,
+  ): Promise<{ count: number; totalCents: number }>;
 };

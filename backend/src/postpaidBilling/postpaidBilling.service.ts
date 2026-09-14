@@ -35,6 +35,7 @@ import {
   EnumCustomerApprovalStatus,
   EnumCustomerBillingMode,
   EnumCustomerCustomerType,
+  EnumDeliveryRequestStatus,
   EnumPaymentPaymentType,
   EnumPaymentStatus,
   Prisma,
@@ -2146,6 +2147,149 @@ export class PostpaidBillingService {
         );
       }
     }
+  }
+
+  // ─── MISSING USAGE REPORT BACKFILL ──────────────────────────────
+
+  /**
+   * Where-clause for "stranded" postpaid payments — rows that SHOULD
+   * have been reported to Stripe but never were:
+   *
+   *   • paymentType = POSTPAID
+   *   • status AUTHORIZED (set at delivery creation) or INVOICED (legacy)
+   *   • no stripeInvoiceItemId → usage was never reported (that field is
+   *     the idempotency key for reporting)
+   *   • delivery COMPLETED → the service was actually rendered
+   *   • dealer CURRENTLY on WEEKLY_POSTPAID with a Stripe customer →
+   *     reporting them now would actually bill someone
+   *
+   * How rows get stranded here: reportUsageToStripe() only runs at
+   * delivery completion, and its billingMode guard SKIPS silently (no
+   * retry scheduled) when the dealer wasn't fully onboarded at that
+   * moment. The hourly retry cron only picks up rows with
+   * usageReportStatus = FAILED, which silent skips never set — so these
+   * rows stay in AUTHORIZED forever, freezing the dealer's outstanding
+   * balance at a constant number (prod example: 46 rows / $11,328.16
+   * unchanged since March).
+   */
+  private missingUsageReportWhere(dealerId?: string): Prisma.PaymentWhereInput {
+    return {
+      paymentType: EnumPaymentPaymentType.POSTPAID,
+      status: {
+        in: [EnumPaymentStatus.AUTHORIZED, EnumPaymentStatus.INVOICED],
+      },
+      stripeInvoiceItemId: null,
+      delivery: {
+        status: EnumDeliveryRequestStatus.COMPLETED,
+        customer: {
+          billingMode: EnumCustomerBillingMode.WEEKLY_POSTPAID,
+          stripeCustomerId: { not: null },
+          ...(dealerId ? { id: dealerId } : {}),
+        },
+      },
+    };
+  }
+
+  /**
+   * Count + sum the stranded rows — surfaced on the admin status and
+   * /admin/health endpoints so the backlog is visible, and used by the
+   * admin PostpaidBillingCard to offer the one-click heal.
+   */
+  async getMissingUsageReportStats(
+    dealerId?: string,
+  ): Promise<{ count: number; totalCents: number }> {
+    const rows = await this.prisma.payment.findMany({
+      where: this.missingUsageReportWhere(dealerId),
+      select: { amount: true },
+    });
+    return {
+      count: rows.length,
+      totalCents: rows.reduce(
+        (sum, p) => sum + Math.round(Number(p.amount) * 100),
+        0,
+      ),
+    };
+  }
+
+  /**
+   * Heal the stranded rows: re-run reportUsageToStripe() for each one.
+   *
+   * reportUsageToStripe is idempotent (skips if stripeInvoiceItemId is
+   * already set), re-validates postpaid/billingMode, and on success
+   * moves the row to USAGE_REPORTED — putting it back into the normal
+   * lifecycle (next weekly invoice → PAID, or CHARGE_FAILED with the
+   * dealer-facing failure banners when the charge fails).
+   *
+   * Rows whose reporting fails here are scheduled into the hourly retry
+   * queue by reportUsageToStripe itself (exponential backoff, then
+   * PERMANENTLY_FAILED for admin attention via /admin/health).
+   *
+   * Batch-capped per run so a large backlog can't blow through the
+   * Stripe rate limit; the daily cron drains the remainder over time.
+   *
+   * Called by the daily @Cron (03:00) and the admin endpoint
+   * POST /dealers/:dealerId/backfill-usage.
+   */
+  async backfillMissingUsageReports(input?: {
+    dealerId?: string;
+    limit?: number;
+  }): Promise<{ found: number; processed: number; succeeded: number; failed: number }> {
+    if (!this.stripeService) {
+      // No Stripe configured — nothing we can report to. Rows stay
+      // stranded (and counted) until Stripe is available.
+      return { found: 0, processed: 0, succeeded: 0, failed: 0 };
+    }
+
+    const limit = Math.min(Math.max(input?.limit ?? 100, 1), 200);
+    const where = this.missingUsageReportWhere(input?.dealerId);
+
+    const found = await this.prisma.payment.count({ where });
+    if (found === 0) {
+      return { found: 0, processed: 0, succeeded: 0, failed: 0 };
+    }
+
+    const batch = await this.prisma.payment.findMany({
+      where,
+      select: { id: true, deliveryId: true },
+      orderBy: { createdAt: "asc" }, // oldest debt first
+      take: limit,
+    });
+
+    this.logger.log(
+      `backfillMissingUsageReports: ${found} stranded postpaid payment(s)` +
+        `${input?.dealerId ? ` for dealer ${input.dealerId}` : ""} — processing ${batch.length}`,
+    );
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const item of batch) {
+      try {
+        const result = await this.reportUsageToStripe({ deliveryId: item.deliveryId });
+        if (result.stripeInvoiceItemId) {
+          succeeded++;
+        } else {
+          // reportUsageToStripe already scheduled a retry
+          // (usageReportStatus=FAILED → hourly retry queue picks it up).
+          failed++;
+        }
+      } catch (err: any) {
+        // reportUsageToStripe is non-throwing by design — safety net.
+        this.logger.error(
+          `backfillMissingUsageReports threw for delivery ${item.deliveryId}: ${err?.message}`,
+          err?.stack,
+        );
+        await this.scheduleUsageReportRetry(item.id, `Backfill threw: ${err?.message}`);
+        failed++;
+      }
+    }
+
+    this.logger.log(
+      `backfillMissingUsageReports: ${succeeded} reported, ${failed} failed ` +
+        `of ${batch.length} processed (${found - batch.length} remaining for the next run)`,
+    );
+
+    return { found, processed: batch.length, succeeded, failed };
   }
 
   // ─── invoice.finalized (debug hook) ──────────────────────────────

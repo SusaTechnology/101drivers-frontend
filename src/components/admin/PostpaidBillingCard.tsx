@@ -50,6 +50,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Info,
+  Send,
   Sparkles,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -81,6 +82,15 @@ interface PostpaidAdminStatus {
   outstandingCents: number
   outstandingDollars: number
   unpaidDeliveryCount: number
+  // Completed deliveries stuck in AUTHORIZED whose usage was never sent
+  // to Stripe — freezes the outstanding balance. Healable via the
+  // "Report to Stripe" button. Optional so the card still renders
+  // against an older backend without the field.
+  missingUsageReports?: {
+    count: number
+    totalCents: number
+    totalDollars: number
+  }
   stripe: {
     customerId: string | null
     subscriptionId: string | null
@@ -115,6 +125,7 @@ export default function PostpaidBillingCard({
   const [setupLoading, setSetupLoading] = useState(false)
   const [unfreezeLoading, setUnfreezeLoading] = useState(false)
   const [retryLoading, setRetryLoading] = useState(false)
+  const [backfillLoading, setBackfillLoading] = useState(false)
 
   const {
     data: status,
@@ -175,6 +186,36 @@ export default function PostpaidBillingCard({
     },
   })
 
+  const backfillMutation = useDataMutation<
+    { ok: boolean; found: number; processed: number; succeeded: number; failed: number },
+    { dealerId: string }
+  >({
+    apiEndPoint: `${API_URL}/api/postpaid-billing/dealers/${dealerId}/backfill-usage`,
+    method: 'POST',
+    onSuccess: (data) => {
+      if (data.succeeded > 0) {
+        toast.success(
+          `Reported ${data.succeeded} ${data.succeeded === 1 ? 'delivery' : 'deliveries'} to Stripe`,
+          {
+            description:
+              "They'll be added to the dealer's next weekly invoice. If a charge fails, the dealer will see the failure banner on their dashboard.",
+          },
+        )
+      } else {
+        toast.error('Nothing could be reported to Stripe', {
+          description:
+            data.failed > 0
+              ? `${data.failed} ${data.failed === 1 ? 'delivery' : 'deliveries'} failed — queued for automatic retry.`
+              : 'No stuck deliveries found.',
+        })
+      }
+      refetch()
+    },
+    onError: (error: any) => {
+      toast.error('Backfill failed', { description: error?.message })
+    },
+  })
+
   const handleSetup = async () => {
     setSetupLoading(true)
     try {
@@ -199,6 +240,15 @@ export default function PostpaidBillingCard({
       await retryMutation.mutateAsync({ dealerId })
     } finally {
       setRetryLoading(false)
+    }
+  }
+
+  const handleBackfill = async () => {
+    setBackfillLoading(true)
+    try {
+      await backfillMutation.mutateAsync({ dealerId })
+    } finally {
+      setBackfillLoading(false)
     }
   }
 
@@ -427,6 +477,44 @@ export default function PostpaidBillingCard({
             </div>
           </div>
         </div>
+
+        {/* Missed usage reports — completed deliveries stuck in AUTHORIZED
+            that were never sent to Stripe (billing wasn't fully set up when
+            they completed). Without this sweep they freeze the outstanding
+            balance at a constant number forever. */}
+        {status.missingUsageReports && status.missingUsageReports.count > 0 && (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs flex-1">
+                <p className="font-bold text-amber-700 dark:text-amber-300">
+                  {status.missingUsageReports.count} completed{' '}
+                  {status.missingUsageReports.count === 1 ? 'delivery was' : 'deliveries were'} never sent to Stripe
+                </p>
+                <p className="text-amber-600 dark:text-amber-400 mt-1">
+                  ${status.missingUsageReports.totalDollars.toFixed(2)} of completed
+                  deliveries are sitting on the outstanding balance but were never
+                  billed — postpaid billing wasn't fully set up when they finished.
+                  Reporting them adds them to the dealer's next weekly invoice.
+                </p>
+                <Button
+                  onClick={handleBackfill}
+                  disabled={backfillLoading}
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl mt-2 border-amber-400 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                >
+                  {backfillLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  <span className="ml-1 font-bold">Report to Stripe</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stripe IDs (debug) */}
         <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-3 space-y-1">
