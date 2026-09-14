@@ -19,8 +19,8 @@ import type {
   SuspendDriverRequest,
   UnsuspendDriverRequest,
   AdminUpdateUserRequest,
-  CreateAdminUserRequest,
-  CreateAdminUserResponse,
+  InviteAdminUserRequest,
+  ResendAdminInviteRequest,
 } from '@/types/users';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -287,17 +287,33 @@ export function useAdminUpdateUser() {
   });
 }
 
-// ==================== CREATE ADMIN USER ====================
+// ==================== INVITE ADMIN USER ====================
 
 /**
- * Hook for creating a new admin user
- * POST /api/users/admin-create
+ * Hook for inviting a new admin user by email (no password — the invitee
+ * receives a single-use setup link and sets their own password).
+ * POST /api/users/admin-invite
  */
-export function useCreateAdminUser() {
-  return useDataMutation<CreateAdminUserResponse, CreateAdminUserRequest>({
-    apiEndPoint: `${API_BASE_URL}/api/users/admin-create`,
+export function useInviteAdminUser() {
+  return useDataMutation<AdminUserDetail, InviteAdminUserRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/admin-invite`,
     method: 'POST',
-    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary']],
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}
+
+// ==================== RESEND ADMIN INVITE ====================
+
+/**
+ * Hook for resending the setup link to an admin whose invite is still
+ * pending (never accepted). Invalidates the previous link.
+ * POST /api/users/:id/admin-resend-invite
+ */
+export function useResendAdminInvite() {
+  return useDataMutation<AdminUserDetail, ResendAdminInviteRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-resend-invite`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
   });
 }
 

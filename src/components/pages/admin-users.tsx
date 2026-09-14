@@ -56,7 +56,8 @@ import {
   useUnsuspendDriver,
   useInviteDriver,
   useResendInviteDriver,
-  useCreateAdminUser,
+  useInviteAdminUser,
+  useResendAdminInvite,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
 import type {
@@ -66,7 +67,6 @@ import type {
   CustomerType,
   CustomerApprovalStatus,
   DriverStatus,
-  CreateAdminUserRequest,
 } from '@/types/users';
 import {
   USER_ROLE_LABELS,
@@ -124,22 +124,18 @@ const rejectSchema = z.object({
   reason: z.string().min(1, 'Reason is required'),
 });
 
-const createAdminSchema = z.object({
+// V3: Admins are INVITED, not created with a password. The admin supplies
+// only identity fields; the invitee receives a single-use email link and
+// sets their own password (48h expiry). No default password ever exists.
+const inviteAdminSchema = z.object({
   email: z.string().email('Invalid email address'),
-  username: z.string().min(3, 'Username must be at least 3 characters').max(50, 'Username too long'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string().min(1, 'Please confirm your password'),
   fullName: z.string().min(1, 'Full name is required'),
   phone: z.string().optional(),
-  isActive: z.boolean().default(true),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword'],
 });
 
 type SuspendFormData = z.infer<typeof suspendSchema>;
 type RejectFormData = z.infer<typeof rejectSchema>;
-type CreateAdminFormData = z.infer<typeof createAdminSchema>;
+type InviteAdminFormData = z.infer<typeof inviteAdminSchema>;
 
 // ==================== CONSTANTS ====================
 
@@ -338,13 +334,11 @@ export default function AdminUsersPage() {
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver'>('approve-customer');
+  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver' | 'resend-admin-invite'>('approve-customer');
   const [selectedUser, setSelectedUser] = useState<AdminUserRow | null>(null);
 
-  // Create Admin Dialog State
-  const [createAdminDialogOpen, setCreateAdminDialogOpen] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Invite Admin Dialog State
+  const [inviteAdminDialogOpen, setInviteAdminDialogOpen] = useState(false);
 
   // ==================== QUERIES (V2 — single call) ====================
 
@@ -389,7 +383,8 @@ export default function AdminUsersPage() {
   const unsuspendDriverMutation = useUnsuspendDriver();
   const inviteDriverMutation = useInviteDriver();
   const resendInviteDriverMutation = useResendInviteDriver();
-  const createAdminMutation = useCreateAdminUser();
+  const inviteAdminMutation = useInviteAdminUser();
+  const resendAdminInviteMutation = useResendAdminInvite();
 
   // ==================== FORMS ====================
 
@@ -403,16 +398,12 @@ export default function AdminUsersPage() {
     defaultValues: { reason: '' },
   });
 
-  const createAdminForm = useForm<CreateAdminFormData>({
-    resolver: zodResolver(createAdminSchema),
+  const inviteAdminForm = useForm<InviteAdminFormData>({
+    resolver: zodResolver(inviteAdminSchema),
     defaultValues: {
       email: '',
-      username: '',
-      password: '',
-      confirmPassword: '',
       fullName: '',
       phone: '',
-      isActive: true,
     },
   });
 
@@ -588,33 +579,49 @@ export default function AdminUsersPage() {
     toast.success('Data refreshed');
   }, [refetchUsers, refetchSummary]);
 
-  const handleCreateAdmin = useCallback((data: CreateAdminFormData) => {
+  const handleInviteAdmin = useCallback((data: InviteAdminFormData) => {
     if (!actorUserId) {
       toast.error('Unable to identify current user');
       return;
     }
 
-    const payload: CreateAdminUserRequest = {
+    inviteAdminMutation.mutate({
       email: data.email,
-      username: data.username,
-      password: data.password,
       fullName: data.fullName,
       phone: data.phone || undefined,
-      isActive: data.isActive,
       actorUserId,
-    };
-
-    createAdminMutation.mutate(payload, {
+    }, {
       onSuccess: () => {
-        toast.success('Admin user created successfully');
-        setCreateAdminDialogOpen(false);
-        createAdminForm.reset();
+        toast.success('Invite sent', {
+          description: `${data.email} will receive an email with a link to set their own password.`,
+        });
+        setInviteAdminDialogOpen(false);
+        inviteAdminForm.reset();
       },
       onError: (error: any) => {
-        toast.error(error?.message || 'Failed to create admin user');
+        toast.error(error?.message || 'Failed to send admin invite');
       },
     });
-  }, [actorUserId, createAdminMutation, createAdminForm]);
+  }, [actorUserId, inviteAdminMutation, inviteAdminForm]);
+
+  const handleResendAdminInvite = useCallback(() => {
+    if (!selectedUser || !actorUserId) return;
+    resendAdminInviteMutation.mutate(
+      { pathParams: { id: selectedUser.id }, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Invite resent successfully', {
+            description: `A new setup link was sent to ${selectedUser.email}.`,
+          });
+          closeDialog();
+        },
+        onError: (error: any) =>
+          toast.error('Failed to resend invite', {
+            description: error?.message || 'Please try again.',
+          }),
+      }
+    );
+  }, [selectedUser, actorUserId, resendAdminInviteMutation, closeDialog]);
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
@@ -665,11 +672,11 @@ export default function AdminUsersPage() {
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={() => setCreateAdminDialogOpen(true)}
+              onClick={() => setInviteAdminDialogOpen(true)}
               className="bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20 rounded-xl"
             >
               <UserPlus className="w-4 h-4 mr-1" />
-              Create Admin
+              Invite Admin
             </Button>
             <Button onClick={handleRefresh} variant="outline" size="sm" className="rounded-xl">
               <RefreshCw className={cn('h-3.5 w-3.5 mr-1', usersFetching && 'animate-spin')} />
@@ -988,7 +995,19 @@ export default function AdminUsersPage() {
                             // can be deleted.
                             <IncompleteSignupBadge emailVerifiedAt={user.emailVerifiedAt} />
                           ) : (
-                            <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
+                            // Non-customer, non-driver rows (i.e. admins).
+                            // Admins with a pending invite show an amber hint
+                            // next to Active so ops can spot never-activated
+                            // accounts at a glance.
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
+                              {user.roles === 'ADMIN' && !user.disabledAt && !user.emailVerifiedAt && !user.lastLoginAt && (
+                                <Badge className="text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-200">
+                                  <Send className="w-3 h-3 mr-1" />
+                                  Invite pending
+                                </Badge>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell className="px-4 py-3">
@@ -1061,6 +1080,12 @@ export default function AdminUsersPage() {
                             {/* Driver invited - show Resend Invite */}
                             {!user.disabledAt && user.driver?.status === 'INVITED' && (
                               <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('resend-invite-driver', user)}>
+                                <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
+                              </Button>
+                            )}
+                            {/* Admin with pending invite - show Resend Invite */}
+                            {!user.disabledAt && user.roles === 'ADMIN' && !user.emailVerifiedAt && !user.lastLoginAt && (
+                              <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('resend-admin-invite', user)}>
                                 <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
                               </Button>
                             )}
@@ -1194,6 +1219,7 @@ export default function AdminUsersPage() {
               {dialogAction === 'unsuspend-customer' && 'Unsuspend Customer'}
               {dialogAction === 'invite-driver' && 'Invite Driver'}
               {dialogAction === 'resend-invite-driver' && 'Resend Invite'}
+              {dialogAction === 'resend-admin-invite' && 'Resend Admin Invite'}
               {dialogAction === 'approve-driver' && 'Approve Driver'}
               {dialogAction === 'reject-driver' && 'Reject Driver'}
               {dialogAction === 'suspend-driver' && 'Suspend Driver'}
@@ -1206,6 +1232,7 @@ export default function AdminUsersPage() {
               {dialogAction === 'unsuspend-customer' && `Restore ${selectedUser?.fullName}'s customer account? They will be able to create deliveries again.`}
               {dialogAction === 'invite-driver' && `Invite ${selectedUser?.fullName} to complete their driver application? They will receive an email with instructions.`}
               {dialogAction === 'resend-invite-driver' && `Resend the invitation email to ${selectedUser?.email}? A new onboarding link will be generated.`}
+              {dialogAction === 'resend-admin-invite' && `Resend the setup link to ${selectedUser?.email}? The previous link will stop working and a new one (valid 48 hours) will be sent.`}
               {dialogAction === 'approve-driver' && `Approve ${selectedUser?.fullName} as a driver? They will be able to accept delivery assignments.`}
               {dialogAction === 'reject-driver' && `Reject ${selectedUser?.fullName}'s driver application?`}
               {dialogAction === 'suspend-driver' && `Suspend ${selectedUser?.fullName}'s driver account? They will not be able to accept deliveries.`}
@@ -1330,6 +1357,31 @@ export default function AdminUsersPage() {
                   className="rounded-2xl bg-sky-600 hover:bg-sky-700 text-white"
                 >
                   {resendInviteDriverMutation.isPending ? 'Sending...' : 'Resend Invite'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Resend Admin Invite Confirmation */}
+          {dialogAction === 'resend-admin-invite' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-sky-50 dark:bg-sky-900/20 rounded-xl">
+                <div className="text-sm text-sky-700 dark:text-sky-300">
+                  A new single-use setup link will be emailed to {selectedUser?.email}.
+                  The previous link will no longer work. The new admin will set their
+                  own password — no password is shared by chat.
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={closeDialog} className="rounded-2xl">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleResendAdminInvite}
+                  disabled={resendAdminInviteMutation.isPending}
+                  className="rounded-2xl bg-sky-600 hover:bg-sky-700 text-white"
+                >
+                  {resendAdminInviteMutation.isPending ? 'Sending...' : 'Resend Invite'}
                 </Button>
               </div>
             </div>
@@ -1467,20 +1519,22 @@ export default function AdminUsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Admin Dialog */}
-      <Dialog open={createAdminDialogOpen} onOpenChange={setCreateAdminDialogOpen}>
+      {/* Invite Admin Dialog */}
+      <Dialog open={inviteAdminDialogOpen} onOpenChange={setInviteAdminDialogOpen}>
         <DialogContent className="rounded-2xl max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Shield className="w-5 h-5 text-primary" />
-              Create Admin User
+              Invite Admin
             </DialogTitle>
             <DialogDescription>
-              Create a new administrator account with full platform access.
+              Invite a new administrator. They will receive an email with a
+              single-use link to set their own password — you never handle or
+              share a password.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={createAdminForm.handleSubmit(handleCreateAdmin)} className="space-y-4">
+          <form onSubmit={inviteAdminForm.handleSubmit(handleInviteAdmin)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Full Name */}
               <div className="md:col-span-2">
@@ -1489,13 +1543,13 @@ export default function AdminUsersPage() {
                   Full Name <span className="text-rose-500">*</span>
                 </Label>
                 <Input
-                  {...createAdminForm.register('fullName')}
+                  {...inviteAdminForm.register('fullName')}
                   placeholder="John Doe"
                   className="mt-1.5 rounded-xl"
                 />
-                {createAdminForm.formState.errors.fullName && (
+                {inviteAdminForm.formState.errors.fullName && (
                   <p className="text-xs text-rose-500 mt-1">
-                    {createAdminForm.formState.errors.fullName.message}
+                    {inviteAdminForm.formState.errors.fullName.message}
                   </p>
                 )}
               </div>
@@ -1507,88 +1561,14 @@ export default function AdminUsersPage() {
                   Email <span className="text-rose-500">*</span>
                 </Label>
                 <Input
-                  {...createAdminForm.register('email')}
+                  {...inviteAdminForm.register('email')}
                   type="email"
                   placeholder="admin@example.com"
                   className="mt-1.5 rounded-xl"
                 />
-                {createAdminForm.formState.errors.email && (
+                {inviteAdminForm.formState.errors.email && (
                   <p className="text-xs text-rose-500 mt-1">
-                    {createAdminForm.formState.errors.email.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Username */}
-              <div>
-                <Label className="text-sm font-medium flex items-center gap-1">
-                  <User className="w-3 h-3" />
-                  Username <span className="text-rose-500">*</span>
-                </Label>
-                <Input
-                  {...createAdminForm.register('username')}
-                  placeholder="johndoe"
-                  className="mt-1.5 rounded-xl"
-                />
-                {createAdminForm.formState.errors.username && (
-                  <p className="text-xs text-rose-500 mt-1">
-                    {createAdminForm.formState.errors.username.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Password */}
-              <div>
-                <Label className="text-sm font-medium flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  Password <span className="text-rose-500">*</span>
-                </Label>
-                <div className="relative mt-1.5">
-                  <Input
-                    {...createAdminForm.register('password')}
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    className="rounded-xl pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {createAdminForm.formState.errors.password && (
-                  <p className="text-xs text-rose-500 mt-1">
-                    {createAdminForm.formState.errors.password.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <Label className="text-sm font-medium flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  Confirm Password <span className="text-rose-500">*</span>
-                </Label>
-                <div className="relative mt-1.5">
-                  <Input
-                    {...createAdminForm.register('confirmPassword')}
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    className="rounded-xl pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {createAdminForm.formState.errors.confirmPassword && (
-                  <p className="text-xs text-rose-500 mt-1">
-                    {createAdminForm.formState.errors.confirmPassword.message}
+                    {inviteAdminForm.formState.errors.email.message}
                   </p>
                 )}
               </div>
@@ -1600,29 +1580,18 @@ export default function AdminUsersPage() {
                   Phone
                 </Label>
                 <Input
-                  {...createAdminForm.register('phone')}
+                  {...inviteAdminForm.register('phone')}
                   placeholder="+1 555 123 4567"
                   className="mt-1.5 rounded-xl"
                 />
-              </div>
-
-              {/* Is Active */}
-              <div className="md:col-span-2">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    {...createAdminForm.register('isActive')}
-                    className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm font-medium">Account is active</span>
-                </label>
               </div>
             </div>
 
             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
               <div className="text-sm text-amber-700 dark:text-amber-300">
                 <Shield className="w-4 h-4 inline mr-1" />
-                This user will have full administrative access to the platform.
+                This person will have full administrative access to the platform.
+                The setup link expires in 48 hours and can be resent anytime.
               </div>
             </div>
 
@@ -1631,10 +1600,8 @@ export default function AdminUsersPage() {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setCreateAdminDialogOpen(false);
-                  createAdminForm.reset();
-                  setShowPassword(false);
-                  setShowConfirmPassword(false);
+                  setInviteAdminDialogOpen(false);
+                  inviteAdminForm.reset();
                 }}
                 className="rounded-xl"
               >
@@ -1643,17 +1610,17 @@ export default function AdminUsersPage() {
               <Button
                 type="submit"
                 className="rounded-xl bg-primary text-slate-950 hover:shadow-xl hover:shadow-primary/20"
-                disabled={createAdminMutation.isPending}
+                disabled={inviteAdminMutation.isPending}
               >
-                {createAdminMutation.isPending ? (
+                {inviteAdminMutation.isPending ? (
                   <>
                     <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-                    Creating...
+                    Sending Invite...
                   </>
                 ) : (
                   <>
                     <UserPlus className="w-4 h-4 mr-1" />
-                    Create Admin
+                    Send Invite
                   </>
                 )}
               </Button>

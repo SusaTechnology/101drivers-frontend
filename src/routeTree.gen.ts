@@ -117,6 +117,7 @@ import { Route as AuthIndividualSignupRouteImport } from './routes/auth/individu
 import { Route as AuthDealerSignupRouteImport } from './routes/auth/dealer-signup'
 import { Route as AuthDealerSigninRouteImport } from './routes/auth/dealer-signin'
 import { Route as AuthAdminSigninRouteImport } from './routes/auth/admin-signin'
+import { Route as AuthAcceptInviteRouteImport } from './routes/auth/accept-invite'
 import { Route as AdminUserDetailUserIdRouteImport } from './routes/admin-user-detail/$userId'
 import { Route as TrackTokenIndexRouteImport } from './routes/track/$token/index'
 import { Route as TestReferralCodeIndexRouteImport } from './routes/test-referral/$code/index'
@@ -689,6 +690,11 @@ const AuthAdminSigninRoute = AuthAdminSigninRouteImport.update({
   path: '/auth/admin-signin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthAcceptInviteRoute = AuthAcceptInviteRouteImport.update({
+  id: '/auth/accept-invite',
+  path: '/auth/accept-invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminUserDetailUserIdRoute = AdminUserDetailUserIdRouteImport.update({
   id: '/admin-user-detail/$userId',
   path: '/admin-user-detail/$userId',
@@ -721,6 +727,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/driver': typeof DriverRouteWithChildren
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
+  '/auth/accept-invite': typeof AuthAcceptInviteRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
@@ -835,6 +842,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
+  '/auth/accept-invite': typeof AuthAcceptInviteRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
@@ -951,6 +959,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/driver': typeof DriverRouteWithChildren
   '/admin-user-detail/$userId': typeof AdminUserDetailUserIdRoute
+  '/auth/accept-invite': typeof AuthAcceptInviteRoute
   '/auth/admin-signin': typeof AuthAdminSigninRoute
   '/auth/dealer-signin': typeof AuthDealerSigninRoute
   '/auth/dealer-signup': typeof AuthDealerSignupRoute
@@ -1068,6 +1077,7 @@ export interface FileRouteTypes {
     | '/'
     | '/driver'
     | '/admin-user-detail/$userId'
+    | '/auth/accept-invite'
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
@@ -1182,6 +1192,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin-user-detail/$userId'
+    | '/auth/accept-invite'
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
@@ -1297,6 +1308,7 @@ export interface FileRouteTypes {
     | '/'
     | '/driver'
     | '/admin-user-detail/$userId'
+    | '/auth/accept-invite'
     | '/auth/admin-signin'
     | '/auth/dealer-signin'
     | '/auth/dealer-signup'
@@ -1413,6 +1425,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DriverRoute: typeof DriverRouteWithChildren
   AdminUserDetailUserIdRoute: typeof AdminUserDetailUserIdRoute
+  AuthAcceptInviteRoute: typeof AuthAcceptInviteRoute
   AuthAdminSigninRoute: typeof AuthAdminSigninRoute
   AuthDealerSigninRoute: typeof AuthDealerSigninRoute
   AuthDealerSignupRoute: typeof AuthDealerSignupRoute
@@ -2261,6 +2274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAdminSigninRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/accept-invite': {
+      id: '/auth/accept-invite'
+      path: '/auth/accept-invite'
+      fullPath: '/auth/accept-invite'
+      preLoaderRoute: typeof AuthAcceptInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-user-detail/$userId': {
       id: '/admin-user-detail/$userId'
       path: '/admin-user-detail/$userId'
@@ -2356,6 +2376,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DriverRoute: DriverRouteWithChildren,
   AdminUserDetailUserIdRoute: AdminUserDetailUserIdRoute,
+  AuthAcceptInviteRoute: AuthAcceptInviteRoute,
   AuthAdminSigninRoute: AuthAdminSigninRoute,
   AuthDealerSigninRoute: AuthDealerSigninRoute,
   AuthDealerSignupRoute: AuthDealerSignupRoute,

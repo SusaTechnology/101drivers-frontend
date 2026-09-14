@@ -36,30 +36,6 @@
     "attributes": "*"
   },
   {
-    "role": "BUSINESS_CUSTOMER",
-    "resource": "User",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "DRIVER",
-    "resource": "User",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "PRIVATE_CUSTOMER",
-    "resource": "User",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
-    "role": "user",
-    "resource": "User",
-    "action": "create:any",
-    "attributes": "*"
-  },
-  {
     "role": "ADMIN",
     "resource": "User",
     "action": "update:any",

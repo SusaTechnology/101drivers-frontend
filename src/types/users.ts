@@ -523,30 +523,27 @@ export interface AdminUpdateUserRequest {
   };
 }
 
-// ==================== CREATE ADMIN USER REQUEST ====================
+// ==================== INVITE ADMIN USER ====================
 
-export interface CreateAdminUserRequest {
+/**
+ * POST /api/users/admin-invite — invite a new administrator by email.
+ * No password field: the invitee receives a single-use setup link
+ * (48h expiry) and sets their own password on the accept-invite page.
+ */
+export interface InviteAdminUserRequest {
   email: string;
-  username: string;
-  password: string;
   fullName: string;
   phone?: string;
-  isActive?: boolean;
   actorUserId: string;
 }
 
-export interface CreateAdminUserResponse {
-  id: string;
-  email: string;
-  username: string;
-  fullName: string | null;
-  phone: string | null;
-  roles: 'ADMIN';
-  isActive: boolean;
-  disabledAt?: string | null;
-  disabledReason?: string | null;
-  createdAt: string;
-  updatedAt: string;
+/**
+ * POST /api/users/:id/admin-resend-invite — resend the setup link to an
+ * admin whose invite is still pending. The previous link is invalidated.
+ */
+export interface ResendAdminInviteRequest {
+  pathParams: { id: string };
+  actorUserId: string;
 }
 
 // ==================== HELPER CONSTANTS ====================

@@ -73,7 +73,7 @@ class EmailVerificationTokenWhereInput {
   @Field(() => EnumEmailVerificationTokenPurpose, {
     nullable: true,
   })
-  purpose?: "SIGNUP" | "PASSWORD_RESET";
+  purpose?: "SIGNUP" | "PASSWORD_RESET" | "ADMIN_INVITE";
 
   @ApiProperty({
     required: false,

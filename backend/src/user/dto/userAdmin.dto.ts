@@ -252,3 +252,42 @@ export class UserAdminCreateBodyDto {
   @swagger.ApiPropertyOptional()
   actorUserId?: string | null;
 }
+
+/**
+ * Body for POST /api/users/admin-invite.
+ * The admin only supplies identity fields — NO password. The invitee
+ * receives a single-use setup link by email and sets their own password.
+ */
+export class UserAdminInviteBodyDto {
+  @swagger.ApiProperty()
+  @IsEmail({}, { message: "A valid email address is required" })
+  email!: string;
+
+  @swagger.ApiProperty()
+  @IsString()
+  fullName!: string;
+
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  phone?: string | null;
+
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+}
+
+/**
+ * Body for POST /api/auth/accept-invite (public).
+ * Exchanges a single-use invite token for a password set by the invitee.
+ */
+export class AdminInviteAcceptDto {
+  @swagger.ApiProperty()
+  @IsString()
+  token!: string;
+
+  @swagger.ApiProperty()
+  @IsString()
+  password!: string;
+}

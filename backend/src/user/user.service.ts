@@ -15,6 +15,7 @@ import {
   User as PrismaUser,
 } from "@prisma/client";
 import * as bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { UserServiceBase } from "./base/user.service.base";
 import { UserDomain } from "../domain/user/user.domain";
@@ -57,8 +58,25 @@ constructor(
   }
 
   async createUser(args: Prisma.UserCreateArgs): Promise<any> {
+    // SECURITY: generic user creation (REST POST /api/users + GraphQL
+    // createUser) must never accept credentials or a role from the client.
+    // Strip them and substitute an unguessable random placeholder whose
+    // bcrypt hash is stored in BOTH password columns (validateUser compares
+    // against `passwordHash ?? password`). Role assignment now happens only
+    // through the guarded admin endpoints (admin-create / admin-invite).
+    const { password: _clientPassword, passwordHash: _clientHash, roles: _clientRoles, ...safeData } =
+      args.data as Prisma.UserCreateInput & Record<string, unknown>;
+
+    const placeholderHash = await this.passwordService.hash(
+      randomBytes(32).toString("base64url")
+    );
+
     const normalizedData = stripEmptyObjectsDeep(
-      this.normalizeCreateData(args.data)
+      this.normalizeCreateData({
+        ...(safeData as Prisma.UserCreateInput),
+        password: placeholderHash,
+        passwordHash: placeholderHash,
+      })
     ) as Prisma.UserCreateArgs["data"];
 
     await this.policy.beforeCreate(this.prisma as any, normalizedData);
@@ -1734,7 +1752,9 @@ async adminCreateUser(input: {
     this.normalizeCreateData({
       email: input.email,
       username: input.username,
-      password: plainPassword,
+      // Consistent credential storage: bcrypt hash in BOTH columns —
+      // the legacy plaintext copy here was a security defect.
+      password: passwordHash,
       passwordHash,
       fullName: input.fullName ?? null,
       phone: input.phone ?? null,

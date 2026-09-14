@@ -9,6 +9,7 @@ import { Request } from "express";
 import { plainToClass } from "class-transformer";
 import { ApiNestedQuery } from "../decorators/api-nested-query.decorator";
 import * as defaultAuthGuard from "../auth/defaultAuth.guard";
+import { AdminGuard } from "../auth/adminAuth.guard";
 import { AclValidateRequestInterceptor } from "../interceptors/aclValidateRequest.interceptor";
 import { AclFilterResponseInterceptor } from "../interceptors/aclFilterResponse.interceptor";
 import { UserCreateInput } from "./base/UserCreateInput";
@@ -70,6 +71,7 @@ export class UserController extends UserControllerBase {
   }
 @common.Post("admin-create")
 @swagger.ApiOkResponse({ type: Object })
+@common.UseGuards(AdminGuard)
 @nestAccessControl.UseRoles({
   resource: "User",
   action: "create",
@@ -78,6 +80,8 @@ export class UserController extends UserControllerBase {
 async adminCreateUser(
   @common.Body() body: UserAdminCreateBodyDto
 ): Promise<any> {
+  // AdminGuard enforces the ADMIN role on top of the ACL grant —
+  // creating administrators must never be reachable by other roles.
   return this.service.adminCreateUser(body);
 }  
 
@@ -467,8 +471,8 @@ async unsuspendUser(
         id: true,
         isActive: true,
         lastLoginAt: true,
-        password: true,
-        passwordHash: true,
+        // password / passwordHash intentionally NOT returned —
+        // credential material must never leave the server.
         phone: true,
         roles: true,
         updatedAt: true,

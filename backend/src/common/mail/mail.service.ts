@@ -215,6 +215,77 @@ export class MailService {
     });
   }
 
+  /**
+   * Admin invite email — sent to a newly invited administrator.
+   * Contains a single-use setup link (48h expiry) that lets the new admin
+   * set their own password. No default password ever exists.
+   */
+  async sendAdminInviteEmail(params: {
+    toEmail: string;
+    token: string;
+    fullName?: string | null;
+    invitedByEmail?: string | null;
+  }): Promise<void> {
+    const normalizedEmail = params.toEmail.trim().toLowerCase();
+    const displayName = params.fullName?.trim() || "there";
+    const setupUrl = `${this.appDomain}/auth/accept-invite?token=${encodeURIComponent(
+      params.token
+    )}`;
+
+    const subject = "Set up your 101 Drivers admin account";
+
+    const text = [
+      `Hi ${displayName},`,
+      "",
+      `You have been invited to join 101 Drivers as an administrator${
+        params.invitedByEmail ? ` by ${params.invitedByEmail}` : ""
+      }.`,
+      "",
+      "Use the secure link below to set your own password and activate your account:",
+      "",
+      setupUrl,
+      "",
+      "This link expires in 48 hours and can only be used once.",
+      "",
+      "If you were not expecting this invitation, you can safely ignore this email.",
+    ].join("\n");
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111;">
+        <h2>You're invited to join 101 Drivers as an administrator</h2>
+        <p>Hi ${this.escapeHtml(displayName)},</p>
+        <p>${
+          params.invitedByEmail
+            ? this.escapeHtml(`${params.invitedByEmail} invited you`)
+            : "You have been invited"
+        } to administer the 101 Drivers delivery platform.</p>
+        <p>Click the button below to set your own password and activate your account. For your security, no password was created for you in advance.</p>
+
+        <p>
+          <a
+            href="${this.escapeHtml(setupUrl)}"
+            style="display:inline-block;padding:12px 18px;background:#111;color:#fff;text-decoration:none;border-radius:6px;"
+          >
+            Set up my account
+          </a>
+        </p>
+
+        <p>Or open this page directly:</p>
+        <p>${this.escapeHtml(setupUrl)}</p>
+
+        <p style="color:#444;">This link expires in 48 hours and can only be used once.</p>
+        <p>If you were not expecting this invitation, you can safely ignore this email.</p>
+      </div>
+    `;
+
+    await this.sendMail({
+      to: normalizedEmail,
+      subject,
+      text,
+      html,
+    });
+  }
+
   private getVerificationDestinationUrl(
     audience: VerificationAudience,
     token: string,
