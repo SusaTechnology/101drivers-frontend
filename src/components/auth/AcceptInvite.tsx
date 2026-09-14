@@ -106,6 +106,7 @@ export function AcceptInvite() {
     formState: { errors },
     reset,
     watch,
+    setValue,
   } = useForm<AcceptInviteFormData>({
     resolver: zodResolver(acceptInviteSchema),
     defaultValues: { newPassword: "", confirmPassword: "" },
@@ -157,6 +158,23 @@ export function AcceptInvite() {
       token,
       password: pwDomValue || data.newPassword,
     });
+  };
+
+  // Chrome autofill can fill these inputs WITHOUT firing React change
+  // events, so react-hook-form's copy can stay stale (often empty) even
+  // though the fields visibly hold a full password. Validation used to run
+  // against that stale copy — a perfectly good autofilled password was
+  // rejected with the false "Password must be at least 8 characters" error
+  // and the form could never be submitted. The DOM value is always what
+  // the user sees, so sync it into the form BEFORE the policy check runs.
+  const syncDomAndSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    setValue("newPassword", newPasswordRef.current?.value ?? "", {
+      shouldDirty: true,
+    });
+    setValue("confirmPassword", confirmPasswordRef.current?.value ?? "", {
+      shouldDirty: true,
+    });
+    handleSubmit(onSubmit)(e);
   };
 
   // ==================== RENDER ====================
@@ -264,7 +282,7 @@ export function AcceptInvite() {
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
+              <form onSubmit={syncDomAndSubmit} className="mt-8 space-y-5">
                 {/* New Password */}
                 <div className="space-y-2">
                   <Label
