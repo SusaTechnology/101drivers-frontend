@@ -1946,6 +1946,11 @@ export class PostpaidBillingService {
       failureCode: string | null;
       failureMessage: string | null;
       failedAt: Date | null;
+      // Which retry attempt this was (1 = initial charge, 2 = first
+      // retry, ...) — from Stripe's invoice attempt_count. Drives the
+      // dealer-facing "failed 1st / 2nd / 3rd consecutive time"
+      // progression in the postpaid panel.
+      attemptCount: number | null;
       deliveryId: string;
       pickupAddress: string;
       dropoffAddress: string;
@@ -2036,6 +2041,7 @@ export class PostpaidBillingService {
         failureCode: true,
         failureMessage: true,
         failedAt: true,
+        attemptCount: true,
         stripeInvoiceId: true,
         delivery: {
           select: {
@@ -2069,6 +2075,7 @@ export class PostpaidBillingService {
         failureCode: p.failureCode,
         failureMessage: p.failureMessage,
         failedAt: p.failedAt,
+        attemptCount: p.attemptCount,
         deliveryId: p.delivery.id,
         pickupAddress: p.delivery.pickupAddress,
         dropoffAddress: p.delivery.dropoffAddress,

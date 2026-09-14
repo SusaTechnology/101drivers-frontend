@@ -1,10 +1,15 @@
 // PostpaidStatusPanel — dealer-facing summary of their weekly postpaid
 // billing state. Pulled from GET /api/postpaid-billing/me/status.
 //
-// Graduated alert system (like Uber/DoorDash):
-//   • 1st failure:  amber banner — "Update your card before [retry date]"
-//   • 2nd failure:  red banner — "Payment failed again. Please update your card."
-//   • 3rd+ failure: red banner + "Account restricted — you can't create new deliveries"
+// Graduated alert system (like Uber/DoorDash), driven by Stripe's
+// invoice attempt_count (1 = initial charge, 2 = first retry, ...):
+//   • 1st failure:  amber banner — "1st payment attempt failed — we'll
+//                   retry automatically on [retry date]"
+//   • 2nd failure:  amber banner — "2nd consecutive failure — update
+//                   your card now; a 3rd pauses new deliveries"
+//   • 3rd+ failure: red banner — account restricted (billingFrozen).
+//                   "3 consecutive failures — new deliveries are
+//                   paused. Update your card or contact support."
 //   • Transient:    no banner (auto-resolves)
 //   • Fraud:        admin-only (dealer doesn't see)
 //
@@ -12,7 +17,7 @@
 //   • Outstanding balance
 //   • Next invoice date
 //   • Saved card status
-//   • Failed payment details (if any) — amount, reason, retry info
+//   • Failed payment details (if any) — amount, reason, attempt #, retry info
 //
 // The dealer NEVER sees:
 //   • Raw Stripe error codes (translated to plain English)
@@ -47,12 +52,18 @@ import { usePersistentCollapsed } from '@/hooks/usePersistentCollapsed'
 
 const API_URL = import.meta.env.VITE_API_URL
 
+// Mirror of MAX_FAILURES_BEFORE_RESTRICT in the backend
+// postpaidBilling.service.ts — the dealer-facing copy uses the same
+// threshold the backend enforces (restrict on the 3rd failure).
+const MAX_CONSECUTIVE_FAILURES = 3
+
 interface FailedPayment {
   paymentId: string
   amount: number
   failureCode: string | null
   failureMessage: string | null
   failedAt: string | null
+  attemptCount: number | null
   deliveryId: string
   pickupAddress: string
   dropoffAddress: string
@@ -144,6 +155,16 @@ export default function PostpaidStatusPanel({
   const isFrozen = status.billingFrozen
   const hasFailures = visibleFailedPayments.length > 0
 
+  // Highest attempt number across the currently-failed charges —
+  // Stripe's attempt_count on the invoice (1 = initial charge,
+  // 2 = first retry, ...). This IS the "consecutive failures" counter:
+  // when a retry succeeds the rows flip to PAID and drop out of this
+  // list, so the count resets naturally.
+  const maxAttempt = visibleFailedPayments.reduce(
+    (max, fp) => Math.max(max, fp.attemptCount || 1),
+    1,
+  )
+
   // ── Status badges (shared) ──
   // Rendered in the expanded header AND in the collapsed one-line strip
   // so the live state (Restricted / Action needed / Active) stays
@@ -207,27 +228,39 @@ export default function PostpaidStatusPanel({
       <div className="max-w-[980px] mx-auto space-y-2">
         {/* ── Graduated alert system ── */}
 
-        {/* RED alert: account restricted (frozen) */}
+        {/* RED alert: account restricted (frozen — 3rd+ consecutive failure) */}
         {isFrozen && (
           <Card className="border-red-300 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 rounded-2xl">
             <CardContent className="p-4 flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-red-700 dark:text-red-300">
-                  Account restricted — new deliveries are paused
+                  {maxAttempt >= 2
+                    ? `${maxAttempt} consecutive payment attempts failed — new deliveries are paused`
+                    : 'Payment attempt failed — new deliveries are paused'}
                 </p>
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                  Multiple payment charges have failed. To resume creating deliveries, please update your payment method below.
+                  We tried charging your card {maxAttempt} {maxAttempt === 1 ? 'time' : 'times'} and every attempt failed. Your outstanding balance of ${status.outstandingDollars.toFixed(2)} is still due.
                 </p>
                 {status.hasSavedPaymentMethod ? (
                   <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                    A card is on file but charges are being declined. Update your card or contact your bank.
+                    A card is on file but charges are being declined. Update your card below — once a charge succeeds, new deliveries are re-enabled automatically. If you keep seeing this, contact support.
                   </p>
                 ) : (
                   <p className="text-xs text-red-600 dark:text-red-400 mt-1">
                     No card on file. Add a card so the next weekly invoice can succeed.
                   </p>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-7 text-xs rounded-lg border-red-300 text-red-700 dark:border-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+                  onClick={() => {
+                    window.location.href = '/help-customer'
+                  }}
+                >
+                  Contact Support
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -240,10 +273,14 @@ export default function PostpaidStatusPanel({
               <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-amber-700 dark:text-amber-300">
-                  Payment action needed
+                  {maxAttempt >= 2
+                    ? `Payment failed for the ${maxAttempt === 2 ? '2nd' : maxAttempt === 3 ? '3rd' : `${maxAttempt}th`} consecutive time`
+                    : '1st payment attempt failed'}
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  Your last invoice charge failed. Stripe will automatically retry — update your payment method before the retry date to ensure it succeeds.
+                  {maxAttempt >= 2
+                    ? `Attempt ${maxAttempt} of ${MAX_CONSECUTIVE_FAILURES} failed. Update your payment method now — after ${MAX_CONSECUTIVE_FAILURES} consecutive failures, new deliveries are paused until the balance is paid.`
+                    : `Your weekly invoice charge failed. We'll retry automatically — update your payment method before the retry date so it succeeds.`}
                 </p>
                 {nextInvoiceDate && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
@@ -267,6 +304,7 @@ export default function PostpaidStatusPanel({
               </div>
               {visibleFailedPayments.map((fp) => {
                 const errorInfo = getStripeErrorInfo(fp.failureCode)
+                const attemptNo = fp.attemptCount || 1
                 return (
                   <div
                     key={fp.paymentId}
@@ -274,8 +312,19 @@ export default function PostpaidStatusPanel({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="text-sm font-bold text-slate-900 dark:text-white">
-                          ${fp.amount.toFixed(2)}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-slate-900 dark:text-white">
+                            ${fp.amount.toFixed(2)}
+                          </span>
+                          <Badge
+                            className={
+                              attemptNo >= MAX_CONSECUTIVE_FAILURES
+                                ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                            }
+                          >
+                            Attempt {attemptNo} of {MAX_CONSECUTIVE_FAILURES}
+                          </Badge>
                         </div>
                         <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           {fp.pickupAddress} → {fp.dropoffAddress}
