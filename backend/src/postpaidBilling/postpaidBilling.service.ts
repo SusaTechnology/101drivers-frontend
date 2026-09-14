@@ -498,17 +498,38 @@ export class PostpaidBillingService {
       };
     }
 
-    // Skip if not a postpaid delivery.
-    if (
-      payment.paymentType !== EnumPaymentPaymentType.POSTPAID ||
-      delivery.customer?.billingMode !== EnumCustomerBillingMode.WEEKLY_POSTPAID
-    ) {
+    // Skip if not a postpaid delivery — prepaid payments were charged
+    // at creation; usage reporting doesn't apply to them.
+    if (payment.paymentType !== EnumPaymentPaymentType.POSTPAID) {
       return {
         deliveryId: input.deliveryId,
         paymentId: payment.id,
         stripeInvoiceItemId: null,
         status: payment.status as EnumPaymentStatus,
       };
+    }
+
+    // paymentType=POSTPAID but the dealer's CURRENT billing mode isn't
+    // weekly postpaid (e.g. an admin switched them to prepaid while this
+    // delivery was still in flight — switchBillingMode does NOT touch
+    // in-flight deliveries). The delivery WAS postpaid — the money is
+    // owed — so do NOT skip silently: that is exactly how payments used
+    // to get stranded in AUTHORIZED forever (prod: 46 rows / $11,328.16
+    // frozen since March). Schedule a retry instead: if the dealer is
+    // switched back / re-onboarded, the hourly retry queue heals it;
+    // after 5 attempts it becomes PERMANENTLY_FAILED with an admin
+    // email, and the daily backfill sweep also retries it once the
+    // dealer is back on WEEKLY_POSTPAID.
+    if (delivery.customer?.billingMode !== EnumCustomerBillingMode.WEEKLY_POSTPAID) {
+      await this.scheduleUsageReportRetry(
+        payment.id,
+        "Dealer billingMode is not WEEKLY_POSTPAID (billing mode likely switched while this delivery was in flight) — retrying in case it is restored",
+      );
+      return failure(
+        "Dealer is not on weekly-postpaid billing — usage report scheduled for retry",
+        payment.id,
+        payment.status as EnumPaymentStatus,
+      );
     }
 
     const stripeCustomerId = delivery.customer?.stripeCustomerId;
@@ -540,18 +561,30 @@ export class PostpaidBillingService {
     });
 
     try {
-      const invoiceItem = await this.stripeService.stripe.invoiceItems.create({
-        customer: stripeCustomerId,
-        amount: amountCents,
-        currency: "usd",
-        description,
-        metadata: {
-          [STRIPE_METADATA_KEYS.DELIVERY_ID]: delivery.id,
-          [STRIPE_METADATA_KEYS.PAYMENT_ID]: payment.id,
-          [STRIPE_METADATA_KEYS.CUSTOMER_ID]: delivery.customer!.id,
-          [STRIPE_METADATA_KEYS.SOURCE]: "postpaid-weekly",
+      const invoiceItem = await this.stripeService.stripe.invoiceItems.create(
+        {
+          customer: stripeCustomerId,
+          amount: amountCents,
+          currency: "usd",
+          description,
+          metadata: {
+            [STRIPE_METADATA_KEYS.DELIVERY_ID]: delivery.id,
+            [STRIPE_METADATA_KEYS.PAYMENT_ID]: payment.id,
+            [STRIPE_METADATA_KEYS.CUSTOMER_ID]: delivery.customer!.id,
+            [STRIPE_METADATA_KEYS.SOURCE]: "postpaid-weekly",
+          },
         },
-      });
+        {
+          // Idempotency key — if the process crashes after Stripe created
+          // the InvoiceItem but BEFORE the Payment row update below, the
+          // payment row still looks unreported and a retry would create a
+          // DUPLICATE InvoiceItem (double bill). Stripe replays the
+          // original response for the same key + params (24h window)
+          // instead of creating a second item — and every retry path
+          // (hourly queue, daily sweep) retries well within 24h.
+          idempotencyKey: `postpaid-usage-${payment.id}`,
+        },
+      );
 
       await this.prisma.payment.update({
         where: { id: payment.id },
@@ -2175,9 +2208,19 @@ export class PostpaidBillingService {
   private missingUsageReportWhere(dealerId?: string): Prisma.PaymentWhereInput {
     return {
       paymentType: EnumPaymentPaymentType.POSTPAID,
-      status: {
-        in: [EnumPaymentStatus.AUTHORIZED, EnumPaymentStatus.INVOICED],
-      },
+      // Either stuck pre-report (AUTHORIZED / legacy INVOICED) OR the
+      // reporting pipeline gave up (PERMANENTLY_FAILED after 5 backoff
+      // retries — e.g. a long Stripe outage at completion time). Both
+      // mean the same thing: a COMPLETED delivery whose usage never
+      // reached Stripe.
+      OR: [
+        {
+          status: {
+            in: [EnumPaymentStatus.AUTHORIZED, EnumPaymentStatus.INVOICED],
+          },
+        },
+        { usageReportStatus: "PERMANENTLY_FAILED" },
+      ],
       stripeInvoiceItemId: null,
       delivery: {
         status: EnumDeliveryRequestStatus.COMPLETED,

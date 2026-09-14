@@ -21,6 +21,7 @@ import {
   Controller,
   Get,
   Logger,
+  OnApplicationBootstrap,
   Param,
   Post,
   UseGuards,
@@ -36,7 +37,7 @@ import { PrismaService } from "../prisma/prisma.service";
 
 @ApiTags("postpaid-billing")
 @Controller("postpaid-billing")
-export class PostpaidBillingController {
+export class PostpaidBillingController implements OnApplicationBootstrap {
   private readonly logger = new Logger(PostpaidBillingController.name);
 
   // ── Cron lock (in-memory, single-process) ──
@@ -45,7 +46,7 @@ export class PostpaidBillingController {
   // still be running when the next interval fires), the new run skips.
   //
   // This is a single-process lock — if you run multiple backend
-  // instances behind a load balancer, each instance has its own Set
+  // instances behind a load balancer, each instance has its own lock
   // and they can run the same cron concurrently. For multi-instance
   // safety, upgrade this to a DB-based lock (e.g. `SELECT FOR UPDATE`
   // on a cron_lock row) or use Redis with `SET NX EX`.
@@ -53,25 +54,112 @@ export class PostpaidBillingController {
   // The cron methods themselves are idempotent (unique constraints +
   // status checks), so even a concurrent run won't double-charge —
   // it'll just do redundant work + waste Stripe API quota.
-  private static readonly runningCrons = new Set<string>();
+  //
+  // Lock registry: cronName → timestamp (ms) when the lock was acquired.
+  private static readonly runningCrons = new Map<string, number>();
+
+  // A run that has held its lock longer than this is presumed dead/hung
+  // (e.g. a Stripe call that never returned). The lock is force-released
+  // so subsequent runs aren't blocked forever — without this, one wedged
+  // run would silently skip every future run AND keep the admin trigger
+  // returning "already running" until the process restarted. Legit runs
+  // take seconds (the backfill caps at 100 Stripe calls); 30 min is a
+  // generous bound.
+  private static readonly CRON_LOCK_STALE_MS = 30 * 60 * 1000;
+
+  // Last result of the missing-usage backfill (daily cron, boot
+  // catch-up, or admin trigger) — surfaced on /admin/health so "is the
+  // sweep actually running?" has a visible answer.
+  private static lastMissingUsageBackfillRun?: {
+    at: string;
+    trigger: string;
+    found: number;
+    processed: number;
+    succeeded: number;
+    failed: number;
+  };
 
   private async withCronLock<T>(
     cronName: string,
     fn: () => Promise<T>,
   ): Promise<T | void> {
-    if (PostpaidBillingController.runningCrons.has(cronName)) {
+    const acquiredAt = PostpaidBillingController.runningCrons.get(cronName);
+    if (acquiredAt !== undefined) {
+      if (Date.now() - acquiredAt < PostpaidBillingController.CRON_LOCK_STALE_MS) {
+        this.logger.warn(
+          `Cron ${cronName} already running — skipping this execution. ` +
+            `(Previous run may be taking longer than the interval. Consider tuning the batch size.)`,
+        );
+        return;
+      }
+      // Stale lock — previous run presumed dead. Force-release and run.
       this.logger.warn(
-        `Cron ${cronName} already running — skipping this execution. ` +
-          `(Previous run may be taking longer than the interval. Consider tuning the batch size.)`,
+        `Cron ${cronName} lock is stale (held > ${PostpaidBillingController.CRON_LOCK_STALE_MS / 60000} min) — force-releasing and re-running.`,
       );
-      return;
+      PostpaidBillingController.runningCrons.delete(cronName);
     }
-    PostpaidBillingController.runningCrons.add(cronName);
+    PostpaidBillingController.runningCrons.set(cronName, Date.now());
     try {
       return await fn();
     } finally {
       PostpaidBillingController.runningCrons.delete(cronName);
     }
+  }
+
+  /**
+   * Shared entry point for the missing-usage backfill — used by the
+   * daily cron, the boot catch-up, and the admin endpoint. All three
+   * share ONE lock name ("missingUsageBackfill") so they can never run
+   * concurrently, and all three record their result for /admin/health.
+   *
+   * Returns undefined when the lock was held (caller decides whether
+   * that's a skip-and-log or an error).
+   */
+  private async runMissingUsageBackfill(
+    trigger: string,
+    input?: { dealerId?: string; limit?: number },
+  ): Promise<
+    | { found: number; processed: number; succeeded: number; failed: number }
+    | undefined
+  > {
+    const result = await this.withCronLock("missingUsageBackfill", () =>
+      this.postpaidBilling.backfillMissingUsageReports(input),
+    );
+    if (!result) return undefined;
+    PostpaidBillingController.lastMissingUsageBackfillRun = {
+      at: new Date().toISOString(),
+      trigger,
+      ...result,
+    };
+    return result;
+  }
+
+  /**
+   * Boot catch-up sweep. @nestjs/schedule does NOT replay a cron that
+   * fired while the process was down — a deploy/restart around 03:00
+   * would otherwise skip the sweep for the whole day. Run it once
+   * shortly after every boot instead: the sweep is idempotent and
+   * count-first (zero Stripe calls when nothing is stranded), so this
+   * is cheap. Delayed so the app finishes wiring up (DB pool, etc.).
+   */
+  onApplicationBootstrap() {
+    setTimeout(() => {
+      this.runMissingUsageBackfill("boot-catchup")
+        .then((result) => {
+          if (result && result.found > 0) {
+            this.logger.log(
+              `Boot catch-up backfill: found=${result.found}, processed=${result.processed}, ` +
+                `succeeded=${result.succeeded}, failed=${result.failed}`,
+            );
+          }
+        })
+        .catch((err: any) => {
+          this.logger.error(
+            `Boot catch-up backfill failed: ${err?.message}`,
+            err?.stack,
+          );
+        });
+    }, 60_000);
   }
 
   constructor(
@@ -128,11 +216,12 @@ export class PostpaidBillingController {
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
   @ApiOperation({ summary: "Re-report completed deliveries whose usage was never sent to Stripe (stuck AUTHORIZED) — adds them to the next weekly invoice" })
   async backfillUsage(@Param("dealerId") dealerId: string) {
-    // Reuses the cron lock — the admin trigger and the daily backfill
-    // cron must never run concurrently (reportUsageToStripe is
-    // idempotent, but avoid redundant Stripe calls).
-    const result = await this.withCronLock("missingUsageBackfill", () =>
-      this.postpaidBilling.backfillMissingUsageReports({ dealerId }),
+    // Shares the "missingUsageBackfill" lock with the daily cron and the
+    // boot catch-up — they can never run concurrently (reportUsageToStripe
+    // is idempotent, but avoid redundant Stripe calls).
+    const result = await this.runMissingUsageBackfill(
+      `admin-trigger:${dealerId}`,
+      { dealerId },
     );
     if (!result) {
       // Lock was held (e.g. the 03:00 cron is mid-run) — tell the admin
@@ -356,15 +445,13 @@ export class PostpaidBillingController {
   async handleDailyMissingUsageBackfill() {
     this.logger.log("Daily missing-usage backfill cron: starting");
     try {
-      await this.withCronLock("dailyMissingUsageBackfill", async () => {
-        const result = await this.postpaidBilling.backfillMissingUsageReports();
-        if (result.found > 0) {
-          this.logger.log(
-            `Daily missing-usage backfill cron: found=${result.found}, ` +
+      const result = await this.runMissingUsageBackfill("daily-cron-3am");
+      if (result && result.found > 0) {
+        this.logger.log(
+          `Daily missing-usage backfill cron: found=${result.found}, ` +
             `processed=${result.processed}, succeeded=${result.succeeded}, failed=${result.failed}`,
-          );
-        }
-      });
+        );
+      }
     } catch (err: any) {
       this.logger.error(
         `Daily missing-usage backfill cron failed: ${err?.message}`,
@@ -459,7 +546,7 @@ export class PostpaidBillingController {
 
     return {
       timestamp: now.toISOString(),
-      runningCrons: Array.from(PostpaidBillingController.runningCrons),
+      runningCrons: Array.from(PostpaidBillingController.runningCrons.keys()),
       queues: {
         usageReport: {
           pendingRetry: usageReportQueue,
@@ -475,9 +562,11 @@ export class PostpaidBillingController {
           count: missingUsage.count,
           totalCents: missingUsage.totalCents,
           // Completed deliveries that never reached Stripe — the daily
-          // backfill cron heals these automatically; an admin can also
-          // trigger POST /dealers/:id/backfill-usage immediately.
+          // backfill cron + boot catch-up heal these automatically; an
+          // admin can also trigger POST /dealers/:id/backfill-usage.
           alert: missingUsage.count > 0 ? "backfill_available" : "ok",
+          // Last sweep result — answers "is this actually running?"
+          lastRun: PostpaidBillingController.lastMissingUsageBackfillRun ?? null,
         },
         remainderCharges: {
           pending: remainderQueue,
