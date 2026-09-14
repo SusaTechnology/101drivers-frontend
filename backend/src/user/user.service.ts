@@ -672,12 +672,27 @@ async getAdminUsersV2(query: {
 
   // ── Build the unified where clause ──────────────────────────────
   // The base filter excludes unverified signups (same as V1).
+  // ADMIN rows are ALWAYS kept: they have no customer/driver profile and
+  // (old-form or invite-pending) admins may not have a verified email yet.
+  // Without this branch, role=ADMIN matched only rows the base filter had
+  // already removed — the table showed zero admins and the summary's admin
+  // count was always 0. (AND-wrapper so callers can still spread/overwrite
+  // OR/roles without losing the base filter.)
   const verifiedFilter = {
-    NOT: {
-      emailVerifiedAt: null,
-      customer: null,
-      driver: null,
-    },
+    AND: [
+      {
+        OR: [
+          { roles: EnumUserRoles.ADMIN },
+          {
+            NOT: {
+              emailVerifiedAt: null,
+              customer: null,
+              driver: null,
+            },
+          },
+        ],
+      },
+    ],
   } as Prisma.UserWhereInput;
 
   const where: Prisma.UserWhereInput = {
