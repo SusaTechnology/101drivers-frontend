@@ -960,7 +960,10 @@ export default function AdminUsersPage() {
                                       <TooltipContent side="top" className="max-w-xs">
                                         <div className="space-y-0.5">
                                           <div className="font-bold">
-                                            Referred by {user.driver.referredBy.referrer.user.fullName || 'Unknown'}
+                                            {/* referrer is nullable (customer referrals, or the
+                                                referring driver was deleted → ON DELETE SET NULL)
+                                                — never assume it's there. */}
+                                            Referred by {user.driver.referredBy.referrer?.user?.fullName || 'Unknown'}
                                           </div>
                                           <div className="text-[10px] opacity-80 font-mono">
                                             Code: {user.driver.referredBy.referralCode}

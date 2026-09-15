@@ -93,6 +93,10 @@ export interface AdminDriverEmbed {
   updatedAt: string;
   // Referral relationship — present if this driver was referred by another driver.
   // Null if the driver signed up without a referral code.
+  // referrer itself can be null: Referral.referrerId became nullable in
+  // referral v2 (customer referrers) and the FK is ON DELETE SET NULL, so
+  // deleting the referring driver leaves the referral row behind with no
+  // referrer. Prisma then serializes referrer as null.
   referredBy: {
     id: string;
     referralCode: string;
@@ -100,7 +104,7 @@ export interface AdminDriverEmbed {
     referrer: {
       id: string;
       user: { fullName: string | null };
-    };
+    } | null;
   } | null;
 }
 
@@ -354,6 +358,9 @@ export interface AdminUserDriverDetail {
   alerts: DriverAlertsDetail | null;
   // Referral relationship — present if this driver was referred by another driver.
   // Null if the driver signed up without a referral code.
+  // referrer itself can be null — same reason as in AdminUserRow: the
+  // referrerId column is nullable (customer referrals) and ON DELETE SET NULL
+  // strips it when the referring driver is deleted.
   referredBy: {
     id: string;
     referralCode: string;
@@ -369,7 +376,7 @@ export interface AdminUserDriverDetail {
     referrer: {
       id: string;
       user: { fullName: string | null; email: string | null };
-    };
+    } | null;
   } | null;
   _count: {
     assignments: number;

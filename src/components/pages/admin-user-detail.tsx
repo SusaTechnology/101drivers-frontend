@@ -2297,9 +2297,11 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                                 <div>
                                   <Label className="text-xs font-bold text-slate-500">Referred by</Label>
                                   <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                                    {user.driver.referredBy.referrer.user.fullName || 'Unknown'}
+                                    {/* referrer is nullable (customer referrals, or the referring
+                                        driver was deleted → ON DELETE SET NULL) — never assume. */}
+                                    {user.driver.referredBy.referrer?.user?.fullName || 'Unknown'}
                                   </div>
-                                  {user.driver.referredBy.referrer.user.email && (
+                                  {user.driver.referredBy.referrer?.user?.email && (
                                     <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                                       {user.driver.referredBy.referrer.user.email}
                                     </div>
