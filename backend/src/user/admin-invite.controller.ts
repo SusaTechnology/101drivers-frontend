@@ -1,16 +1,23 @@
 import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
-import { AdminInviteAcceptDto, UserAdminInviteBodyDto } from "./dto/userAdmin.dto";
+import {
+  AdminInviteAcceptDto,
+  UserAdminInviteBodyDto,
+  UserAdminDisableBodyDto,
+  UserAdminEnableBodyDto,
+} from "./dto/userAdmin.dto";
 import { AdminInviteService } from "./adminInvite.service";
 import { DefaultAuthGuard } from "../auth/defaultAuth.guard";
 import { AdminGuard } from "../auth/adminAuth.guard";
 
 /**
- * Admin invite endpoints.
+ * Admin invite + admin team management endpoints.
  *
  * Admin-side (JWT + AdminGuard):
- *   POST /api/users/admin-invite          — invite a new administrator by email
+ *   POST /api/users/admin-invite            — invite a new administrator by email
  *   POST /api/users/:id/admin-resend-invite — resend the setup link
+ *   POST /api/users/:id/admin-disable       — disable an admin (kills sessions + blocks sign-in)
+ *   POST /api/users/:id/admin-enable        — re-enable a disabled admin
  *
  * Public (no auth — the invitee has no usable account yet):
  *   GET  /api/auth/accept-invite?token=   — validate a setup link (page load)
@@ -45,6 +52,33 @@ export class AdminInviteController {
     @common.Body() body: { actorUserId?: string | null }
   ): Promise<any> {
     return this.adminInviteService.resendInvite({
+      userId: id,
+      actorUserId: body?.actorUserId ?? null,
+    });
+  }
+
+  @common.Post("users/:id/admin-disable")
+  @swagger.ApiOkResponse({ type: Object })
+  @common.UseGuards(DefaultAuthGuard, AdminGuard)
+  async disableAdmin(
+    @common.Param("id") id: string,
+    @common.Body() body: UserAdminDisableBodyDto
+  ): Promise<any> {
+    return this.adminInviteService.disableAdmin({
+      userId: id,
+      actorUserId: body?.actorUserId ?? null,
+      reason: body?.reason ?? null,
+    });
+  }
+
+  @common.Post("users/:id/admin-enable")
+  @swagger.ApiOkResponse({ type: Object })
+  @common.UseGuards(DefaultAuthGuard, AdminGuard)
+  async enableAdmin(
+    @common.Param("id") id: string,
+    @common.Body() body: UserAdminEnableBodyDto
+  ): Promise<any> {
+    return this.adminInviteService.enableAdmin({
       userId: id,
       actorUserId: body?.actorUserId ?? null,
     });

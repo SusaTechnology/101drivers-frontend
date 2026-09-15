@@ -190,6 +190,140 @@ export class AdminInviteService {
     return this.getAdminUserDetail(user.id);
   }
 
+  // ==================== DISABLE / ENABLE (admin team management) ====================
+
+  /**
+   * Disable an administrator account.
+   *
+   * Flips User.isActive to false and stamps disabledAt/disabledReason.
+   * Enforcement is already built into the auth stack — nothing else needs
+   * to change when this flag flips:
+   *   • login (auth.service validateUser) rejects !isActive users
+   *   • the JWT strategy re-reads the user from the DB on EVERY request
+   *     and rejects !isActive users, so existing sessions die instantly
+   *
+   * Guards: the target must be an ADMIN, an admin can never disable their
+   * own account, and the last remaining active administrator cannot be
+   * disabled (that would lock the whole team out of the admin panel).
+   */
+  async disableAdmin(input: {
+    userId: string;
+    actorUserId?: string | null;
+    reason?: string | null;
+  }): Promise<any> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (user.roles !== EnumUserRoles.ADMIN) {
+      throw new BadRequestException(
+        "Only admin accounts are disabled here — customers and drivers have their own suspend actions"
+      );
+    }
+
+    if (input.actorUserId && input.actorUserId === user.id) {
+      throw new BadRequestException(
+        "You cannot disable your own account — ask another administrator"
+      );
+    }
+
+    if (!user.isActive || user.disabledAt) {
+      throw new BadRequestException("This admin account is already disabled");
+    }
+
+    const otherActiveAdmins = await this.prisma.user.count({
+      where: {
+        roles: EnumUserRoles.ADMIN,
+        isActive: true,
+        id: { not: user.id },
+      },
+    });
+
+    if (otherActiveAdmins === 0) {
+      throw new BadRequestException(
+        "This is the last active administrator — enable or invite another admin first, or the team loses all access"
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isActive: false,
+        disabledAt: new Date(),
+        disabledReason:
+          (input.reason ?? "").trim() || "Disabled by an administrator",
+      },
+    });
+
+    this.logger.log(
+      `Admin disabled: ${user.email} (${user.id}) by actor ${input.actorUserId ?? "unknown"}`
+    );
+
+    await this.writeAudit({
+      actorUserId: input.actorUserId ?? null,
+      targetUserId: user.id,
+      action: `Admin account disabled${
+        (input.reason ?? "").trim() ? `: ${(input.reason ?? "").trim()}` : ""
+      }`,
+    });
+
+    return this.getAdminUserDetail(user.id);
+  }
+
+  /**
+   * Re-enable a previously disabled administrator.
+   *
+   * Clears disabledAt/disabledReason and flips isActive back to true.
+   * The admin keeps their email, password, and role — they sign in again
+   * exactly as before. A pending (never accepted) invite keeps working
+   * once the account is re-enabled.
+   */
+  async enableAdmin(input: {
+    userId: string;
+    actorUserId?: string | null;
+  }): Promise<any> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (user.roles !== EnumUserRoles.ADMIN) {
+      throw new BadRequestException("Only admin accounts can be enabled here");
+    }
+
+    if (user.isActive && !user.disabledAt) {
+      throw new BadRequestException("This admin account is already active");
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isActive: true,
+        disabledAt: null,
+        disabledReason: null,
+      },
+    });
+
+    this.logger.log(
+      `Admin re-enabled: ${user.email} (${user.id}) by actor ${input.actorUserId ?? "unknown"}`
+    );
+
+    await this.writeAudit({
+      actorUserId: input.actorUserId ?? null,
+      targetUserId: user.id,
+      action: "Admin account re-enabled",
+    });
+
+    return this.getAdminUserDetail(user.id);
+  }
+
   // ==================== VALIDATE (page load) ====================
 
   /**

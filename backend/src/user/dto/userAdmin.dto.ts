@@ -291,3 +291,36 @@ export class AdminInviteAcceptDto {
   @IsString()
   password!: string;
 }
+
+/**
+ * Body for POST /api/users/:id/admin-disable.
+ * Disabling flips User.isActive to false and stamps disabledAt/disabledReason.
+ * The JWT strategy re-reads the user from the DB on EVERY request, so the
+ * disabled admin's existing sessions stop working immediately, and the
+ * login flow rejects them on the next sign-in attempt. The reason is
+ * recorded in the admin audit log.
+ */
+export class UserAdminDisableBodyDto {
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reason?: string | null;
+
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+}
+
+/**
+ * Body for POST /api/users/:id/admin-enable.
+ * Re-enables a previously disabled administrator: clears the disabled
+ * stamps and flips isActive back to true. The admin signs in again with
+ * their existing password — nothing is reset.
+ */
+export class UserAdminEnableBodyDto {
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+}

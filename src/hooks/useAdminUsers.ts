@@ -21,6 +21,8 @@ import type {
   AdminUpdateUserRequest,
   InviteAdminUserRequest,
   ResendAdminInviteRequest,
+  DisableAdminRequest,
+  EnableAdminRequest,
 } from '@/types/users';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -312,6 +314,36 @@ export function useInviteAdminUser() {
 export function useResendAdminInvite() {
   return useDataMutation<AdminUserDetail, ResendAdminInviteRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-resend-invite`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}
+
+// ==================== DISABLE / ENABLE ADMIN ====================
+
+/**
+ * Hook for disabling an administrator account.
+ * POST /api/users/:id/admin-disable
+ *
+ * Flips User.isActive to false — the JWT strategy re-reads the user on
+ * every request, so the disabled admin's sessions stop working
+ * immediately and the login flow rejects them afterwards.
+ */
+export function useDisableAdmin() {
+  return useDataMutation<AdminUserDetail, DisableAdminRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-disable`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}
+
+/**
+ * Hook for re-enabling a previously disabled administrator.
+ * POST /api/users/:id/admin-enable
+ */
+export function useEnableAdmin() {
+  return useDataMutation<AdminUserDetail, EnableAdminRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-enable`,
     method: 'POST',
     invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
   });

@@ -553,6 +553,24 @@ export interface ResendAdminInviteRequest {
   actorUserId: string;
 }
 
+/**
+ * POST /api/users/:id/admin-disable — disable an administrator.
+ * The reason is required in the UI and recorded in the admin audit log.
+ */
+export interface DisableAdminRequest {
+  pathParams: { id: string };
+  reason: string;
+  actorUserId: string;
+}
+
+/**
+ * POST /api/users/:id/admin-enable — re-enable a disabled administrator.
+ */
+export interface EnableAdminRequest {
+  pathParams: { id: string };
+  actorUserId: string;
+}
+
 // ==================== HELPER CONSTANTS ====================
 
 export const USER_ROLE_LABELS: Record<UserRole, string> = {

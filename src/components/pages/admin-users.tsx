@@ -58,6 +58,8 @@ import {
   useResendInviteDriver,
   useInviteAdminUser,
   useResendAdminInvite,
+  useDisableAdmin,
+  useEnableAdmin,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
 import type {
@@ -198,7 +200,7 @@ function StatusBadge({ isActive, disabledAt }: { isActive: boolean; disabledAt: 
     return (
       <Badge className="text-[10px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
         <Ban className="w-3 h-3 mr-1" />
-        Suspended
+        Disabled
       </Badge>
     );
   }
@@ -334,7 +336,7 @@ export default function AdminUsersPage() {
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver' | 'resend-admin-invite'>('approve-customer');
+  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver' | 'resend-admin-invite' | 'disable-admin' | 'enable-admin'>('approve-customer');
   const [selectedUser, setSelectedUser] = useState<AdminUserRow | null>(null);
 
   // Invite Admin Dialog State
@@ -385,6 +387,8 @@ export default function AdminUsersPage() {
   const resendInviteDriverMutation = useResendInviteDriver();
   const inviteAdminMutation = useInviteAdminUser();
   const resendAdminInviteMutation = useResendAdminInvite();
+  const disableAdminMutation = useDisableAdmin();
+  const enableAdminMutation = useEnableAdmin();
 
   // ==================== FORMS ====================
 
@@ -622,6 +626,44 @@ export default function AdminUsersPage() {
       }
     );
   }, [selectedUser, actorUserId, resendAdminInviteMutation, closeDialog]);
+
+  const handleDisableAdmin = useCallback((data: SuspendFormData) => {
+    if (!selectedUser || !actorUserId) return;
+    disableAdminMutation.mutate(
+      { pathParams: { id: selectedUser.id }, reason: data.reason, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Admin disabled', {
+            description: `${selectedUser.email} was signed out immediately and can no longer sign in.`,
+          });
+          closeDialog();
+        },
+        onError: (error: any) =>
+          toast.error('Failed to disable admin', {
+            description: error?.message || 'Please try again.',
+          }),
+      }
+    );
+  }, [selectedUser, actorUserId, disableAdminMutation, closeDialog]);
+
+  const handleEnableAdmin = useCallback(() => {
+    if (!selectedUser || !actorUserId) return;
+    enableAdminMutation.mutate(
+      { pathParams: { id: selectedUser.id }, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Admin enabled', {
+            description: `${selectedUser.email} can sign in again with their existing password.`,
+          });
+          closeDialog();
+        },
+        onError: (error: any) =>
+          toast.error('Failed to enable admin', {
+            description: error?.message || 'Please try again.',
+          }),
+      }
+    );
+  }, [selectedUser, actorUserId, enableAdminMutation, closeDialog]);
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
@@ -1092,6 +1134,30 @@ export default function AdminUsersPage() {
                                 <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
                               </Button>
                             )}
+                            {/* Admin active - show Disable (never on your own row — the
+                                backend rejects self-disable as a second guard) */}
+                            {!user.disabledAt && user.roles === 'ADMIN' && user.id !== actorUserId && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="rounded-lg"
+                                onClick={() => openDialog('disable-admin', user)}
+                                title="Sign this admin out and block sign-in until re-enabled"
+                              >
+                                <Ban className="w-3.5 h-3.5 mr-1" /> Disable
+                              </Button>
+                            )}
+                            {/* Admin disabled - show Enable */}
+                            {user.disabledAt && user.roles === 'ADMIN' && (
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
+                                onClick={() => openDialog('enable-admin', user)}
+                                title="Restore this admin's access"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Enable
+                              </Button>
+                            )}
                             {/* Driver waitlisted - show Invite / Reject */}
                             {!user.disabledAt && user.driver?.status === 'WAITLISTED' && (
                               <>
@@ -1223,6 +1289,8 @@ export default function AdminUsersPage() {
               {dialogAction === 'invite-driver' && 'Invite Driver'}
               {dialogAction === 'resend-invite-driver' && 'Resend Invite'}
               {dialogAction === 'resend-admin-invite' && 'Resend Admin Invite'}
+              {dialogAction === 'disable-admin' && 'Disable Admin'}
+              {dialogAction === 'enable-admin' && 'Enable Admin'}
               {dialogAction === 'approve-driver' && 'Approve Driver'}
               {dialogAction === 'reject-driver' && 'Reject Driver'}
               {dialogAction === 'suspend-driver' && 'Suspend Driver'}
@@ -1236,6 +1304,8 @@ export default function AdminUsersPage() {
               {dialogAction === 'invite-driver' && `Invite ${selectedUser?.fullName} to complete their driver application? They will receive an email with instructions.`}
               {dialogAction === 'resend-invite-driver' && `Resend the invitation email to ${selectedUser?.email}? A new onboarding link will be generated.`}
               {dialogAction === 'resend-admin-invite' && `Resend the setup link to ${selectedUser?.email}? The previous link will stop working and a new one (valid 48 hours) will be sent.`}
+              {dialogAction === 'disable-admin' && `Disable ${selectedUser?.fullName}'s administrator account? They will be signed out immediately and cannot sign in until another admin re-enables them.`}
+              {dialogAction === 'enable-admin' && `Restore ${selectedUser?.fullName}'s administrator account? They will be able to sign in again with their existing password.`}
               {dialogAction === 'approve-driver' && `Approve ${selectedUser?.fullName} as a driver? They will be able to accept delivery assignments.`}
               {dialogAction === 'reject-driver' && `Reject ${selectedUser?.fullName}'s driver application?`}
               {dialogAction === 'suspend-driver' && `Suspend ${selectedUser?.fullName}'s driver account? They will not be able to accept deliveries.`}
@@ -1387,6 +1457,68 @@ export default function AdminUsersPage() {
                   {resendAdminInviteMutation.isPending ? 'Sending...' : 'Resend Invite'}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* Disable Admin Form — reason required, recorded in the admin audit log */}
+          {dialogAction === 'disable-admin' && (
+            <form onSubmit={suspendForm.handleSubmit(handleDisableAdmin)} className="space-y-4">
+              <div className="p-3 bg-rose-50 dark:bg-rose-900/20 rounded-xl text-sm text-rose-700 dark:text-rose-300 space-y-1.5">
+                <p>
+                  <b>{selectedUser?.email}</b> loses admin access immediately — their current
+                  session stops working and sign-in is blocked until re-enabled.
+                </p>
+                <p>
+                  The right action when an administrator leaves the team or must be paused.
+                  Their profile, history, and audit trail are kept.
+                </p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Reason for disabling</Label>
+                <Textarea
+                  {...suspendForm.register('reason')}
+                  placeholder="e.g. Offboarding, extended leave..."
+                  className="mt-1.5 rounded-xl"
+                  rows={3}
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeDialog} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  className="rounded-xl"
+                  disabled={disableAdminMutation.isPending}
+                >
+                  {disableAdminMutation.isPending ? 'Disabling...' : 'Disable Admin'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+
+          {/* Enable Admin Confirmation */}
+          {dialogAction === 'enable-admin' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
+                <div className="text-sm text-emerald-700 dark:text-emerald-300">
+                  {selectedUser?.email} will be able to sign in again with their existing
+                  password. Nothing else changes — their role and profile are kept.
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeDialog} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleEnableAdmin}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
+                  disabled={enableAdminMutation.isPending}
+                >
+                  {enableAdminMutation.isPending ? 'Enabling...' : 'Enable Admin'}
+                </Button>
+              </DialogFooter>
             </div>
           )}
 
