@@ -298,37 +298,35 @@ export default function AdminPaymentsPage() {
   // Fetch data
   const { data, isLoading, isFetching, isError, error, refetch } = useAdminPayments(queryParams);
   
-  // KPI summary — fleet-wide counts for the whole period (defaults to the
-  // current calendar month), computed server-side. Deliberately NOT derived
-  // from the paginated list: counting the current page made the cards show
-  // e.g. "2 failed" while clicking the card revealed dozens more, because
-  // the click re-queried the full dataset. The cards now show the real
-  // period totals and never move when the admin clicks around.
+  // KPI summary — fleet-wide counts over the WHOLE selected period (all
+  // time unless the admin sets From/To), computed server-side. Deliberately
+  // NOT derived from the paginated list: counting the current page made the
+  // cards show e.g. "2 failed" while clicking the card revealed dozens
+  // more, because the click re-queried the full dataset. The cards show
+  // the real period totals and never move when the admin clicks around.
   const summaryRange = useMemo(() => ({
     from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
     to: dateTo ? new Date(dateTo + 'T23:59:59').toISOString() : undefined,
   }), [dateFrom, dateTo]);
   const { data: summary } = useAdminPaymentSummary(summaryRange);
   
-  // Label for the period the KPI cards + total banner describe.
-  const periodLabel = dateFrom || dateTo ? 'selected range' : 'this month';
+  // Label for the period the KPI cards + total banner describe. All time
+  // by default; From/To filters narrow BOTH the cards and the list to
+  // the same window, so the numbers always describe what the list shows.
+  const periodLabel = dateFrom || dateTo ? 'selected range' : 'all time';
   
-  // KPI card click — filter the list to that status. The first click also
-  // scopes the list's dates to the exact period the cards count, so the
-  // rows the admin sees are the same payments the number came from
-  // (card says 20 → clicking shows those same 20, not an unbounded
-  // all-time query).
+  // KPI card click — filter the list to that status ONLY. Deliberately
+  // does NOT touch the From/To dates: the cards count the current period
+  // (all time by default), and the list already shows that same period,
+  // so the rows behind the number are exactly what appears — the number
+  // itself must never change on click.
   const handleStatusCardClick = useCallback((status: string) => {
     if (statusFilter === status) {
       setStatusFilter('all');
       return;
     }
     setStatusFilter(status);
-    if (!dateFrom && !dateTo) {
-      if (summary?.from) setDateFrom(summary.from.slice(0, 10));
-      if (summary?.to) setDateTo(summary.to.slice(0, 10));
-    }
-  }, [statusFilter, dateFrom, dateTo, summary?.from, summary?.to]);
+  }, [statusFilter]);
   
   const summaryCount = useCallback(
     (status: string) => summary?.counts?.[status] ?? 0,
@@ -572,12 +570,13 @@ export default function AdminPaymentsPage() {
         </section>
 
         {/* KPI Row - Status Cards. Numbers come from the period summary
-            endpoint (this month by default), NOT from the current page of
-            the list — so they are the real totals and don't change when
-            the admin clicks a card or pages through the list. */}
+            endpoint (all time by default, or the From/To window when set),
+            NOT from the current page of the list — so they are the real
+            totals and don't change when the admin clicks a card or pages
+            through the list. */}
         <section className="mb-2">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            Payment status — {periodLabel} · click a card to see those payments
+            Payment status — {periodLabel} · click a card to filter the list by that status
           </p>
         </section>
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-2 mb-6">

@@ -322,26 +322,32 @@ constructor(
  * only the CURRENT PAGE of the list (20 rows), so the numbers jumped
  * around every time an admin clicked a card or changed filters —
  * "summary shows 2 failed, click it, now it shows 20". The cards must
- * show the real period totals ("the exact number of the month"), stay
- * stable no matter what is clicked, and be cheap to query.
+ * show the real period totals, stay stable no matter what is clicked,
+ * and be cheap to query.
  *
- * Period: defaults to the current calendar month (server time). The page
- * forwards its date-range filters when set, so the cards and the list
- * always describe the same window.
+ * Period: NO from/to → ALL TIME (every payment ever). The page forwards
+ * its From/To date filters when the admin sets them, so the cards and
+ * the list always describe the same window. Clicking a card never
+ * changes the period — it only filters the list.
  */
 async getAdminPaymentSummary(input: {
   from?: Date | null;
   to?: Date | null;
 }): Promise<any> {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const from = input.from ?? monthStart;
-  const to = input.to ?? now;
-  const usesDefaultPeriod = !input.from && !input.to;
+  // All-time default: only bound the query by the dates the caller
+  // actually sent. Prisma ignores undefined comparators, and an empty
+  // createdAt filter matches every row.
+  const from = input.from ?? null;
+  const to = input.to ?? null;
+  const usesDefaultPeriod = !from && !to;
+
+  const createdAt: Record<string, Date> = {};
+  if (from) createdAt.gte = from;
+  if (to) createdAt.lte = to;
 
   const groups = await this.prisma.payment.groupBy({
     by: ["status"],
-    where: { createdAt: { gte: from, lte: to } },
+    where: usesDefaultPeriod ? {} : { createdAt },
     _count: true,
     _sum: { amount: true },
   });
@@ -359,8 +365,8 @@ async getAdminPaymentSummary(input: {
     (counts["CHARGE_FAILED"] ?? 0) + (counts["FAILED"] ?? 0);
 
   return {
-    from: from.toISOString(),
-    to: to.toISOString(),
+    from: from ? from.toISOString() : null,
+    to: to ? to.toISOString() : null,
     usesDefaultPeriod,
     counts,
     total,

@@ -119,15 +119,14 @@ export interface AdminPaymentsResponse {
 // ── Admin payments period summary (KPI cards) ──
 //
 // Returned by GET /api/payments/admin/summary. Computed fleet-wide over a
-// whole period (defaults to the current calendar month) with a single
-// groupBy — deliberately NOT derived from the paginated list, so the KPI
-// numbers stay stable no matter which page or filter the admin is on.
+// whole period with a single groupBy — deliberately NOT derived from the
+// paginated list, so the KPI numbers stay stable no matter which page or
+// filter the admin is on. Defaults to ALL TIME when no range is sent.
 export interface AdminPaymentSummary {
-  /** Actual period used (ISO) — echoed back so the UI can scope the list
-   *  to the same window when a KPI card is clicked. */
-  from: string;
-  to: string;
-  /** True when neither from nor to was supplied (current-month default). */
+  /** Actual period used (ISO). Null = unbounded (all time) on that side. */
+  from: string | null;
+  to: string | null;
+  /** True when neither from nor to was supplied (all-time default). */
   usesDefaultPeriod: boolean;
   /** Status → payment count for the period. */
   counts: Record<string, number>;

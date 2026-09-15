@@ -72,7 +72,7 @@ async getAdminPayments(
 
 /**
  * Fleet-wide status totals for the admin payments page KPI cards.
- * Defaults to the current calendar month; `from`/`to` (ISO) override.
+ * Defaults to ALL TIME when no range is sent; `from`/`to` (ISO) narrow it.
  *
  * ⚠️ Declared BEFORE `admin/:id` — Nest matches routes in declaration
  * order, so putting this after it would be swallowed by `:id`.

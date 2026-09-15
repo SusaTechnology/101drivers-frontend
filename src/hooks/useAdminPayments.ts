@@ -59,11 +59,11 @@ export function useAdminPayments(params: AdminPaymentsQueryParams = {}) {
  * Hook for the fleet-wide period summary behind the admin payments KPI
  * cards (GET /api/payments/admin/summary).
  *
- * Defaults to the current calendar month when no range is given — the
- * "exact number of the month" the cards should show. Pass the page's
- * date filters so the cards and the list always describe the same
- * window. Polled every 60s so new payments reflect without a manual
- * refresh.
+ * Defaults to ALL TIME when no range is given — the cards show every
+ * payment ever until the admin narrows the window with the From/To
+ * filters, which are passed through here so the cards and the list
+ * always describe the same period. Polled every 60s so new payments
+ * reflect without a manual refresh.
  */
 export function useAdminPaymentSummary(params: { from?: string; to?: string } = {}) {
   const search = new URLSearchParams();
