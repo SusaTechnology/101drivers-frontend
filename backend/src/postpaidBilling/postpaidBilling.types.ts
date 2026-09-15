@@ -51,6 +51,8 @@ export type IPostpaidBillingService = {
   handleInvoiceUpcoming(invoiceId: string): Promise<void>;
   handleInvoicePaymentSucceeded(invoiceId: string): Promise<void>;
   handleInvoicePaymentFailed(invoiceId: string): Promise<void>;
+  handleInvoiceVoided(invoiceId: string): Promise<void>;
+  handleInvoiceMarkedUncollectible(invoiceId: string): Promise<void>;
   handleInvoiceFinalized(invoiceId: string): Promise<void>;
   setCreditCap(dealerId: string, capCents: number | null): Promise<void>;
   unfreezeDealer(dealerId: string): Promise<void>;

@@ -5314,6 +5314,378 @@ async notifyAdminLockInRetainedOnCancel(input: {
     );
     return true;
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Postpaid weekly-invoice payment failure lifecycle (dealer + admin).
+  //
+  // The dashboard banner (PostpaidStatusPanel) is only visible when the
+  // dealer logs in — historically a failed weekly charge could restrict
+  // an account with NO proactive message of any kind. These methods give
+  // every failure milestone a push (email + bell via queueAndSend):
+  //
+  //   attempt 1   → "action needed" heads-up (retry is scheduled)
+  //   attempt 2   → final warning (3rd failure pauses new deliveries)
+  //   attempt 3+  → account restricted — how to self-serve unblock
+  //
+  // Written-off invoices (voided by admin / marked uncollectible by
+  // Stripe after its final retry) notify the dealer their account is
+  // active again, and alert admins with the money decision.
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Notify the dealer that their weekly postpaid invoice charge failed.
+   * Called from PostpaidBillingService.handleInvoicePaymentFailed.
+   *
+   * Graduated copy mirrors the dashboard banners exactly, so email and
+   * UI never disagree about severity:
+   *   • attempt 1: heads-up + auto-retry date + "update your card now"
+   *   • attempt 2: final warning — 3rd failure pauses new deliveries
+   *   • attempt 3+/critical: account restricted + self-serve unblock path
+   *
+   * Transient errors (processing_error etc.) never reach this method —
+   * the caller filters them out, matching the "no banner" UI behavior.
+   *
+   * Idempotency is the CALLER's job (it dedupes Stripe webhook
+   * redeliveries by comparing attemptCount against the stored Payment
+   * rows before invoking this).
+   */
+  async notifyDealerInvoicePaymentFailed(input: {
+    customerId: string;
+    attemptCount: number;
+    amountDollars?: number | null;
+    failureReason?: string | null;
+    nextRetryAt?: string | null;
+    restricted: boolean;
+    critical?: boolean;
+  }) {
+    const dealer = await this.prisma.customer.findUnique({
+      where: { id: input.customerId },
+      select: {
+        id: true,
+        businessName: true,
+        contactName: true,
+        contactEmail: true,
+        user: { select: { email: true, fullName: true } },
+      },
+    });
+
+    if (!dealer) {
+      this.logger.warn(
+        `notifyDealerInvoicePaymentFailed: customer ${input.customerId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail =
+      dealer.user?.email ?? dealer.contactEmail ?? null;
+    if (!toEmail) {
+      this.logger.warn(
+        `notifyDealerInvoicePaymentFailed: dealer ${dealer.id} has no email on file, skipping`,
+      );
+      return null;
+    }
+
+    const displayName =
+      dealer.user?.fullName ??
+      dealer.contactName ??
+      dealer.businessName ??
+      "there";
+
+    const attempt = input.attemptCount;
+    const amountStr =
+      input.amountDollars != null && input.amountDollars > 0
+        ? `$${Number(input.amountDollars).toFixed(2)}`
+        : null;
+    const amountLine = amountStr
+      ? `We tried to charge ${amountStr} for your weekly invoice, but the charge did not go through.`
+      : `We tried to charge your weekly invoice, but the charge did not go through.`;
+    const reasonLine =
+      !input.critical && input.failureReason
+        ? [`Reason: ${input.failureReason}`, ""]
+        : [];
+    const retryLine = input.nextRetryAt
+      ? `Next automatic retry: ${new Date(input.nextRetryAt).toLocaleDateString(
+          "en-US",
+          { weekday: "long", month: "long", day: "numeric" },
+        )}.`
+      : null;
+
+    let subject: string;
+    let body: (string | null)[];
+
+    if (input.restricted) {
+      // 3rd+ consecutive failure (or a critical code) — account restricted.
+      subject =
+        "Account restricted — new deliveries are paused until your balance is paid";
+      body = [
+        `Hi ${displayName},`,
+        "",
+        `We tried charging your card ${attempt} ${attempt === 1 ? "time" : "times"} and every attempt failed. New deliveries are paused until the balance is paid.`,
+        "",
+        amountLine,
+        ...reasonLine,
+        "Your outstanding balance is still due — completing this payment re-enables your account automatically.",
+        "",
+        "How to fix this (takes about a minute):",
+        "1. Log in and open Settings → Payment method.",
+        "2. Add a new card (or update the saved one).",
+        "3. That's it — we retry failed charges daily, and the moment one succeeds your account is re-enabled automatically. No support ticket needed.",
+        "",
+        retryLine,
+        "",
+        "If you keep seeing failures after updating your card, or you need to deliver urgently, contact support and we can retry the charge right away.",
+        "",
+        "— 101 Drivers Billing",
+      ];
+    } else if (attempt >= 2) {
+      // 2nd consecutive failure — final warning before restriction.
+      subject =
+        "2nd payment failure — update your card before the next retry";
+      body = [
+        `Hi ${displayName},`,
+        "",
+        `Your weekly invoice payment has failed for the 2nd consecutive time.`,
+        "",
+        amountLine,
+        ...reasonLine,
+        "Important: after a 3rd consecutive failure, new deliveries are paused until the balance is paid.",
+        "",
+        "What to do now:",
+        "1. Open Settings → Payment method.",
+        "2. Update your card (or add a different one).",
+        retryLine ? `3. ${retryLine} The retry will charge the card you have saved at that moment.` : "3. We retry automatically — the retry charges whatever card is saved at that moment.",
+        "",
+        "If you believe the charge should have gone through, your bank may be blocking it — a quick call to them usually clears it up.",
+        "",
+        "— 101 Drivers Billing",
+      ];
+    } else {
+      // 1st failure — heads-up, no alarm.
+      subject = "Action needed — your weekly payment attempt failed";
+      body = [
+        `Hi ${displayName},`,
+        "",
+        amountLine,
+        ...reasonLine,
+        "No panic needed — we retry failed charges automatically.",
+        ...(retryLine ? [retryLine] : []),
+        "",
+        "To make sure the retry succeeds, update your card now:",
+        "1. Open Settings → Payment method.",
+        "2. Check the saved card is valid and has available funds (or add a different one).",
+        "",
+        "Your outstanding balance for completed deliveries is unaffected and remains due on your weekly invoice.",
+        "",
+        "— 101 Drivers Billing",
+      ];
+    }
+
+    return this.queueAndSend({
+      customerId: dealer.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.PAYMENT_FAILED,
+      templateCode: "dealer-invoice-payment-failed",
+      toEmail,
+      subject,
+      body: [...body.filter((l) => l !== null)].join("\n"),
+      payload: {
+        attemptCount: attempt,
+        amountDollars: input.amountDollars ?? null,
+        restricted: input.restricted,
+        critical: input.critical ?? false,
+        nextRetryAt: input.nextRetryAt ?? null,
+      },
+    });
+  }
+
+  /**
+   * Notify the dealer that a failed weekly invoice has been closed out —
+   * either VOIDED by an admin (debt cancelled) or marked uncollectible by
+   * Stripe after its final retry (collection given up). Both outcomes
+   * auto-unfreeze the account, so the email doubles as the
+   * "you're unblocked" message. Called from the invoice.voided /
+   * invoice.marked_uncollectible webhook handlers.
+   */
+  async notifyDealerInvoiceResolved(input: {
+    customerId: string;
+    outcome: "cancelled" | "written_off";
+    amountDollars?: number | null;
+  }) {
+    const dealer = await this.prisma.customer.findUnique({
+      where: { id: input.customerId },
+      select: {
+        id: true,
+        businessName: true,
+        contactName: true,
+        contactEmail: true,
+        user: { select: { email: true, fullName: true } },
+      },
+    });
+
+    if (!dealer) {
+      this.logger.warn(
+        `notifyDealerInvoiceResolved: customer ${input.customerId} not found, skipping`,
+      );
+      return null;
+    }
+
+    const toEmail = dealer.user?.email ?? dealer.contactEmail ?? null;
+    if (!toEmail) {
+      this.logger.warn(
+        `notifyDealerInvoiceResolved: dealer ${dealer.id} has no email on file, skipping`,
+      );
+      return null;
+    }
+
+    const displayName =
+      dealer.user?.fullName ??
+      dealer.contactName ??
+      dealer.businessName ??
+      "there";
+    const amountStr =
+      input.amountDollars != null && input.amountDollars > 0
+        ? `$${Number(input.amountDollars).toFixed(2)}`
+        : null;
+
+    const cancelled = input.outcome === "cancelled";
+    const subject = cancelled
+      ? "Your weekly invoice has been cancelled — your account is active again"
+      : "Payment issue resolved — your account is active again";
+    const body = [
+      `Hi ${displayName},`,
+      "",
+      cancelled
+        ? `The weekly invoice that failed to charge${amountStr ? ` (${amountStr})` : ""} has been cancelled by our team.`
+        : `The charge we were unable to collect${amountStr ? ` (${amountStr})` : ""} has been closed by our payment provider after repeated attempts.`,
+      "",
+      cancelled
+        ? "Any failed charges on that invoice have been cleared — no payment is due for it."
+        : "Your account is active again and new deliveries are enabled. Our billing team may contact you separately about the outstanding balance.",
+      "",
+      "You can create deliveries again right away — no further action is needed on your part.",
+      "",
+      "— 101 Drivers Billing",
+    ].join("\n");
+
+    return this.queueAndSend({
+      customerId: dealer.id,
+      channel: EnumNotificationEventChannel.EMAIL,
+      type: EnumNotificationEventType.PAYMENT_FAILED, // same payment domain — no dedicated enum
+      templateCode: "dealer-invoice-resolved",
+      toEmail,
+      subject,
+      body,
+      payload: {
+        outcome: input.outcome,
+        amountDollars: input.amountDollars ?? null,
+      },
+    });
+  }
+
+  /**
+   * Alert admins that a postpaid weekly invoice was written off — either
+   * explicitly voided (an admin cancelled it in the Stripe dashboard) or
+   * marked uncollectible by Stripe after its final retry. Both paths
+   * auto-unfreeze the dealer, so this email is the money-decision prompt:
+   * forgive it, collect manually, or re-freeze the dealer.
+   */
+  async notifyAdminInvoiceWrittenOff(input: {
+    invoiceId: string;
+    customerId?: string | null;
+    amountDollars?: number | null;
+    reason: "voided" | "uncollectible";
+  }) {
+    const admins = await this.prisma.user.findMany({
+      where: { roles: EnumUserRoles.ADMIN },
+      select: { id: true, email: true, fullName: true, username: true },
+    });
+
+    if (admins.length === 0) {
+      this.logger.warn(
+        `notifyAdminInvoiceWrittenOff: no admin users found, skipping`,
+      );
+      return null;
+    }
+
+    let dealerLabel = "(unknown dealer)";
+    let dealerEmail = "(no email on file)";
+    if (input.customerId) {
+      const dealer = await this.prisma.customer.findUnique({
+        where: { id: input.customerId },
+        select: {
+          businessName: true,
+          contactName: true,
+          contactEmail: true,
+          user: { select: { email: true } },
+        },
+      });
+      if (dealer) {
+        dealerLabel =
+          dealer.businessName ?? dealer.contactName ?? dealerLabel;
+        dealerEmail = dealer.user?.email ?? dealer.contactEmail ?? dealerEmail;
+      }
+    }
+
+    const amountStr =
+      input.amountDollars != null && input.amountDollars > 0
+        ? `$${Number(input.amountDollars).toFixed(2)}`
+        : "(unknown amount)";
+    const voided = input.reason === "voided";
+
+    const sendPromises = admins.map((admin) => {
+      const adminName = admin.fullName || admin.username || "admin";
+      return this.queueAndSend({
+        actorUserId: admin.id,
+        customerId: input.customerId ?? null,
+        channel: EnumNotificationEventChannel.EMAIL,
+        type: EnumNotificationEventType.ADMIN_COMMISSION_RECEIVED, // reuse — no dedicated enum
+        templateCode: "admin-invoice-written-off",
+        toEmail: admin.email,
+        subject: `[BILLING] Weekly invoice ${voided ? "voided" : "marked uncollectible"} — ${amountStr} — ${dealerLabel} auto-unfroze`,
+        body: [
+          `Hi ${adminName},`,
+          "",
+          voided
+            ? `A postpaid weekly invoice has been VOIDED (cancelled) in Stripe — the debt on it no longer exists.`
+            : `Stripe has given up retrying a postpaid weekly invoice and marked it UNCOLLECTIBLE — it will never be charged automatically.`,
+          "",
+          "What the system did automatically:",
+          "• Marked the invoice's Payment rows " + (voided ? "as VOIDED (excluded from outstanding balance)." : "as they were (still showing the failed state for the record)."),
+          "• Auto-unfroze the dealer's account (they can create deliveries again).",
+          "• Sent the dealer a resolution notice.",
+          "",
+          "The money decision is now yours:",
+          voided
+            ? "• If the void was intentional (goodwill / error correction) — nothing to do."
+            : "• Forgive the debt — nothing to do (consider voiding the Payment rows so history matches).",
+          "• Collect manually — arrange payment with the dealer outside the weekly cycle, or manually create the charge in Stripe.",
+          "• Re-freeze the dealer if you'd rather pause them until this is settled (Admin → dealer detail → Freeze).",
+          "",
+          "---",
+          "Details",
+          `Invoice: ${input.invoiceId}`,
+          `Dealer: ${dealerLabel}`,
+          `Dealer email: ${dealerEmail}`,
+          `Amount: ${amountStr}`,
+          `Reason: ${voided ? "invoice.voided" : "invoice.marked_uncollectible"}`,
+          `Detected at: ${new Date().toISOString()}`,
+          "---",
+        ].join("\n"),
+        payload: {
+          invoiceId: input.invoiceId,
+          customerId: input.customerId ?? null,
+          amountDollars: input.amountDollars ?? null,
+          reason: input.reason,
+        },
+      });
+    });
+
+    await Promise.all(sendPromises);
+    this.logger.log(
+      `notifyAdminInvoiceWrittenOff: sent to ${admins.length} admin(s) for invoice ${input.invoiceId} (${input.reason})`,
+    );
+    return true;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────

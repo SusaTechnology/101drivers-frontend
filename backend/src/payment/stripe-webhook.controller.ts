@@ -122,6 +122,25 @@ export class StripeWebhookController {
           }
           break;
 
+        // ── Write-off events ──
+        // Stripe stops collecting an invoice either because an admin
+        // voided it (deliberate debt cancellation) or because its final
+        // retry failed and the dashboard's "mark uncollectible" rule
+        // fired. Ignoring these used to leave the Payment rows stuck in
+        // CHARGE_FAILED and a CHARGE_FAILED-frozen dealer with no way
+        // out — no retry can ever succeed on a closed invoice.
+        case "invoice.voided":
+          if (this.postpaidBilling) {
+            await this.postpaidBilling.handleInvoiceVoided(event.data.object.id);
+          }
+          break;
+
+        case "invoice.marked_uncollectible":
+          if (this.postpaidBilling) {
+            await this.postpaidBilling.handleInvoiceMarkedUncollectible(event.data.object.id);
+          }
+          break;
+
         case "invoice.finalized":
           if (this.postpaidBilling) {
             await this.postpaidBilling.handleInvoiceFinalized(event.data.object.id);

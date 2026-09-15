@@ -1429,7 +1429,14 @@ const confirmDelete = () => {
             </Card>
 
             {/* Payment Method Card */}
-            <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+            {/* id="payment-method" + scroll-mt: the PostpaidStatusPanel
+                banners deep-link here ("Update card" / "Add a card"
+                buttons) — scrollIntoView lands with a comfortable offset
+                below any sticky header. */}
+            <Card
+              id="payment-method"
+              className="rounded-3xl border-slate-200 dark:border-slate-800 scroll-mt-24"
+            >
               <CardHeader>
                 <CardTitle className="text-xl font-black">Payment method</CardTitle>
               </CardHeader>

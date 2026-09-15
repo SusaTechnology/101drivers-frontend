@@ -42,6 +42,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { useNavigate } from '@tanstack/react-router'
 import { useDataQuery } from '@/lib/tanstack/dataQuery'
 import {
   getStripeErrorInfo,
@@ -97,6 +98,7 @@ export default function PostpaidStatusPanel({
   collapsible?: boolean
 }) {
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const navigate = useNavigate()
   // Persisted collapse state — default is expanded; the dealer's choice
   // to hide the panel survives page reloads.
   const [collapsed, toggleCollapsed] = usePersistentCollapsed(
@@ -141,6 +143,31 @@ export default function PostpaidStatusPanel({
   const nextInvoiceDate = status.nextInvoiceDate
     ? new Date(status.nextInvoiceDate)
     : null
+
+  // ── Deep-link to Settings → Payment method ──
+  // The single most important action for a dealer with failed charges is
+  // updating their card — so every banner gets a button that lands them
+  // DIRECTLY on the payment settings section instead of leaving them to
+  // find it. The settings page renders after data loads, so the scroll
+  // retries until the "Payment method" card exists.
+  const goToPaymentSettings = () => {
+    navigate({ to: '/dealer-settings' }).catch(() => {
+      // Router navigation failed (stale route tree after a deploy) —
+      // fall back to a hard navigation so the dealer still gets there.
+      window.location.href = '/dealer-settings#payment-method'
+    })
+    let tries = 0
+    const scroll = () => {
+      const el = document.getElementById('payment-method')
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      } else if (tries < 10) {
+        tries += 1
+        setTimeout(scroll, 150)
+      }
+    }
+    setTimeout(scroll, 250)
+  }
 
   // ── Determine which failed payments to show to the dealer ──
   // Filter out fraud/security errors (admin-only) using the error code map.
@@ -251,16 +278,29 @@ export default function PostpaidStatusPanel({
                     No card on file. Add a card so the next weekly invoice can succeed.
                   </p>
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 h-7 text-xs rounded-lg border-red-300 text-red-700 dark:border-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
-                  onClick={() => {
-                    window.location.href = '/help-customer'
-                  }}
-                >
-                  Contact Support
-                </Button>
+                <div className="flex items-center gap-2 mt-2">
+                  {/* Primary CTA: the fastest way out of a restricted
+                      account is a working card — make it the loudest
+                      button, not a hunt through the settings menu. */}
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 dark:text-white"
+                    onClick={goToPaymentSettings}
+                  >
+                    <CreditCard className="h-3 w-3 mr-1" />
+                    {status.hasSavedPaymentMethod ? 'Update card' : 'Add a card'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs rounded-lg border-red-300 text-red-700 dark:border-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30"
+                    onClick={() => {
+                      window.location.href = '/help-customer'
+                    }}
+                  >
+                    Contact Support
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -287,6 +327,15 @@ export default function PostpaidStatusPanel({
                     Next retry: <strong>{nextInvoiceDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
                   </p>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-7 text-xs rounded-lg border-amber-400 text-amber-700 dark:border-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                  onClick={goToPaymentSettings}
+                >
+                  <CreditCard className="h-3 w-3 mr-1" />
+                  {status.hasSavedPaymentMethod ? 'Update card' : 'Add a card'}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -348,14 +397,7 @@ export default function PostpaidStatusPanel({
                         size="sm"
                         variant="outline"
                         className="h-7 text-xs rounded-lg"
-                        onClick={() => {
-                          // The dealer updates their card via the Stripe Connect
-                          // portal — same flow as driver wallet. For now, direct
-                          // them to contact support / payment settings.
-                          toast.info('Update your payment method in Settings → Payment Methods', {
-                            description: 'Or contact support for assistance.',
-                          })
-                        }}
+                        onClick={goToPaymentSettings}
                       >
                         <CreditCard className="h-3 w-3 mr-1" />
                         {getResolutionButtonText(errorInfo.resolutionAction)}

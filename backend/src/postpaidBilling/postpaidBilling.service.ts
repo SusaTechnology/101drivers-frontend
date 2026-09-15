@@ -1235,6 +1235,31 @@ export class PostpaidBillingService {
       // can see "Failure attempt: 2 of 4" without querying Stripe.
       const attemptCount = (invoice as any).attempt_count || 1;
 
+      // ── Webhook redelivery guard (for the dealer notification below) ──
+      // Stripe retries webhook deliveries. The DB updates below are
+      // idempotent (re-marking CHARGE_FAILED is a no-op), but the dealer
+      // email must NOT be re-sent for the same attempt. If any Payment
+      // row for this invoice already records an attemptCount >= this
+      // event's attemptCount, we have already processed — and notified
+      // about — this attempt.
+      const priorAttemptRow =
+        invoiceItemIds.length > 0
+          ? await this.prisma.payment.findFirst({
+              where: {
+                stripeInvoiceItemId: { in: invoiceItemIds },
+                attemptCount: { gte: attemptCount },
+              },
+              select: { id: true },
+            })
+          : await this.prisma.payment.findFirst({
+              where: {
+                stripeInvoiceId: invoiceId,
+                attemptCount: { gte: attemptCount },
+              },
+              select: { id: true },
+            });
+      const alreadyProcessedAttempt = !!priorAttemptRow;
+
       if (invoiceItemIds.length > 0) {
         // ── Primary path: match by stripeInvoiceItemId ──
         await this.prisma.payment.updateMany({
@@ -1339,9 +1364,195 @@ export class PostpaidBillingService {
           `Will restrict after ${MAX_FAILURES_BEFORE_RESTRICT} failures.`,
         );
       }
+
+      // ── Dealer notification (email + bell) ──────────────────────
+      // The dashboard banner is only visible on login — without this,
+      // a dealer could stay unaware for the entire retry window and
+      // discover the restriction only when a delivery is blocked.
+      // Graduated copy mirrors the banners: attempt 1 = heads-up,
+      // 2 = final warning, 3+/critical = restricted + unblock steps.
+      // Transient errors stay silent (they self-heal — matches the UI).
+      // Redelivered webhooks are deduped by the prior-attempt guard above.
+      if (stripeCustomerId && !isTransient && !alreadyProcessedAttempt) {
+        try {
+          const dealer = await this.prisma.customer.findFirst({
+            where: { stripeCustomerId },
+            select: { id: true },
+          });
+          if (dealer && this.notificationEngine) {
+            await this.notificationEngine.notifyDealerInvoicePaymentFailed({
+              customerId: dealer.id,
+              attemptCount,
+              amountDollars:
+                (invoice as any).amount_due != null
+                  ? (invoice as any).amount_due / 100
+                  : null,
+              failureReason: isCritical ? null : failureMessage,
+              nextRetryAt: nextRetryAttempt,
+              restricted: shouldRestrict,
+              critical: isCritical,
+            });
+          }
+        } catch (notifyErr: any) {
+          // A notification failure must never break the webhook path.
+          this.logger.warn(
+            `handleInvoicePaymentFailed: dealer notification failed for invoice ${invoiceId}: ${notifyErr?.message}`,
+          );
+        }
+      }
     } catch (err: any) {
       this.logger.error(
         `handleInvoicePaymentFailed failed for invoice ${invoiceId}: ${err?.message}`,
+      );
+    }
+  }
+
+  // ─── INVOICE WRITE-OFF HANDLERS ─────────────────────────────────
+  //
+  // Stripe stops collecting an invoice in two ways:
+  //   • invoice.voided               — an admin cancelled it in the
+  //                                    Stripe dashboard (deliberate
+  //                                    forgiveness / correction).
+  //   • invoice.marked_uncollectible — Stripe's automatic write-off
+  //                                    after its final retry (dashboard
+  //                                    "mark uncollectible" setting).
+  //
+  // Before these handlers existed, both events were silently ignored:
+  // the Payment rows stayed CHARGE_FAILED forever and a dealer frozen
+  // for CHARGE_FAILED had NO self-serve path out — no retry can ever
+  // succeed on a closed invoice. Same "stranded state" class of bug as
+  // the $11,328 AUTHORIZED case, just on the failure side.
+
+  /**
+   * invoice.voided — the invoice was cancelled, the debt no longer
+   * exists. Marks all non-PAID Payment rows on the invoice as VOIDED
+   * (excluded from outstanding balance) and auto-unfreezes a
+   * CHARGE_FAILED-frozen dealer.
+   */
+  async handleInvoiceVoided(invoiceId: string): Promise<void> {
+    await this.resolveWrittenOffInvoice(invoiceId, "voided");
+  }
+
+  /**
+   * invoice.marked_uncollectible — Stripe gave up retrying (final
+   * write-off). Payment rows keep their failed state for the record
+   * (the money is still nominally owed — an admin decides what happens
+   * to it); the dealer is auto-unfroze so a closed invoice can never
+   * trap the account, and admins get the collect-or-forgive email.
+   */
+  async handleInvoiceMarkedUncollectible(invoiceId: string): Promise<void> {
+    await this.resolveWrittenOffInvoice(invoiceId, "uncollectible");
+  }
+
+  /**
+   * Shared body for both write-off webhooks. Never throws — there is
+   * nothing retryable here, and a throwing handler would only make
+   * Stripe redeliver the event forever.
+   */
+  private async resolveWrittenOffInvoice(
+    invoiceId: string,
+    mode: "voided" | "uncollectible",
+  ): Promise<void> {
+    if (!this.stripeService) return;
+    try {
+      const invoice = await this.stripeService.stripe.invoices
+        .retrieve(invoiceId)
+        .catch(() => null);
+      const stripeCustomerId = invoice
+        ? this.resolveStripeCustomerId(invoice.customer)
+        : null;
+      const amountDollars =
+        invoice && (invoice as any).amount_due != null
+          ? (invoice as any).amount_due / 100
+          : null;
+
+      // Resolve the dealer first (needed for the unfreeze + notifications).
+      const dealer = stripeCustomerId
+        ? await this.prisma.customer.findFirst({
+            where: { stripeCustomerId },
+            select: {
+              id: true,
+              billingFrozen: true,
+              billingFrozenReason: true,
+            },
+          })
+        : null;
+
+      if (mode === "voided") {
+        // The debt is cancelled — every non-PAID row on this invoice is
+        // no longer collectible. VOIDED rows are excluded from the
+        // outstanding-balance calculation (same rule the $11,328 sweep
+        // relies on), so the dealer's numbers stay honest. Re-delivered
+        // webhooks are naturally idempotent (re-voiding is a no-op).
+        const result = await this.prisma.payment.updateMany({
+          where: {
+            stripeInvoiceId: invoiceId,
+            status: { not: EnumPaymentStatus.PAID },
+          },
+          data: {
+            status: EnumPaymentStatus.VOIDED,
+            voidedAt: new Date(),
+          },
+        });
+        this.logger.log(
+          `handleInvoiceVoided ${invoiceId}: marked ${result.count} Payment row(s) VOIDED`,
+        );
+      }
+
+      // ── Auto-unfreeze: a closed invoice can never succeed on retry,
+      // so a CHARGE_FAILED freeze would otherwise be a life sentence.
+      // The postpaid cap still limits the dealer's ongoing exposure,
+      // and admins can re-freeze manually if they disagree.
+      if (
+        dealer?.billingFrozen &&
+        dealer.billingFrozenReason === FREEZE_REASONS.CHARGE_FAILED
+      ) {
+        await this.prisma.customer.update({
+          where: { id: dealer.id },
+          data: {
+            billingFrozen: false,
+            billingFrozenAt: null,
+            billingFrozenReason: null,
+          },
+        });
+        this.logger.log(
+          `Auto-unfroze dealer ${dealer.id} — invoice ${invoiceId} was ${mode === "voided" ? "voided" : "marked uncollectible"}`,
+        );
+      }
+
+      // ── Notifications: admins get the money decision, the dealer gets
+      // the "you're unblocked" closure. Notification failures are logged
+      // and swallowed — they must never fail the webhook.
+      if (this.notificationEngine) {
+        try {
+          await this.notificationEngine.notifyAdminInvoiceWrittenOff({
+            invoiceId,
+            customerId: dealer?.id ?? null,
+            amountDollars,
+            reason: mode,
+          });
+        } catch (err: any) {
+          this.logger.warn(
+            `resolveWrittenOffInvoice: admin notification failed for invoice ${invoiceId}: ${err?.message}`,
+          );
+        }
+        if (dealer) {
+          try {
+            await this.notificationEngine.notifyDealerInvoiceResolved({
+              customerId: dealer.id,
+              outcome: mode === "voided" ? "cancelled" : "written_off",
+              amountDollars,
+            });
+          } catch (err: any) {
+            this.logger.warn(
+              `resolveWrittenOffInvoice: dealer notification failed for invoice ${invoiceId}: ${err?.message}`,
+            );
+          }
+        }
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `resolveWrittenOffInvoice(${mode}) failed for invoice ${invoiceId}: ${err?.message}`,
       );
     }
   }

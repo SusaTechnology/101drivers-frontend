@@ -35,6 +35,10 @@ export const STRIPE_INVOICE_EVENTS = {
   FINALIZED: "invoice.finalized",
   PAYMENT_SUCCEEDED: "invoice.payment_succeeded",
   PAYMENT_FAILED: "invoice.payment_failed",
+  // Write-off events — Stripe stops collecting: an admin voided the
+  // invoice, or its final retry failed and Stripe marked it uncollectible.
+  VOIDED: "invoice.voided",
+  MARKED_UNCOLLECTIBLE: "invoice.marked_uncollectible",
 } as const;
 
 // Postpaid billing env vars. Read at service construction so missing
