@@ -1261,6 +1261,8 @@ export class AuthService {
         id: true,
         email: true,
         isActive: true,
+        roles: true,
+        emailVerifiedAt: true,
       },
     } as any);
 
@@ -1276,12 +1278,28 @@ export class AuthService {
 
     const hashed = await this.passwordService.hash(dto.newPassword);
 
+    // Completing a password reset proves control of the mailbox — the reset
+    // token was emailed there. For an invited admin who never accepted the
+    // invite (or whose link expired) that is exactly the proof the invite
+    // flow was waiting for, so verify the email in the same update. Without
+    // this the admin would set a working password yet stay "Pending invite"
+    // forever and be blocked from signing in by the unverified-admin gate.
+    const adminPendingVerification =
+      String((user as any).roles) === "ADMIN" && !(user as any).emailVerifiedAt;
+
     await this.userService.updateUser({
       where: { id: user.id },
       data: {
         password: hashed,
+        ...(adminPendingVerification ? { emailVerifiedAt: new Date() } : {}),
       },
     } as any);
+
+    if (adminPendingVerification) {
+      this.logger.log(
+        `Admin ${normalizedEmail} verified email via password reset (invite never accepted)`
+      );
+    }
 
     return {
       success: true,
