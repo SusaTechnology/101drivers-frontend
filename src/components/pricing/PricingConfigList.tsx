@@ -388,11 +388,13 @@ function ModeSpecificSection({ config }: { config: PricingConfig }) {
                     </div>
                   </div>
                 </div>
-                <div className={cn("grid grid-cols-2 sm:grid-cols-4 gap-3", bgLight, "rounded-xl p-3 -mx-1")}>
-                  <div className="space-y-1">
+                {/* 3 columns: per-category Base Fee hidden — the ABC engine uses only the
+                    config-level Base Fee; categoryRules.baseFee is a legacy schema field. */}
+                <div className={cn("grid grid-cols-2 sm:grid-cols-3 gap-3", bgLight, "rounded-xl p-3 -mx-1")}>
+                  {/* <div className="space-y-1">
                     <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Base Fee</div>
                     <div className="text-lg font-black text-slate-900 dark:text-white">${rule.baseFee?.toFixed(2) ?? '—'}</div>
-                  </div>
+                  </div> */}
                   <div className="space-y-1">
                     <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Per Mile</div>
                     <div className="text-lg font-black text-slate-900 dark:text-white">${rule.perMileRate?.toFixed(2) ?? '—'}<span className="text-xs font-medium text-slate-400">/mi</span></div>

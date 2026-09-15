@@ -797,7 +797,11 @@ export function PricingConfigForm({
                         Category {category}
                       </Badge>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* 3 columns: the per-category Base Fee input was removed from view —
+                        the ABC formula only uses the config-level Base Fee (Fees & Percentages
+                        section) plus each band's Max Miles / Rate per Mile. Kept as a comment
+                        so the legacy field is easy to restore if the formula ever changes. */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
                           Min Miles
@@ -835,7 +839,12 @@ export function PricingConfigForm({
                           <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.categoryRules as any)?.[ruleIndex]?.maxMiles?.message}</p>
                         )}
                       </div>
-                      <div>
+                      {/* Per-category "Base Fee ($)" hidden — the ABC engine ignores
+                          categoryRules.baseFee entirely (legacy schema field); showing it
+                          confused admins into thinking each band has its own base fee.
+                          Form state still carries the stored value on save (schema allows
+                          null), so existing configs round-trip unchanged. */}
+                      {/* <div>
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
                           Base Fee ($)
                         </Label>
@@ -855,7 +864,7 @@ export function PricingConfigForm({
                         {(errors.categoryRules as any)?.[ruleIndex]?.baseFee && (
                           <p className="text-xs text-red-500 mt-1 font-medium">⚠ {(errors.categoryRules as any)?.[ruleIndex]?.baseFee?.message}</p>
                         )}
-                      </div>
+                      </div> */}
                       <div>
                         <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block">
                           Rate per Mile ($)
