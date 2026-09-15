@@ -31,7 +31,7 @@ import { Navbar } from '../shared/layout/testNavbar';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
-import { useAdminPayments, usePaymentActions } from '@/hooks/useAdminPayments';
+import { useAdminPayments, usePaymentActions, useAdminPaymentSummary } from '@/hooks/useAdminPayments';
 import { downloadReport } from '@/hooks/useAdminReports';
 import { getUser } from '@/lib/tanstack/dataQuery';
 import type { 
@@ -285,7 +285,11 @@ export default function AdminPaymentsPage() {
       params.unpaidOnly = true;
     }
     if (failedOnly) {
-      params.status = 'CHARGE_FAILED';
+      // OR-union across BOTH failure statuses — the postpaid weekly-invoice
+      // failures are CHARGE_FAILED while prepaid failures are FAILED, and
+      // filtering a single exact status made "Failed Only" look broken
+      // (zero rows) whenever the other status held the actual failures.
+      params.statuses = 'CHARGE_FAILED,FAILED';
     }
     
     return params;
@@ -294,37 +298,42 @@ export default function AdminPaymentsPage() {
   // Fetch data
   const { data, isLoading, isFetching, isError, error, refetch } = useAdminPayments(queryParams);
   
-  // Calculate metrics from data
-  const metrics = useMemo(() => {
-    if (!data?.items) {
-      return {
-        PAID: 0, CHARGE_FAILED: 0, FAILED: 0, USAGE_REPORTED: 0,
-        PENDING_STRIPE_USAGE: 0, INVOICED: 0, AUTHORIZED: 0,
-        CAPTURED: 0, VOIDED: 0, REFUNDED: 0,
-        total: 0, totalAmount: 0,
-      };
+  // KPI summary — fleet-wide counts for the whole period (defaults to the
+  // current calendar month), computed server-side. Deliberately NOT derived
+  // from the paginated list: counting the current page made the cards show
+  // e.g. "2 failed" while clicking the card revealed dozens more, because
+  // the click re-queried the full dataset. The cards now show the real
+  // period totals and never move when the admin clicks around.
+  const summaryRange = useMemo(() => ({
+    from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+    to: dateTo ? new Date(dateTo + 'T23:59:59').toISOString() : undefined,
+  }), [dateFrom, dateTo]);
+  const { data: summary } = useAdminPaymentSummary(summaryRange);
+  
+  // Label for the period the KPI cards + total banner describe.
+  const periodLabel = dateFrom || dateTo ? 'selected range' : 'this month';
+  
+  // KPI card click — filter the list to that status. The first click also
+  // scopes the list's dates to the exact period the cards count, so the
+  // rows the admin sees are the same payments the number came from
+  // (card says 20 → clicking shows those same 20, not an unbounded
+  // all-time query).
+  const handleStatusCardClick = useCallback((status: string) => {
+    if (statusFilter === status) {
+      setStatusFilter('all');
+      return;
     }
-
-    const counts: Record<string, number> = {
-      PAID: 0, CHARGE_FAILED: 0, FAILED: 0, USAGE_REPORTED: 0,
-      PENDING_STRIPE_USAGE: 0, INVOICED: 0, AUTHORIZED: 0,
-      CAPTURED: 0, VOIDED: 0, REFUNDED: 0,
-    };
-
-    let totalAmount = 0;
-    data.items.forEach(p => {
-      if (counts[p.status] !== undefined) {
-        counts[p.status]++;
-      }
-      totalAmount += p.amount;
-    });
-
-    return {
-      ...counts,
-      total: data.items.length,
-      totalAmount,
-    };
-  }, [data?.items]);
+    setStatusFilter(status);
+    if (!dateFrom && !dateTo) {
+      if (summary?.from) setDateFrom(summary.from.slice(0, 10));
+      if (summary?.to) setDateTo(summary.to.slice(0, 10));
+    }
+  }, [statusFilter, dateFrom, dateTo, summary?.from, summary?.to]);
+  
+  const summaryCount = useCallback(
+    (status: string) => summary?.counts?.[status] ?? 0,
+    [summary],
+  );
   
   // Handlers
   const handleRefresh = useCallback(() => {
@@ -344,7 +353,7 @@ export default function AdminPaymentsPage() {
       if (dateTo) exportParams.to = dateTo;
       if (invoicedOnly) exportParams.invoicedOnly = true;
       if (unpaidOnly) exportParams.unpaidOnly = true;
-      if (failedOnly) exportParams.status = 'CHARGE_FAILED';
+      if (failedOnly) exportParams.statuses = 'CHARGE_FAILED,FAILED';
       
       await downloadReport('payments', exportParams, format);
       toast.success(`Exported as ${format.toUpperCase()}`);
@@ -562,21 +571,29 @@ export default function AdminPaymentsPage() {
           </div>
         </section>
 
-        {/* KPI Row - Status Cards */}
+        {/* KPI Row - Status Cards. Numbers come from the period summary
+            endpoint (this month by default), NOT from the current page of
+            the list — so they are the real totals and don't change when
+            the admin clicks a card or pages through the list. */}
+        <section className="mb-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            Payment status — {periodLabel} · click a card to see those payments
+          </p>
+        </section>
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-2 mb-6">
           {Object.entries(STATUS_CONFIG).map(([status, config]) => (
             <button
               key={status}
-              onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
+              onClick={() => handleStatusCardClick(status)}
               className={cn(
                 "flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer",
-                statusFilter === status 
-                  ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/30` 
+                statusFilter === status
+                  ? `${config.bgColor} ${config.borderColor} ring-2 ring-primary/30`
                   : "bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900"
               )}
             >
               <div className={cn("text-xl font-black leading-none", config.color)}>
-                {metrics[status as keyof typeof metrics] ?? 0}
+                {summaryCount(status)}
               </div>
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">
                 {config.label}
@@ -585,10 +602,10 @@ export default function AdminPaymentsPage() {
           ))}
         </section>
 
-        {/* Billing Health callout — failed payments on this page usually
+        {/* Billing Health callout — failed payments in this period usually
             mean a dealer's card is failing; the Billing Health page is
             where those dealers are listed by name with one-click fixes. */}
-        {(metrics.CHARGE_FAILED > 0 || metrics.FAILED > 0) && (
+        {(summary?.failedTotal ?? 0) > 0 && (
           <section className="mb-6">
             <Card className="rounded-xl border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
               <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -596,8 +613,8 @@ export default function AdminPaymentsPage() {
                   <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <div>
                     <div className="text-sm font-bold text-amber-800 dark:text-amber-200">
-                      {metrics.CHARGE_FAILED + metrics.FAILED} failed{' '}
-                      {(metrics.CHARGE_FAILED + metrics.FAILED) === 1 ? 'payment' : 'payments'} on this page
+                      {summary?.failedTotal} failed{' '}
+                      {summary?.failedTotal === 1 ? 'payment' : 'payments'} {periodLabel}
                     </div>
                     <div className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
                       Some of these dealers may already be frozen, or about to be. Billing Health lists every dealer who needs payment help — with one-click Retry / Unfreeze.
@@ -623,13 +640,17 @@ export default function AdminPaymentsPage() {
               <div className="flex items-center gap-3">
                 <Banknote className="w-5 h-5 text-primary" />
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total Amount (Current Page)</div>
-                  <div className="text-xl font-black text-slate-900 dark:text-white">{formatCurrency(metrics.totalAmount)}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    Total Amount ({periodLabel})
+                  </div>
+                  <div className="text-xl font-black text-slate-900 dark:text-white">
+                    {formatCurrency(summary?.totalAmount ?? 0)}
+                  </div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total Payments</div>
-                <div className="text-xl font-black text-slate-900 dark:text-white">{metrics.total}</div>
+                <div className="text-xl font-black text-slate-900 dark:text-white">{summary?.total ?? 0}</div>
               </div>
             </CardContent>
           </Card>

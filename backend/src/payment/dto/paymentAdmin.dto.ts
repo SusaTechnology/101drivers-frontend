@@ -11,6 +11,16 @@ export class PaymentAdminListQueryDto {
   @IsString()
   status?: string | null;
 
+  @swagger.ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "Comma-separated status list for OR filtering, e.g. 'CHARGE_FAILED,FAILED' — takes precedence over `status`",
+  })
+  @IsOptional()
+  @IsString()
+  statuses?: string | null;
+
   @swagger.ApiProperty({ required: false, nullable: true })
   @IsOptional()
   @IsString()
@@ -58,6 +68,18 @@ export class PaymentAdminListQueryDto {
   @swagger.ApiProperty({ required: false, default: 20 })
   @IsOptional()
   pageSize?: number;
+}
+
+export class PaymentAdminSummaryQueryDto {
+  @swagger.ApiProperty({ required: false, nullable: true, format: "date-time" })
+  @IsOptional()
+  @IsString()
+  from?: string | null;
+
+  @swagger.ApiProperty({ required: false, nullable: true, format: "date-time" })
+  @IsOptional()
+  @IsString()
+  to?: string | null;
 }
 
 export class PaymentMarkPaidBody {

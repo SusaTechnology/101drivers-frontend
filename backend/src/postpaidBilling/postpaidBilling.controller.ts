@@ -204,10 +204,10 @@ export class PostpaidBillingController implements OnApplicationBootstrap {
 
   @Post("dealers/:dealerId/retry-charge")
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
-  @ApiOperation({ summary: "Retry the most recent failed weekly invoice (Stripe.pay)" })
+  @ApiOperation({ summary: "Retry ALL open (failed) weekly invoices via Stripe — returns per-invoice outcome counts" })
   async retryCharge(@Param("dealerId") dealerId: string) {
-    await this.postpaidBilling.retryFailedCharge(dealerId);
-    return { ok: true, dealerId };
+    const result = await this.postpaidBilling.retryFailedCharge(dealerId);
+    return { ok: true, dealerId, ...result };
   }
 
   // ─── ADMIN: Backfill missing usage reports ──────────────────

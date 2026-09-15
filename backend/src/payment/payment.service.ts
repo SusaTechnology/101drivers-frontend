@@ -155,6 +155,7 @@ constructor(
 
   async getAdminPayments(input: {
   status?: string | null;
+  statuses?: string | null;
   paymentType?: string | null;
   provider?: string | null;
   customerId?: string | null;
@@ -170,8 +171,35 @@ constructor(
   const pageSize = Math.max(1, Math.min(input.pageSize ?? 20, 100));
   const skip = (page - 1) * pageSize;
 
+  // `statuses` (comma-separated) is an OR-union across several statuses —
+  // used by the "Failed Only" quick filter to cover both CHARGE_FAILED
+  // (postpaid weekly-invoice failures) and FAILED (prepaid failures) at
+  // once. Takes precedence over the single `status` exact filter.
+  const statusList = input.statuses
+    ? input.statuses
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+
+  // Status-related conditions are AND-ed via `AND` so they can never
+  // overwrite each other (the old spread-order let `unpaidOnly`'s
+  // status.notIn silently replace an explicit `status` filter).
+  const statusConditions: Prisma.PaymentWhereInput[] = [];
+  if (statusList.length > 0) {
+    statusConditions.push({ status: { in: statusList as any } });
+  } else if (input.status) {
+    statusConditions.push({ status: input.status as any });
+  }
+  if (input.unpaidOnly === true) {
+    statusConditions.push({
+      status: {
+        notIn: [EnumPaymentStatus.PAID, EnumPaymentStatus.REFUNDED] as any,
+      },
+    });
+  }
+
   const where: Prisma.PaymentWhereInput = {
-    ...(input.status ? { status: input.status as any } : {}),
     ...(input.paymentType ? { paymentType: input.paymentType as any } : {}),
     ...(input.provider ? { provider: input.provider as any } : {}),
     ...(input.deliveryId ? { deliveryId: input.deliveryId } : {}),
@@ -185,13 +213,7 @@ constructor(
     ...(input.invoicedOnly === true
       ? { invoiceId: { not: null } }
       : {}),
-    ...(input.unpaidOnly === true
-      ? {
-          status: {
-            notIn: [EnumPaymentStatus.PAID, EnumPaymentStatus.REFUNDED] as any,
-          },
-        }
-      : {}),
+    ...(statusConditions.length > 0 ? { AND: statusConditions } : {}),
     ...((input.from || input.to)
       ? {
           createdAt: {
@@ -278,6 +300,7 @@ constructor(
     pageSize,
     filtersApplied: {
       status: input.status ?? null,
+      statuses: input.statuses ?? null,
       paymentType: input.paymentType ?? null,
       provider: input.provider ?? null,
       customerId: input.customerId ?? null,
@@ -287,6 +310,62 @@ constructor(
       invoicedOnly: input.invoicedOnly === true,
       unpaidOnly: input.unpaidOnly === true,
     },
+  };
+}
+
+/**
+ * Fleet-wide status totals for the admin payments page KPI cards —
+ * computed with ONE groupBy query over the whole period, NOT from the
+ * paginated list rows.
+ *
+ * Why this endpoint exists: the KPI cards used to count statuses across
+ * only the CURRENT PAGE of the list (20 rows), so the numbers jumped
+ * around every time an admin clicked a card or changed filters —
+ * "summary shows 2 failed, click it, now it shows 20". The cards must
+ * show the real period totals ("the exact number of the month"), stay
+ * stable no matter what is clicked, and be cheap to query.
+ *
+ * Period: defaults to the current calendar month (server time). The page
+ * forwards its date-range filters when set, so the cards and the list
+ * always describe the same window.
+ */
+async getAdminPaymentSummary(input: {
+  from?: Date | null;
+  to?: Date | null;
+}): Promise<any> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const from = input.from ?? monthStart;
+  const to = input.to ?? now;
+  const usesDefaultPeriod = !input.from && !input.to;
+
+  const groups = await this.prisma.payment.groupBy({
+    by: ["status"],
+    where: { createdAt: { gte: from, lte: to } },
+    _count: true,
+    _sum: { amount: true },
+  });
+
+  const counts: Record<string, number> = {};
+  let total = 0;
+  let totalAmount = 0;
+  for (const g of groups) {
+    counts[g.status] = g._count;
+    total += g._count;
+    totalAmount += Number(g._sum.amount ?? 0);
+  }
+
+  const failedTotal =
+    (counts["CHARGE_FAILED"] ?? 0) + (counts["FAILED"] ?? 0);
+
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    usesDefaultPeriod,
+    counts,
+    total,
+    totalAmount: Math.round(totalAmount * 100) / 100,
+    failedTotal,
   };
 }
 

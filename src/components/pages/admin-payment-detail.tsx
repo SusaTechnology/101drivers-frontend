@@ -78,6 +78,7 @@ import {
   Copy,
   RotateCcw,
   Loader2,
+  HeartPulse,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -733,6 +734,20 @@ export default function AdminPaymentDetailPage({ paymentId }: AdminPaymentDetail
                           >
                             <Truck className="w-3.5 h-3.5" />
                             View delivery
+                          </Link>
+                        )}
+                        {/* Failed payment → the fleet view where every
+                            dealer needing payment help is listed with
+                            one-click Retry / Unfreeze. This closes the
+                            loop from "why did this payment fail?" to
+                            "how do I fix it?" without hunting. */}
+                        {(payment.status === 'CHARGE_FAILED' || payment.status === 'FAILED') && (
+                          <Link
+                            to="/admin-billing-health"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 transition"
+                          >
+                            <HeartPulse className="w-3.5 h-3.5" />
+                            Fix via Billing Health
                           </Link>
                         )}
                       </div>

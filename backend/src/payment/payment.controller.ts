@@ -21,6 +21,7 @@ import { PaymentEvent } from "../paymentEvent/base/PaymentEvent";
 import { PaymentEventWhereUniqueInput } from "../paymentEvent/base/PaymentEventWhereUniqueInput";
 import {
   PaymentAdminListQueryDto,
+  PaymentAdminSummaryQueryDto,
   PaymentMarkInvoicedBody,
   PaymentMarkPaidBody,
   PaymentMarkPayoutPaidBody,
@@ -55,6 +56,7 @@ async getAdminPayments(
 ): Promise<any> {
   return this.service.getAdminPayments({
     status: query.status ?? null,
+    statuses: query.statuses ?? null,
     paymentType: query.paymentType ?? null,
     provider: query.provider ?? null,
     customerId: query.customerId ?? null,
@@ -65,6 +67,31 @@ async getAdminPayments(
     unpaidOnly: query.unpaidOnly === true,
     page: query.page ? Number(query.page) : 1,
     pageSize: query.pageSize ? Number(query.pageSize) : 20,
+  });
+}
+
+/**
+ * Fleet-wide status totals for the admin payments page KPI cards.
+ * Defaults to the current calendar month; `from`/`to` (ISO) override.
+ *
+ * ⚠️ Declared BEFORE `admin/:id` — Nest matches routes in declaration
+ * order, so putting this after it would be swallowed by `:id`.
+ *
+ * Frontend: GET /api/payments/admin/summary?from=...&to=...
+ */
+@common.Get("admin/summary")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "Payment",
+  action: "read",
+  possession: "any",
+})
+async getAdminPaymentSummary(
+  @common.Query() query: PaymentAdminSummaryQueryDto
+): Promise<any> {
+  return this.service.getAdminPaymentSummary({
+    from: query.from ? new Date(query.from) : null,
+    to: query.to ? new Date(query.to) : null,
   });
 }
 

@@ -3,6 +3,7 @@ import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery';
 import type {
   AdminPaymentsResponse,
   AdminPaymentDetail,
+  AdminPaymentSummary,
   AdminPaymentsQueryParams,
   MarkInvoicedRequest,
   MarkInvoicedResponse,
@@ -23,6 +24,7 @@ function buildQueryString(params: AdminPaymentsQueryParams): string {
   if (params.page) searchParams.set('page', String(params.page));
   if (params.pageSize) searchParams.set('pageSize', String(params.pageSize));
   if (params.status) searchParams.set('status', params.status);
+  if (params.statuses) searchParams.set('statuses', params.statuses);
   if (params.paymentType) searchParams.set('paymentType', params.paymentType);
   if (params.provider) searchParams.set('provider', params.provider);
   if (params.customerId) searchParams.set('customerId', params.customerId);
@@ -50,6 +52,31 @@ export function useAdminPayments(params: AdminPaymentsQueryParams = {}) {
     noFilter: true,
     staleTime: 30 * 1000, // 30 seconds
     queryKey: ['admin-payments', paramsKey],
+  });
+}
+
+/**
+ * Hook for the fleet-wide period summary behind the admin payments KPI
+ * cards (GET /api/payments/admin/summary).
+ *
+ * Defaults to the current calendar month when no range is given — the
+ * "exact number of the month" the cards should show. Pass the page's
+ * date filters so the cards and the list always describe the same
+ * window. Polled every 60s so new payments reflect without a manual
+ * refresh.
+ */
+export function useAdminPaymentSummary(params: { from?: string; to?: string } = {}) {
+  const search = new URLSearchParams();
+  if (params.from) search.set('from', params.from);
+  if (params.to) search.set('to', params.to);
+  const queryString = search.toString();
+
+  return useDataQuery<AdminPaymentSummary>({
+    apiEndPoint: `${API_BASE_URL}/api/payments/admin/summary${queryString ? `?${queryString}` : ''}`,
+    noFilter: true,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    queryKey: ['admin-payment-summary', params.from ?? '', params.to ?? ''],
   });
 }
 

@@ -2115,42 +2115,102 @@ export class PostpaidBillingService {
   }
 
   /**
-   * Retry the most recent failed weekly invoice for a dealer. Stripe
-   * supports `POST /v1/invoices/{id}/pay` which attempts to charge the
-   * customer's default PM again. On success, the payment_succeeded
-   * webhook will fire and mark the Payments PAID + clear the freeze.
+   * Retry the dealer's failed weekly invoice(s) from an admin action.
+   *
+   * Delegates to retryAllFailedCharges() — which pays EVERY open invoice
+   * on the subscription (the 6AM cron path, proven in production) — so
+   * the admin button and the cron behave identically. A dealer with 3
+   * weeks of failed invoices gets all 3 retried, not just the newest.
+   *
+   * Historical bug this replaces: the old implementation called
+   * `invoices.pay(id, { paid_out_of_band: false })` — Stripe rejects any
+   * `paid_out_of_band` value except the string 'true' (the parameter
+   * means "mark paid as collected outside Stripe" and is only ever
+   * passed as true), so EVERY manual retry 400'd with
+   * "invalid_paid_out_of_band_parameter". retryAllFailedCharges already
+   * called `invoices.pay(id)` correctly.
+   *
+   * When the subscription has NO open invoice, this throws a 400 that
+   * explains WHY and what to do — the failed invoice is closed (voided /
+   * marked uncollectible / already paid), and Stripe can never re-charge
+   * a closed invoice. Vague "No open invoice found" errors left admins
+   * stuck with no next step.
    */
-  async retryFailedCharge(dealerId: string): Promise<void> {
+  async retryFailedCharge(
+    dealerId: string,
+  ): Promise<{ invoicesRetried: number; succeeded: number; failed: number }> {
     if (!this.stripeService) {
       throw new Error("StripeService unavailable");
     }
     const dealer = await this.prisma.customer.findUnique({
       where: { id: dealerId },
-      select: { id: true, stripeCustomerId: true, stripeSubscriptionId: true },
+      select: { id: true, stripeSubscriptionId: true },
     });
     if (!dealer?.stripeSubscriptionId) {
-      throw new BadRequestException("Dealer has no Stripe subscription — retry impossible");
+      throw new BadRequestException(
+        "Dealer has no Stripe subscription — retry impossible",
+      );
     }
 
-    // Find the most recent open invoice for this subscription
-    const invoices = await this.stripeService.stripe.invoices.list({
-      subscription: dealer.stripeSubscriptionId,
-      limit: 5,
-      status: "open",
-    });
+    const result = await this.retryAllFailedCharges(dealerId);
 
-    if (invoices.data.length === 0) {
-      throw new BadRequestException("No open invoice found for this dealer's subscription");
+    if (result.invoicesRetried === 0) {
+      throw new BadRequestException(
+        await this.explainNoOpenInvoice(dealer.stripeSubscriptionId),
+      );
     }
 
-    const invoice = invoices.data[0];
-    await this.stripeService.stripe.invoices.pay(invoice.id, {
-      paid_out_of_band: false,
-    });
+    // Stripe will fire invoice.payment_succeeded or .payment_failed per
+    // invoice shortly; our webhook handlers update Payment rows + freeze
+    // state.
+    this.logger.log(
+      `Admin retry for dealer ${dealerId}: ${result.succeeded}/${result.invoicesRetried} invoice(s) retried successfully`,
+    );
+    return result;
+  }
 
-    // Stripe will fire invoice.payment_succeeded or .payment_failed shortly;
-    // our webhook handlers will update Payment rows + freeze state.
-    this.logger.log(`Retried invoice ${invoice.id} for dealer ${dealerId}`);
+  /**
+   * Build a human, decision-ready explanation for "no open invoice to
+   * retry". Looks at the subscription's recent invoices to say WHICH
+   * state they're in and what the admin should do instead.
+   */
+  private async explainNoOpenInvoice(subscriptionId: string): Promise<string> {
+    try {
+      const recent = await this.stripeService!.stripe.invoices.list({
+        subscription: subscriptionId,
+        limit: 10,
+      });
+
+      const writtenOff = recent.data.find(
+        (inv) => inv.status === "uncollectible" || inv.status === "void",
+      );
+      if (writtenOff) {
+        const whatHappened =
+          writtenOff.status === "void"
+            ? "was voided (cancelled)"
+            : "was written off as uncollectible after the retry window";
+        return (
+          `The failed invoice (${writtenOff.number ?? writtenOff.id}) ${whatHappened}, so Stripe can no longer re-charge it. ` +
+          `To collect: take payment from the dealer directly (or have them pay the open amount), then use "Mark Paid" on the payment — ` +
+          `or let the next weekly invoice run and forgive the remainder.`
+        );
+      }
+
+      if (recent.data.some((inv) => inv.status === "paid")) {
+        return (
+          "The most recent invoice was already paid — the payment list updates as soon as the Stripe webhook lands. " +
+          "Refresh in a few seconds; if rows still show failed after a minute, use Unfreeze to re-enable the dealer."
+        );
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `explainNoOpenInvoice: could not inspect invoices for ${subscriptionId}: ${err?.message}`,
+      );
+    }
+    return (
+      "No open invoice found for this dealer's subscription — the failed invoice is closed, so there is nothing for Stripe to re-charge. " +
+      "If the dealer still owes money, collect it manually and use Mark Paid on the payment."
+    );
   }
 
   // ─── ADMIN: FLEET BILLING HEALTH ────────────────────────────────

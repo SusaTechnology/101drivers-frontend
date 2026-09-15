@@ -156,16 +156,29 @@ function CardStatusBadges({
   )
 }
 
-/** One-click retry of the dealer's most recent failed weekly invoice. */
+/** One-click retry of the dealer's failed weekly invoice(s). The backend
+ * retries EVERY open invoice and reports what happened. */
 function useRetryCharge(dealerId: string, refetch: () => void) {
-  return useDataMutation<void, { dealerId: string }>({
+  return useDataMutation<
+    { ok: boolean; invoicesRetried: number; succeeded: number; failed: number },
+    { dealerId: string }
+  >({
     apiEndPoint: `${API_URL}/api/postpaid-billing/dealers/${dealerId}/retry-charge`,
     method: 'POST',
-    onSuccess: () => {
-      toast.success('Retry triggered', {
-        description:
-          "Stripe will fire a webhook when the charge settles — the list updates automatically.",
-      })
+    onSuccess: (data) => {
+      const retried = data?.invoicesRetried ?? 0
+      const ok = data?.succeeded ?? 0
+      if (retried > 1) {
+        toast.success(`Retry triggered — ${ok}/${retried} invoice(s) accepted`, {
+          description:
+            "Stripe will fire a webhook as each charge settles — the list updates automatically.",
+        })
+      } else {
+        toast.success('Retry triggered', {
+          description:
+            "Stripe will fire a webhook when the charge settles — the list updates automatically.",
+        })
+      }
       // Give Stripe a few seconds, then refresh so the row reflects reality.
       setTimeout(() => refetch(), 5000)
     },

@@ -83,6 +83,9 @@ export interface AdminPaymentsQueryParams {
   page?: number;
   pageSize?: number;
   status?: PaymentStatus;
+  /** Comma-separated status list for OR filtering (e.g. "CHARGE_FAILED,FAILED").
+   *  Takes precedence over `status`. Used by the "Failed Only" quick filter. */
+  statuses?: string;
   paymentType?: PaymentType;
   provider?: PaymentProvider;
   customerId?: string;
@@ -101,6 +104,7 @@ export interface AdminPaymentsResponse {
   pageSize: number;
   filtersApplied: {
     status: string | null;
+    statuses: string | null;
     paymentType: string | null;
     provider: string | null;
     customerId: string | null;
@@ -110,6 +114,27 @@ export interface AdminPaymentsResponse {
     invoicedOnly: boolean;
     unpaidOnly: boolean;
   };
+}
+
+// ── Admin payments period summary (KPI cards) ──
+//
+// Returned by GET /api/payments/admin/summary. Computed fleet-wide over a
+// whole period (defaults to the current calendar month) with a single
+// groupBy — deliberately NOT derived from the paginated list, so the KPI
+// numbers stay stable no matter which page or filter the admin is on.
+export interface AdminPaymentSummary {
+  /** Actual period used (ISO) — echoed back so the UI can scope the list
+   *  to the same window when a KPI card is clicked. */
+  from: string;
+  to: string;
+  /** True when neither from nor to was supplied (current-month default). */
+  usesDefaultPeriod: boolean;
+  /** Status → payment count for the period. */
+  counts: Record<string, number>;
+  total: number;
+  totalAmount: number;
+  /** CHARGE_FAILED + FAILED convenience total. */
+  failedTotal: number;
 }
 
 // Payment detail (full payment info)
