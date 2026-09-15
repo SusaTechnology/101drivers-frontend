@@ -38,6 +38,23 @@ export type ReferralStatus =
 
 // ==================== ADMIN USERS TABLE TYPES ====================
 
+/**
+ * Admin account lifecycle status — computed SERVER-SIDE for ADMIN rows
+ * from emailVerifiedAt + the live invite token (pending vs expired needs
+ * token data the client doesn't have). Null for non-admin rows.
+ *   ACTIVE         — invite accepted (email verified), can sign in
+ *   PENDING_INVITE — invited, email unverified, invite link still valid
+ *   INVITE_EXPIRED — invited, email unverified, invite link expired
+ *   DISABLED       — disabled by an admin (Enable restores them)
+ * Only ACTIVE admins get the Disable button; DISABLED gets Enable;
+ * pending/expired get Resend Invite instead.
+ */
+export type AdminInviteStatus =
+  | 'ACTIVE'
+  | 'PENDING_INVITE'
+  | 'INVITE_EXPIRED'
+  | 'DISABLED';
+
 export interface AdminUserRow {
   id: string;
   email: string;
@@ -50,6 +67,8 @@ export interface AdminUserRow {
   disabledReason: string | null;
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;
+  // Admin lifecycle status (ADMIN rows only; null otherwise)
+  adminStatus: AdminInviteStatus | null;
   createdAt: string;
   updatedAt: string;
   customer: AdminCustomerEmbed | null;
@@ -233,6 +252,8 @@ export interface AdminUserDetail {
   disabledReason: string | null;
   emailVerifiedAt: string | null;
   lastLoginAt: string | null;
+  // Admin lifecycle status (ADMIN rows only; null otherwise)
+  adminStatus: AdminInviteStatus | null;
   createdAt: string;
   updatedAt: string;
   customer: AdminUserCustomerDetail | null;

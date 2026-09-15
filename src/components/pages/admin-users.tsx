@@ -65,11 +65,13 @@ import {
 import type {
   AdminUserRow,
   AdminUsersQueryParams,
+  AdminInviteStatus,
   UserRole,
   CustomerType,
   CustomerApprovalStatus,
   DriverStatus,
 } from '@/types/users';
+import { effectiveAdminStatus } from '@/lib/adminStatus';
 import {
   USER_ROLE_LABELS,
   CUSTOMER_TYPE_LABELS,
@@ -216,6 +218,52 @@ function StatusBadge({ isActive, disabledAt }: { isActive: boolean; disabledAt: 
     <Badge className="text-[10px] font-bold border bg-slate-50 text-slate-600 border-slate-200">
       <XCircle className="w-3 h-3 mr-1" />
       Inactive
+    </Badge>
+  );
+}
+
+// Lifecycle badge for ADMIN rows — mirrors the login rules exactly:
+//   Active           → invite accepted (email verified); sign-in allowed
+//   Pending invite   → invite link still valid; sign-in BLOCKED
+//   Invitation expired → link expired unused; sign-in BLOCKED
+//   Disabled         → deactivated by an admin; sign-in BLOCKED
+// The server computes the status (it knows the invite token's expiry);
+// effectiveAdminStatus falls back to a client approximation if absent.
+function AdminStatusBadge({ status }: { status: AdminInviteStatus }) {
+  if (status === 'DISABLED') {
+    return (
+      <Badge className="text-[10px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
+        <Ban className="w-3 h-3 mr-1" />
+        Disabled
+      </Badge>
+    );
+  }
+  if (status === 'PENDING_INVITE') {
+    return (
+      <Badge
+        className="text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-200"
+        title="Invite sent but not accepted yet — this admin cannot sign in until they accept the invite."
+      >
+        <Send className="w-3 h-3 mr-1" />
+        Pending invite
+      </Badge>
+    );
+  }
+  if (status === 'INVITE_EXPIRED') {
+    return (
+      <Badge
+        className="text-[10px] font-bold border bg-rose-50 text-rose-700 border-rose-200"
+        title="The invite link expired without being accepted — resend the invite to let this admin set up their account."
+      >
+        <Clock className="w-3 h-3 mr-1" />
+        Invitation expired
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+      <CheckCircle className="w-3 h-3 mr-1" />
+      Active
     </Badge>
   );
 }
@@ -1039,20 +1087,16 @@ export default function AdminUsersPage() {
                             // instead so admin knows this row is garbage and
                             // can be deleted.
                             <IncompleteSignupBadge emailVerifiedAt={user.emailVerifiedAt} />
+                          ) : user.roles === 'ADMIN' ? (
+                            // Admin lifecycle status — a single truthful badge
+                            // instead of the old "Active + Invite pending hint"
+                            // pair. Unverified admins read Pending invite or
+                            // Invitation expired (server knows the token
+                            // expiry) and can NEVER sign in; only verified,
+                            // enabled admins show Active.
+                            <AdminStatusBadge status={effectiveAdminStatus(user)} />
                           ) : (
-                            // Non-customer, non-driver rows (i.e. admins).
-                            // Admins with a pending invite show an amber hint
-                            // next to Active so ops can spot never-activated
-                            // accounts at a glance.
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
-                              {user.roles === 'ADMIN' && !user.disabledAt && !user.emailVerifiedAt && !user.lastLoginAt && (
-                                <Badge className="text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-200">
-                                  <Send className="w-3 h-3 mr-1" />
-                                  Invite pending
-                                </Badge>
-                              )}
-                            </div>
+                            <StatusBadge isActive={user.isActive} disabledAt={user.disabledAt} />
                           )}
                         </TableCell>
                         <TableCell className="px-4 py-3">
@@ -1128,15 +1172,18 @@ export default function AdminUsersPage() {
                                 <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
                               </Button>
                             )}
-                            {/* Admin with pending invite - show Resend Invite */}
-                            {!user.disabledAt && user.roles === 'ADMIN' && !user.emailVerifiedAt && !user.lastLoginAt && (
+                            {/* Admin with pending OR expired invite - show Resend Invite
+                                (resending is the fix for both states) */}
+                            {!user.disabledAt && user.roles === 'ADMIN' && !user.emailVerifiedAt && (
                               <Button size="sm" className="bg-sky-600 hover:bg-sky-700 text-white rounded-lg" onClick={() => openDialog('resend-admin-invite', user)}>
                                 <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
                               </Button>
                             )}
-                            {/* Admin active - show Disable (never on your own row — the
-                                backend rejects self-disable as a second guard) */}
-                            {!user.disabledAt && user.roles === 'ADMIN' && user.id !== actorUserId && (
+                            {/* Admin ACTIVE (invite accepted) - show Disable. Pending and
+                                expired invites get no Disable/Enable — they can't sign in
+                                anyway; the fix is resending the invite. Never on your own
+                                row — the backend rejects self-disable as a second guard. */}
+                            {!user.disabledAt && user.roles === 'ADMIN' && user.id !== actorUserId && effectiveAdminStatus(user) === 'ACTIVE' && (
                               <Button
                                 size="sm"
                                 variant="destructive"

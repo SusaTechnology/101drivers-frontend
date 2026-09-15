@@ -235,6 +235,15 @@ export class AdminInviteService {
       throw new BadRequestException("This admin account is already disabled");
     }
 
+    // Lifecycle rule: Disable targets ACTIVE admins only. A pending or
+    // expired invite (email unverified) can't hold a session anyway —
+    // the fix there is resending the invite, not disabling.
+    if (!user.emailVerifiedAt) {
+      throw new BadRequestException(
+        "This admin hasn't accepted their invite yet — pending and expired invites can't be disabled. Resend the invite instead."
+      );
+    }
+
     const otherActiveAdmins = await this.prisma.user.count({
       where: {
         roles: EnumUserRoles.ADMIN,
@@ -279,8 +288,8 @@ export class AdminInviteService {
    *
    * Clears disabledAt/disabledReason and flips isActive back to true.
    * The admin keeps their email, password, and role — they sign in again
-   * exactly as before. A pending (never accepted) invite keeps working
-   * once the account is re-enabled.
+   * exactly as before. (Only verified admins can ever be disabled, so
+   * every disabled admin has working credentials once re-enabled.)
    */
   async enableAdmin(input: {
     userId: string;

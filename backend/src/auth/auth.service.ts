@@ -119,6 +119,7 @@ export class AuthService {
         email: true,
         roles: true,
         isActive: true,
+        emailVerifiedAt: true,
         fullName: true,
         password: true,
         passwordHash: true,
@@ -198,6 +199,30 @@ export class AuthService {
 
     if (!user.isActive) {
       return null;
+    }
+
+    // Admin lifecycle gate: an admin whose invite hasn't been accepted
+    // (email unverified) can NEVER sign in — whether the invite is still
+    // pending or already expired. The message distinguishes the two so
+    // the admin knows the fix (use the invite link / ask for a resend).
+    // This runs before the password check: pending invites have no
+    // password at all, so post-password messaging could never fire for
+    // them.
+    if (String(user.roles) === "ADMIN" && !user.emailVerifiedAt) {
+      const liveInvite = await this.prisma.emailVerificationToken.findFirst({
+        where: {
+          email: (user.email ?? "").toLowerCase(),
+          purpose: EnumEmailVerificationPurpose.ADMIN_INVITE,
+          verifiedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      throw new UnauthorizedException(
+        liveInvite
+          ? "This admin account hasn't been activated yet — the invitation is still pending. Use the invite link from your email or ask an administrator to resend it."
+          : "This admin account's invitation has expired — ask an administrator to resend the invite."
+      );
     }
 
     const storedHash = user.passwordHash ?? user.password;
@@ -298,12 +323,21 @@ export class AuthService {
           email: true,
           roles: true,
           isActive: true,
+          emailVerifiedAt: true,
           fullName: true,
         },
       } as any);
 
       if (!user || !user.isActive) {
         throw new UnauthorizedException("User not found or inactive");
+      }
+
+      // Same admin lifecycle gate as login — a never-activated admin
+      // (invite pending or expired) cannot hold a live session either.
+      if (String(user.roles) === "ADMIN" && !user.emailVerifiedAt) {
+        throw new UnauthorizedException(
+          "This admin account hasn't been activated yet — sign-in is blocked until the invite is accepted"
+        );
       }
 
       const roles = [String(user.roles)];

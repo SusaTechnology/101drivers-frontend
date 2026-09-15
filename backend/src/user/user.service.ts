@@ -27,6 +27,7 @@ import {
   EnumCustomerApprovalStatus,
   EnumCustomerCustomerType,
   EnumDriverStatus,
+  EnumEmailVerificationPurpose,
   EnumUserRoles,
 } from "@prisma/client";
 import { CustomerService } from "src/customer/customer.service";
@@ -657,6 +658,25 @@ async getAdminUsersSummary(): Promise<any> {
 // server-side so the query doesn't waste time scanning customer rows.
 // The response includes `availableStatuses` so the frontend can
 // disable driver-only options when role=customer is selected.
+  /**
+   * Admin account lifecycle status (Users list/detail + login gating):
+   *   DISABLED        — disabledAt set (cannot sign in)
+   *   ACTIVE          — invite accepted (email verified), sign-in allowed
+   *   PENDING_INVITE  — invited, email NOT verified, invite link still valid
+   *   INVITE_EXPIRED  — invited, email NOT verified, no valid link left
+   * Unverified admins can never sign in — the login flow rejects them with
+   * a pending-vs-expired message (auth.service), and Disable/Enable in the
+   * Users page key off this status (only ACTIVE admins can be disabled).
+   */
+  private adminInviteStatusFor(
+    user: { disabledAt: Date | null; emailVerifiedAt: Date | null },
+    hasLiveInviteToken: boolean
+  ): "ACTIVE" | "PENDING_INVITE" | "INVITE_EXPIRED" | "DISABLED" {
+    if (user.disabledAt) return "DISABLED";
+    if (user.emailVerifiedAt) return "ACTIVE";
+    return hasLiveInviteToken ? "PENDING_INVITE" : "INVITE_EXPIRED";
+  }
+
 async getAdminUsersV2(query: {
   q?: string;
   role?: string;
@@ -933,6 +953,41 @@ async getAdminUsersV2(query: {
     }),
   ]);
 
+  // ── Admin invite status for ADMIN rows ──────────────────────────
+  // Invite tokens are keyed by EMAIL (not userId), so batch-load the
+  // still-valid ADMIN_INVITE tokens for the unverified admins on this
+  // page — one extra query, no N+1. Non-admin rows get adminStatus: null.
+  const pendingAdminEmails = rows
+    .filter(
+      (r) => r.roles === EnumUserRoles.ADMIN && !r.emailVerifiedAt
+    )
+    .map((r) => r.email.toLowerCase());
+  const liveInviteEmails = new Set<string>();
+  if (pendingAdminEmails.length > 0) {
+    const liveTokens = await this.prisma.emailVerificationToken.findMany({
+      where: {
+        email: { in: pendingAdminEmails },
+        purpose: EnumEmailVerificationPurpose.ADMIN_INVITE,
+        verifiedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { email: true },
+    });
+    for (const token of liveTokens) {
+      liveInviteEmails.add(token.email.toLowerCase());
+    }
+  }
+  const rowsWithStatus = rows.map((r) => ({
+    ...r,
+    adminStatus:
+      r.roles === EnumUserRoles.ADMIN
+        ? this.adminInviteStatusFor(
+            r,
+            liveInviteEmails.has(r.email.toLowerCase())
+          )
+        : null,
+  }));
+
   // ── Build the response ──────────────────────────────────────────
   // The summary's filteredTotal always equals pagination.totalRows —
   // so the summary card + the table always match.
@@ -956,8 +1011,8 @@ async getAdminUsersV2(query: {
       // "Showing X of Y" footer should display.
       filteredTotal: total,
     },
-    // The table rows
-    rows,
+    // The table rows (ADMIN rows carry the computed adminStatus)
+    rows: rowsWithStatus,
     pagination: {
       page,
       pageSize,
@@ -1289,8 +1344,30 @@ async getAdminUserDetail(id: string): Promise<any> {
     }),
   ]);
 
+  // Admin lifecycle status for the detail header badge (null for
+  // non-admins). Pending-vs-expired needs the live invite token, so it
+  // cannot be derived on the client from emailVerifiedAt alone.
+  let adminStatus: string | null = null;
+  if (user.roles === EnumUserRoles.ADMIN) {
+    let hasLiveInvite = false;
+    if (!user.emailVerifiedAt && !user.disabledAt) {
+      const liveInvite = await this.prisma.emailVerificationToken.findFirst({
+        where: {
+          email: user.email.toLowerCase(),
+          purpose: EnumEmailVerificationPurpose.ADMIN_INVITE,
+          verifiedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      hasLiveInvite = !!liveInvite;
+    }
+    adminStatus = this.adminInviteStatusFor(user, hasLiveInvite);
+  }
+
   return {
     ...user,
+    adminStatus,
     recentAdminActions,
     recentNotifications,
     recentDeliveriesCreated,

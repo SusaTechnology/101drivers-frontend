@@ -130,7 +130,8 @@ import {
   formatDateTime,
   getInitials,
 } from '@/types/users';
-import type { AdminUserDetail, AdminUpdateUserRequest } from '@/types/users';
+import type { AdminUserDetail, AdminUpdateUserRequest, AdminInviteStatus } from '@/types/users';
+import { effectiveAdminStatus } from '@/lib/adminStatus';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 
@@ -221,6 +222,22 @@ function StatusBadge({
       {status}
     </Badge>
   );
+}
+
+// Admin lifecycle badge — same statuses and login rules as the Users
+// list: only verified, enabled admins read Active; pending / expired /
+// disabled admins cannot sign in.
+function AdminLifecycleBadge({ status }: { status: AdminInviteStatus }) {
+  if (status === 'ACTIVE') {
+    return <StatusBadge status="Active" color="emerald" icon={CheckCircle} />;
+  }
+  if (status === 'PENDING_INVITE') {
+    return <StatusBadge status="Pending invite" color="amber" icon={Send} />;
+  }
+  if (status === 'INVITE_EXPIRED') {
+    return <StatusBadge status="Invitation expired" color="rose" icon={Clock} />;
+  }
+  return <StatusBadge status="Disabled" color="rose" icon={Ban} />;
 }
 
 function PillBadge({
@@ -1164,13 +1181,22 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                     {USER_ROLE_LABELS[user.roles]}
                   </PillBadge>
 
-                  <StatusBadge
-                    status={user.isActive ? 'Active' : 'Inactive'}
-                    color={user.isActive ? 'emerald' : 'slate'}
-                    icon={user.isActive ? CheckCircle : Ban}
-                  />
+                  {user.roles === 'ADMIN' ? (
+                    // Admin lifecycle badge — same statuses and login rules
+                    // as the Users list: only verified, enabled admins read
+                    // Active; pending/expired/disabled cannot sign in.
+                    <AdminLifecycleBadge status={effectiveAdminStatus(user)} />
+                  ) : (
+                    <StatusBadge
+                      status={user.isActive ? 'Active' : 'Inactive'}
+                      color={user.isActive ? 'emerald' : 'slate'}
+                      icon={user.isActive ? CheckCircle : Ban}
+                    />
+                  )}
 
-                  {user.disabledAt && (
+                  {/* "Suspended" is customer/driver vocabulary — admins get
+                      the lifecycle badge above (Disabled), no duplicate. */}
+                  {user.disabledAt && user.roles !== 'ADMIN' && (
                     <StatusBadge status="Suspended" color="rose" icon={Ban} />
                   )}
                 </div>
