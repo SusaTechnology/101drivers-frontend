@@ -58,6 +58,8 @@ import {
   Eye,
   ArrowRight,
   AlertCircle,
+  AlertTriangle,
+  HeartPulse,
   Truck,
   CheckCircle,
   XCircle,
@@ -530,6 +532,12 @@ export default function AdminPaymentsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Link to="/admin-billing-health">
+              <Button variant="outline" size="sm" className="rounded-xl">
+                <HeartPulse className="h-3.5 w-3.5 mr-1" />
+                Billing Health
+              </Button>
+            </Link>
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => handleExport('csv')}>
               <Download className="h-3.5 w-3.5 mr-1" />
               CSV
@@ -576,6 +584,37 @@ export default function AdminPaymentsPage() {
             </button>
           ))}
         </section>
+
+        {/* Billing Health callout — failed payments on this page usually
+            mean a dealer's card is failing; the Billing Health page is
+            where those dealers are listed by name with one-click fixes. */}
+        {(metrics.CHARGE_FAILED > 0 || metrics.FAILED > 0) && (
+          <section className="mb-6">
+            <Card className="rounded-xl border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-sm font-bold text-amber-800 dark:text-amber-200">
+                      {metrics.CHARGE_FAILED + metrics.FAILED} failed{' '}
+                      {(metrics.CHARGE_FAILED + metrics.FAILED) === 1 ? 'payment' : 'payments'} on this page
+                    </div>
+                    <div className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                      Some of these dealers may already be frozen, or about to be. Billing Health lists every dealer who needs payment help — with one-click Retry / Unfreeze.
+                    </div>
+                  </div>
+                </div>
+                <Link to="/admin-billing-health" className="shrink-0">
+                  <Button size="sm" className="rounded-xl bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 dark:text-white">
+                    <HeartPulse className="w-3.5 h-3.5 mr-1" />
+                    Open Billing Health
+                    <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         {/* Total amount banner */}
         <section className="mb-6">

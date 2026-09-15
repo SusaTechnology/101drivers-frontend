@@ -589,4 +589,23 @@ export class PostpaidBillingController implements OnApplicationBootstrap {
       },
     };
   }
+
+  // ── ADMIN: billing health overview (names, not just counts) ─────
+  //
+  // Powers the admin "Billing Health" page: frozen dealers, dealers
+  // with failed charges that haven't hit the freeze threshold yet,
+  // and uncollectible remainder charges — each with business name,
+  // contact email, outstanding amounts, and card status so the admin
+  // can act (retry-charge / unfreeze are the existing per-dealer
+  // endpoints the page calls) without opening profiles one by one.
+  //
+  // Usage: GET /api/postpaid-billing/admin/billing-health
+  // Auth: admin only (defaultAuthGuard + ACGuard).
+
+  @Get("admin/billing-health")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({ summary: "Admin: dealers needing billing help, by name — frozen, failing (pre-freeze), and uncollectible" })
+  async getBillingHealth() {
+    return this.postpaidBilling.getBillingHealthOverview();
+  }
 }

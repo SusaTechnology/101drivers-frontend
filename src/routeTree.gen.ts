@@ -89,6 +89,7 @@ import { Route as AdminDealerDetailIndexRouteImport } from './routes/admin-deale
 import { Route as AdminDashboardIndexRouteImport } from './routes/admin-dashboard/index'
 import { Route as AdminContentIndexRouteImport } from './routes/admin-content/index'
 import { Route as AdminConfigIndexRouteImport } from './routes/admin-config/index'
+import { Route as AdminBillingHealthIndexRouteImport } from './routes/admin-billing-health/index'
 import { Route as AdminAuditLogsIndexRouteImport } from './routes/admin-audit-logs/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as DriverWalletRouteImport } from './routes/driver/wallet'
@@ -549,6 +550,11 @@ const AdminConfigIndexRoute = AdminConfigIndexRouteImport.update({
   path: '/admin-config/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminBillingHealthIndexRoute = AdminBillingHealthIndexRouteImport.update({
+  id: '/admin-billing-health/',
+  path: '/admin-billing-health/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAuditLogsIndexRoute = AdminAuditLogsIndexRouteImport.update({
   id: '/admin-audit-logs/',
   path: '/admin-audit-logs/',
@@ -756,6 +762,7 @@ export interface FileRoutesByFullPath {
   '/driver/wallet': typeof DriverWalletRoute
   '/about/': typeof AboutIndexRoute
   '/admin-audit-logs/': typeof AdminAuditLogsIndexRoute
+  '/admin-billing-health/': typeof AdminBillingHealthIndexRoute
   '/admin-config/': typeof AdminConfigIndexRoute
   '/admin-content/': typeof AdminContentIndexRoute
   '/admin-dashboard/': typeof AdminDashboardIndexRoute
@@ -871,6 +878,7 @@ export interface FileRoutesByTo {
   '/driver/wallet': typeof DriverWalletRoute
   '/about': typeof AboutIndexRoute
   '/admin-audit-logs': typeof AdminAuditLogsIndexRoute
+  '/admin-billing-health': typeof AdminBillingHealthIndexRoute
   '/admin-config': typeof AdminConfigIndexRoute
   '/admin-content': typeof AdminContentIndexRoute
   '/admin-dashboard': typeof AdminDashboardIndexRoute
@@ -988,6 +996,7 @@ export interface FileRoutesById {
   '/driver/wallet': typeof DriverWalletRoute
   '/about/': typeof AboutIndexRoute
   '/admin-audit-logs/': typeof AdminAuditLogsIndexRoute
+  '/admin-billing-health/': typeof AdminBillingHealthIndexRoute
   '/admin-config/': typeof AdminConfigIndexRoute
   '/admin-content/': typeof AdminContentIndexRoute
   '/admin-dashboard/': typeof AdminDashboardIndexRoute
@@ -1106,6 +1115,7 @@ export interface FileRouteTypes {
     | '/driver/wallet'
     | '/about/'
     | '/admin-audit-logs/'
+    | '/admin-billing-health/'
     | '/admin-config/'
     | '/admin-content/'
     | '/admin-dashboard/'
@@ -1221,6 +1231,7 @@ export interface FileRouteTypes {
     | '/driver/wallet'
     | '/about'
     | '/admin-audit-logs'
+    | '/admin-billing-health'
     | '/admin-config'
     | '/admin-content'
     | '/admin-dashboard'
@@ -1337,6 +1348,7 @@ export interface FileRouteTypes {
     | '/driver/wallet'
     | '/about/'
     | '/admin-audit-logs/'
+    | '/admin-billing-health/'
     | '/admin-config/'
     | '/admin-content/'
     | '/admin-dashboard/'
@@ -1433,6 +1445,7 @@ export interface RootRouteChildren {
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AboutIndexRoute: typeof AboutIndexRoute
   AdminAuditLogsIndexRoute: typeof AdminAuditLogsIndexRoute
+  AdminBillingHealthIndexRoute: typeof AdminBillingHealthIndexRoute
   AdminConfigIndexRoute: typeof AdminConfigIndexRoute
   AdminContentIndexRoute: typeof AdminContentIndexRoute
   AdminDashboardIndexRoute: typeof AdminDashboardIndexRoute
@@ -2078,6 +2091,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminConfigIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-billing-health/': {
+      id: '/admin-billing-health/'
+      path: '/admin-billing-health'
+      fullPath: '/admin-billing-health/'
+      preLoaderRoute: typeof AdminBillingHealthIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-audit-logs/': {
       id: '/admin-audit-logs/'
       path: '/admin-audit-logs'
@@ -2384,6 +2404,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   AboutIndexRoute: AboutIndexRoute,
   AdminAuditLogsIndexRoute: AdminAuditLogsIndexRoute,
+  AdminBillingHealthIndexRoute: AdminBillingHealthIndexRoute,
   AdminConfigIndexRoute: AdminConfigIndexRoute,
   AdminContentIndexRoute: AdminContentIndexRoute,
   AdminDashboardIndexRoute: AdminDashboardIndexRoute,

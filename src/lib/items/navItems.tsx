@@ -7,6 +7,7 @@ export const navItems = [
   { href: '/admin-scheduling-policy', label: 'Scheduling' },
   { href: '/admin-disputes', label: 'Disputes' },
   { href: '/admin-payments', label: 'Payments' },
+  { href: '/admin-billing-health', label: 'Billing Health' },
   { href: '/admin-insurance-reporting', label: 'Insurance' },
   { href: '/admin-reports', label: 'Reports' },
   { href: '/admin-config', label: 'Config' },

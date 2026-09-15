@@ -2153,6 +2153,312 @@ export class PostpaidBillingService {
     this.logger.log(`Retried invoice ${invoice.id} for dealer ${dealerId}`);
   }
 
+  // ─── ADMIN: FLEET BILLING HEALTH ────────────────────────────────
+
+  /**
+   * Fleet-level view for the admin "Billing Health" page — WHO needs
+   * help right now, by name. Complements GET /admin/health (which
+   * returns queue counts but no identities), so an admin no longer
+   * has to open dealer profiles one by one to find who's stuck.
+   *
+   * Three lists:
+   *   • frozenDealers — billingFrozen=true. These dealers cannot create
+   *     deliveries. Actionable via the existing per-dealer endpoints
+   *     (retry-charge / unfreeze) which the page calls inline.
+   *   • warningDealers — NOT frozen but have ≥1 CHARGE_FAILED postpaid
+   *     payment (attempt 1-2 under the graduated policy). Early
+   *     intervention here prevents the freeze entirely.
+   *   • uncollectiblePayments — remainder charges written off after 7
+   *     days of retries. The system cannot collect these automatically;
+   *     an admin must contact the dealer / invoice manually.
+   *
+   * All lists are bounded (take limits) so a pathological dataset can't
+   * make the endpoint heavy, and everything is computed in 4 bulk
+   * queries (no N+1 per dealer).
+   */
+  async getBillingHealthOverview(): Promise<{
+    frozenDealers: Array<{
+      dealerId: string;
+      businessName: string | null;
+      contactEmail: string | null;
+      billingFrozenAt: string | null;
+      billingFrozenReason: string | null;
+      hasSavedCard: boolean;
+      hasSubscription: boolean;
+      capCents: number | null;
+      outstandingCents: number;
+      outstandingDollars: number;
+      unpaidDeliveryCount: number;
+      failedPaymentCount: number;
+      lastFailureAt: string | null;
+      lastFailureCode: string | null;
+      maxAttemptCount: number | null;
+    }>;
+    warningDealers: Array<{
+      dealerId: string;
+      businessName: string | null;
+      contactEmail: string | null;
+      hasSavedCard: boolean;
+      hasSubscription: boolean;
+      capCents: number | null;
+      failedPaymentCount: number;
+      failedAmountDollars: number;
+      lastFailureAt: string | null;
+      lastFailureCode: string | null;
+      maxAttemptCount: number | null;
+    }>;
+    uncollectiblePayments: Array<{
+      paymentId: string;
+      deliveryId: string;
+      dealerId: string;
+      businessName: string | null;
+      amount: number;
+      amountDollars: number;
+      writtenOffAt: string | null;
+    }>;
+    totals: {
+      frozenCount: number;
+      warningCount: number;
+      uncollectibleCount: number;
+      frozenOutstandingCents: number;
+      frozenOutstandingDollars: number;
+    };
+  }> {
+    // ── 1. Frozen dealers (longest-frozen first — they've been blocked longest) ──
+    const frozen = await this.prisma.customer.findMany({
+      where: { billingFrozen: true },
+      select: {
+        id: true,
+        businessName: true,
+        billingFrozenAt: true,
+        billingFrozenReason: true,
+        stripeDefaultPaymentMethodId: true,
+        stripeSubscriptionId: true,
+        postpaidCreditLimitCents: true,
+        user: { select: { email: true } },
+      },
+      orderBy: { billingFrozenAt: "asc" },
+      take: 100,
+    });
+
+    // ── 2. All unpaid postpaid payments for those dealers — ONE query,
+    //      grouped in JS (avoids N+1 computeOutstandingBalanceCents calls) ──
+    const frozenIds = frozen.map((d) => d.id);
+    const frozenPayments =
+      frozenIds.length === 0
+        ? []
+        : await this.prisma.payment.findMany({
+            where: {
+              delivery: { customerId: { in: frozenIds } },
+              paymentType: EnumPaymentPaymentType.POSTPAID,
+              status: {
+                in: [
+                  EnumPaymentStatus.PENDING_STRIPE_USAGE,
+                  EnumPaymentStatus.USAGE_REPORTED,
+                  EnumPaymentStatus.CHARGE_FAILED,
+                  EnumPaymentStatus.AUTHORIZED,
+                  EnumPaymentStatus.INVOICED,
+                ],
+              },
+            },
+            select: {
+              amount: true,
+              status: true,
+              failureCode: true,
+              failedAt: true,
+              attemptCount: true,
+              delivery: { select: { customerId: true } },
+            },
+          });
+
+    interface DealerAgg {
+      outstandingCents: number;
+      unpaidDeliveryCount: number;
+      failedPaymentCount: number;
+      lastFailureAt: Date | null;
+      lastFailureCode: string | null;
+      maxAttemptCount: number;
+    }
+    const aggByDealer = new Map<string, DealerAgg>();
+    for (const p of frozenPayments) {
+      const dealerId = p.delivery.customerId;
+      const agg = aggByDealer.get(dealerId) ?? {
+        outstandingCents: 0,
+        unpaidDeliveryCount: 0,
+        failedPaymentCount: 0,
+        lastFailureAt: null,
+        lastFailureCode: null,
+        maxAttemptCount: 0,
+      };
+      agg.outstandingCents += Math.round(Number(p.amount) * 100);
+      agg.unpaidDeliveryCount += 1;
+      if (p.status === EnumPaymentStatus.CHARGE_FAILED) {
+        agg.failedPaymentCount += 1;
+        const failedAt = p.failedAt ? new Date(p.failedAt) : null;
+        if (failedAt && (!agg.lastFailureAt || failedAt > agg.lastFailureAt)) {
+          agg.lastFailureAt = failedAt;
+          agg.lastFailureCode = p.failureCode;
+        }
+        const attempt = p.attemptCount ?? 0;
+        if (attempt > agg.maxAttemptCount) agg.maxAttemptCount = attempt;
+      }
+      aggByDealer.set(dealerId, agg);
+    }
+
+    const frozenDealers = frozen.map((d) => {
+      const agg = aggByDealer.get(d.id);
+      const outstandingCents = agg?.outstandingCents ?? 0;
+      return {
+        dealerId: d.id,
+        businessName: d.businessName,
+        contactEmail: d.user?.email ?? null,
+        billingFrozenAt: d.billingFrozenAt?.toISOString() ?? null,
+        billingFrozenReason: d.billingFrozenReason,
+        hasSavedCard: Boolean(d.stripeDefaultPaymentMethodId),
+        hasSubscription: Boolean(d.stripeSubscriptionId),
+        capCents: d.postpaidCreditLimitCents,
+        outstandingCents,
+        outstandingDollars: Number((outstandingCents / 100).toFixed(2)),
+        unpaidDeliveryCount: agg?.unpaidDeliveryCount ?? 0,
+        failedPaymentCount: agg?.failedPaymentCount ?? 0,
+        lastFailureAt: agg?.lastFailureAt?.toISOString() ?? null,
+        lastFailureCode: agg?.lastFailureCode ?? null,
+        maxAttemptCount: agg?.maxAttemptCount ?? null,
+      };
+    });
+
+    // ── 3. Warning dealers — failed charges exist but the graduated
+    //      policy hasn't frozen them yet (attempt 1-2). Ordered by most
+    //      recent failure so the freshest problems surface first. ──
+    const warningPayments = await this.prisma.payment.findMany({
+      where: {
+        paymentType: EnumPaymentPaymentType.POSTPAID,
+        status: EnumPaymentStatus.CHARGE_FAILED,
+        delivery: { customer: { billingFrozen: false } },
+      },
+      select: {
+        amount: true,
+        failureCode: true,
+        failedAt: true,
+        attemptCount: true,
+        delivery: {
+          select: {
+            customer: {
+              select: {
+                id: true,
+                businessName: true,
+                stripeDefaultPaymentMethodId: true,
+                stripeSubscriptionId: true,
+                postpaidCreditLimitCents: true,
+                user: { select: { email: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { failedAt: "desc" },
+      take: 300,
+    });
+
+    interface WarningAgg {
+      customer: (typeof warningPayments)[number]["delivery"]["customer"];
+      failedPaymentCount: number;
+      failedAmountCents: number;
+      lastFailureAt: Date | null;
+      lastFailureCode: string | null;
+      maxAttemptCount: number;
+    }
+    const warningByDealer = new Map<string, WarningAgg>();
+    for (const p of warningPayments) {
+      const customer = p.delivery.customer;
+      if (!customer) continue;
+      const agg = warningByDealer.get(customer.id) ?? {
+        customer,
+        failedPaymentCount: 0,
+        failedAmountCents: 0,
+        lastFailureAt: null,
+        lastFailureCode: null,
+        maxAttemptCount: 0,
+      };
+      agg.failedPaymentCount += 1;
+      agg.failedAmountCents += Math.round(Number(p.amount) * 100);
+      const failedAt = p.failedAt ? new Date(p.failedAt) : null;
+      if (failedAt && (!agg.lastFailureAt || failedAt > agg.lastFailureAt)) {
+        agg.lastFailureAt = failedAt;
+        agg.lastFailureCode = p.failureCode;
+      }
+      const attempt = p.attemptCount ?? 0;
+      if (attempt > agg.maxAttemptCount) agg.maxAttemptCount = attempt;
+      warningByDealer.set(customer.id, agg);
+    }
+
+    const warningDealers = Array.from(warningByDealer.values())
+      .slice(0, 50)
+      .map((agg) => ({
+        dealerId: agg.customer.id,
+        businessName: agg.customer.businessName,
+        contactEmail: agg.customer.user?.email ?? null,
+        hasSavedCard: Boolean(agg.customer.stripeDefaultPaymentMethodId),
+        hasSubscription: Boolean(agg.customer.stripeSubscriptionId),
+        capCents: agg.customer.postpaidCreditLimitCents,
+        failedPaymentCount: agg.failedPaymentCount,
+        failedAmountDollars: Number((agg.failedAmountCents / 100).toFixed(2)),
+        lastFailureAt: agg.lastFailureAt?.toISOString() ?? null,
+        lastFailureCode: agg.lastFailureCode,
+        maxAttemptCount: agg.maxAttemptCount ?? null,
+      }));
+
+    // ── 4. Uncollectible remainders — written off after the 7-day retry
+    //      window; only an admin can recover these now. ──
+    const uncollectible = await this.prisma.payment.findMany({
+      where: { remainderChargeStatus: "UNCOLLECTIBLE" },
+      select: {
+        id: true,
+        amount: true,
+        createdAt: true,
+        deliveryId: true,
+        delivery: {
+          select: {
+            customerId: true,
+            customer: { select: { businessName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+
+    const uncollectiblePayments = uncollectible.map((p) => ({
+      paymentId: p.id,
+      deliveryId: p.deliveryId,
+      dealerId: p.delivery.customerId,
+      businessName: p.delivery.customer?.businessName ?? null,
+      amount: p.amount,
+      amountDollars: Number((Number(p.amount)).toFixed(2)),
+      writtenOffAt: p.createdAt.toISOString(),
+    }));
+
+    const frozenOutstandingCents = frozenDealers.reduce(
+      (sum, d) => sum + d.outstandingCents,
+      0,
+    );
+
+    return {
+      frozenDealers,
+      warningDealers,
+      uncollectiblePayments,
+      totals: {
+        frozenCount: frozenDealers.length,
+        warningCount: warningDealers.length,
+        uncollectibleCount: uncollectiblePayments.length,
+        frozenOutstandingCents,
+        frozenOutstandingDollars: Number(
+          (frozenOutstandingCents / 100).toFixed(2),
+        ),
+      },
+    };
+  }
+
   // ─── DEALER-SCOPED STATUS ──────────────────────────────────────
 
   /**
