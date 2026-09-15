@@ -6,9 +6,10 @@
 // this file only puts those actions one click away from a fleet-wide
 // list, so the admin doesn't have to open each profile to act.
 //
-// Unfreeze uses a two-click confirm (the button flips to "Confirm" for
-// a few seconds) — unfreezing bypasses the failed-payment protection,
-// so a stray click on a list row shouldn't do it silently.
+// Unfreeze opens a confirm dialog (like every other destructive admin
+// action in the app) — unfreezing bypasses the failed-payment
+// protection, so it should never happen through a stray double-click
+// on a list row.
 
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
@@ -25,6 +26,14 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useDataMutation } from '@/lib/tanstack/dataQuery'
 import { cn } from '@/lib/utils'
 
@@ -200,7 +209,7 @@ export function FrozenDealerRow({
   const [pendingAction, setPendingAction] = useState<'retry' | 'unfreeze' | null>(
     null,
   )
-  const [confirmingUnfreeze, setConfirmingUnfreeze] = useState(false)
+  const [unfreezeDialogOpen, setUnfreezeDialogOpen] = useState(false)
 
   const retryMutation = useRetryCharge(dealer.dealerId, refetch)
 
@@ -229,16 +238,11 @@ export function FrozenDealerRow({
   }
 
   const handleUnfreeze = async () => {
-    // Two-click confirm: first click arms the button, second click fires.
-    if (!confirmingUnfreeze) {
-      setConfirmingUnfreeze(true)
-      setTimeout(() => setConfirmingUnfreeze(false), 4000)
-      return
-    }
-    setConfirmingUnfreeze(false)
+    // Fired from the confirm dialog — the dialog itself is the guard.
     setPendingAction('unfreeze')
     try {
       await unfreezeMutation.mutateAsync({ dealerId: dealer.dealerId })
+      setUnfreezeDialogOpen(false)
     } finally {
       setPendingAction(null)
     }
@@ -341,12 +345,8 @@ export function FrozenDealerRow({
           <Button
             size="sm"
             variant="outline"
-            className={cn(
-              'rounded-xl flex-1',
-              confirmingUnfreeze &&
-                'border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
-            )}
-            onClick={handleUnfreeze}
+            className="rounded-xl flex-1"
+            onClick={() => setUnfreezeDialogOpen(true)}
             disabled={pendingAction !== null}
             title="Clear the frozen flag after confirming the dealer fixed their card"
           >
@@ -355,9 +355,7 @@ export function FrozenDealerRow({
             ) : (
               <Unlock className="w-4 h-4" />
             )}
-            <span className="ml-1">
-              {confirmingUnfreeze ? 'Confirm unfreeze?' : 'Unfreeze'}
-            </span>
+            <span className="ml-1">Unfreeze</span>
           </Button>
         </div>
       </div>
@@ -368,6 +366,81 @@ export function FrozenDealerRow({
           {dealer.billingFrozenReason}
         </p>
       )}
+
+      {/* Unfreeze confirm dialog — same pattern as every other destructive
+          admin action. States the consequences + the money facts so the
+          decision is made with context, not on faith. */}
+      <Dialog open={unfreezeDialogOpen} onOpenChange={setUnfreezeDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <Unlock className="w-5 h-5 text-amber-600" />
+              Unfreeze {dealer.businessName || 'this dealer'}?
+            </DialogTitle>
+            <DialogDescription>
+              They will be able to create deliveries again immediately. If
+              their card is still failing, the next weekly invoice will
+              freeze the account again — unfreezing does not collect what
+              they owe.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                Outstanding
+              </div>
+              <div className="text-lg font-black text-slate-900 dark:text-white mt-0.5">
+                {formatMoney(dealer.outstandingDollars)}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {dealer.unpaidDeliveryCount} unpaid delivery
+                {dealer.unpaidDeliveryCount === 1 ? '' : 's'}
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                Card on file
+              </div>
+              <div
+                className={cn(
+                  'text-sm font-black mt-1.5',
+                  dealer.hasSavedCard
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-amber-600 dark:text-amber-400',
+                )}
+              >
+                {dealer.hasSavedCard ? 'Yes' : 'No card'}
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {dealer.hasSavedCard
+                  ? 'retry can charge it'
+                  : 'retry will fail until they add one'}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setUnfreezeDialogOpen(false)}
+              disabled={pendingAction === 'unfreeze'}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUnfreeze}
+              disabled={pendingAction === 'unfreeze'}
+              className="bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 dark:text-white"
+            >
+              {pendingAction === 'unfreeze' && (
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
+              )}
+              Unfreeze dealer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
