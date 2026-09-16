@@ -96,6 +96,44 @@ export interface AdminCustomerEmbed {
   updatedAt: string;
 }
 
+// ==================== DRIVER REFERRAL (referredBy) ====================
+// Single source for the referredBy shape the backend returns on driver
+// payloads. The users-list embed (AdminDriverEmbed) returns the summary
+// subset; the driver detail payload (AdminUserDriverDetail) returns the
+// full shape, which extends the summary. Define the shape HERE — never
+// inline a copy at the usage site (a past drift between the two copies
+// caused a runtime crash when referrer was null).
+
+export interface DriverReferredBySummary {
+  id: string;
+  referralCode: string;
+  status: ReferralStatus;
+  // referrer itself can be null: Referral.referrerId became nullable in
+  // referral v2 (customer referrers) and the FK is ON DELETE SET NULL, so
+  // deleting the referring driver leaves the referral row behind with no
+  // referrer. Prisma then serializes referrer as null.
+  referrer: {
+    id: string;
+    user: { fullName: string | null };
+  } | null;
+}
+
+export interface DriverReferredByFull extends DriverReferredBySummary {
+  // Detail payload also includes the referrer's email.
+  referrer: {
+    id: string;
+    user: { fullName: string | null; email: string | null };
+  } | null;
+  tripsCompleted: number;
+  requiredDeliveries: number;
+  rewardTrigger: 'ON_APPROVED' | 'ON_DELIVERIES_COMPLETED';
+  expiresAt: string | null;
+  referredGetsReward: boolean;
+  referredRewardAmount: number | null;
+  referredRewardPaidAt: string | null;
+  createdAt: string;
+}
+
 export interface AdminDriverEmbed {
   id: string;
   status: DriverStatus;
@@ -112,19 +150,7 @@ export interface AdminDriverEmbed {
   updatedAt: string;
   // Referral relationship — present if this driver was referred by another driver.
   // Null if the driver signed up without a referral code.
-  // referrer itself can be null: Referral.referrerId became nullable in
-  // referral v2 (customer referrers) and the FK is ON DELETE SET NULL, so
-  // deleting the referring driver leaves the referral row behind with no
-  // referrer. Prisma then serializes referrer as null.
-  referredBy: {
-    id: string;
-    referralCode: string;
-    status: ReferralStatus;
-    referrer: {
-      id: string;
-      user: { fullName: string | null };
-    } | null;
-  } | null;
+  referredBy: DriverReferredBySummary | null;
 }
 
 // ==================== ADMIN USERS LIST RESPONSE ====================
@@ -379,26 +405,7 @@ export interface AdminUserDriverDetail {
   alerts: DriverAlertsDetail | null;
   // Referral relationship — present if this driver was referred by another driver.
   // Null if the driver signed up without a referral code.
-  // referrer itself can be null — same reason as in AdminUserRow: the
-  // referrerId column is nullable (customer referrals) and ON DELETE SET NULL
-  // strips it when the referring driver is deleted.
-  referredBy: {
-    id: string;
-    referralCode: string;
-    status: ReferralStatus;
-    tripsCompleted: number;
-    requiredDeliveries: number;
-    rewardTrigger: 'ON_APPROVED' | 'ON_DELIVERIES_COMPLETED';
-    expiresAt: string | null;
-    referredGetsReward: boolean;
-    referredRewardAmount: number | null;
-    referredRewardPaidAt: string | null;
-    createdAt: string;
-    referrer: {
-      id: string;
-      user: { fullName: string | null; email: string | null };
-    } | null;
-  } | null;
+  referredBy: DriverReferredByFull | null;
   _count: {
     assignments: number;
     notifications: number;
