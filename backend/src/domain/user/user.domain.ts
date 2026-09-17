@@ -25,6 +25,11 @@ export class UserDomain extends BaseDomain<
     phone: true,
     roles: true,
     isActive: true,
+    // Required by the JWT strategy's per-request DB re-read: without it,
+    // enrichSelectFields acts as a RESTRICTIVE select and request.user
+    // never carries the flag — SuperAdminGuard would 403 even real
+    // super admins (see src/auth/super-admin.ts).
+    isSuperAdmin: true,
     disabledAt: true,
     disabledReason: true,
     emailVerifiedAt: true,

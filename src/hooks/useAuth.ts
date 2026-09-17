@@ -6,9 +6,19 @@ interface LoginResponse {
   accessToken?: string;
   refreshToken?: string;
   id: string;
+  profileId?: string | null;
   username: string;
+  email?: string | null;
   fullName?: string | null;
   roles: string[];
+  customerApprovalStatus?: string | null;
+  driverStatus?: string | null;
+  onboardingCompleted?: boolean;
+  onboardingToken?: string | null;
+  isActive?: boolean;
+  // Elevated-admin flag (ADMIN rows only) — must be stored or the
+  // super-admin UI gates stay false for real super admins.
+  isSuperAdmin?: boolean;
 }
 
 interface LoginPayload {
@@ -25,19 +35,13 @@ export function useLogin() {
     fetchWithoutRefresh: true,
     publicEndpoint: true, // Skip token refresh on 401 - this is a public endpoint
     onSuccess: (data) => {
-      setUser({
-        id: data.id,
-        username: data.username,
-        fullName: data.fullName,
-        roles: data.roles,
-      });
-
-      queryClient.setQueryData(["currentUser"], {
-        id: data.id,
-        username: data.username,
-        fullName: data.fullName,
-        roles: data.roles,
-      });
+      // Store the FULL login payload (minus tokens). Hand-picking fields
+      // silently dropped newer ones like isSuperAdmin — the super-admin
+      // gates stayed false even for real super admins until they
+      // happened to land on a page that re-derives the flag.
+      const { accessToken: _accessToken, refreshToken: _refreshToken, ...user } = data;
+      setUser(user);
+      queryClient.setQueryData(["currentUser"], user);
     },
   });
 }

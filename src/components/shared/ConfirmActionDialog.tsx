@@ -48,11 +48,11 @@ const TONE_STYLES: Record<
     confirmVariant: 'default',
     confirmClass: 'rounded-xl bg-emerald-600 hover:bg-emerald-700',
   },
-  /** Violet callout + violet button — elevating into the super-admin tier. */
+  /** Indigo callout + indigo button — elevating into the super-admin tier. */
   accent: {
-    callout: 'bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300',
+    callout: 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300',
     confirmVariant: 'default',
-    confirmClass: 'rounded-xl bg-violet-600 hover:bg-violet-700 text-white',
+    confirmClass: 'rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white',
   },
   /** Slate callout + destructive button — downgrades/neutral changes. */
   neutral: {

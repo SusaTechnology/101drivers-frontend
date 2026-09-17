@@ -1290,7 +1290,7 @@ export default function AdminUsersPage() {
                             {isCurrentUserSuperAdmin && user.roles === 'ADMIN' && !user.isSuperAdmin && user.id !== actorUserId && effectiveAdminStatus(user) === 'ACTIVE' && (
                               <Button
                                 size="sm"
-                                className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg"
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg"
                                 onClick={() => openDialog('promote-admin', user)}
                                 title="Grant elevated powers: disable admins, manage super admins"
                               >

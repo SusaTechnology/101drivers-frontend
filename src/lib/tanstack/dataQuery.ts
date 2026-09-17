@@ -371,6 +371,9 @@ async function refreshAccessToken(): Promise<string> {
         onboardingCompleted: data.onboardingCompleted ?? prev?.onboardingCompleted ?? false,
         onboardingToken: data.onboardingToken ?? null,
         isActive: data.isActive,
+        // Keep the elevated-admin flag fresh across token refreshes;
+        // fallback preserves the value stored at login.
+        isSuperAdmin: data.isSuperAdmin ?? prev?.isSuperAdmin ?? false,
       });
     }
 
