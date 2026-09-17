@@ -315,9 +315,9 @@ export class AdminInviteService {
     actorUserId?: string | null;
     actorIsSuperAdmin?: boolean;
   }): Promise<any> {
-    // 'admins.enable' is open to every admin today (super-admins.enable
-    // is false in the registry). Flipping that one entry restricts this
-    // action with zero further code changes.
+    // 'admins.enable' is super-admin-only in the registry — a regular
+    // admin reaching this point is rejected with 403 (SuperAdminGuard
+    // already rejected the request earlier; this is defense in depth).
     this.assertSuperAdminCapability(input.actorIsSuperAdmin, "admins.enable");
 
     const user = await this.prisma.user.findUnique({

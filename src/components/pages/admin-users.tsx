@@ -1256,8 +1256,11 @@ export default function AdminUsersPage() {
                                 <Ban className="w-3.5 h-3.5 mr-1" /> Disable
                               </Button>
                             )}
-                            {/* Admin disabled - show Enable */}
-                            {user.disabledAt && user.roles === 'ADMIN' && (
+                            {/* Admin disabled - show Enable for SUPER ADMINS ONLY.
+                                Only a super admin may undo a disable decision —
+                                regular admins don't see the button, and the server
+                                rejects them with 403 even if they craft the request. */}
+                            {isCurrentUserSuperAdmin && user.disabledAt && user.roles === 'ADMIN' && (
                               <Button
                                 size="sm"
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
@@ -1441,7 +1444,7 @@ export default function AdminUsersPage() {
               {dialogAction === 'invite-driver' && `Invite ${selectedUser?.fullName} to complete their driver application? They will receive an email with instructions.`}
               {dialogAction === 'resend-invite-driver' && `Resend the invitation email to ${selectedUser?.email}? A new onboarding link will be generated.`}
               {dialogAction === 'resend-admin-invite' && `Resend the setup link to ${selectedUser?.email}? The previous link will stop working and a new one (valid 48 hours) will be sent.`}
-              {dialogAction === 'disable-admin' && `Disable ${selectedUser?.fullName}'s administrator account? They will be signed out immediately and cannot sign in until another admin re-enables them.`}
+              {dialogAction === 'disable-admin' && `Disable ${selectedUser?.fullName}'s administrator account? They will be signed out immediately and cannot sign in until a super admin re-enables them.`}
               {dialogAction === 'promote-admin' && `Promote ${selectedUser?.fullName} to super admin? They will be able to disable administrators and manage the super-admin tier.`}
               {dialogAction === 'demote-admin' && `Downgrade ${selectedUser?.fullName} to a regular admin? They keep full admin access but lose the elevated actions (disabling admins, managing super admins).`}
               {dialogAction === 'enable-admin' && `Restore ${selectedUser?.fullName}'s administrator account? They will be able to sign in again with their existing password.`}

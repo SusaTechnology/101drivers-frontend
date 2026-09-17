@@ -96,7 +96,11 @@ export class AdminInviteController {
 
   @common.Post("users/:id/admin-enable")
   @swagger.ApiOkResponse({ type: Object })
-  @common.UseGuards(DefaultAuthGuard, AdminGuard)
+  // Super-admin-only (src/auth/super-admin.ts): only a super admin may
+  // undo a disable decision — regular admins cannot restore each other.
+  // SuperAdminGuard rejects before the service; the service asserts the
+  // capability again as defense in depth.
+  @common.UseGuards(DefaultAuthGuard, AdminGuard, SuperAdminGuard)
   async enableAdmin(
     @common.Param("id") id: string,
     @common.Body() body: UserAdminEnableBodyDto,

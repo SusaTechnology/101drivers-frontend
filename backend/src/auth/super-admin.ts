@@ -22,8 +22,9 @@
 export const SUPER_ADMIN_ONLY = {
   /** Disable an administrator (kills sessions + blocks sign-in). */
   "admins.disable": true,
-  /** Re-enable a disabled administrator. */
-  "admins.enable": false,
+  /** Re-enable a disabled administrator (super admins only — regular
+   *  admins must not restore each other after a super-admin decision). */
+  "admins.enable": true,
   /** Invite a new administrator by email. */
   "admins.invite": false,
   /** Resend an admin's setup link. */
