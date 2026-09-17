@@ -23,6 +23,8 @@ import type {
   ResendAdminInviteRequest,
   DisableAdminRequest,
   EnableAdminRequest,
+  PromoteAdminRequest,
+  DemoteAdminRequest,
 } from '@/types/users';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -344,6 +346,33 @@ export function useDisableAdmin() {
 export function useEnableAdmin() {
   return useDataMutation<AdminUserDetail, EnableAdminRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-enable`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}
+
+/**
+ * Hook for raising an admin to super admin.
+ * SUPER-ADMIN-ONLY — regular admins get a 403 from the server.
+ * POST /api/users/:id/admin-promote
+ */
+export function usePromoteAdmin() {
+  return useDataMutation<AdminUserDetail, PromoteAdminRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-promote`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}
+
+/**
+ * Hook for downgrading a super admin to a plain admin.
+ * SUPER-ADMIN-ONLY; the server refuses self-demote and the
+ * last-remaining-super-admin demote.
+ * POST /api/users/:id/admin-demote
+ */
+export function useDemoteAdmin() {
+  return useDataMutation<AdminUserDetail, DemoteAdminRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/admin-demote`,
     method: 'POST',
     invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
   });

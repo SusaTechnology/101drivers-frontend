@@ -1,0 +1,11 @@
+-- Super-admin flag for the admin team hierarchy.
+--
+-- isSuperAdmin marks administrators with elevated capabilities (disable
+-- admins, promote/demote super admins; more may follow). The flag is
+-- ADDITIVE — super admins keep roles=ADMIN, so every existing admin
+-- check (AdminGuard, login routing, adminStatus) keeps working unchanged.
+--
+-- The FIRST super admin cannot be created through the API (no super
+-- admin exists yet to approve the promotion). Bootstrap it with:
+--   cd backend && bun scripts/set-superadmin.ts admin@example.com
+ALTER TABLE "User" ADD COLUMN "isSuperAdmin" BOOLEAN NOT NULL DEFAULT false;

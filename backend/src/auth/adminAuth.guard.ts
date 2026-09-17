@@ -41,3 +41,31 @@ export class AdminGuard implements CanActivate {
     return true;
   }
 }
+
+/**
+ * Elevated gate for super-admin-only endpoints (disable / promote /
+ * demote admins today — see src/auth/super-admin.ts for the registry).
+ *
+ * Must run AFTER DefaultAuthGuard (which populates request.user) and is
+ * used alongside AdminGuard: super admins are admins first. The JWT
+ * strategy re-reads the user from the DB on EVERY request and includes
+ * isSuperAdmin, so granting or revoking the flag takes effect on the
+ * actor's very next request — no token invalidation needed.
+ *
+ * The service layer additionally calls assertSuperAdminCapability(),
+ * so flipping an entry in SUPER_ADMIN_ONLY restricts the action even
+ * without touching guards.
+ */
+@Injectable()
+export class SuperAdminGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    const user = request?.user;
+
+    if (!user || user.isSuperAdmin !== true) {
+      throw new ForbiddenException("Super admin access required");
+    }
+
+    return true;
+  }
+}

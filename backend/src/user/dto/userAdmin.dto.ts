@@ -324,3 +324,30 @@ export class UserAdminEnableBodyDto {
   @IsString()
   actorUserId?: string | null;
 }
+
+/**
+ * Body for POST /api/users/:id/admin-promote.
+ * Raises an active administrator to super admin (User.isSuperAdmin=true).
+ * Super-admin-only — see src/auth/super-admin.ts. The server takes the
+ * actor identity from the JWT (request.user), never from the body.
+ */
+export class UserAdminPromoteBodyDto {
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+}
+
+/**
+ * Body for POST /api/users/:id/admin-demote.
+ * Downgrades a super admin to a plain admin (User.isSuperAdmin=false).
+ * Super-admin-only — see src/auth/super-admin.ts. The server refuses to
+ * demote the acting super admin themselves or the last remaining super
+ * admin, so the system always keeps at least one.
+ */
+export class UserAdminDemoteBodyDto {
+  @swagger.ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  actorUserId?: string | null;
+}

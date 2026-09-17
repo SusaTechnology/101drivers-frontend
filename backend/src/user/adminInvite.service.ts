@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -14,6 +15,10 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { PasswordService } from "../auth/password.service";
 import { MailService } from "../common/mail/mail.service";
+import {
+  requiresSuperAdmin,
+  type SuperAdminCapability,
+} from "../auth/super-admin";
 
 /**
  * Admin invite flow.
@@ -53,7 +58,9 @@ export class AdminInviteService {
     fullName: string;
     phone?: string | null;
     actorUserId?: string | null;
+    actorIsSuperAdmin?: boolean;
   }): Promise<any> {
+    this.assertSuperAdminCapability(input.actorIsSuperAdmin, "admins.invite");
     const email = this.normalizeEmail(input.email);
     const fullName = (input.fullName ?? "").trim();
 
@@ -142,7 +149,13 @@ export class AdminInviteService {
   async resendInvite(input: {
     userId: string;
     actorUserId?: string | null;
+    actorIsSuperAdmin?: boolean;
   }): Promise<any> {
+    this.assertSuperAdminCapability(
+      input.actorIsSuperAdmin,
+      "admins.resendInvite"
+    );
+
     const user = await this.prisma.user.findUnique({
       where: { id: input.userId },
     });
@@ -209,8 +222,14 @@ export class AdminInviteService {
   async disableAdmin(input: {
     userId: string;
     actorUserId?: string | null;
+    actorIsSuperAdmin?: boolean;
     reason?: string | null;
   }): Promise<any> {
+    // Super-admin-only (see src/auth/super-admin.ts). The controller's
+    // SuperAdminGuard rejects earlier; this is the service-level second
+    // gate so internal callers cannot bypass it.
+    this.assertSuperAdminCapability(input.actorIsSuperAdmin, "admins.disable");
+
     const user = await this.prisma.user.findUnique({
       where: { id: input.userId },
     });
@@ -294,7 +313,13 @@ export class AdminInviteService {
   async enableAdmin(input: {
     userId: string;
     actorUserId?: string | null;
+    actorIsSuperAdmin?: boolean;
   }): Promise<any> {
+    // 'admins.enable' is open to every admin today (super-admins.enable
+    // is false in the registry). Flipping that one entry restricts this
+    // action with zero further code changes.
+    this.assertSuperAdminCapability(input.actorIsSuperAdmin, "admins.enable");
+
     const user = await this.prisma.user.findUnique({
       where: { id: input.userId },
     });
@@ -328,6 +353,146 @@ export class AdminInviteService {
       actorUserId: input.actorUserId ?? null,
       targetUserId: user.id,
       action: "Admin account re-enabled",
+    });
+
+    return this.getAdminUserDetail(user.id);
+  }
+
+  // ==================== SUPER ADMIN (promote / demote) ====================
+
+  /**
+   * Raise an administrator to super admin (User.isSuperAdmin=true).
+   *
+   * Super-admin-only — see src/auth/super-admin.ts. Promotion targets
+   * ACTIVE, verified admins only: a pending/expired invite can't sign in
+   * yet (fix = resend invite) and a disabled account must be re-enabled
+   * before it can hold elevated powers. Self-promotion is a no-op guard
+   * (a super admin already holds the flag).
+   */
+  async promoteAdmin(input: {
+    userId: string;
+    actorUserId?: string | null;
+    actorIsSuperAdmin?: boolean;
+  }): Promise<any> {
+    this.assertSuperAdminCapability(input.actorIsSuperAdmin, "admins.promote");
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (user.roles !== EnumUserRoles.ADMIN) {
+      throw new BadRequestException(
+        "Only admin accounts can be promoted to super admin"
+      );
+    }
+
+    if (user.isSuperAdmin) {
+      throw new BadRequestException(
+        "This admin is already a super admin"
+      );
+    }
+
+    if (!user.isActive || user.disabledAt) {
+      throw new BadRequestException(
+        "Re-enable this admin before promoting — disabled accounts can't hold super-admin powers"
+      );
+    }
+
+    // Same lifecycle rule as Disable: only admins whose invite was
+    // accepted (email verified) can be promoted.
+    if (!user.emailVerifiedAt) {
+      throw new BadRequestException(
+        "This admin hasn't accepted their invite yet — pending and expired invites can't be promoted. Resend the invite instead."
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { isSuperAdmin: true },
+    });
+
+    this.logger.log(
+      `Admin promoted to super admin: ${user.email} (${user.id}) by actor ${input.actorUserId ?? "unknown"}`
+    );
+
+    await this.writeAudit({
+      actorUserId: input.actorUserId ?? null,
+      targetUserId: user.id,
+      action: "Admin promoted to super admin",
+    });
+
+    return this.getAdminUserDetail(user.id);
+  }
+
+  /**
+   * Downgrade a super admin to a plain admin (User.isSuperAdmin=false).
+   *
+   * Super-admin-only — see src/auth/super-admin.ts. Two hard rails:
+   * the acting super admin cannot demote themselves, and the LAST
+   * remaining super admin cannot be demoted — otherwise the system
+   * could end up with nobody able to disable admins or manage the
+   * hierarchy, recoverable only by touching the database directly.
+   */
+  async demoteAdmin(input: {
+    userId: string;
+    actorUserId?: string | null;
+    actorIsSuperAdmin?: boolean;
+  }): Promise<any> {
+    this.assertSuperAdminCapability(input.actorIsSuperAdmin, "admins.demote");
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: input.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (user.roles !== EnumUserRoles.ADMIN) {
+      throw new BadRequestException("Only admin accounts can be demoted here");
+    }
+
+    if (!user.isSuperAdmin) {
+      throw new BadRequestException("This admin is not a super admin");
+    }
+
+    if (input.actorUserId && input.actorUserId === user.id) {
+      throw new BadRequestException(
+        "You cannot demote your own super-admin account — ask another super admin"
+      );
+    }
+
+    const otherSuperAdmins = await this.prisma.user.count({
+      where: {
+        roles: EnumUserRoles.ADMIN,
+        isSuperAdmin: true,
+        id: { not: user.id },
+      },
+    });
+
+    if (otherSuperAdmins === 0) {
+      throw new BadRequestException(
+        "This is the last super admin — promote another admin first, or the system loses its super-admin capability"
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { isSuperAdmin: false },
+    });
+
+    this.logger.log(
+      `Super admin demoted to admin: ${user.email} (${user.id}) by actor ${input.actorUserId ?? "unknown"}`
+    );
+
+    await this.writeAudit({
+      actorUserId: input.actorUserId ?? null,
+      targetUserId: user.id,
+      action: "Super admin demoted to admin",
     });
 
     return this.getAdminUserDetail(user.id);
@@ -554,6 +719,23 @@ export class AdminInviteService {
     }
   }
 
+  /**
+   * Enforce the super-admin capability registry (src/auth/super-admin.ts).
+   *
+   * Runs on EVERY admin action with its capability key: when the entry
+   * is true the actor must carry isSuperAdmin, otherwise a 403 is thrown.
+   * Entries set to false pass for any admin — flipping an entry to true
+   * is the whole change needed to restrict enable/invite/resend later.
+   */
+  private assertSuperAdminCapability(
+    actorIsSuperAdmin: boolean | undefined,
+    capability: SuperAdminCapability
+  ): void {
+    if (requiresSuperAdmin(capability) && actorIsSuperAdmin !== true) {
+      throw new ForbiddenException("Super admin access required");
+    }
+  }
+
   /** Same policy as the customer/driver reset-password form. */
   private assertPasswordPolicy(password: string): void {
     const checks: [boolean, string][] = [
@@ -584,6 +766,7 @@ export class AdminInviteService {
         phone: true,
         roles: true,
         isActive: true,
+        isSuperAdmin: true,
         disabledAt: true,
         disabledReason: true,
         emailVerifiedAt: true,

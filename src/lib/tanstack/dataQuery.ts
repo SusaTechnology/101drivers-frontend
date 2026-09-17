@@ -32,6 +32,10 @@ let currentUser: {
   onboardingToken?: string | null;
   // User active status
   isActive?: boolean;
+  // Elevated-admin flag (ADMIN rows only). Sent fresh from the login /
+  // refresh response; gates the super-admin actions on the Users page.
+  // The server re-verifies on every request — this only drives the UI.
+  isSuperAdmin?: boolean;
 } | null = null;
 
 export function getAccessToken(): string | null {

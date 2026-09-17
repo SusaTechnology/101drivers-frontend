@@ -27,6 +27,7 @@ model User {
   fullName                    String?
   id                          String                  @id @default(cuid())
   isActive                    Boolean                 @default(true)
+  isSuperAdmin                Boolean                 @default(false)
   lastLoginAt                 DateTime?
   notifEvents                 NotificationEvent[]      @relation("NotificationActor")
   notifEventsReceived         NotificationEvent[]      @relation("NotificationRecipient")

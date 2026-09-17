@@ -60,8 +60,11 @@ import {
   useResendAdminInvite,
   useDisableAdmin,
   useEnableAdmin,
+  usePromoteAdmin,
+  useDemoteAdmin,
   getActorUserId,
 } from '@/hooks/useAdminUsers';
+import { getUser } from '@/lib/tanstack/dataQuery';
 import type {
   AdminUserRow,
   AdminUsersQueryParams,
@@ -98,6 +101,8 @@ import {
   Truck,
   Store,
   Shield,
+  ShieldCheck,
+  ShieldOff,
   AlertCircle,
   Gift,
   Clock,
@@ -368,6 +373,10 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 export default function AdminUsersPage() {
   const { actionItems, signOut } = useAdminActions();
   const actorUserId = getActorUserId();
+  // Super-admin gate for the elevated row actions (Disable / Make Super
+  // Admin / Downgrade). The server re-verifies on every request — this
+  // only decides which buttons render.
+  const isCurrentUserSuperAdmin = getUser()?.isSuperAdmin === true;
   const navigate = useNavigate();
 
   // ==================== FILTER STATE (V2 — simplified) ====================
@@ -384,7 +393,7 @@ export default function AdminUsersPage() {
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver' | 'resend-admin-invite' | 'disable-admin' | 'enable-admin'>('approve-customer');
+  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver' | 'resend-admin-invite' | 'disable-admin' | 'enable-admin' | 'promote-admin' | 'demote-admin'>('approve-customer');
   const [selectedUser, setSelectedUser] = useState<AdminUserRow | null>(null);
 
   // Invite Admin Dialog State
@@ -436,6 +445,8 @@ export default function AdminUsersPage() {
   const inviteAdminMutation = useInviteAdminUser();
   const resendAdminInviteMutation = useResendAdminInvite();
   const disableAdminMutation = useDisableAdmin();
+  const promoteAdminMutation = usePromoteAdmin();
+  const demoteAdminMutation = useDemoteAdmin();
   const enableAdminMutation = useEnableAdmin();
 
   // ==================== FORMS ====================
@@ -712,6 +723,44 @@ export default function AdminUsersPage() {
       }
     );
   }, [selectedUser, actorUserId, enableAdminMutation, closeDialog]);
+
+  const handlePromoteAdmin = useCallback(() => {
+    if (!selectedUser || !actorUserId) return;
+    promoteAdminMutation.mutate(
+      { pathParams: { id: selectedUser.id }, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Promoted to super admin', {
+            description: `${selectedUser.email} now holds the elevated actions: disabling admins and managing super admins.`,
+          });
+          closeDialog();
+        },
+        onError: (error: any) =>
+          toast.error('Failed to promote admin', {
+            description: error?.message || 'Please try again.',
+          }),
+      }
+    );
+  }, [selectedUser, actorUserId, promoteAdminMutation, closeDialog]);
+
+  const handleDemoteAdmin = useCallback(() => {
+    if (!selectedUser || !actorUserId) return;
+    demoteAdminMutation.mutate(
+      { pathParams: { id: selectedUser.id }, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Downgraded to admin', {
+            description: `${selectedUser.email} is now a regular administrator.`,
+          });
+          closeDialog();
+        },
+        onError: (error: any) =>
+          toast.error('Failed to downgrade super admin', {
+            description: error?.message || 'Please try again.',
+          }),
+      }
+    );
+  }, [selectedUser, actorUserId, demoteAdminMutation, closeDialog]);
 
   const handlePageChange = useCallback((newPage: number) => {
     setPage(newPage);
@@ -1028,6 +1077,18 @@ export default function AdminUsersPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-medium text-sm">{user.fullName}</span>
+                                {/* Super Admin badge — marks elevated administrators. Shown to
+                                    everyone so regular admins understand why they have fewer
+                                    actions on these rows. */}
+                                {user.roles === 'ADMIN' && user.isSuperAdmin && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300"
+                                    title="This admin can disable admins and manage super admins"
+                                  >
+                                    <ShieldCheck className="w-2.5 h-2.5" />
+                                    Super Admin
+                                  </span>
+                                )}
                                 {/* Referred badge — shown for drivers who were referred by another driver.
                                     Hover shows the referrer's name + the referral code used + the referral status.
                                     TooltipProvider wraps the badge so the tooltip works without a global provider. */}
@@ -1179,11 +1240,12 @@ export default function AdminUsersPage() {
                                 <Send className="w-3.5 h-3.5 mr-1" /> Resend Invite
                               </Button>
                             )}
-                            {/* Admin ACTIVE (invite accepted) - show Disable. Pending and
-                                expired invites get no Disable/Enable — they can't sign in
-                                anyway; the fix is resending the invite. Never on your own
-                                row — the backend rejects self-disable as a second guard. */}
-                            {!user.disabledAt && user.roles === 'ADMIN' && user.id !== actorUserId && effectiveAdminStatus(user) === 'ACTIVE' && (
+                            {/* Admin ACTIVE (invite accepted) - show Disable for SUPER ADMINS ONLY.
+                                Regular admins no longer see Disable at all — the server
+                                rejects them with 403 even if they craft the request. Pending
+                                and expired invites get no Disable — they can't sign in anyway;
+                                the fix is resending the invite. Never on your own row. */}
+                            {isCurrentUserSuperAdmin && !user.disabledAt && user.roles === 'ADMIN' && user.id !== actorUserId && effectiveAdminStatus(user) === 'ACTIVE' && (
                               <Button
                                 size="sm"
                                 variant="destructive"
@@ -1203,6 +1265,32 @@ export default function AdminUsersPage() {
                                 title="Restore this admin's access"
                               >
                                 <CheckCircle className="w-3.5 h-3.5 mr-1" /> Enable
+                              </Button>
+                            )}
+                            {/* Super-admin hierarchy actions — visible to SUPER ADMINS only.
+                                Promote: active, verified admins that aren't super admins yet
+                                (never on your own row — you already hold the flag).
+                                Demote: super admins other than yourself; the backend also
+                                refuses to demote the last remaining super admin. */}
+                            {isCurrentUserSuperAdmin && user.roles === 'ADMIN' && !user.isSuperAdmin && user.id !== actorUserId && effectiveAdminStatus(user) === 'ACTIVE' && (
+                              <Button
+                                size="sm"
+                                className="bg-violet-600 hover:bg-violet-700 text-white rounded-lg"
+                                onClick={() => openDialog('promote-admin', user)}
+                                title="Grant elevated powers: disable admins, manage super admins"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Make Super Admin
+                              </Button>
+                            )}
+                            {isCurrentUserSuperAdmin && user.roles === 'ADMIN' && user.isSuperAdmin && user.id !== actorUserId && effectiveAdminStatus(user) === 'ACTIVE' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-lg"
+                                onClick={() => openDialog('demote-admin', user)}
+                                title="Remove elevated powers — this admin keeps regular admin access"
+                              >
+                                <ShieldOff className="w-3.5 h-3.5 mr-1" /> Downgrade
                               </Button>
                             )}
                             {/* Driver waitlisted - show Invite / Reject */}
@@ -1337,6 +1425,8 @@ export default function AdminUsersPage() {
               {dialogAction === 'resend-invite-driver' && 'Resend Invite'}
               {dialogAction === 'resend-admin-invite' && 'Resend Admin Invite'}
               {dialogAction === 'disable-admin' && 'Disable Admin'}
+              {dialogAction === 'promote-admin' && 'Make Super Admin'}
+              {dialogAction === 'demote-admin' && 'Downgrade to Admin'}
               {dialogAction === 'enable-admin' && 'Enable Admin'}
               {dialogAction === 'approve-driver' && 'Approve Driver'}
               {dialogAction === 'reject-driver' && 'Reject Driver'}
@@ -1352,6 +1442,8 @@ export default function AdminUsersPage() {
               {dialogAction === 'resend-invite-driver' && `Resend the invitation email to ${selectedUser?.email}? A new onboarding link will be generated.`}
               {dialogAction === 'resend-admin-invite' && `Resend the setup link to ${selectedUser?.email}? The previous link will stop working and a new one (valid 48 hours) will be sent.`}
               {dialogAction === 'disable-admin' && `Disable ${selectedUser?.fullName}'s administrator account? They will be signed out immediately and cannot sign in until another admin re-enables them.`}
+              {dialogAction === 'promote-admin' && `Promote ${selectedUser?.fullName} to super admin? They will be able to disable administrators and manage the super-admin tier.`}
+              {dialogAction === 'demote-admin' && `Downgrade ${selectedUser?.fullName} to a regular admin? They keep full admin access but lose the elevated actions (disabling admins, managing super admins).`}
               {dialogAction === 'enable-admin' && `Restore ${selectedUser?.fullName}'s administrator account? They will be able to sign in again with their existing password.`}
               {dialogAction === 'approve-driver' && `Approve ${selectedUser?.fullName} as a driver? They will be able to accept delivery assignments.`}
               {dialogAction === 'reject-driver' && `Reject ${selectedUser?.fullName}'s driver application?`}
@@ -1564,6 +1656,63 @@ export default function AdminUsersPage() {
                   disabled={enableAdminMutation.isPending}
                 >
                   {enableAdminMutation.isPending ? 'Enabling...' : 'Enable Admin'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Promote to Super Admin Confirmation */}
+          {dialogAction === 'promote-admin' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-xl text-sm text-violet-700 dark:text-violet-300 space-y-1.5">
+                <p>
+                  <b>{selectedUser?.email}</b> joins the super-admin tier: they will be able to
+                  disable administrators and promote or downgrade other super admins.
+                </p>
+                <p>
+                  Grant sparingly — every super admin can reshape the admin team. Their
+                  regular admin access is unchanged otherwise.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeDialog} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handlePromoteAdmin}
+                  className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white"
+                  disabled={promoteAdminMutation.isPending}
+                >
+                  {promoteAdminMutation.isPending ? 'Promoting...' : 'Make Super Admin'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {/* Demote to Admin Confirmation */}
+          {dialogAction === 'demote-admin' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/20 rounded-xl text-sm text-slate-700 dark:text-slate-300 space-y-1.5">
+                <p>
+                  <b>{selectedUser?.email}</b> loses the elevated actions (disabling admins,
+                  managing super admins) but keeps full regular administrator access.
+                </p>
+                <p>
+                  The system always keeps at least one super admin — the last remaining one
+                  cannot be downgraded.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeDialog} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleDemoteAdmin}
+                  variant="destructive"
+                  className="rounded-xl"
+                  disabled={demoteAdminMutation.isPending}
+                >
+                  {demoteAdminMutation.isPending ? 'Downgrading...' : 'Downgrade to Admin'}
                 </Button>
               </DialogFooter>
             </div>

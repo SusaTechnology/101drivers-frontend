@@ -63,6 +63,10 @@ export interface AdminUserRow {
   phone: string | null;
   roles: UserRole;
   isActive: boolean;
+  // Elevated-admin flag (ADMIN rows only; false otherwise). Gates the
+  // Disable / Make Super Admin / Downgrade actions on the Users page —
+  // the server re-verifies on every request, this only drives the UI.
+  isSuperAdmin: boolean;
   disabledAt: string | null;
   disabledReason: string | null;
   emailVerifiedAt: string | null;
@@ -595,6 +599,26 @@ export interface DisableAdminRequest {
  * POST /api/users/:id/admin-enable — re-enable a disabled administrator.
  */
 export interface EnableAdminRequest {
+  pathParams: { id: string };
+  actorUserId: string;
+}
+
+/**
+ * POST /api/users/:id/admin-promote — raise an admin to super admin.
+ * SUPER-ADMIN-ONLY: regular admins get a 403. The server ignores any
+ * client-claimed identity — the actor comes from the JWT.
+ */
+export interface PromoteAdminRequest {
+  pathParams: { id: string };
+  actorUserId: string;
+}
+
+/**
+ * POST /api/users/:id/admin-demote — downgrade a super admin to a
+ * plain admin. SUPER-ADMIN-ONLY; the server refuses to demote the
+ * acting super admin themselves or the last remaining super admin.
+ */
+export interface DemoteAdminRequest {
   pathParams: { id: string };
   actorUserId: string;
 }

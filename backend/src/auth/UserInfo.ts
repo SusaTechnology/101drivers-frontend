@@ -37,4 +37,13 @@ export class UserInfo {
 
   @Field(() => String, { nullable: true })
   driverStatus?: string | null;
+
+  /**
+   * Elevated-admin flag (ADMIN rows only; falsy for everyone else).
+   * Populated fresh from the DB on every request by the JWT strategy,
+   * so grant/revoke takes effect immediately. Drives which admin
+   * actions the Users page offers (see src/auth/super-admin.ts).
+   */
+  @Field(() => Boolean, { nullable: true })
+  isSuperAdmin?: boolean;
 }

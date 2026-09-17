@@ -103,6 +103,10 @@ export class JwtStrategyBase
     id: user.id,
     username: user.username,
     roles,
+    // Re-read from the DB on every request, so granting/revoking the
+    // super-admin flag takes effect on the actor's next request — no
+    // token invalidation needed. Gates SuperAdminGuard endpoints.
+    isSuperAdmin: user.isSuperAdmin === true,
   };
 }
 }

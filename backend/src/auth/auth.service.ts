@@ -43,6 +43,7 @@ type AuthValidatedUser = {
   fullName?: string | null;
   roles: string[];
   isActive: boolean;
+  isSuperAdmin: boolean;
 };
 
 type VerificationRequiredResult = {
@@ -119,6 +120,7 @@ export class AuthService {
         email: true,
         roles: true,
         isActive: true,
+        isSuperAdmin: true,
         emailVerifiedAt: true,
         fullName: true,
         password: true,
@@ -244,6 +246,7 @@ export class AuthService {
       fullName: (user as any).fullName ?? null,
       roles: [String(user.roles)],
       isActive: user.isActive,
+      isSuperAdmin: user.isSuperAdmin === true,
     };
   }
 
@@ -298,6 +301,7 @@ export class AuthService {
       onboardingCompleted: authMeta.onboardingCompleted,
       onboardingToken: authMeta.onboardingToken,
       isActive: user.isActive,
+      isSuperAdmin: user.isSuperAdmin === true,
     } as UserInfo;
   }
 
@@ -323,6 +327,7 @@ export class AuthService {
           email: true,
           roles: true,
           isActive: true,
+          isSuperAdmin: true,
           emailVerifiedAt: true,
           fullName: true,
         },
@@ -381,6 +386,7 @@ export class AuthService {
         onboardingCompleted: authMeta.onboardingCompleted,
         onboardingToken: authMeta.onboardingToken,
         isActive: user.isActive,
+        isSuperAdmin: (user as any).isSuperAdmin === true,
       } as UserInfo;
     } catch {
       throw new UnauthorizedException("Invalid or expired refresh token");
