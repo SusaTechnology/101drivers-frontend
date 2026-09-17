@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmActionDialog } from '@/components/shared/ConfirmActionDialog';
 import {
   Table,
   TableBody,
@@ -373,10 +374,14 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 export default function AdminUsersPage() {
   const { actionItems, signOut } = useAdminActions();
   const actorUserId = getActorUserId();
-  // Super-admin gate for the elevated row actions (Disable / Make Super
-  // Admin / Downgrade). The server re-verifies on every request — this
-  // only decides which buttons render.
-  const isCurrentUserSuperAdmin = getUser()?.isSuperAdmin === true;
+  // Super-admin gate for the elevated row actions (Disable / Enable /
+  // Make Super Admin / Downgrade) — source 1 of 2: the login payload.
+  // It is a SNAPSHOT from sign-in time, so it is stale/absent when the
+  // user signed in before the super-admin flag existed. Combined with
+  // the freshly fetched users list below (source 2), which the server
+  // stamps with isSuperAdmin on every row. The server re-verifies on
+  // every request regardless — this only decides which buttons render.
+  const loginSnapshotSuperAdmin = getUser()?.isSuperAdmin === true;
   const navigate = useNavigate();
 
   // ==================== FILTER STATE (V2 — simplified) ====================
@@ -425,6 +430,13 @@ export default function AdminUsersPage() {
 
   // Derived values from the V2 response
   const users = v2Data?.rows ?? [];
+  // Super-admin gate, source 2 of 2 (see loginSnapshotSuperAdmin): the
+  // current user's own row in the freshly fetched list is server truth,
+  // so the elevated buttons appear even when the stored login snapshot
+  // predates the flag — no sign-out/in required.
+  const isCurrentUserSuperAdmin =
+    loginSnapshotSuperAdmin ||
+    (actorUserId ? users.some((u) => u.id === actorUserId && u.isSuperAdmin) : false);
   const totalUsers = v2Data?.pagination?.totalRows ?? 0;
   const totalPages = v2Data?.pagination?.totalPages ?? 1;
   const availableStatuses = v2Data?.availableStatuses;
@@ -1415,8 +1427,20 @@ export default function AdminUsersPage() {
         </Card>
       </main>
 
-      {/* Action Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Action Dialog — customer/driver actions + admin invite resend.
+          The four super-admin tier actions (disable / enable / promote /
+          demote admin) render through the reusable ConfirmActionDialog
+          below instead, so they are skipped here. */}
+      <Dialog
+        open={
+          dialogOpen &&
+          dialogAction !== 'disable-admin' &&
+          dialogAction !== 'enable-admin' &&
+          dialogAction !== 'promote-admin' &&
+          dialogAction !== 'demote-admin'
+        }
+        onOpenChange={setDialogOpen}
+      >
         <DialogContent className="rounded-2xl max-w-md">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">
@@ -1427,10 +1451,6 @@ export default function AdminUsersPage() {
               {dialogAction === 'invite-driver' && 'Invite Driver'}
               {dialogAction === 'resend-invite-driver' && 'Resend Invite'}
               {dialogAction === 'resend-admin-invite' && 'Resend Admin Invite'}
-              {dialogAction === 'disable-admin' && 'Disable Admin'}
-              {dialogAction === 'promote-admin' && 'Make Super Admin'}
-              {dialogAction === 'demote-admin' && 'Downgrade to Admin'}
-              {dialogAction === 'enable-admin' && 'Enable Admin'}
               {dialogAction === 'approve-driver' && 'Approve Driver'}
               {dialogAction === 'reject-driver' && 'Reject Driver'}
               {dialogAction === 'suspend-driver' && 'Suspend Driver'}
@@ -1444,10 +1464,6 @@ export default function AdminUsersPage() {
               {dialogAction === 'invite-driver' && `Invite ${selectedUser?.fullName} to complete their driver application? They will receive an email with instructions.`}
               {dialogAction === 'resend-invite-driver' && `Resend the invitation email to ${selectedUser?.email}? A new onboarding link will be generated.`}
               {dialogAction === 'resend-admin-invite' && `Resend the setup link to ${selectedUser?.email}? The previous link will stop working and a new one (valid 48 hours) will be sent.`}
-              {dialogAction === 'disable-admin' && `Disable ${selectedUser?.fullName}'s administrator account? They will be signed out immediately and cannot sign in until a super admin re-enables them.`}
-              {dialogAction === 'promote-admin' && `Promote ${selectedUser?.fullName} to super admin? They will be able to disable administrators and manage the super-admin tier.`}
-              {dialogAction === 'demote-admin' && `Downgrade ${selectedUser?.fullName} to a regular admin? They keep full admin access but lose the elevated actions (disabling admins, managing super admins).`}
-              {dialogAction === 'enable-admin' && `Restore ${selectedUser?.fullName}'s administrator account? They will be able to sign in again with their existing password.`}
               {dialogAction === 'approve-driver' && `Approve ${selectedUser?.fullName} as a driver? They will be able to accept delivery assignments.`}
               {dialogAction === 'reject-driver' && `Reject ${selectedUser?.fullName}'s driver application?`}
               {dialogAction === 'suspend-driver' && `Suspend ${selectedUser?.fullName}'s driver account? They will not be able to accept deliveries.`}
@@ -1602,125 +1618,6 @@ export default function AdminUsersPage() {
             </div>
           )}
 
-          {/* Disable Admin Form — reason required, recorded in the admin audit log */}
-          {dialogAction === 'disable-admin' && (
-            <form onSubmit={suspendForm.handleSubmit(handleDisableAdmin)} className="space-y-4">
-              <div className="p-3 bg-rose-50 dark:bg-rose-900/20 rounded-xl text-sm text-rose-700 dark:text-rose-300 space-y-1.5">
-                <p>
-                  <b>{selectedUser?.email}</b> loses admin access immediately — their current
-                  session stops working and sign-in is blocked until re-enabled.
-                </p>
-                <p>
-                  The right action when an administrator leaves the team or must be paused.
-                  Their profile, history, and audit trail are kept.
-                </p>
-              </div>
-              <div>
-                <Label className="text-sm font-medium">Reason for disabling</Label>
-                <Textarea
-                  {...suspendForm.register('reason')}
-                  placeholder="e.g. Offboarding, extended leave..."
-                  className="mt-1.5 rounded-xl"
-                  rows={3}
-                />
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={closeDialog} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="destructive"
-                  className="rounded-xl"
-                  disabled={disableAdminMutation.isPending}
-                >
-                  {disableAdminMutation.isPending ? 'Disabling...' : 'Disable Admin'}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-
-          {/* Enable Admin Confirmation */}
-          {dialogAction === 'enable-admin' && (
-            <div className="space-y-4">
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
-                <div className="text-sm text-emerald-700 dark:text-emerald-300">
-                  {selectedUser?.email} will be able to sign in again with their existing
-                  password. Nothing else changes — their role and profile are kept.
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={closeDialog} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleEnableAdmin}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
-                  disabled={enableAdminMutation.isPending}
-                >
-                  {enableAdminMutation.isPending ? 'Enabling...' : 'Enable Admin'}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-
-          {/* Promote to Super Admin Confirmation */}
-          {dialogAction === 'promote-admin' && (
-            <div className="space-y-4">
-              <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-xl text-sm text-violet-700 dark:text-violet-300 space-y-1.5">
-                <p>
-                  <b>{selectedUser?.email}</b> joins the super-admin tier: they will be able to
-                  disable administrators and promote or downgrade other super admins.
-                </p>
-                <p>
-                  Grant sparingly — every super admin can reshape the admin team. Their
-                  regular admin access is unchanged otherwise.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={closeDialog} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handlePromoteAdmin}
-                  className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white"
-                  disabled={promoteAdminMutation.isPending}
-                >
-                  {promoteAdminMutation.isPending ? 'Promoting...' : 'Make Super Admin'}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-
-          {/* Demote to Admin Confirmation */}
-          {dialogAction === 'demote-admin' && (
-            <div className="space-y-4">
-              <div className="p-3 bg-slate-50 dark:bg-slate-900/20 rounded-xl text-sm text-slate-700 dark:text-slate-300 space-y-1.5">
-                <p>
-                  <b>{selectedUser?.email}</b> loses the elevated actions (disabling admins,
-                  managing super admins) but keeps full regular administrator access.
-                </p>
-                <p>
-                  The system always keeps at least one super admin — the last remaining one
-                  cannot be downgraded.
-                </p>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={closeDialog} className="rounded-xl">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleDemoteAdmin}
-                  variant="destructive"
-                  className="rounded-xl"
-                  disabled={demoteAdminMutation.isPending}
-                >
-                  {demoteAdminMutation.isPending ? 'Downgrading...' : 'Downgrade to Admin'}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-
           {/* Reject Driver Form */}
           {dialogAction === 'reject-driver' && (
             <form onSubmit={rejectForm.handleSubmit(handleRejectDriver)} className="space-y-4">
@@ -1852,6 +1749,109 @@ export default function AdminUsersPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Super-admin tier confirmations — rendered through the reusable
+          ConfirmActionDialog (src/components/shared/ConfirmActionDialog.tsx)
+          so any future page can confirm sensitive actions the same way. */}
+      <ConfirmActionDialog
+        open={dialogOpen && dialogAction === 'disable-admin'}
+        onOpenChange={(open) => !open && closeDialog()}
+        title="Disable Admin"
+        description={`Disable ${selectedUser?.fullName}'s administrator account? They will be signed out immediately and cannot sign in until a super admin re-enables them.`}
+        tone="danger"
+        message={
+          <>
+            <p>
+              <b>{selectedUser?.email}</b> loses admin access immediately — their current
+              session stops working and sign-in is blocked until re-enabled.
+            </p>
+            <p>
+              The right action when an administrator leaves the team or must be paused.
+              Their profile, history, and audit trail are kept.
+            </p>
+          </>
+        }
+        confirmLabel="Disable Admin"
+        confirmingLabel="Disabling..."
+        pending={disableAdminMutation.isPending}
+        onConfirm={suspendForm.handleSubmit(handleDisableAdmin)}
+      >
+        <div>
+          <Label className="text-sm font-medium">Reason for disabling</Label>
+          <Textarea
+            {...suspendForm.register('reason')}
+            placeholder="e.g. Offboarding, extended leave..."
+            className="mt-1.5 rounded-xl"
+            rows={3}
+          />
+        </div>
+      </ConfirmActionDialog>
+
+      <ConfirmActionDialog
+        open={dialogOpen && dialogAction === 'enable-admin'}
+        onOpenChange={(open) => !open && closeDialog()}
+        title="Enable Admin"
+        description={`Restore ${selectedUser?.fullName}'s administrator account? They will be able to sign in again with their existing password.`}
+        tone="positive"
+        message={
+          <>
+            {selectedUser?.email} will be able to sign in again with their existing
+            password. Nothing else changes — their role and profile are kept.
+          </>
+        }
+        confirmLabel="Enable Admin"
+        confirmingLabel="Enabling..."
+        pending={enableAdminMutation.isPending}
+        onConfirm={handleEnableAdmin}
+      />
+
+      <ConfirmActionDialog
+        open={dialogOpen && dialogAction === 'promote-admin'}
+        onOpenChange={(open) => !open && closeDialog()}
+        title="Make Super Admin"
+        description={`Promote ${selectedUser?.fullName} to super admin? They will be able to disable administrators and manage the super-admin tier.`}
+        tone="accent"
+        message={
+          <>
+            <p>
+              <b>{selectedUser?.email}</b> joins the super-admin tier: they will be able to
+              disable administrators and promote or downgrade other super admins.
+            </p>
+            <p>
+              Grant sparingly — every super admin can reshape the admin team. Their
+              regular admin access is unchanged otherwise.
+            </p>
+          </>
+        }
+        confirmLabel="Make Super Admin"
+        confirmingLabel="Promoting..."
+        pending={promoteAdminMutation.isPending}
+        onConfirm={handlePromoteAdmin}
+      />
+
+      <ConfirmActionDialog
+        open={dialogOpen && dialogAction === 'demote-admin'}
+        onOpenChange={(open) => !open && closeDialog()}
+        title="Downgrade to Admin"
+        description={`Downgrade ${selectedUser?.fullName} to a regular admin? They keep full admin access but lose the elevated actions (disabling admins, managing super admins).`}
+        tone="neutral"
+        message={
+          <>
+            <p>
+              <b>{selectedUser?.email}</b> loses the elevated actions (disabling admins,
+              managing super admins) but keeps full regular administrator access.
+            </p>
+            <p>
+              The system always keeps at least one super admin — the last remaining one
+              cannot be downgraded.
+            </p>
+          </>
+        }
+        confirmLabel="Downgrade to Admin"
+        confirmingLabel="Downgrading..."
+        pending={demoteAdminMutation.isPending}
+        onConfirm={handleDemoteAdmin}
+      />
 
       {/* Invite Admin Dialog */}
       <Dialog open={inviteAdminDialogOpen} onOpenChange={setInviteAdminDialogOpen}>
