@@ -361,7 +361,10 @@ export default function DealerSupportDetail() {
                 <CardHeader>
                   <CardTitle className="text-lg font-black">Conversation</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                {/* Scrollable chat area — capped height so long threads scroll
+                    inside the card instead of stretching the whole page. */}
+                <CardContent className="pb-4">
+                  <div className="max-h-[420px] overflow-y-auto pr-2 space-y-3">
                   {publicNotes.map((note) => {
                     // Explicitly check each role — no "else" fallback
                     const isFromDealer = note.authorRole === 'DEALER' || note.authorRole === 'PRIVATE_CUSTOMER'
@@ -423,6 +426,7 @@ export default function DealerSupportDetail() {
                       </div>
                     )
                   })}
+                  </div>
                 </CardContent>
               </Card>
             )}
