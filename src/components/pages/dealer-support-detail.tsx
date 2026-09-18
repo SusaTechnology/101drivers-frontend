@@ -182,7 +182,7 @@ export default function DealerSupportDetail() {
 
   // Header
   const Header = () => (
-    <header className="sticky top-0 z-50 w-full bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+    <header className="sticky top-0 z-50 w-full shrink-0 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/" className="flex items-center" aria-label="101 Drivers">
@@ -313,11 +313,14 @@ export default function DealerSupportDetail() {
   // Public notes only (filter out internal notes for non-admin)
   const publicNotes = supportData.notes?.filter(note => !note.isInternal) || []
 
+  // Viewport-locked chat layout: the page itself never scrolls — only the
+  // message thread does — so the composer stays pinned at the bottom of the
+  // screen at all times, WhatsApp-style. No Footer on this page.
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+    <div className="h-dvh overflow-hidden bg-slate-50 dark:bg-slate-950 flex flex-col">
       <Header />
 
-      <main className="flex-1 w-full max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col min-h-0">
+      <main className="flex-1 min-h-0 w-full max-w-[1000px] mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col">
         {/* Compact title strip — minimized so the conversation gets the screen */}
         <div className="mb-3 shrink-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -359,7 +362,7 @@ export default function DealerSupportDetail() {
         </div>
 
         {/* Chat panel — fills the rest of the screen like a messenger */}
-        <Card className="flex-1 min-h-[480px] flex flex-col overflow-hidden rounded-3xl border-slate-200 dark:border-slate-800">
+        <Card className="flex-1 min-h-0 flex flex-col overflow-hidden rounded-3xl border-slate-200 dark:border-slate-800">
           <CardHeader className="py-3 px-5 border-b border-slate-200 dark:border-slate-800 shrink-0">
             <CardTitle className="text-base font-black flex items-center gap-2">
               <Headphones className="h-4 w-4 text-lime-500" />
@@ -510,8 +513,6 @@ export default function DealerSupportDetail() {
           )}
         </Card>
       </main>
-
-      <Footer />
     </div>
   )
 }
