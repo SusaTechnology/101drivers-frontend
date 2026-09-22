@@ -3,10 +3,9 @@
 //
 // Graduated alert system (like Uber/DoorDash), driven by Stripe's
 // invoice attempt_count (1 = initial charge, 2 = first retry, ...):
-//   • 1st failure:  amber banner — "1st payment attempt failed — we'll
-//                   retry automatically on [retry date]"
-//   • 2nd failure:  amber banner — "2nd consecutive failure — update
-//                   your card now; a 3rd pauses new deliveries"
+//   • 1st failure:  amber banner — "Failed payment once" (+ hover note
+//                   that the 3rd failed attempt restricts the account)
+//   • 2nd failure:  amber banner — "Failed payment twice" (+ same hover)
 //   • 3rd+ failure: red banner — account restricted (billingFrozen).
 //                   "3 consecutive failures — new deliveries are
 //                   paused. Update your card or contact support."
@@ -57,6 +56,13 @@ const API_URL = import.meta.env.VITE_API_URL
 // postpaidBilling.service.ts — the dealer-facing copy uses the same
 // threshold the backend enforces (restrict on the 3rd failure).
 const MAX_CONSECUTIVE_FAILURES = 3
+
+// Hover note attached to the amber warnings (badge next to "Weekly
+// Postpaid" + banner heading). Mirrors the backend policy exactly:
+// restriction lands on the 3rd failed attempt — never the first.
+// 1st/2nd failures are yellow warnings only.
+const RESTRICT_ON_THIRD_TOOLTIP =
+  'Your account will be restricted on the 3rd failed payment attempt. Update your card to avoid interruption.'
 
 interface FailedPayment {
   paymentId: string
@@ -200,8 +206,11 @@ export default function PostpaidStatusPanel({
     <>
       {isFrozen && <Badge variant="destructive">Restricted</Badge>}
       {!isFrozen && hasFailures && (
-        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-          Action needed
+        <Badge
+          className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 cursor-help"
+          title={RESTRICT_ON_THIRD_TOOLTIP}
+        >
+          Failed payment {maxAttempt === 1 ? 'once' : maxAttempt === 2 ? 'twice' : `${maxAttempt} times`}
         </Badge>
       )}
       {!isFrozen && !hasFailures && (
@@ -312,10 +321,13 @@ export default function PostpaidStatusPanel({
             <CardContent className="p-4 flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-amber-700 dark:text-amber-300">
-                  {maxAttempt >= 2
-                    ? `Payment failed for the ${maxAttempt === 2 ? '2nd' : maxAttempt === 3 ? '3rd' : `${maxAttempt}th`} consecutive time`
-                    : '1st payment attempt failed'}
+                <p
+                  className="font-bold text-amber-700 dark:text-amber-300 cursor-help"
+                  title={RESTRICT_ON_THIRD_TOOLTIP}
+                >
+                  {maxAttempt === 1
+                    ? 'Failed payment once'
+                    : `Failed payment ${maxAttempt === 2 ? 'twice' : `${maxAttempt} times`}`}
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                   {maxAttempt >= 2
