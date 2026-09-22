@@ -1173,32 +1173,48 @@ export class StripeWebhookController {
         // flow: after this update, the daily cron's invoice retry uses
         // the NEW card → invoice succeeds → webhook auto-unfreezes.
         //
-        // Best-effort: if this Stripe API call fails (rare — network error),
-        // the DB default is still set so prepaid works. Postpaid will retry
-        // on the next setup_intent.succeeded webhook (e.g. if the dealer
-        // saves another card). We log the error but don't fail the webhook.
+        // Verify-after-write (B1): set the default, then read the customer
+        // back and CONFIRM it stuck. If the update fails or the value doesn't
+        // match, we THROW — the webhook controller turns that into a 500 and
+        // Stripe redelivers the event, so the write is retried instead of
+        // silently drifting (our DB says "default card X", Stripe says
+        // "no default" → weekly invoices 402 with code=missing).
+        // The handler is fully idempotent, so Stripe's redelivery is safe.
         try {
           await this.stripeService.stripe.customers.update(
             customerId,
             { invoice_settings: { default_payment_method: paymentMethodId } },
           );
-          this.logger.log(
-            `Set Stripe invoice_settings.default_payment_method ${paymentMethodId} for Stripe customer ${customerId}`,
-          );
         } catch (stripeErr: any) {
-          this.logger.error(
-            `Failed to set Stripe invoice_settings.default_payment_method for customer ${customerId}: ${stripeErr.message} — DB default is still set, prepaid will work. Postpaid invoices may use the old card until this succeeds.`,
+          throw new Error(
+            `Failed to set Stripe invoice_settings.default_payment_method for customer ${customerId}: ${stripeErr.message} — failing webhook so Stripe redelivers`,
           );
         }
+
+        const refreshed = await this.stripeService.stripe.customers.retrieve(customerId);
+        const raw = (refreshed as any).invoice_settings?.default_payment_method;
+        const appliedDefault = typeof raw === "string" ? raw : raw?.id;
+        if (appliedDefault !== paymentMethodId) {
+          throw new Error(
+            `Stripe invoice_settings.default_payment_method did not stick for customer ${customerId} (expected ${paymentMethodId}, got ${appliedDefault ?? "null"}) — failing webhook so Stripe redelivers`,
+          );
+        }
+        this.logger.log(
+          `Set Stripe invoice_settings.default_payment_method ${paymentMethodId} for Stripe customer ${customerId} (verified by re-read)`,
+        );
       } else {
         this.logger.warn(
           `No Customer record found for Stripe customer ${customerId}`,
         );
       }
     } catch (err: any) {
+      // Rethrow (B1): the webhook controller's outer catch answers 500 and
+      // Stripe redelivers the event. Swallowing here would leave the DB
+      // default set while Stripe's invoice default silently drifted.
       this.logger.error(
-        `Failed to process SetupIntent ${setupIntent.id}: ${err.message}`,
+        `Failed to process SetupIntent ${setupIntent.id}: ${err.message} — rethrowing so Stripe redelivers`,
       );
+      throw err;
     }
   }
 
