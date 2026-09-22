@@ -1,12 +1,15 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   Optional,
   Inject,
   forwardRef,
 } from "@nestjs/common";
+import { AppException } from "../errors/app.exception";
+import { ErrorCodes } from "../errors/error-codes";
 import {
   EnumAdminAuditLogAction,
   EnumAdminAuditLogActorType,
@@ -2065,6 +2068,36 @@ private async resolveIndividualCustomerForCreate(
     };
   }
 
+  /**
+   * Card-required gate (A1): postpaid dealers MUST have a saved default
+   * card before a delivery is created — direct submission AND draft
+   * promotion. The card is NOT charged at creation (postpaid dealers are
+   * invoiced weekly — "you don't pay now"), but without a card on file the
+   * weekly invoice can never be collected (Stripe 402 code=missing).
+   *
+   * Checks OUR DB flag (stripeDefaultPaymentMethodId — set + verified by
+   * the setup_intent.succeeded webhook). Stripe-side drift is the billing
+   * pre-pay guard's and reconciliation job's concern, not this gate's —
+   * this stays a cheap check with no Stripe call in the hot path.
+   *
+   * The dealer portal shows the "enter a card — you'll be invoiced weekly"
+   * step before submission (A2); this is the server-side enforcement behind
+   * it. Prepaid flows (private customers) pay by card during submission
+   * and are exempt.
+   */
+  private assertPostpaidCardOnFile(customer: {
+    postpaidEnabled: boolean;
+    stripeDefaultPaymentMethodId: string | null;
+  }): void {
+    if (customer.postpaidEnabled && !customer.stripeDefaultPaymentMethodId) {
+      throw new AppException(
+        "A saved payment card is required before creating a delivery. You will be invoiced weekly — you don't pay now.",
+        ErrorCodes.CARD_REQUIRED,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   async createDeliveryFromAcceptedQuote(input: CreateDeliveryFromQuoteInput) {
     const customer = await this.prisma.customer.findUnique({
       where: { id: input.customerId },
@@ -2083,6 +2116,9 @@ private async resolveIndividualCustomerForCreate(
     if (!customer) {
       throw new NotFoundException("Customer not found");
     }
+
+    // Card-required gate (A1) — see assertPostpaidCardOnFile.
+    this.assertPostpaidCardOnFile(customer);
 
     const quote = await this.prisma.quote.findUnique({
       where: { id: input.quoteId },
@@ -2642,6 +2678,9 @@ private async resolveIndividualCustomerForCreate(
     if (!customer) {
       throw new NotFoundException("Customer not found");
     }
+
+    // Card-required gate (A1) — see assertPostpaidCardOnFile.
+    this.assertPostpaidCardOnFile(customer);
 
     const quote = await this.prisma.quote.findUnique({
       where: { id: effectiveQuoteId },
