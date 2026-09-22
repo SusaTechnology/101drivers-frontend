@@ -243,5 +243,53 @@ describe("PostpaidBillingService — payment resilience", () => {
       expect(result.succeeded).toBe(2);
       expect(result.failed).toBe(1);
     });
+
+    it("B2 guard: skips ALL invoices when the Stripe customer has no default PM", async () => {
+      prisma.customer.findUnique.mockResolvedValue({
+        stripeSubscriptionId: "sub_1",
+        stripeCustomerId: "cus_1",
+      });
+      stripeService.stripe.invoices.list.mockResolvedValue({
+        data: [
+          { id: "inv_1", customer: "cus_1" },
+          { id: "inv_2", customer: "cus_1" },
+        ],
+      });
+      stripeService.stripe.customers = {
+        retrieve: jest.fn().mockResolvedValue({
+          id: "cus_1",
+          invoice_settings: { default_payment_method: null },
+        }),
+      };
+      const result = await service.retryAllFailedCharges("dealer_1");
+      expect(result).toEqual({
+        invoicesRetried: 0,
+        succeeded: 0,
+        failed: 0,
+        skippedNoCard: 2,
+      });
+      // The whole point: no doomed invoices.pay calls → no 402 noise in Stripe
+      expect(stripeService.stripe.invoices.pay).not.toHaveBeenCalled();
+    });
+
+    it("B2 guard: proceeds to pay when the Stripe customer HAS a default PM", async () => {
+      prisma.customer.findUnique.mockResolvedValue({
+        stripeSubscriptionId: "sub_1",
+        stripeCustomerId: "cus_1",
+      });
+      stripeService.stripe.invoices.list.mockResolvedValue({
+        data: [{ id: "inv_1", customer: "cus_1" }],
+      });
+      stripeService.stripe.customers = {
+        retrieve: jest.fn().mockResolvedValue({
+          id: "cus_1",
+          invoice_settings: { default_payment_method: "pm_1" },
+        }),
+      };
+      stripeService.stripe.invoices.pay.mockResolvedValue({});
+      const result = await service.retryAllFailedCharges("dealer_1");
+      expect(result.succeeded).toBe(1);
+      expect(stripeService.stripe.invoices.pay).toHaveBeenCalledWith("inv_1");
+    });
   });
 });

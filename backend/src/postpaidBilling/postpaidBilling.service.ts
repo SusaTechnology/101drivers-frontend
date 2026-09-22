@@ -982,14 +982,14 @@ export class PostpaidBillingService {
   // single-invoice retry) + a new admin endpoint to manually trigger
   // a bulk retry.
 
-  async retryAllFailedCharges(dealerId: string): Promise<{ invoicesRetried: number; succeeded: number; failed: number }> {
+  async retryAllFailedCharges(dealerId: string): Promise<{ invoicesRetried: number; succeeded: number; failed: number; skippedNoCard?: number }> {
     if (!this.stripeService) {
       throw new Error("StripeService unavailable");
     }
 
     const dealer = await this.prisma.customer.findUnique({
       where: { id: dealerId },
-      select: { stripeSubscriptionId: true },
+      select: { stripeSubscriptionId: true, stripeCustomerId: true },
     });
     if (!dealer?.stripeSubscriptionId) {
       throw new BadRequestException("Dealer has no Stripe subscription");
@@ -1009,6 +1009,37 @@ export class PostpaidBillingService {
     this.logger.log(
       `Bulk retry: ${invoices.data.length} open invoice(s) for dealer ${dealerId}`,
     );
+
+    // ── Pre-pay guard (B2) ──
+    // Confirm the Stripe customer actually HAS a default_payment_method
+    // before calling invoices.pay. Without it every attempt is a guaranteed
+    // 402 code=missing ("no default_payment_method set on the associated
+    // Customer, Invoice, or Subscription") — pure Stripe log noise on every
+    // cron run for dealers who simply haven't saved a card yet.
+    //
+    // We check STRIPE's field, not our DB's stripeDefaultPaymentMethodId —
+    // the two can drift (the old best-effort write), and Stripe's field is
+    // what invoices.pay actually reads. With B1 (verify-after-write) and B3
+    // (pay-kick on card save) in place, the moment a dealer saves a card the
+    // default is set and retried immediately — skipping here costs nothing.
+    const invoiceCustomer = invoices.data[0]?.customer;
+    const stripeCustomerId =
+      (typeof invoiceCustomer === "string" ? invoiceCustomer : invoiceCustomer?.id) ??
+      dealer.stripeCustomerId ??
+      null;
+
+    if (stripeCustomerId) {
+      const cust = await this.stripeService.stripe.customers.retrieve(stripeCustomerId);
+      const rawDefault = (cust as any).invoice_settings?.default_payment_method;
+      const stripeDefaultPm = typeof rawDefault === "string" ? rawDefault : rawDefault?.id ?? null;
+
+      if (!stripeDefaultPm) {
+        this.logger.warn(
+          `Bulk retry skipped for dealer ${dealerId}: Stripe customer ${stripeCustomerId} has no default_payment_method — nothing to charge (NO_SAVED_CARD). Dealer must save a card first; no retry can succeed until then.`,
+        );
+        return { invoicesRetried: 0, succeeded: 0, failed: 0, skippedNoCard: invoices.data.length };
+      }
+    }
 
     let succeeded = 0;
     let failed = 0;
@@ -2144,7 +2175,7 @@ export class PostpaidBillingService {
     }
     const dealer = await this.prisma.customer.findUnique({
       where: { id: dealerId },
-      select: { id: true, stripeSubscriptionId: true },
+      select: { id: true, stripeSubscriptionId: true, stripeCustomerId: true },
     });
     if (!dealer?.stripeSubscriptionId) {
       throw new BadRequestException(
@@ -2153,6 +2184,18 @@ export class PostpaidBillingService {
     }
 
     const result = await this.retryAllFailedCharges(dealerId);
+
+    // B2: open invoices exist but were SKIPPED because the Stripe customer
+    // has no default_payment_method. Say THAT, not "no open invoice" —
+    // otherwise admins chase the wrong fix.
+    if (result.skippedNoCard && result.skippedNoCard > 0) {
+      throw new BadRequestException(
+        `Dealer has ${result.skippedNoCard} open invoice(s) but NO card to charge — ` +
+        `the Stripe customer (${dealer.stripeCustomerId ?? "unknown"}) has no default payment method. ` +
+        `Ask the dealer to save a card in the app (open invoices are then charged automatically), ` +
+        `or set a default card on that customer in the Stripe dashboard and retry.`,
+      );
+    }
 
     if (result.invoicesRetried === 0) {
       throw new BadRequestException(
@@ -2746,10 +2789,16 @@ export class PostpaidBillingService {
         // `stripe.invoices.list({ subscription, status: 'open' })` and
         // retries each one (with a small delay to avoid rate limits).
         const result = await this.retryAllFailedCharges(dealer.id);
-        this.logger.log(
-          `autoRetryFrozenDealers: dealer ${dealer.id} — ` +
-          `${result.succeeded}/${result.invoicesRetried} invoice(s) succeeded`,
-        );
+        if (result.skippedNoCard && result.skippedNoCard > 0) {
+          this.logger.log(
+            `autoRetryFrozenDealers: dealer ${dealer.id} — skipped ${result.skippedNoCard} invoice(s): no default card on the Stripe customer (NO_SAVED_CARD)`,
+          );
+        } else {
+          this.logger.log(
+            `autoRetryFrozenDealers: dealer ${dealer.id} — ` +
+            `${result.succeeded}/${result.invoicesRetried} invoice(s) succeeded`,
+          );
+        }
       } catch (err: any) {
         // Don't let one dealer's failure abort the rest.
         this.logger.warn(
