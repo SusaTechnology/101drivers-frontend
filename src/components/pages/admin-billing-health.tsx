@@ -19,7 +19,9 @@
 // Data: GET /api/postpaid-billing/admin/billing-health (admin-only),
 // polled every 60s like the rest of the billing surfaces.
 
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import {
   AlertCircle,
   ArrowRight,
@@ -28,6 +30,7 @@ import {
   HeartPulse,
   RefreshCw,
   ShieldAlert,
+  Wrench,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -37,7 +40,7 @@ import { Navbar } from '../shared/layout/testNavbar'
 import { navItems } from '@/lib/items/navItems'
 import { Brand } from '@/lib/items/brand'
 import { useAdminActions } from '@/hooks/useAdminActions'
-import { useDataQuery } from '@/lib/tanstack/dataQuery'
+import { useDataQuery, authFetch } from '@/lib/tanstack/dataQuery'
 import {
   FrozenDealerRow,
   WarningDealerRow,
@@ -62,13 +65,37 @@ interface BillingHealthData {
     amountDollars: number
     writtenOffAt: string | null
   }>
+  reconciliationFindings: Array<{
+    id: string
+    customerId: string
+    businessName: string | null
+    check: string
+    severity: string
+    detail: string
+    expectedValue: string | null
+    actualValue: string | null
+    repairedAt: string | null
+    createdAt: string
+  }>
   totals: {
     frozenCount: number
     warningCount: number
     uncollectibleCount: number
     frozenOutstandingCents: number
     frozenOutstandingDollars: number
+    reconciliationOpenCount: number
   }
+}
+
+// Human labels for the nightly audit's check identifiers
+const CHECK_LABELS: Record<string, string> = {
+  DEFAULT_PM_DRIFT: 'Default card drift (Stripe vs our DB)',
+  PM_NOT_ATTACHED: 'Card no longer attached to Stripe customer',
+  NO_SAVED_CARD: 'No card on file',
+  SUBSCRIPTION_MISSING: 'No anchor subscription',
+  SUBSCRIPTION_CUSTOMER_MISMATCH: 'Subscription bills a different Stripe customer',
+  SUBSCRIPTION_CANCELED: 'Anchor subscription canceled',
+  STRIPE_CUSTOMER_MISSING: 'Stripe customer missing',
 }
 
 function KpiCard({
@@ -168,6 +195,29 @@ export default function AdminBillingHealthPage() {
     health.totals.warningCount === 0 &&
     health.totals.uncollectibleCount === 0
 
+  // D2 — one-click repair for DEFAULT_PM_DRIFT findings: re-set the Stripe
+  // customer's invoice default from our DB (same write the nightly
+  // auto-repair makes). On success the open invoices charge it on the
+  // next retry, and the finding disappears on refetch.
+  const [repairingFindingId, setRepairingFindingId] = useState<string | null>(null)
+  const repairDefault = async (dealerId: string, findingId: string) => {
+    setRepairingFindingId(findingId)
+    try {
+      const res = await authFetch<{ repaired: boolean; message: string }>(
+        `${API_URL}/api/postpaid-billing/admin/dealers/${dealerId}/repair-default`,
+        { method: 'POST' },
+      )
+      toast.success('Default card repaired', {
+        description: res?.message || 'Stripe default re-set from our records.',
+      })
+      refetch()
+    } catch (err: any) {
+      toast.error('Repair failed', { description: err?.message })
+    } finally {
+      setRepairingFindingId(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
       {/* Header — same shell as the other admin pages */}
@@ -247,7 +297,7 @@ export default function AdminBillingHealthPage() {
         ) : (
           <>
             {/* KPI row */}
-            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <section className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
               <KpiCard
                 label="Frozen dealers"
                 value={health.totals.frozenCount}
@@ -276,6 +326,12 @@ export default function AdminBillingHealthPage() {
                 sub="owed by frozen dealers"
                 tone="dark"
               />
+              <KpiCard
+                label="Audit findings"
+                value={health.totals.reconciliationOpenCount}
+                sub="open items from the nightly Stripe audit"
+                tone={health.totals.reconciliationOpenCount > 0 ? 'amber' : 'dark'}
+              />
             </section>
 
             {allClear && (
@@ -294,6 +350,102 @@ export default function AdminBillingHealthPage() {
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Section 0 — nightly reconciliation findings */}
+            {(health.reconciliationFindings?.length ?? 0) > 0 && (
+              <section className="mb-8">
+                <SectionHeader
+                  title="Reconciliation findings — Stripe vs our DB"
+                  count={health.totals.reconciliationOpenCount}
+                  description="From the nightly 4AM audit that compares each postpaid dealer's Stripe objects against our records. AUTO_REPAIRED items were already fixed; CRITICAL/WARNING need a human (or the repair button) and explain the exact next step."
+                />
+                <div className="space-y-3">
+                  {health.reconciliationFindings.map((f) => {
+                    const isCritical = f.severity === 'CRITICAL'
+                    const isRepaired = f.severity === 'AUTO_REPAIRED'
+                    return (
+                      <Card
+                        key={f.id}
+                        className={
+                          isCritical
+                            ? 'rounded-xl border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/10'
+                            : isRepaired
+                              ? 'rounded-xl border-green-200 dark:border-green-900/40 bg-green-50/50 dark:bg-green-950/10'
+                              : 'rounded-xl border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/10'
+                        }
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              {isRepaired ? (
+                                <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                              ) : (
+                                <AlertCircle
+                                  className={
+                                    isCritical
+                                      ? 'w-4 h-4 text-red-500 shrink-0 mt-0.5'
+                                      : 'w-4 h-4 text-amber-500 shrink-0 mt-0.5'
+                                  }
+                                />
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs font-black uppercase tracking-wide text-slate-900 dark:text-white">
+                                    {CHECK_LABELS[f.check] ?? f.check}
+                                  </span>
+                                  <Badge
+                                    className={
+                                      isCritical
+                                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                        : isRepaired
+                                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                    }
+                                  >
+                                    {isRepaired ? 'Auto-repaired' : f.severity}
+                                  </Badge>
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {new Date(f.createdAt).toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                                  {f.detail}
+                                </p>
+                                <div className="text-[10px] font-bold text-slate-700 dark:text-slate-200 mt-1.5">
+                                  {f.businessName || 'Unnamed dealer'}
+                                  {f.expectedValue && (
+                                    <span className="font-mono font-normal text-slate-500 dark:text-slate-400">
+                                      {' '}· expected {f.expectedValue}
+                                      {f.actualValue ? `, got ${f.actualValue}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            {f.check === 'DEFAULT_PM_DRIFT' && !isRepaired && f.customerId && (
+                              <Button
+                                size="sm"
+                                className="rounded-xl h-7 text-xs bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 shrink-0"
+                                disabled={repairingFindingId === f.id}
+                                onClick={() => repairDefault(f.customerId, f.id)}
+                              >
+                                <Wrench className="w-3 h-3 mr-1" />
+                                {repairingFindingId === f.id ? 'Repairing…' : 'Repair default from DB'}
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </section>
             )}
 
             {/* Section 1 — frozen */}

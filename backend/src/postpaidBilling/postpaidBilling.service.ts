@@ -2319,12 +2319,25 @@ export class PostpaidBillingService {
       amountDollars: number;
       writtenOffAt: string | null;
     }>;
+    reconciliationFindings: Array<{
+      id: string;
+      customerId: string;
+      businessName: string | null;
+      check: string;
+      severity: string;
+      detail: string;
+      expectedValue: string | null;
+      actualValue: string | null;
+      repairedAt: string | null;
+      createdAt: string;
+    }>;
     totals: {
       frozenCount: number;
       warningCount: number;
       uncollectibleCount: number;
       frozenOutstandingCents: number;
       frozenOutstandingDollars: number;
+      reconciliationOpenCount: number;
     };
   }> {
     // ── 1. Frozen dealers (longest-frozen first — they've been blocked longest) ──
@@ -2546,10 +2559,45 @@ export class PostpaidBillingService {
       0,
     );
 
+    // ── D1/D2: nightly reconciliation findings (unresolved) — CRITICAL
+    // first, then WARNING, then AUTO_REPAIRED history, newest within group.
+    const [openFindings, openFindingCount] = await Promise.all([
+      this.prisma.billingAuditFinding.findMany({
+        where: { resolvedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: { customer: { select: { businessName: true } } },
+      }),
+      this.prisma.billingAuditFinding.count({ where: { resolvedAt: null } }),
+    ]);
+    const severityRank: Record<string, number> = {
+      CRITICAL: 0,
+      WARNING: 1,
+      AUTO_REPAIRED: 2,
+    };
+    const reconciliationFindings = openFindings
+      .map((f) => ({
+        id: f.id,
+        customerId: f.customerId,
+        businessName: f.customer?.businessName ?? null,
+        check: f.check,
+        severity: f.severity,
+        detail: f.detail,
+        expectedValue: f.expectedValue,
+        actualValue: f.actualValue,
+        repairedAt: f.repairedAt?.toISOString() ?? null,
+        createdAt: f.createdAt.toISOString(),
+      }))
+      .sort(
+        (a, b) =>
+          (severityRank[a.severity] ?? 3) - (severityRank[b.severity] ?? 3),
+      );
+
     return {
       frozenDealers,
       warningDealers,
       uncollectiblePayments,
+      reconciliationFindings,
       totals: {
         frozenCount: frozenDealers.length,
         warningCount: warningDealers.length,
@@ -2558,7 +2606,86 @@ export class PostpaidBillingService {
         frozenOutstandingDollars: Number(
           (frozenOutstandingCents / 100).toFixed(2),
         ),
+        reconciliationOpenCount: openFindingCount,
       },
+    };
+  }
+
+  /**
+   * D2 — admin one-click repair: re-set the Stripe customer's
+   * invoice_settings.default_payment_method from our DB record.
+   *
+   * Used for the DEFAULT_PM_DRIFT finding (DB says a card, Stripe says
+   * none — the exact Farragut failure). Performs the same safety check the
+   * nightly auto-repair does: the card must still be attached to the
+   * dealer's Stripe customer, otherwise no write happens and the admin is
+   * told to have the dealer re-save their card instead.
+   *
+   * Returns a human-readable outcome for the admin UI toast.
+   */
+  async repairStripeDefaultFromDb(dealerId: string): Promise<{ repaired: boolean; message: string }> {
+    if (!this.stripeService) {
+      throw new Error("StripeService unavailable");
+    }
+
+    const dealer = await this.prisma.customer.findUnique({
+      where: { id: dealerId },
+      select: {
+        id: true,
+        businessName: true,
+        stripeCustomerId: true,
+        stripeDefaultPaymentMethodId: true,
+      },
+    });
+    if (!dealer?.stripeCustomerId) {
+      throw new BadRequestException("Dealer has no Stripe customer");
+    }
+    if (!dealer.stripeDefaultPaymentMethodId) {
+      throw new BadRequestException(
+        "No card in our DB to repair from — ask the dealer to save a card in the app.",
+      );
+    }
+
+    // Safety: the card must be attached to THIS customer. A PM attached to
+    // another customer (or detached entirely) can never be a valid default.
+    let attachedCustomer: string | null = null;
+    try {
+      const pm: any = await this.stripeService.stripe.paymentMethods.retrieve(
+        dealer.stripeDefaultPaymentMethodId,
+      );
+      attachedCustomer =
+        typeof pm.customer === "string" ? pm.customer : pm.customer?.id ?? null;
+    } catch {
+      attachedCustomer = null;
+    }
+    if (attachedCustomer !== dealer.stripeCustomerId) {
+      throw new BadRequestException(
+        `Card ${dealer.stripeDefaultPaymentMethodId} is not attached to this dealer's Stripe customer (${attachedCustomer ?? "detached"}). The dealer must re-save their card in the app.`,
+      );
+    }
+
+    await this.stripeService.stripe.customers.update(dealer.stripeCustomerId, {
+      invoice_settings: { default_payment_method: dealer.stripeDefaultPaymentMethodId },
+    });
+    this.logger.log(
+      `Admin repair: Stripe default_payment_method re-set to ${dealer.stripeDefaultPaymentMethodId} for dealer ${dealerId} (${dealer.businessName ?? "?"})`,
+    );
+
+    // Close the open drift findings — the repair is verified-by-construction
+    // (same write + safety check the nightly job makes), and the next audit
+    // run confirms anyway.
+    await this.prisma.billingAuditFinding.updateMany({
+      where: {
+        customerId: dealerId,
+        check: { in: ["DEFAULT_PM_DRIFT", "PM_NOT_ATTACHED"] },
+        resolvedAt: null,
+      },
+      data: { resolvedAt: new Date() },
+    });
+
+    return {
+      repaired: true,
+      message: "Stripe default card re-set from our records. Open invoices will charge it on the next retry.",
     };
   }
 

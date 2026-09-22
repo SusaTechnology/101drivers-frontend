@@ -639,4 +639,21 @@ export class PostpaidBillingController implements OnApplicationBootstrap {
   async getBillingHealth() {
     return this.postpaidBilling.getBillingHealthOverview();
   }
+
+  // ── ADMIN: one-click repair for DEFAULT_PM_DRIFT findings ─────────
+  //
+  // Re-sets the Stripe customer's invoice default from our DB record —
+  // the manual counterpart of the nightly auto-repair, for when an admin
+  // wants to fix a drift finding immediately instead of waiting for the
+  // 4AM audit.
+  //
+  // Usage: POST /api/postpaid-billing/admin/dealers/:dealerId/repair-default
+  // Auth: admin only (defaultAuthGuard + ACGuard).
+
+  @Post("admin/dealers/:dealerId/repair-default")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({ summary: "Admin: re-set the Stripe invoice default from our DB (DEFAULT_PM_DRIFT repair)" })
+  async repairDefault(@Param("dealerId") dealerId: string) {
+    return this.postpaidBilling.repairStripeDefaultFromDb(dealerId);
+  }
 }
