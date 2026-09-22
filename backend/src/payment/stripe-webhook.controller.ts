@@ -1202,6 +1202,31 @@ export class StripeWebhookController {
         this.logger.log(
           `Set Stripe invoice_settings.default_payment_method ${paymentMethodId} for Stripe customer ${customerId} (verified by re-read)`,
         );
+
+        // ── Pay-kick (B3): the dealer just got a WORKING default card.
+        // If they have open (failed) weekly invoices, charge them NOW —
+        // "save card → paid → auto-unfrozen" lands in seconds instead of
+        // waiting for the next hourly retry cron. Fire-and-forget: the card
+        // save itself is fully processed, so a kick failure must NOT fail
+        // this webhook (the hourly cron remains the fallback). Safe to run
+        // alongside the cron — retryAllFailedCharges lists open invoices
+        // fresh and only pays still-open ones.
+        if (this.postpaidBilling) {
+          void this.postpaidBilling
+            .retryAllFailedCharges(customer.id)
+            .then((result) => {
+              if (result.invoicesRetried > 0) {
+                this.logger.log(
+                  `Card-save pay-kick for dealer ${customer.id}: ${result.succeeded}/${result.invoicesRetried} open invoice(s) paid${result.skippedNoCard ? `, ${result.skippedNoCard} skipped (no card)` : ""}`,
+                );
+              }
+            })
+            .catch((kickErr: any) => {
+              this.logger.warn(
+                `Card-save pay-kick for dealer ${customer.id} failed (hourly cron will retry): ${kickErr?.message}`,
+              );
+            });
+        }
       } else {
         this.logger.warn(
           `No Customer record found for Stripe customer ${customerId}`,
