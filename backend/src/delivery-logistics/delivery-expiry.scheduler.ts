@@ -376,10 +376,17 @@ export class DeliveryExpiryScheduler {
   }
 
   /**
-   * Orphan-auth sweep: cancels any EXPIRED delivery's stale Stripe
-   * PaymentIntent that the LISTED-expiry cron missed.
+   * Orphan-auth sweep: cleans up any EXPIRED delivery's stale Payment row
+   * that the LISTED-expiry cron missed.
    *
-   * This catches cases like:
+   * Two classes of orphans:
+   *  - POSTPAID rows still AUTHORIZED on an EXPIRED delivery — voided
+   *    DB-only (no Stripe call needed; no invoice item was ever created
+   *    for expired deliveries). Also self-heals historical ghosts.
+   *  - PREPAID auth holds (provider STRIPE with a PaymentIntent) — the PI
+   *    is cancelled so the customer's card isn't held for up to 7 days.
+   *
+   * Either way, catches cases like:
    *  - A transient Stripe outage at the moment of expiry (the inline release
    *    failed but the cron already moved on).
    *  - DRAFT/QUOTED deliveries that somehow have an AUTHORIZED Payment row
@@ -392,6 +399,65 @@ export class DeliveryExpiryScheduler {
    */
   @Cron("0 3 * * *")
   async releaseOrphanStripeAuths() {
+    // ── POSTPAID ghost sweep (no Stripe needed — runs first) ──
+    // EXPIRED deliveries whose POSTPAID Payment row is still AUTHORIZED.
+    // AUTHORIZED rows count toward the dealer's outstanding balance and
+    // credit cap, so these ghosts would block new deliveries forever.
+    try {
+      const postpaidGhosts = await this.prisma.deliveryRequest.findMany({
+        where: {
+          status: EnumDeliveryRequestStatus.EXPIRED,
+          payment: {
+            status: EnumPaymentStatus.AUTHORIZED,
+            paymentType: EnumPaymentPaymentType.POSTPAID,
+            // Don't touch payments that have a lock-in (trip started —
+            // different flow, admin's call).
+            lockInAmount: null,
+          },
+        },
+        select: {
+          id: true,
+          payment: {
+            select: {
+              id: true,
+              amount: true,
+            },
+          },
+        },
+        take: 100,
+      });
+
+      for (const ghost of postpaidGhosts) {
+        if (!ghost.payment) continue;
+        try {
+          await this.prisma.payment.update({
+            where: { id: ghost.payment.id },
+            data: {
+              status: EnumPaymentStatus.VOIDED,
+              voidedAt: businessNow().toJSDate(),
+            },
+          });
+          this.logger.log(
+            `Orphan sweep: voided stale POSTPAID Payment ${ghost.payment.id} ` +
+              `($${ghost.payment.amount}) for EXPIRED delivery ${ghost.id} — ` +
+              `removed from dealer outstanding`
+          );
+        } catch (err: any) {
+          this.logger.error(
+            `Orphan sweep: failed to void POSTPAID Payment ${ghost.payment.id} ` +
+              `for EXPIRED delivery ${ghost.id}: ${err?.message}`
+          );
+        }
+      }
+      if (postpaidGhosts.length > 0) {
+        this.logger.log(
+          `Orphan sweep: voided ${postpaidGhosts.length} stale POSTPAID payment(s) on EXPIRED deliveries`
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(`Orphan sweep (postpaid ghosts) failed: ${err?.message}`);
+    }
+
     if (!this.stripeService) {
       return;
     }
@@ -533,8 +599,31 @@ export class DeliveryExpiryScheduler {
       return { attempted: false, success: false };
     }
 
-    // POSTPAID → no Stripe auth to release (provider is MANUAL).
+    // POSTPAID → no Stripe auth to release (provider is MANUAL), but the
+    // row must NOT stay AUTHORIZED: the outstanding-balance formula counts
+    // AUTHORIZED rows, so an expired delivery would otherwise haunt the
+    // dealer's outstanding balance + credit cap forever. No invoice item is
+    // ever created for expired deliveries (reportUsageToStripe only runs on
+    // completion / close-with-penalty), so voiding is safe — nobody owes
+    // this money. DB-only void, no Stripe call.
     if (payment.paymentType === EnumPaymentPaymentType.POSTPAID) {
+      if (
+        payment.status === EnumPaymentStatus.AUTHORIZED &&
+        !(payment.lockInAmount != null && payment.lockInAmount > 0)
+      ) {
+        await this.prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: EnumPaymentStatus.VOIDED,
+            voidedAt: businessNow().toJSDate(),
+          },
+        });
+        this.logger.log(
+          `releaseStripeAuthOnExpiry: voided POSTPAID Payment ${payment.id} ` +
+            `for EXPIRED delivery ${delivery.id} ($${payment.amount} removed from outstanding)`
+        );
+        return { attempted: true, success: true };
+      }
       return { attempted: false, success: false };
     }
 
