@@ -33,6 +33,7 @@ import * as nestAccessControl from "nest-access-control";
 import { UserData } from "../auth/userData.decorator";
 import { User } from "@prisma/client";
 import { PostpaidBillingService } from "./postpaidBilling.service";
+import { BillingReconciliationService } from "./billing-reconciliation.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 @ApiTags("postpaid-billing")
@@ -164,6 +165,7 @@ export class PostpaidBillingController implements OnApplicationBootstrap {
 
   constructor(
     private readonly postpaidBilling: PostpaidBillingService,
+    private readonly reconciliation: BillingReconciliationService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -455,6 +457,35 @@ export class PostpaidBillingController implements OnApplicationBootstrap {
     } catch (err: any) {
       this.logger.error(
         `Daily missing-usage backfill cron failed: ${err?.message}`,
+        err?.stack,
+      );
+    }
+  }
+
+  // ── CRON: nightly billing reconciliation (C1+C2+C4) ─────────────
+  // Runs daily at 04:00 server time — after the 3AM usage backfill, before
+  // the 6AM auto-retry, so repairs land before the retry pass.
+  //
+  // 1. Audit every WEEKLY_POSTPAID dealer's Stripe objects vs our DB
+  //    (subscription ownership, default payment method, attachment) with
+  //    safe auto-repairs. Findings → BillingAuditFinding rows.
+  // 2. Invoice-state backfill: re-run idempotent invoice.* handlers for
+  //    recent invoices whose DB rows are stale (missed webhook recovery).
+  //
+  // Never charges anything — the only Stripe write is re-pointing the
+  // invoice default to a card we already believe is the dealer's default.
+
+  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  async handleDailyBillingReconciliation() {
+    this.logger.log("Daily billing reconciliation cron: starting");
+    try {
+      await this.withCronLock("billingReconciliation", async () => {
+        await this.reconciliation.runNightlyReconciliation();
+        await this.reconciliation.runInvoiceStateBackfill();
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `Daily billing reconciliation cron failed: ${err?.message}`,
         err?.stack,
       );
     }
