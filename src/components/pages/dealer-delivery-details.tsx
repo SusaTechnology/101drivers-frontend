@@ -81,6 +81,7 @@ import {
   DollarSign,
   RefreshCw,
   KeyRound,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getUser, useDataQuery, useCreate, useDataMutation } from '@/lib/tanstack/dataQuery'
@@ -2460,6 +2461,20 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
                           />
                         </div>
 
+                        {/* Charged-immediately notice — shown BEFORE the
+                            dealer commits: the tip PaymentIntent fires and
+                            the saved card is charged the moment "Send Tip"
+                            is tapped (one-click flow). Tips never ride the
+                            weekly invoice. */}
+                        <div className="flex items-start gap-1.5 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30">
+                          <Zap className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                          <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 leading-snug">
+                            Your card is charged immediately when you send this tip —
+                            it goes straight to the driver and is never added to your
+                            weekly invoice.
+                          </span>
+                        </div>
+
                         {/* Submit button */}
                         <Button
                           className="w-full py-4 gap-2 mt-2 bg-lime-500 text-slate-950 hover:bg-lime-600"
@@ -2586,7 +2601,8 @@ export default function DealerDeliveryDetails({ deliveryId }: DealerDeliveryDeta
               Tip Your Driver
             </DialogTitle>
             <DialogDescription>
-              Send a tip of <span className="font-extrabold text-slate-900 dark:text-white">${pendingTipAmount.toFixed(2)}</span> to {driver?.name || 'your driver'}.
+              Send a tip of <span className="font-extrabold text-slate-900 dark:text-white">${pendingTipAmount.toFixed(2)}</span> to {driver?.name || 'your driver'}.{' '}
+              Your card is charged <span className="font-extrabold">immediately</span> — the full amount goes to the driver.
             </DialogDescription>
           </DialogHeader>
           {id && pendingTipAmount > 0 && (

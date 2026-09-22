@@ -2863,6 +2863,31 @@ export class PostpaidBillingService {
       }
     }
 
+    // ── Fallback: no Stripe preview available ──
+    // (No subscription yet, or Stripe returned no upcoming invoice.)
+    // Never leave the dealer staring at a blank dash while they owe
+    // money — estimate the next deduction from the unpaid completed
+    // deliveries minus the credits that will ride the next invoice
+    // (same FIFO rule as above). Once the weekly subscription preview
+    // becomes available, this estimate is replaced by Stripe's exact
+    // amount_due. upcomingInvoiceAmountCents stays null so the frontend
+    // can label the figure as an estimate rather than Stripe-official.
+    if (upcomingInvoiceAmountCents === null) {
+      const fallbackBudgetCents =
+        outstandingCents > 0 ? outstandingCents : Number.MAX_SAFE_INTEGER;
+      let fallbackCreditCents = 0;
+      for (const credit of pendingCredits) {
+        if (fallbackCreditCents + credit.amountCents > fallbackBudgetCents) {
+          continue;
+        }
+        fallbackCreditCents += credit.amountCents;
+      }
+      estimatedNextChargeCents = Math.max(
+        0,
+        outstandingCents - fallbackCreditCents,
+      );
+    }
+
     // ── Fetch failed payments for the dealer dashboard ──
     // The dealer sees per-payment failure details (amount, reason, date)
     // so they know exactly what happened and what to do.

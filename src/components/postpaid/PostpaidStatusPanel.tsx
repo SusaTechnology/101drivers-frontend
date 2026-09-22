@@ -15,10 +15,13 @@
 // The dealer ALWAYS sees:
 //   • Next charge — THE number: the final amount Stripe will deduct
 //     (upcoming invoice amount_due minus pending referral credits,
-//     mirrored with the backend's exact FIFO application rule). One
-//     money figure only — non-technical dealers should never have to
-//     reconcile "outstanding" vs "charged"; the owed total still
-//     appears in the failure banners when collection actually fails.
+//     mirrored with the backend's exact FIFO application rule; falls
+//     back to unpaid-deliveries-minus-credits when Stripe has no
+//     preview yet, so the dealer never sees a blank dash while owing
+//     money). One money figure only — non-technical dealers should
+//     never have to reconcile "outstanding" vs "charged"; the owed
+//     total still appears in the failure banners when collection
+//     actually fails.
 //   • Next invoice date
 //   • Saved card status
 //   • Failed payment details (if any) — amount, reason, attempt #, retry info
@@ -178,6 +181,12 @@ export default function PostpaidStatusPanel({
     status.pendingReferralCreditCents > 0
       ? (status.pendingReferralCreditCents / 100).toFixed(2)
       : null
+  // Whether the next-charge figure is Stripe's OFFICIAL upcoming-invoice
+  // amount (preview succeeded) or the backend's DB-side estimate (no
+  // Stripe preview available — e.g. weekly billing not fully set up
+  // yet, or the dealer has no subscription). The backend always returns
+  // a number now, so null only means the backend hasn't been redeployed.
+  const isStripeOfficial = status.upcomingInvoiceAmountCents != null
 
   // ── Deep-link to Settings → Payment method ──
   // The single most important action for a dealer with failed charges is
@@ -545,9 +554,11 @@ export default function PostpaidStatusPanel({
                     : ''}
                 </div>
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
-                  {estimatedNextCharge !== null
-                    ? 'The final amount on your next weekly invoice — every completed delivery, referral credits already subtracted. Tips are charged separately when you add one.'
-                    : 'Appears once your weekly billing is active.'}
+                  {estimatedNextCharge === null
+                    ? 'Appears once your weekly billing is active.'
+                    : isStripeOfficial
+                      ? 'The final amount on your next weekly invoice — every completed delivery, referral credits already subtracted. Tips are charged separately when you add one.'
+                      : 'Estimated from your unpaid completed deliveries, minus referral credits. It locks to the exact invoice amount when your weekly invoice is prepared.'}
                 </div>
               </div>
 
