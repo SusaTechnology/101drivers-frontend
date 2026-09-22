@@ -107,6 +107,7 @@ model Customer {
   user                User                             @relation(name: "CustomerOnUser", fields: [userId], references: [id])
   userId              String                           @unique
   vehicles            SavedVehicle[]
+  billingAuditFindings BillingAuditFinding[]
 
   @@index([customerType, approvalStatus])
   @@index([billingMode, billingFrozen])
@@ -1866,4 +1867,34 @@ model ReferralCredit {
   @@index([customerId, status])
   @@index([referralId])
   @@index([deliveryId])
+}
+
+// ── Billing reconciliation audit (production-readiness C3) ──────────
+// Findings from the nightly billing reconciliation job that verifies each
+// WEEKLY_POSTPAID dealer's Stripe objects against our DB: subscription
+// ownership, default payment method consistency, PM attachment. Safe drift
+// is auto-repaired (repairedAt set); everything else is surfaced to admins
+// via the Billing Health page.
+model BillingAuditFinding {
+  id            String    @id @default(cuid())
+  customerId    String
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  // Which consistency check produced this finding:
+  //   NO_SAVED_CARD | DEFAULT_PM_DRIFT | PM_NOT_ATTACHED |
+  //   SUBSCRIPTION_MISSING | SUBSCRIPTION_CUSTOMER_MISMATCH |
+  //   SUBSCRIPTION_STATUS | STRIPE_CUSTOMER_MISSING
+  check         String
+  // AUTO_REPAIRED | WARNING | CRITICAL
+  severity      String
+  detail        String    @db.Text
+  expectedValue String?
+  actualValue   String?
+  repairedAt    DateTime?
+  // Set when a later audit run (or admin repair) confirms the issue is gone
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([customerId])
+  @@index([check])
+  @@index([createdAt])
 }
