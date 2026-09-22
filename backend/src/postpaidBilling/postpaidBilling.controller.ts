@@ -482,6 +482,15 @@ export class PostpaidBillingController implements OnApplicationBootstrap {
       await this.withCronLock("billingReconciliation", async () => {
         await this.reconciliation.runNightlyReconciliation();
         await this.reconciliation.runInvoiceStateBackfill();
+        // D3: after repairs landed, mail the ops summary (skips itself when
+        // BILLING_OPS_EMAIL is unset or everything is quiet).
+        try {
+          await this.reconciliation.sendDailyOpsDigest();
+        } catch (digestErr: any) {
+          this.logger.warn(
+            `Ops digest failed (reconciliation itself succeeded): ${digestErr?.message}`,
+          );
+        }
       });
     } catch (err: any) {
       this.logger.error(

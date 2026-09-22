@@ -29,8 +29,10 @@
 //   • Findings are deduped per (customer, check) — a persistent issue
 //     doesn't create a new row every night; a changed issue does.
 import { Injectable, Logger, Optional, Inject } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
 import { StripeService } from "../providers/stripe/stripe.service";
+import { MailService } from "../common/mail/mail.service";
 import { PostpaidBillingService } from "./postpaidBilling.service";
 
 const BACKFILL_WINDOW_HOURS = 48;
@@ -83,6 +85,12 @@ export class BillingReconciliationService {
     // Same-module injection — the invoice handlers are public and idempotent.
     @Optional() @Inject(PostpaidBillingService)
     private readonly postpaidBilling?: PostpaidBillingService,
+    // D3: ops digest email. Both optional so tests / SMTP-less envs work —
+    // without BILLING_OPS_EMAIL or SMTP the digest simply logs and skips.
+    @Optional() @Inject(MailService)
+    private readonly mailService?: MailService,
+    @Optional() @Inject(ConfigService)
+    private readonly configService?: ConfigService,
   ) {}
 
   // ── C1 + C2: nightly audit + safe auto-repair ────────────────────
@@ -411,5 +419,111 @@ export class BillingReconciliationService {
         `${summary.repairedPaid} paid-state repair(s), ${summary.repairedClosed} closed-state repair(s), ${summary.errors} error(s)`,
     );
     return summary;
+  }
+
+  // ── D3: daily ops digest email ───────────────────────────────────
+
+  /**
+   * One email a day that answers "is anything wrong with billing?" without
+   * opening a dashboard. Goes to BILLING_OPS_EMAIL — silently skipped (with
+   * a log line) when unset or when SMTP isn't configured. Nothing is sent
+   * when everything is quiet, to avoid alarm fatigue.
+   */
+  async sendDailyOpsDigest(): Promise<{ sent: boolean; reason?: string }> {
+    const opsEmail = this.configService?.get<string>("BILLING_OPS_EMAIL");
+    if (!opsEmail) {
+      this.logger.log("Ops digest skipped — BILLING_OPS_EMAIL not configured");
+      return { sent: false, reason: "no recipient" };
+    }
+
+    const [frozen, openFindings, noCardDealers] = await Promise.all([
+      this.prisma.customer.findMany({
+        where: { billingFrozen: true },
+        select: { businessName: true },
+        orderBy: { billingFrozenAt: "asc" },
+      }),
+      this.prisma.billingAuditFinding.findMany({
+        where: { resolvedAt: null, severity: { not: "AUTO_REPAIRED" } },
+        select: {
+          severity: true,
+          check: true,
+          detail: true,
+          customer: { select: { businessName: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.customer.findMany({
+        where: {
+          postpaidEnabled: true,
+          billingMode: "WEEKLY_POSTPAID",
+          stripeDefaultPaymentMethodId: null,
+        },
+        select: { businessName: true },
+      }),
+    ]);
+
+    const critical = openFindings.filter((f) => f.severity === "CRITICAL");
+    const warnings = openFindings.filter((f) => f.severity === "WARNING");
+
+    const quiet =
+      frozen.length === 0 &&
+      critical.length === 0 &&
+      warnings.length === 0 &&
+      noCardDealers.length === 0;
+    if (quiet) {
+      this.logger.log("Ops digest: all quiet — no email sent");
+      return { sent: false, reason: "quiet" };
+    }
+
+    const nameList = (rows: Array<{ businessName: string | null }>, max = 10) =>
+      rows
+        .slice(0, max)
+        .map((r) => `  • ${r.businessName ?? "Unnamed dealer"}`)
+        .join("\n") + (rows.length > max ? `\n  • …and ${rows.length - max} more` : "");
+
+    const findingList = (rows: typeof critical) =>
+      rows
+        .slice(0, 15)
+        .map(
+          (f) =>
+            `  • [${f.check}] ${f.customer?.businessName ?? "Unnamed dealer"} — ${f.detail}`,
+        )
+        .join("\n") + (rows.length > 15 ? `\n  • …and ${rows.length - 15} more` : "");
+
+    const lines: string[] = [
+      `Billing ops digest — ${new Date().toISOString().slice(0, 10)}`,
+      "",
+      `Frozen dealers (blocked from deliveries): ${frozen.length}`,
+      ...(frozen.length > 0 ? [nameList(frozen)] : []),
+      "",
+      `CRITICAL reconciliation findings: ${critical.length}`,
+      ...(critical.length > 0 ? [findingList(critical)] : []),
+      "",
+      `WARNING reconciliation findings: ${warnings.length}`,
+      ...(warnings.length > 0 ? [findingList(warnings)] : []),
+      "",
+      `Postpaid dealers with no card on file: ${noCardDealers.length}`,
+      ...(noCardDealers.length > 0 ? [nameList(noCardDealers)] : []),
+      "",
+      "Next steps: Admin → Billing Health (repair buttons + dealer list);",
+      "dealers fix a missing/broken card themselves by re-saving it in the app.",
+      "Runbook: docs/billing-runbook.md.",
+    ];
+
+    try {
+      await this.mailService?.sendMail({
+        to: opsEmail,
+        subject:
+          `[101 Drivers billing] ` +
+          (frozen.length > 0 || critical.length > 0 ? "ATTENTION — " : "") +
+          `${frozen.length} frozen · ${critical.length} critical · ${warnings.length} warning`,
+        text: lines.join("\n"),
+      });
+      this.logger.log(`Ops digest email sent to ${opsEmail}`);
+      return { sent: true };
+    } catch (err: any) {
+      this.logger.error(`Ops digest email failed: ${err?.message}`);
+      return { sent: false, reason: "send failed" };
+    }
   }
 }

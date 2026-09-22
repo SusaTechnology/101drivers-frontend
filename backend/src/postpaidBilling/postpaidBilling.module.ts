@@ -7,12 +7,14 @@ import { Module } from "@nestjs/common";
 import { PostpaidBillingController } from "./postpaidBilling.controller";
 import { PostpaidBillingService } from "./postpaidBilling.service";
 import { BillingReconciliationService } from "./billing-reconciliation.service";
+import { MailModule } from "../common/mail/mail.module";
 // TS-level import only — NO module import (that would close a DI cycle:
 // postpaidBilling → referral → driverPayout → delivery-logistics → postpaidBilling).
 // Nest instantiates the class here with the global PrismaService + StripeService.
 import { ReferralCreditApplicationService } from "../referral/referral-credit-application.service";
 
 @Module({
+  imports: [MailModule],
   controllers: [PostpaidBillingController],
   providers: [PostpaidBillingService, BillingReconciliationService, ReferralCreditApplicationService],
   exports: [PostpaidBillingService],
