@@ -13,10 +13,12 @@
 //   • Fraud:        admin-only (dealer doesn't see)
 //
 // The dealer ALWAYS sees:
-//   • Outstanding balance
-//   • Next charge — the FINAL amount Stripe will deduct (upcoming
-//     invoice amount_due minus pending referral credits, mirrored with
-//     the backend's exact FIFO application rule)
+//   • Next charge — THE number: the final amount Stripe will deduct
+//     (upcoming invoice amount_due minus pending referral credits,
+//     mirrored with the backend's exact FIFO application rule). One
+//     money figure only — non-technical dealers should never have to
+//     reconcile "outstanding" vs "charged"; the owed total still
+//     appears in the failure banners when collection actually fails.
 //   • Next invoice date
 //   • Saved card status
 //   • Failed payment details (if any) — amount, reason, attempt #, retry info
@@ -35,7 +37,6 @@ import {
   ChevronUp,
   CreditCard,
   Calendar,
-  DollarSign,
   Receipt,
   Loader2,
   RefreshCw,
@@ -523,25 +524,11 @@ export default function PostpaidStatusPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Outstanding balance */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <DollarSign className="h-3 w-3" />
-                  Outstanding
-                </div>
-                <div className="text-lg font-black text-slate-900 dark:text-white">
-                  ${status.outstandingDollars.toFixed(2)}
-                </div>
-                <div className="text-[10px] text-slate-400">
-                  {status.unpaidDeliveryCount} unpaid {status.unpaidDeliveryCount === 1 ? 'delivery' : 'deliveries'}
-                </div>
-                <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
-                  Total amount owed for completed deliveries not yet charged to your card.
-                </div>
-              </div>
-
-              {/* Next charge — the FINAL amount to be deducted */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Next charge — THE money figure: the final amount Stripe
+                  deducts (deliveries − referral credits). Replaces the old
+                  separate "Outstanding" card: one number, no mental math.
+                  The owed total still appears in the failure banners. */}
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <Receipt className="h-3 w-3" />
@@ -551,14 +538,16 @@ export default function PostpaidStatusPanel({
                   {estimatedNextCharge !== null ? `$${estimatedNextCharge}` : '—'}
                 </div>
                 <div className="text-[10px] text-slate-400">
+                  {status.unpaidDeliveryCount} unpaid{' '}
+                  {status.unpaidDeliveryCount === 1 ? 'delivery' : 'deliveries'}
                   {pendingCreditsDollars
-                    ? `Includes −$${pendingCreditsDollars} referral credits`
-                    : 'All completed deliveries to date'}
+                    ? ` · −$${pendingCreditsDollars} referral credits`
+                    : ''}
                 </div>
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
-                  The exact amount on your next weekly invoice — every completed
-                  delivery so far, minus referral credits. Deliveries completed
-                  before the invoice is issued are added automatically.
+                  {estimatedNextCharge !== null
+                    ? 'The final amount on your next weekly invoice — every completed delivery, referral credits already subtracted. Tips are charged separately when you add one.'
+                    : 'Appears once your weekly billing is active.'}
                 </div>
               </div>
 
