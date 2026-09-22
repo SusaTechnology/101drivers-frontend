@@ -2718,6 +2718,21 @@ export class PostpaidBillingService {
     unpaidDeliveryCount: number;
     hasSavedPaymentMethod: boolean;
     nextInvoiceDate: Date | null;
+    // ── Final next-charge number ("show the final deduction, not
+    // partial") ──
+    // Stripe's official upcoming-invoice amount_due: $0 anchor + every
+    // pending delivery-fee InvoiceItem ± credits already applied to this
+    // cycle. Null when there is no subscription or no upcoming invoice.
+    upcomingInvoiceAmountCents: number | null;
+    // Sum of the dealer's PENDING referral credits (not yet applied to
+    // any invoice) — the UI shows "Includes −$X referral credits".
+    pendingReferralCreditCents: number;
+    // THE number to display: upcomingInvoiceAmountCents minus the
+    // referral credits that WILL be applied at invoice.upcoming,
+    // computed with the exact same oldest-first whole-credit FIFO rule
+    // ReferralCreditApplicationService.applyPostpaidCreditsToUpcomingInvoice
+    // uses. Matches the final invoice total 1:1.
+    estimatedNextChargeCents: number | null;
     // Per-payment failure details — so the dealer dashboard can show
     // "Your charge of $X failed because [reason]. Stripe will retry
     // on [date]." with an "Update payment method" button.
@@ -2789,6 +2804,24 @@ export class PostpaidBillingService {
     // Stripe SDK v22 renamed `retrieveUpcoming` to `createPreview` —
     // same behavior, new name.
     let nextInvoiceDate: Date | null = null;
+    let upcomingInvoiceAmountCents: number | null = null;
+    let estimatedNextChargeCents: number | null = null;
+
+    // Pending referral credits — subtracted below so the panel shows the
+    // FINAL deduction, not a partial number. They are only applied to the
+    // real invoice ~1h before finalization (handleInvoiceUpcoming →
+    // ReferralCreditApplicationService), so until then Stripe's preview
+    // alone overstates the charge by exactly the pending-credit amount.
+    const pendingCredits = await this.prisma.referralCredit.findMany({
+      where: { customerId: dealerId, status: "PENDING" },
+      orderBy: { createdAt: "asc" },
+      select: { amountCents: true },
+    });
+    const pendingReferralCreditCents = pendingCredits.reduce(
+      (sum, c) => sum + c.amountCents,
+      0,
+    );
+
     if (this.stripeService && dealer.stripeSubscriptionId) {
       try {
         const upcoming = await this.stripeService.stripe.invoices.createPreview({
@@ -2799,6 +2832,29 @@ export class PostpaidBillingService {
         if (ts) {
           nextInvoiceDate = new Date(ts * 1000);
         }
+
+        // ── The final number the dealer will see deducted ──
+        // amount_due already includes every pending delivery-fee
+        // InvoiceItem swept into this cycle. Subtract the dealer's
+        // PENDING referral credits using the EXACT same oldest-first
+        // whole-credit FIFO rule the applier uses at invoice.upcoming
+        // (credits that don't fit the invoice total stay PENDING for the
+        // next invoice) so the panel number matches the final invoice 1:1.
+        const amountDueCents = upcoming.amount_due ?? 0;
+        upcomingInvoiceAmountCents = amountDueCents;
+        const budgetCents =
+          amountDueCents > 0 ? amountDueCents : Number.MAX_SAFE_INTEGER;
+        let applicableCreditCents = 0;
+        for (const credit of pendingCredits) {
+          if (applicableCreditCents + credit.amountCents > budgetCents) {
+            continue;
+          }
+          applicableCreditCents += credit.amountCents;
+        }
+        estimatedNextChargeCents = Math.max(
+          0,
+          amountDueCents - applicableCreditCents,
+        );
       } catch (err: any) {
         // Likely "no upcoming invoice" — log + continue.
         this.logger.debug(
@@ -2850,6 +2906,9 @@ export class PostpaidBillingService {
       unpaidDeliveryCount: unpaidCount,
       hasSavedPaymentMethod: Boolean(dealer.stripeDefaultPaymentMethodId),
       nextInvoiceDate,
+      upcomingInvoiceAmountCents,
+      pendingReferralCreditCents,
+      estimatedNextChargeCents,
       failedPayments: failedPayments.map((p) => ({
         paymentId: p.id,
         amount: p.amount,

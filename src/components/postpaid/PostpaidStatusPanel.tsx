@@ -14,6 +14,9 @@
 //
 // The dealer ALWAYS sees:
 //   • Outstanding balance
+//   • Next charge — the FINAL amount Stripe will deduct (upcoming
+//     invoice amount_due minus pending referral credits, mirrored with
+//     the backend's exact FIFO application rule)
 //   • Next invoice date
 //   • Saved card status
 //   • Failed payment details (if any) — amount, reason, attempt #, retry info
@@ -33,6 +36,7 @@ import {
   CreditCard,
   Calendar,
   DollarSign,
+  Receipt,
   Loader2,
   RefreshCw,
   Info,
@@ -91,6 +95,12 @@ interface PostpaidStatus {
   unpaidDeliveryCount: number
   hasSavedPaymentMethod: boolean
   nextInvoiceDate: string | null
+  /** Stripe's raw upcoming-invoice amount_due (all swept items, before pending credits). */
+  upcomingInvoiceAmountCents: number | null
+  /** Sum of the dealer's pending (not yet applied) referral credits, in cents. */
+  pendingReferralCreditCents: number | null
+  /** THE final number: what the next weekly invoice will charge after referral credits. */
+  estimatedNextChargeCents: number | null
   failedPayments: FailedPayment[]
 }
 
@@ -149,6 +159,24 @@ export default function PostpaidStatusPanel({
   const nextInvoiceDate = status.nextInvoiceDate
     ? new Date(status.nextInvoiceDate)
     : null
+
+  // ── Final next-charge number ──
+  // Computed by the backend: Stripe's official upcoming-invoice
+  // amount_due minus the referral credits that will be applied before
+  // the invoice finalizes (same FIFO rule the backend applier uses).
+  // Null when the dealer has no active weekly subscription yet.
+  // `!== undefined` keeps the panel safe against a cached response from
+  // a backend that has not been redeployed yet.
+  const estimatedNextCharge =
+    status.estimatedNextChargeCents !== null &&
+    status.estimatedNextChargeCents !== undefined
+      ? (status.estimatedNextChargeCents / 100).toFixed(2)
+      : null
+  const pendingCreditsDollars =
+    status.pendingReferralCreditCents != null &&
+    status.pendingReferralCreditCents > 0
+      ? (status.pendingReferralCreditCents / 100).toFixed(2)
+      : null
 
   // ── Deep-link to Settings → Payment method ──
   // The single most important action for a dealer with failed charges is
@@ -495,7 +523,7 @@ export default function PostpaidStatusPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Outstanding balance */}
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -510,6 +538,27 @@ export default function PostpaidStatusPanel({
                 </div>
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
                   Total amount owed for completed deliveries not yet charged to your card.
+                </div>
+              </div>
+
+              {/* Next charge — the FINAL amount to be deducted */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <Receipt className="h-3 w-3" />
+                  Next Charge
+                </div>
+                <div className="text-lg font-black text-slate-900 dark:text-white">
+                  {estimatedNextCharge !== null ? `$${estimatedNextCharge}` : '—'}
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {pendingCreditsDollars
+                    ? `Includes −$${pendingCreditsDollars} referral credits`
+                    : 'All completed deliveries to date'}
+                </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+                  The exact amount on your next weekly invoice — every completed
+                  delivery so far, minus referral credits. Deliveries completed
+                  before the invoice is issued are added automatically.
                 </div>
               </div>
 
