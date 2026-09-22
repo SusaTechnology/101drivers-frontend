@@ -142,13 +142,21 @@ interface SaveCardDialogProps {
   open: boolean
   /** DB Customer id (the logged-in user's profileId) */
   customerId: string
+  /**
+   * 'PREPAID' (default): card is charged per delivery.
+   * 'POSTPAID': card is REQUIRED but never charged here — deliveries are
+   * collected into a weekly invoice charged to this card automatically.
+   * Tailors the dialog copy so postpaid dealers aren't misled into thinking
+   * they're paying now.
+   */
+  billingMode?: 'PREPAID' | 'POSTPAID'
   /** Card was saved — parent resumes the delivery submission */
   onSuccess: () => void
   /** User dismissed the dialog — parent stays on the review page */
   onCancel: () => void
 }
 
-export default function SaveCardDialog({ open, customerId, onSuccess, onCancel }: SaveCardDialogProps) {
+export default function SaveCardDialog({ open, customerId, billingMode = 'PREPAID', onSuccess, onCancel }: SaveCardDialogProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [initError, setInitError] = useState<string | null>(null)
   const [initializing, setInitializing] = useState(false)
@@ -209,21 +217,40 @@ export default function SaveCardDialog({ open, customerId, onSuccess, onCancel }
             Add your card to continue
           </DialogTitle>
           <DialogDescription>
-            This is the only time you&apos;ll need to do this.
+            {billingMode === 'POSTPAID'
+              ? 'Required once — your card is saved so weekly billing can run automatically.'
+              : "This is the only time you'll need to do this."}
           </DialogDescription>
         </DialogHeader>
 
         {/* Education copy — set expectations: one-time entry, everything
-            after this runs automatically. */}
+            after this runs automatically. Postpaid variant makes it explicit
+            that NO charge happens now — the card is for the weekly invoice. */}
         <div className="rounded-xl border border-lime-200 dark:border-lime-800/40 bg-lime-50 dark:bg-lime-900/10 p-3">
-          <p className="text-xs font-bold text-lime-800 dark:text-lime-300">
-            Your card will be saved to your account.
-          </p>
-          <p className="text-[11px] text-lime-700/90 dark:text-lime-400/90 mt-0.5">
-            From your next delivery on, everything runs automatically — no card
-            entry again. You can change or remove your card anytime in{' '}
-            <span className="font-bold">Settings → Payment method</span>.
-          </p>
+          {billingMode === 'POSTPAID' ? (
+            <>
+              <p className="text-xs font-bold text-lime-800 dark:text-lime-300">
+                You have to enter a card, but you will be invoiced weekly — you don&apos;t pay now.
+              </p>
+              <p className="text-[11px] text-lime-700/90 dark:text-lime-400/90 mt-0.5">
+                Nothing is charged at submission. Your deliveries are collected into a
+                weekly invoice charged to this card automatically. You can change or
+                remove your card anytime in{' '}
+                <span className="font-bold">Settings → Payment method</span>.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-bold text-lime-800 dark:text-lime-300">
+                Your card will be saved to your account.
+              </p>
+              <p className="text-[11px] text-lime-700/90 dark:text-lime-400/90 mt-0.5">
+                From your next delivery on, everything runs automatically — no card
+                entry again. You can change or remove your card anytime in{' '}
+                <span className="font-bold">Settings → Payment method</span>.
+              </p>
+            </>
+          )}
         </div>
 
         {initializing && (

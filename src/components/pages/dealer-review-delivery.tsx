@@ -549,6 +549,16 @@ export default function ReviewDeliveryPage() {
       const fullMessage = errorDetails || errorMessage;
       console.error("Delivery creation failed:", error);
 
+      // A1 defense-in-depth: the backend requires a saved card for postpaid
+      // delivery creation (CARD_REQUIRED). We normally prevent this in the UI,
+      // but a stale session (card removed after page load, refetch lag) can
+      // still hit it — recover by opening the card dialog; saving resumes the
+      // submission automatically instead of a dead-end error.
+      if (error?.code === 'CARD_REQUIRED' || /saved payment card is required/i.test(String(fullMessage))) {
+        setShowSaveCardDialog(true);
+        return;
+      }
+
       // Detect whether this is a payment failure (vs. a validation error like
       // "VIN must be 4 digits"). Payment failures come from the Stripe charge
       // helper and have specific phrases baked in by translateStripeError().
@@ -680,12 +690,14 @@ export default function ReviewDeliveryPage() {
       });
       return;
     }
-    // First-time prepaid customer with no card on file: capture the card
-    // now — the natural "payment is next" step — instead of letting the
-    // backend fail with "No saved payment method on file". The submission
-    // resumes automatically once the card is saved
+    // Card-required gate (A2, both billing modes): no saved card → capture
+    // the card right here instead of a dead-end backend error. The
+    // submission resumes automatically once the card is saved
     // (handleSaveCardSuccess → submitDelivery.mutate()).
-    if (reviewData?.paymentType !== 'POSTPAID' && customer?.profileId && !hasSavedCard) {
+    // - PREPAID: the card is charged/authorized for this delivery right away.
+    // - POSTPAID: nothing is charged now — the card becomes the default the
+    //   weekly invoices charge. Copy in SaveCardDialog explains this.
+    if (customer?.profileId && !hasSavedCard) {
       setShowSaveCardDialog(true);
       return;
     }
@@ -694,23 +706,37 @@ export default function ReviewDeliveryPage() {
 
   // Card saved successfully in SaveCardDialog → resume the paused submission.
   // By the time confirmSetup resolves, the card is attached to the
-  // customer's Stripe account, so create-from-quote will find it and
-  // charge/authorize silently — no card-entry dialog anywhere in the flow.
+  // customer's Stripe account and the setup_intent.succeeded webhook has
+  // set it as the default (verified + pay-kick), so create-from-quote finds
+  // it — charge/authorize silently for prepaid, nothing now for postpaid.
   const handleSaveCardSuccess = () => {
     setShowSaveCardDialog(false);
     setCardSavedThisSession(true);
-    toast.success('Card saved!', {
-      description: 'Future deliveries are charged automatically — no card entry needed.',
-    });
+    if (reviewData?.paymentType === 'POSTPAID') {
+      toast.success('Card saved!', {
+        description: "You'll be invoiced weekly — nothing was charged now.",
+      });
+    } else {
+      toast.success('Card saved!', {
+        description: 'Future deliveries are charged automatically — no card entry needed.',
+      });
+    }
     submitDelivery.mutate();
   };
 
   const handleSaveCardCancel = () => {
     setShowSaveCardDialog(false);
-    toast('Card needed to continue', {
-      description: 'Add your card to request your first delivery. It stays saved so you never enter it again.',
-      duration: 7000,
-    });
+    if (reviewData?.paymentType === 'POSTPAID') {
+      toast('Card needed to continue', {
+        description: "Add your card to request deliveries. You'll be invoiced weekly — you don't pay now.",
+        duration: 7000,
+      });
+    } else {
+      toast('Card needed to continue', {
+        description: 'Add your card to request your first delivery. It stays saved so you never enter it again.',
+        duration: 7000,
+      });
+    }
   };
 
   const handleGoBack = () => {
@@ -1527,14 +1553,16 @@ export default function ReviewDeliveryPage() {
       loading={submitDelivery.isPending}
     />
 
-    {/* First-delivery card capture — opens when a prepaid customer without
-        a saved card clicks "Request Delivery". On success the paused
-        submission resumes automatically (handleSaveCardSuccess). Postpaid
-        customers never see it. */}
+    {/* Card-required capture — opens when a customer without a saved card
+        clicks "Request Delivery" (prepaid AND postpaid). On success the
+        paused submission resumes automatically (handleSaveCardSuccess).
+        Postpaid copy explains the card is for weekly invoicing — no charge
+        now. */}
     {customer?.profileId && (
       <SaveCardDialog
         open={showSaveCardDialog}
         customerId={customer.profileId}
+        billingMode={reviewData?.paymentType === 'POSTPAID' ? 'POSTPAID' : 'PREPAID'}
         onSuccess={handleSaveCardSuccess}
         onCancel={handleSaveCardCancel}
       />

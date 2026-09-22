@@ -414,6 +414,18 @@ export default function CreateDeliveryPage({ draftId }: CreateDeliveryPageProps)
   const isBusinessCustomer = customerDataQuery.data?.customerType === 'BUSINESS';
   const postpaidEnabled = isBusinessCustomer && (customerDataQuery.data?.postpaidEnabled ?? false);
 
+  // A2: card-on-file awareness — the review step requires a saved card for
+  // postpaid dealers (captured there if missing, enforced server-side via
+  // CARD_REQUIRED). Surface the expectation here so it's never a surprise
+  // at the last step.
+  const savedCardsQuery = useDataQuery<{ cards: any[] }>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/payments/stripe/saved-cards/${customer?.profileId}`,
+    enabled: !!customer?.profileId,
+    noFilter: true,
+    staleTime: 5 * 60 * 1000,
+  });
+  const hasSavedCard = (savedCardsQuery.data?.cards?.length ?? 0) > 0;
+
   // Saved addresses state
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedSavedAddress, setSelectedSavedAddress] = useState<SavedAddress | null>(null);
@@ -2282,6 +2294,24 @@ const handleQuotePreview = () => {
             </div>
           </div>
         </section>
+
+        {/* A2: early billing expectations — postpaid dealers must have a card
+            on file before they can submit (captured at the review step;
+            enforced server-side). Told here so it's never a surprise. */}
+        {postpaidEnabled && customer?.profileId && !hasSavedCard && (
+          <div className="mb-8 flex items-start gap-3 rounded-2xl border border-lime-200 dark:border-lime-800/40 bg-lime-50 dark:bg-lime-900/10 p-4">
+            <CreditCard className="h-5 w-5 shrink-0 text-lime-600 dark:text-lime-400 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-lime-800 dark:text-lime-300">
+                You&apos;ll be asked to enter a card at review — you won&apos;t be charged now.
+              </p>
+              <p className="text-xs text-lime-700/90 dark:text-lime-400/90 mt-0.5">
+                A card on file is required to submit a request. Your deliveries are
+                invoiced weekly and charged to that card automatically.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
           {/* LEFT COLUMN - Form */}
