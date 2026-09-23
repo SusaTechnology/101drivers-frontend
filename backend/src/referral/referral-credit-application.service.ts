@@ -104,17 +104,31 @@ export class ReferralCreditApplicationService {
       }
 
       // Negative InvoiceItem — Stripe sweeps it into the finalizing invoice
-      await this.stripeService.stripe.invoiceItems.create({
-        customer: input.stripeCustomerId,
-        amount: -appliedCents,
-        currency: "usd",
-        description: `Referral rewards credit (${applied.length} credit${applied.length === 1 ? "" : "s"})`,
-        metadata: {
-          source: "referral-credit-autoapply",
-          dealerId: input.dealerId,
-          creditIds: applied.map((c) => c.id).join(","),
+      //
+      // Idempotency key: if invoice.upcoming is redelivered while this
+      // handler is mid-flight, the second run could re-read the same
+      // PENDING credits before the first run marks them APPLIED and
+      // create a DUPLICATE negative item (double discount, potentially
+      // a negative invoice total). The key pins both calls to the same
+      // credit set — Stripe replays the original response instead.
+      // Non-concurrent redelivery is already safe: by then the credits
+      // read as APPLIED and the handler no-ops.
+      await this.stripeService.stripe.invoiceItems.create(
+        {
+          customer: input.stripeCustomerId,
+          amount: -appliedCents,
+          currency: "usd",
+          description: `Referral rewards credit (${applied.length} credit${applied.length === 1 ? "" : "s"})`,
+          metadata: {
+            source: "referral-credit-autoapply",
+            dealerId: input.dealerId,
+            creditIds: applied.map((c) => c.id).join(","),
+          },
         },
-      });
+        {
+          idempotencyKey: `referral-credit-apply-${input.dealerId}-${applied.map((c) => c.id).join(",")}`,
+        },
+      );
 
       // Mark the consumed credits APPLIED (per-row update so each keeps its
       // own reason with an audit suffix).
