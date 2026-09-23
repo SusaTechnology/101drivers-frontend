@@ -56,7 +56,8 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { useDataQuery, useDataMutation, getUser } from '@/lib/tanstack/dataQuery';
+import { useQuery } from '@tanstack/react-query';
+import { useDataQuery, useDataMutation, getUser, authFetch } from '@/lib/tanstack/dataQuery';
 import { usePricingConfigs } from '@/hooks/pricing/usePricingConfigs';
 import { calculatePricing, type PricingCalcResult } from '@/lib/pricing/calculate';
 import type {
@@ -89,7 +90,7 @@ const formatDate = (iso: string): string => {
   }
 };
 
-// ── Audit log entry shape (subset returned by GET /api/adminAuditLogs) ─────
+// ── Audit log entry shape (subset returned by POST /api/adminAuditLogs/search) ──
 
 interface AuditLogEntry {
   id: string;
@@ -547,12 +548,22 @@ function InlineEditPricing({
 
 function RecentPricingAuditLog({ customerId }: { customerId: string }) {
   // Fetch the latest 5 pricing-related audit entries for this customer.
-  // The existing GET /api/adminAuditLogs endpoint accepts customerId + action
-  // filters, so no new endpoint is needed.
-  const { data: auditEntries, isLoading } = useDataQuery<AuditLogEntry[]>({
-    apiEndPoint: `${API_BASE_URL}/api/adminAuditLogs?customerId=${customerId}&action=PRICING_UPDATE&take=5&orderBy=createdAt:desc`,
+  // Uses POST /api/adminAuditLogs/search — the same endpoint as the admin
+  // audit-logs page. The old flat GET params (customerId=...&action=...)
+  // were passed straight into Prisma's findMany and crashed with
+  // "Unknown argument customerId"; /search builds a proper where clause.
+  const { data: auditEntries, isLoading } = useQuery({
+    queryKey: ['customerPricingAuditLog', customerId],
+    queryFn: () =>
+      authFetch<AuditLogEntry[]>(`${API_BASE_URL}/api/adminAuditLogs/search`, {
+        method: 'POST',
+        body: JSON.stringify({
+          where: { customerId, action: 'PRICING_UPDATE' },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        }),
+      }),
     enabled: !!customerId,
-    noFilter: true,
     staleTime: 30 * 1000,
   });
 
