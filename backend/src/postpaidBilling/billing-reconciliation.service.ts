@@ -369,8 +369,12 @@ export class BillingReconciliationService {
     for (const inv of invoices.data) {
       summary.invoicesScanned++;
       try {
-        const lines: any[] = (inv as any).lines?.data ?? [];
-        const itemIds = lines.map((l) => l.invoiceitem).filter(Boolean);
+        // Schema-proof extraction (dahlia lives the id at
+        // parent.invoice_item_details.invoice_item — the legacy flat field
+        // is always undefined on our pinned API version).
+        const itemIds = this.postpaidBilling
+          ? this.postpaidBilling.extractInvoiceItemIds(inv)
+          : [];
         if (itemIds.length === 0) continue; // $0 anchor-only invoice — nothing to sync
 
         if (inv.status === "paid") {
@@ -418,6 +422,110 @@ export class BillingReconciliationService {
       `Invoice state backfill: ${summary.invoicesScanned} invoice(s) scanned — ` +
         `${summary.repairedPaid} paid-state repair(s), ${summary.repairedClosed} closed-state repair(s), ${summary.errors} error(s)`,
     );
+    return summary;
+  }
+
+  // ── Stuck-usage reconciliation (dahlia webhook-bug heal) ─────────
+
+  /**
+   * Heal USAGE_REPORTED rows whose InvoiceItem was already swept into a
+   * finalized invoice — the exact drift the dahlia line-schema webhook
+   * bug left behind (extractInvoiceItemIds returning [] meant
+   * payment_succeeded never marked any row PAID, while Stripe collected
+   * the money normally).
+   *
+   * For each stuck row (status=USAGE_REPORTED, stripeInvoiceItemId set):
+   *   • InvoiceItem still pending (invoice=null)     → leave; rides next invoice
+   *   • swept into a PAID invoice                    → re-run the idempotent
+   *     payment_succeeded handler → row(s) marked PAID + stamped
+   *   • swept into a voided/uncollectible invoice    → re-run the matching
+   *     write-off handler (row → VOIDED, excluded from outstanding)
+   *   • swept into an open/draft invoice             → leave; charge in flight
+   *
+   * Idempotent, bounded by `limit` (oldest first). Runs nightly in the
+   * billing reconciliation cron and on demand via the admin endpoint.
+   */
+  async reconcileStuckUsageReported(limit = 50): Promise<{
+    checked: number;
+    healedPaid: number;
+    healedClosed: number;
+    stillPending: number;
+    errors: number;
+  }> {
+    const summary = {
+      checked: 0,
+      healedPaid: 0,
+      healedClosed: 0,
+      stillPending: 0,
+      errors: 0,
+    };
+    if (!this.stripeService) {
+      this.logger.warn("Stuck-usage reconciliation skipped — StripeService unavailable");
+      return summary;
+    }
+
+    const stuck = await this.prisma.payment.findMany({
+      where: {
+        status: "USAGE_REPORTED",
+        stripeInvoiceItemId: { not: null },
+      },
+      select: { id: true, stripeInvoiceItemId: true },
+      orderBy: { updatedAt: "asc" },
+      take: limit,
+    });
+
+    for (const row of stuck) {
+      summary.checked++;
+      try {
+        const item = (await this.stripeService.stripe.invoiceItems.retrieve(
+          row.stripeInvoiceItemId!,
+        )) as any;
+        const invoiceId = item.invoice as string | null;
+        if (!invoiceId) {
+          // Still pending — will ride the next weekly invoice.
+          summary.stillPending++;
+          continue;
+        }
+        const invoice = await this.stripeService.stripe.invoices.retrieve(invoiceId);
+        if (invoice.status === "paid") {
+          if (!this.postpaidBilling) {
+            summary.errors++;
+            continue;
+          }
+          // Idempotent: re-marks every row on this invoice, stamps
+          // stripeInvoiceId + paidAt, and auto-unfreezes a
+          // CHARGE_FAILED-frozen dealer.
+          await this.postpaidBilling.handleInvoicePaymentSucceeded(invoiceId);
+          summary.healedPaid++;
+          this.logger.warn(
+            `Reconcile: re-ran payment_succeeded for invoice ${invoiceId} — item ${row.stripeInvoiceItemId} was swept but the webhook never marked it (dahlia bug heal)`,
+          );
+        } else if (invoice.status === "void") {
+          await this.postpaidBilling?.handleInvoiceVoided(invoiceId);
+          summary.healedClosed++;
+        } else if (invoice.status === "uncollectible") {
+          await this.postpaidBilling?.handleInvoiceMarkedUncollectible(invoiceId);
+          summary.healedClosed++;
+        } else {
+          // open / draft — payment in flight, leave alone
+          summary.stillPending++;
+        }
+      } catch (err: any) {
+        // InvoiceItem deleted in Stripe, or fetch failed — count and move on.
+        summary.errors++;
+        this.logger.error(
+          `Reconcile error for payment ${row.id} (item ${row.stripeInvoiceItemId}): ${err?.message}`,
+        );
+      }
+    }
+
+    if (summary.checked > 0) {
+      this.logger.log(
+        `Stuck-usage reconciliation: ${summary.checked} checked, ` +
+          `${summary.healedPaid} healed→PAID, ${summary.healedClosed} healed→VOIDED, ` +
+          `${summary.stillPending} still pending/in-flight, ${summary.errors} error(s)`,
+      );
+    }
     return summary;
   }
 

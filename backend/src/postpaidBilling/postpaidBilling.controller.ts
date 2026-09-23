@@ -24,6 +24,7 @@ import {
   OnApplicationBootstrap,
   Param,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
@@ -233,6 +234,22 @@ export class PostpaidBillingController implements OnApplicationBootstrap {
       );
     }
     return { ok: true, dealerId, ...result };
+  }
+
+  // ─── ADMIN: Stuck-usage reconciliation (dahlia webhook-bug heal) ──
+
+  @Post("admin/reconcile-stuck-usage")
+  @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
+  @ApiOperation({
+    summary:
+      "Heal USAGE_REPORTED payments whose Stripe InvoiceItem was already swept into a finalized invoice (missed payment_succeeded webhook) — marks them PAID/VOIDED",
+  })
+  async reconcileStuckUsage(@Query("limit") limit?: string) {
+    const parsed = Number(limit);
+    const result = await this.reconciliation.reconcileStuckUsageReported(
+      Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 200) : 50,
+    );
+    return { ok: true, ...result };
   }
 
   // ─── ADMIN: Billing Mode Switch ────────────────────────────
@@ -482,6 +499,16 @@ export class PostpaidBillingController implements OnApplicationBootstrap {
       await this.withCronLock("billingReconciliation", async () => {
         await this.reconciliation.runNightlyReconciliation();
         await this.reconciliation.runInvoiceStateBackfill();
+        // Heal USAGE_REPORTED rows swept into finalized invoices but never
+        // marked PAID (dahlia line-schema webhook bug drift). Runs after
+        // the backfill so fresh repairs are already reflected.
+        try {
+          await this.reconciliation.reconcileStuckUsageReported();
+        } catch (reconcileErr: any) {
+          this.logger.warn(
+            `Stuck-usage reconciliation failed (non-fatal): ${reconcileErr?.message}`,
+          );
+        }
         // D3: after repairs landed, mail the ops summary (skips itself when
         // BILLING_OPS_EMAIL is unset or everything is quiet).
         try {

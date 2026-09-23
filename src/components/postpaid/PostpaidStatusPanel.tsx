@@ -105,6 +105,34 @@ interface PostpaidStatus {
   pendingReferralCreditCents: number | null
   /** THE final number: what the next weekly invoice will charge after referral credits. */
   estimatedNextChargeCents: number | null
+  // Next-charge breakdown (the clickable "how we got to this amount" view).
+  // Optional — keeps the panel safe against a cached response from a
+  // backend that hasn't been redeployed yet.
+  nextChargeLines?: Array<{
+    id: string
+    source: 'stripe' | 'db'
+    description: string
+    amountCents: number
+    date: string | null
+    deliveryId: string | null
+    pickupAddress: string | null
+    dropoffAddress: string | null
+    completedAt: string | null
+  }>
+  // Unpaid local rows NOT on Stripe's upcoming preview (DB↔Stripe drift —
+  // e.g. an item already swept into a past invoice whose webhook was
+  // missed; nightly reconciliation heals these).
+  unreconciledLines?: Array<{
+    id: string
+    description: string
+    amountCents: number
+    date: string | null
+    deliveryId: string
+    pickupAddress: string
+    dropoffAddress: string
+  }>
+  /** Credits that will actually be applied to this next charge (FIFO). */
+  creditsApplyingCents?: number
   failedPayments: FailedPayment[]
 }
 
@@ -118,6 +146,8 @@ export default function PostpaidStatusPanel({
   collapsible?: boolean
 }) {
   const [isRefreshing, setIsRefreshing] = useState(false)
+  // Breakdown expansion — the "how we got to this amount" detail view.
+  const [showBreakdown, setShowBreakdown] = useState(false)
   const navigate = useNavigate()
   // Persisted collapse state — default is expanded; the dealer's choice
   // to hide the panel survives page reloads.
@@ -206,6 +236,12 @@ export default function PostpaidStatusPanel({
   })()
   const creditsCoverAll =
     status.estimatedNextChargeCents === 0 && creditsAppliedDollars !== null
+  // Credits that will actually ride THIS next charge (FIFO-accurate, from
+  // the backend) — may be less than the pending sum.
+  const creditsApplyingDollars =
+    status.creditsApplyingCents != null && status.creditsApplyingCents > 0
+      ? (status.creditsApplyingCents / 100).toFixed(2)
+      : null
 
   // ── Deep-link to Settings → Payment method ──
   // The single most important action for a dealer with failed charges is
@@ -588,6 +624,20 @@ export default function PostpaidStatusPanel({
                         ? 'Your referral credits fully cover these unpaid deliveries. This locks to the exact invoice amount when your weekly invoice is prepared.'
                         : 'Estimated from your unpaid completed deliveries, minus referral credits. It locks to the exact invoice amount when your weekly invoice is prepared.'}
                 </div>
+                {estimatedNextCharge !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBreakdown((v) => !v)}
+                    className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {showBreakdown ? 'Hide breakdown' : 'View breakdown'}
+                    {showBreakdown ? (
+                      <ChevronUp className="h-3 w-3" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" />
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Next invoice date */}
@@ -635,6 +685,132 @@ export default function PostpaidStatusPanel({
                 </div>
               </div>
             </div>
+
+            {/* ── Breakdown: "how we get to this amount" ──
+                Shows every line the next charge is built from — deliveries
+                with completed dates, plan lines, refunds/credit negatives —
+                and the total, so the dealer can trace the number. */}
+            {showBreakdown && estimatedNextCharge !== null && (
+              <div className="mt-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    How we get to ${estimatedNextCharge}
+                  </div>
+                  {!isStripeOfficial && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-500 border border-amber-300 dark:border-amber-800 rounded-full px-2 py-0.5">
+                      Estimated
+                    </span>
+                  )}
+                </div>
+
+                <div className="divide-y divide-slate-200 dark:divide-slate-800">
+                  {(status.nextChargeLines ?? []).length === 0 && (
+                    <div className="py-2 text-[11px] text-slate-400">
+                      Nothing is pending on the upcoming invoice right now.
+                    </div>
+                  )}
+                  {(status.nextChargeLines ?? []).map((line) => {
+                    const lineDate = line.completedAt ?? line.date
+                    const isNegative = line.amountCents < 0
+                    return (
+                      <div
+                        key={line.id}
+                        className="py-2 flex items-start justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
+                            {line.deliveryId && line.pickupAddress
+                              ? `Delivery · ${line.pickupAddress} → ${line.dropoffAddress ?? ''}`
+                              : line.description}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {line.deliveryId && lineDate
+                              ? `Completed ${new Date(lineDate).toLocaleDateString(
+                                  'en-US',
+                                  { month: 'short', day: 'numeric' },
+                                )}`
+                              : lineDate
+                                ? new Date(lineDate).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })
+                                : line.description}
+                          </div>
+                        </div>
+                        <div
+                          className={`text-xs font-semibold shrink-0 ${
+                            isNegative
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-slate-700 dark:text-slate-200'
+                          }`}
+                        >
+                          {(line.amountCents / 100).toFixed(2).startsWith('-')
+                            ? `−$${(line.amountCents / 100).toFixed(2).slice(1)}`
+                            : `$${(line.amountCents / 100).toFixed(2)}`}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {creditsApplyingDollars !== null && (
+                    <div className="py-2 flex items-center justify-between gap-3">
+                      <div className="text-xs text-emerald-600 dark:text-emerald-400">
+                        Referral credits (applied automatically before the
+                        charge)
+                      </div>
+                      <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
+                        −${creditsApplyingDollars}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-slate-300 dark:border-slate-700 flex items-center justify-between">
+                  <div className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    {isStripeOfficial ? 'Total to be charged' : 'Estimated total'}
+                  </div>
+                  <div className="text-sm font-black text-slate-900 dark:text-white">
+                    ${estimatedNextCharge}
+                  </div>
+                </div>
+
+                {(status.unreconciledLines?.length ?? 0) > 0 && (
+                  <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-2.5">
+                    <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-1">
+                      In our records, not on this invoice yet
+                    </div>
+                    {(status.unreconciledLines ?? []).map((l) => (
+                      <div
+                        key={l.id}
+                        className="py-0.5 flex items-center justify-between gap-3"
+                      >
+                        <div className="text-[10px] text-amber-700/90 dark:text-amber-400/90 truncate">
+                          {l.description}
+                          {l.date
+                            ? ` · completed ${new Date(l.date).toLocaleDateString(
+                                'en-US',
+                                { month: 'short', day: 'numeric' },
+                              )}`
+                            : ''}
+                        </div>
+                        <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 shrink-0">
+                          ${(l.amountCents / 100).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-[10px] text-amber-600 dark:text-amber-500 mt-1.5 leading-snug">
+                      We&apos;re matching these with Stripe. They&apos;ll either
+                      appear on a future weekly invoice or settle as already
+                      paid — you won&apos;t be charged twice.
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+                  Tips are charged separately when you add one. Negative lines
+                  (credits/refunds) reduce the total.
+                </div>
+              </div>
+            )}
 
             <p className="mt-3 text-[10px] text-slate-400 dark:text-slate-500">
               Completed deliveries appear as line items on your next weekly Stripe invoice.

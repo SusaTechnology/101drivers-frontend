@@ -1153,10 +1153,26 @@ export class PostpaidBillingService {
         expand: ["lines"],
       });
 
-      const lineItems = (invoice as any).lines?.data ?? [];
-      const invoiceItemIds: string[] = lineItems
-        .map((l: any) => l.invoiceitem)
-        .filter(Boolean);
+      // Schema-proof extraction — `line.invoiceitem` does NOT exist on
+      // dahlia (our pinned API version); the id lives at
+      // line.parent.invoice_item_details.invoice_item. Reading only the
+      // legacy field returned [] on EVERY invoice, which made this handler
+      // look exactly like a "$0 anchor" invoice and silently mark ZERO
+      // Payment rows PAID.
+      let invoiceItemIds = this.extractInvoiceItemIds(invoice);
+      if (invoiceItemIds.length === 0) {
+        // Bulletproof fallback: list the InvoiceItems attached to this
+        // invoice directly — independent of how line items are rendered.
+        try {
+          const items = await this.stripeService!.stripe.invoiceItems.list({
+            invoice: invoiceId,
+            limit: 100,
+          });
+          invoiceItemIds = items.data.map((i: any) => i.id);
+        } catch {
+          // keep empty — the "nothing to mark" branch below handles it
+        }
+      }
 
       if (invoiceItemIds.length === 0) {
         // $0 anchor subscription cycle — no per-delivery line items.
@@ -1245,10 +1261,23 @@ export class PostpaidBillingService {
 
       const stripeCustomerId = this.resolveStripeCustomerId(invoice.customer);
 
-      const lineItems = (invoice as any).lines?.data ?? [];
-      const invoiceItemIds: string[] = lineItems
-        .map((l: any) => l.invoiceitem)
-        .filter(Boolean);
+      // Schema-proof extraction (see handleInvoicePaymentSucceeded) — the
+      // legacy line.invoiceitem field is gone on dahlia, which killed the
+      // primary match-by-item path and pushed every failure into the
+      // stripeInvoiceId fallback — which matches 0 rows on the FIRST
+      // failure because nothing ever stamps stripeInvoiceId anymore.
+      let invoiceItemIds = this.extractInvoiceItemIds(invoice);
+      if (invoiceItemIds.length === 0) {
+        try {
+          const items = await this.stripeService!.stripe.invoiceItems.list({
+            invoice: invoiceId,
+            limit: 100,
+          });
+          invoiceItemIds = items.data.map((i: any) => i.id);
+        } catch {
+          // keep empty — the stripeInvoiceId fallback below still runs
+        }
+      }
 
       const failureMessage =
         (invoice as any).last_payment_error?.message ||
@@ -2733,6 +2762,42 @@ export class PostpaidBillingService {
     // ReferralCreditApplicationService.applyPostpaidCreditsToUpcomingInvoice
     // uses. Matches the final invoice total 1:1.
     estimatedNextChargeCents: number | null;
+    // ── Next-charge breakdown (the clickable "how we got to this amount"
+    // detail view) ──
+    // Lines the next charge is built from. source="stripe" when built
+    // from Stripe's official upcoming-invoice preview (the anchor plan
+    // line + every pending delivery InvoiceItem ± credit lines), "db"
+    // when estimated from local unpaid rows (no preview available).
+    nextChargeLines: Array<{
+      id: string;
+      source: "stripe" | "db";
+      description: string;
+      amountCents: number;
+      date: string | null;
+      deliveryId: string | null;
+      pickupAddress: string | null;
+      dropoffAddress: string | null;
+      completedAt: string | null;
+    }>;
+    // Unpaid local rows that are NOT on Stripe's upcoming preview. Healthy
+    // state: empty. Non-empty = DB↔Stripe drift — e.g. the item was already
+    // swept into a past invoice whose payment_succeeded webhook was missed
+    // (the nightly stuck-usage reconciliation heals these to PAID), or
+    // usage hasn't been reported yet. Surfaced so the dealer is never
+    // confused by a delivery count that doesn't match the invoice.
+    unreconciledLines: Array<{
+      id: string;
+      description: string;
+      amountCents: number;
+      date: string | null;
+      deliveryId: string;
+      pickupAddress: string;
+      dropoffAddress: string;
+    }>;
+    // The portion of pendingReferralCreditCents that will actually be
+    // applied to THIS next charge under the FIFO rule — may be less than
+    // the pending sum when credits exceed what the invoice needs.
+    creditsApplyingCents: number;
     // Per-payment failure details — so the dealer dashboard can show
     // "Your charge of $X failed because [reason]. Stripe will retry
     // on [date]." with an "Update payment method" button.
@@ -2782,8 +2847,9 @@ export class PostpaidBillingService {
 
     const outstandingCents = await this.computeOutstandingBalanceCents(dealerId);
 
-    // Count unpaid postpaid deliveries
-    const unpaidCount = await this.prisma.payment.count({
+    // Unpaid postpaid deliveries — the count for the panel PLUS the rows
+    // themselves, which feed the next-charge breakdown detail view.
+    const unpaidRows = await this.prisma.payment.findMany({
       where: {
         delivery: { customerId: dealerId },
         paymentType: EnumPaymentPaymentType.POSTPAID,
@@ -2797,7 +2863,37 @@ export class PostpaidBillingService {
           ],
         },
       },
+      select: {
+        id: true,
+        amount: true,
+        status: true,
+        stripeInvoiceItemId: true,
+        delivery: {
+          select: { id: true, pickupAddress: true, dropoffAddress: true },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
     });
+    const unpaidCount = unpaidRows.length;
+
+    // Completion dates for the breakdown (DeliveryRequest has no
+    // completedAt column — the COMPLETED status-history row is the source
+    // of truth). One query for all unpaid deliveries.
+    const unpaidDeliveryIds = unpaidRows.map((r) => r.delivery.id);
+    const completionHistory = unpaidDeliveryIds.length
+      ? await this.prisma.deliveryStatusHistory.findMany({
+          where: {
+            deliveryId: { in: unpaidDeliveryIds },
+            toStatus: EnumDeliveryRequestStatus.COMPLETED,
+          },
+          select: { deliveryId: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
+    const completionDates = new Map(
+      completionHistory.map((h) => [h.deliveryId, h.createdAt]),
+    );
 
     // Look up the next upcoming invoice from Stripe (best-effort —
     // returns null if Stripe is unconfigured or no open invoice exists).
@@ -2806,6 +2902,24 @@ export class PostpaidBillingService {
     let nextInvoiceDate: Date | null = null;
     let upcomingInvoiceAmountCents: number | null = null;
     let estimatedNextChargeCents: number | null = null;
+    let creditsApplyingCents = 0;
+    // Breakdown lines from Stripe's official preview (hasPreview=true) or
+    // estimated from local rows (hasPreview=false).
+    let stripeLines: Array<{
+      id: string;
+      source: "stripe" | "db";
+      description: string;
+      amountCents: number;
+      date: string | null;
+      deliveryId: string | null;
+      pickupAddress: string | null;
+      dropoffAddress: string | null;
+      completedAt: string | null;
+    }> = [];
+    let hasPreview = false;
+    // InvoiceItem ids found on Stripe's preview lines — used to detect
+    // unpaid local rows that are NOT on the upcoming invoice (drift).
+    let previewItemIdsSet = new Set<string>();
 
     // Pending referral credits — subtracted below so the panel shows the
     // FINAL deduction, not a partial number. They are only applied to the
@@ -2842,6 +2956,7 @@ export class PostpaidBillingService {
         // next invoice) so the panel number matches the final invoice 1:1.
         const amountDueCents = upcoming.amount_due ?? 0;
         upcomingInvoiceAmountCents = amountDueCents;
+        hasPreview = true;
         const budgetCents =
           amountDueCents > 0 ? amountDueCents : Number.MAX_SAFE_INTEGER;
         let applicableCreditCents = 0;
@@ -2851,10 +2966,44 @@ export class PostpaidBillingService {
           }
           applicableCreditCents += credit.amountCents;
         }
+        creditsApplyingCents = applicableCreditCents;
         estimatedNextChargeCents = Math.max(
           0,
           amountDueCents - applicableCreditCents,
         );
+
+        // ── Build the breakdown lines from Stripe's official preview ──
+        // Every line the invoice will charge: the anchor plan line,
+        // every pending delivery InvoiceItem, and any negative credit
+        // lines Stripe already holds. InvoiceItem lines are matched back
+        // to their Payment row so the dealer sees pickup → dropoff and
+        // the completed date, not opaque Stripe ids.
+        const previewItemIds = new Set(this.extractInvoiceItemIds(upcoming));
+        previewItemIdsSet = previewItemIds;
+        const rowsByItemId = new Map(
+          unpaidRows
+            .filter((r) => r.stripeInvoiceItemId && previewItemIds.has(r.stripeInvoiceItemId))
+            .map((r) => [r.stripeInvoiceItemId as string, r]),
+        );
+        const rawPreviewLines: any[] = (upcoming as any).lines?.data ?? [];
+        stripeLines = rawPreviewLines.slice(0, 50).map((l) => {
+          const itemId = this.extractOneLineItemId(l);
+          const row = itemId ? rowsByItemId.get(itemId) : undefined;
+          const periodEnd = l?.period?.end;
+          return {
+            id: itemId ?? String(l.id),
+            source: "stripe" as const,
+            description: l.description || "Weekly plan",
+            amountCents: l.amount ?? 0,
+            date: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+            deliveryId: row?.delivery?.id ?? null,
+            pickupAddress: row?.delivery?.pickupAddress ?? null,
+            dropoffAddress: row?.delivery?.dropoffAddress ?? null,
+            completedAt: row
+              ? (completionDates.get(row.delivery.id)?.toISOString() ?? null)
+              : null,
+          };
+        });
       } catch (err: any) {
         // Likely "no upcoming invoice" — log + continue.
         this.logger.debug(
@@ -2882,11 +3031,47 @@ export class PostpaidBillingService {
         }
         fallbackCreditCents += credit.amountCents;
       }
+      creditsApplyingCents = fallbackCreditCents;
       estimatedNextChargeCents = Math.max(
         0,
         outstandingCents - fallbackCreditCents,
       );
     }
+
+    // ── Assemble the breakdown for the detail view ──
+    // With a preview: Stripe's lines are the truth of what will charge;
+    // any unpaid LOCAL row whose InvoiceItem is not on the preview goes
+    // into unreconciledLines (drift — healed by the nightly stuck-usage
+    // reconciliation). Without a preview: estimate lines from local rows.
+    const dbEstimateLines = unpaidRows.map((r) => ({
+      id: r.id,
+      source: "db" as const,
+      description: `Delivery · ${r.delivery.pickupAddress} → ${r.delivery.dropoffAddress}`,
+      amountCents: Math.round(Number(r.amount) * 100),
+      date: completionDates.get(r.delivery.id)?.toISOString() ?? null,
+      deliveryId: r.delivery.id,
+      pickupAddress: r.delivery.pickupAddress,
+      dropoffAddress: r.delivery.dropoffAddress,
+      completedAt: completionDates.get(r.delivery.id)?.toISOString() ?? null,
+    }));
+    const nextChargeLines = hasPreview ? stripeLines : dbEstimateLines;
+    const unreconciledLines = hasPreview
+      ? unpaidRows
+          .filter(
+            (r) =>
+              !r.stripeInvoiceItemId ||
+              !previewItemIdsSet.has(r.stripeInvoiceItemId),
+          )
+          .map((r) => ({
+            id: r.id,
+            description: `${r.delivery.pickupAddress} → ${r.delivery.dropoffAddress}`,
+            amountCents: Math.round(Number(r.amount) * 100),
+            date: completionDates.get(r.delivery.id)?.toISOString() ?? null,
+            deliveryId: r.delivery.id,
+            pickupAddress: r.delivery.pickupAddress,
+            dropoffAddress: r.delivery.dropoffAddress,
+          }))
+      : [];
 
     // ── Fetch failed payments for the dealer dashboard ──
     // The dealer sees per-payment failure details (amount, reason, date)
@@ -2934,6 +3119,9 @@ export class PostpaidBillingService {
       upcomingInvoiceAmountCents,
       pendingReferralCreditCents,
       estimatedNextChargeCents,
+      nextChargeLines,
+      unreconciledLines,
+      creditsApplyingCents,
       failedPayments: failedPayments.map((p) => ({
         paymentId: p.id,
         amount: p.amount,
@@ -3258,6 +3446,39 @@ export class PostpaidBillingService {
       .replace("{dropoff}", truncate(input.dropoff))
       .replace("{miles}", input.miles)
       .replace("{amount}", input.amount);
+  }
+
+  /**
+   * Extract the InvoiceItem ids referenced by an invoice (or preview)'s
+   * line items — across Stripe API schema generations.
+   *
+   *   Pre-2025 (legacy):    line.invoiceitem
+   *   basil/dahlia (2025+): line.parent.invoice_item_details.invoice_item
+   *
+   * Our pinned API version is 2026-04-22.dahlia, where ONLY the parent
+   * form exists. The old `.map(l => l.invoiceitem)` returned [] for every
+   * invoice — which made payment_succeeded a silent no-op (it looked like
+   * a $0 anchor invoice) and left payment_failed matching nothing on the
+   * first attempt. Also used by BillingReconciliationService's backfill.
+   */
+  extractInvoiceItemIds(invoice: any): string[] {
+    const lines: any[] = invoice?.lines?.data ?? [];
+    const ids: string[] = [];
+    for (const l of lines) {
+      const id = this.extractOneLineItemId(l);
+      if (id) ids.push(id);
+    }
+    return ids;
+  }
+
+  extractOneLineItemId(line: any): string | null {
+    if (!line) return null;
+    return (
+      line.parent?.invoice_item_details?.invoice_item ?? // dahlia/basil+
+      line.invoiceitem ?? // legacy flat field (pre-2025 API versions)
+      line.invoice_item ?? // legacy snake_case alias
+      null
+    );
   }
 
   /**
