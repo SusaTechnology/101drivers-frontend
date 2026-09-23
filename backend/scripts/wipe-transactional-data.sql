@@ -3,8 +3,10 @@
 --
 -- KEEPS (untouched): users + logins, dealer (Customer) accounts, drivers,
 --   saved addresses/vehicles, saved cards (stripeCustomerId +
---   stripeDefaultPaymentMethodId), pricing configs, schedules, operating
---   hours, service districts, app settings, dealer/investor leads.
+--   stripeDefaultPaymentMethodId), driver Stripe Connect linkage (see
+--   OPTIONAL block below), pricing configs AND each dealer's pricing-config
+--   assignment (Customer.pricingConfigId), schedules, operating hours,
+--   service districts, app settings, dealer/investor leads.
 -- DELETES: every delivery (and everything hanging off it), every payment,
 --   every payout, all referral state + credits, all notifications, admin
 --   audit rows, support tickets, and resets every dealer's billing flags.
@@ -33,6 +35,9 @@ UPDATE "DeliveryRequest" SET "resubmittedFromId" = NULL;
 
 -- ---------------------------------------------------------------------------
 -- 1) Delivery children — deepest first (FK-safe order).
+--    NOTE: DeliveryAssignment rows are delivery HISTORY (which driver had
+--    which delivery) — they go with the deliveries. Driver accounts,
+--    preferences and district preferences are NOT touched.
 -- ---------------------------------------------------------------------------
 DELETE FROM "DriverRouteCache";        -- has ON DELETE CASCADE anyway; explicit is harmless
 DELETE FROM "TrackingPoint";
@@ -53,6 +58,8 @@ DELETE FROM "DeliveryAssignment";
 --    (ReferralCredit before Referral; Referral before DriverPayout, because
 --    Referral holds the FK to payouts; Invoice before Payment; PayoutBatchItem
 --    before DriverPayout/PayoutBatch.)
+--    Referral CODES on dealers and the referral PROGRAM settings in
+--    AppSetting are configuration — kept.
 -- ---------------------------------------------------------------------------
 DELETE FROM "ReferralCredit";
 DELETE FROM "PaymentEvent";
@@ -71,6 +78,8 @@ DELETE FROM "DeliveryRequest";
 
 -- ---------------------------------------------------------------------------
 -- 4) Pricing quotes created during delivery creation / quote requests.
+--    Pricing CONFIGS themselves (PricingConfig / PricingTier /
+--    PricingCategoryRule) are NOT touched — they are configuration.
 -- ---------------------------------------------------------------------------
 DELETE FROM "Quote";
 
@@ -88,7 +97,8 @@ DELETE FROM "AdminAuditLog";
 -- 6) Reset EVERY dealer's billing state to factory-fresh:
 --    prepaid, never configured, not frozen, no subscription.
 --    NOTE: stripeCustomerId + saved card are deliberately KEPT so dealers
---    don't have to re-add their cards.
+--    don't have to re-add their cards. Pricing-config assignment
+--    (pricingConfigId / pricingModeOverride) is deliberately KEPT.
 -- ---------------------------------------------------------------------------
 UPDATE "Customer" SET
   "billingMode"              = NULL,
@@ -101,7 +111,22 @@ UPDATE "Customer" SET
   "updatedAt"                = now();
 
 -- ---------------------------------------------------------------------------
--- 7) Verify — every number here MUST be 0 before you commit.
+-- 7) OPTIONAL — driver Stripe Connect reset (COMMENTED OUT by default).
+--    Default: drivers keep their Connect accounts and onboarding state, so
+--    they do NOT have to redo identity verification + bank details.
+--    If your drivers are TEST-ONLY and should onboard from scratch,
+--    uncomment the UPDATE below AND run the stripe script with
+--    --also-delete-connect-accounts (both or neither — a linkage pointing
+--    at a deleted account would break the next payout until re-onboarded).
+--    ("DriverBankAccount" rows are harmless legacy data; no need to touch.)
+-- ---------------------------------------------------------------------------
+-- UPDATE "Driver" SET
+--   "stripeConnectAccountId"          = NULL,
+--   "stripeConnectOnboardingComplete" = false,
+--   "updatedAt"                       = now();
+
+-- ---------------------------------------------------------------------------
+-- 8) Verify — every number here MUST be 0 before you commit.
 -- ---------------------------------------------------------------------------
 \echo ''
 \echo '================ VERIFY (all rows must show 0) ================'
@@ -134,8 +159,9 @@ WHERE "billingMode" IS NOT NULL
 
 SELECT 'Dealers kept (accounts + cards safe)' AS check,
        COUNT(*) AS rows,
-       COUNT("stripeDefaultPaymentMethodId") AS with_saved_card
-FROM "Customer";
+       COUNT("stripeDefaultPaymentMethodId") AS with_saved_card;
+
+SELECT 'Pricing configs kept' AS check, COUNT(*) AS rows FROM "PricingConfig";
 
 COMMIT;
 
