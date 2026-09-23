@@ -47,8 +47,10 @@ export interface ChargeBreakdownSection {
   id: string
   /** Optional heading above the rows, e.g. "Refunds & credits". */
   heading?: string
-  /** Optional plain-English sentence explaining this group. */
-  description?: string
+  /** Optional plain-English sentence explaining this group. Accepts a
+   *  ReactNode so callers can use line breaks / bullets for lifecycles
+   *  ("if it succeeds X, if it fails Y"). */
+  description?: React.ReactNode
   /** "warning" renders the group as an amber callout (attention, not alarm). */
   tone?: 'default' | 'warning'
   rows: ChargeBreakdownRow[]

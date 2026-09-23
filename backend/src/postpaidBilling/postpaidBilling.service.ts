@@ -2745,6 +2745,13 @@ export class PostpaidBillingService {
     outstandingCents: number;
     outstandingDollars: number;
     unpaidDeliveryCount: number;
+    // Split of unpaidDeliveryCount for dealer-facing wording: rows whose
+    // payment is actively moving (AUTHORIZED / PENDING_STRIPE_USAGE /
+    // USAGE_REPORTED / INVOICED) vs rows whose charge FAILED and is being
+    // retried. The panel may only say "payment being processed" for the
+    // former — failed charges are surfaced by dedicated failure banners.
+    unpaidProcessingCount: number;
+    unpaidFailedCount: number;
     hasSavedPaymentMethod: boolean;
     nextInvoiceDate: Date | null;
     // ── Final next-charge number ("show the final deduction, not
@@ -2885,6 +2892,11 @@ export class PostpaidBillingService {
       take: 50,
     });
     const unpaidCount = unpaidRows.length;
+    // See the return-type comment on unpaidProcessingCount/unpaidFailedCount.
+    const unpaidFailedCount = unpaidRows.filter(
+      (r) => r.status === EnumPaymentStatus.CHARGE_FAILED,
+    ).length;
+    const unpaidProcessingCount = unpaidCount - unpaidFailedCount;
 
     // Completion dates for the breakdown (DeliveryRequest has no
     // completedAt column — the COMPLETED status-history row is the source
@@ -3148,6 +3160,8 @@ export class PostpaidBillingService {
       outstandingCents,
       outstandingDollars: Number((outstandingCents / 100).toFixed(2)),
       unpaidDeliveryCount: unpaidCount,
+      unpaidProcessingCount: unpaidProcessingCount,
+      unpaidFailedCount: unpaidFailedCount,
       hasSavedPaymentMethod: Boolean(dealer.stripeDefaultPaymentMethodId),
       nextInvoiceDate,
       upcomingInvoiceAmountCents,

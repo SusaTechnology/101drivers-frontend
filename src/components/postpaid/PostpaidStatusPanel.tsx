@@ -102,6 +102,11 @@ interface PostpaidStatus {
   outstandingCents: number
   outstandingDollars: number
   unpaidDeliveryCount: number
+  // Split of unpaidDeliveryCount (optional — absent on a cached response
+  // from a backend that hasn't been redeployed yet): rows whose payment is
+  // actively being processed vs rows whose charge failed and is retrying.
+  unpaidProcessingCount?: number
+  unpaidFailedCount?: number
   hasSavedPaymentMethod: boolean
   nextInvoiceDate: string | null
   /** Stripe's raw upcoming-invoice amount_due (all swept items, before pending credits). */
@@ -251,6 +256,29 @@ export default function PostpaidStatusPanel({
       ? (status.creditsApplyingCents / 100).toFixed(2)
       : null
 
+  // ── What is happening with the unpaid deliveries right now ──
+  // "Unpaid" must never read as "you owe this NOW" — every unpaid delivery
+  // is either being processed for payment (reported usage awaiting the
+  // weekly invoice) or waiting to be retried after a failed attempt. The
+  // backend splits the count so the subline can say which; fall back to
+  // "everything processing" on a cached pre-deploy response.
+  const unpaidFailedCount = status.unpaidFailedCount ?? 0
+  const unpaidProcessingCount =
+    status.unpaidProcessingCount ??
+    Math.max(0, status.unpaidDeliveryCount - unpaidFailedCount)
+  let unpaidStatusPhrase: string | null = null
+  if (status.unpaidDeliveryCount > 0) {
+    if (creditsCoverAll) {
+      unpaidStatusPhrase = 'covered by your credits'
+    } else if (unpaidFailedCount > 0 && unpaidProcessingCount > 0) {
+      unpaidStatusPhrase = `${unpaidProcessingCount} processing · ${unpaidFailedCount} failed — retrying`
+    } else if (unpaidFailedCount > 0) {
+      unpaidStatusPhrase = 'payment failed — retrying'
+    } else {
+      unpaidStatusPhrase = 'payment being processed'
+    }
+  }
+
   // ── Breakdown dialog data ("See how we get to $X") ──
   // Row titles mirror the weekly invoice email's line format
   // ("Delivery #3gifyqd1 — pickup → dropoff (47.3 mi)") so the panel,
@@ -345,13 +373,34 @@ export default function PostpaidStatusPanel({
       amountCents: l.amountCents,
     }
   })
+  // Money the amber section accounts for — one figure the dealer can tie
+  // the "in progress" list to (the user-facing "you have Y to pay").
+  const unreconciledTotalCents = unreconciledRows.reduce(
+    (sum, r) => sum + r.amountCents,
+    0,
+  )
   if (unreconciledRows.length) {
     breakdownSections.push({
       id: 'unreconciled',
       tone: 'warning',
-      heading: 'Also in our records',
-      description:
-        "These completed deliveries aren't included in the total above yet. We're matching them with Stripe in the background — a delivery is never charged twice.",
+      heading: 'Payment in progress',
+      description: (
+        <>
+          These completed deliveries aren&apos;t included in the total above
+          yet — we&apos;re still processing their payments.
+          <br />
+          • If the payment succeeds, each delivery is marked paid on your
+          weekly invoice — nothing more happens.
+          <br />
+          • If the payment fails, the amount moves to a future weekly charge
+          and we retry automatically. New deliveries only pause after several
+          failed attempts.
+          <br />
+          Total for these deliveries:{' '}
+          <strong>{formatBreakdownMoney(unreconciledTotalCents)}</strong> — a
+          delivery is never charged twice.
+        </>
+      ),
       rows: unreconciledRows,
     })
   }
@@ -365,7 +414,9 @@ export default function PostpaidStatusPanel({
     breakdownIntro =
       creditsApplyingDollars !== null || pendingCreditsDollars !== null
         ? 'Your referral credits cover everything right now — nothing will be charged on your next weekly invoice.'
-        : 'Nothing is due right now — your next weekly invoice will be $0.00.'
+        : unreconciledRows.length > 0
+          ? 'Nothing will be charged this week — the deliveries below are still being processed for payment. If a payment fails, the amount moves to a future weekly charge automatically.'
+          : 'Nothing is due right now — your next weekly invoice will be $0.00.'
   } else if (!hasItemization) {
     // Itemized rows unavailable (older backend / unexpected preview) —
     // explain the number in words instead of showing an empty list.
@@ -751,8 +802,10 @@ export default function PostpaidStatusPanel({
                   {estimatedNextCharge !== null ? `$${estimatedNextCharge}` : '—'}
                 </div>
                 <div className="text-[10px] text-slate-400">
-                  {status.unpaidDeliveryCount} unpaid{' '}
-                  {status.unpaidDeliveryCount === 1 ? 'delivery' : 'deliveries'}
+                  {status.unpaidDeliveryCount > 0
+                    ? `${status.unpaidDeliveryCount} ${status.unpaidDeliveryCount === 1 ? 'delivery' : 'deliveries'}`
+                    : 'No unpaid deliveries'}
+                  {unpaidStatusPhrase ? ` · ${unpaidStatusPhrase}` : ''}
                   {status.outstandingCents > 0
                     ? ` · $${grossDeliveriesDollars} in deliveries`
                     : ''}
@@ -768,7 +821,9 @@ export default function PostpaidStatusPanel({
                     : isStripeOfficial
                       ? creditsCoverAll
                         ? 'Your referral credits fully cover these deliveries — nothing will be charged when the weekly invoice runs.'
-                        : 'The final amount your next weekly invoice will charge — deliveries and referral credits already included.'
+                        : nextChargeCents === 0 && status.unpaidDeliveryCount > 0
+                          ? 'Nothing will be charged this week — payment for these deliveries is still being processed. If a payment fails, the amount moves to a future weekly charge automatically.'
+                          : 'The final amount your next weekly invoice will charge — deliveries and referral credits already included.'
                       : creditsCoverAll
                         ? 'Your referral credits fully cover your unpaid deliveries right now.'
                         : 'Estimated from your completed deliveries that have not been billed yet, minus referral credits.'}
