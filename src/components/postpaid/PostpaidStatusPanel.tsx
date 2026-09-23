@@ -31,20 +31,20 @@
 //   • Fraud/security flags (admin-only)
 //   • Other dealers' data
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
   CheckCircle,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   CreditCard,
   Calendar,
   Receipt,
   Loader2,
   RefreshCw,
   Info,
-  ExternalLink,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -57,6 +57,11 @@ import {
   shouldShowDealer,
 } from '@/lib/stripe-error-codes'
 import { usePersistentCollapsed } from '@/hooks/usePersistentCollapsed'
+import ChargeBreakdownDialog, {
+  formatBreakdownMoney,
+  type ChargeBreakdownRow,
+  type ChargeBreakdownSection,
+} from '@/components/postpaid/ChargeBreakdownDialog'
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -118,6 +123,7 @@ interface PostpaidStatus {
     pickupAddress: string | null
     dropoffAddress: string | null
     completedAt: string | null
+    distanceMiles?: number | null
   }>
   // Unpaid local rows NOT on Stripe's upcoming preview (DB↔Stripe drift —
   // e.g. an item already swept into a past invoice whose webhook was
@@ -130,6 +136,7 @@ interface PostpaidStatus {
     deliveryId: string
     pickupAddress: string
     dropoffAddress: string
+    distanceMiles?: number | null
   }>
   /** Credits that will actually be applied to this next charge (FIFO). */
   creditsApplyingCents?: number
@@ -146,8 +153,9 @@ export default function PostpaidStatusPanel({
   collapsible?: boolean
 }) {
   const [isRefreshing, setIsRefreshing] = useState(false)
-  // Breakdown expansion — the "how we got to this amount" detail view.
-  const [showBreakdown, setShowBreakdown] = useState(false)
+  // Breakdown dialog — the "how we got to this amount" detail view
+  // (a real modal dialog, not an inline collapse).
+  const [breakdownOpen, setBreakdownOpen] = useState(false)
   const navigate = useNavigate()
   // Persisted collapse state — default is expanded; the dealer's choice
   // to hide the panel survives page reloads.
@@ -242,6 +250,147 @@ export default function PostpaidStatusPanel({
     status.creditsApplyingCents != null && status.creditsApplyingCents > 0
       ? (status.creditsApplyingCents / 100).toFixed(2)
       : null
+
+  // ── Breakdown dialog data ("See how we get to $X") ──
+  // Row titles mirror the weekly invoice email's line format
+  // ("Delivery #3gifyqd1 — pickup → dropoff (47.3 mi)") so the panel,
+  // the dialog and the invoice all speak the same language.
+  const rawLines = status.nextChargeLines ?? []
+  // Zero-amount lines (the $0/week billing-anchor plan) are noise for a
+  // non-technical reader — skip them so every visible row is real money.
+  const itemizedLines = rawLines.filter((l) => l.amountCents !== 0)
+  const hasItemization = itemizedLines.length > 0
+
+  type BreakdownLine = (typeof itemizedLines)[number]
+  const lineTitle = (l: BreakdownLine): string => {
+    if (l.deliveryId && l.pickupAddress) {
+      const dist =
+        l.distanceMiles != null && Number(l.distanceMiles) > 0
+          ? ` (${Number(l.distanceMiles).toFixed(1)} mi)`
+          : ''
+      return `Delivery #${l.deliveryId.slice(-8)} — ${l.pickupAddress} → ${l.dropoffAddress ?? ''}${dist}`
+    }
+    // Stripe line without a matched local row — strip the trailing
+    // "— $X" from Stripe's own description (amount shown on the right).
+    return l.description.replace(/\s*[—-]\s*\$[\d,.]+\s*$/, '')
+  }
+  const toRow = (l: BreakdownLine): ChargeBreakdownRow => {
+    const d = l.completedAt ?? l.date
+    const dateStr = d
+      ? new Date(d).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : null
+    return {
+      id: l.id,
+      title: lineTitle(l),
+      subtitle: dateStr
+        ? l.deliveryId
+          ? `Completed ${dateStr}`
+          : dateStr
+        : null,
+      amountCents: l.amountCents,
+    }
+  }
+
+  const breakdownSections: ChargeBreakdownSection[] = []
+  const positiveRows = itemizedLines
+    .filter((l) => l.amountCents > 0)
+    .map(toRow)
+  if (positiveRows.length) {
+    breakdownSections.push({ id: 'deliveries', rows: positiveRows })
+  }
+  const discountRows = itemizedLines
+    .filter((l) => l.amountCents < 0)
+    .map(toRow)
+  if (status.creditsApplyingCents != null && status.creditsApplyingCents > 0) {
+    discountRows.push({
+      id: 'referral-credits',
+      title: 'Referral credits',
+      subtitle: 'Applied automatically before the charge',
+      amountCents: -status.creditsApplyingCents,
+    })
+  }
+  if (discountRows.length) {
+    breakdownSections.push({
+      id: 'discounts',
+      heading: 'Refunds & credits',
+      description: 'These reduce what you pay.',
+      rows: discountRows,
+    })
+  }
+  // Completed deliveries our records show but Stripe's upcoming invoice
+  // doesn't (yet) — surfaced separately so the itemized rows and the
+  // total always agree.
+  const unreconciledRows: ChargeBreakdownRow[] = (
+    status.unreconciledLines ?? []
+  ).map((l) => {
+    const dist =
+      l.distanceMiles != null && Number(l.distanceMiles) > 0
+        ? ` (${Number(l.distanceMiles).toFixed(1)} mi)`
+        : ''
+    const dateStr = l.date
+      ? new Date(l.date).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : null
+    return {
+      id: l.id,
+      title: `Delivery #${l.deliveryId.slice(-8)} — ${l.pickupAddress} → ${l.dropoffAddress}${dist}`,
+      subtitle: dateStr ? `Completed ${dateStr}` : null,
+      amountCents: l.amountCents,
+    }
+  })
+  if (unreconciledRows.length) {
+    breakdownSections.push({
+      id: 'unreconciled',
+      tone: 'warning',
+      heading: 'Also in our records',
+      description:
+        "These completed deliveries aren't included in the total above yet. We're matching them with Stripe in the background — a delivery is never charged twice.",
+      rows: unreconciledRows,
+    })
+  }
+
+  // Intro sentence — the words must always agree with the total. The old
+  // "Nothing is pending on the upcoming invoice right now." line next to
+  // a $818.02 figure is exactly what this replaces.
+  const nextChargeCents = status.estimatedNextChargeCents ?? 0
+  let breakdownIntro: ReactNode
+  if (nextChargeCents === 0) {
+    breakdownIntro =
+      creditsApplyingDollars !== null || pendingCreditsDollars !== null
+        ? 'Your referral credits cover everything right now — nothing will be charged on your next weekly invoice.'
+        : 'Nothing is due right now — your next weekly invoice will be $0.00.'
+  } else if (!hasItemization) {
+    // Itemized rows unavailable (older backend / unexpected preview) —
+    // explain the number in words instead of showing an empty list.
+    breakdownIntro = (
+      <>
+        We&apos;re still preparing the itemized list for this amount. Right
+        now we can tell you: {status.unpaidDeliveryCount} completed{' '}
+        {status.unpaidDeliveryCount === 1 ? 'delivery' : 'deliveries'} totaling{' '}
+        {formatBreakdownMoney(status.outstandingCents)}
+        {creditsApplyingDollars !== null
+          ? `, minus $${creditsApplyingDollars} in referral credits`
+          : ''}
+        . The full list will appear here as soon as your invoice is prepared.
+      </>
+    )
+  } else if (isStripeOfficial) {
+    breakdownIntro =
+      'This is the exact amount your next weekly invoice will charge to the card on file. Each line below is one delivery, refund or credit.'
+  } else {
+    breakdownIntro =
+      'Your weekly invoice has not been prepared yet, so this is our estimate from the deliveries below — it locks to the exact amount when the invoice is prepared.'
+  }
+  const breakdownBadge = isStripeOfficial
+    ? { label: 'Final amount', tone: 'green' as const }
+    : { label: 'Estimated', tone: 'amber' as const }
 
   // ── Deep-link to Settings → Payment method ──
   // The single most important action for a dealer with failed charges is
@@ -618,24 +767,20 @@ export default function PostpaidStatusPanel({
                     ? 'Appears once your weekly billing is active.'
                     : isStripeOfficial
                       ? creditsCoverAll
-                        ? 'Your referral credits fully cover these deliveries — nothing will be charged when the weekly invoice runs. Tips are charged separately when you add one.'
-                        : 'The final amount on your next weekly invoice — every completed delivery, referral credits already subtracted. Tips are charged separately when you add one.'
+                        ? 'Your referral credits fully cover these deliveries — nothing will be charged when the weekly invoice runs.'
+                        : 'The final amount your next weekly invoice will charge — deliveries and referral credits already included.'
                       : creditsCoverAll
-                        ? 'Your referral credits fully cover these unpaid deliveries. This locks to the exact invoice amount when your weekly invoice is prepared.'
-                        : 'Estimated from your unpaid completed deliveries, minus referral credits. It locks to the exact invoice amount when your weekly invoice is prepared.'}
+                        ? 'Your referral credits fully cover your unpaid deliveries right now.'
+                        : 'Estimated from your completed deliveries that have not been billed yet, minus referral credits.'}
                 </div>
                 {estimatedNextCharge !== null && (
                   <button
                     type="button"
-                    onClick={() => setShowBreakdown((v) => !v)}
-                    className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                    onClick={() => setBreakdownOpen(true)}
+                    className="mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline"
                   >
-                    {showBreakdown ? 'Hide breakdown' : 'View breakdown'}
-                    {showBreakdown ? (
-                      <ChevronUp className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    )}
+                    See how we get to ${estimatedNextCharge}
+                    <ChevronRight className="h-3 w-3" />
                   </button>
                 )}
               </div>
@@ -664,7 +809,7 @@ export default function PostpaidStatusPanel({
                     : 'No upcoming invoice'}
                 </div>
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
-                  When Stripe will next charge your saved card for the outstanding balance.
+                  When your card on file will be charged for the amount above.
                 </div>
               </div>
 
@@ -686,138 +831,32 @@ export default function PostpaidStatusPanel({
               </div>
             </div>
 
-            {/* ── Breakdown: "how we get to this amount" ──
-                Shows every line the next charge is built from — deliveries
-                with completed dates, plan lines, refunds/credit negatives —
-                and the total, so the dealer can trace the number. */}
-            {showBreakdown && estimatedNextCharge !== null && (
-              <div className="mt-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    How we get to ${estimatedNextCharge}
-                  </div>
-                  {!isStripeOfficial && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-500 border border-amber-300 dark:border-amber-800 rounded-full px-2 py-0.5">
-                      Estimated
-                    </span>
-                  )}
-                </div>
-
-                <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                  {(status.nextChargeLines ?? []).length === 0 && (
-                    <div className="py-2 text-[11px] text-slate-400">
-                      Nothing is pending on the upcoming invoice right now.
-                    </div>
-                  )}
-                  {(status.nextChargeLines ?? []).map((line) => {
-                    const lineDate = line.completedAt ?? line.date
-                    const isNegative = line.amountCents < 0
-                    return (
-                      <div
-                        key={line.id}
-                        className="py-2 flex items-start justify-between gap-3"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
-                            {line.deliveryId && line.pickupAddress
-                              ? `Delivery · ${line.pickupAddress} → ${line.dropoffAddress ?? ''}`
-                              : line.description}
-                          </div>
-                          <div className="text-[10px] text-slate-400">
-                            {line.deliveryId && lineDate
-                              ? `Completed ${new Date(lineDate).toLocaleDateString(
-                                  'en-US',
-                                  { month: 'short', day: 'numeric' },
-                                )}`
-                              : lineDate
-                                ? new Date(lineDate).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                  })
-                                : line.description}
-                          </div>
-                        </div>
-                        <div
-                          className={`text-xs font-semibold shrink-0 ${
-                            isNegative
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-slate-700 dark:text-slate-200'
-                          }`}
-                        >
-                          {(line.amountCents / 100).toFixed(2).startsWith('-')
-                            ? `−$${(line.amountCents / 100).toFixed(2).slice(1)}`
-                            : `$${(line.amountCents / 100).toFixed(2)}`}
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {creditsApplyingDollars !== null && (
-                    <div className="py-2 flex items-center justify-between gap-3">
-                      <div className="text-xs text-emerald-600 dark:text-emerald-400">
-                        Referral credits (applied automatically before the
-                        charge)
-                      </div>
-                      <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
-                        −${creditsApplyingDollars}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-2 pt-2 border-t border-slate-300 dark:border-slate-700 flex items-center justify-between">
-                  <div className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                    {isStripeOfficial ? 'Total to be charged' : 'Estimated total'}
-                  </div>
-                  <div className="text-sm font-black text-slate-900 dark:text-white">
-                    ${estimatedNextCharge}
-                  </div>
-                </div>
-
-                {(status.unreconciledLines?.length ?? 0) > 0 && (
-                  <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-2.5">
-                    <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-1">
-                      In our records, not on this invoice yet
-                    </div>
-                    {(status.unreconciledLines ?? []).map((l) => (
-                      <div
-                        key={l.id}
-                        className="py-0.5 flex items-center justify-between gap-3"
-                      >
-                        <div className="text-[10px] text-amber-700/90 dark:text-amber-400/90 truncate">
-                          {l.description}
-                          {l.date
-                            ? ` · completed ${new Date(l.date).toLocaleDateString(
-                                'en-US',
-                                { month: 'short', day: 'numeric' },
-                              )}`
-                            : ''}
-                        </div>
-                        <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 shrink-0">
-                          ${(l.amountCents / 100).toFixed(2)}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="text-[10px] text-amber-600 dark:text-amber-500 mt-1.5 leading-snug">
-                      We&apos;re matching these with Stripe. They&apos;ll either
-                      appear on a future weekly invoice or settle as already
-                      paid — you won&apos;t be charged twice.
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
-                  Tips are charged separately when you add one. Negative lines
-                  (credits/refunds) reduce the total.
-                </div>
-              </div>
-            )}
 
             <p className="mt-3 text-[10px] text-slate-400 dark:text-slate-500">
-              Completed deliveries appear as line items on your next weekly Stripe invoice.
-              You&apos;ll receive the invoice via email when it&apos;s finalized.
+              Completed deliveries appear as line items on your next weekly
+              invoice — you&apos;ll receive it by email when it&apos;s ready.
+              Tips are charged separately when you add one.
             </p>
           </CardContent>
         </Card>
+
+        {/* ── Breakdown dialog: "how we get to this amount" ──
+            Opens as a modal (not an inline collapse) so the dealer's eye
+            stays on one focused, itemized explanation of the number. */}
+        {estimatedNextCharge !== null && (
+          <ChargeBreakdownDialog
+            open={breakdownOpen}
+            onOpenChange={setBreakdownOpen}
+            title={`How we get to $${estimatedNextCharge}`}
+            description="Line-by-line breakdown of your next charge"
+            intro={breakdownIntro}
+            badge={breakdownBadge}
+            sections={breakdownSections}
+            totalLabel={isStripeOfficial ? 'Total' : 'Estimated total'}
+            totalCents={status.estimatedNextChargeCents ?? 0}
+            footnote="Questions about any line? Contact support — we're happy to walk through it with you."
+          />
+        )}
       </div>
     </div>
   )

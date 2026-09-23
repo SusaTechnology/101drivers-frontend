@@ -2778,6 +2778,7 @@ export class PostpaidBillingService {
       pickupAddress: string | null;
       dropoffAddress: string | null;
       completedAt: string | null;
+      distanceMiles: number | null;
     }>;
     // Unpaid local rows that are NOT on Stripe's upcoming preview. Healthy
     // state: empty. Non-empty = DB↔Stripe drift — e.g. the item was already
@@ -2793,6 +2794,7 @@ export class PostpaidBillingService {
       deliveryId: string;
       pickupAddress: string;
       dropoffAddress: string;
+      distanceMiles: number | null;
     }>;
     // The portion of pendingReferralCreditCents that will actually be
     // applied to THIS next charge under the FIFO rule — may be less than
@@ -2869,7 +2871,14 @@ export class PostpaidBillingService {
         status: true,
         stripeInvoiceItemId: true,
         delivery: {
-          select: { id: true, pickupAddress: true, dropoffAddress: true },
+          select: {
+            id: true,
+            pickupAddress: true,
+            dropoffAddress: true,
+            // Route distance for the dealer-facing breakdown dialog
+            // ("Marina Del Rey → Santa Ana (47.3 mi)").
+            quote: { select: { distanceMiles: true } },
+          },
         },
       },
       orderBy: { updatedAt: "desc" },
@@ -2915,6 +2924,7 @@ export class PostpaidBillingService {
       pickupAddress: string | null;
       dropoffAddress: string | null;
       completedAt: string | null;
+      distanceMiles: number | null;
     }> = [];
     let hasPreview = false;
     // InvoiceItem ids found on Stripe's preview lines — used to detect
@@ -2986,24 +2996,35 @@ export class PostpaidBillingService {
             .map((r) => [r.stripeInvoiceItemId as string, r]),
         );
         const rawPreviewLines: any[] = (upcoming as any).lines?.data ?? [];
-        stripeLines = rawPreviewLines.slice(0, 50).map((l) => {
-          const itemId = this.extractOneLineItemId(l);
-          const row = itemId ? rowsByItemId.get(itemId) : undefined;
-          const periodEnd = l?.period?.end;
-          return {
-            id: itemId ?? String(l.id),
-            source: "stripe" as const,
-            description: l.description || "Weekly plan",
-            amountCents: l.amount ?? 0,
-            date: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-            deliveryId: row?.delivery?.id ?? null,
-            pickupAddress: row?.delivery?.pickupAddress ?? null,
-            dropoffAddress: row?.delivery?.dropoffAddress ?? null,
-            completedAt: row
-              ? (completionDates.get(row.delivery.id)?.toISOString() ?? null)
-              : null,
-          };
-        });
+        try {
+          stripeLines = rawPreviewLines.slice(0, 50).map((l) => {
+            const itemId = this.extractOneLineItemId(l);
+            const row = itemId ? rowsByItemId.get(itemId) : undefined;
+            const periodEnd = l?.period?.end;
+            return {
+              id: itemId ?? String(l.id),
+              source: "stripe" as const,
+              description: l.description || "Weekly plan",
+              amountCents: l.amount ?? 0,
+              date: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+              deliveryId: row?.delivery?.id ?? null,
+              pickupAddress: row?.delivery?.pickupAddress ?? null,
+              dropoffAddress: row?.delivery?.dropoffAddress ?? null,
+              completedAt: row
+                ? (completionDates.get(row.delivery.id)?.toISOString() ?? null)
+                : null,
+              distanceMiles: row?.delivery?.quote?.distanceMiles ?? null,
+            };
+          });
+        } catch (lineErr: any) {
+          // Itemization is display-only — a mapping failure must never
+          // blank out the breakdown while the money figure survives.
+          // The dbEstimateLines safety net below fills in.
+          this.logger.warn(
+            `getMyStatus: failed to itemize preview lines for dealer ${dealerId}: ${lineErr?.message}`,
+          );
+          stripeLines = [];
+        }
       } catch (err: any) {
         // Likely "no upcoming invoice" — log + continue.
         this.logger.debug(
@@ -3053,9 +3074,10 @@ export class PostpaidBillingService {
       pickupAddress: r.delivery.pickupAddress,
       dropoffAddress: r.delivery.dropoffAddress,
       completedAt: completionDates.get(r.delivery.id)?.toISOString() ?? null,
+      distanceMiles: r.delivery.quote?.distanceMiles ?? null,
     }));
-    const nextChargeLines = hasPreview ? stripeLines : dbEstimateLines;
-    const unreconciledLines = hasPreview
+    let nextChargeLines = hasPreview ? stripeLines : dbEstimateLines;
+    let unreconciledLines = hasPreview
       ? unpaidRows
           .filter(
             (r) =>
@@ -3070,8 +3092,20 @@ export class PostpaidBillingService {
             deliveryId: r.delivery.id,
             pickupAddress: r.delivery.pickupAddress,
             dropoffAddress: r.delivery.dropoffAddress,
+            distanceMiles: r.delivery.quote?.distanceMiles ?? null,
           }))
       : [];
+    // Display-safety net: money is due but the itemization came back
+    // empty (preview served by an older deploy, or an unexpected Stripe
+    // shape). Itemize from the local unpaid rows instead so the dealer
+    // ALWAYS sees a line list that adds up to the total — never a
+    // "nothing pending" sentence next to a nonzero figure.
+    if (nextChargeLines.length === 0 && (estimatedNextChargeCents ?? 0) > 0) {
+      nextChargeLines = dbEstimateLines;
+      // The rows above are already itemized — listing them again as
+      // "also in our records" would double-count them on screen.
+      unreconciledLines = [];
+    }
 
     // ── Fetch failed payments for the dealer dashboard ──
     // The dealer sees per-payment failure details (amount, reason, date)
