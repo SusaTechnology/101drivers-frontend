@@ -119,9 +119,14 @@ export function IndividualSignUp() {
             </Link>
           </div>
 
+          {/* Owner request: heading above the two cards + login option */}
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white text-center mb-4">
+            Choose your delivery type.
+          </h1>
+
           {/* Signup type switcher — card-style buttons matching the homepage.
               Personal is the active/selected option here (dark bg + checkmark). */}
-          <div className="mb-6 flex flex-col sm:flex-row gap-3">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3">
             {/* Personal Delivery — selected (this is the personal signup page) */}
             <Link
               to="/auth/individual-signup"
@@ -164,6 +169,16 @@ export function IndividualSignUp() {
               </div>
             </Link>
           </div>
+
+          <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
+            Already have an account?{' '}
+            <Link
+              to="/auth/dealer-signin"
+              className="font-bold text-primary hover:underline"
+            >
+              Log in
+            </Link>
+          </p>
 
           <IndividualSignupForm />
         </div>

@@ -4,26 +4,17 @@ import { useState, useRef, useEffect } from "react";
 import {
   ArrowRight as ArrowForward,
   LogIn,
-  Building,
-  Car,
-  ChevronDown,
   Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const RightHemisphereNav = () => {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dotsMenuOpen, setDotsMenuOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const dotsMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
+  // Close dots menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
       if (dotsMenuRef.current && !dotsMenuRef.current.contains(e.target as Node)) {
         setDotsMenuOpen(false);
       }
@@ -32,40 +23,23 @@ export const RightHemisphereNav = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const loginItems = [
-    { label: "Customer", icon: Building, to: "/auth/dealer-signin" },
-    { label: "Driver", icon: Car, to: "/driver-signin" },
-  ];
+  // Owner request: tapping "Log in / Sign Up" must land the customer DIRECTLY
+  // on the "Choose your delivery type." section of the home page (the Business
+  // vs Personal cards) — no intermediate Customer/Driver choice dropdown.
+  // That section also carries an "Already have an account? Log in" link, so
+  // login is covered there too. Drivers keep one-tap login via the mobile
+  // dots menu ("Driver Login") and the Drivers section on desktop.
 
   return (
     <div className="flex items-center gap-3">
-      {/* Log in dropdown — desktop */}
-      <div className="hidden md:block relative" ref={dropdownRef}>
-        <button
-          onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-        >
-          <LogIn className="w-4 h-4" />
-          Log in/ Sign Up
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
-        </button>
-
-        {dropdownOpen && (
-          <div className="absolute top-full right-0 mt-2 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-2 flex flex-col gap-1">
-            {loginItems.map((item) => (
-              <Link
-                key={item.label}
-                to={item.to}
-                onClick={() => setDropdownOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                <item.icon className="w-4 h-4 text-slate-400" />
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Log in / Sign Up — desktop: straight to Choose your delivery type */}
+      <Link
+        to="/home#dealers"
+        className="hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+      >
+        <LogIn className="w-4 h-4" />
+        Log in / Sign Up
+      </Link>
 
       {/* Request a Delivery — CTA */}
       <Button
@@ -78,49 +52,23 @@ export const RightHemisphereNav = () => {
         </a>
       </Button>
 
-      {/* Mobile Login / Sign Up button — compact pill */}
-      <button
-        onClick={() => { setMobileMenuOpen(!mobileMenuOpen); setDotsMenuOpen(false); }}
+      {/* Mobile Log in / Sign Up — straight to Choose your delivery type */}
+      <Link
+        to="/home#dealers"
         className="md:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
       >
         <LogIn className="w-3.5 h-3.5" />
-        <span>Log in /Sign Up</span>
-      </button>
+        <span>Log in / Sign Up</span>
+      </Link>
 
       {/* Mobile Hamburger Menu Button */}
       <button
-        onClick={() => { setDotsMenuOpen(!dotsMenuOpen); setMobileMenuOpen(false); }}
+        onClick={() => setDotsMenuOpen(!dotsMenuOpen)}
         className="md:hidden w-10 h-10 flex items-center justify-center rounded-full border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         aria-label="Menu"
       >
         <Menu className="w-5 h-5" />
       </button>
-
-      {/* Mobile Login Dropdown */}
-      {mobileMenuOpen && (
-        <div className="absolute top-20 right-16 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-2 flex flex-col gap-1">
-          {loginItems.map((item) => (
-            <Link
-              key={item.label}
-              to={item.to}
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              <item.icon className="w-4 h-4 text-slate-400" />
-              {item.label}
-            </Link>
-          ))}
-          <div className="border-t border-slate-200 dark:border-slate-700 my-1" />
-          <a
-            href="#quote"
-            onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-lime-500 text-slate-950 font-bold text-sm hover:bg-lime-600 transition-colors"
-          >
-            Request a Delivery
-            <ArrowForward className="w-4 h-4" />
-          </a>
-        </div>
-      )}
 
       {/* Mobile Three-Dots Menu Dropdown */}
       {dotsMenuOpen && (
@@ -153,6 +101,16 @@ export const RightHemisphereNav = () => {
           >
             Contact
           </a>
+          <div className="border-t border-slate-200 dark:border-slate-700 my-1" />
+          {/* Driver login keeps a one-tap home after the Customer/Driver
+              dropdown was removed from the Log in / Sign Up button */}
+          <Link
+            to="/driver-signin"
+            onClick={() => setDotsMenuOpen(false)}
+            className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            Driver Login
+          </Link>
         </div>
       )}
     </div>

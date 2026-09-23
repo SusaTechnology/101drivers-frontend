@@ -1428,10 +1428,10 @@ export default function LandingPage() {
         <section id="dealers" className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-14">
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-2">
-              Get started with 101 Drivers
+              Choose your delivery type.
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-8">
-              Choose your account type to sign up
+              Sign up or log in to get started — pick the option that fits you.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
               {/* ── Business delivery — default selected (dark bg + checkmark) ──
@@ -1483,6 +1483,17 @@ export default function LandingPage() {
                 </div>
               </Link>
             </div>
+
+            {/* Login — the "Choose your delivery type" hub covers login too */}
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-6">
+              Already have an account?{' '}
+              <Link
+                to="/auth/dealer-signin"
+                className="font-bold text-primary hover:underline"
+              >
+                Log in
+              </Link>
+            </p>
           </div>
         </section>
 
