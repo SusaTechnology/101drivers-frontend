@@ -188,6 +188,25 @@ export default function PostpaidStatusPanel({
   // a number now, so null only means the backend hasn't been redeployed.
   const isStripeOfficial = status.upcomingInvoiceAmountCents != null
 
+  // ── Breakdown math: deliveries − credits = due ──
+  // The single "Next Charge" figure hides WHY it can be $0.00 while N
+  // deliveries still show unpaid (credits never zero the Payment rows —
+  // they only reduce the invoice). Show the gross so the card reads as
+  // "3 unpaid deliveries · $585.72 in deliveries · −$585.72 credits".
+  // The applied figure is derived (gross − due, clamped into [0, pending])
+  // because the backend applies whole credits FIFO — applied can be less
+  // than the pending sum when credits exceed what the invoice needs.
+  const grossDeliveriesDollars = (status.outstandingCents / 100).toFixed(2)
+  const creditsAppliedDollars = (() => {
+    const pending = status.pendingReferralCreditCents ?? 0
+    if (pending <= 0) return null
+    const due = status.estimatedNextChargeCents ?? status.outstandingCents
+    const applied = Math.max(0, Math.min(status.outstandingCents - due, pending))
+    return (applied / 100).toFixed(2)
+  })()
+  const creditsCoverAll =
+    status.estimatedNextChargeCents === 0 && creditsAppliedDollars !== null
+
   // ── Deep-link to Settings → Payment method ──
   // The single most important action for a dealer with failed charges is
   // updating their card — so every banner gets a button that lands them
@@ -549,16 +568,25 @@ export default function PostpaidStatusPanel({
                 <div className="text-[10px] text-slate-400">
                   {status.unpaidDeliveryCount} unpaid{' '}
                   {status.unpaidDeliveryCount === 1 ? 'delivery' : 'deliveries'}
-                  {pendingCreditsDollars
-                    ? ` · −$${pendingCreditsDollars} referral credits`
+                  {status.outstandingCents > 0
+                    ? ` · $${grossDeliveriesDollars} in deliveries`
                     : ''}
+                  {creditsAppliedDollars !== null
+                    ? ` · −$${creditsAppliedDollars} credits`
+                    : pendingCreditsDollars
+                      ? ` · −$${pendingCreditsDollars} credits`
+                      : ''}
                 </div>
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
                   {estimatedNextCharge === null
                     ? 'Appears once your weekly billing is active.'
                     : isStripeOfficial
-                      ? 'The final amount on your next weekly invoice — every completed delivery, referral credits already subtracted. Tips are charged separately when you add one.'
-                      : 'Estimated from your unpaid completed deliveries, minus referral credits. It locks to the exact invoice amount when your weekly invoice is prepared.'}
+                      ? creditsCoverAll
+                        ? 'Your referral credits fully cover these deliveries — nothing will be charged when the weekly invoice runs. Tips are charged separately when you add one.'
+                        : 'The final amount on your next weekly invoice — every completed delivery, referral credits already subtracted. Tips are charged separately when you add one.'
+                      : creditsCoverAll
+                        ? 'Your referral credits fully cover these unpaid deliveries. This locks to the exact invoice amount when your weekly invoice is prepared.'
+                        : 'Estimated from your unpaid completed deliveries, minus referral credits. It locks to the exact invoice amount when your weekly invoice is prepared.'}
                 </div>
               </div>
 
