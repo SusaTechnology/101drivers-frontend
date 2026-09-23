@@ -126,32 +126,14 @@ export function DealerSignUp() {
         )}
       </header>
 
-      {/* Owner request: heading above the two cards + login option */}
+      {/* Signup type switcher — card-style buttons matching the homepage.
+          Business is the active/selected option here (dark bg + checkmark). */}
       <div className="w-full max-w-[1100px] mx-auto px-6 lg:px-8 pt-6">
-        <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white text-center mb-4">
+        <div className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto">
+<h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white text-center mb-4">
           Choose your delivery type.
         </h1>
-        <div className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto">
-          {/* Personal Delivery — not selected, light card */}
-          <Link
-            to="/auth/individual-signup"
-            className="flex-1 group relative cursor-pointer rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl hover:border-lime-400 dark:hover:border-lime-500 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
-          >
-            <div className="p-4 sm:p-5 text-left">
-              <div className="flex items-center gap-2.5 mb-1">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                  <UserCircle className="w-4 h-4 text-slate-600 dark:text-slate-400 group-hover:text-lime-500 transition-colors" />
-                </div>
-                <span className="text-base font-extrabold text-slate-900 dark:text-white">
-                  Personal Delivery
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Pay per delivery with upfront pricing
-              </p>
-            </div>
-          </Link>
-          {/* Business Delivery — selected (this is the business signup page) */}
+                    {/* Business Delivery — selected (this is the business signup page) */}
           <Link
             to="/auth/dealer-signup"
             className="flex-1 group relative cursor-pointer rounded-2xl bg-slate-900 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
@@ -169,20 +151,31 @@ export function DealerSignUp() {
                 </span>
               </div>
               <p className="text-xs text-slate-300 dark:text-slate-400 leading-relaxed">
-                Weekly invoiced billing + postpaid options
+                For dealerships, rental companies, and other business needing vehicle delivery services.
+              </p>
+            </div>
+          </Link>
+          
+          {/* Personal Delivery — not selected, light card */}
+          <Link
+            to="/auth/individual-signup"
+            className="flex-1 group relative cursor-pointer rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl hover:border-lime-400 dark:hover:border-lime-500 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
+          >
+            <div className="p-4 sm:p-5 text-left">
+              <div className="flex items-center gap-2.5 mb-1">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                  <UserCircle className="w-4 h-4 text-slate-600 dark:text-slate-400 group-hover:text-lime-500 transition-colors" />
+                </div>
+                <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Personal Delivery
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                For individuals who need their own car moved from point A to point B
               </p>
             </div>
           </Link>
         </div>
-        <p className="text-sm text-slate-500 dark:text-slate-400 text-center mt-4">
-          Already have an account?{' '}
-          <Link
-            to="/auth/dealer-signin"
-            className="font-bold text-primary hover:underline"
-          >
-            Log in
-          </Link>
-        </p>
       </div>
 
       <main className="w-full">
