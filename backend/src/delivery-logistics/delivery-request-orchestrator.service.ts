@@ -625,6 +625,30 @@ export class DeliveryRequestOrchestratorService {
         'which our app does not support yet. Please contact support ' +
         'so we can help you complete this payment manually.';
     }
+    // ── Stale saved-card references ──────────────────────────────────
+    // The customer or card stored in our DB no longer exists in Stripe.
+    // Happens when a card is deleted/detached in the Stripe dashboard,
+    // the customer is deleted, or the backend keys were switched between
+    // test and live mode (test-mode IDs don't exist in live mode).
+    // The dealer's fix is always: re-save the card.
+    if (code === 'resource_missing') {
+      const param = String(err?.param || '');
+      if (param.includes('customer') || /no such customer/i.test(rawMsg)) {
+        return 'We could not find your saved payment profile. Please add a card under Payment Methods and try again. If it still fails, contact support.';
+      }
+      return 'Your saved card is no longer valid. Please remove it and save a new card under Payment Methods, then try again.';
+    }
+
+    // The card belongs to a different Stripe customer than the one being
+    // charged (mismatched references in our database).
+    if (/not attached to the customer/i.test(rawMsg)) {
+      return 'There is a mismatch with your saved card. Please remove it and save a new card under Payment Methods, then try again.';
+    }
+
+    // Amount below Stripe's minimum ($0.50 for USD charges).
+    if (code === 'amount_too_small' || /amount must be at least|below the minimum/i.test(rawMsg)) {
+      return 'The delivery amount is below the minimum card charge of $0.50. Please contact support.';
+    }
     // Internal Stripe config issues — DO NOT leak these to the dealer.
     // The dealer can't fix our API keys; tell them to contact support.
     if (err?.type === 'StripeAuthenticationError' || err?.type === 'StripeInvalidApiKeyError') {

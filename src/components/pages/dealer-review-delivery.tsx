@@ -574,11 +574,16 @@ export default function ReviewDeliveryPage() {
         'payment method',
         'payment processing',
         'payment could not',
+        'could not process your payment',
         '3D Secure',
         'Stripe',
         'payment processor',
         'No saved payment',
         'No Stripe customer',
+        'no longer valid',
+        'saved payment profile',
+        'mismatch with your saved card',
+        'minimum card charge',
       ].some((phrase) => fullMessage.toLowerCase().includes(phrase.toLowerCase()));
 
       if (isPaymentFailure) {
