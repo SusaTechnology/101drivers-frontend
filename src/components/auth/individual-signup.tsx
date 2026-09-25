@@ -118,37 +118,12 @@ export function IndividualSignUp() {
               ← Back to home
             </Link>
           </div>
-
-          {/* Owner request: heading above the two cards + login option */}
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white text-center mb-4">
-            Choose your delivery type.
-          </h1>
-
+<h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white text-center mb-4">
+          Choose your delivery type.
+        </h1>
           {/* Signup type switcher — card-style buttons matching the homepage.
               Personal is the active/selected option here (dark bg + checkmark). */}
-          <div className="mb-4 flex flex-col sm:flex-row gap-3">
-            {/* Personal Delivery — selected (this is the personal signup page) */}
-            <Link
-              to="/auth/individual-signup"
-              className="flex-1 group relative cursor-pointer rounded-2xl bg-slate-900 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
-            >
-              <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-lime-400 flex items-center justify-center shadow-md">
-                <CheckCircle className="w-4 h-4 text-slate-900" strokeWidth={3} />
-              </div>
-              <div className="p-4 sm:p-5 text-left">
-                <div className="flex items-center gap-2.5 mb-1">
-                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                    <UserCircle className="w-4 h-4 text-lime-400" />
-                  </div>
-                  <span className="text-base font-extrabold text-white">
-                    Personal Delivery
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 dark:text-slate-400 leading-relaxed">
-                  Pay per delivery with upfront pricing
-                </p>
-              </div>
-            </Link>
+          <div className="mb-1 flex flex-col sm:flex-row gap-3">
             {/* Business Delivery — not selected, light card */}
             <Link
               to="/auth/dealer-signup"
@@ -164,22 +139,45 @@ export function IndividualSignUp() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Weekly invoiced billing + postpaid options
+                  For dealerships, rental companies, and other business needing vehicle delivery services.
+                </p>
+              </div>
+            </Link>
+
+                        {/* Personal Delivery — selected (this is the personal signup page) */}
+            <Link
+              to="/auth/individual-signup"
+              className="flex-1 group relative cursor-pointer rounded-2xl bg-slate-900 dark:bg-slate-800 border-2 border-slate-900 dark:border-slate-700 shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
+            >
+              <div className="absolute top-1 right-2 w-6 h-6 rounded-full bg-lime-400 flex items-center justify-center shadow-md">
+                <CheckCircle className="w-4 h-4 text-slate-900" strokeWidth={3} />
+              </div>
+              <div className="p-4 sm:p-5 text-left">
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                    <UserCircle className="w-4 h-4 text-lime-400" />
+                  </div>
+                  <span className="text-base font-extrabold text-white">
+                    Personal Delivery
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 dark:text-slate-400 leading-relaxed">
+                  For individuals who need their own car moved from point A to point B
                 </p>
               </div>
             </Link>
           </div>
-
-          <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
-            Already have an account?{' '}
-            <Link
-              to="/auth/dealer-signin"
-              className="font-bold text-primary hover:underline"
-            >
-              Log in
-            </Link>
-          </p>
-
+<div className="text-center pt-2 mb-6">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Already have an account?{" "}
+              <Link
+                to="/auth/dealer-signin"
+                className="text-primary hover:underline font-semibold"
+              >
+                Sign in
+              </Link>
+            </span>
+          </div>
           <IndividualSignupForm />
         </div>
       </main>

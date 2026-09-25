@@ -15,7 +15,7 @@ export interface SEOHeadProps {
 const DEFAULT_TITLE = '101 Drivers — Car Pickup & Delivery Service in California | Flat Rate'
 const DEFAULT_DESCRIPTION =
   "California's flat-rate car pickup & delivery service. Dealers & individuals get instant quotes, real-time GPS tracking, and insured vehicle transport across Southern California. Santa Monica to LA & beyond."
-const DEFAULT_IMAGE = 'https://101drivers.com/assets/101drivers-logo.jpg'
+const DEFAULT_IMAGE = 'https://101drivers.com/og-image.png'
 const DEFAULT_IMAGE_ALT = '101 Drivers — Flat-rate vehicle delivery service in California'
 const BASE_URL = 'https://101drivers.com'
 

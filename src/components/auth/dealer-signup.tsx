@@ -129,10 +129,11 @@ export function DealerSignUp() {
       {/* Signup type switcher — card-style buttons matching the homepage.
           Business is the active/selected option here (dark bg + checkmark). */}
       <div className="w-full max-w-[1100px] mx-auto px-6 lg:px-8 pt-6">
-        <div className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto">
-<h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white text-center mb-4">
+        <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white text-center mb-4">
           Choose your delivery type.
         </h1>
+        <div className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto">
+
                     {/* Business Delivery — selected (this is the business signup page) */}
           <Link
             to="/auth/dealer-signup"
@@ -177,7 +178,17 @@ export function DealerSignUp() {
           </Link>
         </div>
       </div>
-
+<div className="text-center pt-2">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Already have an account?{" "}
+              <Link
+                to="/auth/dealer-signin"
+                className="text-primary hover:underline font-semibold"
+              >
+                Sign in
+              </Link>
+            </span>
+          </div>
       <main className="w-full">
         <DealerSignupForm isLoaded={isLoaded} />
       </main>

@@ -387,7 +387,7 @@ export function ReferralCodeWidget({
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="joesgarage or your shop name"
+              placeholder="joesgarage..."
               maxLength={16}
               autoComplete="off"
               disabled={disabled}

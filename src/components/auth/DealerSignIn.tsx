@@ -566,24 +566,6 @@ export function DealerSignIn({
                 </Button>
 
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                  {/* Referral entry — text link ONLY (per spec): tapping does
-                      not open a field here; it routes to the individual signup
-                      card, which consumes the referral_open session flag and
-                      any referral_code already in session. */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        sessionStorage.setItem("referral_open", "1");
-                      } catch {
-                        /* sessionStorage unavailable — still route to signup */
-                      }
-                      navigate({ to: "/auth/individual-signup" });
-                    }}
-                    className="block text-sm font-semibold text-primary hover:underline underline-offset-4 transition-colors"
-                  >
-                    Have a referral code?
-                  </button>
                   <p className="text-sm text-slate-600 dark:text-slate-400">
                     Don't have an account?{" "}
                     <Button
@@ -604,7 +586,7 @@ export function DealerSignIn({
               <h2 className="text-xl font-black text-slate-900 dark:text-white">
                 New customer?
               </h2>
-              <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
+              <ul className="mt-4 mb-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
                 <li className="flex gap-3">
                   <CheckCircle2 className="text-primary w-5 h-5 shrink-0" />
                   Create vehicle delivery requests or schedule inventory moves
@@ -618,8 +600,29 @@ export function DealerSignIn({
                   View before &amp; after photos, full delivery history, and payment reports on your account
                 </li>
               </ul>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+
+                                {/* Referral entry — text link ONLY (per spec): tapping does
+                      not open a field here; it routes to the individual signup
+                      card, which consumes the referral_open session flag and
+                      any referral_code already in session. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem("referral_open", "1");
+                      } catch {
+                        /* sessionStorage unavailable — still route to signup */
+                      }
+                      navigate({ to: "/auth/individual-signup" });
+                    }}
+                    className="block text-sm font-semibold text-primary hover:underline underline-offset-4 transition-colors cursor-pointer"
+                  >
+                    Have a referral code?
+                  </button>
               <Link to="/auth/dealer-signup"
-                  className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-14 text-base mt-6"
+                  className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition flex items-center justify-center gap-2 h-14 text-base mt-3"
                 >
                 
                     <>
@@ -627,6 +630,7 @@ export function DealerSignIn({
                       <ArrowRight className="w-5 h-5 font-bold" />
                     </>
                 </Link>
+                </div>
             </CustomCard>
 
             {/* Bottom Sign Up Link */}
