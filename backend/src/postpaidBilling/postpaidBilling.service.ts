@@ -814,6 +814,9 @@ export class PostpaidBillingService {
         deliveryId: true,
         remainderAmount: true,
         remainderDueAt: true,
+        status: true,
+        providerPaymentIntentId: true,
+        lockInPaymentIntentId: true,
       },
       take: 50,
     });
@@ -900,6 +903,50 @@ export class PostpaidBillingService {
           continue;
         }
 
+        // ── Two retry kinds share this queue ──
+        // 1. Lock-in remainder (lockInPaymentIntentId set): PI #1 already
+        //    captured the base fee, so the remainder needs a NEW PaymentIntent.
+        // 2. Legacy capture retry (no lock-in): the ORIGINAL PI's capture
+        //    failed at completion (Stripe hiccup) — re-capture the SAME PI.
+        //    Never a new charge → no double-charge risk.
+        if (!item.lockInPaymentIntentId && item.providerPaymentIntentId) {
+          try {
+            const captured = await this.stripeService.stripe.paymentIntents.capture(
+              item.providerPaymentIntentId,
+              undefined,
+              { idempotencyKey: `capture-retry-${item.providerPaymentIntentId}` },
+            );
+            if (captured.status === 'succeeded') {
+              await this.prisma.payment.update({
+                where: { id: item.id },
+                data: {
+                  status: EnumPaymentStatus.CAPTURED,
+                  capturedAt: new Date(),
+                  remainderChargeStatus: null,
+                  remainderAmount: null,
+                  remainderDueAt: null,
+                  failureMessage: null,
+                },
+              });
+              succeeded++;
+              this.logger.log(
+                `Capture retry SUCCEEDED for payment ${item.id} (delivery ${item.deliveryId}): $${amount.toFixed(2)}`,
+              );
+            } else {
+              failed++;
+              this.logger.warn(
+                `Capture retry for payment ${item.id} — PI status: ${captured.status} (left PENDING)`,
+              );
+            }
+          } catch (capErr: any) {
+            failed++;
+            this.logger.error(
+              `Capture retry threw for payment ${item.id}: ${capErr.message}`,
+            );
+          }
+          continue;
+        }
+
         const pi = await this.stripeService.createPaymentIntent({
           amount,
           deliveryId: delivery.id,
@@ -938,6 +985,19 @@ export class PostpaidBillingService {
           this.logger.log(
             `Remainder charge retry SUCCEEDED for payment ${item.id} (delivery ${item.deliveryId}): $${amount.toFixed(2)}`,
           );
+
+          // ── Upgrade the driver payout (was lock-in-share only) ──
+          // The customer has now paid the FULL effective quote, so the
+          // driver is entitled to the full completion share. Previously the
+          // payout stayed at the small lock-in share forever and the
+          // platform silently kept the difference.
+          try {
+            await this.upgradePayoutAfterRemainderCapture(item.deliveryId);
+          } catch (upgErr: any) {
+            this.logger.error(
+              `Failed to upgrade driver payout after remainder capture (delivery ${item.deliveryId}): ${upgErr?.message}`,
+            );
+          }
         } else {
           // PI didn't succeed — mark as RETRIED but keep PENDING for next cron run
           await this.prisma.payment.update({
@@ -968,6 +1028,108 @@ export class PostpaidBillingService {
     );
 
     return { processed: due.length, succeeded, failed, uncollectible };
+  }
+
+  /**
+   * Upgrade a lock-in-only driver payout to the full completion net after
+   * the daily cron finally collected the remainder from the customer.
+   *
+   *   • payout ELIGIBLE/FAILED → updated in place to the full completion
+   *     amounts (type → TRIP_COMPLETION); it then flows out via the normal
+   *     rails (weekly auto / manual withdrawal / instant).
+   *   • payout PAID (lock-in share already sent) → only the DIFFERENCE is
+   *     paid, via a positive COMPLETION_TOPUP adjustment.
+   *   • payout CANCELLED → untouched.
+   *
+   * The breakdown math mirrors PaymentPayoutEngine.computeBreakdown:
+   * net = gross × driverSharePct − insuranceFee + tip (tips are never split).
+   */
+  private async upgradePayoutAfterRemainderCapture(deliveryId: string): Promise<void> {
+    const delivery = await this.prisma.deliveryRequest.findUnique({
+      where: { id: deliveryId },
+      select: {
+        id: true,
+        quote: {
+          select: { estimatedPrice: true, pricingSnapshot: true, feesBreakdown: true },
+        },
+        payment: { select: { amount: true, refundedAmountCents: true } },
+        tip: { select: { amount: true, status: true } },
+        payout: {
+          select: {
+            id: true,
+            status: true,
+            netAmount: true,
+            type: true,
+            driverId: true,
+          },
+        },
+      },
+    });
+
+    const payout = delivery?.payout;
+    if (!delivery || !payout) return;
+    if (payout.type !== 'LOCK_IN_FEE') return; // nothing to upgrade
+    if (payout.status === 'CANCELLED') return;
+
+    const totalQuoted = delivery.quote?.estimatedPrice ?? delivery.payment?.amount ?? 0;
+    const refunded = Number(((delivery.payment?.refundedAmountCents ?? 0) / 100).toFixed(2));
+    const effective = Math.max(0, Number((totalQuoted - refunded).toFixed(2)));
+
+    const snapshot = (delivery.quote?.pricingSnapshot ?? {}) as Record<string, unknown>;
+    const fees = (delivery.quote?.feesBreakdown ?? {}) as Record<string, unknown>;
+    const toNum = (v: unknown): number | null =>
+      Number.isFinite(Number(v)) ? Number(v) : null;
+    const sharePct = toNum(snapshot.driverSharePct) ?? 60;
+    const insuranceFee =
+      toNum(fees.insuranceFee) ?? toNum(snapshot.insuranceFee) ?? 0;
+    const tipAmount =
+      delivery.tip && ['AUTHORIZED', 'CAPTURED'].includes(delivery.tip.status)
+        ? Number((delivery.tip.amount ?? 0).toFixed(2))
+        : 0;
+
+    const gross = Number(effective.toFixed(2));
+    const driverShare = Number((gross * (sharePct / 100)).toFixed(2));
+    const platformFee = Number((gross - driverShare).toFixed(2));
+    const fullNet = Number(
+      Math.max(driverShare - insuranceFee + tipAmount, 0).toFixed(2),
+    );
+
+    if (payout.status === 'PAID') {
+      const diff = Number((fullNet - Number(payout.netAmount)).toFixed(2));
+      if (diff > 0.005) {
+        await this.prisma.driverPayoutAdjustment.create({
+          data: {
+            driverId: payout.driverId,
+            deliveryId,
+            originalPayoutId: payout.id,
+            amount: diff,
+            reason: 'COMPLETION_TOPUP',
+            status: 'PENDING',
+            note: `Remainder captured after the lock-in payout was already sent — top-up $${diff.toFixed(2)}`,
+          },
+        });
+        this.logger.log(
+          `Delivery ${deliveryId}: payout already PAID — created top-up adjustment of $${diff.toFixed(2)} after remainder capture`,
+        );
+      }
+      return;
+    }
+
+    await this.prisma.driverPayout.update({
+      where: { id: payout.id },
+      data: {
+        grossAmount: gross,
+        insuranceFee: Number(insuranceFee.toFixed(2)),
+        platformFee,
+        netAmount: fullNet,
+        driverSharePct: sharePct,
+        type: 'TRIP_COMPLETION',
+        failureMessage: null,
+      },
+    });
+    this.logger.log(
+      `Driver payout for delivery ${deliveryId} upgraded to full completion net $${fullNet.toFixed(2)} after remainder capture`,
+    );
   }
 
   // ── Multi-invoice retry (Fix #8) ──

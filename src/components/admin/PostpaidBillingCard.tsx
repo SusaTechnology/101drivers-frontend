@@ -52,6 +52,7 @@ import {
   Info,
   Send,
   Sparkles,
+  Pencil,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -64,6 +65,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { useDataQuery, useDataMutation } from '@/lib/tanstack/dataQuery'
 import { cn } from '@/lib/utils'
 
@@ -126,6 +128,9 @@ export default function PostpaidBillingCard({
   const [unfreezeLoading, setUnfreezeLoading] = useState(false)
   const [retryLoading, setRetryLoading] = useState(false)
   const [backfillLoading, setBackfillLoading] = useState(false)
+  const [capDialogOpen, setCapDialogOpen] = useState(false)
+  const [capInput, setCapInput] = useState('')
+  const [capSaving, setCapSaving] = useState(false)
 
   const {
     data: status,
@@ -216,6 +221,26 @@ export default function PostpaidBillingCard({
     },
   })
 
+  const capMutation = useDataMutation<{ ok: boolean; capCents: number | null }, { capCents: number | null }>({
+    apiEndPoint: `${API_URL}/api/postpaid-billing/dealers/${dealerId}/cap`,
+    method: 'POST',
+    onSuccess: (data) => {
+      toast.success(
+        data.capCents === null
+          ? 'Credit cap removed — dealer is unlimited'
+          : `Credit cap set to $${(data.capCents / 100).toFixed(2)}`,
+        {
+          description:
+            'The dealer can no longer create new postpaid deliveries once their unpaid balance reaches this cap.',
+        },
+      )
+      refetch()
+    },
+    onError: (error: any) => {
+      toast.error('Failed to set credit cap', { description: error?.message })
+    },
+  })
+
   const handleSetup = async () => {
     setSetupLoading(true)
     try {
@@ -231,6 +256,30 @@ export default function PostpaidBillingCard({
       await unfreezeMutation.mutateAsync({ dealerId })
     } finally {
       setUnfreezeLoading(false)
+    }
+  }
+
+  const openCapDialog = () => {
+    setCapInput(status?.capCents != null ? (status.capCents / 100).toFixed(0) : '')
+    setCapDialogOpen(true)
+  }
+
+  const handleSaveCap = async () => {
+    const trimmed = capInput.trim()
+    if (trimmed !== '') {
+      const value = Number(trimmed)
+      if (!Number.isFinite(value) || value < 0) {
+        toast.error('Enter a valid dollar amount (or leave empty for no limit)')
+        return
+      }
+    }
+    const capCents = trimmed === '' ? null : Math.round(Number(trimmed) * 100)
+    setCapSaving(true)
+    try {
+      await capMutation.mutateAsync({ capCents })
+      setCapDialogOpen(false)
+    } finally {
+      setCapSaving(false)
     }
   }
 
@@ -464,10 +513,18 @@ export default function PostpaidBillingCard({
               {status.unpaidDeliveryCount} unpaid {status.unpaidDeliveryCount === 1 ? 'delivery' : 'deliveries'}
             </div>
           </div>
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              <Calendar className="h-3 w-3" />
-              Cap
+          <button
+            type="button"
+            onClick={openCapDialog}
+            title="Click to set the credit cap"
+            className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-left hover:border-blue-400 dark:hover:border-blue-600 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <Calendar className="h-3 w-3" />
+                Cap
+              </div>
+              <Pencil className="h-3 w-3 text-slate-400" />
             </div>
             <div className="text-xl font-black text-slate-900 dark:text-white mt-1">
               {status.capCents === null ? '∞' : `$${(status.capCents / 100).toFixed(0)}`}
@@ -475,8 +532,58 @@ export default function PostpaidBillingCard({
             <div className="text-[10px] text-slate-400 mt-1">
               {status.capCents === null ? 'No limit set' : `$${status.outstandingDollars.toFixed(2)} used`}
             </div>
-          </div>
+          </button>
         </div>
+
+        {/* Credit cap editor */}
+        <Dialog open={capDialogOpen} onOpenChange={setCapDialogOpen}>
+          <DialogContent className="sm:max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Set credit cap</DialogTitle>
+              <DialogDescription>
+                Maximum unpaid balance this dealer can reach on weekly postpaid
+                billing. New deliveries are blocked once they'd push the dealer
+                over this cap. Leave empty for no limit.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              placeholder="e.g. 500 (leave empty = no limit)"
+              value={capInput}
+              onChange={(e) => setCapInput(e.target.value)}
+            />
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                disabled={capSaving || capInput.trim() === ''}
+                onClick={async () => {
+                  setCapSaving(true)
+                  try {
+                    await capMutation.mutateAsync({ capCents: null })
+                    setCapDialogOpen(false)
+                  } finally {
+                    setCapSaving(false)
+                  }
+                }}
+              >
+                Remove limit
+              </Button>
+              <Button
+                size="sm"
+                className="rounded-xl bg-blue-600 text-white hover:bg-blue-700"
+                disabled={capSaving}
+                onClick={handleSaveCap}
+              >
+                {capSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                <span className="ml-1 font-bold">Save cap</span>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Missed usage reports — completed deliveries stuck in AUTHORIZED
             that were never sent to Stripe (billing wasn't fully set up when

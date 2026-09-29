@@ -223,9 +223,23 @@ export class PaymentPayoutEngine {
       (delivery.quote?.estimatedPrice ?? payment.amount ?? 0).toFixed(2),
     );
 
+    // ── Refund netting ──
+    // If part (or all) of this delivery's money was refunded BEFORE
+    // completion, the driver's completion payout must be based on the money
+    // actually KEPT — not the original quote. Otherwise a refunded delivery
+    // pays the driver in full on top of the refund, and the platform loses
+    // the gross. (Refunds AFTER completion are handled separately by the
+    // charge.refunded webhook clawback adjustments.)
+    const refundedDollars = Number(
+      ((payment.refundedAmountCents ?? 0) / 100).toFixed(2),
+    );
+
     if (isLockedIn) {
       const lockInAmount = Number(delivery.lockInBaseFee!.toFixed(2));
-      const remainder = Number(Math.max(0, totalQuoted - lockInAmount).toFixed(2));
+      const effectiveQuoted = Number(
+        Math.max(0, totalQuoted - refundedDollars).toFixed(2),
+      );
+      const remainder = Number(Math.max(0, effectiveQuoted - lockInAmount).toFixed(2));
 
       // `remainderCaptured` tracks whether the second PaymentIntent (PI #2)
       // for the remainder was successfully created+captured. If it failed,
@@ -399,7 +413,16 @@ export class PaymentPayoutEngine {
           );
           await tx.payment.update({
             where: { id: payment.id },
-            data: { status: EnumPaymentStatus.FAILED, failureMessage: errMsg },
+            data: {
+              status: EnumPaymentStatus.FAILED,
+              failureMessage: errMsg,
+              // Enqueue for the daily remainder-retry cron — previously a
+              // thrown error (decline, Stripe outage) escaped the retry
+              // queue entirely and only the lock-in was ever collected.
+              remainderChargeStatus: "PENDING" as any,
+              remainderAmount: remainder,
+              remainderDueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
           });
           await tx.paymentEvent.create({
             data: {
@@ -418,11 +441,12 @@ export class PaymentPayoutEngine {
         delivery.customer?.postpaidEnabled
       ) {
         // Postpaid lock-in: no Stripe call, just update the amount on the
-        // Payment row to reflect the full quoted price. It'll be invoiced
-        // later via adminInvoicePostpaid.
+        // Payment row to reflect the effective quoted price (quote minus any
+        // pre-completion refunds). It'll be invoiced later via
+        // adminInvoicePostpaid.
         await tx.payment.update({
           where: { id: payment.id },
-          data: { amount: totalQuoted },
+          data: { amount: effectiveQuoted },
         });
         remainderCaptured = true; // postpaid "capture" is just invoicing later
       }
@@ -454,7 +478,7 @@ export class PaymentPayoutEngine {
           : 0;
 
       const breakdown = this.computeBreakdown({
-        amount: totalQuoted,
+        amount: effectiveQuoted,
         pricingSnapshot: delivery.quote?.pricingSnapshot ?? null,
         feesBreakdown: delivery.quote?.feesBreakdown ?? null,
         tipAmount,
@@ -466,36 +490,22 @@ export class PaymentPayoutEngine {
       // driver payouts are never locked behind dealer payment.
       const payoutStatus = EnumDriverPayoutStatus.ELIGIBLE;
 
-      await tx.driverPayout.upsert({
-        where: { deliveryId: input.deliveryId },
-        create: {
-          deliveryId: input.deliveryId,
-          driverId: activeAssignment.driverId,
-          grossAmount: breakdown.grossAmount,
-          insuranceFee: breakdown.insuranceFee,
-          platformFee: breakdown.platformFee,
-          netAmount: breakdown.netAmount,
-          driverSharePct: breakdown.driverSharePct,
-          status: payoutStatus,
-          type: EnumDriverPayoutType.TRIP_COMPLETION,
-        },
-        update: {
-          driverId: activeAssignment.driverId,
-          grossAmount: breakdown.grossAmount,
-          insuranceFee: breakdown.insuranceFee,
-          platformFee: breakdown.platformFee,
-          netAmount: breakdown.netAmount,
-          driverSharePct: breakdown.driverSharePct,
-          status: payoutStatus,
-          failureMessage: null,
-          type: EnumDriverPayoutType.TRIP_COMPLETION,
-        },
+      // ── Guarded payout settlement (see settleCompletionPayout) ──
+      // Prevents the double-pay bug where a lock-in fee batch-paid mid-trip
+      // (payout PAID) was reset to ELIGIBLE and paid AGAIN at completion.
+      const payoutSettledEligible = await this.settleCompletionPayout(tx, {
+        deliveryId: input.deliveryId,
+        driverId: activeAssignment.driverId,
+        breakdown,
+        status: payoutStatus,
+        payoutType: EnumDriverPayoutType.TRIP_COMPLETION,
+        refundedDollars,
       });
 
       // Auto-transfer to driver's Connect account if eligible.
-      // (Guarded by remainderCaptured — see comment above.)
+      // (Guarded by remainderCaptured + the settlement result — see above.)
       if (
-        payoutStatus === EnumDriverPayoutStatus.ELIGIBLE &&
+        payoutSettledEligible &&
         this.stripeService &&
         activeAssignment.driver.stripeConnectAccountId &&
         activeAssignment.driver.stripeConnectOnboardingComplete
@@ -542,9 +552,21 @@ export class PaymentPayoutEngine {
       } catch (captureErr: any) {
         const errMsg = captureErr?.message || "Unknown capture error";
         this.logger.error(`Stripe capture failed for delivery ${input.deliveryId}: ${errMsg}`);
+        // Mark FAILED **and enqueue for the daily capture-retry cron**.
+        // Option B: the driver is still paid for the completed work — we
+        // collect from the customer ourselves instead of holding the
+        // driver's money hostage. The cron re-captures the SAME
+        // PaymentIntent (never a new charge), so there is no double-charge
+        // risk; after 7 days it flags an admin alert.
         await tx.payment.update({
           where: { id: payment.id },
-          data: { status: EnumPaymentStatus.FAILED },
+          data: {
+            status: EnumPaymentStatus.FAILED,
+            failureMessage: errMsg,
+            remainderChargeStatus: "PENDING" as any,
+            remainderAmount: payment.amount,
+            remainderDueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
         });
       }
     }
@@ -556,10 +578,15 @@ export class PaymentPayoutEngine {
         : 0;
 
     const breakdown = this.computeBreakdown({
-      amount:
-        payment.amount ??
-        delivery.quote?.estimatedPrice ??
+      amount: Math.max(
         0,
+        Number(
+          (
+            (payment.amount ?? delivery.quote?.estimatedPrice ?? 0) -
+            refundedDollars
+          ).toFixed(2),
+        ),
+      ),
       pricingSnapshot: delivery.quote?.pricingSnapshot ?? null,
       feesBreakdown: delivery.quote?.feesBreakdown ?? null,
       tipAmount,
@@ -569,34 +596,20 @@ export class PaymentPayoutEngine {
     // lock-in path above. See that comment for the rationale.
     const payoutStatus = EnumDriverPayoutStatus.ELIGIBLE;
 
-    await tx.driverPayout.upsert({
-      where: { deliveryId: input.deliveryId },
-      create: {
-        deliveryId: input.deliveryId,
-        driverId: activeAssignment.driverId,
-        grossAmount: breakdown.grossAmount,
-        insuranceFee: breakdown.insuranceFee,
-        platformFee: breakdown.platformFee,
-        netAmount: breakdown.netAmount,
-        driverSharePct: breakdown.driverSharePct,
-        status: payoutStatus,
-      },
-      update: {
-        driverId: activeAssignment.driverId,
-        grossAmount: breakdown.grossAmount,
-        insuranceFee: breakdown.insuranceFee,
-        platformFee: breakdown.platformFee,
-        netAmount: breakdown.netAmount,
-        driverSharePct: breakdown.driverSharePct,
-        status: payoutStatus,
-      },
+    // ── Guarded payout settlement (see settleCompletionPayout) ──
+    const payoutSettledEligible = await this.settleCompletionPayout(tx, {
+      deliveryId: input.deliveryId,
+      driverId: activeAssignment.driverId,
+      breakdown,
+      status: payoutStatus,
+      refundedDollars,
     });
 
     // ── AUTO-TRANSFER to driver via Stripe Connect ──────────────
     // If payout is ELIGIBLE and driver has a completed Connect account,
     // automatically initiate the transfer (non-blocking, fire-and-forget).
     if (
-      payoutStatus === EnumDriverPayoutStatus.ELIGIBLE &&
+      payoutSettledEligible &&
       this.stripeService &&
       activeAssignment.driver.stripeConnectAccountId &&
       activeAssignment.driver.stripeConnectOnboardingComplete
@@ -752,18 +765,26 @@ export class PaymentPayoutEngine {
             // (no providerTransferId — no actual Stripe transfer)
           },
         });
-        // Mark the adjustments as APPLIED. If the adjustment amount
-        // exceeded the gross, the leftover stays PENDING — we'd need
-        // to create a new "remainder" adjustment row for the leftover.
-        // For simplicity in this iteration, we mark ALL the fetched
-        // adjustments as APPLIED (even if some of their amount wasn't
-        // actually deducted). The driver's net effect is correct
-        // because we floored transferAmount at 0. A follow-up task
-        // can add the leftover-reversal adjustment for precision.
+        // Mark the adjustments as APPLIED. Any clawback portion that could
+        // not be recovered from this payout stays as debt: a leftover
+        // PENDING row is created so it applies to a FUTURE payout instead of
+        // being silently written off.
         if (appliedAdjustmentIds.length > 0) {
           await tx.driverPayoutAdjustment.updateMany({
             where: { id: { in: appliedAdjustmentIds } },
             data: { status: 'APPLIED', appliedToPayoutId: payout.id },
+          });
+        }
+        const uncollected = Number((-(amount + totalAdjustment)).toFixed(2));
+        if (uncollected > 0.005) {
+          await tx.driverPayoutAdjustment.create({
+            data: {
+              driverId,
+              amount: -uncollected,
+              reason: 'REFUND',
+              status: 'PENDING',
+              note: `Leftover clawback debt from payout ${payout.id} — $0 transferred, $${uncollected.toFixed(2)} still owed`,
+            },
           });
         }
       });
@@ -1168,14 +1189,82 @@ export class PaymentPayoutEngine {
   private readonly INSTANT_FEE = 1.5;         // $1.50 fee for instant payout
 
   /**
-   * Get a driver's available balance (sum of ELIGIBLE DriverPayouts).
+   * Get a driver's available balance (sum of ELIGIBLE DriverPayouts),
+   * adjusted by all PENDING DriverPayoutAdjustments:
+   *   • positive adjustments (late tips, dispute-won reversals) ADD to the balance
+   *   • negative adjustments (refund/dispute clawbacks) SUBTRACT
+   * Floored at 0 for display. The actual withdrawal math applies the same
+   * adjustments to the batch transfer (see applyPendingAdjustmentsToPot).
    */
   async getDriverAvailableBalance(driverId: string): Promise<number> {
     const result = await this.prisma.driverPayout.aggregate({
       where: { driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
       _sum: { netAmount: true },
     });
-    return Math.round((result._sum.netAmount || 0) * 100) / 100;
+    const adj = await this.prisma.driverPayoutAdjustment.aggregate({
+      where: { driverId, status: "PENDING" },
+      _sum: { amount: true },
+    });
+    const total = Number(result._sum.netAmount || 0) + Number(adj._sum.amount || 0);
+    return Math.round(Math.max(0, total) * 100) / 100;
+  }
+
+  /**
+   * Apply all PENDING DriverPayoutAdjustments for a driver to a batch pot.
+   * Called by the withdrawal rails (free / instant / weekly auto) BEFORE the
+   * batch is created, so clawbacks and late tips flow through EVERY payout
+   * rail — not just completion auto-transfers.
+   *
+   *   • Negative adjustments (clawbacks) are deducted FIFO, but never below
+   *     $0 — whatever can't be deducted stays as debt: the ORIGINAL row is
+   *     marked APPLIED and a leftover row is created for the remainder
+   *     (previously the leftover was silently written off).
+   *   • Positive adjustments (late tips) are added on top.
+   *
+   * The caller must mark the returned adjustment ids APPLIED and create the
+   * leftover rows inside the same transaction that flips the payouts to PAID.
+   */
+  private async applyPendingAdjustmentsToPot(
+    driverId: string,
+    payoutSum: number,
+  ): Promise<{
+    transferAmount: number;
+    appliedIds: string[];
+    leftovers: { amount: number; reason: string; note: string }[];
+  }> {
+    const pending = await this.prisma.driverPayoutAdjustment.findMany({
+      where: { driverId, status: "PENDING" },
+      select: { id: true, amount: true, reason: true },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+    });
+
+    let pot = payoutSum;
+    const appliedIds: string[] = [];
+    const leftovers: { amount: number; reason: string; note: string }[] = [];
+
+    for (const adj of pending) {
+      const amt = Number(adj.amount ?? 0);
+      if (amt >= 0) {
+        pot += amt;
+        appliedIds.push(adj.id);
+      } else {
+        const debt = -amt;
+        const deduct = Math.min(Math.max(pot, 0), debt);
+        pot -= deduct;
+        const leftover = Number((debt - deduct).toFixed(2));
+        appliedIds.push(adj.id);
+        if (leftover > 0.005) {
+          leftovers.push({
+            amount: -leftover,
+            reason: adj.reason || "CLAWBACK",
+            note: `Leftover from adjustment ${adj.id} — $${deduct.toFixed(2)} of $${debt.toFixed(2)} recovered, rest stays owed`,
+          });
+        }
+      }
+    }
+
+    return { transferAmount: Math.round(pot * 100) / 100, appliedIds, leftovers };
   }
 
   /**
@@ -1250,7 +1339,11 @@ export class PaymentPayoutEngine {
       throw new BadRequestException('No eligible payouts to withdraw.');
     }
 
-    const totalAmount = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+    const payoutSum = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+    // Apply pending adjustments (clawbacks + late tips) so they flow through
+    // this rail too — not just completion auto-transfers.
+    const adj = await this.applyPendingAdjustmentsToPot(driverId, payoutSum);
+    const totalAmount = Math.max(0, adj.transferAmount);
 
     const batch = await this.prisma.$transaction(async (tx) => {
       const newBatch = await tx.payoutBatch.create({
@@ -1271,6 +1364,26 @@ export class PaymentPayoutEngine {
         await tx.driverPayout.update({
           where: { id: payout.id },
           data: { status: EnumDriverPayoutStatus.PAID, paidAt: new Date() },
+        });
+      }
+
+      // Settle the adjustments atomically with the batch (same tx):
+      // applied → APPLIED; unrecoverable clawback remainder → new PENDING row.
+      if (adj.appliedIds.length > 0) {
+        await tx.driverPayoutAdjustment.updateMany({
+          where: { id: { in: adj.appliedIds } },
+          data: { status: 'APPLIED' },
+        });
+      }
+      for (const lo of adj.leftovers) {
+        await tx.driverPayoutAdjustment.create({
+          data: {
+            driverId,
+            amount: lo.amount,
+            reason: lo.reason,
+            status: 'PENDING',
+            note: lo.note,
+          },
         });
       }
 
@@ -1343,7 +1456,10 @@ export class PaymentPayoutEngine {
       throw new BadRequestException('No eligible payouts to withdraw.');
     }
 
-    const totalAmount = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+    const payoutSum = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+    // Apply pending adjustments (clawbacks + late tips) — same as the free rail.
+    const adj = await this.applyPendingAdjustmentsToPot(driverId, payoutSum);
+    const totalAmount = Math.max(0, adj.transferAmount);
     const feeAmount = this.INSTANT_FEE;
     const netPayoutAmount = Math.max(0, totalAmount - feeAmount);
 
@@ -1366,6 +1482,25 @@ export class PaymentPayoutEngine {
         await tx.driverPayout.update({
           where: { id: payout.id },
           data: { status: EnumDriverPayoutStatus.PAID, paidAt: new Date() },
+        });
+      }
+
+      // Settle the adjustments atomically with the batch (same tx).
+      if (adj.appliedIds.length > 0) {
+        await tx.driverPayoutAdjustment.updateMany({
+          where: { id: { in: adj.appliedIds } },
+          data: { status: 'APPLIED' },
+        });
+      }
+      for (const lo of adj.leftovers) {
+        await tx.driverPayoutAdjustment.create({
+          data: {
+            driverId,
+            amount: lo.amount,
+            reason: lo.reason,
+            status: 'PENDING',
+            note: lo.note,
+          },
         });
       }
 
@@ -1406,7 +1541,10 @@ export class PaymentPayoutEngine {
           select: { id: true, netAmount: true },
         });
 
-        const totalAmount = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+        const payoutSum = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
+        // Apply pending adjustments (clawbacks + late tips) — weekly rail too.
+        const adj = await this.applyPendingAdjustmentsToPot(driver.driverId, payoutSum);
+        const totalAmount = Math.max(0, adj.transferAmount);
 
         const batch = await this.prisma.$transaction(async (tx) => {
           const newBatch = await tx.payoutBatch.create({
@@ -1424,6 +1562,25 @@ export class PaymentPayoutEngine {
             await tx.driverPayout.update({
               where: { id: payout.id },
               data: { status: EnumDriverPayoutStatus.PAID, paidAt: new Date() },
+            });
+          }
+
+          // Settle the adjustments atomically with the batch (same tx).
+          if (adj.appliedIds.length > 0) {
+            await tx.driverPayoutAdjustment.updateMany({
+              where: { id: { in: adj.appliedIds } },
+              data: { status: 'APPLIED' },
+            });
+          }
+          for (const lo of adj.leftovers) {
+            await tx.driverPayoutAdjustment.create({
+              data: {
+                driverId: driver.driverId,
+                amount: lo.amount,
+                reason: lo.reason,
+                status: 'PENDING',
+                note: lo.note,
+              },
             });
           }
           return newBatch;
@@ -1561,6 +1718,19 @@ export class PaymentPayoutEngine {
             status: EnumDriverPayoutStatus.ELIGIBLE,
             paidAt: null,
           },
+        });
+      }
+
+      // Re-open the adjustments that were settled with this failed batch —
+      // their money did NOT actually leave, so they must return to PENDING
+      // and be applied again on the next successful payout. Without this,
+      // a failed withdrawal would permanently erase a clawback debt or a
+      // driver's late tip.
+      const payoutIds = batchItems.map((i) => i.driverPayoutId);
+      if (payoutIds.length > 0) {
+        await this.prisma.driverPayoutAdjustment.updateMany({
+          where: { appliedToPayoutId: { in: payoutIds }, status: 'APPLIED' },
+          data: { status: 'PENDING', appliedToPayoutId: null },
         });
       }
 
@@ -1875,6 +2045,126 @@ export class PaymentPayoutEngine {
   }
 
   // ── Private Helpers ──────────────────────────────────────────
+
+  /**
+   * Settle the completion payout with double-pay protection.
+   * Both completion paths (lock-in and legacy) route through here.
+   *
+   *   • No existing payout            → create it.
+   *   • Existing ELIGIBLE/FAILED      → update to the full completion amounts.
+   *   • Existing PAID (already sent to the driver, e.g. the lock-in fee was
+   *     batch-paid mid-trip)          → NEVER reset to ELIGIBLE for a re-pay.
+   *     If the full completion net exceeds what was already paid, only the
+   *     DIFFERENCE is paid — via a positive COMPLETION_TOPUP adjustment on
+   *     the driver's next payout rail.
+   *   • Existing CANCELLED            → untouched (delivery money was cancelled).
+   *
+   * Also reverses any PENDING refund clawback adjustments created BEFORE
+   * completion (while only a partial lock-in payout existed): the caller has
+   * already excluded those refunds from the effective payout amount, so
+   * keeping the adjustments would deduct the refund twice.
+   *
+   * Returns true when the payout ended up ELIGIBLE (caller may auto-transfer).
+   */
+  private async settleCompletionPayout(
+    tx: Prisma.TransactionClient,
+    input: {
+      deliveryId: string;
+      driverId: string;
+      breakdown: {
+        grossAmount: number;
+        insuranceFee: number;
+        platformFee: number;
+        netAmount: number;
+        driverSharePct: number;
+      };
+      status: EnumDriverPayoutStatus;
+      payoutType?: EnumDriverPayoutType;
+      refundedDollars: number;
+    },
+  ): Promise<boolean> {
+    const existing = await tx.driverPayout.findUnique({
+      where: { deliveryId: input.deliveryId },
+    });
+
+    if (existing && input.refundedDollars > 0) {
+      await tx.driverPayoutAdjustment.updateMany({
+        where: {
+          originalPayoutId: existing.id,
+          status: "PENDING",
+          reason: { in: ["REFUND", "DISPUTE_LOST"] },
+        },
+        data: {
+          status: "REVERSED",
+          note: "Superseded by completion refund netting — the refund was already excluded from the payout amount",
+        },
+      });
+    }
+
+    if (
+      existing &&
+      existing.status === EnumDriverPayoutStatus.PAID &&
+      input.breakdown.netAmount > Number(existing.netAmount)
+    ) {
+      const diff = Number(
+        (input.breakdown.netAmount - Number(existing.netAmount)).toFixed(2),
+      );
+      await tx.driverPayoutAdjustment.create({
+        data: {
+          driverId: input.driverId,
+          deliveryId: input.deliveryId,
+          originalPayoutId: existing.id,
+          amount: diff,
+          reason: "COMPLETION_TOPUP",
+          status: "PENDING",
+          note: `Completion top-up — already paid $${Number(existing.netAmount).toFixed(2)}, full completion net is $${input.breakdown.netAmount.toFixed(2)}`,
+        },
+      });
+      this.logger.log(
+        `Delivery ${input.deliveryId}: payout already PAID ($${Number(existing.netAmount).toFixed(2)}) — top-up adjustment of $${diff.toFixed(2)} created instead of re-paying in full`,
+      );
+      return false;
+    }
+
+    if (existing && existing.status === EnumDriverPayoutStatus.CANCELLED) {
+      this.logger.warn(
+        `Delivery ${input.deliveryId}: payout was CANCELLED — not re-activating`,
+      );
+      return false;
+    }
+
+    if (existing) {
+      await tx.driverPayout.update({
+        where: { id: existing.id },
+        data: {
+          driverId: input.driverId,
+          grossAmount: input.breakdown.grossAmount,
+          insuranceFee: input.breakdown.insuranceFee,
+          platformFee: input.breakdown.platformFee,
+          netAmount: input.breakdown.netAmount,
+          driverSharePct: input.breakdown.driverSharePct,
+          status: input.status,
+          failureMessage: null,
+          ...(input.payoutType ? { type: input.payoutType } : {}),
+        },
+      });
+    } else {
+      await tx.driverPayout.create({
+        data: {
+          deliveryId: input.deliveryId,
+          driverId: input.driverId,
+          grossAmount: input.breakdown.grossAmount,
+          insuranceFee: input.breakdown.insuranceFee,
+          platformFee: input.breakdown.platformFee,
+          netAmount: input.breakdown.netAmount,
+          driverSharePct: input.breakdown.driverSharePct,
+          status: input.status,
+          ...(input.payoutType ? { type: input.payoutType } : {}),
+        },
+      });
+    }
+    return input.status === EnumDriverPayoutStatus.ELIGIBLE;
+  }
 
   private computeBreakdown(input: {
     amount: number;

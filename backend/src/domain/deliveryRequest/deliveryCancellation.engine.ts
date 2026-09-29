@@ -15,6 +15,7 @@ import {
   EnumDeliveryStatusHistoryToStatus,
   EnumDriverPayoutStatus,
   EnumDriverPayoutType,
+  EnumPaymentEventStatus,
   EnumPaymentEventType,
   EnumPaymentStatus,
   EnumTrackingSessionStatus,
@@ -299,7 +300,12 @@ export class DeliveryCancellationEngine {
           delivery.payment.status === EnumPaymentStatus.CAPTURED ||
           delivery.payment.status === EnumPaymentStatus.PAID
         ) {
-          // Legacy: full refund
+          // Legacy: full refund — but ONLY mark REFUNDED if the Stripe refund
+          // actually succeeded. Previously a failed Stripe call was logged and
+          // the row was marked REFUNDED anyway: the books said "refunded"
+          // while the customer never received their money.
+          let refundIssued = false;
+          let refundError: string | null = null;
           if (delivery.payment.providerPaymentIntentId && this.stripeService) {
             try {
               const pi = await this.stripeService.getPaymentIntent(delivery.payment.providerPaymentIntentId);
@@ -315,34 +321,56 @@ export class DeliveryCancellationEngine {
                     reason: 'auto-refund-on-cancellation',
                   },
                 });
+                refundIssued = true;
                 this.logger.log(
                   `Refunded charge ${chargeId} for captured payment on delivery ${delivery.id}`,
                 );
+              } else {
+                refundError = "PaymentIntent has no charge to refund";
               }
             } catch (err: any) {
-              this.logger.warn(
-                `Failed to refund captured payment ${delivery.payment.id} on delivery ${delivery.id}: ${err.message}. Admin manual refund may be needed.`,
+              refundError = err?.message || "Unknown Stripe refund error";
+              this.logger.error(
+                `Failed to refund captured payment ${delivery.payment.id} on delivery ${delivery.id}: ${refundError}. Admin manual refund required — payment NOT marked refunded.`,
               );
             }
+          } else {
+            // No Stripe charge to refund (offline/manual provider) — DB-only.
+            refundIssued = true;
           }
 
-          await tx.payment.update({
-            where: { id: delivery.payment.id },
-            data: {
-              status: EnumPaymentStatus.REFUNDED,
-              refundedAt: now,
-            },
-          });
+          if (refundIssued) {
+            await tx.payment.update({
+              where: { id: delivery.payment.id },
+              data: {
+                status: EnumPaymentStatus.REFUNDED,
+                refundedAt: now,
+              },
+            });
 
-          await tx.paymentEvent.create({
-            data: {
-              paymentId: delivery.payment.id,
-              type: EnumPaymentEventType.REFUND,
-              status: EnumPaymentStatus.REFUNDED,
-              amount: delivery.payment.amount,
-              message: "Auto-refund issued because delivery was cancelled after payment capture",
-            },
-          });
+            await tx.paymentEvent.create({
+              data: {
+                paymentId: delivery.payment.id,
+                type: EnumPaymentEventType.REFUND,
+                status: EnumPaymentStatus.REFUNDED,
+                amount: delivery.payment.amount,
+                message: "Auto-refund issued because delivery was cancelled after payment capture",
+              },
+            });
+          } else {
+            // Honest state: the money was NOT returned. Keep the payment in
+            // its current status (CAPTURED/PAID) and record the failure so an
+            // admin can issue the refund via the refund endpoint.
+            await tx.paymentEvent.create({
+              data: {
+                paymentId: delivery.payment.id,
+                type: EnumPaymentEventType.REFUND,
+                status: EnumPaymentEventStatus.FAILED,
+                amount: delivery.payment.amount,
+                message: `Auto-refund FAILED on cancellation — customer has NOT been refunded. Admin must refund manually. Reason: ${refundError}`,
+              },
+            });
+          }
         }
       }
 

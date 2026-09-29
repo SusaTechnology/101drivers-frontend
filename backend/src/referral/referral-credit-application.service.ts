@@ -84,11 +84,18 @@ export class ReferralCreditApplicationService {
       });
       if (pendingCredits.length === 0) return;
 
-      // Whole-credit FIFO within the invoice-total budget
+      // Whole-credit FIFO within the invoice-total budget.
+      //   • null        → no cap (explicit "apply everything" callers only)
+      //   • 0 / $0 week → ZERO budget: sweeping credits onto an empty invoice
+      //     makes the total NEGATIVE, Stripe finalization fails, and the
+      //     dealer's weekly invoice gets stuck (deliveries go unbilled).
+      //     Credits simply wait for the next week with usage.
       const budgetCents =
-        input.invoiceTotalCents && input.invoiceTotalCents > 0
-          ? input.invoiceTotalCents
-          : Number.MAX_SAFE_INTEGER;
+        input.invoiceTotalCents == null
+          ? Number.MAX_SAFE_INTEGER
+          : input.invoiceTotalCents > 0
+            ? input.invoiceTotalCents
+            : 0;
       const applied: typeof pendingCredits = [];
       let appliedCents = 0;
       for (const credit of pendingCredits) {

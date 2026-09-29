@@ -221,36 +221,48 @@ export class StripeWebhookController {
     if (pi.metadata?.type === "tip") {
       const tip = await this.prisma.tip.findUnique({ where: { deliveryId } });
       if (!tip) {
+        // The tip endpoint now creates the Tip row BEFORE confirming the PI,
+        // so this should be unreachable in normal flow — kept as a safety net.
         this.logger.warn(`payment_intent.succeeded: no tip found for delivery ${deliveryId}`);
         return;
       }
+
+      // ── Idempotency: skip if this exact Stripe event already credited the tip ──
+      // Stripe can redeliver events (network retries). Without this check the
+      // payout netAmount would be incremented twice (driver overpaid).
+      const creditedEventId = stripeEventId ?? pi.id;
+      if (tip.payoutCreditedEventId === creditedEventId) {
+        this.logger.log(`Tip event ${creditedEventId} already credited for delivery ${deliveryId} — skipping`);
+        return;
+      }
+
       await this.prisma.tip.update({
         where: { id: tip.id },
-        data: { status: "CAPTURED" },
+        data: { status: "CAPTURED", payoutCreditedEventId: creditedEventId },
       });
 
       // Tips are added to a delivery AFTER completion (see
       // stripe-payment.controller.ts createTipPaymentIntent which requires
-      // delivery.status === COMPLETED). At completion time, handleCompletionTx
-      // in PaymentPayoutEngine looked up delivery.tip — but it didn't exist
-      // yet, so the DriverPayout.netAmount was created WITHOUT the tip.
+      // delivery.status === COMPLETED). The payout may already be settled:
       //
-      // Now that the tip is captured, we retroactively add it to the
-      // driver's payout. The full tip amount goes to the driver (matches
-      // computeBreakdown which adds tipAmount directly to netAmount, not
-      // multiplied by driverSharePct).
-      //
-      // If the payout doesn't exist yet (e.g. postpaid delivery awaiting
-      // invoicing) we skip — the tip will be picked up when admin invoices
-      // the delivery (adminInvoicePostpaid calls computeBreakdown with the
-      // then-current tip amount).
+      //   • ELIGIBLE  → tip rides along in the next withdrawal/weekly batch
+      //                 (add to netAmount — full tip to the driver, matches
+      //                 computeBreakdown which does not split tips).
+      //   • PAID      → the payout was already transferred to the driver's
+      //                 bank (the NORMAL case, since completion auto-transfers
+      //                 and tips arrive minutes later). Creating a positive
+      //                 TIP DriverPayoutAdjustment pays the tip on the
+      //                 driver's next payout rail (next completion transfer
+      //                 or the next withdrawal batch — batch rails apply
+      //                 pending adjustments).
+      //   • FAILED    → tip added to netAmount; admin re-triggers the payout.
+      //   • none      → warn — admin investigation (no assignment at completion).
+      //   • CANCELLED → skip (delivery money was cancelled).
       try {
         const payout = await this.prisma.driverPayout.findUnique({
           where: { deliveryId },
         });
-        if (payout && payout.status !== "CANCELLED") {
-          // Only add the tip to netAmount (driver keeps 100% of tips per
-          // computeBreakdown). grossAmount stays as the original quote.
+        if (payout && payout.status === "ELIGIBLE") {
           const newNet = Number(
             (Number(payout.netAmount) + Number(tip.amount)).toFixed(2),
           );
@@ -262,12 +274,45 @@ export class StripeWebhookController {
             `Tip $${Number(tip.amount).toFixed(2)} added to driver payout for ` +
             `delivery ${deliveryId} — new netAmount=$${newNet.toFixed(2)}`,
           );
+        } else if (payout && payout.status === "PAID") {
+          const adjustment = await this.prisma.driverPayoutAdjustment.create({
+            data: {
+              driverId: payout.driverId,
+              deliveryId,
+              originalPayoutId: payout.id,
+              amount: Number(tip.amount.toFixed(2)),
+              reason: "TIP",
+              status: "PENDING",
+              note: `Late tip on already-paid payout — pays out on the driver's next payout rail (event ${creditedEventId})`,
+            },
+          });
+          this.logger.log(
+            `Tip $${Number(tip.amount).toFixed(2)} on ALREADY-PAID payout for delivery ` +
+            `${deliveryId} — created TIP adjustment ${adjustment.id} (pays on next payout)`,
+          );
+        } else if (payout && payout.status === "FAILED") {
+          const newNet = Number(
+            (Number(payout.netAmount) + Number(tip.amount)).toFixed(2),
+          );
+          await this.prisma.driverPayout.update({
+            where: { id: payout.id },
+            data: { netAmount: newNet },
+          });
+          this.logger.log(
+            `Tip $${Number(tip.amount).toFixed(2)} added to FAILED payout ${payout.id} for ` +
+            `delivery ${deliveryId} — will be included when the payout is re-triggered`,
+          );
+        } else if (!payout) {
+          this.logger.warn(
+            `Tip captured for delivery ${deliveryId} but no DriverPayout exists — ` +
+            `admin must credit the driver manually (tip $${Number(tip.amount).toFixed(2)})`,
+          );
         }
       } catch (payoutErr: any) {
         // Don't fail the webhook over a payout update issue — the tip
         // capture itself already succeeded. Admin can manually adjust.
         this.logger.error(
-          `Failed to add tip to driver payout for delivery ${deliveryId}: ${payoutErr?.message}`,
+          `Failed to credit tip to driver payout for delivery ${deliveryId}: ${payoutErr?.message}`,
         );
       }
 
@@ -481,7 +526,34 @@ export class StripeWebhookController {
     // Without the delta calculation, multiple partial refunds would
     // over-clawback the driver (the cumulative amount would be passed
     // each time, summing to far more than the actual refund).
-    const cumulativeRefundedCents = charge.amount_refunded || 0;
+    // ── Referral-credit refunds must NOT count as customer refunds ──
+    // ReferralCreditApplicationService.refundPrepaidCreditForDelivery issues
+    // statement-credit refunds tagged metadata.source = "referral-credit-autoapply".
+    // Those refunds reduce the dealer's charge as a REWARD — they are not the
+    // customer getting delivery money back, and counting them here would create
+    // a FALSE driver clawback on an unrelated, fully-paid delivery.
+    // So: recompute the customer-refund total from the charge's refund list,
+    // excluding referral-credit refunds.
+    let customerRefundedCents = charge.amount_refunded || 0;
+    try {
+      if (this.stripeService) {
+        const refunds = await this.stripeService.stripe.refunds.list({
+          charge: charge.id,
+          limit: 100,
+        });
+        customerRefundedCents = refunds.data
+          .filter((r: any) => r?.metadata?.source !== "referral-credit-autoapply")
+          .reduce((sum: number, r: any) => sum + (r.amount || 0), 0);
+      }
+    } catch (listErr: any) {
+      // Fall back to the cumulative field (pre-referral-credit behavior) —
+      // better to over-approximate than skip the refund entirely.
+      this.logger.warn(
+        `Could not list refunds for charge ${charge.id} (${listErr.message}) — using amount_refunded as-is`,
+      );
+    }
+
+    const cumulativeRefundedCents = customerRefundedCents;
     const totalAmountCents = Math.round(Number(payment.amount) * 100);
     const previousRefundedCents = payment.refundedAmountCents ?? 0;
     const deltaRefundedCents = Math.max(0, cumulativeRefundedCents - previousRefundedCents);
@@ -497,7 +569,13 @@ export class StripeWebhookController {
     // happen in the same transaction. If the clawback fails (e.g.,
     // unique constraint on stripeEventId for a duplicate webhook),
     // the Payment update is rolled back too — no half-state.
-    await this.prisma.$transaction(async (tx) => {
+    //
+    // A P2002 on stripeEventId means Stripe redelivered an event we already
+    // processed — that is a success (idempotent no-op), so we return quietly
+    // instead of throwing (a thrown error made the outer handler return 500
+    // and Stripe retried the duplicate for 3 days).
+    try {
+      await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
         where: { id: payment.id },
         data: {
@@ -555,6 +633,21 @@ export class StripeWebhookController {
         }
       }
     });
+    } catch (txErr: any) {
+      if (
+        txErr?.code === "P2002" &&
+        Array.isArray(txErr?.meta?.target) &&
+        txErr.meta.target.includes("stripeEventId")
+      ) {
+        // Duplicate webhook delivery — already processed. Treat as success
+        // so Stripe stops retrying.
+        this.logger.log(
+          `charge.refunded event ${stripeEventId} already processed (idempotent) — skipping`,
+        );
+        return;
+      }
+      throw txErr;
+    }
 
     await this.createPaymentEventIdempotent({
       paymentId: payment.id,

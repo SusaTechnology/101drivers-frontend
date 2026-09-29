@@ -15,7 +15,7 @@ import { PaymentPolicyService } from "../domain/payment/paymentPolicy.service";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
 import { StripeService } from "../providers/stripe/stripe.service";
 import { NotFoundException } from "@nestjs/common";
-import { EnumPaymentStatus, EnumPaymentEventType, Prisma as PrismaClientNS } from "@prisma/client";
+import { EnumPaymentStatus, EnumPaymentEventType, EnumPaymentEventStatus, Prisma as PrismaClientNS } from "@prisma/client";
 @Injectable()
 export class PaymentService extends PaymentServiceBase {
   private readonly logger = new Logger(PaymentService.name);
@@ -596,8 +596,114 @@ async adminRefundPayment(input: {
     );
   }
 
-  // Process Stripe refund if provider is STRIPE and charge exists
-  if (payment.provider === "STRIPE" && payment.providerChargeId && this.stripeService) {
+  // ── Non-STRIPE providers (postpaid "MANUAL") ──────────────────────
+  // The dealer paid via the weekly Stripe INVOICE, so there is no Payment
+  // charge to refund through the refunds API. Go-live policy (approved):
+  //   1. Issue a CREDIT on the dealer's NEXT weekly invoice (a negative
+  //      Stripe InvoiceItem that Stripe sweeps into the upcoming invoice).
+  //   2. Keep the driver whole (Option B) — the platform absorbs the refund.
+  //   3. Track the refund on the Payment row WITHOUT corrupting its
+  //      lifecycle status: a partial refund must NOT flip PAID → CAPTURED
+  //      (the old behavior, which broke the postpaid invoice reconciliation).
+  if (payment.provider !== "STRIPE") {
+    const refundDollars = Math.min(
+      input.amount ?? Number(payment.amount),
+      Number(payment.amount) - Number(payment.refundedAmountCents ?? 0) / 100,
+    );
+    if (refundDollars <= 0) {
+      throw new BadRequestException("This payment is already fully refunded");
+    }
+
+    const totalCents = Math.round(Number(payment.amount) * 100);
+    const newRefundedCents = Math.min(
+      totalCents,
+      (payment.refundedAmountCents ?? 0) + Math.round(refundDollars * 100),
+    );
+    const isFull = newRefundedCents >= totalCents;
+
+    // Credit the dealer's next weekly invoice.
+    let creditCreated = false;
+    let creditError: string | null = null;
+    if (this.stripeService) {
+      const delivery = await this.prisma.deliveryRequest.findUnique({
+        where: { id: payment.deliveryId },
+        select: { customer: { select: { stripeCustomerId: true } } },
+      });
+      const stripeCustomerId = delivery?.customer?.stripeCustomerId;
+      if (stripeCustomerId) {
+        try {
+          await this.stripeService.stripe.invoiceItems.create(
+            {
+              customer: stripeCustomerId,
+              amount: -Math.round(refundDollars * 100),
+              currency: "usd",
+              description: `Refund credit — delivery ${payment.deliveryId.slice(-8)}${input.reason ? ` (${input.reason})` : ""}`,
+              metadata: {
+                source: "admin-postpaid-refund-credit",
+                paymentId: payment.id,
+                deliveryId: payment.deliveryId,
+              },
+            } as any,
+            { idempotencyKey: `postpaid-refund-credit-${payment.id}-${newRefundedCents}` },
+          );
+          creditCreated = true;
+        } catch (err: any) {
+          creditError = err?.message || "unknown error";
+          this.logger.error(
+            `Failed to create postpaid refund credit for payment ${payment.id}: ${creditError} — admin must add the credit manually in Stripe`,
+          );
+        }
+      } else {
+        creditError = "dealer has no Stripe customer id";
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          // Full refund → REFUNDED. Partial → keep the current lifecycle
+          // status (PAID stays PAID) and record the partial via refundStatus.
+          status: isFull ? EnumPaymentStatus.REFUNDED : payment.status,
+          refundedAt: isFull ? new Date() : payment.refundedAt,
+          refundedAmountCents: newRefundedCents,
+          refundStatus: isFull ? "FULL" : "PARTIAL",
+        },
+      });
+
+      await tx.paymentEvent.create({
+        data: {
+          paymentId: payment.id,
+          type: EnumPaymentEventType.REFUND,
+          status: EnumPaymentEventStatus.REFUNDED,
+          amount: refundDollars,
+          message:
+            `Postpaid ${isFull ? "full" : "partial"} refund of $${refundDollars.toFixed(2)} — ` +
+            (creditCreated
+              ? "credit issued on the dealer's next weekly invoice"
+              : `Stripe credit NOT created (${creditError ?? "no Stripe service"}) — add it manually`) +
+            ". Driver payout kept (Option B).",
+          raw: {
+            source: "admin-postpaid-refund",
+            actorUserId: input.actorUserId ?? null,
+            reason: input.reason ?? null,
+            creditCreated,
+          },
+        },
+      });
+    });
+
+    return this.domain.findUnique({ id: input.paymentId });
+  }
+
+  if (!payment.providerChargeId && payment.provider === "STRIPE") {
+    throw new BadRequestException(
+      "No Stripe charge found on this payment. Cannot process refund via Stripe.",
+    );
+  }
+
+  // STRIPE provider: process the refund via the Stripe refunds API.
+  if (payment.providerChargeId && this.stripeService) {
     try {
       await this.stripeService.createRefund({
         chargeId: payment.providerChargeId,
@@ -612,12 +718,7 @@ async adminRefundPayment(input: {
       this.logger.error(`Stripe refund failed for payment ${payment.id}: ${err.message}`);
       throw new BadRequestException(`Stripe refund failed: ${err.message}`);
     }
-  } else if (!payment.providerChargeId && payment.provider === "STRIPE") {
-    throw new BadRequestException(
-      "No Stripe charge found on this payment. Cannot process refund via Stripe.",
-    );
   }
-  // Non-STRIPE providers: just update the DB status (manual/offline refund)
 
   const isFullRefund = !input.amount || input.amount >= payment.amount;
 

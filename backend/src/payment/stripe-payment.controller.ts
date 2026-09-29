@@ -116,6 +116,7 @@ export class StripePaymentController {
   @UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
   async createTipPaymentIntent(
     @Body() body: { deliveryId: string; amount: number },
+    @Req() req: any,
   ) {
     const { deliveryId, amount } = body;
 
@@ -126,6 +127,15 @@ export class StripePaymentController {
     if (amount > 500) {
       throw new BadRequestException("Tip amount cannot exceed $500");
     }
+
+    // ── Ownership check: only the delivery's own dealer (or an admin) may ──
+    // charge a card here. Without this, ANY authenticated user could tip
+    // ANY dealer's saved card for any completed delivery.
+    // req.user = { id, username, roles } from the JWT.
+    const caller = req?.user as any;
+    const callerIsAdmin = Array.isArray(caller?.roles)
+      ? caller.roles.includes("ADMIN")
+      : caller?.roles === "ADMIN";
 
     // Verify delivery exists and is completed
     const delivery = await this.prisma.deliveryRequest.findUnique({
@@ -139,7 +149,7 @@ export class StripePaymentController {
             stripeCustomerId: true,
             stripeDefaultPaymentMethodId: true,
             contactEmail: true,
-            user: { select: { email: true } },
+            user: { select: { id: true, email: true } },
           },
         },
       },
@@ -147,6 +157,10 @@ export class StripePaymentController {
 
     if (!delivery) {
       throw new NotFoundException("Delivery not found");
+    }
+
+    if (!callerIsAdmin && delivery.customer?.user?.id !== caller?.id) {
+      throw new BadRequestException("You can only add a tip to your own deliveries");
     }
 
     if (delivery.status !== "COMPLETED") {
@@ -180,11 +194,21 @@ export class StripePaymentController {
     });
 
     if (existingTip?.providerRef) {
-      // Check if the existing tip PaymentIntent is terminal
       try {
         const pi = await this.stripeService.getPaymentIntent(existingTip.providerRef);
-        const terminalStatuses = ['succeeded', 'canceled', 'cancelled'];
+        if (pi.status === 'succeeded') {
+          // ── Server-side double-charge guard ──
+          // The UI hides the tip form after a successful tip, but the API
+          // previously fell through and created a NEW PaymentIntent → the
+          // dealer's card charged twice. Reject here instead.
+          throw new BadRequestException(
+            "A tip has already been added to this delivery",
+          );
+        }
+        const terminalStatuses = ['canceled', 'cancelled'];
         if (!terminalStatuses.includes(pi.status)) {
+          // Non-terminal (processing / requires_action) — let the frontend
+          // resume the same PaymentIntent instead of creating a new one.
           return {
             paymentIntentId: pi.id,
             clientSecret: pi.client_secret,
@@ -192,9 +216,37 @@ export class StripePaymentController {
             amount: pi.amount / 100,
           };
         }
-      } catch {
+      } catch (err: any) {
+        if (err instanceof BadRequestException) throw err;
         // PaymentIntent not found or API error — fall through and create new one
       }
+    }
+
+    // ── Create the Tip row BEFORE confirming the PaymentIntent ──
+    // This closes the webhook race: with confirm:true the charge can land
+    // and the payment_intent.succeeded webhook can arrive BEFORE the Tip row
+    // existed — the webhook found no tip, gave up (200), and the tip money
+    // was never credited to the driver. Row-first means the webhook always
+    // finds the row.
+    let tipId: string;
+    if (existingTip) {
+      const updated = await this.prisma.tip.update({
+        where: { deliveryId },
+        data: { amount, provider: "STRIPE", status: "AUTHORIZED" as any },
+        select: { id: true },
+      });
+      tipId = updated.id;
+    } else {
+      const created = await this.prisma.tip.create({
+        data: {
+          amount,
+          deliveryId,
+          provider: "STRIPE",
+          status: "AUTHORIZED" as any,
+        },
+        select: { id: true },
+      });
+      tipId = created.id;
     }
 
     try {
@@ -233,41 +285,24 @@ export class StripePaymentController {
       const refreshedPi = await this.stripeService.getPaymentIntent(result.paymentIntentId);
       const finalStatus = refreshedPi.status;
 
-      // Upsert tip record — capture the tip row id so the frontend can PATCH
-      // the same row by id after the Stripe payment confirms. Without this,
-      // the frontend's `existingTip` (fetched on page load, before the tip
-      // was created) is undefined and the PATCH hits /api/tips/undefined → 404.
-      let tipId: string;
+      // Update the tip row created BEFORE the PI was confirmed (race fix).
+      // The row already exists with tipId — just stamp the PI reference and
+      // the final status.
       const tipStatus =
         finalStatus === "succeeded" ? "CAPTURED" :
         finalStatus === "requires_action" ? "AUTHORIZED" :
         finalStatus === "requires_capture" ? "AUTHORIZED" :
         "AUTHORIZED";
-      if (existingTip) {
-        const updated = await this.prisma.tip.update({
-          where: { deliveryId },
-          data: {
-            amount,
-            provider: "STRIPE",
-            providerRef: result.paymentIntentId,
-            status: tipStatus as any,
-          },
-          select: { id: true },
-        });
-        tipId = updated.id;
-      } else {
-        const created = await this.prisma.tip.create({
-          data: {
-            amount,
-            deliveryId,
-            provider: "STRIPE",
-            providerRef: result.paymentIntentId,
-            status: tipStatus as any,
-          },
-          select: { id: true },
-        });
-        tipId = created.id;
-      }
+      await this.prisma.tip.update({
+        where: { id: tipId },
+        data: {
+          amount,
+          provider: "STRIPE",
+          providerRef: result.paymentIntentId,
+          status: tipStatus as any,
+        },
+        select: { id: true },
+      });
 
       // Return the final status so the frontend knows whether to show
       // "Tip Sent!" directly (succeeded) or render the 3DS modal

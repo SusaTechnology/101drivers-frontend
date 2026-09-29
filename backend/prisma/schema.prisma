@@ -1056,6 +1056,12 @@ model Tip {
   providerRef String?
   status      EnumTipStatus   @default(AUTHORIZED)
   updatedAt   DateTime        @updatedAt
+
+  // Idempotency for the tip payout-credit: the Stripe event id of the last
+  // payment_intent.succeeded webhook that credited this tip to the driver's
+  // payout (or created a TIP adjustment for it). Prevents double-crediting
+  // when Stripe redelivers the same event.
+  payoutCreditedEventId String?
 }
 
 model NotificationEvent {

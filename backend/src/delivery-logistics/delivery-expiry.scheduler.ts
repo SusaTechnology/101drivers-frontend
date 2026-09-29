@@ -632,7 +632,20 @@ export class DeliveryExpiryScheduler {
       return { attempted: false, success: false };
     }
 
-    // Payment is not in AUTHORIZED state → already captured/refunded/voided.
+    // ── CAPTURED with no lock-in: the customer was already CHARGED ──
+    // Private customers are instant-charged at creation. If the delivery is
+    // expiring from LISTED, no driver ever took the job — keeping the money
+    // would be silent theft. Auto-refund in full (the charge may also have
+    // been captured for a business delivery that was fully captured then
+    // abandoned — same rule: work never started, money goes back).
+    if (
+      payment.status === EnumPaymentStatus.CAPTURED &&
+      !(payment.lockInAmount != null && payment.lockInAmount > 0)
+    ) {
+      return this.refundCapturedPaymentOnExpiry(delivery, payment);
+    }
+
+    // Payment is not in AUTHORIZED state → already refunded/voided.
     if (payment.status !== EnumPaymentStatus.AUTHORIZED) {
       return { attempted: false, success: false };
     }
@@ -711,6 +724,96 @@ export class DeliveryExpiryScheduler {
       this.logger.error(
         `releaseStripeAuthOnExpiry: failed to cancel PI ${piId} for delivery ${delivery.id}: ${error.message}. ` +
           `The orphan-auth sweep will retry on the next run.`
+      );
+      return { attempted: true, success: false };
+    }
+  }
+
+  /**
+   * Auto-refund a CAPTURED payment whose delivery expired without a driver
+   * (LISTED → EXPIRED). The customer was charged instantly at creation but
+   * the work never started — the money must go back. Previously the charge
+   * was kept silently and recovery was a manual admin refund nobody knew
+   * to do.
+   *
+   * createRefund is idempotent per charge (stable key `refund-{chargeId}`),
+   * so a retry after a partial failure can never double-refund.
+   */
+  private async refundCapturedPaymentOnExpiry(
+    delivery: { id: string },
+    payment: {
+      id: string;
+      amount: number;
+      providerPaymentIntentId: string | null;
+    },
+  ): Promise<{ attempted: boolean; success: boolean }> {
+    if (!this.stripeService) {
+      this.logger.warn(
+        `refundCapturedPaymentOnExpiry: StripeService not configured — cannot refund ` +
+          `payment ${payment.id} for expired delivery ${delivery.id}. Admin must refund manually.`
+      );
+      return { attempted: true, success: false };
+    }
+
+    try {
+      const piId = payment.providerPaymentIntentId;
+      if (!piId) {
+        this.logger.warn(
+          `refundCapturedPaymentOnExpiry: payment ${payment.id} (delivery ${delivery.id}) is ` +
+            `CAPTURED but has no PaymentIntent id — admin must refund manually.`
+        );
+        return { attempted: false, success: false };
+      }
+
+      const pi = await this.stripeService.getPaymentIntent(piId);
+      const charge = pi.latest_charge;
+      const chargeId = typeof charge === "string" ? charge : (charge as any)?.id;
+      if (!chargeId) {
+        this.logger.warn(
+          `refundCapturedPaymentOnExpiry: no charge on PI ${piId} for delivery ${delivery.id} — admin must refund manually.`
+        );
+        return { attempted: false, success: false };
+      }
+
+      await this.stripeService.createRefund({
+        chargeId,
+        reason: "requested_by_customer",
+        metadata: {
+          paymentId: payment.id,
+          deliveryId: delivery.id,
+          reason: "auto-refund-on-expiry",
+        },
+      });
+
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: EnumPaymentStatus.REFUNDED,
+          refundedAt: businessNow().toJSDate(),
+          refundedAmountCents: Math.round(Number(payment.amount) * 100),
+          refundStatus: "FULL",
+        },
+      });
+      await this.prisma.paymentEvent.create({
+        data: {
+          paymentId: payment.id,
+          type: "REFUND" as any,
+          status: "REFUNDED" as any,
+          amount: payment.amount,
+          message:
+            "Auto-refund — delivery expired with no driver (customer was charged instantly at creation)",
+        },
+      });
+
+      this.logger.log(
+        `refundCapturedPaymentOnExpiry: refunded $${payment.amount} to the customer for ` +
+          `EXPIRED delivery ${delivery.id} (charge ${chargeId})`
+      );
+      return { attempted: true, success: true };
+    } catch (error: any) {
+      this.logger.error(
+        `refundCapturedPaymentOnExpiry: failed to refund payment ${payment.id} for delivery ` +
+          `${delivery.id}: ${error?.message}. Admin must refund manually.`
       );
       return { attempted: true, success: false };
     }

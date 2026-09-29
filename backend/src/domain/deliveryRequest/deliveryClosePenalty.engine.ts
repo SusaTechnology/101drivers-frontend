@@ -358,6 +358,29 @@ export class DeliveryClosePenaltyEngine {
       const payment = delivery.payment;
       const isPrepaid = payment.paymentType === EnumPaymentPaymentType.PREPAID;
 
+      if (
+        isPrepaid &&
+        (payment.status === EnumPaymentStatus.CAPTURED || payment.lockInPaymentIntentId)
+      ) {
+        // The customer was already CHARGED (fully captured, or the lock-in
+        // partial capture already succeeded on this PI). Capturing a penalty
+        // on top is impossible, and the old fallback rewrote the Payment row
+        // to a fictional penalty amount — mis-stating the books and silently
+        // keeping money that should have been refunded. Admin must use the
+        // (partial) refund tools instead — skip all money movement here.
+        this.logger.warn(
+          `applyClosePenalty: delivery ${input.deliveryId} payment is already charged ` +
+            `(status=${payment.status}${payment.lockInPaymentIntentId ? ", lock-in captured" : ""}) — ` +
+            `penalty NOT collected. Use a partial refund to return any difference to the customer.`
+        );
+        return {
+          applied: false,
+          penaltyAmountDollars: 0,
+          driverPayoutId: null,
+          paymentStatus: null,
+        };
+      }
+
       if (isPrepaid && payment.providerPaymentIntentId && this.stripeService) {
         // PREPAID with an active Stripe hold → partial capture of the penalty.
         // The rest of the hold is released automatically by Stripe's
