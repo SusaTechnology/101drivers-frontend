@@ -460,12 +460,11 @@ export class PaymentPayoutEngine {
         tipAmount,
       });
 
-      const payoutStatus =
-        payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
-        payment.status !== EnumPaymentStatus.INVOICED &&
-        payment.status !== EnumPaymentStatus.PAID
-          ? EnumDriverPayoutStatus.PENDING
-          : EnumDriverPayoutStatus.ELIGIBLE;
+      // Option B (go-live policy): pay drivers for completed work regardless
+      // of whether the dealer has paid yet. The dealer's unpaid balance is a
+      // platform receivable managed by the weekly invoice + credit cap —
+      // driver payouts are never locked behind dealer payment.
+      const payoutStatus = EnumDriverPayoutStatus.ELIGIBLE;
 
       await tx.driverPayout.upsert({
         where: { deliveryId: input.deliveryId },
@@ -566,12 +565,9 @@ export class PaymentPayoutEngine {
       tipAmount,
     });
 
-    const payoutStatus =
-      payment.paymentType === EnumPaymentPaymentType.POSTPAID &&
-      payment.status !== EnumPaymentStatus.INVOICED &&
-      payment.status !== EnumPaymentStatus.PAID
-        ? EnumDriverPayoutStatus.PENDING
-        : EnumDriverPayoutStatus.ELIGIBLE;
+    // Option B (go-live policy): payable at completion — same as the
+    // lock-in path above. See that comment for the rationale.
+    const payoutStatus = EnumDriverPayoutStatus.ELIGIBLE;
 
     await tx.driverPayout.upsert({
       where: { deliveryId: input.deliveryId },

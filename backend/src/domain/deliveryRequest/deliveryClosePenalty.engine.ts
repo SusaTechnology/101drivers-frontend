@@ -283,8 +283,9 @@ export class DeliveryClosePenaltyEngine {
    *     ADJUSTMENT enum value to avoid a schema migration).
    *   • grossAmount = penalty, netAmount = penalty (driver gets 100%
    *     of the penalty per product spec — no platform fee on penalty).
-   *   • status = PENDING for postpaid, ELIGIBLE for prepaid (paid
-   *     immediately from the captured funds).
+   *   • status = ELIGIBLE for both prepaid and postpaid (Option B —
+   *     drivers are paid for completed work; postpaid is a platform
+   *     receivable managed by the weekly invoice + credit cap).
    *
    * Returns the result for audit logging.
    */
@@ -431,11 +432,9 @@ export class DeliveryClosePenaltyEngine {
     const driverId = delivery.assignments[0]?.driverId ?? null;
 
     if (driverId) {
-      const isPrepaid =
-        delivery.payment?.paymentType === EnumPaymentPaymentType.PREPAID;
-      const payoutStatus = isPrepaid
-        ? EnumDriverPayoutStatus.ELIGIBLE
-        : EnumDriverPayoutStatus.PENDING;
+      // Option B (go-live policy): penalty payouts are payable immediately
+      // for both prepaid and postpaid — same policy as completion payouts.
+      const payoutStatus = EnumDriverPayoutStatus.ELIGIBLE;
 
       // Upsert — if a payout already exists (e.g. lock-in fee from
       // startTrip), we DON'T overwrite it. We only create a payout if

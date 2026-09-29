@@ -1188,10 +1188,18 @@ export class PostpaidBillingService {
         return;
       }
 
+      // Fetch the affected payments first — we need their deliveryIds so we
+      // can also unlock driver payouts that are still PENDING (rows created
+      // before payouts became ELIGIBLE at completion).
+      const paidPayments = await this.prisma.payment.findMany({
+        where: { stripeInvoiceItemId: { in: invoiceItemIds } },
+        select: { id: true, deliveryId: true },
+      });
+
       // Bulk update all Payment rows with matching stripeInvoiceItemId.
       // Also stamp stripeInvoiceId so future queries can find them.
       const result = await this.prisma.payment.updateMany({
-        where: { stripeInvoiceItemId: { in: invoiceItemIds } },
+        where: { id: { in: paidPayments.map((p) => p.id) } },
         data: {
           status: EnumPaymentStatus.PAID,
           paidAt: new Date(),
@@ -1202,6 +1210,27 @@ export class PostpaidBillingService {
       this.logger.log(
         `invoice.payment_succeeded ${invoiceId}: marked ${result.count} Payment(s) as PAID`,
       );
+
+      // ── Legacy safety net: unlock still-PENDING driver payouts ──
+      // Deliveries completed before the Option-B change may have payouts
+      // stuck in PENDING. Now that the dealer actually paid the invoice,
+      // flip those to ELIGIBLE so the driver can withdraw. Idempotent:
+      // matches status PENDING only, so it's a no-op for rows already
+      // ELIGIBLE/PAID/CANCELLED.
+      const paidDeliveryIds = paidPayments
+        .map((p) => p.deliveryId)
+        .filter((id): id is string => Boolean(id));
+      if (paidDeliveryIds.length > 0) {
+        const unlocked = await this.prisma.driverPayout.updateMany({
+          where: { deliveryId: { in: paidDeliveryIds }, status: "PENDING" },
+          data: { status: "ELIGIBLE" },
+        });
+        if (unlocked.count > 0) {
+          this.logger.log(
+            `invoice.payment_succeeded ${invoiceId}: unlocked ${unlocked.count} PENDING driver payout(s) → ELIGIBLE`,
+          );
+        }
+      }
 
       // ── Fix 2: Auto-unfreeze dealer if they were frozen due to CHARGE_FAILED ──
       // When a frozen dealer replaces their card and the daily cron retries
