@@ -1065,15 +1065,21 @@ export default function AdminUsersPage() {
 
               {/* ZIP Region — named CA regions; fills the From/To range.
                   Hidden entirely until Role = Driver (customers have no
-                  ZIP), per admin UX decision — not merely disabled. */}
+                  ZIP), per admin UX decision — not merely disabled.
+                  min-w-0 on the cell + w-full on the trigger pin the
+                  control to its grid column: long region names (e.g.
+                  "Inland Empire (Riverside / San Bernardino)") ellipsize
+                  inside the trigger instead of stretching it over the
+                  ZIP field. The ! variants out-rank the trigger's built-in
+                  w-fit / flex value styles so the clamp always applies. */}
               {zipEnabled && (
-              <div>
+              <div className="min-w-0">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Region</Label>
                 <Select
                   value={zipRegion}
                   onValueChange={handleZipRegionChange}
                 >
-                  <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                  <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm w-full min-w-0 [&_[data-slot=select-value]]:block! [&_[data-slot=select-value]]:max-w-full! [&_[data-slot=select-value]]:truncate!">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
