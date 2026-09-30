@@ -510,6 +510,17 @@ export default function AdminUsersPage() {
   const totalUsers = v2Data?.pagination?.totalRows ?? 0;
   const totalPages = v2Data?.pagination?.totalPages ?? 1;
   const availableStatuses = v2Data?.availableStatuses;
+  // Admin dropdown live counts, keyed by the ADMIN_-prefixed value the
+  // backend sends ("ADMIN_ACTIVE" ↔ option value "ACTIVE"). Used to
+  // render "Disabled (0)" — an empty filter result explains itself
+  // before the option is even picked, instead of reading like a bug.
+  const adminStatusCountByValue = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const opt of availableStatuses?.admin ?? []) {
+      if (typeof opt.count === 'number') map.set(opt.value, opt.count);
+    }
+    return map;
+  }, [availableStatuses]);
   const roleAutoForced = v2Data?.filtersApplied?.roleAutoForced ?? false;
 
   // ==================== MUTATIONS ====================
@@ -1058,9 +1069,20 @@ export default function AdminUsersPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {ADMIN_STATUS_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
+                      {ADMIN_STATUS_OPTIONS.map(opt => {
+                        // Live per-option count from the backend — each
+                        // number equals exactly what the table will show
+                        // when the option is picked ("Disabled (0)").
+                        // 'all' has no count by definition.
+                        const count = opt.value === 'all'
+                          ? undefined
+                          : adminStatusCountByValue.get(`ADMIN_${opt.value}`);
+                        return (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}{typeof count === 'number' ? ` (${count})` : ''}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 ) : (
@@ -1524,6 +1546,30 @@ export default function AdminUsersPage() {
                         </TableCell>
                       </TableRow>
                     ))}
+                    {/* Empty state — an unexplained blank table reads as a
+                        broken filter (the "Disabled (0)" report). Say WHY
+                        it's empty and offer the way out. Only after loading
+                        completes: every filter change is a fresh query key,
+                        so rows are [] mid-fetch too. */}
+                    {!usersLoading && users.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="px-4 py-14 text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                              No users match the current filters
+                            </p>
+                            <p className="text-xs text-slate-400 max-w-sm">
+                              The summary cards above always count everyone — the table only lists rows matching the filters. Try a different status or clear them.
+                            </p>
+                            {hasActiveFilters && (
+                              <Button variant="outline" size="sm" className="mt-2 rounded-lg" onClick={clearFilters}>
+                                Clear filters
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>
