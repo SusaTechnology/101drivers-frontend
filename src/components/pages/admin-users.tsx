@@ -397,6 +397,16 @@ export default function AdminUsersPage() {
   const [zipFilter, setZipFilter] = useState('');
   const [zipFrom, setZipFrom] = useState('');
   const [zipTo, setZipTo] = useState('');
+  // ZIP filtering is meaningful only for drivers — customers have NO ZIP
+  // field in the database (the only ZIP column is Driver.residentialZip).
+  // The inputs are disabled unless the Role filter is explicitly "Driver",
+  // with a helper underneath explaining why. Typed values are kept in
+  // state but NOT sent while disabled, so switching back to Driver
+  // restores them instead of silently zeroing the result list.
+  const zipEnabled = roleFilter === 'DRIVER';
+  // A reversed numeric range (e.g. From 92000, To 90000) can never match.
+  const zipRangeReversed =
+    zipFrom.length === 5 && zipTo.length === 5 && zipFrom > zipTo;
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -423,9 +433,9 @@ export default function AdminUsersPage() {
     q: searchQuery || undefined,
     role: roleFilter !== 'all' ? roleFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
-    zipPrefix: zipFilter.trim() || undefined,
-    zipFrom: zipFrom.trim() || undefined,
-    zipTo: zipTo.trim() || undefined,
+    zipPrefix: zipEnabled ? (zipFilter.trim() || undefined) : undefined,
+    zipFrom: zipEnabled ? (zipFrom.trim() || undefined) : undefined,
+    zipTo: zipEnabled ? (zipTo.trim() || undefined) : undefined,
     sortBy,
     sortOrder,
     page,
@@ -807,9 +817,10 @@ export default function AdminUsersPage() {
     searchQuery ||
     roleFilter !== 'all' ||
     statusFilter !== 'all' ||
-    zipFilter.trim() !== '' ||
-    zipFrom.trim() !== '' ||
-    zipTo.trim() !== '';
+    (zipEnabled &&
+      (zipFilter.trim() !== '' ||
+        zipFrom.trim() !== '' ||
+        zipTo.trim() !== ''));
 
   // ==================== RENDER ====================
 
@@ -998,7 +1009,9 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
-              {/* ZIP Filter — prefix match, drivers only */}
+              {/* ZIP Filter — driver home ZIP only. Customers have no ZIP
+                  field, so it's disabled unless Role = Driver, with a helper
+                  underneath so the user always knows why. */}
               <div className="w-32">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP</Label>
                 <Input
@@ -1009,8 +1022,14 @@ export default function AdminUsersPage() {
                     }}
                   placeholder="e.g. 900"
                   inputMode="numeric"
-                  className="mt-1.5 rounded-xl h-9 w-full"
+                  disabled={!zipEnabled}
+                  className="mt-1.5 rounded-xl h-9 w-full disabled:cursor-not-allowed disabled:opacity-50"
                 />
+                <p className="mt-1 text-[10px] leading-tight text-slate-400">
+                  {zipEnabled
+                    ? 'Driver home ZIP. 900 = LA metro area.'
+                    : 'Drivers only — customers have no ZIP. Set Role = Driver.'}
+                </p>
               </div>
 
               {/* Advanced toggle */}
@@ -1046,7 +1065,8 @@ export default function AdminUsersPage() {
                     }}
                     placeholder="90000"
                     inputMode="numeric"
-                    className="mt-1.5 rounded-xl h-9 w-full"
+                    disabled={!zipEnabled}
+                    className="mt-1.5 rounded-xl h-9 w-full disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
                 <div className="w-28">
@@ -1059,8 +1079,21 @@ export default function AdminUsersPage() {
                     }}
                     placeholder="96199 = CA"
                     inputMode="numeric"
-                    className="mt-1.5 rounded-xl h-9 w-full"
+                    disabled={!zipEnabled}
+                    className="mt-1.5 rounded-xl h-9 w-full disabled:cursor-not-allowed disabled:opacity-50"
                   />
+                  {zipEnabled && zipRangeReversed && (
+                    <p className="mt-1 text-[10px] leading-tight text-amber-500">
+                      From is above To — this range matches nothing.
+                    </p>
+                  )}
+                </div>
+                <div className="w-44">
+                  <p className="text-[10px] leading-tight text-slate-400 pb-2">
+                    {zipEnabled
+                      ? 'Range sweep, not city-to-city: 90000–96199 = all of California, 90000–93599 ≈ Southern California.'
+                      : 'Drivers only — customers have no ZIP. Set Role = Driver to use ZIP filters.'}
+                  </p>
                 </div>
                 <div className="w-40">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sort By</Label>
