@@ -181,6 +181,26 @@ const SORT_BY_OPTIONS: { value: string; label: string }[] = [
   { value: 'lastLoginAt', label: 'Last Login' },
 ];
 
+// Named California regions for the ZIP filter. Admins think in places
+// ("LA", "San Diego"), not in ZIP digits — named zones are how US ops
+// systems do geographic filtering. Each region is a contiguous band of
+// USPS 3-digit prefixes (sectional centers) expressed as a ZIP From/To
+// range that auto-fills the advanced inputs. Bands follow USPS sorting
+// geography, not city limits; the manual prefix/range inputs stay
+// available for anything finer (they flip the picker to "Custom").
+const ZIP_REGION_OPTIONS: { value: string; label: string; from: string; to: string }[] = [
+  { value: 'all-ca', label: 'All California', from: '90000', to: '96199' },
+  { value: 'la', label: 'Los Angeles Metro', from: '90000', to: '91899' },
+  { value: 'sd', label: 'San Diego', from: '91900', to: '92199' },
+  { value: 'ie', label: 'Inland Empire (Riverside / San Bernardino)', from: '92200', to: '92599' },
+  { value: 'oc', label: 'Orange County', from: '92600', to: '92899' },
+  { value: 'central-coast', label: 'Central Coast & Bakersfield', from: '93000', to: '93499' },
+  { value: 'high-desert', label: 'High Desert (Palmdale / Lancaster)', from: '93500', to: '93599' },
+  { value: 'central-valley', label: 'Fresno & Central Valley', from: '93600', to: '93999' },
+  { value: 'bay-area', label: 'San Francisco Bay Area', from: '94000', to: '95199' },
+  { value: 'norcal', label: 'Sacramento & Northern California', from: '95200', to: '96199' },
+];
+
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 // ==================== HELPER COMPONENTS ====================
@@ -404,6 +424,30 @@ export default function AdminUsersPage() {
   // state but NOT sent while disabled, so switching back to Driver
   // restores them instead of silently zeroing the result list.
   const zipEnabled = roleFilter === 'DRIVER';
+  // Named-region picker for the ZIP filter: 'any' = no region filter,
+  // a ZIP_REGION_OPTIONS key = region whose band fills zipFrom/zipTo,
+  // 'custom' = the admin hand-edited the ZIP inputs (values kept as-is).
+  const [zipRegion, setZipRegion] = useState('any');
+  const handleZipRegionChange = (v: string) => {
+    setZipRegion(v);
+    setPage(1);
+    if (v === 'any') {
+      setZipFrom('');
+      setZipTo('');
+    } else if (v !== 'custom') {
+      const region = ZIP_REGION_OPTIONS.find(o => o.value === v);
+      if (region) {
+        setZipFrom(region.from);
+        setZipTo(region.to);
+        setZipFilter('');
+        // Reveal the filled From/To so the admin sees what was applied
+        setShowAdvanced(true);
+      }
+    }
+  };
+  // Any manual edit of the ZIP inputs (prefix/From/To) means the admin is
+  // doing something finer than a named region — those onChange handlers
+  // flip the picker to "custom" instead of fighting them.
   // A reversed numeric range (e.g. From 92000, To 90000) can never match.
   const zipRangeReversed =
     zipFrom.length === 5 && zipTo.length === 5 && zipFrom > zipTo;
@@ -810,6 +854,7 @@ export default function AdminUsersPage() {
     setZipFilter('');
     setZipFrom('');
     setZipTo('');
+    setZipRegion('any');
     setPage(1);
   }, []);
 
@@ -818,7 +863,8 @@ export default function AdminUsersPage() {
     roleFilter !== 'all' ||
     statusFilter !== 'all' ||
     (zipEnabled &&
-      (zipFilter.trim() !== '' ||
+      (zipRegion !== 'any' ||
+        zipFilter.trim() !== '' ||
         zipFrom.trim() !== '' ||
         zipTo.trim() !== ''));
 
@@ -1009,6 +1055,35 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
+              {/* ZIP Region — named CA regions; fills the From/To range.
+                  Drivers only (same helper logic as the ZIP box). */}
+              <div className="w-44">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Region</Label>
+                <Select
+                  value={zipRegion}
+                  onValueChange={handleZipRegionChange}
+                  disabled={!zipEnabled}
+                >
+                  <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any Region</SelectItem>
+                    {ZIP_REGION_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                    {zipRegion === 'custom' && (
+                      <SelectItem value="custom">Custom (manual ZIPs)</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-[10px] leading-tight text-slate-400">
+                  {zipEnabled
+                    ? 'Driver home ZIP region.'
+                    : 'Drivers only — customers have no ZIP.'}
+                </p>
+              </div>
+
               {/* ZIP Filter — driver home ZIP only. Customers have no ZIP
                   field, so it's disabled unless Role = Driver, with a helper
                   underneath so the user always knows why. */}
@@ -1018,6 +1093,7 @@ export default function AdminUsersPage() {
                   value={zipFilter}
                   onChange={(e) => {
                       setZipFilter(e.target.value.replace(/\D/g, '').slice(0, 5));
+                      setZipRegion('custom');
                       setPage(1);
                     }}
                   placeholder="e.g. 900"
@@ -1027,7 +1103,7 @@ export default function AdminUsersPage() {
                 />
                 <p className="mt-1 text-[10px] leading-tight text-slate-400">
                   {zipEnabled
-                    ? 'Driver home ZIP. 900 = LA metro area.'
+                    ? 'Driver home ZIP. 900 = LA metro.'
                     : 'Drivers only — customers have no ZIP. Set Role = Driver.'}
                 </p>
               </div>
@@ -1061,6 +1137,7 @@ export default function AdminUsersPage() {
                     value={zipFrom}
                     onChange={(e) => {
                       setZipFrom(e.target.value.replace(/\D/g, '').slice(0, 5));
+                      setZipRegion('custom');
                       setPage(1);
                     }}
                     placeholder="90000"
@@ -1075,6 +1152,7 @@ export default function AdminUsersPage() {
                     value={zipTo}
                     onChange={(e) => {
                       setZipTo(e.target.value.replace(/\D/g, '').slice(0, 5));
+                      setZipRegion('custom');
                       setPage(1);
                     }}
                     placeholder="96199 = CA"
@@ -1091,7 +1169,7 @@ export default function AdminUsersPage() {
                 <div className="w-44">
                   <p className="text-[10px] leading-tight text-slate-400 pb-2">
                     {zipEnabled
-                      ? 'Range sweep, not city-to-city: 90000–96199 = all of California, 90000–93599 ≈ Southern California.'
+                      ? 'Auto-filled by the Region picker. Custom band: 90000–96199 = all of California.'
                       : 'Drivers only — customers have no ZIP. Set Role = Driver to use ZIP filters.'}
                   </p>
                 </div>
