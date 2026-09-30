@@ -73,7 +73,24 @@ import { useDataMutation, useDataQuery, getUser, isAuthenticated, clearAuth } fr
 import PolicySheet from "../shared/PolicySheet";
 import { ReferralCodeInput } from "../shared/ReferralCodeInput";
 
-// Form validation schema (unchanged)
+// ─── California-only driver onboarding ──────────────────────────────
+// 101 Drivers operates exclusively in California. Every California ZIP
+// code falls in the contiguous range 90001–96199 (the 9xx block below
+// 97000 — Oregon starts at 97000, Washington at 98000, Alaska at 99500),
+// so a simple range check is sufficient; no ZIP database is needed.
+// Mirrored on the backend (auth.service.ts assertCaliforniaHomeArea) so
+// the restriction holds even for direct API calls.
+export const CALIFORNIA_ZIP_ERROR_MESSAGE =
+  "This ZIP code is outside California. We currently only accept drivers based in California (ZIP codes 90001–96199).";
+
+export const isCaliforniaZip = (zip: string | null | undefined): boolean => {
+  const trimmed = (zip ?? "").trim();
+  if (!/^\d{5}$/.test(trimmed)) return false;
+  const n = parseInt(trimmed, 10);
+  return n >= 90001 && n <= 96199;
+};
+
+// Form validation schema
 const onboardingSchema = z
   .object({
     fullName: z.string().min(2, "Full name is required"),
@@ -97,7 +114,12 @@ const onboardingSchema = z
         "Password must contain at least one special character",
       ),
     confirmPassword: z.string().min(1, "Please confirm your password"),
-    homeArea: z.string().regex(/^\d{5}$/, "Enter a valid 5-digit ZIP code"),
+    homeArea: z
+      .string()
+      .regex(/^\d{5}$/, "Enter a valid 5-digit ZIP code")
+      .refine((zip) => isCaliforniaZip(zip), {
+        message: CALIFORNIA_ZIP_ERROR_MESSAGE,
+      }),
     radius: z.string().optional(),
     districts: z.array(z.string()).optional(),
     alerts: z.boolean().optional(),
@@ -475,7 +497,7 @@ export default function DriverOnboardingPage() {
     watchEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(watchEmail) &&
     passwordChecks.allValid &&
     (watchPhone?.replace(/\D/g, '').length || 0) >= 10 &&
-    /^\d{5}$/.test(homeAreaValue?.trim() || '')  
+    isCaliforniaZip(homeAreaValue)
   );
 
   // Form is ready to submit only when all fields are filled AND terms accepted
@@ -1227,28 +1249,32 @@ export default function DriverOnboardingPage() {
                       : "border-transparent"
                   )}>
                     <Label htmlFor="homeArea" className="text-xs font-bold">
-                      Home ZIP Code {!/^\d{5}$/.test(homeAreaValue?.trim() || '') && <span className="text-red-500"> *</span>}
+                      Home ZIP Code {!isCaliforniaZip(homeAreaValue) && <span className="text-red-500"> *</span>}
                     </Label>
                     <div className="relative">
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <Input
                         id="homeArea"
                         {...register("homeArea", {
-                          validate: (v) => v?.trim() ? /^\d{5}$/.test(v.trim()) || "Enter a valid 5-digit ZIP code" : true,
+                          validate: (v) => {
+                            if (!v?.trim()) return true;
+                            if (!/^\d{5}$/.test(v.trim())) return "Enter a valid 5-digit ZIP code";
+                            return isCaliforniaZip(v) || CALIFORNIA_ZIP_ERROR_MESSAGE;
+                          },
                           onChange: () => { if (homeAreaValue?.trim()) trigger("homeArea"); }
                         })}
                         className={cn(
                           "h-14 pl-12 rounded-2xl transition-colors",
                           errors.homeArea
                             ? "border-red-400 dark:border-red-500"
-                            : /^\d{5}$/.test(homeAreaValue?.trim() || '')
+                            : isCaliforniaZip(homeAreaValue)
                               ? "border-green-300 dark:border-green-700"
                               : ""
                         )}
                         placeholder="90012"
                         disabled={isPending || !isAgeVerified}
                       />
-                      {/^\d{5}$/.test(homeAreaValue?.trim() || '') && !errors.homeArea && (
+                      {isCaliforniaZip(homeAreaValue) && !errors.homeArea && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
                           <CheckCircle className="w-5 h-5 text-green-500" />
                         </div>
@@ -1260,7 +1286,7 @@ export default function DriverOnboardingPage() {
                       </p>
                     )}
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Enter your 5-digit California ZIP code. We only operate in California.
+                      Enter your 5-digit California ZIP code. We only operate in California — registrations with ZIP codes outside California (90001–96199) are rejected.
                     </p>
                   </div>
 

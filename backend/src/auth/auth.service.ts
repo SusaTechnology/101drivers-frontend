@@ -441,6 +441,16 @@ export class AuthService {
   ): Promise<UserInfo | VerificationRequiredResult> {
     const normalizedEmail = dto.email.trim().toLowerCase();
 
+    // ─── California-only driver onboarding ───────────────────────────
+    // 101 Drivers operates exclusively in California. Reject out-of-state
+    // ZIPs FIRST — before the OTP request (call 1) and before any User/
+    // Driver row can be created (call 2) — so an out-of-state applicant
+    // never leaves a record behind. Mirrors the frontend check in
+    // driverOnboarding.tsx. Every California ZIP falls in the contiguous
+    // range 90001–96199 (the 9xx block below 97000; Oregon starts at
+    // 97000), so a range check needs no ZIP database.
+    this.assertCaliforniaHomeArea(dto.homeArea);
+
     // Validate driver age (must be 25+) before anything else
     this.validateDriverAge(dto.dateOfBirth);
 
@@ -1397,6 +1407,36 @@ export class AuthService {
     }
     if (age < 25) {
       throw new BadRequestException("Driver must be at least 25 years old");
+    }
+  }
+
+  /**
+   * California-only driver onboarding guard.
+   *
+   * 101 Drivers operates exclusively in California. Every California ZIP
+   * code falls in the contiguous range 90001–96199 (the 9xx block below
+   * 97000 — Oregon starts at 97000, Washington at 98000, Alaska at 99500),
+   * so a range check is sufficient and requires no ZIP database.
+   *
+   * Called at the very top of signupDriver so BOTH the OTP request (call 1,
+   * no verificationToken) and the account creation (call 2, with token)
+   * reject out-of-state applicants — no OTP email is sent and no User or
+   * Driver row is ever created for a non-California ZIP. The frontend
+   * (driverOnboarding.tsx isCaliforniaZip) enforces the same rule for a
+   * smooth UX; this is the authoritative server-side backstop.
+   */
+  private assertCaliforniaHomeArea(homeArea?: string | null): void {
+    const zip = (homeArea ?? "").trim();
+    if (!/^\d{5}$/.test(zip)) {
+      throw new BadRequestException(
+        "A valid 5-digit ZIP code is required to register as a driver."
+      );
+    }
+    const numeric = parseInt(zip, 10);
+    if (numeric < 90001 || numeric > 96199) {
+      throw new BadRequestException(
+        "We currently only operate in California. Your ZIP code is outside California, so we can't accept your driver registration."
+      );
     }
   }
 

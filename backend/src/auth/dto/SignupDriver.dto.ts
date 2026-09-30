@@ -46,6 +46,19 @@ export class SignupDriverDto {
   @IsString()
   phone?: string;
 
+  @ApiProperty({
+    required: false,
+    example: "90012",
+    description:
+      "Driver's home ZIP code. Registration is restricted to California ZIPs (90001–96199); out-of-state ZIPs are rejected before any record is created.",
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{5}$/, {
+    message: "homeArea must be a 5-digit ZIP code",
+  })
+  homeArea?: string;
+
   @ApiProperty({ required: false, example: "https://cdn.example.com/me.jpg" })
   @IsOptional()
   @IsString()
