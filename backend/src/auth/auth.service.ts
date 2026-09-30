@@ -515,6 +515,12 @@ export class AuthService {
             profilePhotoUrl: dto.profilePhotoUrl ?? null,
             selfiePhotoUrl: dto.selfiePhotoUrl ?? null,
             dateOfBirth: parsedDob,
+            // Signup form collects a mandatory 5-digit "Home ZIP Code" that
+            // was previously dropped (field never declared on the DTO), so
+            // admins saw no ZIP until the driver completed onboarding. Save
+            // it as residentialZip — onboarding-complete overwrites it later
+            // with the verified value.
+            residentialZip: this.normalizeSignupZip(dto.homeArea),
             user: { connect: { id: createdUser.id } },
             agreementAcceptedAt: dto.agreementAcceptedAt ? new Date(dto.agreementAcceptedAt) : null,
 
@@ -606,7 +612,7 @@ export class AuthService {
 
   private buildDriverPreferenceCreate(dto: SignupDriverDto) {
     const city = dto.city?.trim() ?? null;
-    const radiusMiles = dto.radiusMiles ?? null;
+    const radiusMiles = this.parseSignupRadius(dto);
 
     if (!city && radiusMiles == null) {
       return {};
@@ -622,12 +628,43 @@ export class AuthService {
     };
   }
 
+  /**
+   * The signup form sends the radius as `preferredRadius` (a string, may be
+   * empty — it's an optional select). Older API clients may send the numeric
+   * `radiusMiles`. Parse leniently so a bad value can never block signup;
+   * fall back to `radiusMiles`, then null.
+   */
+  private parseSignupRadius(dto: SignupDriverDto): number | null {
+    const raw = dto.preferredRadius?.trim();
+    if (raw) {
+      const parsed = Number(raw.replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(parsed) && parsed >= 1) {
+        return Math.round(parsed);
+      }
+    }
+    return dto.radiusMiles ?? null;
+  }
+
+  /**
+   * Signup form sends a 5-digit home ZIP as `homeArea`. Normalize leniently:
+   * only save well-formed 5-digit values (the form enforces this client-side;
+   * onboarding-complete re-validates and overwrites later).
+   */
+  private normalizeSignupZip(homeArea?: string | null): string | null {
+    if (typeof homeArea !== "string") return null;
+    const zip = homeArea.trim();
+    return /^\d{5}$/.test(zip) ? zip : null;
+  }
+
   private buildDriverAlertsCreate(dto: SignupDriverDto) {
+    // Signup form sends a single boolean named `emailAlerts` (meaning the
+    // master alerts switch); API clients may send the granular fields.
+    const emailAlerts = dto.emailAlertsEnabled ?? dto.emailAlerts ?? true;
     return {
       alerts: {
         create: {
-          enabled: dto.alertsEnabled ?? true,
-          emailEnabled: dto.emailAlertsEnabled ?? true,
+          enabled: dto.alertsEnabled ?? emailAlerts,
+          emailEnabled: emailAlerts,
           smsEnabled: dto.smsAlertsEnabled ?? false,
         },
       },
@@ -635,7 +672,8 @@ export class AuthService {
   }
 
   private buildDriverDistrictsCreate(dto: SignupDriverDto) {
-    const districtIds = (dto.districtIds ?? [])
+    // Signup form sends `districts`; API clients may send `districtIds`.
+    const districtIds = (dto.districtIds ?? dto.districts ?? [])
       .map((id) => id?.trim())
       .filter((id): id is string => !!id);
 

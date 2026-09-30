@@ -131,6 +131,47 @@ export class SignupDriverDto {
     required: false,
     nullable: true,
     description:
+      "5-digit home ZIP code collected by the signup form (field name `homeArea`). Saved as Driver.residentialZip so admins can see and filter by it before onboarding.",
+  })
+  @IsOptional()
+  @IsString()
+  homeArea?: string | null;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      "Preferred service radius in miles, as sent by the signup form (`preferredRadius`, a string). Parsed leniently; falls back to radiusMiles.",
+  })
+  @IsOptional()
+  @IsString()
+  preferredRadius?: string | null;
+
+  @ApiProperty({
+    required: false,
+    type: [String],
+    example: ["district_id_1"],
+    description:
+      "Preferred service districts, as sent by the signup form (`districts`). Alias of districtIds.",
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  districts?: string[];
+
+  @ApiProperty({
+    required: false,
+    description:
+      "Email alerts switch, as sent by the signup form (`emailAlerts`). Alias of emailAlertsEnabled.",
+  })
+  @IsOptional()
+  @IsBoolean()
+  emailAlerts?: boolean;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
       "ISO timestamp of when the driver accepted the agreement during signup",
     example: "2026-05-25T12:00:00.000Z",
   })
