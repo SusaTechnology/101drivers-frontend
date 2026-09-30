@@ -703,8 +703,6 @@ async getAdminUsersV2(query: {
   status?: string;
   region?: string;
   zipPrefix?: string;
-  zipFrom?: string;
-  zipTo?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   page?: number;
@@ -864,7 +862,7 @@ async getAdminUsersV2(query: {
   }
 
   // ── ZIP filter (drivers only — residentialZip lives on the Driver row) ──
-  // Three complementary modes, all simple for admins:
+  // Two complementary modes, both simple for admins:
   //
   //   • region — named region from the generated crosswalk (see
   //     scripts/build-zip-regions.ts). "all-ca" uses the 90000–96199 band
@@ -876,15 +874,14 @@ async getAdminUsersV2(query: {
   //   • zipPrefix ("starts with") — the everyday tool. ZIP prefixes map to
   //     geography: "900" matches every 900xx ZIP (the LA metro area),
   //     "90" matches 90000–90999.
-  //   • zipFrom/zipTo (numeric range) — makes sense for ZIPs because they
-  //     are 5-digit geographic codes assigned in contiguous blocks:
-  //     California is exactly 90000–96199, so a range filters a whole
-  //     state. Partial entries are padded: from pads with 0s, to pads
-  //     with 9s ("90" → 90000–90999).
   //
-  // If several arrive, all provided conditions apply together (implicit
-  // AND inside ONE filter object). Region + prefix/range combine cleanly
-  // (e.g. region=la + zipPrefix=9 = LA-region ZIPs starting with 9).
+  // The old zipFrom/zipTo range was removed: exact region lists + prefix
+  // cover every real query, and a hand-typed band is just another guess —
+  // the thing the county data replaced.
+  //
+  // If both arrive, all provided conditions apply together (implicit AND
+  // inside ONE filter object — region=la + zipPrefix=9 = LA-region ZIPs
+  // starting with 9).
   // Customers never match (no ZIP), so a ZIP filter effectively narrows
   // the list to drivers.
   const normalizeZip = (v: string) => (v || "").replace(/\D/g, "").slice(0, 5);
@@ -903,18 +900,6 @@ async getAdminUsersV2(query: {
     const prefix = normalizeZip(query.zipPrefix);
     if (prefix) {
       zipConditions.push({ startsWith: prefix } as Prisma.StringFilter);
-    }
-  }
-  if (query.zipFrom) {
-    const from = normalizeZip(query.zipFrom).padEnd(5, "0");
-    if (from) {
-      zipConditions.push({ gte: from } as Prisma.StringFilter);
-    }
-  }
-  if (query.zipTo) {
-    const to = normalizeZip(query.zipTo).padEnd(5, "9");
-    if (to) {
-      zipConditions.push({ lte: to } as Prisma.StringFilter);
     }
   }
   if (zipConditions.length > 0) {

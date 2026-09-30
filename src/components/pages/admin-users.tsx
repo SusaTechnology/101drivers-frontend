@@ -112,7 +112,6 @@ import {
   ChevronRight,
   Calendar,
   Filter,
-  SlidersHorizontal,
   X,
   Plus,
   Mail,
@@ -389,48 +388,41 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   // ZIP filters — drivers only. zipFilter is a prefix ("900" = all 900xx,
-  // the LA area); zipFrom/zipTo are a numeric range (90000–96199 = all of
-  // California). ZIPs are geographic and contiguous, so both are useful:
-  // prefix for a metro area, range for a whole state.
+  // the LA metro area); the Region picker is an exact county-backed list
+  // from the backend. The old From/To range is gone: exact region lists
+  // + prefix cover every real query, and guessed bands are what produced
+  // wrong memberships in the first place.
   const [zipFilter, setZipFilter] = useState('');
-  const [zipFrom, setZipFrom] = useState('');
-  const [zipTo, setZipTo] = useState('');
   // ZIP filtering is meaningful only for drivers — customers have NO ZIP
   // field in the database (the only ZIP column is Driver.residentialZip).
-  // ZIP filters (Region + prefix + From/To range) are hidden entirely
-  // until Role = Driver — customers have no home ZIP. Typed values are
-  // kept in state but NOT sent while hidden, so switching back to
-  // Driver restores them instead of silently zeroing the result list.
+  // ZIP filters (Region + prefix) are hidden entirely until Role =
+  // Driver — customers have no home ZIP. Typed values are kept in state
+  // but NOT sent while hidden, so switching back to Driver restores them
+  // instead of silently zeroing the result list.
   const zipEnabled = roleFilter === 'DRIVER';
   // Named-region picker for the ZIP filter: 'any' = no region filter,
   // a region value from the API = exact county-backed ZIP list applied
-  // server-side, 'custom' = the admin hand-edited the ZIP inputs. The
-  // list comes from the backend (generated from real ZIP→county data) —
-  // nothing geographic is hardcoded in the frontend.
+  // server-side, 'custom' = the admin hand-typed a ZIP prefix instead.
+  // The list comes from the backend (generated from real ZIP→county
+  // data) — nothing geographic is hardcoded in the frontend.
   const [zipRegion, setZipRegion] = useState('any');
   const { data: zipRegionsData, isLoading: zipRegionsLoading } = useZipRegions();
   const zipRegionOptions = zipRegionsData?.regions ?? [];
   const handleZipRegionChange = (v: string) => {
     setZipRegion(v);
     setPage(1);
-    // Picking a region REPLACES the manual ZIP inputs (an exact county-
-    // backed list beats a guessed band, and the two must not fight);
-    // typing in the inputs flips the picker back to 'custom'.
+    // Picking a region REPLACES the typed prefix (an exact county-backed
+    // list beats a digit guess, and the two must not fight); typing a
+    // prefix flips the picker back to 'custom'.
     if (v !== 'any' && v !== 'custom') {
       setZipFilter('');
-      setZipFrom('');
-      setZipTo('');
     }
   };
-  // Any manual edit of the ZIP inputs (prefix/From/To) means the admin is
-  // doing something finer than a named region — those onChange handlers
-  // flip the picker to "custom" instead of fighting them.
-  // A reversed numeric range (e.g. From 92000, To 90000) can never match.
-  const zipRangeReversed =
-    zipFrom.length === 5 && zipTo.length === 5 && zipFrom > zipTo;
+  // Typing a ZIP prefix means the admin is doing something finer than a
+  // named region — the onChange handler flips the picker to "custom"
+  // instead of silently keeping a region filter alongside it.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -457,8 +449,6 @@ export default function AdminUsersPage() {
         ? zipRegion
         : undefined,
     zipPrefix: zipEnabled ? (zipFilter.trim() || undefined) : undefined,
-    zipFrom: zipEnabled ? (zipFrom.trim() || undefined) : undefined,
-    zipTo: zipEnabled ? (zipTo.trim() || undefined) : undefined,
     page,
     pageSize,
   });
@@ -824,8 +814,6 @@ export default function AdminUsersPage() {
     setRoleFilter('all');
     setStatusFilter('all');
     setZipFilter('');
-    setZipFrom('');
-    setZipTo('');
     setZipRegion('any');
     setPage(1);
   }, []);
@@ -836,9 +824,7 @@ export default function AdminUsersPage() {
     statusFilter !== 'all' ||
     (zipEnabled &&
       (zipRegion !== 'any' ||
-        zipFilter.trim() !== '' ||
-        zipFrom.trim() !== '' ||
-        zipTo.trim() !== ''));
+        zipFilter.trim() !== ''));
 
   // ==================== RENDER ====================
 
@@ -941,27 +927,15 @@ export default function AdminUsersPage() {
           <CardContent className="p-4">
             {/* Card actions — pinned to the top-right corner on their own
                 line so they never sit inside the filter row. Clear only
-                renders when a filter is active; the More/Hide toggle keeps
-                the far corner so nothing jumps when Clear appears. */}
-            <div className="flex items-center justify-end gap-1 mb-2">
-              {hasActiveFilters && (
+                renders when a filter is active. */}
+            {hasActiveFilters && (
+              <div className="flex items-center justify-end gap-1 mb-2">
                 <Button variant="ghost" size="sm" className="rounded-xl h-8 text-xs text-red-500 hover:text-red-600" onClick={clearFilters}>
                   <X className="w-3.5 h-3.5 mr-1" />
                   Clear
                 </Button>
-              )}
-              {zipEnabled && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="rounded-xl h-8 text-xs"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
-                  {showAdvanced ? 'Hide' : 'More'}
-                </Button>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Primary Filters — responsive grid (1 col on phones, 2 on
                 small tablets, 6 on desktop) so fields never overlap or
@@ -1098,9 +1072,9 @@ export default function AdminUsersPage() {
               </div>
               )}
 
-              {/* ZIP Filter — driver home ZIP only. Hidden until Role =
-                  Driver. Typing here clears the From/To range so the two
-                  ZIP tools never fight (the backend would AND them). */}
+              {/* ZIP Filter — driver home ZIP prefix. Hidden until Role =
+                  Driver. Typing here flips the Region picker to Custom so
+                  the two tools never fight (the backend would AND them). */}
               {zipEnabled && (
               <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP</Label>
@@ -1109,8 +1083,6 @@ export default function AdminUsersPage() {
                   onChange={(e) => {
                       setZipFilter(e.target.value.replace(/\D/g, '').slice(0, 5));
                       setZipRegion('custom');
-                      setZipFrom('');
-                      setZipTo('');
                       setPage(1);
                     }}
                   placeholder="e.g. 900"
@@ -1124,58 +1096,6 @@ export default function AdminUsersPage() {
               )}
 
             </div>
-
-            {/* Advanced (ZIP From/To range sweep) — driver role only.
-                Grid keeps From/To side by side on desktop, stacked on
-                phones; the Region-picker note sits on its own full-width
-                row directly under the two fields. */}
-            {zipEnabled && showAdvanced && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP From</Label>
-                  <Input
-                    value={zipFrom}
-                    onChange={(e) => {
-                      setZipFrom(e.target.value.replace(/\D/g, '').slice(0, 5));
-                      setZipRegion('custom');
-                      setZipFilter('');
-                      setPage(1);
-                    }}
-                    placeholder="90000"
-                    inputMode="numeric"
-                    className="mt-1.5 rounded-xl h-9 w-full"
-                  />
-                </div>
-                <div>
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP To</Label>
-                  <Input
-                    value={zipTo}
-                    onChange={(e) => {
-                      setZipTo(e.target.value.replace(/\D/g, '').slice(0, 5));
-                      setZipRegion('custom');
-                      setZipFilter('');
-                      setPage(1);
-                    }}
-                    placeholder="96199 = CA"
-                    inputMode="numeric"
-                    className="mt-1.5 rounded-xl h-9 w-full"
-                  />
-                  {zipRangeReversed && (
-                    <p className="mt-1 text-[10px] leading-tight text-amber-500">
-                      From is above To — this range matches nothing.
-                    </p>
-                  )}
-                </div>
-                <div className="sm:col-span-2 lg:col-span-4">
-                  <p className="mt-1 flex items-start gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300">
-                    <Info className="w-4 h-4 shrink-0 mt-px" />
-                    <span>
-                      Region uses real county data. Custom band: 90000–96199 = all of California.
-                    </span>
-                  </p>
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 

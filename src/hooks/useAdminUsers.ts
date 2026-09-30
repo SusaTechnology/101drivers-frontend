@@ -99,8 +99,6 @@ export interface AdminUsersV2Params {
   status?: string;
   region?: string;
   zipPrefix?: string;
-  zipFrom?: string;
-  zipTo?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   page?: number;
@@ -122,8 +120,6 @@ export function useAdminUsersV2(params: AdminUsersV2Params = {}) {
   if (params.status) searchParams.set('status', params.status);
   if (params.region) searchParams.set('region', params.region);
   if (params.zipPrefix) searchParams.set('zipPrefix', params.zipPrefix);
-  if (params.zipFrom) searchParams.set('zipFrom', params.zipFrom);
-  if (params.zipTo) searchParams.set('zipTo', params.zipTo);
   if (params.sortBy) searchParams.set('sortBy', params.sortBy);
   if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
   if (params.page) searchParams.set('page', String(params.page));
