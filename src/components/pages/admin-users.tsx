@@ -958,24 +958,26 @@ export default function AdminUsersPage() {
                   Clear
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="rounded-xl h-8 text-xs"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
-                {showAdvanced ? 'Hide' : 'More'}
-              </Button>
+              {zipEnabled && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-xl h-8 text-xs"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
+                  {showAdvanced ? 'Hide' : 'More'}
+                </Button>
+              )}
             </div>
 
-            {/* Primary Filters Row — items-start so the helper text under
-                Region/ZIP hangs BELOW its field instead of lifting the
-                input up (items-end made those inputs sit higher than the
-                rest of the row). */}
-            <div className="flex flex-wrap gap-3 items-start">
+            {/* Primary Filters — responsive grid (1 col on phones, 2 on
+                small tablets, 6 on desktop) so fields never overlap or
+                squeeze at any width. Region + ZIP only render once
+                Role = Driver is chosen (hidden, not disabled). */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
               {/* Search */}
-              <div className="flex-1 min-w-[200px]">
+              <div className="sm:col-span-2 lg:col-span-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Search</Label>
                 <div className="relative mt-1.5">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -992,7 +994,7 @@ export default function AdminUsersPage() {
               </div>
 
               {/* Role Filter */}
-              <div className="w-40">
+              <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Role</Label>
                 <Select
                   value={roleFilter}
@@ -1019,7 +1021,7 @@ export default function AdminUsersPage() {
               </div>
 
               {/* Status Filter (V2 — unified, covers both customer + driver) */}
-              <div className="w-44">
+              <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</Label>
                 <Select
                   value={statusFilter}
@@ -1062,15 +1064,16 @@ export default function AdminUsersPage() {
               </div>
 
               {/* ZIP Region — named CA regions; fills the From/To range.
-                  Drivers only (same helper logic as the ZIP box). */}
-              <div className="w-44">
+                  Hidden entirely until Role = Driver (customers have no
+                  ZIP), per admin UX decision — not merely disabled. */}
+              {zipEnabled && (
+              <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Region</Label>
                 <Select
                   value={zipRegion}
                   onValueChange={handleZipRegionChange}
-                  disabled={!zipEnabled}
                 >
-                  <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+                  <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1084,81 +1087,86 @@ export default function AdminUsersPage() {
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-[10px] leading-tight text-slate-400">
-                  {zipEnabled
-                    ? 'Driver home ZIP region.'
-                    : 'Drivers only — customers have no ZIP.'}
+                  Driver home ZIP region.
                 </p>
               </div>
+              )}
 
-              {/* ZIP Filter — driver home ZIP only. Customers have no ZIP
-                  field, so it's disabled unless Role = Driver, with a helper
-                  underneath so the user always knows why. */}
-              <div className="w-32">
+              {/* ZIP Filter — driver home ZIP only. Hidden until Role =
+                  Driver. Typing here clears the From/To range so the two
+                  ZIP tools never fight (the backend would AND them). */}
+              {zipEnabled && (
+              <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP</Label>
                 <Input
                   value={zipFilter}
                   onChange={(e) => {
                       setZipFilter(e.target.value.replace(/\D/g, '').slice(0, 5));
                       setZipRegion('custom');
+                      setZipFrom('');
+                      setZipTo('');
                       setPage(1);
                     }}
                   placeholder="e.g. 900"
                   inputMode="numeric"
-                  disabled={!zipEnabled}
-                  className="mt-1.5 rounded-xl h-9 w-full disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-1.5 rounded-xl h-9 w-full"
                 />
                 <p className="mt-1 text-[10px] leading-tight text-slate-400">
-                  {zipEnabled
-                    ? 'Driver home ZIP. 900 = LA metro.'
-                    : 'Drivers only — customers have no ZIP. Set Role = Driver.'}
+                  Driver home ZIP. 900 = LA metro.
                 </p>
               </div>
+              )}
 
             </div>
 
-            {/* Advanced (ZIP From/To range sweep) */}
-            {showAdvanced && (
-              <div className="flex flex-wrap gap-3 items-start mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <div className="w-28">
+            {/* Advanced (ZIP From/To range sweep) — driver role only.
+                Grid keeps From/To/note side by side on desktop, stacked on
+                phones. The note has an invisible label so its text starts
+                exactly at input height, aligned with the fields beside it. */}
+            {zipEnabled && showAdvanced && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP From</Label>
                   <Input
                     value={zipFrom}
                     onChange={(e) => {
                       setZipFrom(e.target.value.replace(/\D/g, '').slice(0, 5));
                       setZipRegion('custom');
+                      setZipFilter('');
                       setPage(1);
                     }}
                     placeholder="90000"
                     inputMode="numeric"
-                    disabled={!zipEnabled}
-                    className="mt-1.5 rounded-xl h-9 w-full disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-1.5 rounded-xl h-9 w-full"
                   />
                 </div>
-                <div className="w-28">
+                <div>
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP To</Label>
                   <Input
                     value={zipTo}
                     onChange={(e) => {
                       setZipTo(e.target.value.replace(/\D/g, '').slice(0, 5));
                       setZipRegion('custom');
+                      setZipFilter('');
                       setPage(1);
                     }}
                     placeholder="96199 = CA"
                     inputMode="numeric"
-                    disabled={!zipEnabled}
-                    className="mt-1.5 rounded-xl h-9 w-full disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-1.5 rounded-xl h-9 w-full"
                   />
-                  {zipEnabled && zipRangeReversed && (
+                  {zipRangeReversed && (
                     <p className="mt-1 text-[10px] leading-tight text-amber-500">
                       From is above To — this range matches nothing.
                     </p>
                   )}
                 </div>
-                <div className="w-44">
-                  <p className="text-[10px] leading-tight text-slate-400">
-                    {zipEnabled
-                      ? 'Auto-filled by the Region picker. Custom band: 90000–96199 = all of California.'
-                      : 'Drivers only — customers have no ZIP. Set Role = Driver to use ZIP filters.'}
+                <div className="sm:col-span-2 lg:col-span-2">
+                  <Label aria-hidden="true" className="select-none text-[10px] font-bold uppercase tracking-widest text-transparent">.</Label>
+                  <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300">
+                    <Info className="w-4 h-4 shrink-0 mt-px" />
+                    <span>
+                      Auto-filled by the Region picker. Custom band: 90000–96199 = all of California.
+                    </span>
                   </p>
                 </div>
               </div>

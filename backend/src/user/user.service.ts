@@ -855,8 +855,9 @@ async getAdminUsersV2(query: {
   //     state. Partial entries are padded: from pads with 0s, to pads
   //     with 9s ("90" → 90000–90999).
   //
-  // Prefix and range can be combined. Customers never match (no ZIP),
-  // so a ZIP filter effectively narrows the list to drivers.
+  // If both arrive, all provided conditions apply together (implicit AND).
+  // Customers never match (no ZIP), so a ZIP filter effectively narrows
+  // the list to drivers.
   const normalizeZip = (v: string) => (v || "").replace(/\D/g, "").slice(0, 5);
   const zipConditions: Prisma.StringFilter[] = [];
   if (query.zipPrefix) {
@@ -886,7 +887,14 @@ async getAdminUsersV2(query: {
     where.driver = {
       is: {
         ...existingDriverIs,
-        residentialZip: { AND: zipConditions } as Prisma.StringFilter,
+        // Prisma string filters have NO AND/OR combinator: several
+        // conditions inside ONE filter object (e.g. { gte, lte }) are
+        // ANDed implicitly, which is what we want here. Wrapping them in
+        // { AND: [...] } throws "Unknown argument AND" at runtime.
+        residentialZip: Object.assign(
+          {},
+          ...zipConditions
+        ) as Prisma.StringFilter,
       },
     };
   }
