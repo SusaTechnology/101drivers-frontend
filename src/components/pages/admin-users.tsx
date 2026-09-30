@@ -47,6 +47,7 @@ import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
 import {
   useAdminUsersV2,
+  useZipRegions,
   useApproveCustomer,
   useRejectCustomer,
   useSuspendCustomer,
@@ -172,25 +173,13 @@ const V2_STATUS_OPTIONS: { value: string; label: string; driverOnly: boolean }[]
   { value: 'WAITLISTED', label: 'Waitlisted (driver only)', driverOnly: true },
 ];
 
-// Named California regions for the ZIP filter. Admins think in places
-// ("LA", "San Diego"), not in ZIP digits — named zones are how US ops
-// systems do geographic filtering. Each region is a contiguous band of
-// USPS 3-digit prefixes (sectional centers) expressed as a ZIP From/To
-// range that auto-fills the advanced inputs. Bands follow USPS sorting
-// geography, not city limits; the manual prefix/range inputs stay
-// available for anything finer (they flip the picker to "Custom").
-const ZIP_REGION_OPTIONS: { value: string; label: string; from: string; to: string }[] = [
-  { value: 'all-ca', label: 'All California', from: '90000', to: '96199' },
-  { value: 'la', label: 'Los Angeles Metro', from: '90000', to: '91899' },
-  { value: 'sd', label: 'San Diego', from: '91900', to: '92199' },
-  { value: 'ie', label: 'Inland Empire (Riverside / San Bernardino)', from: '92200', to: '92599' },
-  { value: 'oc', label: 'Orange County', from: '92600', to: '92899' },
-  { value: 'central-coast', label: 'Central Coast & Bakersfield', from: '93000', to: '93499' },
-  { value: 'high-desert', label: 'High Desert (Palmdale / Lancaster)', from: '93500', to: '93599' },
-  { value: 'central-valley', label: 'Fresno & Central Valley', from: '93600', to: '93999' },
-  { value: 'bay-area', label: 'San Francisco Bay Area', from: '94000', to: '95199' },
-  { value: 'norcal', label: 'Sacramento & Northern California', from: '95200', to: '96199' },
-];
+// Named California regions for the ZIP filter now come from the BACKEND
+// (GET /api/users/admin/zip-regions — generated from real ZIP→county
+// crosswalk data by backend/scripts/build-zip-regions.ts). Admins think
+// in places ("LA", "San Diego"), not ZIP digits; the backend owns which
+// ZIPs belong to each, so the frontend keeps zero geographic hardcoding.
+// The manual prefix/range inputs stay available for anything finer (they
+// flip the picker to "Custom").
 
 // ==================== HELPER COMPONENTS ====================
 
@@ -408,30 +397,29 @@ export default function AdminUsersPage() {
   const [zipTo, setZipTo] = useState('');
   // ZIP filtering is meaningful only for drivers — customers have NO ZIP
   // field in the database (the only ZIP column is Driver.residentialZip).
-  // The inputs are disabled unless the Role filter is explicitly "Driver",
-  // with a helper underneath explaining why. Typed values are kept in
-  // state but NOT sent while disabled, so switching back to Driver
-  // restores them instead of silently zeroing the result list.
+  // ZIP filters (Region + prefix + From/To range) are hidden entirely
+  // until Role = Driver — customers have no home ZIP. Typed values are
+  // kept in state but NOT sent while hidden, so switching back to
+  // Driver restores them instead of silently zeroing the result list.
   const zipEnabled = roleFilter === 'DRIVER';
   // Named-region picker for the ZIP filter: 'any' = no region filter,
-  // a ZIP_REGION_OPTIONS key = region whose band fills zipFrom/zipTo,
-  // 'custom' = the admin hand-edited the ZIP inputs (values kept as-is).
+  // a region value from the API = exact county-backed ZIP list applied
+  // server-side, 'custom' = the admin hand-edited the ZIP inputs. The
+  // list comes from the backend (generated from real ZIP→county data) —
+  // nothing geographic is hardcoded in the frontend.
   const [zipRegion, setZipRegion] = useState('any');
+  const { data: zipRegionsData, isLoading: zipRegionsLoading } = useZipRegions();
+  const zipRegionOptions = zipRegionsData?.regions ?? [];
   const handleZipRegionChange = (v: string) => {
     setZipRegion(v);
     setPage(1);
-    if (v === 'any') {
+    // Picking a region REPLACES the manual ZIP inputs (an exact county-
+    // backed list beats a guessed band, and the two must not fight);
+    // typing in the inputs flips the picker back to 'custom'.
+    if (v !== 'any' && v !== 'custom') {
+      setZipFilter('');
       setZipFrom('');
       setZipTo('');
-    } else if (v !== 'custom') {
-      const region = ZIP_REGION_OPTIONS.find(o => o.value === v);
-      if (region) {
-        setZipFrom(region.from);
-        setZipTo(region.to);
-        setZipFilter('');
-        // Reveal the filled From/To so the admin sees what was applied
-        setShowAdvanced(true);
-      }
     }
   };
   // Any manual edit of the ZIP inputs (prefix/From/To) means the admin is
@@ -464,6 +452,10 @@ export default function AdminUsersPage() {
     q: searchQuery || undefined,
     role: roleFilter !== 'all' ? roleFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
+    region:
+      zipEnabled && zipRegion !== 'any' && zipRegion !== 'custom'
+        ? zipRegion
+        : undefined,
     zipPrefix: zipEnabled ? (zipFilter.trim() || undefined) : undefined,
     zipFrom: zipEnabled ? (zipFrom.trim() || undefined) : undefined,
     zipTo: zipEnabled ? (zipTo.trim() || undefined) : undefined,
@@ -1084,9 +1076,17 @@ export default function AdminUsersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="any">Any Region</SelectItem>
-                    {ZIP_REGION_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
+                    {zipRegionsLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading regions…
+                      </SelectItem>
+                    ) : (
+                      zipRegionOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))
+                    )}
                     {zipRegion === 'custom' && (
                       <SelectItem value="custom">Custom (manual ZIPs)</SelectItem>
                     )}
@@ -1170,7 +1170,7 @@ export default function AdminUsersPage() {
                   <p className="mt-1 flex items-start gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300">
                     <Info className="w-4 h-4 shrink-0 mt-px" />
                     <span>
-                      Auto-filled by the Region picker. Custom band: 90000–96199 = all of California.
+                      Region uses real county data. Custom band: 90000–96199 = all of California.
                     </span>
                   </p>
                 </div>

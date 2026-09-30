@@ -1,5 +1,9 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import {
+  ZIP_REGION_META,
+  ZIP_REGIONS,
+} from "../geo/zip-regions.generated";
+import {
   AdminAuditLog as PrismaAdminAuditLog,
   Customer as PrismaCustomer,
   DeliveryAssignment as PrismaDeliveryAssignment,
@@ -678,10 +682,26 @@ async getAdminUsersSummary(): Promise<any> {
     return hasLiveInviteToken ? "PENDING_INVITE" : "INVITE_EXPIRED";
   }
 
+  // Region list for the admin ZIP filter — from the generated crosswalk
+  // (scripts/build-zip-regions.ts refreshes it quarterly). Only value +
+  // label + count go over the wire; the full ZIP lists never leave the
+  // server (the backend does the IN-list filtering itself).
+  getAdminZipRegions() {
+    return {
+      meta: ZIP_REGION_META,
+      regions: ZIP_REGIONS.map(({ value, label, zips }) => ({
+        value,
+        label,
+        zipCount: zips.length,
+      })),
+    };
+  }
+
 async getAdminUsersV2(query: {
   q?: string;
   role?: string;
   status?: string;
+  region?: string;
   zipPrefix?: string;
   zipFrom?: string;
   zipTo?: string;
@@ -844,8 +864,15 @@ async getAdminUsersV2(query: {
   }
 
   // ── ZIP filter (drivers only — residentialZip lives on the Driver row) ──
-  // Two complementary modes, both simple for admins:
+  // Three complementary modes, all simple for admins:
   //
+  //   • region — named region from the generated crosswalk (see
+  //     scripts/build-zip-regions.ts). "all-ca" uses the 90000–96199 band
+  //     (exact for California and index-friendly); any other region uses
+  //     an exact IN list built from REAL county data, so non-contiguous
+  //     membership is handled correctly (the old hand-guessed bands put
+  //     Salinas 939xx in "Fresno & Central Valley" and left Oceanside
+  //     920xx outside "San Diego").
   //   • zipPrefix ("starts with") — the everyday tool. ZIP prefixes map to
   //     geography: "900" matches every 900xx ZIP (the LA metro area),
   //     "90" matches 90000–90999.
@@ -855,11 +882,23 @@ async getAdminUsersV2(query: {
   //     state. Partial entries are padded: from pads with 0s, to pads
   //     with 9s ("90" → 90000–90999).
   //
-  // If both arrive, all provided conditions apply together (implicit AND).
+  // If several arrive, all provided conditions apply together (implicit
+  // AND inside ONE filter object). Region + prefix/range combine cleanly
+  // (e.g. region=la + zipPrefix=9 = LA-region ZIPs starting with 9).
   // Customers never match (no ZIP), so a ZIP filter effectively narrows
   // the list to drivers.
   const normalizeZip = (v: string) => (v || "").replace(/\D/g, "").slice(0, 5);
   const zipConditions: Prisma.StringFilter[] = [];
+  if (query.region && query.region !== "any" && query.region !== "custom") {
+    if (query.region === "all-ca") {
+      zipConditions.push({ gte: "90000", lte: "96199" } as Prisma.StringFilter);
+    } else {
+      const regionDef = ZIP_REGIONS.find((r) => r.value === query.region);
+      if (regionDef && regionDef.zips.length > 0) {
+        zipConditions.push({ in: regionDef.zips } as Prisma.StringFilter);
+      }
+    }
+  }
   if (query.zipPrefix) {
     const prefix = normalizeZip(query.zipPrefix);
     if (prefix) {

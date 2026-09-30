@@ -97,6 +97,7 @@ export interface AdminUsersV2Params {
   q?: string;
   role?: string;
   status?: string;
+  region?: string;
   zipPrefix?: string;
   zipFrom?: string;
   zipTo?: string;
@@ -119,6 +120,7 @@ export function useAdminUsersV2(params: AdminUsersV2Params = {}) {
   if (params.q) searchParams.set('q', params.q);
   if (params.role) searchParams.set('role', params.role);
   if (params.status) searchParams.set('status', params.status);
+  if (params.region) searchParams.set('region', params.region);
   if (params.zipPrefix) searchParams.set('zipPrefix', params.zipPrefix);
   if (params.zipFrom) searchParams.set('zipFrom', params.zipFrom);
   if (params.zipTo) searchParams.set('zipTo', params.zipTo);
@@ -136,6 +138,35 @@ export function useAdminUsersV2(params: AdminUsersV2Params = {}) {
     noFilter: true,
     staleTime: 30 * 1000,
     queryKey: ['admin-users-v2', paramsKey],
+  });
+}
+
+// ==================== ADMIN ZIP REGIONS (generated data) ====================
+
+/** One dropdown entry for the admin ZIP region filter. */
+export interface ZipRegionOption {
+  value: string;
+  label: string;
+  zipCount: number;
+}
+
+export interface ZipRegionsResponse {
+  meta: { source: string; generatedAt: string; zipCount: number };
+  regions: ZipRegionOption[];
+}
+
+/**
+ * Region list for the admin ZIP filter — GET /api/users/admin/zip-regions.
+ * The backend generates this from real ZIP→county crosswalk data
+ * (build-zip-regions.ts, refreshed quarterly), so the frontend keeps no
+ * geographic hardcoding. Quarterly data — cache it for a day.
+ */
+export function useZipRegions() {
+  return useDataQuery<ZipRegionsResponse>({
+    apiEndPoint: `${API_BASE_URL}/api/users/admin/zip-regions`,
+    noFilter: true,
+    staleTime: 24 * 60 * 60 * 1000,
+    queryKey: ['admin-zip-regions'],
   });
 }
 

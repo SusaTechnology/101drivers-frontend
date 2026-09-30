@@ -341,6 +341,20 @@ async adminUsersSummary(): Promise<any> {
   return this.service.getAdminUsersSummary();
 }
 
+// Named regions for the admin ZIP filter — generated from real ZIP→county
+// data (backend/src/geo/zip-regions.generated.ts, refreshed quarterly via
+// scripts/build-zip-regions.ts). Static data, no DB cost.
+@common.Get("admin/zip-regions")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "read",
+  possession: "any",
+})
+async adminZipRegions(): Promise<any> {
+  return this.service.getAdminZipRegions();
+}
+
 // ── V2 — Unified admin users endpoint (single call: summary + rows + pagination) ──
 // Replaces the separate /admin + /admin/summary endpoints with one call.
 // Key change: unified `status` param that ORs customer + driver conditions
@@ -356,6 +370,7 @@ async adminUsersV2(
   @common.Query("q") q?: string,
   @common.Query("role") role?: string,
   @common.Query("status") status?: string,
+  @common.Query("region") region?: string,
   @common.Query("zipPrefix") zipPrefix?: string,
   @common.Query("zipFrom") zipFrom?: string,
   @common.Query("zipTo") zipTo?: string,
@@ -368,6 +383,7 @@ async adminUsersV2(
     q: q || undefined,
     role: role || undefined,
     status: status || undefined,
+    region: region || undefined,
     zipPrefix: zipPrefix || undefined,
     zipFrom: zipFrom || undefined,
     zipTo: zipTo || undefined,
