@@ -1126,9 +1126,9 @@ export default function AdminUsersPage() {
             </div>
 
             {/* Advanced (ZIP From/To range sweep) — driver role only.
-                Grid keeps From/To/note side by side on desktop, stacked on
-                phones. The note has an invisible label so its text starts
-                exactly at input height, aligned with the fields beside it. */}
+                Grid keeps From/To side by side on desktop, stacked on
+                phones; the Region-picker note sits on its own full-width
+                row directly under the two fields. */}
             {zipEnabled && showAdvanced && (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <div>
@@ -1166,9 +1166,8 @@ export default function AdminUsersPage() {
                     </p>
                   )}
                 </div>
-                <div className="sm:col-span-2 lg:col-span-2">
-                  <Label aria-hidden="true" className="select-none text-[10px] font-bold uppercase tracking-widest text-transparent">.</Label>
-                  <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300">
+                <div className="sm:col-span-2 lg:col-span-4">
+                  <p className="mt-1 flex items-start gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300">
                     <Info className="w-4 h-4 shrink-0 mt-px" />
                     <span>
                       Auto-filled by the Region picker. Custom band: 90000–96199 = all of California.
