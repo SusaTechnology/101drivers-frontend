@@ -655,6 +655,19 @@ async getAdminUsersSummary(): Promise<any> {
 //   INVITED     → Driver.status = INVITED (driver-only)
 //   WAITLISTED  → Driver.status = WAITLISTED (driver-only)
 //
+// Admin lifecycle statuses (ADMIN_ prefix — the frontend swaps in a
+// dedicated admin Status dropdown when Role = Admin, so these never
+// collide with the unified customer/driver values):
+//   ADMIN_ACTIVE          → disabledAt IS NULL AND emailVerifiedAt IS NOT NULL
+//   ADMIN_PENDING_INVITE  → unverified + a live ADMIN_INVITE email token exists
+//   ADMIN_INVITE_EXPIRED  → unverified + NO live ADMIN_INVITE email token
+//   ADMIN_DISABLED        → disabledAt IS NOT NULL
+//   ADMIN_SUPER_ADMIN     → isSuperAdmin = TRUE
+// Pending-vs-expired cannot be derived from User columns alone (the
+// invite liveness lives in EmailVerificationToken, keyed by email with
+// no relation), so the endpoint pre-queries the live invite emails once
+// and filters with IN / NOT IN.
+//
 // When status=PENDING, the query ORs both customer + driver conditions
 // so the table shows the same count as the summary's "Pending Approvals"
 // card. No more "14 in summary, 3 in filter" mismatch.
@@ -753,15 +766,30 @@ async getAdminUsersV2(query: {
   };
 
   // ── Role filter ─────────────────────────────────────────────────
-  // If status is a driver-only value (INVITED, WAITLISTED), force
-  // roles=DRIVER server-side so we don't scan customer rows that can
-  // never match.
+  // Status values that only exist on one role auto-force that role
+  // server-side so we don't scan rows that can never match:
+  //   INVITED / WAITLISTED  → roles=DRIVER (unless a role was given)
+  //   ADMIN_* lifecycle     → roles=ADMIN ALWAYS (the name declares the
+  //                           scope; an explicit non-admin role + admin
+  //                           status is a contradictory request)
   const driverOnlyStatuses = ["INVITED", "WAITLISTED"];
+  const adminLifecycleStatuses = [
+    "ADMIN_ACTIVE",
+    "ADMIN_PENDING_INVITE",
+    "ADMIN_INVITE_EXPIRED",
+    "ADMIN_DISABLED",
+    "ADMIN_SUPER_ADMIN",
+  ];
   const isDriverOnlyStatus = query.status
     ? driverOnlyStatuses.includes(query.status)
     : false;
+  const isAdminLifecycleStatus = query.status
+    ? adminLifecycleStatuses.includes(query.status)
+    : false;
 
-  if (query.role) {
+  if (isAdminLifecycleStatus) {
+    where.roles = EnumUserRoles.ADMIN;
+  } else if (query.role) {
     where.roles = query.role as EnumUserRoles;
   } else if (isDriverOnlyStatus) {
     // Auto-force driver role for driver-only statuses
@@ -858,6 +886,41 @@ async getAdminUsersV2(query: {
       where.driver = {
         is: { status: EnumDriverStatus.WAITLISTED },
       };
+    } else if (status === "ADMIN_DISABLED") {
+      // Admin lifecycle — roles=ADMIN forced above
+      where.disabledAt = { not: null };
+    } else if (status === "ADMIN_ACTIVE") {
+      // Invite accepted (email verified) and not disabled
+      where.disabledAt = null;
+      where.emailVerifiedAt = { not: null };
+    } else if (
+      status === "ADMIN_PENDING_INVITE" ||
+      status === "ADMIN_INVITE_EXPIRED"
+    ) {
+      // Unverified + not disabled; pending vs expired is decided by the
+      // existence of a live ADMIN_INVITE token. Tokens are keyed by email
+      // (no User relation), so pre-query the live invite emails ONCE and
+      // filter with IN / NOT IN. Case-insensitive to survive mixed-case
+      // stored emails; an empty list degrades correctly (everything
+      // unverified counts as expired).
+      where.disabledAt = null;
+      where.emailVerifiedAt = null;
+      const liveInvites = await this.prisma.emailVerificationToken.findMany({
+        where: {
+          purpose: EnumEmailVerificationPurpose.ADMIN_INVITE,
+          verifiedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        distinct: ["email"],
+        select: { email: true },
+      });
+      const liveEmails = liveInvites.map((t) => t.email);
+      where.email =
+        status === "ADMIN_PENDING_INVITE"
+          ? { in: liveEmails, mode: "insensitive" }
+          : { notIn: liveEmails, mode: "insensitive" };
+    } else if (status === "ADMIN_SUPER_ADMIN") {
+      where.isSuperAdmin = true;
     }
   }
 
@@ -1131,6 +1194,16 @@ async getAdminUsersV2(query: {
       ],
       // Which values are driver-only (not applicable to customers)
       driverOnly: ["INVITED", "WAITLISTED"],
+      // Dedicated admin lifecycle statuses — the frontend swaps the
+      // unified Status dropdown for these when Role = Admin. Same values
+      // the /admin/v2 status param accepts with the ADMIN_ prefix.
+      admin: [
+        { value: "ADMIN_ACTIVE", label: "Active" },
+        { value: "ADMIN_PENDING_INVITE", label: "Pending invite" },
+        { value: "ADMIN_INVITE_EXPIRED", label: "Invitation expired" },
+        { value: "ADMIN_DISABLED", label: "Disabled" },
+        { value: "ADMIN_SUPER_ADMIN", label: "Super Admin" },
+      ],
     },
   };
 }

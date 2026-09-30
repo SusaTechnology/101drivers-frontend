@@ -176,16 +176,30 @@ const V2_STATUS_OPTIONS: { value: string; label: string; driverOnly: boolean }[]
 // Mirrors the backend contract (backend/src/user/user.service.ts V2):
 // PENDING/APPROVED/REJECTED/SUSPENDED OR the customer-approval status with
 // the driver status; INVITED/WAITLISTED exist only on the Driver profile.
-// ADMIN rows have NEITHER a customer nor a driver profile, so no unified
-// status can ever match an admin — admins are lifecycle-managed separately
-// (ACTIVE / PENDING_INVITE / INVITE_EXPIRED / DISABLED, computed
-// server-side and shown as row badges, not filterable in this dropdown).
+// Only ever called with non-admin roles — when Role = Admin the Status
+// field itself swaps to the dedicated admin lifecycle dropdown (see
+// ADMIN_STATUS_OPTIONS), so the unified options aren't rendered there.
 function statusAppliesToRole(statusValue: string, role: string): boolean {
   if (role === 'all' || role === 'DRIVER') return true;
-  if (role === 'ADMIN') return false;
   // Customer roles: driver-only statuses don't apply.
   return !V2_STATUS_OPTIONS.find(o => o.value === statusValue)?.driverOnly;
 }
+
+// Dedicated admin lifecycle dropdown — swaps in for the unified Status
+// field when Role = Admin (same grid cell, identical UI, its own state).
+// Values are sent with an ADMIN_ prefix, which the backend /admin/v2
+// endpoint maps to the admin lifecycle: Active (email verified + not
+// disabled), Pending invite / Invitation expired (unverified, with vs
+// without a live invite token — decided server-side), Disabled
+// (deactivated by an admin), Super Admin (isSuperAdmin flag).
+const ADMIN_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All Status' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'PENDING_INVITE', label: 'Pending invite' },
+  { value: 'INVITE_EXPIRED', label: 'Invitation expired' },
+  { value: 'DISABLED', label: 'Disabled' },
+  { value: 'SUPER_ADMIN', label: 'Super Admin' },
+];
 
 // Named California regions for the ZIP filter now come from the BACKEND
 // (GET /api/users/admin/zip-regions — generated from real ZIP→county
@@ -402,6 +416,10 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  // Dedicated ADMIN lifecycle status — only visible (and only sent) while
+  // Role = Admin. Kept separate from statusFilter so each dropdown
+  // remembers its own selection while the other one is hidden.
+  const [adminStatusFilter, setAdminStatusFilter] = useState('all');
   // ZIP filters — drivers only. zipFilter is a prefix ("900" = all 900xx,
   // the LA metro area); the Region picker is an exact county-backed list
   // from the backend. The old From/To range is gone: exact region lists
@@ -458,7 +476,13 @@ export default function AdminUsersPage() {
   } = useAdminUsersV2({
     q: searchQuery || undefined,
     role: roleFilter !== 'all' ? roleFilter : undefined,
-    status: statusFilter !== 'all' ? statusFilter : undefined,
+    status:
+      roleFilter === 'ADMIN'
+        // Admin lifecycle values go out prefixed — the backend recognizes
+        // ADMIN_* and applies the admin conditions (incl. invite-token
+        // liveness for Pending invite vs Invitation expired).
+        ? (adminStatusFilter !== 'all' ? `ADMIN_${adminStatusFilter}` : undefined)
+        : (statusFilter !== 'all' ? statusFilter : undefined),
     region:
       zipEnabled && zipRegion !== 'any' && zipRegion !== 'custom'
         ? zipRegion
@@ -828,15 +852,24 @@ export default function AdminUsersPage() {
     setSearchQuery('');
     setRoleFilter('all');
     setStatusFilter('all');
+    setAdminStatusFilter('all');
     setZipFilter('');
     setZipRegion('any');
     setPage(1);
   }, []);
 
+  // Only the VISIBLE dropdown counts — each status state is dormant while
+  // the other one is on screen (Role = Admin swaps the Status field).
+  // Extracted to its own const: comparing roleFilter inside the
+  // hasActiveFilters expression AFTER `roleFilter !== 'all' ||` would let
+  // control-flow narrowing shrink it to 'all' and flag a TS2367.
+  const statusFilterActive =
+    roleFilter === 'ADMIN' ? adminStatusFilter !== 'all' : statusFilter !== 'all';
+
   const hasActiveFilters =
     searchQuery ||
     roleFilter !== 'all' ||
-    statusFilter !== 'all' ||
+    statusFilterActive ||
     (zipEnabled &&
       (zipRegion !== 'any' ||
         zipFilter.trim() !== ''));
@@ -982,12 +1015,13 @@ export default function AdminUsersPage() {
                   onValueChange={(v) => {
                     setRoleFilter(v);
                     setPage(1);
-                    // If the selected status can't match the new role, reset to
-                    // "All Status". Covers every role transition — e.g. Driver
-                    // → Admin kept INVITED/PENDING selected and produced a
-                    // guaranteed-empty table, because no unified status ever
-                    // matches an admin (admins have no customer/driver profile).
-                    if (statusFilter !== 'all' && !statusAppliesToRole(statusFilter, v)) {
+                    // If the selected status can't match the new role, reset
+                    // to "All Status" (customer role + driver-only status).
+                    // Switching to Admin does NOT reset: the Status field
+                    // swaps to the admin lifecycle dropdown and the unified
+                    // selection stays dormant (it is not sent while hidden)
+                    // and comes back intact when the admin switches away.
+                    if (v !== 'ADMIN' && statusFilter !== 'all' && !statusAppliesToRole(statusFilter, v)) {
                       setStatusFilter('all');
                     }
                   }}
@@ -1003,49 +1037,73 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
-              {/* Status Filter (V2 — unified, covers both customer + driver) */}
+              {/* Status Filter — ROLE-AWARE SWAP. Customers/drivers get the
+                  unified V2 dropdown; Role = Admin swaps the SAME grid cell
+                  to the dedicated admin-lifecycle dropdown (ADMIN_STATUS_OPTIONS,
+                  sent as ADMIN_* values). Identical UI on purpose — nothing
+                  to relearn — and each dropdown keeps its own selection
+                  while the other is hidden (nothing is sent for a hidden
+                  dropdown, so the two can never fight). */}
               <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</Label>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(v) => {
-                    setStatusFilter(v);
-                    setPage(1);
-                    // If picking a driver-only status + role is a customer role,
-                    // auto-switch to Driver (with a toast)
-                    const isDriverOnly = V2_STATUS_OPTIONS.find(o => o.value === v)?.driverOnly;
-                    if (isDriverOnly && roleFilter !== 'DRIVER' && roleFilter !== 'all') {
-                      toast.info('Showing drivers only', {
-                        description: `${V2_STATUS_OPTIONS.find(o => o.value === v)?.label} is a driver-only status.`,
-                      });
-                      setRoleFilter('DRIVER');
-                    }
-                  }}
-                >
-                  <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {V2_STATUS_OPTIONS.map(opt => {
-                      // Disable statuses that can never match the selected role:
-                      // driver-only options for customer roles, and EVERY unified
-                      // status for admins (they use their own lifecycle badges).
-                      const isApplicable = opt.value === 'all' || statusAppliesToRole(opt.value, roleFilter);
-                      const naSuffix = roleFilter === 'ADMIN' ? ' (N/A for admins)' : ' (N/A for customers)';
-                      return (
-                        <SelectItem
-                          key={opt.value}
-                          value={opt.value}
-                          disabled={!isApplicable}
-                          className={!isApplicable ? 'opacity-40 cursor-not-allowed' : ''}
-                        >
-                          {opt.label}
-                          {!isApplicable && naSuffix}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                {roleFilter === 'ADMIN' ? (
+                  <Select
+                    value={adminStatusFilter}
+                    onValueChange={(v) => {
+                      setAdminStatusFilter(v);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ADMIN_STATUS_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select
+                    value={statusFilter}
+                    onValueChange={(v) => {
+                      setStatusFilter(v);
+                      setPage(1);
+                      // If picking a driver-only status + role is a customer role,
+                      // auto-switch to Driver (with a toast)
+                      const isDriverOnly = V2_STATUS_OPTIONS.find(o => o.value === v)?.driverOnly;
+                      if (isDriverOnly && roleFilter !== 'DRIVER' && roleFilter !== 'all') {
+                        toast.info('Showing drivers only', {
+                          description: `${V2_STATUS_OPTIONS.find(o => o.value === v)?.label} is a driver-only status.`,
+                        });
+                        setRoleFilter('DRIVER');
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {V2_STATUS_OPTIONS.map(opt => {
+                        // Disable driver-only options when a customer role
+                        // is selected (Role = Admin never reaches this
+                        // branch — the admin dropdown renders instead).
+                        const isApplicable = opt.value === 'all' || statusAppliesToRole(opt.value, roleFilter);
+                        return (
+                          <SelectItem
+                            key={opt.value}
+                            value={opt.value}
+                            disabled={!isApplicable}
+                            className={!isApplicable ? 'opacity-40 cursor-not-allowed' : ''}
+                          >
+                            {opt.label}
+                            {!isApplicable && ' (N/A for customers)'}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* ZIP Region — named CA regions; fills the From/To range.
