@@ -172,15 +172,6 @@ const V2_STATUS_OPTIONS: { value: string; label: string; driverOnly: boolean }[]
   { value: 'WAITLISTED', label: 'Waitlisted (driver only)', driverOnly: true },
 ];
 
-const SORT_BY_OPTIONS: { value: string; label: string }[] = [
-  { value: 'createdAt', label: 'Created Date' },
-  { value: 'updatedAt', label: 'Updated Date' },
-  { value: 'email', label: 'Email' },
-  { value: 'username', label: 'Username' },
-  { value: 'fullName', label: 'Full Name' },
-  { value: 'lastLoginAt', label: 'Last Login' },
-];
-
 // Named California regions for the ZIP filter. Admins think in places
 // ("LA", "San Diego"), not in ZIP digits — named zones are how US ops
 // systems do geographic filtering. Each region is a contiguous band of
@@ -200,8 +191,6 @@ const ZIP_REGION_OPTIONS: { value: string; label: string; from: string; to: stri
   { value: 'bay-area', label: 'San Francisco Bay Area', from: '94000', to: '95199' },
   { value: 'norcal', label: 'Sacramento & Northern California', from: '95200', to: '96199' },
 ];
-
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 // ==================== HELPER COMPONENTS ====================
 
@@ -451,8 +440,6 @@ export default function AdminUsersPage() {
   // A reversed numeric range (e.g. From 92000, To 90000) can never match.
   const zipRangeReversed =
     zipFrom.length === 5 && zipTo.length === 5 && zipFrom > zipTo;
-  const [sortBy, setSortBy] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -480,8 +467,6 @@ export default function AdminUsersPage() {
     zipPrefix: zipEnabled ? (zipFilter.trim() || undefined) : undefined,
     zipFrom: zipEnabled ? (zipFrom.trim() || undefined) : undefined,
     zipTo: zipEnabled ? (zipTo.trim() || undefined) : undefined,
-    sortBy,
-    sortOrder,
     page,
     pageSize,
   });
@@ -842,11 +827,6 @@ export default function AdminUsersPage() {
     setPage(newPage);
   }, []);
 
-  const handlePageSizeChange = useCallback((newSize: string) => {
-    setPageSize(Number(newSize));
-    setPage(1);
-  }, []);
-
   const clearFilters = useCallback(() => {
     setSearchQuery('');
     setRoleFilter('all');
@@ -963,11 +943,37 @@ export default function AdminUsersPage() {
           </section>
         )}
 
-        {/* V2 Filters — simplified to 3 primary + 2 advanced */}
+        {/* V2 Filters — search/role/status + driver-only ZIP region & ZIP,
+            with the ZIP From/To range sweep tucked under "More". */}
         <Card className="rounded-2xl border-slate-200 dark:border-slate-800 mb-6">
           <CardContent className="p-4">
-            {/* Primary Filters Row */}
-            <div className="flex flex-wrap gap-3 items-end">
+            {/* Card actions — pinned to the top-right corner on their own
+                line so they never sit inside the filter row. Clear only
+                renders when a filter is active; the More/Hide toggle keeps
+                the far corner so nothing jumps when Clear appears. */}
+            <div className="flex items-center justify-end gap-1 mb-2">
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" className="rounded-xl h-8 text-xs text-red-500 hover:text-red-600" onClick={clearFilters}>
+                  <X className="w-3.5 h-3.5 mr-1" />
+                  Clear
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-xl h-8 text-xs"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
+                {showAdvanced ? 'Hide' : 'More'}
+              </Button>
+            </div>
+
+            {/* Primary Filters Row — items-start so the helper text under
+                Region/ZIP hangs BELOW its field instead of lifting the
+                input up (items-end made those inputs sit higher than the
+                rest of the row). */}
+            <div className="flex flex-wrap gap-3 items-start">
               {/* Search */}
               <div className="flex-1 min-w-[200px]">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Search</Label>
@@ -1108,29 +1114,11 @@ export default function AdminUsersPage() {
                 </p>
               </div>
 
-              {/* Advanced toggle */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="rounded-xl h-9 text-xs"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
-                {showAdvanced ? 'Hide' : 'Sort'}
-              </Button>
-
-              {/* Clear Filters */}
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" className="rounded-xl h-9 text-xs text-red-500 hover:text-red-600" onClick={clearFilters}>
-                  <X className="w-3.5 h-3.5 mr-1" />
-                  Clear
-                </Button>
-              )}
             </div>
 
-            {/* Advanced (Sort + Per Page + ZIP range) */}
+            {/* Advanced (ZIP From/To range sweep) */}
             {showAdvanced && (
-              <div className="flex flex-wrap gap-3 items-end mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex flex-wrap gap-3 items-start mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <div className="w-28">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP From</Label>
                   <Input
@@ -1167,49 +1155,11 @@ export default function AdminUsersPage() {
                   )}
                 </div>
                 <div className="w-44">
-                  <p className="text-[10px] leading-tight text-slate-400 pb-2">
+                  <p className="text-[10px] leading-tight text-slate-400">
                     {zipEnabled
                       ? 'Auto-filled by the Region picker. Custom band: 90000–96199 = all of California.'
                       : 'Drivers only — customers have no ZIP. Set Role = Driver to use ZIP filters.'}
                   </p>
-                </div>
-                <div className="w-40">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sort By</Label>
-                  <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SORT_BY_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="w-28">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Order</Label>
-                  <Select value={sortOrder} onValueChange={(v) => { setSortOrder(v as 'asc' | 'desc'); setPage(1); }}>
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="desc">Newest first</SelectItem>
-                      <SelectItem value="asc">Oldest first</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="w-28">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Per Page</Label>
-                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
-                    <SelectTrigger className="mt-1.5 rounded-xl h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAGE_SIZE_OPTIONS.map(n => (
-                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
             )}
