@@ -172,6 +172,21 @@ const V2_STATUS_OPTIONS: { value: string; label: string; driverOnly: boolean }[]
   { value: 'WAITLISTED', label: 'Waitlisted (driver only)', driverOnly: true },
 ];
 
+// Which unified status values can actually match rows of a given role.
+// Mirrors the backend contract (backend/src/user/user.service.ts V2):
+// PENDING/APPROVED/REJECTED/SUSPENDED OR the customer-approval status with
+// the driver status; INVITED/WAITLISTED exist only on the Driver profile.
+// ADMIN rows have NEITHER a customer nor a driver profile, so no unified
+// status can ever match an admin — admins are lifecycle-managed separately
+// (ACTIVE / PENDING_INVITE / INVITE_EXPIRED / DISABLED, computed
+// server-side and shown as row badges, not filterable in this dropdown).
+function statusAppliesToRole(statusValue: string, role: string): boolean {
+  if (role === 'all' || role === 'DRIVER') return true;
+  if (role === 'ADMIN') return false;
+  // Customer roles: driver-only statuses don't apply.
+  return !V2_STATUS_OPTIONS.find(o => o.value === statusValue)?.driverOnly;
+}
+
 // Named California regions for the ZIP filter now come from the BACKEND
 // (GET /api/users/admin/zip-regions — generated from real ZIP→county
 // crosswalk data by backend/scripts/build-zip-regions.ts). Admins think
@@ -967,10 +982,12 @@ export default function AdminUsersPage() {
                   onValueChange={(v) => {
                     setRoleFilter(v);
                     setPage(1);
-                    // If switching to a customer role + current status is driver-only,
-                    // reset the status to "all" (the driver-only option doesn't apply)
-                    const isDriverOnly = V2_STATUS_OPTIONS.find(o => o.value === statusFilter)?.driverOnly;
-                    if (isDriverOnly && (v === 'PRIVATE_CUSTOMER' || v === 'BUSINESS_CUSTOMER')) {
+                    // If the selected status can't match the new role, reset to
+                    // "All Status". Covers every role transition — e.g. Driver
+                    // → Admin kept INVITED/PENDING selected and produced a
+                    // guaranteed-empty table, because no unified status ever
+                    // matches an admin (admins have no customer/driver profile).
+                    if (statusFilter !== 'all' && !statusAppliesToRole(statusFilter, v)) {
                       setStatusFilter('all');
                     }
                   }}
@@ -1010,18 +1027,20 @@ export default function AdminUsersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {V2_STATUS_OPTIONS.map(opt => {
-                      // Disable driver-only options when a customer role is selected
-                      const isCustomerRole = roleFilter === 'PRIVATE_CUSTOMER' || roleFilter === 'BUSINESS_CUSTOMER';
-                      const isDisabled = opt.driverOnly && isCustomerRole;
+                      // Disable statuses that can never match the selected role:
+                      // driver-only options for customer roles, and EVERY unified
+                      // status for admins (they use their own lifecycle badges).
+                      const isApplicable = opt.value === 'all' || statusAppliesToRole(opt.value, roleFilter);
+                      const naSuffix = roleFilter === 'ADMIN' ? ' (N/A for admins)' : ' (N/A for customers)';
                       return (
                         <SelectItem
                           key={opt.value}
                           value={opt.value}
-                          disabled={isDisabled}
-                          className={isDisabled ? 'opacity-40 cursor-not-allowed' : ''}
+                          disabled={!isApplicable}
+                          className={!isApplicable ? 'opacity-40 cursor-not-allowed' : ''}
                         >
                           {opt.label}
-                          {isDisabled && ' (N/A for customers)'}
+                          {!isApplicable && naSuffix}
                         </SelectItem>
                       );
                     })}
@@ -1247,9 +1266,13 @@ export default function AdminUsersPage() {
                               {user.driver.residentialZip && (
                                 <div className="text-xs text-slate-500">ZIP {user.driver.residentialZip}</div>
                               )}
-                              <div className="text-xs text-slate-500">
+                              {/* Schedule-change requests count hidden per ops
+                                  decision (always 0 today — nothing in the app
+                                  creates ScheduleChangeRequests). Restore if the
+                                  workflow ever gets a UI. */}
+                              {/* <div className="text-xs text-slate-500">
                                 {user._count.scheduleChangesRequested} schedule requests
-                              </div>
+                              </div> */}
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
