@@ -172,17 +172,42 @@ const V2_STATUS_OPTIONS: { value: string; label: string; driverOnly: boolean }[]
   { value: 'WAITLISTED', label: 'Waitlisted (driver only)', driverOnly: true },
 ];
 
-// Which unified status values can actually match rows of a given role.
-// Mirrors the backend contract (backend/src/user/user.service.ts V2):
-// PENDING/APPROVED/REJECTED/SUSPENDED OR the customer-approval status with
-// the driver status; INVITED/WAITLISTED exist only on the Driver profile.
-// Only ever called with non-admin roles — when Role = Admin the Status
-// field itself swaps to the dedicated admin lifecycle dropdown (see
-// ADMIN_STATUS_OPTIONS), so the unified options aren't rendered there.
-function statusAppliesToRole(statusValue: string, role: string): boolean {
-  if (role === 'all' || role === 'DRIVER') return true;
-  // Customer roles: driver-only statuses don't apply.
-  return !V2_STATUS_OPTIONS.find(o => o.value === statusValue)?.driverOnly;
+// Per-role status option lists — the Status field swaps its OPTION LIST
+// with the Role (same cell, same UI, same pattern as the admin swap), so
+// a role only ever sees statuses that exist on its rows and every label
+// matches the badge the rows actually show. The old single unified list
+// for all roles is why "Pending" on Role=Driver read as a no-op: it maps
+// to three driver states whose badges say Waitlisted / Invited / Pending
+// Approval — nothing on screen ever said "Pending".
+//
+// Labels mirror DRIVER_STATUS_LABELS / CUSTOMER_APPROVAL_STATUS_LABELS
+// (types/users.ts) so filter and badge always agree.
+const DRIVER_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All Status' },
+  { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
+  { value: 'WAITLISTED', label: 'Waitlisted' },
+  { value: 'INVITED', label: 'Invited' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'SUSPENDED', label: 'Suspended' },
+];
+
+const CUSTOMER_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All Status' },
+  { value: 'PENDING', label: 'Pending Approval' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'SUSPENDED', label: 'Suspended' },
+];
+
+// Which status list the (non-admin) Status dropdown shows for a role.
+// Role = All keeps the unified cross-role list (driver-only picks there
+// auto-switch Role to Driver); Role = Admin never reaches this — the
+// dedicated admin lifecycle dropdown renders instead (ADMIN_STATUS_OPTIONS).
+function statusOptionsForRole(role: string): { value: string; label: string }[] {
+  if (role === 'DRIVER') return DRIVER_STATUS_OPTIONS;
+  if (role === 'PRIVATE_CUSTOMER' || role === 'BUSINESS_CUSTOMER') return CUSTOMER_STATUS_OPTIONS;
+  return V2_STATUS_OPTIONS;
 }
 
 // Dedicated admin lifecycle dropdown — swaps in for the unified Status
@@ -509,18 +534,6 @@ export default function AdminUsersPage() {
     (actorUserId ? users.some((u) => u.id === actorUserId && u.isSuperAdmin) : false);
   const totalUsers = v2Data?.pagination?.totalRows ?? 0;
   const totalPages = v2Data?.pagination?.totalPages ?? 1;
-  const availableStatuses = v2Data?.availableStatuses;
-  // Admin dropdown live counts, keyed by the ADMIN_-prefixed value the
-  // backend sends ("ADMIN_ACTIVE" ↔ option value "ACTIVE"). Used to
-  // render "Disabled (0)" — an empty filter result explains itself
-  // before the option is even picked, instead of reading like a bug.
-  const adminStatusCountByValue = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const opt of availableStatuses?.admin ?? []) {
-      if (typeof opt.count === 'number') map.set(opt.value, opt.count);
-    }
-    return map;
-  }, [availableStatuses]);
   const roleAutoForced = v2Data?.filtersApplied?.roleAutoForced ?? false;
 
   // ==================== MUTATIONS ====================
@@ -1026,13 +1039,20 @@ export default function AdminUsersPage() {
                   onValueChange={(v) => {
                     setRoleFilter(v);
                     setPage(1);
-                    // If the selected status can't match the new role, reset
-                    // to "All Status" (customer role + driver-only status).
+                    // The Status dropdown swaps its option list with the
+                    // Role, so a selected-but-invisible value would be
+                    // worse than none: if the new role's list doesn't
+                    // offer the current selection, reset to All Status.
                     // Switching to Admin does NOT reset: the Status field
-                    // swaps to the admin lifecycle dropdown and the unified
-                    // selection stays dormant (it is not sent while hidden)
-                    // and comes back intact when the admin switches away.
-                    if (v !== 'ADMIN' && statusFilter !== 'all' && !statusAppliesToRole(statusFilter, v)) {
+                    // swaps to the admin lifecycle dropdown and the
+                    // unified selection stays dormant (it is not sent
+                    // while hidden) and comes back intact when the admin
+                    // switches away.
+                    if (
+                      v !== 'ADMIN' &&
+                      statusFilter !== 'all' &&
+                      !statusOptionsForRole(v).some(o => o.value === statusFilter)
+                    ) {
                       setStatusFilter('all');
                     }
                   }}
@@ -1048,13 +1068,17 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
-              {/* Status Filter — ROLE-AWARE SWAP. Customers/drivers get the
-                  unified V2 dropdown; Role = Admin swaps the SAME grid cell
-                  to the dedicated admin-lifecycle dropdown (ADMIN_STATUS_OPTIONS,
-                  sent as ADMIN_* values). Identical UI on purpose — nothing
-                  to relearn — and each dropdown keeps its own selection
-                  while the other is hidden (nothing is sent for a hidden
-                  dropdown, so the two can never fight). */}
+              {/* Status Filter — ROLE-AWARE SWAP. The Status field swaps
+                  BOTH its dropdown variant and its option list with the
+                  Role: Role = Admin renders the admin-lifecycle options,
+                  Role = Driver the driver-native statuses (Pending
+                  Approval / Waitlisted / Invited / ...), customer roles
+                  the customer approval statuses, and Role = All the
+                  unified cross-role list. Every list only contains
+                  statuses that exist on that role's rows, and labels
+                  match the badges the rows show — so the filter result
+                  always looks like the option that was picked. Identical
+                  UI on purpose — nothing to relearn. */}
               <div>
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</Label>
                 {roleFilter === 'ADMIN' ? (
@@ -1069,20 +1093,9 @@ export default function AdminUsersPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {ADMIN_STATUS_OPTIONS.map(opt => {
-                        // Live per-option count from the backend — each
-                        // number equals exactly what the table will show
-                        // when the option is picked ("Disabled (0)").
-                        // 'all' has no count by definition.
-                        const count = opt.value === 'all'
-                          ? undefined
-                          : adminStatusCountByValue.get(`ADMIN_${opt.value}`);
-                        return (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}{typeof count === 'number' ? ` (${count})` : ''}
-                          </SelectItem>
-                        );
-                      })}
+                      {ADMIN_STATUS_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 ) : (
@@ -1091,12 +1104,17 @@ export default function AdminUsersPage() {
                     onValueChange={(v) => {
                       setStatusFilter(v);
                       setPage(1);
-                      // If picking a driver-only status + role is a customer role,
-                      // auto-switch to Driver (with a toast)
-                      const isDriverOnly = V2_STATUS_OPTIONS.find(o => o.value === v)?.driverOnly;
-                      if (isDriverOnly && roleFilter !== 'DRIVER' && roleFilter !== 'all') {
+                      // Role = All + a driver-only status: only drivers
+                      // can ever match, so switch Role to Driver (the
+                      // server auto-forces it too). Driver/customer lists
+                      // never offer driver-only-orphaned values, so no
+                      // guard is needed there.
+                      const isDriverOnly =
+                        roleFilter === 'all' &&
+                        V2_STATUS_OPTIONS.find(o => o.value === v)?.driverOnly;
+                      if (isDriverOnly) {
                         toast.info('Showing drivers only', {
-                          description: `${V2_STATUS_OPTIONS.find(o => o.value === v)?.label} is a driver-only status.`,
+                          description: `${V2_STATUS_OPTIONS.find(o => o.value === v)?.label} only exists on driver profiles.`,
                         });
                         setRoleFilter('DRIVER');
                       }
@@ -1106,23 +1124,9 @@ export default function AdminUsersPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {V2_STATUS_OPTIONS.map(opt => {
-                        // Disable driver-only options when a customer role
-                        // is selected (Role = Admin never reaches this
-                        // branch — the admin dropdown renders instead).
-                        const isApplicable = opt.value === 'all' || statusAppliesToRole(opt.value, roleFilter);
-                        return (
-                          <SelectItem
-                            key={opt.value}
-                            value={opt.value}
-                            disabled={!isApplicable}
-                            className={!isApplicable ? 'opacity-40 cursor-not-allowed' : ''}
-                          >
-                            {opt.label}
-                            {!isApplicable && ' (N/A for customers)'}
-                          </SelectItem>
-                        );
-                      })}
+                      {statusOptionsForRole(roleFilter).map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 )}

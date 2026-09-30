@@ -654,6 +654,9 @@ async getAdminUsersSummary(): Promise<any> {
 //   SUSPENDED   → Customer.approvalStatus = SUSPENDED OR Driver.status = SUSPENDED
 //   INVITED     → Driver.status = INVITED (driver-only)
 //   WAITLISTED  → Driver.status = WAITLISTED (driver-only)
+//   PENDING_APPROVAL → Driver.status = PENDING_APPROVAL (driver-only;
+//                      sent by the Role=Driver dropdown so the option
+//                      label matches the row badge 1:1)
 //
 // Admin lifecycle statuses (ADMIN_ prefix — the frontend swaps in a
 // dedicated admin Status dropdown when Role = Admin, so these never
@@ -750,23 +753,19 @@ async getAdminUsersV2(query: {
     ],
   } as Prisma.UserWhereInput;
 
-  // Search condition — extracted so the admin-status dropdown counts can
-  // reuse it (counts are search-aware: each number equals exactly what
-  // the table will show when that option is picked).
-  const searchCondition: Prisma.UserWhereInput = query.q
-    ? {
-        OR: [
-          { email: { contains: query.q, mode: "insensitive" } },
-          { username: { contains: query.q, mode: "insensitive" } },
-          { fullName: { contains: query.q, mode: "insensitive" } },
-          { phone: { contains: query.q, mode: "insensitive" } },
-        ],
-      }
-    : {};
-
   const where: Prisma.UserWhereInput = {
     ...verifiedFilter,
-    ...searchCondition,
+    // Search
+    ...(query.q
+      ? {
+          OR: [
+            { email: { contains: query.q, mode: "insensitive" } },
+            { username: { contains: query.q, mode: "insensitive" } },
+            { fullName: { contains: query.q, mode: "insensitive" } },
+            { phone: { contains: query.q, mode: "insensitive" } },
+          ],
+        }
+      : {}),
   };
 
   // ── Role filter ─────────────────────────────────────────────────
@@ -776,7 +775,7 @@ async getAdminUsersV2(query: {
   //   ADMIN_* lifecycle     → roles=ADMIN ALWAYS (the name declares the
   //                           scope; an explicit non-admin role + admin
   //                           status is a contradictory request)
-  const driverOnlyStatuses = ["INVITED", "WAITLISTED"];
+  const driverOnlyStatuses = ["INVITED", "WAITLISTED", "PENDING_APPROVAL"];
   const adminLifecycleStatuses = [
     "ADMIN_ACTIVE",
     "ADMIN_PENDING_INVITE",
@@ -798,88 +797,6 @@ async getAdminUsersV2(query: {
   } else if (isDriverOnlyStatus) {
     // Auto-force driver role for driver-only statuses
     where.roles = EnumUserRoles.DRIVER;
-  }
-
-  // ── Admin lifecycle counts (Role = Admin dropdown shows "(n)") ──
-  // An empty admin filter result used to look like a broken endpoint —
-  // "Disabled" with zero disabled admins returned an empty table and no
-  // explanation. The dropdown now carries a live count per option
-  // ("Disabled (0)") so the emptiness is self-explanatory BEFORE the
-  // option is picked. Counts are admin-scoped + search-aware: each
-  // number equals exactly what the table will show when that option is
-  // chosen. ZIP/region filters never apply to admins (no ZIP column),
-  // and the unified status can't combine with ADMIN_* (contradictory by
-  // definition), so neither needs to be part of the count base.
-  const isAdminScoped = query.role === "ADMIN" || isAdminLifecycleStatus;
-  let adminStatusCounts: Record<
-    | "ADMIN_ACTIVE"
-    | "ADMIN_PENDING_INVITE"
-    | "ADMIN_INVITE_EXPIRED"
-    | "ADMIN_DISABLED"
-    | "ADMIN_SUPER_ADMIN",
-    number
-  > | null = null;
-  // Live ADMIN_INVITE emails — shared by the pending/expired counts below
-  // AND the ADMIN_PENDING_INVITE / ADMIN_INVITE_EXPIRED status branch, so
-  // a single request queries the token table at most once.
-  let liveAdminInviteEmails: string[] | null = null;
-
-  if (isAdminScoped) {
-    const adminBase: Prisma.UserWhereInput = {
-      ...verifiedFilter,
-      ...searchCondition,
-      roles: EnumUserRoles.ADMIN,
-    };
-    const liveInviteTokens = await this.prisma.emailVerificationToken.findMany({
-      where: {
-        purpose: EnumEmailVerificationPurpose.ADMIN_INVITE,
-        verifiedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      distinct: ["email"],
-      select: { email: true },
-    });
-    liveAdminInviteEmails = liveInviteTokens.map((t) => t.email);
-    const [adminActive, adminPending, adminExpired, adminDisabled, adminSuper] =
-      await Promise.all([
-        // Active — invite accepted (verified) and not disabled
-        this.prisma.user.count({
-          where: { ...adminBase, disabledAt: null, emailVerifiedAt: { not: null } },
-        }),
-        // Pending invite — unverified + a live invite token exists
-        this.prisma.user.count({
-          where: {
-            ...adminBase,
-            disabledAt: null,
-            emailVerifiedAt: null,
-            email: { in: liveAdminInviteEmails, mode: "insensitive" },
-          },
-        }),
-        // Invitation expired — unverified + no live invite token left
-        this.prisma.user.count({
-          where: {
-            ...adminBase,
-            disabledAt: null,
-            emailVerifiedAt: null,
-            email: { notIn: liveAdminInviteEmails, mode: "insensitive" },
-          },
-        }),
-        // Disabled — deactivated by an administrator
-        this.prisma.user.count({
-          where: { ...adminBase, disabledAt: { not: null } },
-        }),
-        // Super Admin — orthogonal flag, overlaps with Active
-        this.prisma.user.count({
-          where: { ...adminBase, isSuperAdmin: true },
-        }),
-      ]);
-    adminStatusCounts = {
-      ADMIN_ACTIVE: adminActive,
-      ADMIN_PENDING_INVITE: adminPending,
-      ADMIN_INVITE_EXPIRED: adminExpired,
-      ADMIN_DISABLED: adminDisabled,
-      ADMIN_SUPER_ADMIN: adminSuper,
-    };
   }
 
   // ── Unified status filter ───────────────────────────────────────
@@ -972,6 +889,16 @@ async getAdminUsersV2(query: {
       where.driver = {
         is: { status: EnumDriverStatus.WAITLISTED },
       };
+    } else if (status === "PENDING_APPROVAL") {
+      // Driver-native — the Role=Driver dropdown sends this so the label
+      // matches the row badge exactly. The unified "Pending" ORs three
+      // driver states + customers, which read as "nothing changed" when
+      // the newest rows are all pending; the native value filters one
+      // state whose badge says the same thing as the option. Role
+      // auto-forces to DRIVER above when absent.
+      where.driver = {
+        is: { status: EnumDriverStatus.PENDING_APPROVAL },
+      };
     } else if (status === "ADMIN_DISABLED") {
       // Admin lifecycle — roles=ADMIN forced above
       where.disabledAt = { not: null };
@@ -984,17 +911,23 @@ async getAdminUsersV2(query: {
       status === "ADMIN_INVITE_EXPIRED"
     ) {
       // Unverified + not disabled; pending vs expired is decided by the
-      // existence of a live ADMIN_INVITE token (keyed by email, no User
-      // relation — the list is pre-queried in the admin-counts block
-      // above). Case-insensitive matching survives mixed-case stored
-      // emails; an empty list degrades correctly (everything unverified
-      // counts as expired).
+      // existence of a live ADMIN_INVITE token. Tokens are keyed by email
+      // (no User relation), so pre-query the live invite emails ONCE and
+      // filter with IN / NOT IN. Case-insensitive to survive mixed-case
+      // stored emails; an empty list degrades correctly (everything
+      // unverified counts as expired).
       where.disabledAt = null;
       where.emailVerifiedAt = null;
-      // Live invite emails were already pre-queried for the dropdown
-      // counts (every ADMIN_* status is admin-scoped) — reuse them so a
-      // single request never hits the token table twice.
-      const liveEmails = liveAdminInviteEmails ?? [];
+      const liveInvites = await this.prisma.emailVerificationToken.findMany({
+        where: {
+          purpose: EnumEmailVerificationPurpose.ADMIN_INVITE,
+          verifiedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        distinct: ["email"],
+        select: { email: true },
+      });
+      const liveEmails = liveInvites.map((t) => t.email);
       where.email =
         status === "ADMIN_PENDING_INVITE"
           ? { in: liveEmails, mode: "insensitive" }
@@ -1276,17 +1209,13 @@ async getAdminUsersV2(query: {
       driverOnly: ["INVITED", "WAITLISTED"],
       // Dedicated admin lifecycle statuses — the frontend swaps the
       // unified Status dropdown for these when Role = Admin. Same values
-      // the /admin/v2 status param accepts with the ADMIN_ prefix. Each
-      // option carries a live count (admin-scoped + search-aware) so the
-      // dropdown renders "Disabled (0)" instead of surprising the admin
-      // with a silently empty table. Omitted when the request isn't
-      // admin-scoped (the unified dropdown is on screen then).
+      // the /admin/v2 status param accepts with the ADMIN_ prefix.
       admin: [
-        { value: "ADMIN_ACTIVE", label: "Active", count: adminStatusCounts?.ADMIN_ACTIVE },
-        { value: "ADMIN_PENDING_INVITE", label: "Pending invite", count: adminStatusCounts?.ADMIN_PENDING_INVITE },
-        { value: "ADMIN_INVITE_EXPIRED", label: "Invitation expired", count: adminStatusCounts?.ADMIN_INVITE_EXPIRED },
-        { value: "ADMIN_DISABLED", label: "Disabled", count: adminStatusCounts?.ADMIN_DISABLED },
-        { value: "ADMIN_SUPER_ADMIN", label: "Super Admin", count: adminStatusCounts?.ADMIN_SUPER_ADMIN },
+        { value: "ADMIN_ACTIVE", label: "Active" },
+        { value: "ADMIN_PENDING_INVITE", label: "Pending invite" },
+        { value: "ADMIN_INVITE_EXPIRED", label: "Invitation expired" },
+        { value: "ADMIN_DISABLED", label: "Disabled" },
+        { value: "ADMIN_SUPER_ADMIN", label: "Super Admin" },
       ],
     },
   };

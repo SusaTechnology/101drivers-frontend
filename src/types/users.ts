@@ -266,22 +266,7 @@ export interface AdminUsersV2Response {
   availableStatuses: {
     all: AdminUsersV2AvailableStatus[];
     driverOnly: AdminUnifiedStatus[];
-    // Dedicated admin lifecycle options (Role = Admin swaps the unified
-    // Status dropdown for these). Each carries a live count so the
-    // dropdown shows "Disabled (0)" instead of a silently empty table.
-    // Omitted when the request isn't admin-scoped.
-    admin?: AdminUsersV2AdminAvailableStatus[];
   };
-}
-
-// One admin-lifecycle dropdown entry from /admin/v2 — value matches the
-// backend's ADMIN_* status names ("ADMIN_ACTIVE"), count is how many rows
-// the option will return (search-aware, admin-scoped). count is absent
-// when the request wasn't admin-scoped.
-export interface AdminUsersV2AdminAvailableStatus {
-  value: string;
-  label: string;
-  count?: number;
 }
 
 // ==================== ADMIN USER DETAIL ====================
