@@ -144,6 +144,7 @@ export interface AdminDriverEmbed {
   phone: string | null;
   profilePhotoUrl: string | null;
   selfiePhotoUrl: string | null;
+  residentialZip: string | null;
   approvedAt: string | null;
   approvedByUserId: string | null;
   licenseNumber: string | null;

@@ -390,6 +390,13 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  // ZIP filters — drivers only. zipFilter is a prefix ("900" = all 900xx,
+  // the LA area); zipFrom/zipTo are a numeric range (90000–96199 = all of
+  // California). ZIPs are geographic and contiguous, so both are useful:
+  // prefix for a metro area, range for a whole state.
+  const [zipFilter, setZipFilter] = useState('');
+  const [zipFrom, setZipFrom] = useState('');
+  const [zipTo, setZipTo] = useState('');
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -416,6 +423,9 @@ export default function AdminUsersPage() {
     q: searchQuery || undefined,
     role: roleFilter !== 'all' ? roleFilter : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
+    zipPrefix: zipFilter.trim() || undefined,
+    zipFrom: zipFrom.trim() || undefined,
+    zipTo: zipTo.trim() || undefined,
     sortBy,
     sortOrder,
     page,
@@ -787,10 +797,19 @@ export default function AdminUsersPage() {
     setSearchQuery('');
     setRoleFilter('all');
     setStatusFilter('all');
+    setZipFilter('');
+    setZipFrom('');
+    setZipTo('');
     setPage(1);
   }, []);
 
-  const hasActiveFilters = searchQuery || roleFilter !== 'all' || statusFilter !== 'all';
+  const hasActiveFilters =
+    searchQuery ||
+    roleFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    zipFilter.trim() !== '' ||
+    zipFrom.trim() !== '' ||
+    zipTo.trim() !== '';
 
   // ==================== RENDER ====================
 
@@ -979,6 +998,21 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
+              {/* ZIP Filter — prefix match, drivers only */}
+              <div className="w-32">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP</Label>
+                <Input
+                  value={zipFilter}
+                  onChange={(e) => {
+                      setZipFilter(e.target.value.replace(/\D/g, '').slice(0, 5));
+                      setPage(1);
+                    }}
+                  placeholder="e.g. 900"
+                  inputMode="numeric"
+                  className="mt-1.5 rounded-xl h-9 w-full"
+                />
+              </div>
+
               {/* Advanced toggle */}
               <Button
                 variant="ghost"
@@ -999,9 +1033,35 @@ export default function AdminUsersPage() {
               )}
             </div>
 
-            {/* Advanced (Sort + Per Page) */}
+            {/* Advanced (Sort + Per Page + ZIP range) */}
             {showAdvanced && (
               <div className="flex flex-wrap gap-3 items-end mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="w-28">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP From</Label>
+                  <Input
+                    value={zipFrom}
+                    onChange={(e) => {
+                      setZipFrom(e.target.value.replace(/\D/g, '').slice(0, 5));
+                      setPage(1);
+                    }}
+                    placeholder="90000"
+                    inputMode="numeric"
+                    className="mt-1.5 rounded-xl h-9 w-full"
+                  />
+                </div>
+                <div className="w-28">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">ZIP To</Label>
+                  <Input
+                    value={zipTo}
+                    onChange={(e) => {
+                      setZipTo(e.target.value.replace(/\D/g, '').slice(0, 5));
+                      setPage(1);
+                    }}
+                    placeholder="96199 = CA"
+                    inputMode="numeric"
+                    className="mt-1.5 rounded-xl h-9 w-full"
+                  />
+                </div>
                 <div className="w-40">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sort By</Label>
                   <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
@@ -1190,6 +1250,9 @@ export default function AdminUsersPage() {
                           {user.driver ? (
                             <div className="space-y-1">
                               <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">Driver</span>
+                              {user.driver.residentialZip && (
+                                <div className="text-xs text-slate-500">ZIP {user.driver.residentialZip}</div>
+                              )}
                               <div className="text-xs text-slate-500">
                                 {user._count.scheduleChangesRequested} schedule requests
                               </div>

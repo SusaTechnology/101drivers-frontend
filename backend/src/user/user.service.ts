@@ -682,6 +682,9 @@ async getAdminUsersV2(query: {
   q?: string;
   role?: string;
   status?: string;
+  zipPrefix?: string;
+  zipFrom?: string;
+  zipTo?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   page?: number;
@@ -840,6 +843,54 @@ async getAdminUsersV2(query: {
     }
   }
 
+  // ── ZIP filter (drivers only — residentialZip lives on the Driver row) ──
+  // Two complementary modes, both simple for admins:
+  //
+  //   • zipPrefix ("starts with") — the everyday tool. ZIP prefixes map to
+  //     geography: "900" matches every 900xx ZIP (the LA metro area),
+  //     "90" matches 90000–90999.
+  //   • zipFrom/zipTo (numeric range) — makes sense for ZIPs because they
+  //     are 5-digit geographic codes assigned in contiguous blocks:
+  //     California is exactly 90000–96199, so a range filters a whole
+  //     state. Partial entries are padded: from pads with 0s, to pads
+  //     with 9s ("90" → 90000–90999).
+  //
+  // Prefix and range can be combined. Customers never match (no ZIP),
+  // so a ZIP filter effectively narrows the list to drivers.
+  const normalizeZip = (v: string) => (v || "").replace(/\D/g, "").slice(0, 5);
+  const zipConditions: Prisma.StringFilter[] = [];
+  if (query.zipPrefix) {
+    const prefix = normalizeZip(query.zipPrefix);
+    if (prefix) {
+      zipConditions.push({ startsWith: prefix } as Prisma.StringFilter);
+    }
+  }
+  if (query.zipFrom) {
+    const from = normalizeZip(query.zipFrom).padEnd(5, "0");
+    if (from) {
+      zipConditions.push({ gte: from } as Prisma.StringFilter);
+    }
+  }
+  if (query.zipTo) {
+    const to = normalizeZip(query.zipTo).padEnd(5, "9");
+    if (to) {
+      zipConditions.push({ lte: to } as Prisma.StringFilter);
+    }
+  }
+  if (zipConditions.length > 0) {
+    // Merge with a driver filter the status branch may already have set
+    // (INVITED / WAITLISTED) — don't overwrite it.
+    const existingDriverIs = (
+      where.driver as { is?: Prisma.DriverWhereInput } | undefined
+    )?.is;
+    where.driver = {
+      is: {
+        ...existingDriverIs,
+        residentialZip: { AND: zipConditions } as Prisma.StringFilter,
+      },
+    };
+  }
+
   // ── Run the query + count in parallel ───────────────────────────
   const [total, rows, totalUsers, activeUsers, inactiveUsers,
     privateCustomers, businessCustomers, drivers, admins,
@@ -892,6 +943,7 @@ async getAdminUsersV2(query: {
             status: true,
             phone: true,
             profilePhotoUrl: true,
+            residentialZip: true,
             approvedAt: true,
             approvedByUserId: true,
             createdAt: true,
