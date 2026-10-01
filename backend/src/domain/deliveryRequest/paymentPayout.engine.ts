@@ -146,6 +146,7 @@ export class PaymentPayoutEngine {
             lockInAmount: true,
             lockInChargeId: true,
             invoiceId: true,
+            refundedAmountCents: true,
           },
         },
         payout: {

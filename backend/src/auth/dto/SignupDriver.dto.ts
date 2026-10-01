@@ -46,19 +46,6 @@ export class SignupDriverDto {
   @IsString()
   phone?: string;
 
-  @ApiProperty({
-    required: false,
-    example: "90012",
-    description:
-      "Driver's home ZIP code. Registration is restricted to California ZIPs (90001–96199); out-of-state ZIPs are rejected before any record is created.",
-  })
-  @IsOptional()
-  @IsString()
-  @Matches(/^\d{5}$/, {
-    message: "homeArea must be a 5-digit ZIP code",
-  })
-  homeArea?: string;
-
   @ApiProperty({ required: false, example: "https://cdn.example.com/me.jpg" })
   @IsOptional()
   @IsString()
@@ -143,11 +130,15 @@ export class SignupDriverDto {
   @ApiProperty({
     required: false,
     nullable: true,
+    example: "90012",
     description:
-      "5-digit home ZIP code collected by the signup form (field name `homeArea`). Saved as Driver.residentialZip so admins can see and filter by it before onboarding.",
+      "5-digit home ZIP code collected by the signup form (field name `homeArea`). Registration is restricted to California ZIPs (90001–96199); out-of-state ZIPs are rejected before any record is created. Saved as Driver.residentialZip so admins can see and filter by it before onboarding.",
   })
   @IsOptional()
   @IsString()
+  @Matches(/^\d{5}$/, {
+    message: "homeArea must be a 5-digit ZIP code",
+  })
   homeArea?: string | null;
 
   @ApiProperty({

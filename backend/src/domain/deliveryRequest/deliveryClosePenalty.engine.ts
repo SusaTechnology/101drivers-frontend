@@ -336,6 +336,7 @@ export class DeliveryClosePenaltyEngine {
             status: true,
             provider: true,
             providerPaymentIntentId: true,
+            lockInPaymentIntentId: true,
           },
         },
         assignments: {
