@@ -510,3 +510,205 @@ describe("PaymentPayoutEngine.handleCompletionTx — lock-in branch (Issue 1 + 5
     );
   });
 });
+
+// ── Batch ↔ adjustment linkage (appliedBatchId) ────────────────────────────
+// The batch rails (weekly sweep / free / instant) settle adjustments inside
+// the batch transaction. If the Stripe transfer then FAILS, revertFailedBatch
+// must restore every adjustment of that batch (APPLIED → PENDING) and delete
+// the PENDING leftover rows the batch created — otherwise a failed transfer
+// permanently erases clawback debts and drivers' late tips. Linkage is the
+// appliedBatchId column written by the batch rails.
+describe("PaymentPayoutEngine — batch revert restores adjustments (appliedBatchId)", () => {
+  const buildEngine = () => {
+    const stripeService = makeStripeService({ piStatus: "succeeded" });
+    const prismaService = {
+      $transaction: jest.fn(),
+      appSetting: { findUnique: jest.fn().mockResolvedValue(null) },
+      payoutBatch: { findFirst: jest.fn(), update: jest.fn() },
+      payoutBatchItem: { findMany: jest.fn() },
+      driverPayout: {
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        groupBy: jest.fn(),
+        update: jest.fn(),
+      },
+      driverPayoutAdjustment: {
+        findMany: jest.fn(),
+        groupBy: jest.fn(),
+        updateMany: jest.fn(),
+        deleteMany: jest.fn(),
+        create: jest.fn(),
+      },
+      disputeCase: { findMany: jest.fn().mockResolvedValue([]) },
+      driver: {
+        findUnique: jest.fn().mockResolvedValue({
+          stripeConnectAccountId: "acct_complete_001",
+          stripeConnectOnboardingComplete: true,
+        }),
+      },
+    };
+    const engine = new PaymentPayoutEngine(
+      prismaService as any,
+      stripeService,
+      undefined,
+    );
+    return { engine, prismaService, stripeService };
+  };
+
+  it("Scenario I: failed batch transfer re-opens APPLIED adjustments by appliedBatchId and deletes its PENDING leftovers", async () => {
+    const { engine, prismaService } = buildEngine();
+    prismaService.payoutBatchItem.findMany.mockResolvedValue([
+      { driverPayoutId: "pay_1" },
+      { driverPayoutId: "pay_2" },
+    ]);
+
+    await (engine as any).revertFailedBatch(
+      "batch_failed_001",
+      "transfer declined",
+    );
+
+    // Both batch payouts restored to ELIGIBLE.
+    expect(prismaService.driverPayout.update).toHaveBeenCalledTimes(2);
+    expect(prismaService.driverPayout.update).toHaveBeenCalledWith({
+      where: { id: "pay_1" },
+      data: { status: EnumDriverPayoutStatus.ELIGIBLE, paidAt: null },
+    });
+    expect(prismaService.driverPayout.update).toHaveBeenCalledWith({
+      where: { id: "pay_2" },
+      data: { status: EnumDriverPayoutStatus.ELIGIBLE, paidAt: null },
+    });
+
+    // Adjustments settled by THIS batch return to PENDING — keyed on
+    // appliedBatchId (NOT appliedToPayoutId, which batch rails never set).
+    expect(
+      prismaService.driverPayoutAdjustment.updateMany,
+    ).toHaveBeenCalledWith({
+      where: { appliedBatchId: "batch_failed_001", status: "APPLIED" },
+      data: { status: "PENDING", appliedBatchId: null },
+    });
+
+    // Leftover rows created by THIS batch are deleted — the re-opened
+    // originals already carry the full debt; keeping leftovers would
+    // double-count it.
+    expect(prismaService.driverPayoutAdjustment.deleteMany).toHaveBeenCalledWith(
+      { where: { appliedBatchId: "batch_failed_001", status: "PENDING" } },
+    );
+
+    // Batch marked FAILED with the message.
+    expect(prismaService.payoutBatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "batch_failed_001" },
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
+    );
+  });
+
+  it("Scenario J: driver with zero ELIGIBLE payouts but a $10 PENDING tip is swept as a zero-item batch with appliedBatchId linkage", async () => {
+    const { engine, prismaService, stripeService } = buildEngine();
+    (stripeService.createTransfer as jest.Mock).mockResolvedValue({
+      id: "tr_weekly_001",
+    });
+
+    // No ELIGIBLE payouts at all — but one PENDING +$10 late-tip adjustment.
+    prismaService.driverPayout.groupBy.mockResolvedValue([]);
+    prismaService.driverPayoutAdjustment.groupBy.mockResolvedValue([
+      { driverId: "drv_1", _sum: { amount: 10 } },
+    ]);
+    prismaService.payoutBatch.findFirst.mockResolvedValue(null);
+    prismaService.driverPayout.findMany.mockResolvedValue([]);
+    prismaService.driverPayoutAdjustment.findMany.mockResolvedValue([
+      { id: "adj_tip_1", amount: 10, reason: "TIP" },
+    ]);
+
+    const capturedTx = {
+      payoutBatch: {
+        create: jest.fn().mockResolvedValue({
+          id: "batch_weekly_001",
+          driverId: "drv_1",
+          type: "WEEKLY_AUTO",
+          netPayoutAmount: 10,
+        }),
+      },
+      payoutBatchItem: { create: jest.fn() },
+      driverPayout: { update: jest.fn() },
+      driverPayoutAdjustment: { updateMany: jest.fn(), create: jest.fn() },
+    };
+    prismaService.$transaction.mockImplementation((fn: any) => fn(capturedTx));
+
+    const result = await engine.processWeeklyAutoPayouts();
+
+    // Driver processed, transfer for the tip pot fired.
+    expect(result).toEqual({ processed: 1, skipped: 0 });
+    expect(stripeService.createTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 10,
+        destinationAccountId: "acct_complete_001",
+        metadata: expect.objectContaining({ type: "WEEKLY_AUTO" }),
+      }),
+    );
+
+    // The adjustment was settled INTO the batch with the revert linkage.
+    expect(capturedTx.driverPayoutAdjustment.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["adj_tip_1"] } },
+      data: { status: "APPLIED", appliedBatchId: "batch_weekly_001" },
+    });
+    // Zero payout rows in the batch (nothing was ELIGIBLE).
+    expect(capturedTx.payoutBatchItem.create).not.toHaveBeenCalled();
+  });
+
+  it("Scenario K: a PENDING batch stuck for over an hour is auto-reverted, then the sweep pays the driver", async () => {
+    const { engine, prismaService, stripeService } = buildEngine();
+    (stripeService.createTransfer as jest.Mock).mockResolvedValue({
+      id: "tr_weekly_002",
+    });
+
+    prismaService.driverPayout.groupBy.mockResolvedValue([
+      { driverId: "drv_1", _sum: { netAmount: 20 } },
+    ]);
+    prismaService.driverPayoutAdjustment.groupBy.mockResolvedValue([]);
+    prismaService.driverPayoutAdjustment.findMany.mockResolvedValue([]);
+    prismaService.driverPayout.findMany.mockResolvedValue([
+      { id: "pay_1", deliveryId: "del_1", netAmount: 20 },
+    ]);
+
+    // Stuck PENDING batch from a crashed run 2 hours ago.
+    prismaService.payoutBatch.findFirst.mockResolvedValue({
+      id: "batch_stuck_001",
+      status: "PENDING",
+      initiatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    });
+    prismaService.payoutBatchItem.findMany.mockResolvedValue([
+      { driverPayoutId: "pay_old_1" },
+    ]);
+
+    const capturedTx = {
+      payoutBatch: {
+        create: jest.fn().mockResolvedValue({
+          id: "batch_weekly_002",
+          driverId: "drv_1",
+          type: "WEEKLY_AUTO",
+          netPayoutAmount: 20,
+        }),
+      },
+      payoutBatchItem: { create: jest.fn() },
+      driverPayout: { update: jest.fn() },
+      driverPayoutAdjustment: { updateMany: jest.fn(), create: jest.fn() },
+    };
+    prismaService.$transaction.mockImplementation((fn: any) => fn(capturedTx));
+
+    const result = await engine.processWeeklyAutoPayouts();
+
+    // The stuck batch was reverted (payouts + batch row), then the sweep
+    // proceeded and paid the driver in a fresh batch.
+    expect(prismaService.payoutBatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "batch_stuck_001" },
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
+    );
+    expect(stripeService.createTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 20 }),
+    );
+    expect(result).toEqual({ processed: 1, skipped: 0 });
+  });
+});

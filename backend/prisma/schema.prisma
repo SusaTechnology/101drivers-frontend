@@ -857,6 +857,13 @@ model DriverPayoutAdjustment {
   appliedToPayoutId   String?
   appliedToPayout     DriverPayout?         @relation("AdjustmentAppliedTo", fields: [appliedToPayoutId], references: [id])
 
+  // The batch (WEEKLY_AUTO / MANUAL_FREE / INSTANT) this adjustment was
+  // settled in. Set by the batch rails when they mark the adjustment
+  // APPLIED (and on the leftover rows they create). revertFailedBatch
+  // uses it to restore adjustments when a batch's transfer fails.
+  appliedBatchId      String?
+  appliedBatch        PayoutBatch?          @relation("AdjustmentAppliedBatch", fields: [appliedBatchId], references: [id])
+
   // If this adjustment reverses another adjustment (e.g. a dispute-won
   // reversal of a dispute-lost clawback), points to the original.
   reversalOfAdjustmentId String?
@@ -873,6 +880,7 @@ model DriverPayoutAdjustment {
   @@index([driverId, status])
   @@index([deliveryId])
   @@index([paymentId])
+  @@index([appliedBatchId])
 }
 
 enum EnumAdjustmentStatus {
@@ -897,6 +905,12 @@ model PayoutBatch {
   completedAt       DateTime?
   failedAt          DateTime?
   payoutItems       PayoutBatchItem[]
+  // Adjustments settled inside this batch (APPLIED clawbacks/tips + the
+  // PENDING leftover rows it created). This is the revert key: when the
+  // batch's Stripe transfer fails, every adjustment carrying this batchId
+  // is restored to PENDING (or deleted for leftovers) so a failed
+  // transfer can never permanently erase a debt or a driver's tip.
+  adjustmentsApplied DriverPayoutAdjustment[] @relation("AdjustmentAppliedBatch")
   updatedAt         DateTime                  @updatedAt
 
   @@index([driverId, status, initiatedAt])

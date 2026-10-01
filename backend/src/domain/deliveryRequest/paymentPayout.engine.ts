@@ -1234,6 +1234,16 @@ export class PaymentPayoutEngine {
   private readonly INSTANT_FEE = 1.5;         // $1.50 fee for instant payout
 
   /**
+   * How long a PENDING PayoutBatch may sit before the weekly sweep treats
+   * it as crashed and auto-reverts it (payouts back to ELIGIBLE,
+   * adjustments back to PENDING). In-flight batches reach PROCESSING
+   * within milliseconds of creation, so anything younger than this is
+   * presumed to be another run mid-flight and skipped instead — this
+   * grace window is what makes the auto-revert safe against concurrency.
+   */
+  private static readonly STUCK_BATCH_GRACE_MS = 60 * 60 * 1000; // 1 hour
+
+  /**
    * Get a driver's available balance (sum of ELIGIBLE DriverPayouts),
    * adjusted by all PENDING DriverPayoutAdjustments:
    *   • positive adjustments (late tips, dispute-won reversals) ADD to the balance
@@ -1462,10 +1472,12 @@ export class PaymentPayoutEngine {
 
       // Settle the adjustments atomically with the batch (same tx):
       // applied → APPLIED; unrecoverable clawback remainder → new PENDING row.
+      // Both carry appliedBatchId so revertFailedBatch can restore them
+      // exactly if the Stripe transfer below fails.
       if (adj.appliedIds.length > 0) {
         await tx.driverPayoutAdjustment.updateMany({
           where: { id: { in: adj.appliedIds } },
-          data: { status: 'APPLIED' },
+          data: { status: 'APPLIED', appliedBatchId: newBatch.id },
         });
       }
       for (const lo of adj.leftovers) {
@@ -1475,6 +1487,7 @@ export class PaymentPayoutEngine {
             amount: lo.amount,
             reason: lo.reason,
             status: 'PENDING',
+            appliedBatchId: newBatch.id,
             note: lo.note,
           },
         });
@@ -1592,10 +1605,11 @@ export class PaymentPayoutEngine {
       }
 
       // Settle the adjustments atomically with the batch (same tx).
+      // appliedBatchId set on both — see the free-rail comment above.
       if (adj.appliedIds.length > 0) {
         await tx.driverPayoutAdjustment.updateMany({
           where: { id: { in: adj.appliedIds } },
-          data: { status: 'APPLIED' },
+          data: { status: 'APPLIED', appliedBatchId: newBatch.id },
         });
       }
       for (const lo of adj.leftovers) {
@@ -1605,6 +1619,7 @@ export class PaymentPayoutEngine {
             amount: lo.amount,
             reason: lo.reason,
             status: 'PENDING',
+            appliedBatchId: newBatch.id,
             note: lo.note,
           },
         });
@@ -1630,10 +1645,14 @@ export class PaymentPayoutEngine {
    * Selection: every driver whose ELIGIBLE balance + PENDING adjustments
    * (B4 fix — adjustments participate in the sweep decision) meets
    * minimumWeeklyPayoutDollars (default $0.50 — Stripe's transfer
-   * minimum). Payouts on legal-held deliveries are EXCLUDED and stay
-   * ELIGIBLE until the hold is released. After FIFO adjustments, a pot
-   * below the minimum is skipped (no doomed $0 batches) — the balance
-   * simply waits for a future week.
+   * minimum). Drivers with only PENDING adjustments (e.g. a late tip on
+   * top of an already-paid history) are swept too, as a zero-item batch.
+   * Payouts on legal-held deliveries are EXCLUDED and stay ELIGIBLE until
+   * the hold is released. After FIFO adjustments, a pot below the minimum
+   * is skipped (no doomed $0 batches) — the balance simply waits for a
+   * future week. A PENDING batch stuck for over an hour (crashed run) is
+   * auto-reverted first so the driver is not skipped forever; an
+   * in-flight PENDING/PROCESSING batch skips the driver for this run.
    */
   async processWeeklyAutoPayouts(): Promise<{ processed: number; skipped: number }> {
     const settings = await this.getPayoutSettingsSafe();
@@ -1654,12 +1673,20 @@ export class PaymentPayoutEngine {
     const adjByDriver = new Map<string, number>(
       adjustmentSums.map((a) => [a.driverId, Number(a._sum.amount || 0)]),
     );
+    const eligibleByDriver = new Map<string, number>(
+      eligibleSums.map((s) => [s.driverId, Number(s._sum.netAmount || 0)]),
+    );
 
-    const candidates = eligibleSums
-      .map((s) => ({
-        driverId: s.driverId,
-        eligibleSum: Number(s._sum.netAmount || 0),
-        pendingAdjustments: adjByDriver.get(s.driverId) ?? 0,
+    // Union of both maps: drivers with ELIGIBLE payouts AND drivers with
+    // only PENDING adjustments (e.g. all payouts PAID + a late tip) — both
+    // are sweepable when the combined pot meets the minimum.
+    const candidates = Array.from(
+      new Set([...eligibleByDriver.keys(), ...adjByDriver.keys()]),
+    )
+      .map((driverId) => ({
+        driverId,
+        eligibleSum: eligibleByDriver.get(driverId) ?? 0,
+        pendingAdjustments: adjByDriver.get(driverId) ?? 0,
       }))
       .filter(
         (c) =>
@@ -1671,10 +1698,35 @@ export class PaymentPayoutEngine {
     let skipped = 0;
 
     for (const candidate of candidates) {
-      const existingPending = await this.prisma.payoutBatch.findFirst({
-        where: { driverId: candidate.driverId, status: 'PENDING' },
+      const inFlight = await this.prisma.payoutBatch.findFirst({
+        where: {
+          driverId: candidate.driverId,
+          status: { in: ['PENDING', 'PROCESSING'] },
+        },
       });
-      if (existingPending) { skipped++; continue; }
+      if (inFlight) {
+        if (inFlight.status === 'PROCESSING') {
+          // Another run (cron overlap / admin manual trigger) is
+          // transferring right now — skip this cycle.
+          skipped++;
+          continue;
+        }
+        // PENDING: in-flight batches are seconds old; only treat the
+        // batch as crashed if it has been stuck for over an hour, so a
+        // concurrent run can never revert something being processed.
+        const stuckMs = Date.now() - new Date(inFlight.initiatedAt).getTime();
+        if (stuckMs < PaymentPayoutEngine.STUCK_BATCH_GRACE_MS) {
+          skipped++;
+          continue;
+        }
+        this.logger.warn(
+          `Weekly sweep: driver ${candidate.driverId} had a PENDING batch stuck for ${Math.round(stuckMs / 60000)} min — reverting it so this sweep can pay`,
+        );
+        await this.revertFailedBatch(
+          inFlight.id,
+          'A previous weekly payout was interrupted before the transfer completed. Your balance has been restored for this payout.',
+        );
+      }
 
       try {
         const eligiblePayouts = await this.excludeLegalHeldPayouts(
@@ -1684,7 +1736,9 @@ export class PaymentPayoutEngine {
           }),
           `Weekly sweep (driver ${candidate.driverId})`,
         );
-        if (eligiblePayouts.length === 0) { skipped++; continue; }
+        // NOTE: an empty list is NOT an automatic skip — a driver whose
+        // payouts are all PAID but who has PENDING tips/adjustments is
+        // swept as a zero-item adjustment-only batch below.
 
         const payoutSum = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
         // Apply pending adjustments (clawbacks + late tips) — weekly rail too.
@@ -1719,10 +1773,11 @@ export class PaymentPayoutEngine {
           }
 
           // Settle the adjustments atomically with the batch (same tx).
+          // appliedBatchId set on both — see the free-rail comment above.
           if (adj.appliedIds.length > 0) {
             await tx.driverPayoutAdjustment.updateMany({
               where: { id: { in: adj.appliedIds } },
-              data: { status: 'APPLIED' },
+              data: { status: 'APPLIED', appliedBatchId: newBatch.id },
             });
           }
           for (const lo of adj.leftovers) {
@@ -1732,6 +1787,7 @@ export class PaymentPayoutEngine {
                 amount: lo.amount,
                 reason: lo.reason,
                 status: 'PENDING',
+                appliedBatchId: newBatch.id,
                 note: lo.note,
               },
             });
@@ -1878,14 +1934,22 @@ export class PaymentPayoutEngine {
       // their money did NOT actually leave, so they must return to PENDING
       // and be applied again on the next successful payout. Without this,
       // a failed withdrawal would permanently erase a clawback debt or a
-      // driver's late tip.
-      const payoutIds = batchItems.map((i) => i.driverPayoutId);
-      if (payoutIds.length > 0) {
-        await this.prisma.driverPayoutAdjustment.updateMany({
-          where: { appliedToPayoutId: { in: payoutIds }, status: 'APPLIED' },
-          data: { status: 'PENDING', appliedToPayoutId: null },
-        });
-      }
+      // driver's late tip. Linkage is appliedBatchId (written by the batch
+      // rails when they settle adjustments); the legacy appliedToPayoutId
+      // link from the old per-delivery auto-transfer path is not
+      // batch-scoped and is intentionally left alone.
+      await this.prisma.driverPayoutAdjustment.updateMany({
+        where: { appliedBatchId: batchId, status: 'APPLIED' },
+        data: { status: 'PENDING', appliedBatchId: null },
+      });
+
+      // Delete the leftover rows THIS batch created for partially-recovered
+      // clawbacks. The re-opened original above is back in PENDING with its
+      // FULL amount, so keeping the leftovers would double-count the debt
+      // (original -$25 + leftover -$15 = -$40 owed for a $25 debt).
+      await this.prisma.driverPayoutAdjustment.deleteMany({
+        where: { appliedBatchId: batchId, status: 'PENDING' },
+      });
 
       // Mark the batch as FAILED (keep the record for transfer history)
       await this.prisma.payoutBatch.update({
@@ -1897,7 +1961,7 @@ export class PaymentPayoutEngine {
         },
       });
 
-      this.logger.log(`Reverted batch ${batchId}: ${batchItems.length} payout(s) restored to ELIGIBLE. Reason: ${failureMessage}`);
+      this.logger.log(`Reverted batch ${batchId}: ${batchItems.length} payout(s) restored to ELIGIBLE, adjustments re-opened. Reason: ${failureMessage}`);
     } catch (revertErr: any) {
       this.logger.error(`Failed to revert batch ${batchId}: ${revertErr.message}`);
     }
