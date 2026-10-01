@@ -197,19 +197,32 @@ export class DeliveryCancellationEngine {
         const platformFee = Number((lockInAmount - driverNet).toFixed(2));
 
         if (delivery.payout?.id) {
-          await tx.driverPayout.update({
-            where: { id: delivery.payout.id },
-            data: {
-              status: EnumDriverPayoutStatus.ELIGIBLE,
-              failureMessage: null,
-              grossAmount: lockInAmount,
-              insuranceFee: 0,
-              platformFee,
-              netAmount: driverNet,
-              driverSharePct,
-              type: EnumDriverPayoutType.LOCK_IN_FEE,
-            },
-          });
+          if (
+            delivery.payout.status === EnumDriverPayoutStatus.PAID ||
+            delivery.payout.status === EnumDriverPayoutStatus.CANCELLED
+          ) {
+            // PAID/CANCELLED are TERMINAL — never resurrect them to ELIGIBLE.
+            // A lock-in fee batch-paid mid-trip must survive a later
+            // cancellation of the ACTIVE delivery; re-activating it here
+            // would make the weekly/manual rails pay the driver twice.
+            this.logger.warn(
+              `Delivery ${delivery.id} cancelled: lock-in payout already ${delivery.payout.status} — terminal, left untouched`,
+            );
+          } else {
+            await tx.driverPayout.update({
+              where: { id: delivery.payout.id },
+              data: {
+                status: EnumDriverPayoutStatus.ELIGIBLE,
+                failureMessage: null,
+                grossAmount: lockInAmount,
+                insuranceFee: 0,
+                platformFee,
+                netAmount: driverNet,
+                driverSharePct,
+                type: EnumDriverPayoutType.LOCK_IN_FEE,
+              },
+            });
+          }
         } else if (activeAssignment) {
           await tx.driverPayout.create({
             data: {

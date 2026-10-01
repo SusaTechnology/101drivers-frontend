@@ -16,6 +16,21 @@ import { PrismaService } from "../prisma/prisma.service";
 import { NotificationEventEngine } from "../domain/notificationEvent/notificationEvent.engine";
 import { PostpaidBillingService } from "../postpaidBilling/postpaidBilling.service";
 
+/**
+ * Payment statuses that have already moved money (or left the PaymentIntent
+ * lifecycle) — a late/redelivered `payment_intent.*` event must NEVER
+ * regress them. Stripe retries non-2xx webhook deliveries for ~3 days and
+ * does not guarantee event ordering, so every PI lifecycle handler must
+ * check this list before writing a status.
+ */
+const PAYMENT_TERMINAL_STATUSES = [
+  "CAPTURED", // customer charged — money moved
+  "PAID", // postpaid invoice settled — money moved
+  "REFUNDED", // charge returned after capture
+  "VOIDED", // PaymentIntent canceled before capture (cancellation path)
+  "INVOICED", // postpaid usage invoiced — the invoice rail owns this state
+];
+
 @Controller("stripe")
 export class StripeWebhookController {
   private readonly logger = new Logger(StripeWebhookController.name);
@@ -184,6 +199,16 @@ export class StripeWebhookController {
     const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
     if (!payment) {
       this.logger.warn(`payment_intent.amount_capturable_updated: no payment found for delivery ${deliveryId}`);
+      return;
+    }
+
+    // Terminal-state guard: a redelivered/out-of-order amount_capturable_updated
+    // must not regress a payment whose money already moved (or that the
+    // invoice rail owns) back to AUTHORIZED.
+    if (PAYMENT_TERMINAL_STATUSES.includes(payment.status)) {
+      this.logger.warn(
+        `amount_capturable_updated for delivery ${deliveryId} ignored — payment already ${payment.status} (terminal); likely a redelivered/out-of-order Stripe event`,
+      );
       return;
     }
 
@@ -415,6 +440,17 @@ export class StripeWebhookController {
       return;
     }
 
+    // Terminal-state guard: the charge already went through (or the money
+    // left the PI lifecycle) — a late/redelivered failure event must NOT
+    // regress it to FAILED, write a false FAIL PaymentEvent, or send the
+    // customer a scary "payment failed" email for money we already hold.
+    if (PAYMENT_TERMINAL_STATUSES.includes(payment.status)) {
+      this.logger.warn(
+        `payment_intent.failed for delivery ${deliveryId} ignored — payment already ${payment.status} (terminal); not regressing`,
+      );
+      return;
+    }
+
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: {
@@ -474,6 +510,15 @@ export class StripeWebhookController {
     const payment = await this.prisma.payment.findUnique({ where: { deliveryId } });
     if (!payment) {
       this.logger.warn(`payment_intent.canceled: no payment found for delivery ${deliveryId}`);
+      return;
+    }
+
+    // Terminal-state guard: money already moved — a redelivered canceled
+    // event must not VOID a CAPTURED/REFUNDED payment out of existence.
+    if (PAYMENT_TERMINAL_STATUSES.includes(payment.status)) {
+      this.logger.warn(
+        `payment_intent.canceled for delivery ${deliveryId} ignored — payment already ${payment.status} (terminal); not voiding`,
+      );
       return;
     }
 

@@ -343,8 +343,14 @@ async assignDriver(input: {
         const platformFee = Number((lockInAmount - driverNet).toFixed(2));
 
         if (delivery.payout?.id) {
-          await tx.driverPayout.update({
-            where: { id: delivery.payout.id },
+          // PAID/CANCELLED are TERMINAL — conditional update so a lock-in fee
+          // already batch-paid mid-trip is never resurrected to ELIGIBLE by
+          // an admin cancellation of the ACTIVE delivery (double-pay guard).
+          const updated = await tx.driverPayout.updateMany({
+            where: {
+              id: delivery.payout.id,
+              status: { notIn: ["PAID", "CANCELLED"] as any },
+            },
             data: {
               status: EnumDriverPayoutStatus.ELIGIBLE,
               failureMessage: null,
@@ -356,6 +362,11 @@ async assignDriver(input: {
               type: EnumDriverPayoutType.LOCK_IN_FEE,
             },
           });
+          if (updated.count === 0) {
+            this.logger.warn(
+              `Admin cancel: delivery ${delivery.id} lock-in payout is PAID/CANCELLED — terminal, left untouched`,
+            );
+          }
         } else if (activeAssignment) {
           await tx.driverPayout.create({
             data: {

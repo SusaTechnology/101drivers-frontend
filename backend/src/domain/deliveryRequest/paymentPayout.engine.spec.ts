@@ -7,11 +7,14 @@
  *    no saved card → PI returns requires_payment_method).
  *  - Issue 5 (High): providerChargeId must be populated from the refreshed
  *    PI's latest_charge, not left null for the webhook to fill in.
+ *  - B1 (High): a PAID payout is TERMINAL at completion — never resurrected
+ *    to ELIGIBLE; only a positive difference may top up via adjustment.
  */
 import { PaymentPayoutEngine } from "./paymentPayout.engine";
 import { StripeService } from "../../providers/stripe/stripe.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
+  EnumDriverPayoutStatus,
   EnumDriverPayoutType,
   EnumPaymentEventStatus,
   EnumPaymentEventType,
@@ -29,7 +32,19 @@ const makeMockTx = (): MockTx => {
     deliveryRequest: { findUnique: jest.fn() },
     payment: { update: jest.fn() },
     paymentEvent: { create: jest.fn() },
-    driverPayout: { upsert: jest.fn() },
+    // settleCompletionPayout routes through findUnique + update/create
+    // (NOT upsert — the upsert mock is kept only so the "MUST NOT be
+    // called" assertions in Scenarios A/D stay meaningful).
+    driverPayout: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      create: jest.fn(),
+      upsert: jest.fn(),
+    },
+    driverPayoutAdjustment: {
+      updateMany: jest.fn(),
+      create: jest.fn(),
+    },
   };
   return tx;
 };
@@ -185,9 +200,11 @@ describe("PaymentPayoutEngine.handleCompletionTx — lock-in branch (Issue 1 + 5
     expect(stripeService.createTransfer).not.toHaveBeenCalled();
   });
 
-  it("Scenario B: PI status='succeeded' + latest_charge='ch_xxx' → MUST mark captured, MUST set providerChargeId, MUST upgrade payout", async () => {
+  it("Scenario B: PI status='succeeded' + latest_charge='ch_xxx' → MUST mark captured, MUST set providerChargeId, MUST settle payout to full completion", async () => {
     tx = makeMockTx();
     tx.deliveryRequest.findUnique.mockResolvedValue(baseDelivery);
+    // No payout row yet — settleCompletionPayout must CREATE it.
+    tx.driverPayout.findUnique.mockResolvedValue(null);
     stripeService = makeStripeService({
       piStatus: "succeeded",
       chargeId: "ch_remainder_001", // string form
@@ -224,15 +241,16 @@ describe("PaymentPayoutEngine.handleCompletionTx — lock-in branch (Issue 1 + 5
     expect(eventCall.data.providerRef).toBe("pi_test_REMAINDER_001");
     expect(eventCall.data.raw.chargeId).toBe("ch_remainder_001");
 
-    // driverPayout.upsert MUST be called with TRIP_COMPLETION type.
-    expect(tx.driverPayout.upsert).toHaveBeenCalledTimes(1);
-    const upsertCall = tx.driverPayout.upsert.mock.calls[0][0];
-    expect(upsertCall.create.type).toBe(
-      EnumDriverPayoutType.TRIP_COMPLETION,
-    );
-    expect(upsertCall.update.type).toBe(
-      EnumDriverPayoutType.TRIP_COMPLETION,
-    );
+    // settleCompletionPayout: no existing payout → CREATE with full
+    // completion amounts, TRIP_COMPLETION type, ELIGIBLE (Option B —
+    // payable at completion regardless of dealer payment).
+    expect(tx.driverPayout.create).toHaveBeenCalledTimes(1);
+    const createCall = tx.driverPayout.create.mock.calls[0][0];
+    expect(createCall.data.type).toBe(EnumDriverPayoutType.TRIP_COMPLETION);
+    expect(createCall.data.status).toBe(EnumDriverPayoutStatus.ELIGIBLE);
+    expect(createCall.data.netAmount).toBe(150); // $250 × 60%, no snapshot/fees
+    // The legacy upsert path must stay dead.
+    expect(tx.driverPayout.upsert).not.toHaveBeenCalled();
 
     // ─ Note on Issue 6 (NOT tested here) ─────────────────────────────────
     // `initiateDriverTransfer` is invoked fire-and-forgotten from this path
@@ -303,6 +321,79 @@ describe("PaymentPayoutEngine.handleCompletionTx — lock-in branch (Issue 1 + 5
     expect(updateCall.data.failureMessage).toMatch(/requires_action/);
 
     expect(tx.driverPayout.upsert).not.toHaveBeenCalled();
+    expect(stripeService.createTransfer).not.toHaveBeenCalled();
+  });
+
+  it("Scenario E: payout already PAID, completion net does NOT exceed paid net → PAID stays terminal (no ELIGIBLE reset, no top-up, no transfer)", async () => {
+    // Regression guard for the B1 double-pay hole: the PAID check used to
+    // fire only when completion net > paid net, so the equal/less case fell
+    // through to a blind update that resurrected the PAID payout to
+    // ELIGIBLE — and the weekly/manual rails would pay it a SECOND time.
+    tx = makeMockTx();
+    tx.deliveryRequest.findUnique.mockResolvedValue(baseDelivery);
+    tx.driverPayout.findUnique.mockResolvedValue({
+      id: "payout_paid_001",
+      status: EnumDriverPayoutStatus.PAID,
+      netAmount: 150, // == completion net ($250 × 60%, no snapshot/fees)
+    });
+    stripeService = makeStripeService({
+      piStatus: "succeeded",
+      chargeId: "ch_remainder_001",
+    });
+
+    engine = new PaymentPayoutEngine(
+      prismaService as any,
+      stripeService,
+      undefined,
+    );
+
+    await engine.handleCompletionTx(tx as any, {
+      deliveryId: "del_test_001",
+    });
+
+    // The PAID row must NOT be re-activated or duplicated.
+    expect(tx.driverPayout.update).not.toHaveBeenCalled();
+    expect(tx.driverPayout.create).not.toHaveBeenCalled();
+    // Nothing extra to pay → no top-up adjustment.
+    expect(tx.driverPayoutAdjustment.create).not.toHaveBeenCalled();
+    // And obviously no money moves.
+    expect(stripeService.createTransfer).not.toHaveBeenCalled();
+  });
+
+  it("Scenario F: payout already PAID below completion net (lock-in fee batch-paid mid-trip) → COMPLETION_TOPUP adjustment for the diff, payout row NOT re-paid", async () => {
+    tx = makeMockTx();
+    tx.deliveryRequest.findUnique.mockResolvedValue(baseDelivery);
+    tx.driverPayout.findUnique.mockResolvedValue({
+      id: "payout_lockin_paid_001",
+      status: EnumDriverPayoutStatus.PAID,
+      netAmount: 15, // lock-in fee already batch-paid: $25 × 60%
+    });
+    stripeService = makeStripeService({
+      piStatus: "succeeded",
+      chargeId: "ch_remainder_001",
+    });
+
+    engine = new PaymentPayoutEngine(
+      prismaService as any,
+      stripeService,
+      undefined,
+    );
+
+    await engine.handleCompletionTx(tx as any, {
+      deliveryId: "del_test_001",
+    });
+
+    // Only the DIFFERENCE may be paid — via a positive top-up adjustment on
+    // the driver's next payout rail.
+    expect(tx.driverPayoutAdjustment.create).toHaveBeenCalledTimes(1);
+    const topupCall = tx.driverPayoutAdjustment.create.mock.calls[0][0];
+    expect(topupCall.data.reason).toBe("COMPLETION_TOPUP");
+    expect(topupCall.data.amount).toBe(135); // 150 − 15
+    expect(topupCall.data.originalPayoutId).toBe("payout_lockin_paid_001");
+    expect(topupCall.data.status).toBe("PENDING");
+    // The PAID row itself must NOT be re-activated, re-created, re-transferred.
+    expect(tx.driverPayout.update).not.toHaveBeenCalled();
+    expect(tx.driverPayout.create).not.toHaveBeenCalled();
     expect(stripeService.createTransfer).not.toHaveBeenCalled();
   });
 });

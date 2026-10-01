@@ -2102,28 +2102,33 @@ export class PaymentPayoutEngine {
       });
     }
 
-    if (
-      existing &&
-      existing.status === EnumDriverPayoutStatus.PAID &&
-      input.breakdown.netAmount > Number(existing.netAmount)
-    ) {
+    if (existing && existing.status === EnumDriverPayoutStatus.PAID) {
+      // PAID is TERMINAL — completion may only TOP UP, never re-activate.
+      // Falling through to the update below would flip the payout back to
+      // ELIGIBLE and the weekly/manual rails would pay it a SECOND time.
       const diff = Number(
         (input.breakdown.netAmount - Number(existing.netAmount)).toFixed(2),
       );
-      await tx.driverPayoutAdjustment.create({
-        data: {
-          driverId: input.driverId,
-          deliveryId: input.deliveryId,
-          originalPayoutId: existing.id,
-          amount: diff,
-          reason: "COMPLETION_TOPUP",
-          status: "PENDING",
-          note: `Completion top-up — already paid $${Number(existing.netAmount).toFixed(2)}, full completion net is $${input.breakdown.netAmount.toFixed(2)}`,
-        },
-      });
-      this.logger.log(
-        `Delivery ${input.deliveryId}: payout already PAID ($${Number(existing.netAmount).toFixed(2)}) — top-up adjustment of $${diff.toFixed(2)} created instead of re-paying in full`,
-      );
+      if (diff > 0) {
+        await tx.driverPayoutAdjustment.create({
+          data: {
+            driverId: input.driverId,
+            deliveryId: input.deliveryId,
+            originalPayoutId: existing.id,
+            amount: diff,
+            reason: "COMPLETION_TOPUP",
+            status: "PENDING",
+            note: `Completion top-up — already paid $${Number(existing.netAmount).toFixed(2)}, full completion net is $${input.breakdown.netAmount.toFixed(2)}`,
+          },
+        });
+        this.logger.log(
+          `Delivery ${input.deliveryId}: payout already PAID ($${Number(existing.netAmount).toFixed(2)}) — top-up adjustment of $${diff.toFixed(2)} created instead of re-paying in full`,
+        );
+      } else {
+        this.logger.log(
+          `Delivery ${input.deliveryId}: payout already PAID ($${Number(existing.netAmount).toFixed(2)}) — completion net ($${input.breakdown.netAmount.toFixed(2)}) does not exceed it; PAID is terminal, leaving untouched (Option B absorbs the shortfall; post-payment refunds flow through REFUND clawback adjustments)`,
+        );
+      }
       return false;
     }
 
