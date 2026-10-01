@@ -657,6 +657,8 @@ async getAdminUsersSummary(): Promise<any> {
 //   PENDING_APPROVAL → Driver.status = PENDING_APPROVAL (driver-only;
 //                      sent by the Role=Driver dropdown so the option
 //                      label matches the row badge 1:1)
+//   ON_HOLD     → Driver.status = ON_HOLD (driver-only; parked applicant —
+//                      held without rejection, revisit later)
 //
 // Admin lifecycle statuses (ADMIN_ prefix — the frontend swaps in a
 // dedicated admin Status dropdown when Role = Admin, so these never
@@ -775,7 +777,7 @@ async getAdminUsersV2(query: {
   //   ADMIN_* lifecycle     → roles=ADMIN ALWAYS (the name declares the
   //                           scope; an explicit non-admin role + admin
   //                           status is a contradictory request)
-  const driverOnlyStatuses = ["INVITED", "WAITLISTED", "PENDING_APPROVAL"];
+  const driverOnlyStatuses = ["INVITED", "WAITLISTED", "PENDING_APPROVAL", "ON_HOLD"];
   const adminLifecycleStatuses = [
     "ADMIN_ACTIVE",
     "ADMIN_PENDING_INVITE",
@@ -888,6 +890,12 @@ async getAdminUsersV2(query: {
       // Driver-only — role already auto-forced above
       where.driver = {
         is: { status: EnumDriverStatus.WAITLISTED },
+      };
+    } else if (status === "ON_HOLD") {
+      // Driver-only — parked applicant (held without rejection; see
+      // DriverApprovalEngine.holdDriver). Role already auto-forced above.
+      where.driver = {
+        is: { status: EnumDriverStatus.ON_HOLD },
       };
     } else if (status === "PENDING_APPROVAL") {
       // Driver-native — the Role=Driver dropdown sends this so the label
@@ -1334,6 +1342,10 @@ async getAdminUserDetail(id: string): Promise<any> {
           profilePhotoUrl: true,
           selfiePhotoUrl: true,
           status: true,
+          // Hold context — the detail page shows when the hold was placed
+          // and which funnel stage "Release Hold" restores.
+          heldFromStatus: true,
+          heldAt: true,
           userId: true,
           createdAt: true,
           updatedAt: true,
@@ -1864,6 +1876,38 @@ async rejectDriverFromUser(input: {
     driverId: driver.id,
     actorUserId: input.actorUserId ?? null,
     reason: input.reason ?? null,
+  });
+
+  return this.getAdminUserDetail(input.userId);
+}
+
+async holdDriverFromUser(input: {
+  userId: string;
+  actorUserId?: string | null;
+  reason?: string | null;
+}) {
+  const driver = await this.getUserDriverOrThrow(input.userId);
+
+  await this.driverService.holdDriver({
+    driverId: driver.id,
+    actorUserId: input.actorUserId ?? null,
+    reason: input.reason ?? null,
+  });
+
+  return this.getAdminUserDetail(input.userId);
+}
+
+async releaseDriverHoldFromUser(input: {
+  userId: string;
+  actorUserId?: string | null;
+  note?: string | null;
+}) {
+  const driver = await this.getUserDriverOrThrow(input.userId);
+
+  await this.driverService.releaseDriverHold({
+    driverId: driver.id,
+    actorUserId: input.actorUserId ?? null,
+    note: input.note ?? null,
   });
 
   return this.getAdminUserDetail(input.userId);

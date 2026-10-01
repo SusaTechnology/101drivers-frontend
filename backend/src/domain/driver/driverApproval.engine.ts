@@ -380,8 +380,161 @@ export class DriverApprovalEngine {
   }
 
   /**
+   * HOLD: Admin parks a pre-activation applicant without rejecting them.
+   * WAITLISTED / INVITED / PENDING_APPROVAL → ON_HOLD
+   *
+   * Business context: 101 Drivers signs drivers up region by region. When
+   * a region has enough drivers (or has not launched yet), applicants are
+   * put ON HOLD instead of rejected — the record stays in the system and
+   * can be revisited later (release → back to the previous funnel stage,
+   * or reject if a later review finds the application fake).
+   *
+   * Silent by design: no email/notification is sent to the applicant —
+   * hold is an internal pipeline state, unlike invite/approve/reject
+   * which communicate a decision. The pre-hold stage is stored on the
+   * Driver row (heldFromStatus / heldAt) so release restores exactly
+   * where they were; the full who/when/why trail lives in AdminAuditLog
+   * (DRIVER_HOLD action).
+   */
+  async holdDriver(input: {
+    driverId: string;
+    actorUserId?: string | null;
+    reason?: string | null;
+  }): Promise<void> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        status: true,
+        heldFromStatus: true,
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException("Driver not found");
+    }
+
+    if (driver.status === EnumDriverStatus.ON_HOLD) {
+      throw new BadRequestException("Driver is already on hold");
+    }
+
+    if (driver.status === EnumDriverStatus.APPROVED) {
+      throw new BadRequestException(
+        "Approved drivers cannot be put on hold — use suspend instead"
+      );
+    }
+
+    if (driver.status === EnumDriverStatus.SUSPENDED) {
+      throw new BadRequestException("Suspended driver cannot be put on hold");
+    }
+
+    if (driver.status === EnumDriverStatus.REJECTED) {
+      throw new BadRequestException("Rejected driver cannot be put on hold");
+    }
+
+    const beforeJson = driver;
+
+    await this.prisma.driver.update({
+      where: { id: input.driverId },
+      data: {
+        status: EnumDriverStatus.ON_HOLD,
+        heldFromStatus: driver.status,
+        heldAt: new Date(),
+      },
+    });
+
+    const afterDriver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        status: true,
+        heldFromStatus: true,
+        heldAt: true,
+      },
+    });
+
+    await this.prisma.adminAuditLog.create({
+      data: {
+        action: EnumAdminAuditLogAction.DRIVER_HOLD,
+        actorUserId: input.actorUserId ?? null,
+        actorType: EnumAdminAuditLogActorType.USER,
+        driverId: input.driverId,
+        reason: input.reason ?? null,
+        beforeJson: beforeJson ?? Prisma.JsonNull,
+        afterJson: afterDriver ?? Prisma.JsonNull,
+      },
+    });
+  }
+
+  /**
+   * RELEASE HOLD: Admin moves a held driver back to the funnel stage they
+   * were in when the hold was placed.
+   * ON_HOLD → heldFromStatus (falls back to WAITLISTED for legacy rows
+   * that were held before the column existed). Clears the hold fields and
+   * writes a DRIVER_RELEASE audit row. Silent by design — no email.
+   */
+  async releaseDriverHold(input: {
+    driverId: string;
+    actorUserId?: string | null;
+    note?: string | null;
+  }): Promise<void> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        status: true,
+        heldFromStatus: true,
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException("Driver not found");
+    }
+
+    if (driver.status !== EnumDriverStatus.ON_HOLD) {
+      throw new BadRequestException("Driver is not on hold");
+    }
+
+    const restoreStatus = driver.heldFromStatus ?? EnumDriverStatus.WAITLISTED;
+
+    const beforeJson = driver;
+
+    await this.prisma.driver.update({
+      where: { id: input.driverId },
+      data: {
+        status: restoreStatus,
+        heldFromStatus: null,
+        heldAt: null,
+      },
+    });
+
+    const afterDriver = await this.prisma.driver.findUnique({
+      where: { id: input.driverId },
+      select: {
+        id: true,
+        status: true,
+        heldFromStatus: true,
+        heldAt: true,
+      },
+    });
+
+    await this.prisma.adminAuditLog.create({
+      data: {
+        action: EnumAdminAuditLogAction.DRIVER_RELEASE,
+        actorUserId: input.actorUserId ?? null,
+        actorType: EnumAdminAuditLogActorType.USER,
+        driverId: input.driverId,
+        reason: input.note ?? null,
+        beforeJson: beforeJson ?? Prisma.JsonNull,
+        afterJson: afterDriver ?? Prisma.JsonNull,
+      },
+    });
+  }
+
+  /**
    * REJECT: Admin rejects a driver application.
-   * INVITED or PENDING_APPROVAL → REJECTED (sets status instead of deleting)
+   * WAITLISTED / INVITED / PENDING_APPROVAL / ON_HOLD → REJECTED
+   * (sets status instead of deleting)
    */
   async rejectDriver(input: {
     driverId: string;
@@ -424,7 +577,8 @@ export class DriverApprovalEngine {
     if (
       driver.status !== EnumDriverStatus.WAITLISTED &&
       driver.status !== EnumDriverStatus.INVITED &&
-      driver.status !== EnumDriverStatus.PENDING_APPROVAL
+      driver.status !== EnumDriverStatus.PENDING_APPROVAL &&
+      driver.status !== EnumDriverStatus.ON_HOLD
     ) {
       throw new BadRequestException("Driver cannot be rejected in current status");
     }
@@ -459,33 +613,11 @@ export class DriverApprovalEngine {
       },
     });
 
-    const toEmail = driver.user?.email?.trim().toLowerCase() || null;
-    const displayName = driver.user?.fullName || "Driver";
-
-    if (toEmail) {
-      await this.notificationEventEngine.queueAndSend({
-        actorUserId: input.actorUserId ?? null,
-        driverId: input.driverId,
-        channel: EnumNotificationEventChannel.EMAIL,
-        type: EnumNotificationEventType.DRIVER_APPROVED,
-        templateCode: "driver-rejected",
-        subject: "Your driver account application was rejected",
-        body: [
-          `Hi ${displayName},`,
-          "",
-          "Your driver account application was rejected.",
-          input.reason ? `Reason: ${input.reason}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        toEmail,
-        payload: {
-          driverId: input.driverId,
-          reason: input.reason ?? null,
-          rejected: true,
-        },
-      });
-    }
+    // NO EMAIL on rejection (owner decision): rejection is a silent admin
+    // state change. Unlike invite/approve (which email instructions), a
+    // rejected applicant gets no notification — the admin reviews the
+    // application (usually a second-round fake-document find) and may
+    // revisit the record later via approve.
   }
 
   /**

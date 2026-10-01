@@ -13,6 +13,8 @@ import type {
   RejectCustomerRequest,
   ApproveDriverRequest,
   RejectDriverRequest,
+  HoldDriverRequest,
+  ReleaseDriverHoldRequest,
   InviteDriverRequest,
   SuspendCustomerRequest,
   UnsuspendCustomerRequest,
@@ -305,6 +307,34 @@ export function useSuspendDriver() {
 export function useUnsuspendDriver() {
   return useDataMutation<AdminUserDetail, UnsuspendDriverRequest>({
     apiEndPoint: `${API_BASE_URL}/api/users/:id/unsuspend-driver`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}
+
+/**
+ * Hook for putting a driver on hold via user ID (silent — no email to
+ * the applicant). Stores the pre-hold funnel stage so "Release Hold"
+ * restores it; every hold writes a DRIVER_HOLD AdminAuditLog row.
+ * POST /api/users/:id/hold-driver
+ */
+export function useHoldDriver() {
+  return useDataMutation<AdminUserDetail, HoldDriverRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/hold-driver`,
+    method: 'POST',
+    invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
+  });
+}
+
+/**
+ * Hook for releasing a driver's hold via user ID — restores the driver
+ * to the funnel stage they were in when held (heldFromStatus), writes a
+ * DRIVER_RELEASE AdminAuditLog row. Silent — no email.
+ * POST /api/users/:id/release-driver-hold
+ */
+export function useReleaseDriverHold() {
+  return useDataMutation<AdminUserDetail, ReleaseDriverHoldRequest>({
+    apiEndPoint: `${API_BASE_URL}/api/users/:id/release-driver-hold`,
     method: 'POST',
     invalidateQueryKey: [['admin-users'], ['admin-users-v2'], ['admin-users-summary'], ['admin-user-detail']],
   });

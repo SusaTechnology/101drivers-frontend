@@ -5,7 +5,7 @@ import {
   isAuthenticated,
   getUser,
 } from "@/lib/tanstack/dataQuery";
-import { Loader2, Clock, AlertTriangle, CheckCircle } from "lucide-react";
+import { Loader2, Clock, AlertTriangle, CheckCircle, PauseCircle } from "lucide-react";
 
 type GuardState =
   | "loading"
@@ -14,6 +14,7 @@ type GuardState =
   | "needs_onboarding"
   | "pending_approval"
   | "waitlisted"
+  | "on_hold"
   | "invited"
   | "rejected";
 
@@ -57,6 +58,15 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
     const driverStatus = user.driverStatus;
     if (driverStatus === 'WAITLISTED') {
       setGuardState("waitlisted");
+      return;
+    }
+    if (driverStatus === 'ON_HOLD') {
+      // Parked without rejection (driver oversupply / region not launched
+      // yet). Show a calm hold screen — NOT the waitlist screen (their
+      // application was received and is deliberately paused) and NOT a
+      // redirect loop (previously ON_HOLD fell through every status check
+      // and bounced between onboarding and sign-in).
+      setGuardState("on_hold");
       return;
     }
     if (driverStatus === 'INVITED') {
@@ -160,6 +170,35 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
             Your account has been created and is on the waitlist. An administrator
             will review your profile and invite you to complete your application
             when a spot opens up.
+          </p>
+          <button
+            onClick={() => window.history.back()}
+            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // On Hold screen — held without rejection; the application stays in the
+  // system and the admin team will revisit it when the region opens up.
+  if (guardState === "on_hold") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark p-6">
+        <div className="max-w-md w-full text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-6">
+            <PauseCircle className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-3">
+            Application On Hold
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+            Your application has been received and is complete — we've simply
+            paused new activations in your area for now. Our team will reach
+            out when we're ready to move forward; no action is needed from
+            you in the meantime.
           </p>
           <button
             onClick={() => window.history.back()}

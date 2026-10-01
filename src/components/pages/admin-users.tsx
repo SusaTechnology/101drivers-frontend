@@ -119,6 +119,7 @@ import {
   Lock,
   UserPlus,
   Send,
+  PauseCircle,
   Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -187,6 +188,7 @@ const DRIVER_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
   { value: 'WAITLISTED', label: 'Waitlisted' },
   { value: 'INVITED', label: 'Invited' },
+  { value: 'ON_HOLD', label: 'On Hold' },
   { value: 'APPROVED', label: 'Approved' },
   { value: 'REJECTED', label: 'Rejected' },
   { value: 'SUSPENDED', label: 'Suspended' },
@@ -345,7 +347,7 @@ function CustomerStatusBadge({ status }: { status: CustomerApprovalStatus }) {
 
 function DriverStatusBadge({ status }: { status: DriverStatus }) {
   const color = getDriverStatusColor(status);
-  const Icon = status === 'APPROVED' ? CheckCircle : status === 'SUSPENDED' ? Ban : Clock;
+  const Icon = status === 'APPROVED' ? CheckCircle : status === 'SUSPENDED' ? Ban : status === 'ON_HOLD' ? PauseCircle : Clock;
 
   return (
     <Badge className={cn(
@@ -1256,6 +1258,18 @@ export default function AdminUsersPage() {
                                   >
                                     <ShieldCheck className="w-2.5 h-2.5" />
                                     Super Admin
+                                  </span>
+                                )}
+                                {/* On Hold badge — marks drivers parked as ON_HOLD
+                                    (held without rejecting — e.g. driver oversupply in
+                                    a region). Same name-chip pattern as Super Admin. */}
+                                {user.roles === 'DRIVER' && user.driver?.status === 'ON_HOLD' && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300"
+                                    title="This driver is on hold — held without rejection. Release Hold or Reject from their profile."
+                                  >
+                                    <PauseCircle className="w-2.5 h-2.5" />
+                                    On Hold
                                   </span>
                                 )}
                                 {/* Referred badge — shown for drivers who were referred by another driver.

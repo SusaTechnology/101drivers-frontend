@@ -53,6 +53,7 @@ import {
   CreditCard,
   Trash2,
   ArrowLeftRight,
+  PauseCircle,
   Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -111,6 +112,8 @@ import {
   useRejectDriver,
   useSuspendDriver,
   useUnsuspendDriver,
+  useHoldDriver,
+  useReleaseDriverHold,
   useInviteDriver,
   useResendInviteDriver,
   useAdminUpdateUser,
@@ -145,6 +148,12 @@ const rejectSchema = z.object({
   reason: z.string().min(1, 'Reason is required'),
 });
 
+// Hold is deliberately low-friction: the reason is OPTIONAL (the audit log
+// records who/when regardless; the reason just gives future context).
+const holdSchema = z.object({
+  reason: z.string().optional(),
+});
+
 const editUserSchema = z.object({
   email: z.string().email('Invalid email').optional(),
   username: z.string().min(3, 'Username must be at least 3 characters').optional(),
@@ -174,6 +183,7 @@ const editDriverSchema = z.object({
 
 type SuspendFormData = z.infer<typeof suspendSchema>;
 type RejectFormData = z.infer<typeof rejectSchema>;
+type HoldFormData = z.infer<typeof holdSchema>;
 type EditUserFormData = z.infer<typeof editUserSchema>;
 type EditCustomerFormData = z.infer<typeof editCustomerSchema>;
 type EditDriverFormData = z.infer<typeof editDriverSchema>;
@@ -349,7 +359,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   // Dialog state — 'delete-user' is used for orphaned User rows (no
   // Customer/Driver attached) so admin can clean up failed signups in-place.
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'suspend-driver' | 'unsuspend-driver' | 'delete-user'>('approve-customer');
+  const [dialogAction, setDialogAction] = useState<'approve-customer' | 'reject-customer' | 'suspend-customer' | 'unsuspend-customer' | 'invite-driver' | 'resend-invite-driver' | 'approve-driver' | 'reject-driver' | 'hold-driver' | 'release-driver-hold' | 'suspend-driver' | 'unsuspend-driver' | 'delete-user'>('approve-customer');
 
   // Edit mode state
   const [editMode, setEditMode] = useState<'none' | 'user' | 'customer' | 'driver'>('none');
@@ -534,6 +544,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
   const inviteDriverMutation = useInviteDriver();
   const resendInviteDriverMutation = useResendInviteDriver();
   const rejectDriverMutation = useRejectDriver();
+  const holdDriverMutation = useHoldDriver();
+  const releaseDriverHoldMutation = useReleaseDriverHold();
   const suspendDriverMutation = useSuspendDriver();
   const unsuspendDriverMutation = useUnsuspendDriver();
   const adminUpdateUserMutation = useAdminUpdateUser();
@@ -548,6 +560,11 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
 
   const rejectForm = useForm<RejectFormData>({
     resolver: zodResolver(rejectSchema),
+    defaultValues: { reason: '' },
+  });
+
+  const holdForm = useForm<HoldFormData>({
+    resolver: zodResolver(holdSchema),
     defaultValues: { reason: '' },
   });
 
@@ -653,6 +670,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
     setDialogOpen(true);
     suspendForm.reset();
     rejectForm.reset();
+    holdForm.reset();
   };
 
   const closeDialog = () => {
@@ -810,6 +828,50 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
           refetch();
         },
         onError: () => toast.error('Failed to reject driver'),
+      }
+    );
+  };
+
+  const handleHoldDriver = (data: HoldFormData) => {
+    if (!user || !actorUserId) return;
+    holdDriverMutation.mutate(
+      {
+        pathParams: { id: user.id },
+        reason: data.reason?.trim() ? data.reason.trim() : undefined,
+        actorUserId,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Driver put on hold', {
+            description: 'No notification was sent to the applicant. Release the hold or reject the application at any time.',
+          });
+          closeDialog();
+          refetch();
+        },
+        onError: (error: any) =>
+          toast.error('Failed to put driver on hold', {
+            description: error?.message || 'Please try again.',
+          }),
+      }
+    );
+  };
+
+  const handleReleaseDriverHold = () => {
+    if (!user || !actorUserId) return;
+    releaseDriverHoldMutation.mutate(
+      { pathParams: { id: user.id }, actorUserId },
+      {
+        onSuccess: () => {
+          toast.success('Hold released', {
+            description: 'The driver was restored to the funnel stage they were in when held.',
+          });
+          closeDialog();
+          refetch();
+        },
+        onError: (error: any) =>
+          toast.error('Failed to release hold', {
+            description: error?.message || 'Please try again.',
+          }),
       }
     );
   };
@@ -1199,6 +1261,13 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   {user.disabledAt && user.roles !== 'ADMIN' && (
                     <StatusBadge status="Suspended" color="rose" icon={Ban} />
                   )}
+
+                  {/* Driver pipeline hold — amber "ON HOLD" pill (same
+                      style family as the Suspended pill above). The full
+                      driver-lifecycle badge also shows in the Driver card. */}
+                  {user.driver?.status === 'ON_HOLD' && (
+                    <StatusBadge status="On Hold" color="amber" icon={PauseCircle} />
+                  )}
                 </div>
 
                 <h1 className="text-3xl lg:text-4xl font-black text-slate-900 dark:text-white mt-4">
@@ -1241,19 +1310,37 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                   </Button>
                 )}
                 
-                {/* Driver invited - show Resend Invite */}
+                {/* Driver invited - show Resend Invite + Hold */}
                 {!user.disabledAt && user.driver?.status === 'INVITED' && (
-                  <Button onClick={() => openDialog('resend-invite-driver')} className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-sky-600 text-white hover:opacity-90 transition">
-                    <Send className="w-4 h-4" />
-                    Resend Invite
-                  </Button>
+                  <>
+                    <Button onClick={() => openDialog('resend-invite-driver')} className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-sky-600 text-white hover:opacity-90 transition">
+                      <Send className="w-4 h-4" />
+                      Resend Invite
+                    </Button>
+                    <Button
+                      onClick={() => openDialog('hold-driver')}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-amber-500 text-white hover:opacity-90 transition"
+                    >
+                      <PauseCircle className="w-4 h-4" />
+                      Hold
+                    </Button>
+                  </>
                 )}
-                {/* Driver waitlisted - show Invite / Reject */}
+                {/* Driver waitlisted - show Invite / Hold / Reject.
+                    Hold sits between Invite and Reject (owner request):
+                    neutral amber, distinct from blue Invite and red Reject. */}
                 {!user.disabledAt && user.driver?.status === 'WAITLISTED' && (
                   <>
                     <Button onClick={() => openDialog('invite-driver')} className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-sky-600 text-white hover:opacity-90 transition">
                       <Send className="w-4 h-4" />
                       Invite Driver
+                    </Button>
+                    <Button
+                      onClick={() => openDialog('hold-driver')}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-amber-500 text-white hover:opacity-90 transition"
+                    >
+                      <PauseCircle className="w-4 h-4" />
+                      Hold
                     </Button>
                     <Button
                       onClick={() => openDialog('reject-driver')}
@@ -1265,7 +1352,7 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                     </Button>
                   </>
                 )}
-                {/* Driver pending approval - show Approve/Reject */}
+                {/* Driver pending approval - show Approve/Hold/Reject */}
                 {!user.disabledAt && user.driver?.status === 'PENDING_APPROVAL' && (
                   <>
                     <Button
@@ -1274,6 +1361,36 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                     >
                       <CheckCircle className="w-4 h-4" />
                       Approve Driver
+                    </Button>
+                    <Button
+                      onClick={() => openDialog('hold-driver')}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-amber-500 text-white hover:opacity-90 transition"
+                    >
+                      <PauseCircle className="w-4 h-4" />
+                      Hold
+                    </Button>
+                    <Button
+                      onClick={() => openDialog('reject-driver')}
+                      variant="destructive"
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject Driver
+                    </Button>
+                  </>
+                )}
+                {/* Driver on hold - show Release Hold / Reject.
+                    Release restores the pre-hold funnel stage (heldFromStatus
+                    — WAITLISTED / INVITED / PENDING_APPROVAL); Reject is the
+                    permanent exit. Both are audited. */}
+                {!user.disabledAt && user.driver?.status === 'ON_HOLD' && (
+                  <>
+                    <Button
+                      onClick={() => openDialog('release-driver-hold')}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-600 text-white hover:opacity-90 transition"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Release Hold
                     </Button>
                     <Button
                       onClick={() => openDialog('reject-driver')}
@@ -2500,6 +2617,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
               {dialogAction === 'resend-invite-driver' && 'Resend Invite'}
               {dialogAction === 'approve-driver' && 'Approve Driver'}
               {dialogAction === 'reject-driver' && 'Reject Driver'}
+              {dialogAction === 'hold-driver' && 'Put Driver On Hold'}
+              {dialogAction === 'release-driver-hold' && 'Release Hold'}
               {dialogAction === 'suspend-driver' && 'Suspend Driver'}
               {dialogAction === 'unsuspend-driver' && 'Unsuspend Driver'}
               {dialogAction === 'delete-user' && 'Delete Orphaned User'}
@@ -2513,6 +2632,8 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
               {dialogAction === 'resend-invite-driver' && `Resend the invitation email to ${user?.email}? A new onboarding link will be generated.`}
               {dialogAction === 'approve-driver' && `Approve ${user?.fullName} as a driver? They will be able to accept delivery assignments.`}
               {dialogAction === 'reject-driver' && `Reject ${user?.fullName}'s driver application?`}
+              {dialogAction === 'hold-driver' && `Put ${user?.fullName}'s driver application on hold? The applicant will not be notified.`}
+              {dialogAction === 'release-driver-hold' && `Release ${user?.fullName}'s hold? They will be restored to their previous application stage.`}
               {dialogAction === 'suspend-driver' && `Suspend ${user?.fullName}'s driver account? They will not be able to accept deliveries.`}
               {dialogAction === 'unsuspend-driver' && `Restore ${user?.fullName}'s driver account? They will be able to accept deliveries again.`}
               {dialogAction === 'delete-user' && `Permanently delete ${user?.email}? This removes the User row so the dealer can re-sign-up with the same email.`}
@@ -2655,6 +2776,67 @@ export default function AdminUserDetailPage({ userId }: AdminUserDetailPageProps
                 </Button>
               </DialogFooter>
             </form>
+          )}
+
+          {/* Hold Driver Form — optional reason; SILENT (no email to the
+              applicant). Hold = internal pipeline state (oversupply / region
+              not launched), not a decision the applicant must hear about. */}
+          {dialogAction === 'hold-driver' && (
+            <form onSubmit={holdForm.handleSubmit(handleHoldDriver)} className="space-y-4">
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                <div className="text-sm text-amber-700 dark:text-amber-300">
+                  The applicant will NOT be notified. Their record stays in the system — you can Release Hold (back to their previous stage) or Reject later from this page. Both actions are logged in the audit trail.
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Reason for hold (optional)</Label>
+                <Textarea
+                  {...holdForm.register('reason')}
+                  placeholder="e.g. Too many drivers in this area right now — revisit when demand grows"
+                  className="mt-1.5 rounded-xl"
+                  rows={3}
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeDialog} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white"
+                  disabled={holdDriverMutation.isPending}
+                >
+                  {holdDriverMutation.isPending ? 'Putting on hold...' : 'Put On Hold'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+
+          {/* Release Hold Confirmation — restores the pre-hold funnel stage
+              (heldFromStatus). Silent like the hold itself. */}
+          {dialogAction === 'release-driver-hold' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
+                <div className="text-sm text-emerald-700 dark:text-emerald-300">
+                  {user?.driver?.heldFromStatus
+                    ? `${user?.fullName} will be restored to "${DRIVER_STATUS_LABELS[user.driver.heldFromStatus]}".`
+                    : `${user?.fullName} will be restored to "Waitlisted".`}{' '}
+                  The applicant will not be notified. The release is recorded in the audit log.
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeDialog} className="rounded-xl">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleReleaseDriverHold}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
+                  disabled={releaseDriverHoldMutation.isPending}
+                >
+                  {releaseDriverHoldMutation.isPending ? 'Releasing...' : 'Release Hold'}
+                </Button>
+              </DialogFooter>
+            </div>
           )}
 
           {/* Suspend Customer Form */}

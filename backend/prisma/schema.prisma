@@ -161,6 +161,13 @@ model Driver {
   stripeConnectAccountId String?
   stripeConnectOnboardingComplete Boolean @default(false)
   status           EnumDriverStatus           @default(WAITLISTED)
+  // Hold state — admins can park a pre-activation applicant (WAITLISTED /
+  // INVITED / PENDING_APPROVAL) as ON_HOLD without rejecting them (e.g.
+  // driver oversupply in a region, or the region is not launching yet).
+  // heldFromStatus remembers where they were so "release hold" restores
+  // them to the same funnel stage; full history lives in AdminAuditLog.
+  heldFromStatus   EnumDriverStatus?
+  heldAt           DateTime?
   // Tracks the highest tier the referrer has been paid out for.
   // Incremented each time the referrer crosses a multiple of
   // `referralThreshold` (read live from REFERRAL_PROGRAM_SETTINGS).
@@ -1287,6 +1294,7 @@ enum EnumDriverStatus {
   APPROVED
   SUSPENDED
   REJECTED
+  ON_HOLD
 }
 
 enum EnumPricingConfigPricingMode {
@@ -1607,6 +1615,8 @@ enum EnumAdminAuditLogAction {
   DRIVER_APPROVE
   DRIVER_SUSPEND
   DRIVER_UNSUSPEND
+  DRIVER_HOLD
+  DRIVER_RELEASE
   DELIVERY_CANCEL
   DELIVERY_REASSIGN
   PRICING_UPDATE

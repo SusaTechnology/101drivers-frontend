@@ -459,6 +459,34 @@ async unsuspendDriver(input: {
   return this.domain.findUnique({ id: input.driverId });
 }
 
+async holdDriver(input: {
+  driverId: string;
+  actorUserId?: string | null;
+  reason?: string | null;
+}): Promise<any> {
+  await this.driverApprovalEngine.holdDriver({
+    driverId: input.driverId,
+    actorUserId: input.actorUserId ?? null,
+    reason: input.reason ?? null,
+  });
+
+  return this.domain.findUnique({ id: input.driverId });
+}
+
+async releaseDriverHold(input: {
+  driverId: string;
+  actorUserId?: string | null;
+  note?: string | null;
+}): Promise<any> {
+  await this.driverApprovalEngine.releaseDriverHold({
+    driverId: input.driverId,
+    actorUserId: input.actorUserId ?? null,
+    note: input.note ?? null,
+  });
+
+  return this.domain.findUnique({ id: input.driverId });
+}
+
 async rejectDriver(input: {
   driverId: string;
   actorUserId?: string | null;

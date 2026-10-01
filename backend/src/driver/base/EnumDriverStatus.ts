@@ -18,6 +18,7 @@ export enum EnumDriverStatus {
   Approved = "APPROVED",
   Suspended = "SUSPENDED",
   Rejected = "REJECTED",
+  OnHold = "ON_HOLD",
 }
 
 registerEnumType(EnumDriverStatus, {

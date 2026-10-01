@@ -12,7 +12,10 @@ export type CustomerApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSP
 // V2: removed the ghost 'PENDING' value that didn't exist in the backend
 // EnumDriverStatus enum. The old value was a legacy artifact from a rename
 // and caused a duplicate "Pending" option in the admin UI.
-export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED';
+// ON_HOLD: parked applicant — held without rejection (driver oversupply /
+// region not launched yet); the record stays and can be released or
+// rejected later. See DriverApprovalEngine.holdDriver.
+export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING_APPROVAL' | 'APPROVED' | 'SUSPENDED' | 'REJECTED' | 'ON_HOLD';
 
 // V2: unified admin status — the single `status` param for the /admin/v2
 // endpoint. Maps to both customer + driver sides:
@@ -22,7 +25,8 @@ export type DriverStatus = 'WAITLISTED' | 'INVITED' | 'PENDING_APPROVAL' | 'APPR
 //   SUSPENDED   → Customer.SUSPENDED OR Driver.SUSPENDED
 //   INVITED     → Driver.INVITED (driver-only)
 //   WAITLISTED  → Driver.WAITLISTED (driver-only)
-export type AdminUnifiedStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED' | 'WAITLISTED';
+//   ON_HOLD     → Driver.ON_HOLD (driver-only)
+export type AdminUnifiedStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED' | 'WAITLISTED' | 'ON_HOLD';
 
 // Referral relationship status — matches the backend EnumReferralStatus enum
 // (prisma/schema.prisma).
@@ -391,6 +395,10 @@ export interface AdminUserDriverDetail {
   profilePhotoUrl: string | null;
   selfiePhotoUrl: string | null;
   status: DriverStatus;
+  // Hold context — when the hold was placed and which funnel stage
+  // "Release Hold" restores (null when the driver is not on hold).
+  heldFromStatus: DriverStatus | null;
+  heldAt: string | null;
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -509,6 +517,16 @@ export interface ApproveDriverRequest {
 
 export interface RejectDriverRequest {
   reason: string;
+  actorUserId?: string;
+}
+
+export interface HoldDriverRequest {
+  reason?: string;
+  actorUserId?: string;
+}
+
+export interface ReleaseDriverHoldRequest {
+  note?: string;
   actorUserId?: string;
 }
 
@@ -652,6 +670,7 @@ export const DRIVER_STATUS_LABELS: Record<DriverStatus, string> = {
   APPROVED: 'Approved',
   SUSPENDED: 'Suspended',
   REJECTED: 'Rejected',
+  ON_HOLD: 'On Hold',
 };
 
 // V2: unified status labels for the /admin/v2 endpoint's `status` filter.
@@ -663,6 +682,7 @@ export const ADMIN_UNIFIED_STATUS_LABELS: Record<AdminUnifiedStatus, string> = {
   SUSPENDED: 'Suspended',
   INVITED: 'Invited (driver only)',
   WAITLISTED: 'Waitlisted (driver only)',
+  ON_HOLD: 'On Hold (driver only)',
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -713,6 +733,8 @@ export function getDriverStatusColor(status: DriverStatus): string {
       return 'rose';
     case 'REJECTED':
       return 'rose';
+    case 'ON_HOLD':
+      return 'amber';
     default:
       return 'slate';
   }

@@ -245,6 +245,42 @@ async rejectDriverFromUser(
   });
 }
 
+@common.Post(":id/hold-driver")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "update",
+  possession: "any",
+})
+async holdDriverFromUser(
+  @common.Param("id") id: string,
+  @common.Body() body: UserAdminApprovalActionDto
+): Promise<any> {
+  return this.service.holdDriverFromUser({
+    userId: id,
+    actorUserId: body.actorUserId ?? null,
+    reason: body.reason ?? null,
+  });
+}
+
+@common.Post(":id/release-driver-hold")
+@swagger.ApiOkResponse({ type: Object })
+@nestAccessControl.UseRoles({
+  resource: "User",
+  action: "update",
+  possession: "any",
+})
+async releaseDriverHoldFromUser(
+  @common.Param("id") id: string,
+  @common.Body() body: UserAdminApprovalActionDto
+): Promise<any> {
+  return this.service.releaseDriverHoldFromUser({
+    userId: id,
+    actorUserId: body.actorUserId ?? null,
+    note: body.note ?? null,
+  });
+}
+
 @common.Post(":id/suspend-driver")
 @swagger.ApiOkResponse({ type: Object })
 @nestAccessControl.UseRoles({

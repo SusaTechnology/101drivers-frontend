@@ -183,7 +183,7 @@ class Driver {
   @Field(() => EnumDriverStatus, {
     nullable: true,
   })
-  status?: "WAITLISTED" | "INVITED" | "PENDING_APPROVAL" | "APPROVED" | "SUSPENDED" | "REJECTED";
+  status?: "WAITLISTED" | "INVITED" | "PENDING_APPROVAL" | "APPROVED" | "SUSPENDED" | "REJECTED" | "ON_HOLD";
 
   @ApiProperty({
     required: true,

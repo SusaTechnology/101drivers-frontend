@@ -45,6 +45,8 @@ class AdminAuditLogCreateInput {
     | "DRIVER_APPROVE"
     | "DRIVER_SUSPEND"
     | "DRIVER_UNSUSPEND"
+    | "DRIVER_HOLD"
+    | "DRIVER_RELEASE"
     | "DELIVERY_CANCEL"
     | "DELIVERY_REASSIGN"
     | "PRICING_UPDATE"

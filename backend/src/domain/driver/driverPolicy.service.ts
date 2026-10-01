@@ -181,7 +181,11 @@ export class DriverPolicyService {
   }
 
   private ensureDriverStatus(value: unknown): void {
-    const validStatuses = [
+    // NOTE: ON_HOLD is deliberately NOT in this whitelist — the raw CRUD
+    // path must not be able to set it. Holds go through
+    // DriverApprovalEngine.holdDriver / releaseDriverHold so every hold
+    // and release writes an AdminAuditLog row (who / when / reason).
+    const validStatuses: EnumDriverStatus[] = [
       EnumDriverStatus.WAITLISTED,
       EnumDriverStatus.INVITED,
       EnumDriverStatus.PENDING_APPROVAL,
