@@ -481,6 +481,14 @@ export default function DriverOnboardingPage() {
   const watchEmail = watch("email");
   const watchPhone = watch("phone");
 
+  // ZIP field interaction tracking — the ZIP field must never turn red
+  // while the user is still on it typing. Red format feedback appears only
+  // when the field is left (blur) with fewer than 5 digits; red for the
+  // service area appears only when a complete 5-digit ZIP gets the
+  // server's "not in California" verdict (or on submit).
+  const [homeAreaFocused, setHomeAreaFocused] = useState(false);
+  const [homeAreaBlurred, setHomeAreaBlurred] = useState(false);
+
   // Age gate: compute actual age from DOB
   const computedAge = useMemo(() => {
     const dobStr = watchDateOfBirth;
@@ -548,15 +556,28 @@ export default function DriverOnboardingPage() {
     staleTime: 60_000,
   });
 
-  // Verdict priority: client format check → debounce/in-flight → server
-  // verdict → client fallback (same rule) when the endpoint is unreachable
-  // or the query is gated, so the field never blocks signup on a hiccup.
+  // Verdict priority: blur-gated format check → debounce/in-flight →
+  // server verdict → client fallback (same rule) when the endpoint is
+  // unreachable or the query is gated, so the field never blocks signup
+  // on a hiccup.
+  //
+  // Red policy (owner request): while the user is still on the field
+  // typing, incomplete input stays NEUTRAL — no red, no error text. The
+  // "format-error" red appears only when the field loses focus with fewer
+  // than 5 digits in it. Once 5 digits are in, the server verdict (or its
+  // client fallback) decides green vs red regardless of focus, because a
+  // complete ZIP is a committed answer, not work-in-progress. Re-focusing
+  // a red incomplete field clears the red until the next blur.
   const zipValue = (homeAreaValue ?? "").trim();
+  const zipFormatOk = /^\d{5}$/.test(zipValue);
+  const zipBlurRed = homeAreaBlurred && !homeAreaFocused && !zipFormatOk;
   let zipVerdict: ZipVerdict = "empty";
-  if (!zipValue) {
-    zipVerdict = "empty";
-  } else if (!/^\d{5}$/.test(zipValue)) {
+  if (zipBlurRed) {
     zipVerdict = "format-error";
+  } else if (!zipValue || !zipFormatOk) {
+    // Incomplete but the user is still on the field (or never left it) —
+    // stay neutral and let them keep typing.
+    zipVerdict = "empty";
   } else if (zipChecking || debouncedZip !== zipValue) {
     zipVerdict = "checking";
   } else if (zipCheckError) {
@@ -1321,14 +1342,38 @@ export default function DriverOnboardingPage() {
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <Input
                         id="homeArea"
+                        onFocus={() => setHomeAreaFocused(true)}
                         {...register("homeArea", {
                           validate: (v) => {
                             if (!v?.trim()) return true;
                             if (!/^\d{5}$/.test(v.trim())) return "Enter a valid 5-digit ZIP code";
                             return isCaliforniaZip(v) || CALIFORNIA_ZIP_ERROR_MESSAGE;
                           },
-                          onChange: () => { if (homeAreaValue?.trim()) trigger("homeArea"); }
+                          // US ZIPs are exactly 5 digits: strip everything
+                          // that is not a digit and hard-cap at 5 (typing
+                          // AND paste). No validation errors are raised here
+                          // while typing (owner request: red only on
+                          // blur-with-incomplete, server verdict, or submit);
+                          // we only re-validate when a submit error is
+                          // already showing, so it clears the moment the
+                          // value becomes valid.
+                          onChange: (e) => {
+                            const digits = e.target.value.replace(/\D/g, "").slice(0, 5);
+                            if (e.target.value !== digits) e.target.value = digits;
+                            if (digits !== homeAreaValue) {
+                              setValue("homeArea", digits, { shouldDirty: true });
+                            }
+                            if (errors.homeArea) trigger("homeArea");
+                          },
+                          onBlur: () => {
+                            setHomeAreaFocused(false);
+                            setHomeAreaBlurred(true);
+                          },
                         })}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="postal-code"
+                        maxLength={5}
                         className={cn(
                           "h-14 pl-12 rounded-2xl transition-colors",
                           (zipVerdict === "format-error" || zipVerdict === "not-california" || errors.homeArea)
