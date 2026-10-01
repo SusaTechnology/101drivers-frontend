@@ -70,6 +70,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDataMutation, useDataQuery, getUser, isAuthenticated, clearAuth } from "@/lib/tanstack/dataQuery";
+import { useDebouncedValue } from "@/hooks/useDebounce";
+import { Spinner } from "@/components/ui/spinner";
 import PolicySheet from "../shared/PolicySheet";
 import { ReferralCodeInput } from "../shared/ReferralCodeInput";
 
@@ -165,6 +167,23 @@ interface DriverSignupPayload {
   agreementAcceptedAt?: string;
   referralCode?: string;
 }
+
+/** Response of GET /api/auth/public/validate-zip/:zip (public, no auth). */
+interface ZipCheckResponse {
+  valid: boolean;
+  zip: string;
+  state: "CA" | null;
+  reason: "INVALID_FORMAT" | "OUT_OF_STATE" | null;
+  message: string;
+}
+
+/** Verdict states rendered by the Home ZIP Code field. */
+type ZipVerdict =
+  | "empty"
+  | "format-error"
+  | "checking"
+  | "valid"
+  | "not-california";
 
 // Format phone number to US format: (XXX) XXX-XXXX
 const formatPhoneNumber = (value: string): string => {
@@ -505,6 +524,49 @@ export default function DriverOnboardingPage() {
 
   // Determine if any mutation is pending
   const isPending = sendOtpMutation.isPending;
+
+  // ── Live ZIP service-area check (mirrors ReferralCodeInput) ────────
+  // The verdict comes from the backend's public validate-zip endpoint —
+  // the SAME rule (evaluateCaliforniaHomeArea) the signup guard enforces,
+  // so the field can never show green for a ZIP the backend would reject.
+  // Client-side isCaliforniaZip stays as the instant fallback + submit
+  // gating (identical rule, no network dependency).
+  const debouncedZip = useDebouncedValue((homeAreaValue ?? "").trim(), 500);
+  const zipQueryReady =
+    /^\d{5}$/.test(debouncedZip) && !isPending && isAgeVerified;
+  const {
+    data: zipCheck,
+    isFetching: zipChecking,
+    isError: zipCheckError,
+  } = useDataQuery<ZipCheckResponse | null>({
+    apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/public/validate-zip/${encodeURIComponent(debouncedZip)}`,
+    noFilter: true,
+    fetchWithoutRefresh: true,
+    publicEndpoint: true,
+    enabled: zipQueryReady,
+    queryKey: ["driver-zip-validate", debouncedZip],
+    staleTime: 60_000,
+  });
+
+  // Verdict priority: client format check → debounce/in-flight → server
+  // verdict → client fallback (same rule) when the endpoint is unreachable
+  // or the query is gated, so the field never blocks signup on a hiccup.
+  const zipValue = (homeAreaValue ?? "").trim();
+  let zipVerdict: ZipVerdict = "empty";
+  if (!zipValue) {
+    zipVerdict = "empty";
+  } else if (!/^\d{5}$/.test(zipValue)) {
+    zipVerdict = "format-error";
+  } else if (zipChecking || debouncedZip !== zipValue) {
+    zipVerdict = "checking";
+  } else if (zipCheckError) {
+    zipVerdict = isCaliforniaZip(zipValue) ? "valid" : "not-california";
+  } else if (zipCheck) {
+    zipVerdict = zipCheck.valid ? "valid" : "not-california";
+  } else {
+    // Query not enabled yet (age gate / submitting) — client fallback.
+    zipVerdict = isCaliforniaZip(zipValue) ? "valid" : "not-california";
+  }
 
   // Header component — adapts to auth state. If the user is already
   // signed in as a driver, show "Back to Dashboard" + "Sign Out"
@@ -1241,15 +1303,19 @@ export default function DriverOnboardingPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  {/* Home ZIP Code */}
+                  {/* Home ZIP Code — live California verdict via
+                      GET /api/auth/public/validate-zip/:zip (same rule as
+                      the signup guard; mirrors ReferralCodeInput UX) */}
                   <div className={cn(
                     "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                    errors.homeArea
+                    (zipVerdict === "format-error" || zipVerdict === "not-california" || errors.homeArea)
                       ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                      : "border-transparent"
+                      : zipVerdict === "valid"
+                        ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/10"
+                        : "border-transparent"
                   )}>
                     <Label htmlFor="homeArea" className="text-xs font-bold">
-                      Home ZIP Code {!isCaliforniaZip(homeAreaValue) && <span className="text-red-500"> *</span>}
+                      Home ZIP Code {zipVerdict !== "valid" && <span className="text-red-500"> *</span>}
                     </Label>
                     <div className="relative">
                       <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1265,29 +1331,56 @@ export default function DriverOnboardingPage() {
                         })}
                         className={cn(
                           "h-14 pl-12 rounded-2xl transition-colors",
-                          errors.homeArea
+                          (zipVerdict === "format-error" || zipVerdict === "not-california" || errors.homeArea)
                             ? "border-red-400 dark:border-red-500"
-                            : isCaliforniaZip(homeAreaValue)
-                              ? "border-green-300 dark:border-green-700"
+                            : zipVerdict === "valid"
+                              ? "border-emerald-400 dark:border-emerald-700"
                               : ""
                         )}
                         placeholder="90012"
                         disabled={isPending || !isAgeVerified}
                       />
-                      {isCaliforniaZip(homeAreaValue) && !errors.homeArea && (
+                      {zipVerdict === "checking" && (
+                        <Spinner className="absolute right-4 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
+                      )}
+                      {zipVerdict === "valid" && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          <CheckCircle className="w-5 h-5 text-green-500" />
+                          <CheckCircle className="w-5 h-5 text-emerald-500" />
+                        </div>
+                      )}
+                      {zipVerdict === "not-california" && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <X className="w-5 h-5 text-red-500" />
                         </div>
                       )}
                     </div>
-                    {errors.homeArea && (
-                      <p className="text-xs text-red-500 font-medium">
-                        {errors.homeArea.message}
+                    {zipVerdict === "valid" && (
+                      <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium flex items-center gap-1.5">
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        {zipCheck?.message || "In California — we serve this area."}
                       </p>
                     )}
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Enter your 5-digit California ZIP code. We only operate in California — registrations with ZIP codes outside California (90001–96199) are rejected.
-                    </p>
+                    {zipVerdict === "not-california" && (
+                      <p className="text-xs text-red-500 dark:text-red-400 font-medium flex items-center gap-1.5">
+                        <X className="w-3.5 h-3.5" />
+                        {zipCheck?.message || CALIFORNIA_ZIP_ERROR_MESSAGE}
+                      </p>
+                    )}
+                    {zipVerdict === "format-error" && (
+                      <p className="text-xs text-red-500 font-medium">
+                        Enter a valid 5-digit ZIP code.
+                      </p>
+                    )}
+                    {zipVerdict === "checking" && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        Checking your ZIP code…
+                      </p>
+                    )}
+                    {zipVerdict === "empty" && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Enter your 5-digit California ZIP code. We only operate in California — registrations with ZIP codes outside California (90001–96199) are rejected.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

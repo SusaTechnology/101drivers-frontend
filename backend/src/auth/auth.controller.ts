@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   Req,
   Res,
@@ -67,6 +68,28 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response
   ): Promise<any> {
     return this.authService.signupDriver(body, request, response);
+  }
+
+  /**
+   * Public field-level ZIP service-area check for the driver signup form.
+   *
+   * GET /api/auth/public/validate-zip/90012 (no auth — mirrors the
+   * referral public resolve endpoint pattern).
+   *
+   * Returns 200 always with a structured verdict the form renders live:
+   *   { valid: true,  zip, state: "CA", reason: null,
+   *     message: "In California — we serve this area." }
+   *   { valid: false, zip, state: null, reason: "OUT_OF_STATE"|"INVALID_FORMAT",
+   *     message: "Not in California — ..." }
+   *
+   * Same rule as the signupDriver hard guard (single source of truth in
+   * AuthService.evaluateCaliforniaHomeArea) — the form can never show
+   * green for a ZIP the backend would reject.
+   */
+  @Get("public/validate-zip/:zip")
+  @HttpCode(HttpStatus.OK)
+  async validateSignupZip(@Param("zip") zip: string) {
+    return this.authService.validateHomeAreaZip(zip);
   }
 
   @Post("signup/customer/private")
