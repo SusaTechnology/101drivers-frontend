@@ -27,7 +27,6 @@ import {
   Copy,
   Gift,
   Users,
-  Zap,
   Banknote,
   PartyPopper,
   CheckCircle2,
@@ -290,6 +289,17 @@ export default function DriverWalletPage() {
         payouts: [],
       }
 
+  // ── Payout cadence config (from my-earnings PAYOUT_SETTINGS) ──
+  // The weekly sweep is THE payout rail — the wallet tells the driver
+  // when money moves instead of offering manual cash-out (which is
+  // setting-gated; backend rejects it when driverCashoutEnabled=false).
+  const payoutConfig = earningsData?.payoutConfig ?? {
+    driverCashoutEnabled: false,
+    autoTransferOnCompletion: false,
+    minimumWeeklyPayoutDollars: 0.5,
+    weeklyPayoutSummary: 'Mondays at 6:00 AM (America/Los_Angeles)',
+  }
+
   // ── Stripe Connect onboarding ──────────────────────────────
   // NOTE: the legacy in-app bank form (routing/account numbers stored in our
   // DB + Wise CSV export) has been RETIRED. Drivers connect their bank
@@ -333,20 +343,6 @@ export default function DriverWalletPage() {
     },
   })
 
-  const instantPayoutMutation = useDataMutation<any, void>({
-    apiEndPoint: `${API_URL}/api/driverPayouts/request-instant-payout`,
-    method: 'POST',
-    onSuccess: (data) => {
-      toast.success('Instant payout sent!', {
-        description: data?.message || 'Your funds are on the way.',
-      })
-      refetchEarnings()
-    },
-    onError: (error: any) => {
-      toast.error('Instant payout failed', { description: error?.message })
-    },
-  })
-
   // ── Theme handling ─────────────────────────────────────────
   useEffect(() => {
     setMounted(true)
@@ -358,7 +354,7 @@ export default function DriverWalletPage() {
     if (search?.stripe === 'complete') {
       refetchConnectStatus()
       toast.success('Stripe account linked!', {
-        description: 'Your payout setup is complete. Earnings will transfer automatically after deliveries.',
+        description: 'Your payout setup is complete. Your balance will transfer automatically every week.',
       })
     }
   }, [search])
@@ -382,21 +378,6 @@ export default function DriverWalletPage() {
       return
     }
     freeWithdrawalMutation.mutate()
-  }
-
-  const handleInstantPayout = () => {
-    if (wallet.availableBalance < 5) {
-      toast.error('Insufficient balance', {
-        description: `You need at least $5.00 for an instant payout. Current balance: $${wallet.availableBalance.toFixed(2)}`,
-      })
-      return
-    }
-    const fee = 1.5
-    const net = wallet.availableBalance - fee
-    toast.info(`Instant payout: $${wallet.availableBalance.toFixed(2)} - $${fee.toFixed(2)} fee = $${net.toFixed(2)} to your bank`, {
-      duration: 4000,
-    })
-    instantPayoutMutation.mutate()
   }
 
   // ── Referral dialog handler ────────────────────────────────
@@ -1027,7 +1008,7 @@ export default function DriverWalletPage() {
                   Available balance
                 </h1>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                  Earnings from completed deliveries. Payout timing depends on Admin payment policy.
+                  Earnings from completed deliveries. Your balance is transferred automatically every week — {payoutConfig.weeklyPayoutSummary}.
                 </p>
               </div>
 
@@ -1036,7 +1017,7 @@ export default function DriverWalletPage() {
                   ${wallet.availableBalance.toFixed(2)}
                 </p>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                  Ready for payout
+                  Transfers weekly
                 </p>
               </div>
             </div>
@@ -1067,41 +1048,38 @@ export default function DriverWalletPage() {
               </div>
             </div>
 
-            <div className="relative z-10 mt-6 flex flex-col sm:flex-row gap-3">
-              <Button
-                onClick={handleFreeWithdrawal}
-                disabled={wallet.availableBalance < 50 || freeWithdrawalMutation.isPending}
-                className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {freeWithdrawalMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Banknote className="w-4 h-4 mr-2" />
-                )}
-                Withdraw Free
-                <span className="ml-2 text-[10px] font-medium opacity-75">1-2 business days</span>
-              </Button>
+            {payoutConfig.driverCashoutEnabled ? (
+              <>
+                <div className="relative z-10 mt-6 flex flex-col sm:flex-row gap-3">
+                  <Button
+                    onClick={handleFreeWithdrawal}
+                    disabled={wallet.availableBalance < 50 || freeWithdrawalMutation.isPending}
+                    className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {freeWithdrawalMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Banknote className="w-4 h-4 mr-2" />
+                    )}
+                    Withdraw Free
+                    <span className="ml-2 text-[10px] font-medium opacity-75">1-2 business days</span>
+                  </Button>
+                </div>
 
-              {/* <Button
-                onClick={handleInstantPayout}
-                disabled={wallet.availableBalance < 5 || instantPayoutMutation.isPending}
-                className="flex-1 h-12 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {instantPayoutMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Zap className="w-4 h-4 mr-2" />
+                {wallet.availableBalance > 0 && wallet.availableBalance < 50 && (
+                  <div className="relative z-10 mt-3 flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40">
+                    <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Free withdrawal requires a minimum balance of $50.00.
+                    </p>
+                  </div>
                 )}
-                Cash Out Instantly
-                <span className="ml-2 text-[10px] font-medium opacity-75">$1.50 fee</span>
-              </Button> */}
-            </div>
-
-            {wallet.availableBalance > 0 && wallet.availableBalance < 50 && (
-              <div className="relative z-10 mt-3 flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40">
-                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  Free withdrawal requires a minimum balance of $50.00. You can use <span className="font-bold">Cash Out Instantly</span> for any amount over $5.00.
+              </>
+            ) : (
+              <div className="relative z-10 mt-6 flex items-start gap-2 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40">
+                <Schedule className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                  <span className="font-bold">Weekly automatic payouts.</span> Your full balance is transferred to your connected account every week — {payoutConfig.weeklyPayoutSummary}. No action needed.
                 </p>
               </div>
             )}
@@ -1136,9 +1114,9 @@ export default function DriverWalletPage() {
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <CardTitle className="text-lg font-black">Fast payouts</CardTitle>
+                <CardTitle className="text-lg font-black">Weekly payouts</CardTitle>
                 <CardDescription className="text-sm mt-1">
-                  Connect your Stripe account for instant payouts after each delivery.
+                  Connect your Stripe account to receive your automatic weekly payouts.
                 </CardDescription>
               </div>
               {connectStatus?.setupComplete ? (
@@ -1163,7 +1141,7 @@ export default function DriverWalletPage() {
                     <p className="font-bold text-emerald-700 dark:text-emerald-300">Payouts are active</p>
                   </div>
                   <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                    Your earnings are automatically transferred to your connected account after each delivery.
+                    Your balance is automatically transferred to your connected account every week — {payoutConfig.weeklyPayoutSummary}.
                   </p>
                 </div>
                 {/* ── Update / change bank account ──

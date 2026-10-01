@@ -595,3 +595,61 @@ export class UpdateWhatsappSupportSettingsBody {
   @MaxLength(500)
   supportUrl!: string;
 }
+
+// ============================================================
+// PAYOUT SETTINGS (admin-configurable driver payout cadence)
+// ============================================================
+// Weekly sweep is THE payout rail — drivers see their eligible balance
+// grow in the wallet and the cron sweeps it to Stripe Connect. Defaults
+// (and the full design contract) live in payout-settings.ts:
+//   weeklyCron="0 6 * * 1" (Monday 06:00), weeklyTimezone="America/Los_Angeles",
+//   minimumWeeklyPayoutDollars=0.5 (Stripe transfer minimum),
+//   autoTransferOnCompletion=false (pay-and-forget rail off),
+//   driverCashoutEnabled=false (manual cash-out off).
+// NOTE: weeklyCron/weeklyTimezone take effect after the next API restart;
+// the other fields apply immediately.
+export class PayoutSettingsResponseDto {
+  @ApiProperty()
+  weeklyCron!: string;
+
+  @ApiProperty()
+  weeklyTimezone!: string;
+
+  @ApiProperty()
+  minimumWeeklyPayoutDollars!: number;
+
+  @ApiProperty()
+  autoTransferOnCompletion!: boolean;
+
+  @ApiProperty()
+  driverCashoutEnabled!: boolean;
+}
+
+export class UpdatePayoutSettingsBody {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  weeklyCron?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  weeklyTimezone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0.5)
+  @Max(100000)
+  minimumWeeklyPayoutDollars?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  autoTransferOnCompletion?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  driverCashoutEnabled?: boolean;
+}

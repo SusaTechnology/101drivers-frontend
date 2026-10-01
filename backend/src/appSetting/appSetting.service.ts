@@ -31,6 +31,11 @@ import {
 // EXACT same values — service fallback and seeded row can never drift.
 import { defaultReferralProgramSettings } from "./referral-program-defaults";
 export { defaultReferralProgramSettings };
+import {
+  PayoutSettings,
+  PAYOUT_SETTINGS_KEY,
+  normalizePayoutSettings,
+} from "./payout-settings";
 
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
 const DELIVERY_SETTINGS_KEY = "DELIVERY_SETTINGS";
@@ -324,6 +329,37 @@ export class AppSettingService extends AppSettingServiceBase {
     await this.prisma.appSetting.upsert({
       where: { key: DELIVERY_SETTINGS_KEY },
       create: { key: DELIVERY_SETTINGS_KEY, value: next as any },
+      update: { value: next as any },
+    });
+
+    return next;
+  }
+
+  // ============================================================
+  // PAYOUT SETTINGS (admin-configurable driver payout cadence)
+  // ============================================================
+  // Weekly sweep is THE payout rail (see payout-settings.ts for the
+  // design contract). Values are normalized in payout-settings.ts so the
+  // service, the payout engine, and the scheduler can never disagree.
+  // NOTE: weeklyCron/weeklyTimezone changes require an API restart to
+  // re-register the cron job; the other flags apply immediately.
+  async getPayoutSettings(): Promise<PayoutSettings> {
+    const row = await this.prisma.appSetting.findUnique({
+      where: { key: PAYOUT_SETTINGS_KEY },
+      select: { value: true },
+    });
+    return normalizePayoutSettings(row?.value);
+  }
+
+  async updatePayoutSettings(
+    input: Partial<PayoutSettings>,
+  ): Promise<PayoutSettings> {
+    const current = await this.getPayoutSettings();
+    const next = normalizePayoutSettings({ ...current, ...input });
+
+    await this.prisma.appSetting.upsert({
+      where: { key: PAYOUT_SETTINGS_KEY },
+      create: { key: PAYOUT_SETTINGS_KEY, value: next as any },
       update: { value: next as any },
     });
 

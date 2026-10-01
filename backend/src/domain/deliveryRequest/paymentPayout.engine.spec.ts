@@ -252,12 +252,12 @@ describe("PaymentPayoutEngine.handleCompletionTx — lock-in branch (Issue 1 + 5
     // The legacy upsert path must stay dead.
     expect(tx.driverPayout.upsert).not.toHaveBeenCalled();
 
-    // ─ Note on Issue 6 (NOT tested here) ─────────────────────────────────
-    // `initiateDriverTransfer` is invoked fire-and-forgotten from this path
-    // when payoutStatus === ELIGIBLE and the driver has a Connect account.
-    // It uses `this.prisma.driverPayout.findUnique` (NOT the tx mock) so it
-    // would need a fuller Prisma mock to assert end-to-end. The race-condition
-    // fix for Issue 6 is a separate change — see audit report.
+    // ─ Note on Issue 6 / the auto-transfer gate (Scenarios G + H) ────────
+    // `initiateDriverTransfer` is invoked fire-and-forgotten from this path,
+    // but the "pay and forget" rail is SETTING-GATED: PAYOUT_SETTINGS
+    // .autoTransferOnCompletion defaults to FALSE (weekly sweep is THE
+    // rail). Scenario G proves the gate opens when the flag is enabled;
+    // Scenario H proves the default keeps money in the weekly sweep.
   });
 
   it("Scenario C: PI status='succeeded' + latest_charge={id:'ch_xxx'} (object form) → MUST extract chargeId from object", async () => {
@@ -395,5 +395,118 @@ describe("PaymentPayoutEngine.handleCompletionTx — lock-in branch (Issue 1 + 5
     expect(tx.driverPayout.update).not.toHaveBeenCalled();
     expect(tx.driverPayout.create).not.toHaveBeenCalled();
     expect(stripeService.createTransfer).not.toHaveBeenCalled();
+  });
+
+  it("Scenario G: PAYOUT_SETTINGS.autoTransferOnCompletion=true → pay-and-forget rail fires the completion transfer", async () => {
+    // The weekly sweep is the default rail, but the admin can re-enable
+    // the per-delivery auto-transfer via PAYOUT_SETTINGS. This proves the
+    // gate actually opens (and the end-to-end transfer path still works).
+    tx = makeMockTx();
+    tx.deliveryRequest.findUnique.mockResolvedValue(baseDelivery);
+    stripeService = makeStripeService({
+      piStatus: "succeeded",
+      chargeId: "ch_remainder_001",
+    });
+
+    // initiateDriverTransfer runs OUTSIDE the completion tx (fire-and-
+    // forget) → it uses the service-level prisma client.
+    const capturedTx = {
+      driverPayout: { update: jest.fn() },
+      driverPayoutAdjustment: { updateMany: jest.fn(), create: jest.fn() },
+    };
+    prismaService = {
+      $transaction: jest.fn().mockImplementation((fn: any) => fn(capturedTx)),
+      appSetting: {
+        findUnique: jest.fn().mockResolvedValue({
+          key: "PAYOUT_SETTINGS",
+          value: { autoTransferOnCompletion: true },
+        }),
+      },
+      driverPayout: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "payout_completion_001",
+          type: "TRIP_COMPLETION",
+          providerTransferId: null,
+        }),
+      },
+      driverPayoutAdjustment: { findMany: jest.fn().mockResolvedValue([]) },
+      disputeCase: { findUnique: jest.fn().mockResolvedValue(null) },
+      driver: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ stripeConnectAccountId: "acct_complete_001" }),
+      },
+    } as any;
+
+    engine = new PaymentPayoutEngine(
+      prismaService as any,
+      stripeService,
+      undefined,
+    );
+    // Give the transfer a real return shape so the post-transfer DB update
+    // (providerTransferId) completes its happy path.
+    (stripeService.createTransfer as jest.Mock).mockResolvedValue({
+      id: "tr_test_001",
+    });
+
+    await engine.handleCompletionTx(tx as any, {
+      deliveryId: "del_test_001",
+    });
+
+    // Flush the fire-and-forget transfer promise.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(stripeService.createTransfer).toHaveBeenCalledTimes(1);
+    expect(stripeService.createTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 150, // completion net: $250 × 60%
+        destinationAccountId: "acct_complete_001",
+        transferGroup: "del_test_001",
+      }),
+    );
+    // The payout was marked PAID with the transfer id recorded atomically.
+    expect(capturedTx.driverPayout.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "payout_completion_001" },
+        data: expect.objectContaining({
+          status: "PAID",
+          providerTransferId: "tr_test_001",
+        }),
+      }),
+    );
+  });
+
+  it("Scenario H: no PAYOUT_SETTINGS row → pay-and-forget rail stays OFF (payout settles ELIGIBLE for the weekly sweep)", async () => {
+    // Weekly-only is the DEFAULT: even on a fully-captured completion with
+    // a connected driver, no per-delivery transfer fires unless an admin
+    // explicitly enables autoTransferOnCompletion.
+    tx = makeMockTx();
+    tx.deliveryRequest.findUnique.mockResolvedValue(baseDelivery);
+    stripeService = makeStripeService({
+      piStatus: "succeeded",
+      chargeId: "ch_remainder_001",
+    });
+    prismaService = {
+      $transaction: jest.fn(),
+      appSetting: { findUnique: jest.fn().mockResolvedValue(null) },
+    } as any;
+
+    engine = new PaymentPayoutEngine(
+      prismaService as any,
+      stripeService,
+      undefined,
+    );
+
+    await engine.handleCompletionTx(tx as any, {
+      deliveryId: "del_test_001",
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(stripeService.createTransfer).not.toHaveBeenCalled();
+    // The payout itself was still settled → ELIGIBLE, waiting for the sweep.
+    expect(tx.driverPayout.create).toHaveBeenCalledTimes(1);
+    expect(tx.driverPayout.create.mock.calls[0][0].data.status).toBe(
+      EnumDriverPayoutStatus.ELIGIBLE,
+    );
   });
 });

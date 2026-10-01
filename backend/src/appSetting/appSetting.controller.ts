@@ -26,6 +26,8 @@ import {
   UpdateReferralProgramSettingsBody,
   WhatsappSupportSettingsResponseDto,
   UpdateWhatsappSupportSettingsBody,
+  PayoutSettingsResponseDto,
+  UpdatePayoutSettingsBody,
 } from "./dto/appSetting.dto";
 
 @swagger.ApiTags("appSettings")
@@ -85,6 +87,37 @@ export class AppSettingController extends AppSettingControllerBase {
     @common.Body() body: UpdateDeliverySettingsBody
   ): Promise<DeliverySettingsResponseDto> {
     return this.service.updateDeliverySettings(body);
+  }
+
+  // ============================================================
+  // PAYOUT SETTINGS (admin-only)
+  // ============================================================
+  // Driver payout cadence: weekly sweep schedule + minimum, the
+  // pay-and-forget completion transfer flag, and the manual cash-out
+  // flag. See payout-settings.ts for the design contract. Invalid or
+  // hand-edited values fall back to defaults on read (normalize).
+  @common.Get("payout")
+  @swagger.ApiOkResponse({ type: PayoutSettingsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "read",
+    possession: "any",
+  })
+  async getPayoutSettings(): Promise<PayoutSettingsResponseDto> {
+    return this.service.getPayoutSettings();
+  }
+
+  @common.Patch("payout")
+  @swagger.ApiOkResponse({ type: PayoutSettingsResponseDto })
+  @nestAccessControl.UseRoles({
+    resource: "AppSetting",
+    action: "update",
+    possession: "any",
+  })
+  async updatePayoutSettings(
+    @common.Body() body: UpdatePayoutSettingsBody
+  ): Promise<PayoutSettingsResponseDto> {
+    return this.service.updatePayoutSettings(body);
   }
 
   // ============================================================

@@ -6,6 +6,13 @@ import { DriverPayoutControllerBase } from "./base/driverPayout.controller.base"
 import { PrismaService } from "../prisma/prisma.service";
 import { PaymentPayoutEngine } from "../domain/deliveryRequest/paymentPayout.engine";
 import { Inject, Optional } from "@nestjs/common";
+import {
+  PayoutSettings,
+  PAYOUT_SETTINGS_KEY,
+  defaultPayoutSettings,
+  describeWeeklyCron,
+  normalizePayoutSettings,
+} from "../appSetting/payout-settings";
 
 @swagger.ApiTags("driverPayouts")
 @common.Controller("driverPayouts")
@@ -36,6 +43,23 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     });
     if (!driver) throw new common.NotFoundException('Driver profile not found');
     return driver.id;
+  }
+
+  /**
+   * Live PAYOUT_SETTINGS for the driver wallet (cadence label + whether
+   * manual cash-out is offered). Falls back to defaults on any failure —
+   * the wallet must render even if the settings row is missing/broken.
+   */
+  private async getPayoutSettingsSafe(): Promise<PayoutSettings> {
+    try {
+      const row = await this.prisma.appSetting.findUnique({
+        where: { key: PAYOUT_SETTINGS_KEY },
+        select: { value: true },
+      });
+      return normalizePayoutSettings(row?.value);
+    } catch {
+      return { ...defaultPayoutSettings };
+    }
   }
 
   /**
@@ -113,8 +137,28 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
       if (created >= startOfYear) yearlyEarnings += net;
     }
 
+    // Include PENDING adjustments (late tips / clawbacks) in the available
+    // balance so the wallet shows the SAME number the withdrawal math uses
+    // (getDriverAvailableBalance) — otherwise the UI can display more (or
+    // less) than the driver can actually be paid.
+    let pendingAdjustmentSum = 0;
+    try {
+      const adjAgg = await this.prisma.driverPayoutAdjustment.aggregate({
+        where: { driverId, status: "PENDING" },
+        _sum: { amount: true },
+      });
+      pendingAdjustmentSum = Number(adjAgg._sum.amount || 0);
+    } catch {
+      // Non-fatal — adjustments are a refinement, not a requirement.
+      pendingAdjustmentSum = 0;
+    }
+    availableBalance += pendingAdjustmentSum;
+    availableBalance = Math.round(Math.max(0, availableBalance) * 100) / 100;
+
+    const payoutSettings = await this.getPayoutSettingsSafe();
+
     return {
-      availableBalance: Math.round(availableBalance * 100) / 100,
+      availableBalance,
       pendingAmount: Math.round(pendingAmount * 100) / 100,
       weeklyEarnings: Math.round(weeklyEarnings * 100) / 100,
       monthlyEarnings: Math.round(monthlyEarnings * 100) / 100,
@@ -123,6 +167,15 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
       totalTips: Math.round(totalTips * 100) / 100,
       payoutCount: payouts.length,
       payouts,
+      // Payout cadence for the wallet UI: the weekly sweep is THE rail,
+      // so the app tells the driver when money moves instead of offering
+      // manual cash-out (which is setting-gated).
+      payoutConfig: {
+        driverCashoutEnabled: payoutSettings.driverCashoutEnabled,
+        autoTransferOnCompletion: payoutSettings.autoTransferOnCompletion,
+        minimumWeeklyPayoutDollars: payoutSettings.minimumWeeklyPayoutDollars,
+        weeklyPayoutSummary: describeWeeklyCron(payoutSettings),
+      },
     };
   }
 

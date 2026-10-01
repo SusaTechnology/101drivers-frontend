@@ -23,6 +23,12 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { StripeService } from "../../providers/stripe/stripe.service";
 import { NotificationEventEngine } from "../../domain/notificationEvent/notificationEvent.engine";
+import {
+  PayoutSettings,
+  PAYOUT_SETTINGS_KEY,
+  defaultPayoutSettings,
+  normalizePayoutSettings,
+} from "../../appSetting/payout-settings";
 
 type Tx = Prisma.TransactionClient;
 
@@ -37,6 +43,29 @@ export class PaymentPayoutEngine {
     @Optional() @Inject(NotificationEventEngine)
     private readonly notificationEngine?: NotificationEventEngine,
   ) {}
+
+  /**
+   * Live payout settings (PAYOUT_SETTINGS AppSetting), falling back to
+   * the defaults on ANY failure — a broken/missing settings row must
+   * never stop the payout machinery. Design contract lives in
+   * appSetting/payout-settings.ts: the WEEKLY SWEEP is THE payout rail;
+   * the per-delivery "pay and forget" transfer and manual driver
+   * cash-out are OFF unless explicitly enabled in the setting.
+   */
+  private async getPayoutSettingsSafe(): Promise<PayoutSettings> {
+    try {
+      const row = await this.prisma.appSetting.findUnique({
+        where: { key: PAYOUT_SETTINGS_KEY },
+        select: { value: true },
+      });
+      return normalizePayoutSettings(row?.value);
+    } catch (err: any) {
+      this.logger.warn(
+        `PAYOUT_SETTINGS read failed — using defaults: ${err?.message}`,
+      );
+      return { ...defaultPayoutSettings };
+    }
+  }
 
   async getDeliveryFinancialSummary(deliveryId: string) {
     const delivery = await this.prisma.deliveryRequest.findUnique({
@@ -636,6 +665,21 @@ export class PaymentPayoutEngine {
     driverId: string,
     amount: number,
   ): Promise<void> {
+    // ── Payout-mode gate: weekly sweep is THE rail by default ──────
+    // The per-delivery "pay and forget" transfer is DISABLED unless
+    // PAYOUT_SETTINGS.autoTransferOnCompletion is explicitly true
+    // (admin-configurable; default off — payouts accumulate in the
+    // driver's ELIGIBLE balance and the weekly batch sweeps them, which
+    // means fewer transfers, easier reconciliation, and more time to
+    // resolve disputes/refunds before money leaves).
+    const payoutSettings = await this.getPayoutSettingsSafe();
+    if (!payoutSettings.autoTransferOnCompletion) {
+      this.logger.log(
+        `Auto-transfer skipped for delivery ${deliveryId} (autoTransferOnCompletion=false) — payout stays in the weekly sweep`,
+      );
+      return;
+    }
+
     const payout = await this.prisma.driverPayout.findUnique({
       where: { deliveryId },
     });
@@ -1211,6 +1255,38 @@ export class PaymentPayoutEngine {
   }
 
   /**
+   * Split out DriverPayouts whose delivery has an open dispute under
+   * legal hold — those payouts must NOT be swept or paid by ANY rail
+   * while the hold is active (the admin is investigating; the money
+   * stays in the driver's ELIGIBLE balance and the next sweep after the
+   * hold is released pays it). Referral payouts (deliveryId null) are
+   * never held. Returns the sweepable subset.
+   */
+  private async excludeLegalHeldPayouts<
+    T extends { id: string; deliveryId: string | null },
+  >(payouts: T[], context: string): Promise<T[]> {
+    const deliveryIds = payouts
+      .map((p) => p.deliveryId)
+      .filter((id): id is string => !!id);
+    if (deliveryIds.length === 0) return payouts;
+
+    const held = await this.prisma.disputeCase.findMany({
+      where: { deliveryId: { in: deliveryIds }, legalHold: true },
+      select: { deliveryId: true },
+    });
+    if (held.length === 0) return payouts;
+
+    const heldIds = new Set(held.map((h) => h.deliveryId));
+    const sweepable = payouts.filter(
+      (p) => !p.deliveryId || !heldIds.has(p.deliveryId),
+    );
+    this.logger.warn(
+      `${context}: legal hold excluded ${payouts.length - sweepable.length} payout(s) — dispute under investigation, payout stays ELIGIBLE`,
+    );
+    return sweepable;
+  }
+
+  /**
    * Apply all PENDING DriverPayoutAdjustments for a driver to a batch pot.
    * Called by the withdrawal rails (free / instant / weekly auto) BEFORE the
    * batch is created, so clawbacks and late tips flow through EVERY payout
@@ -1273,14 +1349,27 @@ export class PaymentPayoutEngine {
    * Collects all ELIGIBLE payouts for this driver into a PayoutBatch.
    * Minimum balance: $50. Arrives in 1-2 business days.
    *
+   * SETTING-GATED: manual cash-out is disabled by default — the weekly
+   * sweep is THE payout rail. Admin enables it via PAYOUT_SETTINGS
+   * (driverCashoutEnabled).
+   *
    * Pre-checks Stripe Connect BEFORE creating the batch — if the
    * driver hasn't set up their bank account, tells them to do so
    * first instead of creating a stuck PENDING batch.
+   *
+   * Legal-held deliveries are excluded (payout stays ELIGIBLE).
    *
    * If the Stripe transfer fails, reverts payouts from PAID back to
    * ELIGIBLE + marks batch FAILED — so the driver can retry later.
    */
   async requestFreeWithdrawal(driverId: string): Promise<any> {
+    const payoutSettings = await this.getPayoutSettingsSafe();
+    if (!payoutSettings.driverCashoutEnabled) {
+      throw new BadRequestException(
+        'Manual cash-out is currently disabled. Your balance is transferred automatically every week — see the payout schedule on this page.',
+      );
+    }
+
     const availableBalance = await this.getDriverAvailableBalance(driverId);
 
     if (availableBalance < this.MIN_FREE_WITHDRAWAL) {
@@ -1331,10 +1420,13 @@ export class PaymentPayoutEngine {
       );
     }
 
-    const eligiblePayouts = await this.prisma.driverPayout.findMany({
-      where: { driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
-      select: { id: true, netAmount: true },
-    });
+    const eligiblePayouts = await this.excludeLegalHeldPayouts(
+      await this.prisma.driverPayout.findMany({
+        where: { driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
+        select: { id: true, deliveryId: true, netAmount: true },
+      }),
+      `Free withdrawal (driver ${driverId})`,
+    );
 
     if (eligiblePayouts.length === 0) {
       throw new BadRequestException('No eligible payouts to withdraw.');
@@ -1401,10 +1493,20 @@ export class PaymentPayoutEngine {
    * Collects all ELIGIBLE payouts, deducts $1.50 fee, pays immediately via Stripe.
    * Any amount >= $5. Arrives in minutes.
    *
+   * SETTING-GATED: same as the free rail — disabled by default, enabled
+   * via PAYOUT_SETTINGS (driverCashoutEnabled).
+   *
    * Pre-checks Stripe Connect BEFORE creating the batch — same
-   * rationale as requestFreeWithdrawal.
+   * rationale as requestFreeWithdrawal. Legal-held deliveries excluded.
    */
   async requestInstantPayout(driverId: string): Promise<any> {
+    const payoutSettings = await this.getPayoutSettingsSafe();
+    if (!payoutSettings.driverCashoutEnabled) {
+      throw new BadRequestException(
+        'Instant cash-out is currently disabled. Your balance is transferred automatically every week — see the payout schedule on this page.',
+      );
+    }
+
     const availableBalance = await this.getDriverAvailableBalance(driverId);
 
     if (availableBalance < this.MIN_INSTANT_PAYOUT) {
@@ -1448,10 +1550,13 @@ export class PaymentPayoutEngine {
       );
     }
 
-    const eligiblePayouts = await this.prisma.driverPayout.findMany({
-      where: { driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
-      select: { id: true, netAmount: true },
-    });
+    const eligiblePayouts = await this.excludeLegalHeldPayouts(
+      await this.prisma.driverPayout.findMany({
+        where: { driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
+        select: { id: true, deliveryId: true, netAmount: true },
+      }),
+      `Instant payout (driver ${driverId})`,
+    );
 
     if (eligiblePayouts.length === 0) {
       throw new BadRequestException('No eligible payouts to withdraw.');
@@ -1516,41 +1621,88 @@ export class PaymentPayoutEngine {
   }
 
   /**
-   * Process weekly auto-payouts. Call via cron every Sunday.
-   * Only processes drivers with $50+ available balance.
+   * Process weekly auto-payouts — THE payout rail (weekly sweep model).
+   * Registered by WeeklyPayoutScheduler from PAYOUT_SETTINGS
+   * (weeklyCron + weeklyTimezone; default Monday 06:00
+   * America/Los_Angeles). The admin can also trigger the same run
+   * manually via POST /driverPayouts/admin/process-weekly-payouts.
+   *
+   * Selection: every driver whose ELIGIBLE balance + PENDING adjustments
+   * (B4 fix — adjustments participate in the sweep decision) meets
+   * minimumWeeklyPayoutDollars (default $0.50 — Stripe's transfer
+   * minimum). Payouts on legal-held deliveries are EXCLUDED and stay
+   * ELIGIBLE until the hold is released. After FIFO adjustments, a pot
+   * below the minimum is skipped (no doomed $0 batches) — the balance
+   * simply waits for a future week.
    */
   async processWeeklyAutoPayouts(): Promise<{ processed: number; skipped: number }> {
-    const driversWithBalance = await this.prisma.driverPayout.groupBy({
+    const settings = await this.getPayoutSettingsSafe();
+
+    const eligibleSums = await this.prisma.driverPayout.groupBy({
       by: ['driverId'],
       where: { status: EnumDriverPayoutStatus.ELIGIBLE },
       _sum: { netAmount: true },
-      having: { netAmount: { _sum: { gte: this.MIN_FREE_WITHDRAWAL } } },
     });
+    // Adjustments count toward the sweep decision: a driver with $0
+    // eligible + $10 pending tips gets swept; a $30 eligible balance
+    // with a -$25 pending clawback nets to $5.
+    const adjustmentSums = await this.prisma.driverPayoutAdjustment.groupBy({
+      by: ['driverId'],
+      where: { status: 'PENDING' },
+      _sum: { amount: true },
+    });
+    const adjByDriver = new Map<string, number>(
+      adjustmentSums.map((a) => [a.driverId, Number(a._sum.amount || 0)]),
+    );
+
+    const candidates = eligibleSums
+      .map((s) => ({
+        driverId: s.driverId,
+        eligibleSum: Number(s._sum.netAmount || 0),
+        pendingAdjustments: adjByDriver.get(s.driverId) ?? 0,
+      }))
+      .filter(
+        (c) =>
+          c.eligibleSum + c.pendingAdjustments >=
+          settings.minimumWeeklyPayoutDollars,
+      );
 
     let processed = 0;
     let skipped = 0;
 
-    for (const driver of driversWithBalance) {
+    for (const candidate of candidates) {
       const existingPending = await this.prisma.payoutBatch.findFirst({
-        where: { driverId: driver.driverId, status: 'PENDING' },
+        where: { driverId: candidate.driverId, status: 'PENDING' },
       });
       if (existingPending) { skipped++; continue; }
 
       try {
-        const eligiblePayouts = await this.prisma.driverPayout.findMany({
-          where: { driverId: driver.driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
-          select: { id: true, netAmount: true },
-        });
+        const eligiblePayouts = await this.excludeLegalHeldPayouts(
+          await this.prisma.driverPayout.findMany({
+            where: { driverId: candidate.driverId, status: EnumDriverPayoutStatus.ELIGIBLE },
+            select: { id: true, deliveryId: true, netAmount: true },
+          }),
+          `Weekly sweep (driver ${candidate.driverId})`,
+        );
+        if (eligiblePayouts.length === 0) { skipped++; continue; }
 
         const payoutSum = eligiblePayouts.reduce((sum, p) => sum + p.netAmount, 0);
         // Apply pending adjustments (clawbacks + late tips) — weekly rail too.
-        const adj = await this.applyPendingAdjustmentsToPot(driver.driverId, payoutSum);
+        const adj = await this.applyPendingAdjustmentsToPot(candidate.driverId, payoutSum);
         const totalAmount = Math.max(0, adj.transferAmount);
+
+        if (totalAmount < settings.minimumWeeklyPayoutDollars) {
+          // Clawbacks consumed the pot (or dust below Stripe's minimum) —
+          // leave payouts ELIGIBLE and adjustments PENDING for a future
+          // week instead of creating a batch whose transfer would fail.
+          skipped++;
+          continue;
+        }
 
         const batch = await this.prisma.$transaction(async (tx) => {
           const newBatch = await tx.payoutBatch.create({
             data: {
-              driverId: driver.driverId, type: 'WEEKLY_AUTO', status: 'PENDING',
+              driverId: candidate.driverId, type: 'WEEKLY_AUTO', status: 'PENDING',
               totalAmount: Math.round(totalAmount * 100) / 100, feeAmount: 0,
               netPayoutAmount: Math.round(totalAmount * 100) / 100,
             },
@@ -1576,7 +1728,7 @@ export class PaymentPayoutEngine {
           for (const lo of adj.leftovers) {
             await tx.driverPayoutAdjustment.create({
               data: {
-                driverId: driver.driverId,
+                driverId: candidate.driverId,
                 amount: lo.amount,
                 reason: lo.reason,
                 status: 'PENDING',
@@ -1590,7 +1742,7 @@ export class PaymentPayoutEngine {
         await this.processBatchTransfer(batch);
         processed++;
       } catch (err: any) {
-        this.logger.error(`Weekly auto-payout failed for driver ${driver.driverId}: ${err.message}`);
+        this.logger.error(`Weekly auto-payout failed for driver ${candidate.driverId}: ${err.message}`);
         skipped++;
       }
     }
