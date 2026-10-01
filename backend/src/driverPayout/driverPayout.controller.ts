@@ -1,6 +1,7 @@
 import * as common from "@nestjs/common";
 import * as swagger from "@nestjs/swagger";
 import * as nestAccessControl from "nest-access-control";
+import { Response } from "express";
 import { DriverPayoutService } from "./driverPayout.service";
 import { DriverPayoutControllerBase } from "./base/driverPayout.controller.base";
 import { PrismaService } from "../prisma/prisma.service";
@@ -63,15 +64,73 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
   }
 
   /**
-   * RETIRED (payout-rails cleanup): the Wise BatchTransfer CSV export and
-   * the in-app bank account endpoints (GET/POST /my-bank-account) were
-   * removed. They belonged to the legacy manual payout rail that collected
-   * and stored drivers' routing/account numbers in OUR database — exactly
-   * what Stripe hosted onboarding eliminates. Drivers now connect their
-   * bank exclusively via Stripe Connect Express ("Set Up Payouts" in the
-   * wallet), and transfers go through the Transfers API. The historical
-   * DriverBankAccount table is left in place (harmless legacy data).
+   * RESTORED by owner decision (was retired in the legacy bank-rail
+   * cleanup): the Wise BatchTransfer CSV export is needed by admin and
+   * insurance workflows.
+   *
+   * Exports payouts (default status: ELIGIBLE) as a Wise bulk-payment CSV
+   * using the bank details stored in DriverBankAccount.
+   *
+   * NOTE: drivers who connected their bank via Stripe Connect Express do
+   * NOT have a DriverBankAccount row — their bank details live with Stripe
+   * only, so their rows export with "UNKNOWN" name and empty routing/
+   * account fields. Those drivers are paid by the weekly Stripe sweep;
+   * this CSV covers drivers whose bank details are stored in-app.
    */
+  @common.Get("admin/export-wise-csv")
+  @swagger.ApiOkResponse({ description: "Wise BatchTransfer CSV file" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "read",
+    possession: "any",
+  })
+  async exportWiseBatchCsv(
+    @common.Query("status") status?: string,
+    @common.Res() res?: Response,
+  ): Promise<void> {
+    const where: any = {};
+    if (status) {
+      where.status = status;
+    } else {
+      where.status = "ELIGIBLE";
+    }
+
+    const payouts = await this.service.driverPayouts({
+      where,
+      include: {
+        driver: {
+          include: {
+            bankAccount: true,
+            user: { select: { email: true } },
+          },
+        },
+        delivery: { select: { id: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `wise-batch-${dateStr}.csv`;
+
+    const header =
+      "Name,Amount,Currency,Routing Number,Account Number,Account Type,Payment Reference";
+    const rows = payouts.map((p: any) => {
+      const ba = p.driver?.bankAccount;
+      const name = ba?.accountHolderName || "UNKNOWN";
+      const amount = p.netAmount.toFixed(2);
+      const routing = ba?.routingNumber || "";
+      const account = ba?.accountNumber || "";
+      const type = ba?.accountType || "checking";
+      const ref = `Driver Pay ${dateStr} - ${p.deliveryId}`;
+      return `${name},${amount},USD,${routing},${account},${type},"${ref}"`;
+    });
+
+    const csv = [header, ...rows].join("\n");
+
+    res!.setHeader("Content-Type", "text/csv");
+    res!.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res!.send(csv);
+  }
 
   @common.Get("my-earnings")
   @nestAccessControl.UseRoles({
