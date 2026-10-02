@@ -53,7 +53,7 @@ const SOCIAL_LINKS: Array<{
  */
 export function SocialLinks({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex items-center gap-3 ${className}`}>
+    <div className={`flex items-center gap-2.5 ${className}`}>
       {SOCIAL_LINKS.map(({ label, href, Icon }) => (
         <a
           key={label}
@@ -62,9 +62,9 @@ export function SocialLinks({ className = "" }: { className?: string }) {
           rel="noopener noreferrer"
           aria-label={label}
           title={label}
-          className="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-lime-500 hover:border-lime-500 hover:text-slate-950 transition-colors"
+          className="w-7 h-7 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-lime-500 hover:border-lime-500 hover:text-slate-950 transition-colors"
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-3.5 w-3.5" />
         </a>
       ))}
     </div>

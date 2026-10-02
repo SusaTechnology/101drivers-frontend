@@ -16,13 +16,13 @@ import { WhatsAppIcon } from "./WhatsAppSupportButton";
  */
 export function PublicFooter() {
   return (
-    <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-8 pb-6">
+    <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-6 pb-4">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           {/* Brand blurb */}
           <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl overflow-hidden bg-black border border-slate-200">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-black border border-slate-200">
                 <img
                   src="/assets/101drivers-logo.jpg"
                   alt="101 Drivers logo"
@@ -33,7 +33,7 @@ export function PublicFooter() {
                 101 Drivers
               </span>
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+            <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-snug">
               101 Drivers is a platform that connects drivers with businesses
               and individuals who need drivers.
             </p>
@@ -42,10 +42,10 @@ export function PublicFooter() {
           {/* Customers — one section per user type so logins, signups and
               help never mix. */}
           <div>
-            <h5 className="font-extrabold mb-3 uppercase text-[10px] tracking-widest text-slate-400">
+            <h5 className="font-extrabold mb-1.5 uppercase text-[10px] tracking-widest text-slate-400">
               Customers
             </h5>
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-1 text-[13px] leading-[16px]">
               <li>
                 {/* Auth hub: sign-in for both customer types + the
                     business/personal sign-up choice live on this page. */}
@@ -69,10 +69,10 @@ export function PublicFooter() {
 
           {/* Drivers */}
           <div>
-            <h5 className="font-extrabold mb-3 uppercase text-[10px] tracking-widest text-slate-400">
+            <h5 className="font-extrabold mb-1.5 uppercase text-[10px] tracking-widest text-slate-400">
               Drivers
             </h5>
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-1 text-[13px] leading-[16px]">
               <li>
                 {/* Auth hub: driver sign-in + "Become a Driver" onboarding
                     live on this page. */}
@@ -96,10 +96,10 @@ export function PublicFooter() {
 
           {/* Company */}
           <div>
-            <h5 className="font-extrabold mb-3 uppercase text-[10px] tracking-widest text-slate-400">
+            <h5 className="font-extrabold mb-1.5 uppercase text-[10px] tracking-widest text-slate-400">
               Company
             </h5>
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-1 text-[13px] leading-[16px]">
               <li>
                 <Link
                   to="/about"
@@ -153,7 +153,7 @@ export function PublicFooter() {
                   href="https://wa.me/message/YQXTDFV6STKUP1"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-[#25D366] hover:opacity-80 transition-opacity"
+                  className="mt-1.5 flex items-center gap-2 text-[13px] leading-[16px] font-semibold text-emerald-700 dark:text-[#25D366] hover:opacity-80 transition-opacity"
                 >
                   <WhatsAppIcon className="h-4 w-4" />
                   WhatsApp Us
@@ -164,11 +164,11 @@ export function PublicFooter() {
         </div>
 
         {/* Social — Instagram / X / YouTube / WhatsApp */}
-        <SocialLinks className="mb-4" />
+        <SocialLinks className="mb-3" />
 
         {/* Legal — pipe-separated, one line */}
-        <div className="mb-4">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="mb-3">
+          <p className="text-[13px] text-slate-500 dark:text-slate-400">
             <Link
               to="/privacy"
               className="hover:text-lime-500 transition-colors"
@@ -183,7 +183,7 @@ export function PublicFooter() {
         </div>
 
         {/* Bottom line */}
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2">
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2">
           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.25em]">
             Strictly California-only operations
           </p>
