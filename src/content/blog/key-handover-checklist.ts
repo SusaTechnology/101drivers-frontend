@@ -10,8 +10,17 @@ export const keyHandoverChecklist: BlogPost = {
   image: "/assets/angle-3-passenger-side.jpeg",
   imageAlt: "Vehicle interior check — passenger-side inspection angle",
   body: [
-    "First: remove personal belongings from the cabin and trunk. Drivers photograph the interior state at pickup, but loose items cannot be insured.",
-    "Second: have the registration and insurance documents accessible. Third: note your fuel and odometer readings — the driver records them too, and matching records make any later dispute trivial.",
-    "Fourth: ensure there is a working key or fob for the car — rekeying delays are the most common cause of same-day cancellations. Fifth: if someone else is at the pickup location, share the delivery PIN with them in advance so the driver can verify authorization.",
+    {
+      type: "p",
+      text: "First: remove personal belongings from the cabin and trunk. Drivers photograph the interior state at pickup, but loose items cannot be insured.",
+    },
+    {
+      type: "p",
+      text: "Second: have the registration and insurance documents accessible. Third: note your fuel and odometer readings — the driver records them too, and matching records make any later dispute trivial.",
+    },
+    {
+      type: "p",
+      text: "Fourth: ensure there is a working key or fob for the car — rekeying delays are the most common cause of same-day cancellations. Fifth: if someone else is at the pickup location, share the delivery PIN with them in advance so the driver can verify authorization.",
+    },
   ],
 };
