@@ -3,7 +3,7 @@ import { ArrowLeft, Briefcase, MapPin } from "lucide-react";
 
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
-import { SiteFooter } from "../shared/SiteFooter";
+import { PublicFooter } from "../shared/PublicFooter";
 import { ContentNotFound } from "../shared/ContentNotFound";
 import { getJobPosting } from "@/content/careers";
 
@@ -29,7 +29,7 @@ export default function CareerDetailPage({ slug }: { slug: string }) {
         />
         <NavBar />
         <ContentNotFound label="job posting" backTo="/careers" backLabel="Back to careers" />
-        <SiteFooter />
+        <PublicFooter />
       </div>
     );
   }
@@ -141,7 +141,7 @@ export default function CareerDetailPage({ slug }: { slug: string }) {
         </article>
       </main>
 
-      <SiteFooter />
+      <PublicFooter />
     </div>
   );
 }

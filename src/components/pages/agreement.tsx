@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from '@tanstack/react-router'
+import { PublicFooter } from '../shared/PublicFooter'
 import { Card, CardContent, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -120,28 +121,8 @@ export default function IndependentDriverAgreement() {
     </header>
   )
 
-  // Footer component
-  const Footer = () => (
-    <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-10">
-      <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl overflow-hidden bg-black border border-slate-200">
-              <img
-                src="/assets/101drivers-logo.jpg"
-                alt="101 Drivers logo"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
-              California-only operations &bull; Email-first notifications
-            </p>
-          </div>
-          <p className="text-xs text-slate-500 font-medium">&copy; 2026 101 Drivers Inc. All rights reserved.</p>
-        </div>
-      </div>
-    </footer>
-  )
+  // Footer — shared public footer (single source of truth)
+  const Footer = () => <PublicFooter />
 
   // Section Header Component
   const SectionHeader = ({ icon: Icon, title, id }: { icon: React.ElementType; title: string; id: string }) => (

@@ -4,20 +4,24 @@ import { SocialLinks } from "./SocialLinks";
 import { WhatsAppIcon } from "./WhatsAppSupportButton";
 
 /**
- * SiteFooter — the shared three-section public footer (Customers /
- * Drivers / Company) for the standalone public pages (news, careers,
- * blog). The landing page (homePage.tsx) and the About page keep their
- * own inline footers with the SAME structure — they predate this
- * component; consolidating them is a separate decision.
+ * PublicFooter — the one shared footer for every public page: landing,
+ * about, legal (privacy / terms / agreement), help, the auth hubs and
+ * the blog / news / careers section.
+ *
+ * Layout is the approved three-section structure so the two user types
+ * never mix — Customers | Drivers | Company — followed by the social
+ * icon row, the legal links, and the California / copyright bar.
+ * Vertical spacing is deliberately tight so the footer stays compact
+ * on short pages (auth, legal).
  */
-export function SiteFooter() {
+export function PublicFooter() {
   return (
-    <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-10 pb-8">
+    <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-8 pb-6">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
           {/* Brand blurb */}
-          <div className="md:col-span-1">
-            <div className="flex items-center gap-3 mb-4">
+          <div className="col-span-2 md:col-span-1">
+            <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl overflow-hidden bg-black border border-slate-200">
                 <img
                   src="/assets/101drivers-logo.jpg"
@@ -38,10 +42,10 @@ export function SiteFooter() {
           {/* Customers — one section per user type so logins, signups and
               help never mix. */}
           <div>
-            <h5 className="font-extrabold mb-4 uppercase text-[10px] tracking-widest text-slate-400">
+            <h5 className="font-extrabold mb-3 uppercase text-[10px] tracking-widest text-slate-400">
               Customers
             </h5>
-            <ul className="space-y-2.5 text-sm">
+            <ul className="space-y-2 text-sm">
               <li>
                 {/* Auth hub: sign-in for both customer types + the
                     business/personal sign-up choice live on this page. */}
@@ -65,10 +69,10 @@ export function SiteFooter() {
 
           {/* Drivers */}
           <div>
-            <h5 className="font-extrabold mb-4 uppercase text-[10px] tracking-widest text-slate-400">
+            <h5 className="font-extrabold mb-3 uppercase text-[10px] tracking-widest text-slate-400">
               Drivers
             </h5>
-            <ul className="space-y-2.5 text-sm">
+            <ul className="space-y-2 text-sm">
               <li>
                 {/* Auth hub: driver sign-in + "Become a Driver" onboarding
                     live on this page. */}
@@ -92,10 +96,10 @@ export function SiteFooter() {
 
           {/* Company */}
           <div>
-            <h5 className="font-extrabold mb-4 uppercase text-[10px] tracking-widest text-slate-400">
+            <h5 className="font-extrabold mb-3 uppercase text-[10px] tracking-widest text-slate-400">
               Company
             </h5>
-            <ul className="space-y-2.5 text-sm">
+            <ul className="space-y-2 text-sm">
               <li>
                 <Link
                   to="/about"
@@ -160,10 +164,10 @@ export function SiteFooter() {
         </div>
 
         {/* Social — Instagram / X / YouTube / WhatsApp */}
-        <SocialLinks className="mb-6" />
+        <SocialLinks className="mb-4" />
 
         {/* Legal — pipe-separated, one line */}
-        <div className="mb-6">
+        <div className="mb-4">
           <p className="text-sm text-slate-500 dark:text-slate-400">
             <Link
               to="/privacy"
@@ -179,7 +183,7 @@ export function SiteFooter() {
         </div>
 
         {/* Bottom line */}
-        <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2">
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2">
           <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.25em]">
             Strictly California-only operations
           </p>

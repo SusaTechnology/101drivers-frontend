@@ -14,7 +14,7 @@ import {
 
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
-import { SiteFooter } from "../shared/SiteFooter";
+import { PublicFooter } from "../shared/PublicFooter";
 import { ContentNotFound } from "../shared/ContentNotFound";
 import { getBlogPost } from "@/content/blog";
 import { formatContentDate } from "@/lib/format-date";
@@ -279,7 +279,7 @@ export default function BlogDetailPage({ slug }: { slug: string }) {
         />
         <NavBar />
         <ContentNotFound label="blog post" backTo="/blog" backLabel="Back to the blog" />
-        <SiteFooter />
+        <PublicFooter />
       </div>
     );
   }
@@ -438,7 +438,7 @@ export default function BlogDetailPage({ slug }: { slug: string }) {
         </article>
       </main>
 
-      <SiteFooter />
+      <PublicFooter />
     </div>
   );
 }
