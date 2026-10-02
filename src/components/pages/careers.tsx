@@ -8,6 +8,7 @@ import {
   ContentCard,
   ContentCardGrid,
 } from "../shared/ContentCard";
+import { ContentEmptyState } from "../shared/ContentEmptyState";
 import { OPEN_ROLES } from "@/content/careers";
 
 /**
@@ -123,6 +124,15 @@ function CareersPage() {
               />
             ))}
           </ContentCardGrid>
+          {OPEN_ROLES.length === 0 && (
+            <ContentEmptyState
+              icon={Briefcase}
+              title="No open roles right now"
+              description="We are not hiring for a listed role at the moment — but we are always glad to hear from good people. Reach out anytime."
+              actionTo="/help-customer"
+              actionLabel="Get in touch"
+            />
+          )}
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-6 leading-relaxed">
             101 Drivers Inc. is an equal opportunity employer. Independent
             contractor driving is not employment — drivers join through the

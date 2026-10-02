@@ -8,6 +8,7 @@ import {
   ContentCard,
   ContentCardGrid,
 } from "../shared/ContentCard";
+import { ContentEmptyState } from "../shared/ContentEmptyState";
 import { BLOG_POSTS } from "@/content/blog";
 import { formatContentDate } from "@/lib/format-date";
 
@@ -52,24 +53,35 @@ function BlogPage() {
           </p>
         </section>
 
-        {/* Post cards — generated from the src/content/blog registry */}
+        {/* Post cards — generated from the src/content/blog registry;
+            empty registry renders the shared empty state */}
         <section>
-          <ContentCardGrid>
-            {BLOG_POSTS.map((post) => (
-              <ContentCard
-                key={post.slug}
-                to="/blog/$slug"
-                params={{ slug: post.slug }}
-                title={post.title}
-                description={post.excerpt}
-                image={post.image}
-                imageAlt={post.imageAlt}
-                meta={[{ label: formatContentDate(post.date) }]}
-                fallbackIcon={BookOpen}
-                ctaLabel="Read article"
-              />
-            ))}
-          </ContentCardGrid>
+          {BLOG_POSTS.length === 0 ? (
+            <ContentEmptyState
+              icon={BookOpen}
+              title="No posts yet"
+              description="We haven't published anything here yet — new guides and delivery-day breakdowns are on the way. Check back soon."
+              actionTo="/"
+              actionLabel="Get an instant quote"
+            />
+          ) : (
+            <ContentCardGrid>
+              {BLOG_POSTS.map((post) => (
+                <ContentCard
+                  key={post.slug}
+                  to="/blog/$slug"
+                  params={{ slug: post.slug }}
+                  title={post.title}
+                  description={post.excerpt}
+                  image={post.image}
+                  imageAlt={post.imageAlt}
+                  meta={[{ label: formatContentDate(post.date) }]}
+                  fallbackIcon={BookOpen}
+                  ctaLabel="Read article"
+                />
+              ))}
+            </ContentCardGrid>
+          )}
         </section>
 
         {/* Cross-link */}

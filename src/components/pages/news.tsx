@@ -8,6 +8,7 @@ import {
   ContentCard,
   ContentCardGrid,
 } from "../shared/ContentCard";
+import { ContentEmptyState } from "../shared/ContentEmptyState";
 import { NEWS_POSTS } from "@/content/news";
 import { formatContentDate } from "@/lib/format-date";
 
@@ -52,25 +53,36 @@ function NewsPage() {
           </p>
         </section>
 
-        {/* Announcement cards — generated from the src/content/news registry */}
+        {/* Announcement cards — generated from the src/content/news
+            registry; empty registry renders the shared empty state */}
         <section>
-          <ContentCardGrid>
-            {NEWS_POSTS.map((post) => (
-              <ContentCard
-                key={post.slug}
-                to="/news/$slug"
-                params={{ slug: post.slug }}
-                title={post.title}
-                description={post.excerpt}
-                image={post.image}
-                imageAlt={post.imageAlt}
-                badge={post.tag}
-                meta={[{ label: formatContentDate(post.date) }]}
-                fallbackIcon={Newspaper}
-                ctaLabel="Read update"
-              />
-            ))}
-          </ContentCardGrid>
+          {NEWS_POSTS.length === 0 ? (
+            <ContentEmptyState
+              icon={Newspaper}
+              title="No announcements yet"
+              description="There is nothing new to share right now. Updates will appear here as they happen."
+              actionTo="/help-customer"
+              actionLabel="Contact us"
+            />
+          ) : (
+            <ContentCardGrid>
+              {NEWS_POSTS.map((post) => (
+                <ContentCard
+                  key={post.slug}
+                  to="/news/$slug"
+                  params={{ slug: post.slug }}
+                  title={post.title}
+                  description={post.excerpt}
+                  image={post.image}
+                  imageAlt={post.imageAlt}
+                  badge={post.tag}
+                  meta={[{ label: formatContentDate(post.date) }]}
+                  fallbackIcon={Newspaper}
+                  ctaLabel="Read update"
+                />
+              ))}
+            </ContentCardGrid>
+          )}
         </section>
 
         {/* Cross-link */}
