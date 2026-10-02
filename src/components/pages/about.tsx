@@ -329,93 +329,117 @@ function AboutPage() {
 
             <div>
               <h5 className="font-extrabold mb-5 uppercase text-[10px] tracking-widest text-slate-400">
-                Public
+                Customers
               </h5>
               <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
                 <li>
-                  <Link to="/" className="hover:text-primary transition-colors">
-                    Index
+                  {/* Auth hub: sign-in for both customer types + the
+                      business/personal sign-up choice live on this page. */}
+                  <Link
+                    to="/auth/dealer-signin"
+                    className="font-bold text-slate-900 dark:text-white hover:text-primary transition-colors"
+                  >
+                    Customer Login / Sign Up
                   </Link>
                 </li>
                 <li>
                   <Link
-                    to="/home"
+                    to="/help-customer"
                     className="hover:text-primary transition-colors"
                   >
-                    Home
+                    Customer Help
                   </Link>
                 </li>
+              </ul>
+            </div>
+
+            <div>
+              <h5 className="font-extrabold mb-5 uppercase text-[10px] tracking-widest text-slate-400">
+                Drivers
+              </h5>
+              <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
+                <li>
+                  {/* Auth hub: driver sign-in + "Become a Driver" onboarding
+                      live on this page. */}
+                  <Link
+                    to="/driver-signin"
+                    className="font-bold text-slate-900 dark:text-white hover:text-primary transition-colors"
+                  >
+                    Driver Sign Up / Login
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/help-driver"
+                    className="hover:text-primary transition-colors"
+                  >
+                    Driver Help
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h5 className="font-extrabold mb-5 uppercase text-[10px] tracking-widest text-slate-400">
+                Company
+              </h5>
+              <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
                 <li>
                   <Link
                     to="/about"
                     className="hover:text-primary transition-colors"
                   >
-                    About
+                    About Us
                   </Link>
                 </li>
-              </ul>
-            </div>
-
-            <div>
-              <h5 className="font-extrabold mb-5 uppercase text-[10px] tracking-widest text-slate-400">
-                Accounts
-              </h5>
-              <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
+                <li>
+                  {/* Placeholder — no News page exists yet. */}
+                  <a
+                    href="#"
+                    title="Coming soon"
+                    className="hover:text-primary transition-colors"
+                  >
+                    News
+                  </a>
+                </li>
+                <li>
+                  {/* Placeholder — no Careers page exists yet. */}
+                  <a
+                    href="#"
+                    title="Coming soon"
+                    className="hover:text-primary transition-colors"
+                  >
+                    Careers
+                  </a>
+                </li>
                 <li>
                   <Link
-                    to="/auth/dealer-signin"
+                    to="/help-customer"
                     className="hover:text-primary transition-colors"
                   >
-                    Dealer Sign In
+                    FAQ
                   </Link>
                 </li>
                 <li>
-                  <a
-                    href="/driver-signin"
+                  <Link
+                    to="/help-customer"
                     className="hover:text-primary transition-colors"
                   >
-                    Driver Sign In
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/driver-onboarding"
-                    className="hover:text-primary transition-colors"
-                  >
-                    Become a Driver
-                  </a>
+                    Contact Us
+                  </Link>
                 </li>
               </ul>
             </div>
+          </div>
 
-            <div>
-              <h5 className="font-extrabold mb-5 uppercase text-[10px] tracking-widest text-slate-400">
-                Governance
-              </h5>
-              <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400 font-semibold">
-                <li>
-                  <a
-                    href="/privacy"
-                    className="hover:text-primary transition-colors"
-                  >
-                    Privacy Policy
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/terms"
-                    className="hover:text-primary transition-colors"
-                  >
-                    Terms of Service
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-primary transition-colors">
-                    Carrier Policy
-                  </a>
-                </li>
-              </ul>
-            </div>
+          {/* Legal — pipe-separated, one line (moved out of the link
+              columns so the legal row matches the landing footer) */}
+          <div className="mb-6">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+              {" "}&bull;{" "}
+              <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
+            </p>
           </div>
 
           <div className="pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">

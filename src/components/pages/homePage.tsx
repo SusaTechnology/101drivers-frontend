@@ -671,45 +671,48 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Accounts — Business, Individual, Driver */}
+          {/* Customers — one section per user type so logins, signups and
+              help never mix: customers always look left of drivers. */}
           <div>
+            <h5 className="font-extrabold mb-4 uppercase text-[10px] tracking-widest text-slate-400">
+              Customers
+            </h5>
             <ul className="space-y-2.5 text-sm">
               <li>
+                {/* Auth hub: sign-in for both customer types + the
+                    business/personal sign-up choice live on this page. */}
                 <Link
                   to="/auth/dealer-signin"
                   className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
                 >
-                  Business
+                  Customer Login / Sign Up
                 </Link>
               </li>
-              <li>
-                <Link
-                  to="/auth/individual-signup"
-                  className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
-                >
-                  Individual
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/driver-signin"
-                  className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
-                >
-                  Driver
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Help */}
-          <div>
-            <ul className="space-y-2.5 text-sm">
               <li>
                 <Link
                   to="/help-customer"
                   className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
                   Customer Help
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Drivers */}
+          <div>
+            <h5 className="font-extrabold mb-4 uppercase text-[10px] tracking-widest text-slate-400">
+              Drivers
+            </h5>
+            <ul className="space-y-2.5 text-sm">
+              <li>
+                {/* Auth hub: driver sign-in + "Become a Driver" onboarding
+                    live on this page. */}
+                <Link
+                  to="/driver-signin"
+                  className="font-bold text-slate-900 dark:text-white hover:text-lime-500 transition-colors"
+                >
+                  Driver Sign Up / Login
                 </Link>
               </li>
               <li>
@@ -723,26 +726,68 @@ export default function LandingPage() {
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Company */}
           <div>
-            <Link
-              to="/help-customer"
-              className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
-            >
-              Contact Us
-            </Link>
-            <a
-              href="https://wa.me/message/YQXTDFV6STKUP1"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-[#25D366] hover:opacity-80 transition-opacity"
-            >
-              <WhatsAppIcon className="h-4 w-4" />
-              WhatsApp Us
-            </a>
-            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-              Urgent? Message us — we reply fast
-            </p>
+            <h5 className="font-extrabold mb-4 uppercase text-[10px] tracking-widest text-slate-400">
+              Company
+            </h5>
+            <ul className="space-y-2.5 text-sm">
+              <li>
+                <Link
+                  to="/about"
+                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+                >
+                  About Us
+                </Link>
+              </li>
+              <li>
+                {/* Placeholder — no News page exists yet. */}
+                <a
+                  href="#"
+                  title="Coming soon"
+                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+                >
+                  News
+                </a>
+              </li>
+              <li>
+                {/* Placeholder — no Careers page exists yet. */}
+                <a
+                  href="#"
+                  title="Coming soon"
+                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+                >
+                  Careers
+                </a>
+              </li>
+              <li>
+                <Link
+                  to="/help-customer"
+                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+                >
+                  FAQ
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/help-customer"
+                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+                >
+                  Contact Us
+                </Link>
+              </li>
+              <li>
+                <a
+                  href="https://wa.me/message/YQXTDFV6STKUP1"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-[#25D366] hover:opacity-80 transition-opacity"
+                >
+                  <WhatsAppIcon className="h-4 w-4" />
+                  WhatsApp Us
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
 
