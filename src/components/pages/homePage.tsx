@@ -68,6 +68,7 @@ import { usePickupZones } from "@/hooks/usePickupZones";
 import { isInPickupZone } from "@/lib/geo-utils";
 import { calculateHomeQuote, getAdvertisedRateSummary } from "@/lib/pricing/home-quote";
 import { WhatsAppIcon } from "@/components/shared/WhatsAppSupportButton";
+import { SocialLinks } from "@/components/shared/SocialLinks";
 import { usePublicDefaultPricing } from "@/hooks/pricing/usePublicDefaultPricing";
 import { SEOHead } from "../shared/SEOHead";
 
@@ -741,24 +742,28 @@ export default function LandingPage() {
                 </Link>
               </li>
               <li>
-                {/* Placeholder — no News page exists yet. */}
-                <a
-                  href="#"
-                  title="Coming soon"
+                <Link
+                  to="/news"
                   className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
                   News
-                </a>
+                </Link>
               </li>
               <li>
-                {/* Placeholder — no Careers page exists yet. */}
-                <a
-                  href="#"
-                  title="Coming soon"
+                <Link
+                  to="/careers"
                   className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
                 >
                   Careers
-                </a>
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/blog"
+                  className="font-semibold text-slate-600 dark:text-slate-400 hover:text-lime-500 transition-colors"
+                >
+                  Blog
+                </Link>
               </li>
               <li>
                 <Link
@@ -790,6 +795,9 @@ export default function LandingPage() {
             </ul>
           </div>
         </div>
+
+        {/* Social — Instagram / X / YouTube / WhatsApp */}
+        <SocialLinks className="mb-6" />
 
         {/* Legal — pipe-separated, one line */}
         <div className="mb-6">

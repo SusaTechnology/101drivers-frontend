@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
+import { SocialLinks } from "../shared/SocialLinks";
 
 function AboutPage() {
 
@@ -393,24 +394,28 @@ function AboutPage() {
                   </Link>
                 </li>
                 <li>
-                  {/* Placeholder — no News page exists yet. */}
-                  <a
-                    href="#"
-                    title="Coming soon"
+                  <Link
+                    to="/news"
                     className="hover:text-primary transition-colors"
                   >
                     News
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  {/* Placeholder — no Careers page exists yet. */}
-                  <a
-                    href="#"
-                    title="Coming soon"
+                  <Link
+                    to="/careers"
                     className="hover:text-primary transition-colors"
                   >
                     Careers
-                  </a>
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/blog"
+                    className="hover:text-primary transition-colors"
+                  >
+                    Blog
+                  </Link>
                 </li>
                 <li>
                   <Link
@@ -431,6 +436,9 @@ function AboutPage() {
               </ul>
             </div>
           </div>
+
+          {/* Social — Instagram / X / YouTube / WhatsApp */}
+          <SocialLinks className="mb-6" />
 
           {/* Legal — pipe-separated, one line (moved out of the link
               columns so the legal row matches the landing footer) */}

@@ -29,6 +29,24 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://101drivers.com/news</loc>
+    <lastmod>2026-10-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://101drivers.com/careers</loc>
+    <lastmod>2026-10-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://101drivers.com/blog</loc>
+    <lastmod>2026-10-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://101drivers.com/driver-onboarding</loc>
     <lastmod>2026-08-26</lastmod>
     <changefreq>monthly</changefreq>

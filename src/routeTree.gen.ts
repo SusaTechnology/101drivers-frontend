@@ -17,6 +17,7 @@ import { Route as SignupIndexRouteImport } from './routes/signup/index'
 import { Route as QuoteDetailsIndexRouteImport } from './routes/quote-details/index'
 import { Route as QuoteConfirmationIndexRouteImport } from './routes/quote-confirmation/index'
 import { Route as PrivacyIndexRouteImport } from './routes/privacy/index'
+import { Route as NewsIndexRouteImport } from './routes/news/index'
 import { Route as MapTestIndexRouteImport } from './routes/map-test/index'
 import { Route as LiveTrackIndexRouteImport } from './routes/live-track/index'
 import { Route as InsurancePortalIndexRouteImport } from './routes/insurance-portal/index'
@@ -57,6 +58,8 @@ import { Route as DealerDraftsIndexRouteImport } from './routes/dealer-drafts/in
 import { Route as DealerDeliveryDetailsIndexRouteImport } from './routes/dealer-delivery-details/index'
 import { Route as DealerDashboardIndexRouteImport } from './routes/dealer-dashboard/index'
 import { Route as DealerCreateDeliveryIndexRouteImport } from './routes/dealer-create-delivery/index'
+import { Route as CareersIndexRouteImport } from './routes/careers/index'
+import { Route as BlogIndexRouteImport } from './routes/blog/index'
 import { Route as AgreementIndexRouteImport } from './routes/agreement/index'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin-users/index'
 import { Route as AdminSupportListIndexRouteImport } from './routes/admin-support-list/index'
@@ -165,6 +168,11 @@ const QuoteConfirmationIndexRoute = QuoteConfirmationIndexRouteImport.update({
 const PrivacyIndexRoute = PrivacyIndexRouteImport.update({
   id: '/privacy/',
   path: '/privacy/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewsIndexRoute = NewsIndexRouteImport.update({
+  id: '/news/',
+  path: '/news/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MapTestIndexRoute = MapTestIndexRouteImport.update({
@@ -379,6 +387,16 @@ const DealerCreateDeliveryIndexRoute =
     path: '/dealer-create-delivery/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const CareersIndexRoute = CareersIndexRouteImport.update({
+  id: '/careers/',
+  path: '/careers/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogIndexRoute = BlogIndexRouteImport.update({
+  id: '/blog/',
+  path: '/blog/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgreementIndexRoute = AgreementIndexRouteImport.update({
   id: '/agreement/',
   path: '/agreement/',
@@ -810,6 +828,8 @@ export interface FileRoutesByFullPath {
   '/admin-support-list/': typeof AdminSupportListIndexRoute
   '/admin-users/': typeof AdminUsersIndexRoute
   '/agreement/': typeof AgreementIndexRoute
+  '/blog/': typeof BlogIndexRoute
+  '/careers/': typeof CareersIndexRoute
   '/dealer-create-delivery/': typeof DealerCreateDeliveryIndexRoute
   '/dealer-dashboard/': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details/': typeof DealerDeliveryDetailsIndexRoute
@@ -850,6 +870,7 @@ export interface FileRoutesByFullPath {
   '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
+  '/news/': typeof NewsIndexRoute
   '/privacy/': typeof PrivacyIndexRoute
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
   '/quote-details/': typeof QuoteDetailsIndexRoute
@@ -928,6 +949,8 @@ export interface FileRoutesByTo {
   '/admin-support-list': typeof AdminSupportListIndexRoute
   '/admin-users': typeof AdminUsersIndexRoute
   '/agreement': typeof AgreementIndexRoute
+  '/blog': typeof BlogIndexRoute
+  '/careers': typeof CareersIndexRoute
   '/dealer-create-delivery': typeof DealerCreateDeliveryIndexRoute
   '/dealer-dashboard': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details': typeof DealerDeliveryDetailsIndexRoute
@@ -968,6 +991,7 @@ export interface FileRoutesByTo {
   '/insurance-portal': typeof InsurancePortalIndexRoute
   '/live-track': typeof LiveTrackIndexRoute
   '/map-test': typeof MapTestIndexRoute
+  '/news': typeof NewsIndexRoute
   '/privacy': typeof PrivacyIndexRoute
   '/quote-confirmation': typeof QuoteConfirmationIndexRoute
   '/quote-details': typeof QuoteDetailsIndexRoute
@@ -1048,6 +1072,8 @@ export interface FileRoutesById {
   '/admin-support-list/': typeof AdminSupportListIndexRoute
   '/admin-users/': typeof AdminUsersIndexRoute
   '/agreement/': typeof AgreementIndexRoute
+  '/blog/': typeof BlogIndexRoute
+  '/careers/': typeof CareersIndexRoute
   '/dealer-create-delivery/': typeof DealerCreateDeliveryIndexRoute
   '/dealer-dashboard/': typeof DealerDashboardIndexRoute
   '/dealer-delivery-details/': typeof DealerDeliveryDetailsIndexRoute
@@ -1088,6 +1114,7 @@ export interface FileRoutesById {
   '/insurance-portal/': typeof InsurancePortalIndexRoute
   '/live-track/': typeof LiveTrackIndexRoute
   '/map-test/': typeof MapTestIndexRoute
+  '/news/': typeof NewsIndexRoute
   '/privacy/': typeof PrivacyIndexRoute
   '/quote-confirmation/': typeof QuoteConfirmationIndexRoute
   '/quote-details/': typeof QuoteDetailsIndexRoute
@@ -1169,6 +1196,8 @@ export interface FileRouteTypes {
     | '/admin-support-list/'
     | '/admin-users/'
     | '/agreement/'
+    | '/blog/'
+    | '/careers/'
     | '/dealer-create-delivery/'
     | '/dealer-dashboard/'
     | '/dealer-delivery-details/'
@@ -1209,6 +1238,7 @@ export interface FileRouteTypes {
     | '/insurance-portal/'
     | '/live-track/'
     | '/map-test/'
+    | '/news/'
     | '/privacy/'
     | '/quote-confirmation/'
     | '/quote-details/'
@@ -1287,6 +1317,8 @@ export interface FileRouteTypes {
     | '/admin-support-list'
     | '/admin-users'
     | '/agreement'
+    | '/blog'
+    | '/careers'
     | '/dealer-create-delivery'
     | '/dealer-dashboard'
     | '/dealer-delivery-details'
@@ -1327,6 +1359,7 @@ export interface FileRouteTypes {
     | '/insurance-portal'
     | '/live-track'
     | '/map-test'
+    | '/news'
     | '/privacy'
     | '/quote-confirmation'
     | '/quote-details'
@@ -1406,6 +1439,8 @@ export interface FileRouteTypes {
     | '/admin-support-list/'
     | '/admin-users/'
     | '/agreement/'
+    | '/blog/'
+    | '/careers/'
     | '/dealer-create-delivery/'
     | '/dealer-dashboard/'
     | '/dealer-delivery-details/'
@@ -1446,6 +1481,7 @@ export interface FileRouteTypes {
     | '/insurance-portal/'
     | '/live-track/'
     | '/map-test/'
+    | '/news/'
     | '/privacy/'
     | '/quote-confirmation/'
     | '/quote-details/'
@@ -1505,6 +1541,8 @@ export interface RootRouteChildren {
   AdminSupportListIndexRoute: typeof AdminSupportListIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
   AgreementIndexRoute: typeof AgreementIndexRoute
+  BlogIndexRoute: typeof BlogIndexRoute
+  CareersIndexRoute: typeof CareersIndexRoute
   DealerCreateDeliveryIndexRoute: typeof DealerCreateDeliveryIndexRoute
   DealerDashboardIndexRoute: typeof DealerDashboardIndexRoute
   DealerDeliveryDetailsIndexRoute: typeof DealerDeliveryDetailsIndexRoute
@@ -1544,6 +1582,7 @@ export interface RootRouteChildren {
   InsurancePortalIndexRoute: typeof InsurancePortalIndexRoute
   LiveTrackIndexRoute: typeof LiveTrackIndexRoute
   MapTestIndexRoute: typeof MapTestIndexRoute
+  NewsIndexRoute: typeof NewsIndexRoute
   PrivacyIndexRoute: typeof PrivacyIndexRoute
   QuoteConfirmationIndexRoute: typeof QuoteConfirmationIndexRoute
   QuoteDetailsIndexRoute: typeof QuoteDetailsIndexRoute
@@ -1612,6 +1651,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy/'
       preLoaderRoute: typeof PrivacyIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/news/': {
+      id: '/news/'
+      path: '/news'
+      fullPath: '/news/'
+      preLoaderRoute: typeof NewsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/map-test/': {
@@ -1892,6 +1938,20 @@ declare module '@tanstack/react-router' {
       path: '/dealer-create-delivery'
       fullPath: '/dealer-create-delivery/'
       preLoaderRoute: typeof DealerCreateDeliveryIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/careers/': {
+      id: '/careers/'
+      path: '/careers'
+      fullPath: '/careers/'
+      preLoaderRoute: typeof CareersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/': {
+      id: '/blog/'
+      path: '/blog'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof BlogIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agreement/': {
@@ -2480,6 +2540,8 @@ const rootRouteChildren: RootRouteChildren = {
   AdminSupportListIndexRoute: AdminSupportListIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
   AgreementIndexRoute: AgreementIndexRoute,
+  BlogIndexRoute: BlogIndexRoute,
+  CareersIndexRoute: CareersIndexRoute,
   DealerCreateDeliveryIndexRoute: DealerCreateDeliveryIndexRoute,
   DealerDashboardIndexRoute: DealerDashboardIndexRoute,
   DealerDeliveryDetailsIndexRoute: DealerDeliveryDetailsIndexRoute,
@@ -2519,6 +2581,7 @@ const rootRouteChildren: RootRouteChildren = {
   InsurancePortalIndexRoute: InsurancePortalIndexRoute,
   LiveTrackIndexRoute: LiveTrackIndexRoute,
   MapTestIndexRoute: MapTestIndexRoute,
+  NewsIndexRoute: NewsIndexRoute,
   PrivacyIndexRoute: PrivacyIndexRoute,
   QuoteConfirmationIndexRoute: QuoteConfirmationIndexRoute,
   QuoteDetailsIndexRoute: QuoteDetailsIndexRoute,
