@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -35,7 +36,7 @@ import { Navbar } from '../shared/layout/testNavbar';
 import { navItems } from '@/lib/items/navItems';
 import { Brand } from '@/lib/items/brand';
 import { useAdminActions } from '@/hooks/useAdminActions';
-import { usePayoutsReport, formatReportCurrency, downloadReport } from '@/hooks/useAdminReports';
+import { usePayoutsReport, usePayoutRuns, formatReportCurrency, formatReportDateTime, downloadReport } from '@/hooks/useAdminReports';
 import { useCustomerLookup } from '@/hooks/useAdminDashboard';
 import { useDriverLookup } from '@/hooks/useAdminDeliveries';
 import { DynamicReportTable } from '@/components/shared/reports/DynamicReportTable';
@@ -51,6 +52,8 @@ import {
   ArrowUpDown,
   Check,
   ChevronDown,
+  Eye,
+  CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -153,10 +156,15 @@ export default function AdminPayoutsReportPage() {
 
   const { data, isLoading, isFetching, isError, error, refetch } = usePayoutsReport(queryParams);
 
+  // Weekly transfer run report (latest sweep executions + outcomes).
+  const { data: runsData, isLoading: isLoadingRuns, isFetching: isFetchingRuns, refetch: refetchRuns } = usePayoutRuns(25);
+  const runs = runsData?.runs || [];
+
   const handleRefresh = useCallback(() => {
     refetch();
+    refetchRuns();
     toast.success('Report refreshed');
-  }, [refetch]);
+  }, [refetch, refetchRuns]);
 
   const handleExport = useCallback(async (format: string) => {
     try {
@@ -194,6 +202,17 @@ export default function AdminPayoutsReportPage() {
 
   // Custom formatters for specific columns
   const formatters = useMemo(() => ({
+    // View action — every table row navigates to its detail page.
+    payoutId: (_value: unknown, row: DisplayRow) => (
+      <Link
+        to="/admin-payout-detail"
+        search={{ payoutId: String(row.payoutId || row.id) }}
+        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900"
+      >
+        <Eye className="w-3 h-3" />
+        View
+      </Link>
+    ),
     grossAmount: (value: unknown) => {
       const num = typeof value === 'number' ? value : parseFloat(String(value));
       return <span className="text-sm font-bold text-slate-900 dark:text-white">{formatReportCurrency(num)}</span>;
@@ -446,6 +465,112 @@ export default function AdminPayoutsReportPage() {
               <div className="mt-4 flex justify-end">
                 <Button variant="outline" size="sm" onClick={resetFilters} className="rounded-xl">Reset Filters</Button>
               </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Weekly transfer run report — how many driver transfers the
+            scheduled sweep made, how many failed, and why (per-run detail). */}
+        <section className="mb-6">
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800">
+            <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-primary" />
+                  <CardTitle className="text-base font-black">Weekly Transfer Runs</CardTitle>
+                  <span className="text-xs text-slate-500 hidden sm:inline">
+                    Automatic sweep results — succeeded vs failed per run
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl"
+                  onClick={() => refetchRuns()}
+                  disabled={isFetchingRuns}
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", isFetchingRuns && "animate-spin")} />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isLoadingRuns ? (
+                <div className="p-6 space-y-3">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
+                </div>
+              ) : runs.length === 0 ? (
+                <div className="p-8 text-center">
+                  <CalendarClock className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-600 dark:text-slate-400 font-medium">
+                    No weekly transfer runs yet — the first sweep runs on the configured schedule (or trigger it from the admin payout actions).
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Started</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Trigger</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Status</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Succeeded</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Failed</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Skipped</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-left">Transfers</th>
+                        <th className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {runs.map((run) => (
+                        <tr key={run.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                          <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
+                            {formatReportDateTime(run.startedAt)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className="text-[10px] font-bold border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400">
+                              {run.trigger === 'MANUAL' ? 'Manual' : 'Scheduled'}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge className={cn(
+                              'text-[10px] font-bold border',
+                              run.status === 'COMPLETED'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : run.status === 'RUNNING'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-slate-50 text-slate-600 border-slate-200',
+                            )}>
+                              {run.status === 'RUNNING' ? 'In Progress' : run.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={cn('text-sm font-black', run.succeededCount > 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                              {run.succeededCount}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={cn('text-sm font-black', run.failedCount > 0 ? 'text-rose-600' : 'text-slate-400')}>
+                              {run.failedCount}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-500">{run.skippedCount}</td>
+                          <td className="px-4 py-3 text-sm text-slate-500">{run._count?.batches ?? run.processedCount}</td>
+                          <td className="px-4 py-3 text-right">
+                            <Link
+                              to="/admin-payout-run-detail"
+                              search={{ runId: run.id }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900"
+                            >
+                              <Eye className="w-3 h-3" />
+                              View
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>

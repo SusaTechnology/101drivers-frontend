@@ -48,6 +48,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -56,6 +57,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
@@ -67,8 +76,19 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+// Simplified payout type options
+const payoutTypeOptions = [
+  { value: 'ach', label: 'Bank transfer (ACH)' },
+  { value: 'checking', label: 'Checking account' },
+  { value: 'savings', label: 'Savings account' },
+]
+
 export default function DriverWalletPage() {
   const [mounted, setMounted] = useState(false)
+  const [payoutType, setPayoutType] = useState('ach')
+  const [accountHolder, setAccountHolder] = useState('')
+  const [routingNumber, setRoutingNumber] = useState('')
+  const [accountNumber, setAccountNumber] = useState('')
   const [referralDialogOpen, setReferralDialogOpen] = useState(false)
   const [customizeDialogOpen, setCustomizeDialogOpen] = useState(false)
   const [countdown, setCountdown] = useState(20)
@@ -297,14 +317,51 @@ export default function DriverWalletPage() {
     driverCashoutEnabled: false,
     autoTransferOnCompletion: false,
     minimumWeeklyPayoutDollars: 0.5,
-    weeklyPayoutSummary: 'Mondays at 6:00 AM (America/Los_Angeles)',
+    // No hardcoded schedule here — the cadence text is CONFIG-DRIVEN from
+    // the backend (PAYOUT_SETTINGS via my-earnings). An empty fallback
+    // renders a schedule-free sentence instead of inventing a day/time.
+    weeklyPayoutSummary: '',
   }
 
-  // ── Stripe Connect onboarding ──────────────────────────────
-  // NOTE: the legacy in-app bank form (routing/account numbers stored in our
-  // DB + Wise CSV export) has been RETIRED. Drivers connect their bank
-  // exclusively through Stripe's hosted onboarding — bank details never
-  // touch our servers (same trust model as Lyft/DoorDash).
+  // Cadence copy is CONFIG-DRIVEN: every schedule claim on this page comes
+  // from PAYOUT_SETTINGS (admin-configurable). When the summary is absent
+  // the sentences render without any day/time claim.
+  const cadenceSummary = payoutConfig?.weeklyPayoutSummary || ''
+  const cadenceClause = cadenceSummary ? ` — ${cadenceSummary}` : ''
+
+  // ── Fetch saved bank account ──────────────────────────
+  // RESTORED by owner decision (was retired in the legacy bank-rail
+  // cleanup): these calls hit GET/POST /driverPayouts/my-bank-account,
+  // which feed DriverBankAccount — the data source of the Wise
+  // BatchTransfer CSV export used by admin and insurance workflows.
+  const { data: bankAccountData } = useDataQuery<any>({
+    apiEndPoint: `${API_URL}/api/driverPayouts/my-bank-account`,
+    noFilter: true,
+  })
+  useEffect(() => {
+    if (bankAccountData) {
+      setAccountHolder(bankAccountData?.accountHolderName || '')
+      setRoutingNumber(bankAccountData?.routingNumber || '')
+      setAccountNumber(bankAccountData?.accountNumber || '')
+      if (bankAccountData?.accountType) setPayoutType(bankAccountData?.accountType === 'checking' ? 'checking' : bankAccountData?.accountType === 'savings' ? 'savings' : 'ach')
+    }
+  }, [bankAccountData])
+
+  // Save bank account
+  const saveBankAccountMutation = useDataMutation<any, any>({
+    apiEndPoint: `${API_URL}/api/driverPayouts/my-bank-account`,
+    method: 'POST',
+    onSuccess: () => {
+      toast.success('Payout method saved', {
+        description: 'Your bank account information has been updated securely.',
+      })
+    },
+    onError: (error: any) => {
+      toast.error('Failed to save', { description: error?.message })
+    },
+  })
+
+  // ── Stripe Connect onboarding ──────────────────────
   const { data: connectStatus, refetch: refetchConnectStatus } = useDataQuery<{
     setupComplete: boolean;
     needsOnboarding: boolean;
@@ -354,7 +411,9 @@ export default function DriverWalletPage() {
     if (search?.stripe === 'complete') {
       refetchConnectStatus()
       toast.success('Stripe account linked!', {
-        description: 'Your payout setup is complete. Your balance will transfer automatically every week.',
+        description: cadenceSummary
+          ? `Your payout setup is complete. Your balance will transfer automatically — ${cadenceSummary}.`
+          : 'Your payout setup is complete. Your balance will transfer automatically per the configured payout schedule.',
       })
     }
   }, [search])
@@ -378,6 +437,21 @@ export default function DriverWalletPage() {
       return
     }
     freeWithdrawalMutation.mutate()
+  }
+
+  const handleSavePayoutMethod = () => {
+    if (!accountHolder || !routingNumber || !accountNumber) {
+      toast.error('Please fill in all fields', {
+        description: 'Account holder name, routing number, and account number are required.',
+      })
+      return
+    }
+    saveBankAccountMutation.mutate({
+      accountHolderName: accountHolder,
+      routingNumber,
+      accountNumber,
+      accountType: payoutType,
+    })
   }
 
   // ── Referral dialog handler ────────────────────────────────
@@ -1008,7 +1082,7 @@ export default function DriverWalletPage() {
                   Available balance
                 </h1>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                  Earnings from completed deliveries. Your balance is transferred automatically every week — {payoutConfig.weeklyPayoutSummary}.
+                  Earnings from completed deliveries. Your balance is transferred automatically{cadenceClause}.
                 </p>
               </div>
 
@@ -1079,7 +1153,7 @@ export default function DriverWalletPage() {
               <div className="relative z-10 mt-6 flex items-start gap-2 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40">
                 <Schedule className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                  <span className="font-bold">Weekly automatic payouts.</span> Your full balance is transferred to your connected account every week — {payoutConfig.weeklyPayoutSummary}. No action needed.
+                  <span className="font-bold">Automatic payouts.</span> Your full balance is transferred to your connected account on the configured schedule{cadenceClause}. No action needed.
                 </p>
               </div>
             )}
@@ -1106,6 +1180,103 @@ export default function DriverWalletPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Payout Method card (bank form for the Wise CSV rail) — kept as
+            pre-retirement: commented out, ready to enable if the owner
+            re-activates the in-app bank details flow. */}
+        {/* <Card className="border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg font-black">Payout method</CardTitle>
+                <CardDescription className="text-sm mt-1">
+                  Add your preferred payout destination. This is verified and stored securely.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className={cn(
+                'chip',
+                bankAccountData
+                  ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 text-emerald-900 dark:text-emerald-200'
+                  : 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30 text-amber-900 dark:text-amber-200',
+              )}>
+                <Info className="w-3.5 h-3.5 mr-1" />
+                {bankAccountData ? 'Connected' : 'Not connected'}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Payout Type
+                </Label>
+                <Select
+                  value={payoutType}
+                  onValueChange={setPayoutType}
+                >
+                  <SelectTrigger className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {payoutTypeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Account holder name
+                </Label>
+                <Input
+                  value={accountHolder}
+                  onChange={(e) => setAccountHolder(e.target.value)}
+                  placeholder="Your full name"
+                  className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Routing number
+                </Label>
+                <Input
+                  value={routingNumber}
+                  onChange={(e) => setRoutingNumber(e.target.value)}
+                  placeholder="•••••••••"
+                  className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase tracking-widest text-slate-500">
+                  Account number
+                </Label>
+                <Input
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="h-12 rounded-2xl border-slate-200 dark:border-slate-700 dark:bg-slate-800/40 text-sm"
+                />
+              </div>
+            </div>
+
+            <Button
+              onClick={handleSavePayoutMethod}
+              className="w-full py-4 rounded-2xl lime-btn hover:shadow-xl hover:shadow-primary/20 transition inline-flex items-center justify-center gap-2"
+            >
+              Save payout method
+              <Check className="w-4 h-4" />
+            </Button>
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              For security, banking details are tokenized and verified before use.
+            </p>
+          </CardContent>
+        </Card> */}
 
         {/* ═══════════════════════════════════════════════════════
             6. Stripe Connect — Fast Payouts
@@ -1141,7 +1312,7 @@ export default function DriverWalletPage() {
                     <p className="font-bold text-emerald-700 dark:text-emerald-300">Payouts are active</p>
                   </div>
                   <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                    Your balance is automatically transferred to your connected account every week — {payoutConfig.weeklyPayoutSummary}.
+                    Your balance is automatically transferred to your connected account on the configured schedule{cadenceClause}.
                   </p>
                 </div>
                 {/* ── Update / change bank account ──

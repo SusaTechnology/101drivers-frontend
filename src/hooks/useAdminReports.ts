@@ -11,6 +11,9 @@ import type {
   PaymentsReportParams,
   PayoutsReportResponse,
   PayoutsReportParams,
+  PayoutSweepRunRow,
+  PayoutRunDetailResponse,
+  PayoutDetailResponse,
   InsuranceMileageReportResponse,
   InsuranceMileageReportParams,
 } from '@/types/report';
@@ -104,6 +107,45 @@ export function usePayoutsReport(params: PayoutsReportParams = {}) {
     noFilter: true,
     staleTime: 60 * 1000,
     queryKey: ['report-payouts', paramsKey],
+  });
+}
+
+// ==================== WEEKLY PAYOUT SWEEP RUNS ====================
+
+/**
+ * Weekly transfer run report (admin dashboard): one row per weekly sweep
+ * execution with how many driver transfers succeeded / failed / were
+ * skipped. Per-driver detail with failure reasons lives on the run detail
+ * page (/admin-payout-run-detail).
+ */
+export function usePayoutRuns(take = 25) {
+  return useDataQuery<{ runs: PayoutSweepRunRow[] }>({
+    apiEndPoint: `${API_BASE_URL}/api/driverPayouts/admin/payout-runs?take=${take}`,
+    noFilter: true,
+    staleTime: 30 * 1000,
+    queryKey: ['payout-runs', take],
+  });
+}
+
+/** Detail of one weekly sweep run — per-driver results with reasons. */
+export function usePayoutRunDetail(runId: string | null | undefined) {
+  return useDataQuery<PayoutRunDetailResponse>({
+    apiEndPoint: `${API_BASE_URL}/api/driverPayouts/admin/payout-runs/${runId}`,
+    noFilter: true,
+    enabled: !!runId,
+    staleTime: 30 * 1000,
+    queryKey: ['payout-run-detail', runId],
+  });
+}
+
+/** Detail of a single driver payout (View action on the payouts report). */
+export function usePayoutDetail(payoutId: string | null | undefined) {
+  return useDataQuery<PayoutDetailResponse>({
+    apiEndPoint: `${API_BASE_URL}/api/driverPayouts/admin/payouts/${payoutId}`,
+    noFilter: true,
+    enabled: !!payoutId,
+    staleTime: 30 * 1000,
+    queryKey: ['payout-detail', payoutId],
   });
 }
 

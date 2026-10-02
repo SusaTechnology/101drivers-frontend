@@ -458,6 +458,80 @@ export interface PayoutsReportParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+// ==================== WEEKLY PAYOUT SWEEP RUNS ====================
+
+/** One weekly sweep execution (cron tick or admin manual trigger). */
+export interface PayoutSweepRunRow {
+  id: string;
+  trigger: string;
+  status: string;
+  candidateCount: number;
+  processedCount: number;
+  succeededCount: number;
+  failedCount: number;
+  skippedCount: number;
+  startedAt: string;
+  finishedAt: string | null;
+  _count?: { batches: number };
+}
+
+export interface PayoutSweepRunResultRow {
+  batchId: string;
+  driverId: string;
+  driverName: string | null;
+  driverEmail: string | null;
+  amount: number;
+  status: string;
+  failureReason: string | null;
+  stripeTransferId: string | null;
+  initiatedAt: string;
+  completedAt: string | null;
+  failedAt: string | null;
+}
+
+export interface PayoutRunDetailResponse {
+  run: Omit<PayoutSweepRunRow, '_count'>;
+  results: PayoutSweepRunResultRow[];
+}
+
+export interface PayoutDetailResponse {
+  payout: {
+    id: string;
+    grossAmount: number;
+    driverSharePct: number;
+    insuranceFee: number;
+    platformFee: number;
+    netAmount: number;
+    status: string;
+    paidAt: string | null;
+    createdAt: string;
+    deliveryId: string;
+  };
+  driver: {
+    id: string | null;
+    name: string | null;
+    email: string | null;
+  };
+  delivery: {
+    id: string;
+    status: string;
+    serviceType: string;
+    pickupAddress: string;
+    dropoffAddress: string;
+    createdAt: string;
+  } | null;
+  batches: Array<{
+    batchId: string;
+    type: string;
+    status: string;
+    amount: number;
+    failureReason: string | null;
+    stripeTransferId: string | null;
+    initiatedAt: string;
+    completedAt: string | null;
+  }>;
+}
+
 // ==================== INSURANCE MILEAGE REPORT ====================
 
 export interface InsuranceMileageReportFilters {

@@ -905,6 +905,11 @@ model PayoutBatch {
   completedAt       DateTime?
   failedAt          DateTime?
   payoutItems       PayoutBatchItem[]
+  // The weekly sweep run this batch belongs to. NULL for manual rails
+  // (free withdrawal / instant payout) — runs are created only by the
+  // weekly sweep (cron or admin manual trigger).
+  runId             String?
+  run               PayoutSweepRun?           @relation(fields: [runId], references: [id])
   // Adjustments settled inside this batch (APPLIED clawbacks/tips + the
   // PENDING leftover rows it created). This is the revert key: when the
   // batch's Stripe transfer fails, every adjustment carrying this batchId
@@ -915,6 +920,29 @@ model PayoutBatch {
 
   @@index([driverId, status, initiatedAt])
   @@index([type, status])
+  @@index([runId])
+}
+
+// One row per weekly sweep execution (cron tick or admin manual trigger).
+// This is the admin-facing report record: how many driver transfers the
+// run attempted, how many succeeded, how many failed — with the per-driver
+// detail (amount, status, failure reason) readable from the linked
+// PayoutBatch rows. trigger/status are app-validated strings
+// ("CRON" | "MANUAL" / "RUNNING" | "COMPLETED").
+model PayoutSweepRun {
+  id             String       @id @default(cuid())
+  trigger        String       @default("CRON")
+  status         String       @default("RUNNING")
+  candidateCount Int          @default(0)
+  processedCount Int          @default(0)
+  succeededCount Int          @default(0)
+  failedCount    Int          @default(0)
+  skippedCount   Int          @default(0)
+  startedAt      DateTime     @default(now())
+  finishedAt     DateTime?
+  batches        PayoutBatch[]
+
+  @@index([startedAt])
 }
 
 model PayoutBatchItem {

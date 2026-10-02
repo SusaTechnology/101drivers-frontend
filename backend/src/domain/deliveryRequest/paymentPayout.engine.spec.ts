@@ -526,6 +526,10 @@ describe("PaymentPayoutEngine — batch revert restores adjustments (appliedBatc
       appSetting: { findUnique: jest.fn().mockResolvedValue(null) },
       payoutBatch: { findFirst: jest.fn(), update: jest.fn() },
       payoutBatchItem: { findMany: jest.fn() },
+      payoutSweepRun: {
+        create: jest.fn().mockResolvedValue({ id: "run_weekly_001" }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       driverPayout: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -638,7 +642,13 @@ describe("PaymentPayoutEngine — batch revert restores adjustments (appliedBatc
     const result = await engine.processWeeklyAutoPayouts();
 
     // Driver processed, transfer for the tip pot fired.
-    expect(result).toEqual({ processed: 1, skipped: 0 });
+    expect(result).toEqual({
+      processed: 1,
+      skipped: 0,
+      succeeded: 1,
+      failed: 0,
+      runId: "run_weekly_001",
+    });
     expect(stripeService.createTransfer).toHaveBeenCalledWith(
       expect.objectContaining({
         amount: 10,
@@ -709,6 +719,94 @@ describe("PaymentPayoutEngine — batch revert restores adjustments (appliedBatc
     expect(stripeService.createTransfer).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 20 }),
     );
-    expect(result).toEqual({ processed: 1, skipped: 0 });
+    expect(result).toEqual({
+      processed: 1,
+      skipped: 0,
+      succeeded: 1,
+      failed: 0,
+      runId: "run_weekly_001",
+    });
+
+    // The run report was finalized with the outcome counts.
+    expect(prismaService.payoutSweepRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "run_weekly_001" },
+        data: expect.objectContaining({
+          status: "COMPLETED",
+          processedCount: 1,
+          succeededCount: 1,
+          failedCount: 0,
+        }),
+      }),
+    );
+  });
+
+  it("Scenario L: a Stripe transfer failure is reported on the run (0 succeeded, 1 failed) and the balance is restored", async () => {
+    const { engine, prismaService, stripeService } = buildEngine();
+    (stripeService.createTransfer as jest.Mock).mockRejectedValue(
+      new Error("insufficient funds"),
+    );
+
+    prismaService.driverPayout.groupBy.mockResolvedValue([
+      { driverId: "drv_1", _sum: { netAmount: 20 } },
+    ]);
+    prismaService.driverPayoutAdjustment.groupBy.mockResolvedValue([]);
+    prismaService.driverPayoutAdjustment.findMany.mockResolvedValue([]);
+    prismaService.payoutBatch.findFirst.mockResolvedValue(null);
+    prismaService.driverPayout.findMany.mockResolvedValue([
+      { id: "pay_1", deliveryId: "del_1", netAmount: 20 },
+    ]);
+    // revertFailedBatch reads the batch items to restore the payouts.
+    prismaService.payoutBatchItem.findMany.mockResolvedValue([
+      { driverPayoutId: "pay_1" },
+    ]);
+
+    const capturedTx = {
+      payoutBatch: {
+        create: jest.fn().mockResolvedValue({
+          id: "batch_weekly_003",
+          driverId: "drv_1",
+          type: "WEEKLY_AUTO",
+          netPayoutAmount: 20,
+        }),
+      },
+      payoutBatchItem: { create: jest.fn() },
+      driverPayout: { update: jest.fn() },
+      driverPayoutAdjustment: { updateMany: jest.fn(), create: jest.fn() },
+    };
+    prismaService.$transaction.mockImplementation((fn: any) => fn(capturedTx));
+
+    const result = await engine.processWeeklyAutoPayouts();
+
+    // The run report shows the failure.
+    expect(result).toEqual({
+      processed: 1,
+      skipped: 0,
+      succeeded: 0,
+      failed: 1,
+      runId: "run_weekly_001",
+    });
+
+    // The driver's money was restored to ELIGIBLE by the revert.
+    expect(prismaService.driverPayout.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "pay_1" },
+        data: expect.objectContaining({
+          status: EnumDriverPayoutStatus.ELIGIBLE,
+        }),
+      }),
+    );
+
+    // The run was finalized carrying the failure count.
+    expect(prismaService.payoutSweepRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "run_weekly_001" },
+        data: expect.objectContaining({
+          status: "COMPLETED",
+          succeededCount: 0,
+          failedCount: 1,
+        }),
+      }),
+    );
   });
 });

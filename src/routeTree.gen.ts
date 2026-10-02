@@ -75,6 +75,8 @@ import { Route as AdminReferralProgramIndexRouteImport } from './routes/admin-re
 import { Route as AdminPricingIndexRouteImport } from './routes/admin-pricing/index'
 import { Route as AdminPricingRuleIndexRouteImport } from './routes/admin-pricing-rule/index'
 import { Route as AdminPricingConfigIndexRouteImport } from './routes/admin-pricing-config/index'
+import { Route as AdminPayoutRunDetailIndexRouteImport } from './routes/admin-payout-run-detail/index'
+import { Route as AdminPayoutDetailIndexRouteImport } from './routes/admin-payout-detail/index'
 import { Route as AdminPaymentsIndexRouteImport } from './routes/admin-payments/index'
 import { Route as AdminPaymentDetailIndexRouteImport } from './routes/admin-payment-detail/index'
 import { Route as AdminNotificationPolicyIndexRouteImport } from './routes/admin-notification-policy/index'
@@ -475,6 +477,17 @@ const AdminPricingConfigIndexRoute = AdminPricingConfigIndexRouteImport.update({
   path: '/admin-pricing-config/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPayoutRunDetailIndexRoute =
+  AdminPayoutRunDetailIndexRouteImport.update({
+    id: '/admin-payout-run-detail/',
+    path: '/admin-payout-run-detail/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminPayoutDetailIndexRoute = AdminPayoutDetailIndexRouteImport.update({
+  id: '/admin-payout-detail/',
+  path: '/admin-payout-detail/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPaymentsIndexRoute = AdminPaymentsIndexRouteImport.update({
   id: '/admin-payments/',
   path: '/admin-payments/',
@@ -777,6 +790,8 @@ export interface FileRoutesByFullPath {
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
   '/admin-payment-detail/': typeof AdminPaymentDetailIndexRoute
   '/admin-payments/': typeof AdminPaymentsIndexRoute
+  '/admin-payout-detail/': typeof AdminPayoutDetailIndexRoute
+  '/admin-payout-run-detail/': typeof AdminPayoutRunDetailIndexRoute
   '/admin-pricing-config/': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule/': typeof AdminPricingRuleIndexRoute
   '/admin-pricing/': typeof AdminPricingIndexRoute
@@ -893,6 +908,8 @@ export interface FileRoutesByTo {
   '/admin-notification-policy': typeof AdminNotificationPolicyIndexRoute
   '/admin-payment-detail': typeof AdminPaymentDetailIndexRoute
   '/admin-payments': typeof AdminPaymentsIndexRoute
+  '/admin-payout-detail': typeof AdminPayoutDetailIndexRoute
+  '/admin-payout-run-detail': typeof AdminPayoutRunDetailIndexRoute
   '/admin-pricing-config': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule': typeof AdminPricingRuleIndexRoute
   '/admin-pricing': typeof AdminPricingIndexRoute
@@ -1011,6 +1028,8 @@ export interface FileRoutesById {
   '/admin-notification-policy/': typeof AdminNotificationPolicyIndexRoute
   '/admin-payment-detail/': typeof AdminPaymentDetailIndexRoute
   '/admin-payments/': typeof AdminPaymentsIndexRoute
+  '/admin-payout-detail/': typeof AdminPayoutDetailIndexRoute
+  '/admin-payout-run-detail/': typeof AdminPayoutRunDetailIndexRoute
   '/admin-pricing-config/': typeof AdminPricingConfigIndexRoute
   '/admin-pricing-rule/': typeof AdminPricingRuleIndexRoute
   '/admin-pricing/': typeof AdminPricingIndexRoute
@@ -1130,6 +1149,8 @@ export interface FileRouteTypes {
     | '/admin-notification-policy/'
     | '/admin-payment-detail/'
     | '/admin-payments/'
+    | '/admin-payout-detail/'
+    | '/admin-payout-run-detail/'
     | '/admin-pricing-config/'
     | '/admin-pricing-rule/'
     | '/admin-pricing/'
@@ -1246,6 +1267,8 @@ export interface FileRouteTypes {
     | '/admin-notification-policy'
     | '/admin-payment-detail'
     | '/admin-payments'
+    | '/admin-payout-detail'
+    | '/admin-payout-run-detail'
     | '/admin-pricing-config'
     | '/admin-pricing-rule'
     | '/admin-pricing'
@@ -1363,6 +1386,8 @@ export interface FileRouteTypes {
     | '/admin-notification-policy/'
     | '/admin-payment-detail/'
     | '/admin-payments/'
+    | '/admin-payout-detail/'
+    | '/admin-payout-run-detail/'
     | '/admin-pricing-config/'
     | '/admin-pricing-rule/'
     | '/admin-pricing/'
@@ -1460,6 +1485,8 @@ export interface RootRouteChildren {
   AdminNotificationPolicyIndexRoute: typeof AdminNotificationPolicyIndexRoute
   AdminPaymentDetailIndexRoute: typeof AdminPaymentDetailIndexRoute
   AdminPaymentsIndexRoute: typeof AdminPaymentsIndexRoute
+  AdminPayoutDetailIndexRoute: typeof AdminPayoutDetailIndexRoute
+  AdminPayoutRunDetailIndexRoute: typeof AdminPayoutRunDetailIndexRoute
   AdminPricingConfigIndexRoute: typeof AdminPricingConfigIndexRoute
   AdminPricingRuleIndexRoute: typeof AdminPricingRuleIndexRoute
   AdminPricingIndexRoute: typeof AdminPricingIndexRoute
@@ -1993,6 +2020,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPricingConfigIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin-payout-run-detail/': {
+      id: '/admin-payout-run-detail/'
+      path: '/admin-payout-run-detail'
+      fullPath: '/admin-payout-run-detail/'
+      preLoaderRoute: typeof AdminPayoutRunDetailIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-payout-detail/': {
+      id: '/admin-payout-detail/'
+      path: '/admin-payout-detail'
+      fullPath: '/admin-payout-detail/'
+      preLoaderRoute: typeof AdminPayoutDetailIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-payments/': {
       id: '/admin-payments/'
       path: '/admin-payments'
@@ -2419,6 +2460,8 @@ const rootRouteChildren: RootRouteChildren = {
   AdminNotificationPolicyIndexRoute: AdminNotificationPolicyIndexRoute,
   AdminPaymentDetailIndexRoute: AdminPaymentDetailIndexRoute,
   AdminPaymentsIndexRoute: AdminPaymentsIndexRoute,
+  AdminPayoutDetailIndexRoute: AdminPayoutDetailIndexRoute,
+  AdminPayoutRunDetailIndexRoute: AdminPayoutRunDetailIndexRoute,
   AdminPricingConfigIndexRoute: AdminPricingConfigIndexRoute,
   AdminPricingRuleIndexRoute: AdminPricingRuleIndexRoute,
   AdminPricingIndexRoute: AdminPricingIndexRoute,

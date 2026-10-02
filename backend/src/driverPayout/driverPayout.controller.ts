@@ -132,6 +132,65 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     res!.send(csv);
   }
 
+  /**
+   * RESTORED by owner decision (was retired in the legacy bank-rail
+   * cleanup): the in-app bank account endpoints feed DriverBankAccount,
+   * which is the data source for the Wise BatchTransfer CSV export used
+   * by admin and insurance workflows.
+   */
+  @common.Get("my-bank-account")
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "read",
+    possession: "own",
+  })
+  async getMyBankAccount(@common.Req() req: any, @common.Res() res: Response): Promise<void> {
+    const driverId = await this.resolveDriverId(req);
+
+    const account = await this.prisma.driverBankAccount.findUnique({
+      where: { driverId },
+    });
+    res.json(account || {});
+  }
+
+  @common.Post("my-bank-account")
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "update",
+    possession: "own",
+  })
+  async upsertMyBankAccount(
+    @common.Body() body: any,
+    @common.Req() req: any,
+  ): Promise<any> {
+    const driverId = await this.resolveDriverId(req);
+
+    const { accountHolderName, routingNumber, accountNumber, accountType, bankName } = body;
+
+    if (!accountHolderName || !routingNumber || !accountNumber) {
+      throw new common.BadRequestException("Account holder name, routing number, and account number are required");
+    }
+
+    return this.prisma.driverBankAccount.upsert({
+      where: { driverId },
+      create: {
+        driverId,
+        accountHolderName,
+        routingNumber,
+        accountNumber,
+        accountType: accountType || "checking",
+        bankName: bankName || null,
+      },
+      update: {
+        accountHolderName,
+        routingNumber,
+        accountNumber,
+        accountType: accountType || "checking",
+        bankName: bankName || null,
+      },
+    });
+  }
+
   @common.Get("my-earnings")
   @nestAccessControl.UseRoles({
     resource: "DriverPayout",
@@ -296,6 +355,143 @@ export class DriverPayoutController extends DriverPayoutControllerBase {
     if (!this.payoutEngine) {
       throw new common.ServiceUnavailableException('Payout service not available');
     }
-    return this.payoutEngine.processWeeklyAutoPayouts();
+    return this.payoutEngine.processWeeklyAutoPayouts('MANUAL');
+  }
+
+  // ── Weekly Transfer Run Report (admin dashboard) ──────────────
+
+  /**
+   * List weekly sweep runs, latest first. Each run carries the counts the
+   * admin dashboard needs: how many driver transfers were attempted,
+   * succeeded, failed, and skipped. Per-driver detail (with failure
+   * reasons) is on the run detail endpoint.
+   */
+  @common.Get("admin/payout-runs")
+  @swagger.ApiOkResponse({ description: "Weekly payout sweep runs (latest first)" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "read",
+    possession: "any",
+  })
+  async listPayoutRuns(
+    @common.Query("take") take?: string,
+  ): Promise<any> {
+    const parsed = Number(take);
+    const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.floor(parsed), 100) : 25;
+
+    const runs = await this.prisma.payoutSweepRun.findMany({
+      orderBy: { startedAt: "desc" },
+      take: limit,
+      include: { _count: { select: { batches: true } } },
+    });
+    return { runs };
+  }
+
+  /**
+   * Detail of one weekly sweep run: the run counters plus every driver
+   * batch it created — amount, final status (COMPLETED / FAILED / still
+   * in-flight), the Stripe transfer id, and the human-readable failure
+   * reason when a transfer did not go through.
+   */
+  @common.Get("admin/payout-runs/:id")
+  @swagger.ApiOkResponse({ description: "Weekly payout sweep run with per-driver results" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "read",
+    possession: "any",
+  })
+  async getPayoutRun(@common.Param("id") id: string): Promise<any> {
+    const run = await this.prisma.payoutSweepRun.findUnique({
+      where: { id },
+      include: {
+        batches: {
+          orderBy: { initiatedAt: "asc" },
+          include: {
+            driver: {
+              include: { user: { select: { fullName: true, email: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!run) throw new common.NotFoundException("Payout run not found");
+
+    const { batches, ...runFields } = run;
+    return {
+      run: runFields,
+      results: batches.map((b: any) => ({
+        batchId: b.id,
+        driverId: b.driverId,
+        driverName: b.driver?.user?.fullName || null,
+        driverEmail: b.driver?.user?.email || null,
+        amount: b.netPayoutAmount,
+        status: b.status,
+        failureReason: b.failureMessage || null,
+        stripeTransferId: b.stripeTransferId || null,
+        initiatedAt: b.initiatedAt,
+        completedAt: b.completedAt,
+        failedAt: b.failedAt,
+      })),
+    };
+  }
+
+  /**
+   * Admin detail for a single driver payout (the View action on the
+   * payouts report table): payout amounts + status, the delivery it came
+   * from, and any payout batch the payout was settled through.
+   */
+  @common.Get("admin/payouts/:id")
+  @swagger.ApiOkResponse({ description: "Single driver payout detail for admins" })
+  @nestAccessControl.UseRoles({
+    resource: "DriverPayout",
+    action: "read",
+    possession: "any",
+  })
+  async getAdminPayoutDetail(@common.Param("id") id: string): Promise<any> {
+    const payout = await this.prisma.driverPayout.findUnique({
+      where: { id },
+      include: {
+        driver: {
+          include: { user: { select: { fullName: true, email: true } } },
+        },
+        delivery: {
+          select: {
+            id: true,
+            status: true,
+            serviceType: true,
+            pickupAddress: true,
+            dropoffAddress: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+    if (!payout) throw new common.NotFoundException("Payout not found");
+
+    const batchItems = await this.prisma.payoutBatchItem.findMany({
+      where: { driverPayoutId: id },
+      include: { batch: true },
+    });
+
+    const { driver, delivery, ...payoutFields } = payout as any;
+    return {
+      payout: payoutFields,
+      driver: {
+        id: driver?.id || null,
+        name: driver?.user?.fullName || null,
+        email: driver?.user?.email || null,
+      },
+      delivery,
+      batches: batchItems.map((item: any) => ({
+        batchId: item.batch?.id,
+        type: item.batch?.type,
+        status: item.batch?.status,
+        amount: item.amount,
+        failureReason: item.batch?.failureMessage || null,
+        stripeTransferId: item.batch?.stripeTransferId || null,
+        initiatedAt: item.batch?.initiatedAt,
+        completedAt: item.batch?.completedAt,
+      })),
+    };
   }
 }

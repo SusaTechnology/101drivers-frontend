@@ -174,4 +174,105 @@ describe("WeeklyPayoutScheduler", () => {
       defaultPayoutSettings.weeklyTimezone,
     );
   });
+
+  // ── settings watchdog (apply schedule changes without a restart) ──
+
+  it("checkCronSync re-registers the cron when PAYOUT_SETTINGS changed since registration", async () => {
+    const prisma = {
+      appSetting: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ key: "PAYOUT_SETTINGS", value: { weeklyCron: "0 6 * * 1" } }),
+      },
+    };
+    const registry = makeSchedulerRegistry();
+    registry.doesExist.mockReturnValue(true);
+    const scheduler = new WeeklyPayoutScheduler(undefined, prisma as any, registry as any);
+    jest.spyOn(scheduler["logger"], "log").mockImplementation(() => undefined);
+
+    await scheduler.syncCronFromSettings(); // registers "0 6 * * 1"
+    expect(registry.addCronJob).toHaveBeenCalledTimes(1);
+
+    // Admin changes the schedule to Fridays 17:30.
+    prisma.appSetting.findUnique.mockResolvedValue({
+      key: "PAYOUT_SETTINGS",
+      value: { weeklyCron: "30 17 * * 5" },
+    });
+    await scheduler.checkCronSync();
+
+    expect(registry.addCronJob).toHaveBeenCalledTimes(2);
+    expect(CronJobMock).toHaveBeenLastCalledWith(
+      "30 17 * * 5",
+      expect.any(Function),
+      null,
+      false,
+      defaultPayoutSettings.weeklyTimezone,
+    );
+  });
+
+  it("checkCronSync re-registers when the cron job vanished from the registry (self-heal)", async () => {
+    const prisma = {
+      appSetting: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const registry = makeSchedulerRegistry();
+    registry.doesExist.mockReturnValue(true);
+    const scheduler = new WeeklyPayoutScheduler(undefined, prisma as any, registry as any);
+    jest.spyOn(scheduler["logger"], "log").mockImplementation(() => undefined);
+
+    await scheduler.syncCronFromSettings();
+    expect(registry.addCronJob).toHaveBeenCalledTimes(1);
+
+    // The job disappeared (e.g. registry cleared) while settings stayed put.
+    registry.doesExist.mockReturnValue(false);
+    await scheduler.checkCronSync();
+
+    expect(registry.addCronJob).toHaveBeenCalledTimes(2);
+  });
+
+  it("checkCronSync does nothing when the schedule is unchanged and the job is alive", async () => {
+    const prisma = {
+      appSetting: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const registry = makeSchedulerRegistry();
+    registry.doesExist.mockReturnValue(true);
+    const scheduler = new WeeklyPayoutScheduler(undefined, prisma as any, registry as any);
+
+    await scheduler.syncCronFromSettings();
+    await scheduler.checkCronSync();
+
+    expect(registry.addCronJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("a transient settings read failure keeps the currently registered job untouched", async () => {
+    const prisma = {
+      appSetting: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({ key: "PAYOUT_SETTINGS", value: null })
+          .mockRejectedValueOnce(new Error("db down")),
+      },
+    };
+    const registry = makeSchedulerRegistry();
+    registry.doesExist.mockReturnValue(true);
+    const scheduler = new WeeklyPayoutScheduler(undefined, prisma as any, registry as any);
+
+    await scheduler.syncCronFromSettings();
+    expect(registry.addCronJob).toHaveBeenCalledTimes(1);
+
+    await scheduler.checkCronSync(); // read fails — must NOT re-register
+
+    expect(registry.addCronJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("the watchdog timer starts on module init and is cleared on destroy", async () => {
+    const prisma = { appSetting: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const registry = makeSchedulerRegistry();
+    const scheduler = new WeeklyPayoutScheduler(undefined, prisma as any, registry as any);
+
+    scheduler.onModuleInit();
+    expect(scheduler["watchdogTimer"]).not.toBeNull();
+
+    scheduler.onModuleDestroy();
+    expect(scheduler["watchdogTimer"]).toBeNull();
+  });
 });

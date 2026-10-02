@@ -6,10 +6,12 @@
  *
  * The schedule is SETTING-DRIVEN, not hardcoded: on boot the cron job is
  * registered from PAYOUT_SETTINGS (weeklyCron + weeklyTimezone; defaults
- * Monday 06:00 America/Los_Angeles). Changing the schedule in the admin
- * setting takes effect on the next API restart; the other payout flags
- * (minimum, autoTransferOnCompletion, driverCashoutEnabled) are read
- * LIVE by the engine on every use.
+ * Monday 06:00 America/Los_Angeles). A settings watchdog re-checks
+ * PAYOUT_SETTINGS every 5 minutes and re-registers the cron when the
+ * schedule changed — admin edits apply WITHOUT a restart (and the job
+ * self-heals if it ever disappears from the registry). The other payout
+ * flags (minimum, autoTransferOnCompletion, driverCashoutEnabled) are
+ * read LIVE by the engine on every use.
  *
  * Safety:
  *   - Drivers WITHOUT completed Connect onboarding are skipped (their
@@ -37,9 +39,17 @@ import {
 
 const WEEKLY_PAYOUT_JOB_NAME = "weekly-driver-payouts";
 
+/** How often the watchdog re-checks PAYOUT_SETTINGS for schedule changes. */
+const SETTINGS_WATCHDOG_INTERVAL_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class WeeklyPayoutScheduler {
   private readonly logger = new Logger(WeeklyPayoutScheduler.name);
+
+  /** What the currently-registered cron was built from (watchdog baseline). */
+  private lastAppliedCron: string | null = null;
+  private lastAppliedTimezone: string | null = null;
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     @Optional() @Inject(PaymentPayoutEngine)
@@ -98,6 +108,8 @@ export class WeeklyPayoutScheduler {
       );
       this.schedulerRegistry.addCronJob(WEEKLY_PAYOUT_JOB_NAME, job);
       job.start();
+      this.lastAppliedCron = settings.weeklyCron;
+      this.lastAppliedTimezone = settings.weeklyTimezone;
       this.logger.log(
         `Weekly payouts cron registered: "${settings.weeklyCron}" (${settings.weeklyTimezone})`,
       );
@@ -118,11 +130,75 @@ export class WeeklyPayoutScheduler {
       );
       this.schedulerRegistry.addCronJob(WEEKLY_PAYOUT_JOB_NAME, fallback);
       fallback.start();
+      // Record the DEFAULT as applied: the watchdog compares against what
+      // is actually running, so a still-invalid setting retries (and
+      // self-heals) on the next check instead of thrashing immediately.
+      this.lastAppliedCron = defaultPayoutSettings.weeklyCron;
+      this.lastAppliedTimezone = defaultPayoutSettings.weeklyTimezone;
     }
+  }
+
+  /**
+   * Watchdog tick: re-register the cron when PAYOUT_SETTINGS changed
+   * (admin edited weeklyCron/weeklyTimezone — applies without a restart)
+   * or when the job vanished from the registry (self-healing). A transient
+   * DB read failure keeps the current job untouched.
+   */
+  async checkCronSync(): Promise<void> {
+    if (!this.prisma || !this.schedulerRegistry) return;
+
+    let jobMissing = false;
+    try {
+      jobMissing = !this.schedulerRegistry.doesExist("cron", WEEKLY_PAYOUT_JOB_NAME);
+    } catch {
+      jobMissing = false;
+    }
+
+    let settings: ReturnType<typeof normalizePayoutSettings>;
+    try {
+      const row = await this.prisma.appSetting.findUnique({
+        where: { key: PAYOUT_SETTINGS_KEY },
+        select: { value: true },
+      });
+      settings = normalizePayoutSettings(row?.value);
+    } catch {
+      return; // transient DB issue — keep the currently registered job
+    }
+
+    const scheduleChanged =
+      settings.weeklyCron !== this.lastAppliedCron ||
+      settings.weeklyTimezone !== this.lastAppliedTimezone;
+
+    if (jobMissing || scheduleChanged) {
+      this.logger.log(
+        `PAYOUT_SETTINGS change detected (cron "${this.lastAppliedCron}" -> "${settings.weeklyCron}", tz "${this.lastAppliedTimezone}" -> "${settings.weeklyTimezone}"${jobMissing ? ", job missing" : ""}) — re-registering weekly payouts cron`,
+      );
+      await this.syncCronFromSettings();
+    }
+  }
+
+  /**
+   * Periodically re-check PAYOUT_SETTINGS so admin schedule edits apply
+   * without a restart. The timer never keeps the process alive.
+   */
+  private startSettingsWatchdog(): void {
+    if (this.watchdogTimer || !this.prisma || !this.schedulerRegistry) return;
+    this.watchdogTimer = setInterval(() => {
+      void this.checkCronSync();
+    }, SETTINGS_WATCHDOG_INTERVAL_MS);
+    (this.watchdogTimer as any)?.unref?.();
   }
 
   onModuleInit(): void {
     void this.syncCronFromSettings();
+    this.startSettingsWatchdog();
+  }
+
+  onModuleDestroy(): void {
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
   }
 
   /** The weekly sweep — engine hand-off. Env kill switch honored here. */
@@ -137,9 +213,9 @@ export class WeeklyPayoutScheduler {
     }
 
     try {
-      const result = await this.payoutEngine.processWeeklyAutoPayouts();
+      const result = await this.payoutEngine.processWeeklyAutoPayouts("CRON");
       this.logger.log(
-        `Weekly auto-payouts: ${result?.processed ?? 0} processed, ${result?.skipped ?? 0} skipped`,
+        `Weekly auto-payouts: ${result?.processed ?? 0} processed, ${result?.skipped ?? 0} skipped${result?.runId ? ` (run ${result.runId})` : ""}`,
       );
     } catch (err: any) {
       this.logger.error(`Weekly auto-payouts failed: ${err?.message}`, err?.stack);

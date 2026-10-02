@@ -1654,8 +1654,32 @@ export class PaymentPayoutEngine {
    * auto-reverted first so the driver is not skipped forever; an
    * in-flight PENDING/PROCESSING batch skips the driver for this run.
    */
-  async processWeeklyAutoPayouts(): Promise<{ processed: number; skipped: number }> {
+  async processWeeklyAutoPayouts(
+    trigger: 'CRON' | 'MANUAL' = 'CRON',
+  ): Promise<{
+    processed: number;
+    skipped: number;
+    succeeded: number;
+    failed: number;
+    runId: string | null;
+  }> {
     const settings = await this.getPayoutSettingsSafe();
+
+    // Run report record (admin dashboard: how many transfers succeeded /
+    // failed this week and why). Reporting must NEVER block payouts — if
+    // the run row cannot be created (e.g. migration not applied yet) the
+    // sweep still runs and the batches simply carry runId = null.
+    let runId: string | null = null;
+    try {
+      const run = await this.prisma.payoutSweepRun.create({
+        data: { trigger, status: 'RUNNING' },
+      });
+      runId = run.id;
+    } catch (err: any) {
+      this.logger.warn(
+        `Weekly sweep: PayoutSweepRun row could not be created — run report will be unavailable: ${err.message}`,
+      );
+    }
 
     const eligibleSums = await this.prisma.driverPayout.groupBy({
       by: ['driverId'],
@@ -1696,6 +1720,32 @@ export class PaymentPayoutEngine {
 
     let processed = 0;
     let skipped = 0;
+    let succeeded = 0;
+    let failed = 0;
+
+    // Finalize the run report no matter how the loop ends (crashes leave
+    // the row RUNNING — visible as an interrupted run on the dashboard).
+    const finalizeRun = async () => {
+      if (!runId) return;
+      try {
+        await this.prisma.payoutSweepRun.update({
+          where: { id: runId },
+          data: {
+            status: 'COMPLETED',
+            finishedAt: new Date(),
+            candidateCount: candidates.length,
+            processedCount: processed,
+            succeededCount: succeeded,
+            failedCount: failed,
+            skippedCount: skipped,
+          },
+        });
+      } catch (err: any) {
+        this.logger.warn(
+          `Weekly sweep: PayoutSweepRun ${runId} could not be finalized: ${err.message}`,
+        );
+      }
+    };
 
     for (const candidate of candidates) {
       const inFlight = await this.prisma.payoutBatch.findFirst({
@@ -1759,6 +1809,7 @@ export class PaymentPayoutEngine {
               driverId: candidate.driverId, type: 'WEEKLY_AUTO', status: 'PENDING',
               totalAmount: Math.round(totalAmount * 100) / 100, feeAmount: 0,
               netPayoutAmount: Math.round(totalAmount * 100) / 100,
+              runId,
             },
           });
 
@@ -1795,26 +1846,38 @@ export class PaymentPayoutEngine {
           return newBatch;
         });
 
-        await this.processBatchTransfer(batch);
+        // Classify the outcome for the run report from the transfer result
+        // (processBatchTransfer reverts + marks FAILED internally when the
+        // Stripe transfer fails — the failure reason lives on the batch row
+        // and shows up on the run's detail page).
+        const outcome = await this.processBatchTransfer(batch);
         processed++;
+        if (outcome === 'COMPLETED') succeeded++;
+        else if (outcome === 'FAILED') failed++;
       } catch (err: any) {
         this.logger.error(`Weekly auto-payout failed for driver ${candidate.driverId}: ${err.message}`);
         skipped++;
       }
     }
 
-    this.logger.log(`Weekly auto-payouts: ${processed} processed, ${skipped} skipped`);
-    return { processed, skipped };
+    await finalizeRun();
+
+    this.logger.log(
+      `Weekly auto-payouts: ${processed} processed (${succeeded} succeeded, ${failed} failed), ${skipped} skipped`,
+    );
+    return { processed, skipped, succeeded, failed, runId };
   }
 
   /**
    * Process a standard (free) transfer via Stripe Connect.
+   * Returns the batch's final status so the weekly sweep can classify the
+   * outcome for the run report (failures are reverted + marked FAILED here).
    */
-  private async processBatchTransfer(batch: any): Promise<void> {
+  private async processBatchTransfer(batch: any): Promise<'COMPLETED' | 'FAILED'> {
     if (!this.stripeService) {
       this.logger.warn('StripeService not available — reverting batch as FAILED');
       await this.revertFailedBatch(batch.id, 'Stripe service is not configured. Please contact support.');
-      return;
+      return 'FAILED';
     }
 
     const driver = await this.prisma.driver.findUnique({
@@ -1828,7 +1891,7 @@ export class PaymentPayoutEngine {
         batch.id,
         'Your payout account is not set up. Tap "Set Up Payouts" to connect your bank account through Stripe.',
       );
-      return;
+      return 'FAILED';
     }
 
     try {
@@ -1845,6 +1908,7 @@ export class PaymentPayoutEngine {
         where: { id: batch.id },
         data: { status: 'COMPLETED', stripeTransferId: transfer.id, completedAt: new Date() },
       });
+      return 'COMPLETED';
     } catch (err: any) {
       // Stripe transfer failed — revert payouts back to ELIGIBLE so the
       // driver can retry. Don't leave them stuck with money "PAID" in
@@ -1854,6 +1918,7 @@ export class PaymentPayoutEngine {
         batch.id,
         `The transfer to your bank failed: ${err.message}. Your balance has been restored — please try again.`,
       );
+      return 'FAILED';
     }
   }
 
