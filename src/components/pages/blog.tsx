@@ -4,42 +4,20 @@ import { BookOpen } from "lucide-react";
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
 import { SiteFooter } from "../shared/SiteFooter";
+import {
+  ContentCard,
+  ContentCardGrid,
+} from "../shared/ContentCard";
+import { BLOG_POSTS } from "@/content/blog";
+import { formatContentDate } from "@/lib/format-date";
 
 /**
- * Blog page — TEST/SAMPLE content. The owner asked for placeholder pages;
- * replace the sample posts below with real articles (or wire them to the
- * admin CMS) when ready.
+ * Blog index — renders a card for every post registered in
+ * src/content/blog/. Adding a post (a new file + one line in that
+ * folder's index.ts) automatically adds its card here and creates its
+ * /blog/$slug detail page — nothing on this page is hard-coded per
+ * post.
  */
-const SAMPLE_POSTS = [
-  {
-    date: "September 5, 2026",
-    title: "How our flat-rate pricing works",
-    paragraphs: [
-      "Every quote on 101 Drivers is flat-rate: the price you see is the price you pay, regardless of the traffic, the route the driver takes, or how many tolls show up on the way.",
-      "The rate is built from the pickup and drop-off zones, the vehicle type, and the service level you choose. Because drivers see the full route and payout before accepting a job, nobody renegotiates mid-delivery — that is the whole point.",
-      "If anything about your quote looks off, contact us before confirming. Changing a booked delivery later can change the price; changing it before booking never does.",
-    ],
-  },
-  {
-    date: "August 14, 2026",
-    title: "5 things to check before handing over your keys",
-    paragraphs: [
-      "First: remove personal belongings from the cabin and trunk. Drivers photograph the interior state at pickup, but loose items cannot be insured.",
-      "Second: have the registration and insurance documents accessible. Third: note your fuel and odometer readings — the driver records them too, and matching records make any later dispute trivial.",
-      "Fourth: ensure there is a working key or fob for the car — rekeying delays are the most common cause of same-day cancellations. Fifth: if someone else is at the pickup location, share the delivery PIN with them in advance so the driver can verify authorization.",
-    ],
-  },
-  {
-    date: "July 9, 2026",
-    title: "What happens between pickup and drop-off",
-    paragraphs: [
-      "Once the driver enters the last four digits of the VIN, live tracking starts. Every material event — inspection photos, route progress, arrival — is stamped with GPS coordinates and time.",
-      "You can follow the delivery from the public tracking link or your dashboard. If a delivery is ever late, the tracking page is the first place the new ETA appears.",
-      "At drop-off the driver repeats the inspection: photos of the car, final odometer reading, and keys handed to the authorized person. You receive the full report by email within minutes.",
-    ],
-  },
-];
-
 function BlogPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
@@ -74,31 +52,24 @@ function BlogPage() {
           </p>
         </section>
 
-        {/* Test posts — replace with real content */}
-        <section className="space-y-6">
-          {SAMPLE_POSTS.map((post) => (
-            <article
-              key={post.title}
-              className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 lg:p-8"
-            >
-              <span className="text-xs text-slate-400 font-medium">
-                {post.date}
-              </span>
-              <h2 className="text-lg lg:text-xl font-black text-slate-900 dark:text-white mt-2">
-                {post.title}
-              </h2>
-              <div className="mt-3 space-y-3">
-                {post.paragraphs.map((p, i) => (
-                  <p
-                    key={i}
-                    className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed"
-                  >
-                    {p}
-                  </p>
-                ))}
-              </div>
-            </article>
-          ))}
+        {/* Post cards — generated from the src/content/blog registry */}
+        <section>
+          <ContentCardGrid>
+            {BLOG_POSTS.map((post) => (
+              <ContentCard
+                key={post.slug}
+                to="/blog/$slug"
+                params={{ slug: post.slug }}
+                title={post.title}
+                description={post.excerpt}
+                image={post.image}
+                imageAlt={post.imageAlt}
+                meta={[{ label: formatContentDate(post.date) }]}
+                fallbackIcon={BookOpen}
+                ctaLabel="Read article"
+              />
+            ))}
+          </ContentCardGrid>
         </section>
 
         {/* Cross-link */}

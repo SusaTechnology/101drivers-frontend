@@ -1,14 +1,18 @@
+import { Link } from "@tanstack/react-router";
 import { Briefcase, MapPin, Clock, HeartHandshake } from "lucide-react";
 
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
 import { SiteFooter } from "../shared/SiteFooter";
+import {
+  ContentCard,
+  ContentCardGrid,
+} from "../shared/ContentCard";
+import { OPEN_ROLES } from "@/content/careers";
 
 /**
- * Careers page — TEST/SAMPLE content. The owner asked for placeholder
- * pages; replace the sample roles below with real openings when ready.
- * Apply buttons route to the support inbox already used across the site
- * (support@101drivers.com).
+ * Why-101-Drivers panels — page copy, not per-role content, so these
+ * stay inline. Roles come from the src/content/careers registry.
  */
 const WHY_SECTIONS = [
   {
@@ -31,30 +35,14 @@ const WHY_SECTIONS = [
   },
 ];
 
-const SAMPLE_ROLES = [
-  {
-    title: "Delivery Driver (Independent Contractor)",
-    location: "Greater Los Angeles, CA",
-    type: "Contractor",
-    description:
-      "Drive different cars from one location to another across the LA area. Pick your own jobs, see the route and pay before you accept, and get paid weekly. Requires an eligible vehicle, a clean record, and completed in-app onboarding.",
-  },
-  {
-    title: "Operations Coordinator",
-    location: "Greater Los Angeles, CA",
-    type: "Full-time",
-    description:
-      "Keep daily dispatch running smoothly: monitor active deliveries, help drivers and customers unblock issues, and flag patterns the product team should fix. Strong communication and calm-under-pressure are must-haves.",
-  },
-  {
-    title: "Customer Support Specialist",
-    location: "Remote (California)",
-    type: "Part-time",
-    description:
-      "Own the WhatsApp and email queues: answer quote questions, delivery status checks, and post-delivery reports. You are the voice customers quote back at us — write like a human, resolve like a pro.",
-  },
-];
-
+/**
+ * Careers index — the "why us" panels below are page copy, while the
+ * open roles are rendered as cards from the src/content/careers
+ * registry. Adding a role (a new file + one line in that folder's
+ * index.ts) automatically adds its card here and creates its
+ * /careers/$slug detail page — nothing on this page is hard-coded per
+ * role.
+ */
 function CareersPage() {
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark">
@@ -110,7 +98,7 @@ function CareersPage() {
           ))}
         </section>
 
-        {/* Open roles — sample content */}
+        {/* Open roles — cards generated from the src/content/careers registry */}
         <section>
           <h2 className="text-xl font-black text-slate-900 dark:text-white mb-1">
             Open roles
@@ -118,43 +106,23 @@ function CareersPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
             Sample listings — contact us even if your role is not listed.
           </p>
-          <div className="space-y-4">
-            {SAMPLE_ROLES.map((role) => (
-              <article
-                key={role.title}
-                className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div>
-                    <h3 className="text-base font-black text-slate-900 dark:text-white">
-                      {role.title}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                      <span className="inline-flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {role.location}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5" />
-                        {role.type}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mt-3">
-                      {role.description}
-                    </p>
-                  </div>
-                  <a
-                    href={`mailto:support@101drivers.com?subject=${encodeURIComponent(
-                      `Application: ${role.title}`,
-                    )}`}
-                    className="shrink-0 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-lime-500 hover:bg-lime-600 text-slate-950 text-xs font-black uppercase tracking-wider transition-colors"
-                  >
-                    Apply
-                  </a>
-                </div>
-              </article>
+          <ContentCardGrid>
+            {OPEN_ROLES.map((role) => (
+              <ContentCard
+                key={role.slug}
+                to="/careers/$slug"
+                params={{ slug: role.slug }}
+                title={role.title}
+                description={role.excerpt}
+                badge={role.type}
+                meta={[
+                  { icon: MapPin, label: role.location },
+                ]}
+                fallbackIcon={Briefcase}
+                ctaLabel="View role"
+              />
             ))}
-          </div>
+          </ContentCardGrid>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-6 leading-relaxed">
             101 Drivers Inc. is an equal opportunity employer. Independent
             contractor driving is not employment — drivers join through the

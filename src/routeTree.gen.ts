@@ -127,6 +127,9 @@ import { Route as AuthAcceptInviteRouteImport } from './routes/auth/accept-invit
 import { Route as AdminUserDetailUserIdRouteImport } from './routes/admin-user-detail/$userId'
 import { Route as TrackTokenIndexRouteImport } from './routes/track/$token/index'
 import { Route as TestReferralCodeIndexRouteImport } from './routes/test-referral/$code/index'
+import { Route as NewsSlugIndexRouteImport } from './routes/news/$slug/index'
+import { Route as CareersSlugIndexRouteImport } from './routes/careers/$slug/index'
+import { Route as BlogSlugIndexRouteImport } from './routes/blog/$slug/index'
 import { Route as AdminPricingConfigCreateIndexRouteImport } from './routes/admin-pricing-config/create/index'
 import { Route as AdminPricingConfigEditConfigIdRouteImport } from './routes/admin-pricing-config/edit/$configId'
 
@@ -747,6 +750,21 @@ const TestReferralCodeIndexRoute = TestReferralCodeIndexRouteImport.update({
   path: '/test-referral/$code/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NewsSlugIndexRoute = NewsSlugIndexRouteImport.update({
+  id: '/news/$slug/',
+  path: '/news/$slug/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CareersSlugIndexRoute = CareersSlugIndexRouteImport.update({
+  id: '/careers/$slug/',
+  path: '/careers/$slug/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogSlugIndexRoute = BlogSlugIndexRouteImport.update({
+  id: '/blog/$slug/',
+  path: '/blog/$slug/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPricingConfigCreateIndexRoute =
   AdminPricingConfigCreateIndexRouteImport.update({
     id: '/admin-pricing-config/create/',
@@ -879,6 +897,9 @@ export interface FileRoutesByFullPath {
   '/test-referral/': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
+  '/blog/$slug/': typeof BlogSlugIndexRoute
+  '/careers/$slug/': typeof CareersSlugIndexRoute
+  '/news/$slug/': typeof NewsSlugIndexRoute
   '/test-referral/$code/': typeof TestReferralCodeIndexRoute
   '/track/$token/': typeof TrackTokenIndexRoute
 }
@@ -1000,6 +1021,9 @@ export interface FileRoutesByTo {
   '/test-referral': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create': typeof AdminPricingConfigCreateIndexRoute
+  '/blog/$slug': typeof BlogSlugIndexRoute
+  '/careers/$slug': typeof CareersSlugIndexRoute
+  '/news/$slug': typeof NewsSlugIndexRoute
   '/test-referral/$code': typeof TestReferralCodeIndexRoute
   '/track/$token': typeof TrackTokenIndexRoute
 }
@@ -1123,6 +1147,9 @@ export interface FileRoutesById {
   '/test-referral/': typeof TestReferralIndexRoute
   '/admin-pricing-config/edit/$configId': typeof AdminPricingConfigEditConfigIdRoute
   '/admin-pricing-config/create/': typeof AdminPricingConfigCreateIndexRoute
+  '/blog/$slug/': typeof BlogSlugIndexRoute
+  '/careers/$slug/': typeof CareersSlugIndexRoute
+  '/news/$slug/': typeof NewsSlugIndexRoute
   '/test-referral/$code/': typeof TestReferralCodeIndexRoute
   '/track/$token/': typeof TrackTokenIndexRoute
 }
@@ -1247,6 +1274,9 @@ export interface FileRouteTypes {
     | '/test-referral/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
+    | '/blog/$slug/'
+    | '/careers/$slug/'
+    | '/news/$slug/'
     | '/test-referral/$code/'
     | '/track/$token/'
   fileRoutesByTo: FileRoutesByTo
@@ -1368,6 +1398,9 @@ export interface FileRouteTypes {
     | '/test-referral'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create'
+    | '/blog/$slug'
+    | '/careers/$slug'
+    | '/news/$slug'
     | '/test-referral/$code'
     | '/track/$token'
   id:
@@ -1490,6 +1523,9 @@ export interface FileRouteTypes {
     | '/test-referral/'
     | '/admin-pricing-config/edit/$configId'
     | '/admin-pricing-config/create/'
+    | '/blog/$slug/'
+    | '/careers/$slug/'
+    | '/news/$slug/'
     | '/test-referral/$code/'
     | '/track/$token/'
   fileRoutesById: FileRoutesById
@@ -1591,6 +1627,9 @@ export interface RootRouteChildren {
   TestReferralIndexRoute: typeof TestReferralIndexRoute
   AdminPricingConfigEditConfigIdRoute: typeof AdminPricingConfigEditConfigIdRoute
   AdminPricingConfigCreateIndexRoute: typeof AdminPricingConfigCreateIndexRoute
+  BlogSlugIndexRoute: typeof BlogSlugIndexRoute
+  CareersSlugIndexRoute: typeof CareersSlugIndexRoute
+  NewsSlugIndexRoute: typeof NewsSlugIndexRoute
   TestReferralCodeIndexRoute: typeof TestReferralCodeIndexRoute
   TrackTokenIndexRoute: typeof TrackTokenIndexRoute
 }
@@ -2423,6 +2462,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TestReferralCodeIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/news/$slug/': {
+      id: '/news/$slug/'
+      path: '/news/$slug'
+      fullPath: '/news/$slug/'
+      preLoaderRoute: typeof NewsSlugIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/careers/$slug/': {
+      id: '/careers/$slug/'
+      path: '/careers/$slug'
+      fullPath: '/careers/$slug/'
+      preLoaderRoute: typeof CareersSlugIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/$slug/': {
+      id: '/blog/$slug/'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug/'
+      preLoaderRoute: typeof BlogSlugIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-pricing-config/create/': {
       id: '/admin-pricing-config/create/'
       path: '/admin-pricing-config/create'
@@ -2590,6 +2650,9 @@ const rootRouteChildren: RootRouteChildren = {
   TestReferralIndexRoute: TestReferralIndexRoute,
   AdminPricingConfigEditConfigIdRoute: AdminPricingConfigEditConfigIdRoute,
   AdminPricingConfigCreateIndexRoute: AdminPricingConfigCreateIndexRoute,
+  BlogSlugIndexRoute: BlogSlugIndexRoute,
+  CareersSlugIndexRoute: CareersSlugIndexRoute,
+  NewsSlugIndexRoute: NewsSlugIndexRoute,
   TestReferralCodeIndexRoute: TestReferralCodeIndexRoute,
   TrackTokenIndexRoute: TrackTokenIndexRoute,
 }
