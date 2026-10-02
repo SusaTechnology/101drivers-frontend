@@ -35,6 +35,7 @@ import {
   PayoutSettings,
   PAYOUT_SETTINGS_KEY,
   normalizePayoutSettings,
+  notifyPayoutSettingsChanged,
 } from "./payout-settings";
 
 const LANDING_PAGE_SETTINGS_KEY = "LANDING_PAGE_SETTINGS";
@@ -341,8 +342,9 @@ export class AppSettingService extends AppSettingServiceBase {
   // Weekly sweep is THE payout rail (see payout-settings.ts for the
   // design contract). Values are normalized in payout-settings.ts so the
   // service, the payout engine, and the scheduler can never disagree.
-  // NOTE: weeklyCron/weeklyTimezone changes require an API restart to
-  // re-register the cron job; the other flags apply immediately.
+  // NOTE: weeklyCron/weeklyTimezone changes apply IMMEDIATELY — the save
+  // notifies the scheduler, which re-registers its cron in-process (no
+  // restart). The other flags are read live by the engine on every use.
   async getPayoutSettings(): Promise<PayoutSettings> {
     const row = await this.prisma.appSetting.findUnique({
       where: { key: PAYOUT_SETTINGS_KEY },
@@ -362,6 +364,16 @@ export class AppSettingService extends AppSettingServiceBase {
       create: { key: PAYOUT_SETTINGS_KEY, value: next as any },
       update: { value: next as any },
     });
+
+    // Instant-apply: publish AFTER the value is persisted so the scheduler
+    // re-registers its cron right away (schedule edits no longer wait for
+    // the 5-min watchdog tick). Flag-only saves that change nothing are
+    // skipped to avoid pointless cron churn. Listener failures are
+    // isolated inside notifyPayoutSettingsChanged — they can never fail
+    // this save, and the scheduler's watchdog re-syncs as a safety net.
+    if (JSON.stringify(next) !== JSON.stringify(current)) {
+      await notifyPayoutSettingsChanged(next);
+    }
 
     return next;
   }

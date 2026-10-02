@@ -6,12 +6,14 @@
  *
  * The schedule is SETTING-DRIVEN, not hardcoded: on boot the cron job is
  * registered from PAYOUT_SETTINGS (weeklyCron + weeklyTimezone; defaults
- * Monday 06:00 America/Los_Angeles). A settings watchdog re-checks
- * PAYOUT_SETTINGS every 5 minutes and re-registers the cron when the
- * schedule changed — admin edits apply WITHOUT a restart (and the job
- * self-heals if it ever disappears from the registry). The other payout
- * flags (minimum, autoTransferOnCompletion, driverCashoutEnabled) are
- * read LIVE by the engine on every use.
+ * Monday 06:00 America/Los_Angeles). Admin edits apply INSTANTLY: the
+ * settings save publishes an in-process change event and this scheduler
+ * re-registers the cron — no restart, no waiting. A lightweight watchdog
+ * still re-checks PAYOUT_SETTINGS every 5 minutes as a self-healing
+ * safety net for writes that bypass the API (direct DB edits, Prisma
+ * Studio) and re-registers if the job ever vanishes from the registry.
+ * The other payout flags (minimum, autoTransferOnCompletion,
+ * driverCashoutEnabled) are read LIVE by the engine on every use.
  *
  * Safety:
  *   - Drivers WITHOUT completed Connect onboarding are skipped (their
@@ -35,6 +37,7 @@ import {
   PAYOUT_SETTINGS_KEY,
   defaultPayoutSettings,
   normalizePayoutSettings,
+  onPayoutSettingsChanged,
 } from "../appSetting/payout-settings";
 
 const WEEKLY_PAYOUT_JOB_NAME = "weekly-driver-payouts";
@@ -50,6 +53,8 @@ export class WeeklyPayoutScheduler {
   private lastAppliedCron: string | null = null;
   private lastAppliedTimezone: string | null = null;
   private watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  /** Unsubscribe from PAYOUT_SETTINGS change events (module destroy). */
+  private unsubscribeSettingsChange: (() => void) | null = null;
 
   constructor(
     @Optional() @Inject(PaymentPayoutEngine)
@@ -139,10 +144,13 @@ export class WeeklyPayoutScheduler {
   }
 
   /**
-   * Watchdog tick: re-register the cron when PAYOUT_SETTINGS changed
-   * (admin edited weeklyCron/weeklyTimezone — applies without a restart)
-   * or when the job vanished from the registry (self-healing). A transient
-   * DB read failure keeps the current job untouched.
+   * Watchdog tick — the SAFETY NET, not the primary apply path: admin
+   * edits reach us instantly via onPayoutSettingsChanged (published by
+   * AppSettingService.updatePayoutSettings). This tick catches what an
+   * in-process event can never see: writes that bypass the API (direct
+   * DB edits, Prisma Studio, a manual hotfix) and a job that vanished
+   * from the registry (self-healing). A transient DB read failure keeps
+   * the currently registered job untouched.
    */
   async checkCronSync(): Promise<void> {
     if (!this.prisma || !this.schedulerRegistry) return;
@@ -178,8 +186,9 @@ export class WeeklyPayoutScheduler {
   }
 
   /**
-   * Periodically re-check PAYOUT_SETTINGS so admin schedule edits apply
-   * without a restart. The timer never keeps the process alive.
+   * Periodically re-check PAYOUT_SETTINGS as a self-healing safety net
+   * for out-of-band writes (the change event is the instant path).
+   * The timer never keeps the process alive.
    */
   private startSettingsWatchdog(): void {
     if (this.watchdogTimer || !this.prisma || !this.schedulerRegistry) return;
@@ -191,10 +200,21 @@ export class WeeklyPayoutScheduler {
 
   onModuleInit(): void {
     void this.syncCronFromSettings();
+    // PRIMARY apply path: re-register the moment an admin saves
+    // PAYOUT_SETTINGS via the API. The handler re-reads the persisted row
+    // (instead of trusting the event payload) so it always applies exactly
+    // what is in the DB, and re-registration stays idempotent.
+    this.unsubscribeSettingsChange = onPayoutSettingsChanged(() =>
+      this.syncCronFromSettings(),
+    );
     this.startSettingsWatchdog();
   }
 
   onModuleDestroy(): void {
+    if (this.unsubscribeSettingsChange) {
+      this.unsubscribeSettingsChange();
+      this.unsubscribeSettingsChange = null;
+    }
     if (this.watchdogTimer) {
       clearInterval(this.watchdogTimer);
       this.watchdogTimer = null;

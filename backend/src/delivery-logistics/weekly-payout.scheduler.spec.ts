@@ -3,12 +3,17 @@
  *
  * The cron method is invoked directly (the cron expression itself isn't
  * under test): verifies the kill switch, the engine hand-off, error
- * resilience, and the SETTINGS-DRIVEN registration (PAYOUT_SETTINGS ->
+ * resilience, the SETTINGS-DRIVEN registration (PAYOUT_SETTINGS ->
  * SchedulerRegistry, with a safe fallback if the configured expression
- * is invalid).
+ * is invalid), the watchdog safety net, and the INSTANT apply path
+ * (settings change event -> re-registration).
  */
 import { WeeklyPayoutScheduler } from "./weekly-payout.scheduler";
-import { defaultPayoutSettings } from "../appSetting/payout-settings";
+import {
+  defaultPayoutSettings,
+  notifyPayoutSettingsChanged,
+  onPayoutSettingsChanged,
+} from "../appSetting/payout-settings";
 
 jest.mock("cron", () => ({
   CronJob: jest.fn().mockImplementation(() => ({ start: jest.fn() })),
@@ -274,5 +279,88 @@ describe("WeeklyPayoutScheduler", () => {
 
     scheduler.onModuleDestroy();
     expect(scheduler["watchdogTimer"]).toBeNull();
+  });
+
+  // ── instant apply: settings change event (primary path) ─────────
+
+  it("re-registers the cron immediately when a settings change event fires", async () => {
+    const prisma = {
+      appSetting: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({ key: "PAYOUT_SETTINGS", value: null }) // boot → defaults
+          .mockResolvedValue({
+            key: "PAYOUT_SETTINGS",
+            value: { weeklyCron: "30 17 * * 5", weeklyTimezone: "America/New_York" },
+          }),
+      },
+    };
+    const registry = makeSchedulerRegistry();
+    const scheduler = new WeeklyPayoutScheduler(undefined, prisma as any, registry as any);
+
+    scheduler.onModuleInit();
+    // Let the fire-and-forget boot sync settle before asserting on it.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(registry.addCronJob).toHaveBeenCalledTimes(1);
+
+    // Admin saves via the API — AppSettingService publishes AFTER the
+    // upsert commits; the handler re-reads the persisted row.
+    await notifyPayoutSettingsChanged({
+      ...defaultPayoutSettings,
+      weeklyCron: "30 17 * * 5",
+      weeklyTimezone: "America/New_York",
+    });
+
+    expect(registry.addCronJob).toHaveBeenCalledTimes(2);
+    expect(CronJobMock).toHaveBeenLastCalledWith(
+      "30 17 * * 5",
+      expect.any(Function),
+      null,
+      false,
+      "America/New_York",
+    );
+
+    scheduler.onModuleDestroy();
+  });
+
+  it("a failing change listener is isolated — the publish succeeds and the scheduler still re-registers", async () => {
+    const errorHandler = jest.fn(() => {
+      throw new Error("listener exploded");
+    });
+    const unsubscribeError = onPayoutSettingsChanged(errorHandler);
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const prisma = { appSetting: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const registry = makeSchedulerRegistry();
+    const scheduler = new WeeklyPayoutScheduler(undefined, prisma as any, registry as any);
+    scheduler.onModuleInit();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(registry.addCronJob).toHaveBeenCalledTimes(1);
+
+    // The admin save must never fail because a listener threw.
+    await expect(
+      notifyPayoutSettingsChanged({ ...defaultPayoutSettings, weeklyCron: "30 17 * * 5" }),
+    ).resolves.toBeUndefined();
+
+    expect(errorHandler).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalled();
+    expect(registry.addCronJob).toHaveBeenCalledTimes(2); // scheduler listener still ran
+
+    errorSpy.mockRestore();
+    unsubscribeError();
+    scheduler.onModuleDestroy();
+  });
+
+  it("stops applying settings changes after onModuleDestroy (unsubscribed)", async () => {
+    const prisma = { appSetting: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const registry = makeSchedulerRegistry();
+    const scheduler = new WeeklyPayoutScheduler(undefined, prisma as any, registry as any);
+    scheduler.onModuleInit();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    scheduler.onModuleDestroy();
+
+    await notifyPayoutSettingsChanged({ ...defaultPayoutSettings, weeklyCron: "30 17 * * 5" });
+
+    expect(registry.addCronJob).toHaveBeenCalledTimes(1); // boot registration only
   });
 });

@@ -17,11 +17,14 @@
  *   • The weekly sweep pays EVERYTHING at or above the minimum (Stripe's
  *     transfer minimum is $0.50 — a lower value would make transfers fail).
  *
- * NOTE: the cron SCHEDULE (expression + timezone) is registered at boot.
- * Changing it via the admin setting takes effect after the next API
- * restart (pm2 restart 101drivers-api). The other flags (minimum,
- * autoTransferOnCompletion, driverCashoutEnabled) are read LIVE on every
- * use — no restart needed.
+ * NOTE: the cron SCHEDULE (expression + timezone) is registered at boot
+ * and re-registered the moment an admin saves PAYOUT_SETTINGS through the
+ * API (in-process change notification — see onPayoutSettingsChanged
+ * below). A 5-minute watchdog in the scheduler stays as a self-healing
+ * safety net for writes that bypass this service (direct DB edits) and
+ * for re-registering a job that vanished from the registry. The other
+ * flags (minimum, autoTransferOnCompletion, driverCashoutEnabled) are
+ * read LIVE on every use — no restart, no re-registration needed.
  */
 
 export const PAYOUT_SETTINGS_KEY = "PAYOUT_SETTINGS";
@@ -158,4 +161,59 @@ export function describeWeeklyCron(settings: PayoutSettings): string {
   return `${dayName} at ${hour12}:${String(
     Number(fields[0]) || 0,
   ).padStart(2, "0")} ${ampm} (${settings.weeklyTimezone})`;
+}
+
+// ============================================================
+// CHANGE NOTIFICATION (in-process pub/sub, dependency-free)
+// ============================================================
+// PRIMARY apply path for schedule edits: when an admin saves
+// PAYOUT_SETTINGS through the API, the service publishes here and the
+// weekly payout scheduler re-registers its cron immediately — no restart,
+// no waiting for the next watchdog tick.
+//
+// The scheduler's 5-minute watchdog deliberately REMAINS as a safety net:
+// an in-process event can never see writes that bypass this service
+// (direct DB edits, Prisma Studio, a manual hotfix), nor heal a job that
+// vanished from the registry. Events give latency; the poll guarantees
+// convergence. Kept beside the settings contract (same standalone-module
+// philosophy as the rest of this file): no Nest DI wiring, no import
+// cycles, no extra package for a single event.
+
+export type PayoutSettingsChangeHandler = (
+  settings: PayoutSettings,
+) => void | Promise<void>;
+
+const payoutSettingsChangeHandlers = new Set<PayoutSettingsChangeHandler>();
+
+/**
+ * Subscribe to PAYOUT_SETTINGS saves. Returns an unsubscribe function
+ * (call on module destroy so torn-down consumers stop receiving events).
+ */
+export function onPayoutSettingsChanged(
+  handler: PayoutSettingsChangeHandler,
+): () => void {
+  payoutSettingsChangeHandlers.add(handler);
+  return () => {
+    payoutSettingsChangeHandlers.delete(handler);
+  };
+}
+
+/**
+ * Publish a saved settings value. Call ONLY after the new value is
+ * persisted. A failing listener is logged and skipped — a broken
+ * re-registration can never fail the admin's save (the watchdog
+ * re-syncs as a fallback).
+ */
+export async function notifyPayoutSettingsChanged(
+  settings: PayoutSettings,
+): Promise<void> {
+  for (const handler of [...payoutSettingsChangeHandlers]) {
+    try {
+      await handler(settings);
+    } catch (err: any) {
+      console.error(
+        `[payout-settings] change listener failed (watchdog will re-sync): ${err?.message}`,
+      );
+    }
+  }
 }
