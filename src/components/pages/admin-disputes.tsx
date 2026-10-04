@@ -47,6 +47,7 @@ import type {
   AdminDisputesQueryParams,
 } from '@/types/dispute';
 import {
+  ArrowLeft,
   Gavel,
   RefreshCw,
   Download,
@@ -484,6 +485,10 @@ export default function AdminDisputesPage() {
         <section className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-6">
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
+              <Link to="/admin-dashboard" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900">
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to Dashboard
+              </Link>
               <Badge variant="outline" className="bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300">
                 <Gavel className="w-3.5 h-3.5 mr-1" />
                 Disputes

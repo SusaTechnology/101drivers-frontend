@@ -1304,6 +1304,18 @@ export default function AdminUsersPage() {
           </div>
         )}
 
+        {/* Fetch indicator — the query keeps previous rows visible while a
+            filter/page change refetches, which read as "frozen". The
+            payments/disputes pages show this same spinner next to their
+            result counts; here it sits directly above the table. Hidden
+            during the initial load, where the skeleton rows below speak. */}
+        {usersFetching && !usersLoading && (
+          <div className="flex items-center justify-end gap-2 mb-3">
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-[10px] text-primary font-medium">Loading…</span>
+          </div>
+        )}
+
         {/* Table */}
         <Card className="rounded-2xl border-slate-200 dark:border-slate-800 overflow-hidden">
           <CardContent className="p-0">
@@ -1321,7 +1333,18 @@ export default function AdminUsersPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.map((user) => (
+                    {/* Loading state — first fetch for this filter combo has
+                        no rows to keep, so without this the table renders as
+                        a silent blank. Skeleton bars in a full-width cell
+                        reuse the TableSkeleton defined below the page. */}
+                    {usersLoading && (
+                      <TableRow className="border-b border-slate-100 dark:border-slate-800">
+                        <TableCell colSpan={7} className="px-0 py-0">
+                          <TableSkeleton rows={6} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!usersLoading && users.map((user) => (
                       <TableRow
                         key={user.id}
                         className="border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50"
