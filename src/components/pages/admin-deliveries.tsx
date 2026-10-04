@@ -1,6 +1,7 @@
 // components/pages/admin-deliveries.tsx
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useSearch } from '@tanstack/react-router';
+import { firstUrlParamValue, isTrueParam } from '@/lib/dashboardRoutes';
 import {
   Card,
   CardContent,
@@ -146,9 +147,34 @@ const CUSTOMER_TYPE_OPTIONS: { value: string; label: string }[] = [
 export default function AdminDeliveriesPage() {
   const { actionItems, signOut } = useAdminActions();
   const queryClient = useQueryClient();
-  
+
+  // ==================== DEEP-LINK FILTERS (dashboard urgent tiles) ====================
+  // Dashboard tiles link here with their filters in the URL, e.g.
+  //   Active without tracking → /admin-deliveries?statuses=ACTIVE&activeWithoutTracking=true
+  //   Compliance missing      → /admin-deliveries?complianceMissing=true
+  //   Listed without driver   → /admin-deliveries?statuses=LISTED&withoutAssignment=true
+  // The table must land showing ONLY those rows. Status values are
+  // validated against this page's own STATUS_OPTIONS so an unknown value
+  // can't select itself into an invisible state; boolean flags only ever
+  // turn ON from the URL (the dashboard never sends "false").
+  const searchParams = useSearch({ strict: false }) as Record<string, unknown>;
+  const deepLinkStatus = useMemo(() => {
+    const v = firstUrlParamValue(searchParams.statuses ?? searchParams.status);
+    return v && STATUS_OPTIONS.some((o) => o.value === v) ? v : undefined;
+  }, [searchParams]);
+  const deepLinkFlags = {
+    urgentOnly: isTrueParam(searchParams.urgentOnly),
+    disputedOnly: isTrueParam(searchParams.disputedOnly),
+    withoutAssignment: isTrueParam(searchParams.withoutAssignment),
+    requiresOpsConfirmation: isTrueParam(searchParams.requiresOpsConfirmation),
+    complianceMissing: isTrueParam(searchParams.complianceMissing),
+    activeWithoutTracking: isTrueParam(searchParams.activeWithoutTracking),
+    staleTracking: isTrueParam(searchParams.staleTracking),
+  };
+  const deepLinkKey = JSON.stringify([deepLinkStatus, deepLinkFlags]);
+
   // Filter state
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(deepLinkStatus ?? 'all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('all');
   const [customerTypeFilter, setCustomerTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -186,15 +212,33 @@ export default function AdminDeliveriesPage() {
   }, [searchQuery, debouncedSearch]);
   
   // Quick filter toggles
-  const [urgentOnly, setUrgentOnly] = useState(false);
-  const [disputedOnly, setDisputedOnly] = useState(false);
-  const [withoutAssignment, setWithoutAssignment] = useState(false);
-  const [requiresOpsConfirmation, setRequiresOpsConfirmation] = useState(false);
-  const [complianceMissing, setComplianceMissing] = useState(false);
-  const [activeWithoutTracking, setActiveWithoutTracking] = useState(false);
-  const [staleTracking, setStaleTracking] = useState(false);
-  
+  const [urgentOnly, setUrgentOnly] = useState(deepLinkFlags.urgentOnly);
+  const [disputedOnly, setDisputedOnly] = useState(deepLinkFlags.disputedOnly);
+  const [withoutAssignment, setWithoutAssignment] = useState(deepLinkFlags.withoutAssignment);
+  const [requiresOpsConfirmation, setRequiresOpsConfirmation] = useState(deepLinkFlags.requiresOpsConfirmation);
+  const [complianceMissing, setComplianceMissing] = useState(deepLinkFlags.complianceMissing);
+  const [activeWithoutTracking, setActiveWithoutTracking] = useState(deepLinkFlags.activeWithoutTracking);
+  const [staleTracking, setStaleTracking] = useState(deepLinkFlags.staleTracking);
+
   const [page, setPage] = useState(1);
+
+  // Re-apply a deep link when the dashboard navigates here with a NEW one
+  // while this page is already mounted (same route → no remount → the
+  // state initializers above never run again). Only turns filters ON —
+  // the dashboard never sends "false", and this must not clear a toggle
+  // the admin switched on by hand. The filter-change watcher below
+  // already resets the page to 1 whenever these states move.
+  useEffect(() => {
+    if (deepLinkStatus !== undefined) setStatusFilter(deepLinkStatus);
+    if (deepLinkFlags.urgentOnly) setUrgentOnly(true);
+    if (deepLinkFlags.disputedOnly) setDisputedOnly(true);
+    if (deepLinkFlags.withoutAssignment) setWithoutAssignment(true);
+    if (deepLinkFlags.requiresOpsConfirmation) setRequiresOpsConfirmation(true);
+    if (deepLinkFlags.complianceMissing) setComplianceMissing(true);
+    if (deepLinkFlags.activeWithoutTracking) setActiveWithoutTracking(true);
+    if (deepLinkFlags.staleTracking) setStaleTracking(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkKey]);
   
   // Reset page to 1 when any filter changes (not page itself)
   const prevFiltersRef = useRef<string>('');

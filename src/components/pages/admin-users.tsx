@@ -1,7 +1,8 @@
 // components/pages/admin-users.tsx
 // Admin Users Management Page - Unified Users Table
-import React, { useState, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { firstUrlParamValue } from '@/lib/dashboardRoutes';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -210,6 +211,72 @@ function statusOptionsForRole(role: string): { value: string; label: string }[] 
   if (role === 'DRIVER') return DRIVER_STATUS_OPTIONS;
   if (role === 'PRIVATE_CUSTOMER' || role === 'BUSINESS_CUSTOMER') return CUSTOMER_STATUS_OPTIONS;
   return V2_STATUS_OPTIONS;
+}
+
+// ==================== DEEP-LINK FILTERS (dashboard urgent tiles) ====================
+// The dashboard's urgent tiles link here WITH their filters in the URL:
+//   New Dealer Signups (alert) → /admin-users?roles=BUSINESS_CUSTOMER&customerApprovalStatus=PENDING
+//   Dealer approval pending    → /admin-users?customerType=BUSINESS&approvalStatus=PENDING
+//   Driver approval pending    → /admin-users?status={"in":["WAITLISTED","INVITED","PENDING_APPROVAL"]}
+// The table must land showing ONLY those rows — the reported bug was the
+// page ignoring the params and rendering every user. Every spelling the
+// dashboard emits is mapped onto the V2 filter state (Role + Status) and
+// validated against the same option lists the dropdowns render, so an
+// unknown value can never select itself into an invisible state.
+// The {in:[...]} driver trio folds into Role=Driver + Status=Pending —
+// the V2 endpoint expands PENDING back to exactly those three driver
+// states, so the landing rows match the tile count 1:1.
+const DRIVER_PENDING_TRIO = ['WAITLISTED', 'INVITED', 'PENDING_APPROVAL'];
+
+function parseUsersDeepLink(
+  params: Record<string, unknown>
+): { role?: string; status?: string } {
+  // Role: "roles"/"role" (alert spelling) first, then customerType
+  // (Needs-Attention dealer spelling: BUSINESS/PRIVATE → user roles).
+  let role: string | undefined;
+  const rawRole = firstUrlParamValue(params.roles ?? params.role);
+  if (rawRole && ROLE_OPTIONS.some((o) => o.value === rawRole)) {
+    role = rawRole;
+  } else {
+    const customerType = firstUrlParamValue(params.customerType);
+    if (customerType === 'BUSINESS' || customerType === 'PRIVATE') {
+      role = customerType === 'BUSINESS' ? 'BUSINESS_CUSTOMER' : 'PRIVATE_CUSTOMER';
+    }
+  }
+
+  // Status: the Needs-Attention driver card sends a Prisma-style
+  // { in: [...] } object; the alert cards send flat strings.
+  let status: string | undefined;
+  if (
+    params.status &&
+    typeof params.status === 'object' &&
+    !Array.isArray(params.status)
+  ) {
+    const inList = (params.status as { in?: unknown }).in;
+    const vals = Array.isArray(inList)
+      ? inList.filter((s): s is string => typeof s === 'string')
+      : [];
+    if (vals.length > 0 && vals.every((s) => DRIVER_PENDING_TRIO.includes(s))) {
+      status = 'PENDING';
+      // The trio only exists on drivers — without forcing the role,
+      // "Pending" would also sweep in pending customers.
+      role = role ?? 'DRIVER';
+    }
+  } else {
+    status = firstUrlParamValue(
+      params.customerApprovalStatus ?? params.approvalStatus ?? params.status
+    );
+  }
+
+  // Keep only values the resolved role's dropdown actually renders.
+  if (
+    status &&
+    !statusOptionsForRole(role ?? 'all').some((o) => o.value === status)
+  ) {
+    status = undefined;
+  }
+
+  return { role, status };
 }
 
 // Dedicated admin lifecycle dropdown — swaps in for the unified Status
@@ -437,12 +504,19 @@ export default function AdminUsersPage() {
   const loginSnapshotSuperAdmin = getUser()?.isSuperAdmin === true;
   const navigate = useNavigate();
 
+  // Deep-link filters from the dashboard urgent tiles (see
+  // parseUsersDeepLink above) — they seed the SAME state the dropdowns
+  // drive, so the first fetch is already filtered and loosening a filter
+  // afterwards behaves exactly like a hand-picked one.
+  const searchParams = useSearch({ strict: false }) as Record<string, unknown>;
+  const deepLink = useMemo(() => parseUsersDeepLink(searchParams), [searchParams]);
+
   // ==================== FILTER STATE (V2 — simplified) ====================
   // Replaced the old 14 filter states with 5 clean ones.
   // The V2 backend endpoint handles the unified status mapping.
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState(deepLink.role ?? 'all');
+  const [statusFilter, setStatusFilter] = useState(deepLink.status ?? 'all');
   // Dedicated ADMIN lifecycle status — only visible (and only sent) while
   // Role = Admin. Kept separate from statusFilter so each dropdown
   // remembers its own selection while the other one is hidden.
@@ -483,6 +557,22 @@ export default function AdminUsersPage() {
   // instead of silently keeping a region filter alongside it.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // The dashboard can navigate here with a NEW deep link while this page
+  // is already mounted (same route → no remount → the state initializers
+  // above never run again). Re-apply whenever the deep link changes;
+  // picking a different tile is the only way it can change, and editing
+  // filters on this page never rewrites the URL, so this never fights
+  // the admin's hand.
+  const deepLinkKey = JSON.stringify(deepLink);
+  useEffect(() => {
+    if (deepLink.role !== undefined) setRoleFilter(deepLink.role);
+    if (deepLink.status !== undefined) setStatusFilter(deepLink.status);
+    if (deepLink.role !== undefined || deepLink.status !== undefined) {
+      setPage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkKey]);
 
   // ==================== DIALOG STATE ====================
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -1,6 +1,7 @@
 // components/pages/admin-disputes.tsx
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useSearch } from '@tanstack/react-router';
+import { firstUrlParamValue } from '@/lib/dashboardRoutes';
 import {
   Card,
   CardContent,
@@ -119,8 +120,23 @@ export default function AdminDisputesPage() {
   const actorUser = getUser();
   const actorUserId = actorUser?.id;
 
+  // ==================== DEEP-LINK FILTERS (dashboard urgent tiles) ====================
+  // The dashboard's "Open disputes" tile links here as
+  //   /admin-disputes?statuses=OPEN&statuses=UNDER_REVIEW
+  // and the table must land on live disputes, not the full list. The
+  // status dropdown is single-select, so it takes the FIRST status from
+  // the URL (Open — the actionable one); values are validated against
+  // this page's STATUS_OPTIONS so an unknown value can't select itself
+  // into an invisible state.
+  const searchParams = useSearch({ strict: false }) as Record<string, unknown>;
+  const deepLinkStatus = useMemo(() => {
+    const v = firstUrlParamValue(searchParams.statuses ?? searchParams.status);
+    return v && STATUS_OPTIONS.some((o) => o.value === v) ? v : undefined;
+  }, [searchParams]);
+  const deepLinkKey = JSON.stringify(deepLinkStatus);
+
   // Filter state
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(deepLinkStatus ?? 'all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
 
@@ -154,6 +170,14 @@ export default function AdminDisputesPage() {
 
   // Quick filter toggles
   const [legalHoldOnly, setLegalHoldOnly] = useState(false);
+
+  // Re-apply a deep link when the dashboard navigates here with a NEW one
+  // while this page is already mounted (same route → no remount → the
+  // state initializer above never runs again).
+  useEffect(() => {
+    if (deepLinkStatus !== undefined) setStatusFilter(deepLinkStatus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkKey]);
 
   // Dialog states
   const [selectedDispute, setSelectedDispute] = useState<DisputeListItem | null>(null);

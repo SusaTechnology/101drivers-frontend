@@ -89,6 +89,53 @@ export function getFilterQueryString(filters?: Record<string, unknown> | null): 
   return queryString ? `?${queryString}` : '';
 }
 
+// ============================================================
+// Deep-link readers — the landing side of the filters above.
+//
+// Dashboard urgent tiles (NeedsAttention / AlertsStrip) navigate to the
+// admin lists WITH the same filter objects serialized into the URL
+// (e.g. /admin-users?roles=BUSINESS_CUSTOMER&customerApprovalStatus=PENDING).
+// The list pages call these helpers to turn those params back into their
+// own filter state, so tapping "2 urgent" lands on exactly those 2 rows
+// instead of the unfiltered list.
+//
+// TanStack Router's serializer round-trips arrays and nested objects as
+// JSON (statuses=["ACTIVE"], status={"in":[...]}), while a hand-typed or
+// shared URL carries plain strings — the readers accept every shape.
+// ============================================================
+
+/**
+ * First usable value from a URL search param. Accepts a plain string
+ * ("ACTIVE"), a comma-separated string ("OPEN,UNDER_REVIEW"), or the
+ * router-parsed array form (["ACTIVE"]) — and returns the first token,
+ * which is all the single-select dropdowns on the list pages need.
+ */
+export function firstUrlParamValue(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const first = value.split(',')[0].trim();
+    return first || undefined;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const v = firstUrlParamValue(item);
+      if (v) return v;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * URL truthiness for boolean deep-link flags ("?complianceMissing=true").
+ * The dashboard serializes booleans as "true"/"false" strings; only an
+ * explicit true counts — absent, "false", or anything else means off.
+ */
+export function isTrueParam(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === 'string') return value === 'true' || value === '1';
+  if (Array.isArray(value)) return value.some(isTrueParam);
+  return false;
+}
+
 /**
  * Get status badge color class
  */

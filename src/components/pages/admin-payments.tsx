@@ -1,6 +1,7 @@
 // components/pages/admin-payments.tsx
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useSearch } from '@tanstack/react-router';
+import { firstUrlParamValue } from '@/lib/dashboardRoutes';
 import {
   Card,
   CardContent,
@@ -174,9 +175,24 @@ function getStatusColor(status: PaymentStatus) {
 
 export default function AdminPaymentsPage() {
   const { actionItems, signOut } = useAdminActions();
-  
+
+  // ==================== DEEP-LINK FILTERS (dashboard urgent tiles) ====================
+  // The dashboard's "Payment failures" tile links here as
+  //   /admin-payments?statuses=FAILED
+  // and the table must land showing exactly those failed payments — the
+  // badge count on the tile is Payment.status = FAILED, so the first
+  // status from the URL feeds the SAME single-select dropdown the admin
+  // uses. Values are validated against this page's STATUS_OPTIONS so an
+  // unknown value can't select itself into an invisible state.
+  const searchParams = useSearch({ strict: false }) as Record<string, unknown>;
+  const deepLinkStatus = useMemo(() => {
+    const v = firstUrlParamValue(searchParams.statuses ?? searchParams.status);
+    return v && STATUS_OPTIONS.some((o) => o.value === v) ? v : undefined;
+  }, [searchParams]);
+  const deepLinkKey = JSON.stringify(deepLinkStatus);
+
   // Filter state
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(deepLinkStatus ?? 'all');
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('all');
   const [providerFilter, setProviderFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -218,6 +234,15 @@ export default function AdminPaymentsPage() {
   const [failedOnly, setFailedOnly] = useState(false);
   
   const [page, setPage] = useState(1);
+
+  // Re-apply a deep link when the dashboard navigates here with a NEW one
+  // while this page is already mounted (same route → no remount → the
+  // state initializer above never runs again). The filter-change watcher
+  // below already resets the page to 1 whenever statusFilter moves.
+  useEffect(() => {
+    if (deepLinkStatus !== undefined) setStatusFilter(deepLinkStatus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkKey]);
   
   // Reset page to 1 when any filter changes
   const prevFiltersRef = useRef<string>('');
