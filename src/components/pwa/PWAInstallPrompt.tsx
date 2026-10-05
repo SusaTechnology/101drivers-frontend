@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Download, Smartphone } from 'lucide-react';
+import { safeLocalStorage } from '@/lib/safeStorage';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -23,7 +24,10 @@ export function PWAInstallPrompt() {
     setIsIOS(iOS);
 
     // Check if user dismissed recently
-    const dismissed = localStorage.getItem('pwa-install-dismissed');
+    // Safe read — this prompt is mounted in __root on EVERY page; a raw
+    // localStorage.getItem here would crash the entire app for webviews
+    // with null storage (in-app browsers, private mode).
+    const dismissed = safeLocalStorage.get('pwa-install-dismissed');
     if (dismissed) {
       const dismissedTime = parseInt(dismissed);
       const sevenDays = 7 * 24 * 60 * 60 * 1000;
@@ -94,7 +98,7 @@ export function PWAInstallPrompt() {
   const handleDismiss = useCallback(() => {
     setShowPrompt(false);
     // Remember dismissal for 7 days
-    localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+    safeLocalStorage.set('pwa-install-dismissed', Date.now().toString());
   }, []);
 
   // Don't show if already installed

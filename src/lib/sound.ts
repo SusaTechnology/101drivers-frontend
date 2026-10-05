@@ -14,6 +14,8 @@
  */
 
 // ── Constants ──────────────────────────────────────────────────────────────
+import { safeLocalStorage } from '@/lib/safeStorage'
+
 const SOUND_URL = '/assets/notification.mp3'
 const STORAGE_KEY = 'driverSoundEnabled'
 
@@ -23,7 +25,11 @@ let audioContext: AudioContext | null = null
 let audioBuffer: AudioBuffer | null = null
 let audioBufferLoaded = false
 let audioContextFailed = false
-let soundEnabled = localStorage.getItem(STORAGE_KEY) !== 'false' // default ON
+// Safe read — this line runs at MODULE EVALUATION time, i.e. the moment the
+// /driver/* route chunk loads. A raw localStorage.getItem here crashes the
+// whole driver app for webviews with null storage BEFORE any component
+// even renders.
+let soundEnabled = safeLocalStorage.get(STORAGE_KEY) !== 'false' // default ON
 
 // ── Preference management ──────────────────────────────────────────────────
 

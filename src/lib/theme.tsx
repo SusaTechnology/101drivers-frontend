@@ -12,6 +12,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { safeLocalStorage } from '@/lib/safeStorage'
 
 type Theme = 'light' | 'dark'
 
@@ -44,7 +45,11 @@ export function ThemeProvider({
 }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme | undefined>(() => {
     if (typeof window === 'undefined') return defaultTheme
-    return (localStorage.getItem('theme') as Theme) || defaultTheme
+    // Safe read — this initializer runs during RENDER, so a raw
+    // localStorage.getItem here would crash every ThemeProvider-wrapped
+    // route (signin, onboarding-complete, application-submitted) on
+    // webviews where localStorage is null.
+    return (safeLocalStorage.get('theme') as Theme) || defaultTheme
   })
 
   // Apply the theme to <html> whenever it changes
@@ -61,7 +66,7 @@ export function ThemeProvider({
       }
     }
 
-    localStorage.setItem('theme', theme)
+    safeLocalStorage.set('theme', theme)
   }, [theme, attribute])
 
   const setTheme = useCallback((newTheme: Theme) => {

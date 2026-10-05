@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
+import { safeLocalStorage, safeSessionStorage } from "@/lib/safeStorage";
 import {
   ArrowRight,
   Home,
@@ -281,8 +282,11 @@ export default function DriverOnboardingPage() {
       toast.success("Code sent to your email", {
         description: `${data.message}`,
       });
-      // Store payload for the verify page
-      sessionStorage.setItem(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(variables));
+      // Store payload for the verify page — safe storage: the OTP email was
+      // already sent successfully at this point; a raw sessionStorage write
+      // must not crash the page into "Something went wrong" right after the
+      // "Code sent" toast.
+      safeSessionStorage.set(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(variables));
       // Navigate to the dedicated OTP verification page
       navigate({ to: '/driver-verify-email' });
     },
@@ -392,7 +396,9 @@ export default function DriverOnboardingPage() {
     const urlOtp = urlParams.get('otp');
 
     if (urlOtp) {
-      const draftStr = localStorage.getItem(DRIVER_SIGNUP_DRAFT_KEY);
+      // Safe read — this effect runs on mount; raw localStorage access here
+      // crashed email-link resume on webviews with null storage.
+      const draftStr = safeLocalStorage.get(DRIVER_SIGNUP_DRAFT_KEY);
       if (draftStr) {
         try {
           const draft = JSON.parse(draftStr);
@@ -416,7 +422,7 @@ export default function DriverOnboardingPage() {
               ...(referralCode ? { referralCode } : {}),
             };
             // Store payload and redirect to verify page (with OTP in URL)
-            sessionStorage.setItem(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(payload));
+            safeSessionStorage.set(DRIVER_PENDING_PAYLOAD_KEY, JSON.stringify(payload));
             navigate({ to: '/driver-verify-email', search: { otp: urlOtp } });
           }
         } catch (e) {
@@ -459,11 +465,15 @@ export default function DriverOnboardingPage() {
       ...(referralCode ? { referralCode } : {}),
     };
 
-    // Save draft to localStorage so user can resume via email link
+    // Save draft to localStorage so user can resume via email link.
+    // Safe write — with storage unavailable (private mode / in-app webviews)
+    // the draft simply won't persist; signup itself still proceeds. A raw
+    // setItem here used to throw BEFORE the OTP call, leaving the form
+    // silently dead — no toast, no navigation.
     const draft = {
       formData: data,
     };
-    localStorage.setItem(DRIVER_SIGNUP_DRAFT_KEY, JSON.stringify(draft));
+    safeLocalStorage.set(DRIVER_SIGNUP_DRAFT_KEY, JSON.stringify(draft));
 
     // Send OTP
     sendOtpMutation.mutate(basePayload);

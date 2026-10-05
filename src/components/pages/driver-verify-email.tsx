@@ -5,6 +5,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { toast } from 'sonner';
 import { ArrowRight, Mail, RefreshCw, Loader2 } from 'lucide-react';
 import { useDataMutation } from '@/lib/tanstack/dataQuery';
+import { safeLocalStorage, safeSessionStorage } from '@/lib/safeStorage';
 
 const DRIVER_SIGNUP_DRAFT_KEY = 'driverSignupDraft';
 const DRIVER_PENDING_PAYLOAD_KEY = 'driverPendingPayload';
@@ -52,7 +53,7 @@ export default function DriverVerifyEmailPage() {
   // Load pending signup data from sessionStorage
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem(DRIVER_PENDING_PAYLOAD_KEY);
+      const stored = safeSessionStorage.get(DRIVER_PENDING_PAYLOAD_KEY);
       if (stored) {
         const payload = JSON.parse(stored);
         setPendingPayload(payload);
@@ -106,12 +107,16 @@ export default function DriverVerifyEmailPage() {
       toast.success('Application submitted!', {
         description: "We'll contact you when we need more drivers in your area.",
       });
-      // Clear session data
-      sessionStorage.removeItem(DRIVER_PENDING_PAYLOAD_KEY);
-      localStorage.removeItem(DRIVER_SIGNUP_DRAFT_KEY);
+      // Clear session data — safe storage: this is bookkeeping AFTER the
+      // backend already created the account. A raw localStorage call here
+      // used to throw on webviews with null storage and crash the page to
+      // "Something went wrong" right after the success toast — the exact
+      // "error after successfully submitted" report.
+      safeSessionStorage.remove(DRIVER_PENDING_PAYLOAD_KEY);
+      safeLocalStorage.remove(DRIVER_SIGNUP_DRAFT_KEY);
       // Store non-sensitive data
       const { password, ...safeData } = variables;
-      localStorage.setItem('driverSignupData', JSON.stringify(safeData));
+      safeLocalStorage.set('driverSignupData', JSON.stringify(safeData));
       // Navigate to success page
       navigate({ to: '/driver-application-submitted' });
     },

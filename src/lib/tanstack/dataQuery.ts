@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { socketConnect, socketDisconnect } from "@/lib/socket";
+import { safeLocalStorage } from "@/lib/safeStorage";
 
 // ==================== TOKEN & USER MANAGEMENT ====================
 const ACCESS_TOKEN_KEY = "accessToken";
@@ -39,20 +40,20 @@ let currentUser: {
 } | null = null;
 
 export function getAccessToken(): string | null {
-  return currentAccessToken ?? localStorage.getItem(ACCESS_TOKEN_KEY);
+  return currentAccessToken ?? safeLocalStorage.get(ACCESS_TOKEN_KEY);
 }
 
 export function setAccessToken(token: string) {
   currentAccessToken = token;
-  if (token) localStorage.setItem(ACCESS_TOKEN_KEY, token);
-  else localStorage.removeItem(ACCESS_TOKEN_KEY);
+  if (token) safeLocalStorage.set(ACCESS_TOKEN_KEY, token);
+  else safeLocalStorage.remove(ACCESS_TOKEN_KEY);
   // Connect WebSocket when user logs in
   socketConnect(token);
 }
 
 export function getUser() {
   if (!currentUser) {
-    const stored = localStorage.getItem(USER_KEY);
+    const stored = safeLocalStorage.get(USER_KEY);
     if (stored) currentUser = JSON.parse(stored);
   }
   return currentUser;
@@ -60,8 +61,8 @@ export function getUser() {
 
 export function setUser(user: typeof currentUser) {
   currentUser = user;
-  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
-  else localStorage.removeItem(USER_KEY);
+  if (user) safeLocalStorage.set(USER_KEY, JSON.stringify(user));
+  else safeLocalStorage.remove(USER_KEY);
 }
 
 // Remember the last known roles so the session-expired redirect
@@ -77,8 +78,8 @@ export function clearAuth() {
   currentUser = null;
   refreshTokenPromise = null;
   lastRefreshAttemptTime = 0;
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  safeLocalStorage.remove(ACCESS_TOKEN_KEY);
+  safeLocalStorage.remove(USER_KEY);
   // Disconnect WebSocket when user logs out
   socketDisconnect();
 }
