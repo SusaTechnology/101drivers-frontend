@@ -572,7 +572,12 @@ async completeOnboarding(
           : null,
         residentialCity: dto.residentialCity.trim(),
         residentialState: dto.residentialState.trim(),
-        residentialZip: dto.residentialZip.trim(),
+        // ZIP is no longer collected on the onboarding form. When the
+        // client omits it, keep the ZIP already stored from signup
+        // untouched; when a client still sends it, honor it.
+        ...(dto.residentialZip
+          ? { residentialZip: dto.residentialZip.trim() }
+          : {}),
         selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
         status: EnumDriverStatus.PENDING_APPROVAL,
         onboardingCompletedAt: new Date(),
@@ -658,7 +663,12 @@ async completeOnboardingByToken(
           : null,
         residentialCity: dto.residentialCity.trim(),
         residentialState: dto.residentialState.trim(),
-        residentialZip: dto.residentialZip.trim(),
+        // ZIP is no longer collected on the onboarding form. When the
+        // client omits it, keep the ZIP already stored from signup
+        // untouched; when a client still sends it, honor it.
+        ...(dto.residentialZip
+          ? { residentialZip: dto.residentialZip.trim() }
+          : {}),
         selfiePhotoUrl: dto.selfiePhotoUrl.trim(),
         status: EnumDriverStatus.PENDING_APPROVAL,
         onboardingCompletedAt: new Date(),

@@ -60,10 +60,9 @@ import {
   getUser,
   authFetchRaw,
 } from "@/lib/tanstack/dataQuery";
-import { useDebouncedValue } from "@/hooks/useDebounce";
-// Shared California-ZIP rule — the exact helpers the signup form
+// Shared California-ZIP rule — the exact helper the signup form
 // (driverOnboarding.tsx) uses, so both forms can never drift apart.
-import { isCaliforniaZip, CALIFORNIA_ZIP_ERROR_MESSAGE } from "./driverOnboarding";
+import { isCaliforniaZip } from "./driverOnboarding";
 
 // ==================== CONSTANTS ====================
 
@@ -148,13 +147,10 @@ const onboardingCompleteSchema = z.object({
     .string()
     .min(1, "State is required")
     .regex(/^[A-Z]{2}$/, "State must be a valid 2-letter code"),
-  residentialZip: z
-    .string()
-    .min(1, "ZIP code is required")
-    .regex(/^\d{5}$/, "Enter a valid 5-digit ZIP code")
-    .refine((zip) => isCaliforniaZip(zip), {
-      message: CALIFORNIA_ZIP_ERROR_MESSAGE,
-    }),
+  // residentialZip is deliberately NOT collected on this form — the ZIP
+  // captured at signup (required, California-validated there) is
+  // authoritative; it is submitted from savedZip and the backend keeps
+  // the stored value when this payload omits it.
   selfiePhotoUrl: z.string().min(1, "Selfie photo is required"),
 });
 
@@ -195,25 +191,6 @@ interface OnboardingStatusResponse {
   driverStatus?: string;
 }
 
-/** Response of GET /api/auth/public/validate-zip/:zip (public, no auth) —
- *  same endpoint and shape the signup form's live ZIP verdict consumes. */
-interface ZipCheckResponse {
-  valid: boolean;
-  zip: string;
-  state: "CA" | null;
-  reason: "INVALID_FORMAT" | "OUT_OF_STATE" | null;
-  message: string;
-}
-
-/** Verdict states rendered by the fallback ZIP field — mirrors
- *  driverOnboarding.tsx so both fields behave identically. */
-type ZipVerdict =
-  | "empty"
-  | "format-error"
-  | "checking"
-  | "valid"
-  | "not-california";
-
 interface OnboardingCompletePayload {
   ssn: string;
   licenseNumber: string;
@@ -224,7 +201,7 @@ interface OnboardingCompletePayload {
   residentialAddressLine2?: string;
   residentialCity: string;
   residentialState: string;
-  residentialZip: string;
+  residentialZip?: string;
   selfiePhotoUrl: string;
 }
 
@@ -244,18 +221,11 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [driverName, setDriverName] = useState<string | null>(null);
   // ZIP captured by the signup form (stored as Driver.residentialZip at
-  // signup). When present, this form reuses it instead of asking again —
-  // the input is hidden and the saved value is submitted unchanged. Null
-  // (legacy accounts whose signup ZIP was dropped, lookup failures, or a
-  // stored value that is not a valid California ZIP) keeps the ZIP input
-  // visible exactly as before.
+  // signup, required and California-validated there). This form never
+  // asks for a ZIP — when the backend reports the saved value it is
+  // submitted unchanged; when absent (legacy/API-created records),
+  // nothing is sent and the backend keeps whatever is stored.
   const [savedZip, setSavedZip] = useState<string | null>(null);
-  // Fallback ZIP field interaction tracking — same policy as the signup
-  // form: never red while the user is typing; format red only after blur
-  // with fewer than 5 digits; service-area red only once a complete
-  // 5-digit ZIP gets the "not in California" verdict (or on submit).
-  const [zipFocused, setZipFocused] = useState(false);
-  const [zipBlurred, setZipBlurred] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
@@ -332,20 +302,9 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       residentialAddressLine2: "",
       residentialCity: "",
       residentialState: "",
-      residentialZip: "",
       selfiePhotoUrl: "",
     },
   });
-
-  // Reuse the ZIP collected at signup: when the backend reports a saved
-  // residentialZip, seed the form with it so the driver never re-types it.
-  // The value is validated and submitted exactly as before — only the
-  // visible input is hidden when we already have the ZIP on file.
-  useEffect(() => {
-    if (savedZip) {
-      setValue("residentialZip", savedZip, { shouldValidate: true });
-    }
-  }, [savedZip, setValue]);
 
   // Selfie photo upload handler
   const handleSelfieChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -396,6 +355,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       setIsSubmitting(true);
       const payload = {
         ...data,
+        // ZIP is never asked on this form: submit the signup ZIP when the
+        // backend reported one; omit it otherwise so the backend keeps
+        // the already-stored value.
+        ...(savedZip ? { residentialZip: savedZip } : {}),
         ...(agreementAcceptedAt ? { agreementAcceptedAt } : {}),
       };
       let res: Response;
@@ -443,54 +406,8 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const watchAddressLine1 = watch("residentialAddressLine1");
   const watchCity = watch("residentialCity");
   const watchState = watch("residentialState");
-  const watchZipCode = watch("residentialZip");
 
   const ssnIsValid = watchSsn?.trim() && /^\d{9}$/.test(watchSsn);
-
-  // ── Live California service-area check on the fallback ZIP field ────
-  // Mirrors the signup form (driverOnboarding.tsx): debounced verdict from
-  // GET /api/auth/public/validate-zip/:zip — the SAME rule the signup
-  // guard (assertCaliforniaHomeArea) enforces — with isCaliforniaZip as
-  // the instant client fallback so the field never blocks on a hiccup.
-  const debouncedZip = useDebouncedValue((watchZipCode ?? "").trim(), 500);
-  const zipQueryReady = /^\d{5}$/.test(debouncedZip);
-  const {
-    data: zipCheck,
-    isFetching: zipChecking,
-    isError: zipCheckError,
-  } = useDataQuery<ZipCheckResponse | null>({
-    apiEndPoint: `${API_URL}/api/auth/public/validate-zip/${encodeURIComponent(debouncedZip)}`,
-    noFilter: true,
-    fetchWithoutRefresh: true,
-    publicEndpoint: true,
-    enabled: zipQueryReady,
-    queryKey: ["driver-onboarding-zip-validate", debouncedZip],
-    staleTime: 60_000,
-  });
-
-  // Verdict priority identical to the signup form: blur-gated format
-  // check → debounce/in-flight → server verdict → client fallback (same
-  // rule) when the endpoint is unreachable or the query is gated.
-  const zipValue = (watchZipCode ?? "").trim();
-  const zipFormatOk = /^\d{5}$/.test(zipValue);
-  const zipBlurRed = zipBlurred && !zipFocused && !zipFormatOk;
-  let zipVerdict: ZipVerdict = "empty";
-  if (zipBlurRed) {
-    zipVerdict = "format-error";
-  } else if (!zipValue || !zipFormatOk) {
-    // Incomplete but the user is still on the field (or never left it) —
-    // stay neutral and let them keep typing.
-    zipVerdict = "empty";
-  } else if (zipChecking || debouncedZip !== zipValue) {
-    zipVerdict = "checking";
-  } else if (zipCheckError) {
-    zipVerdict = isCaliforniaZip(zipValue) ? "valid" : "not-california";
-  } else if (zipCheck) {
-    zipVerdict = zipCheck.valid ? "valid" : "not-california";
-  } else {
-    // Query not enabled yet — client fallback (same rule).
-    zipVerdict = isCaliforniaZip(zipValue) ? "valid" : "not-california";
-  }
 
   // SSN change handler
   const handleSSNChange = useCallback(
@@ -1192,9 +1109,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                 )}
               </div>
 
-              {/* State + ZIP Row — ZIP input is hidden when the signup ZIP
-                  is already on file; State then takes the full width. */}
-              <div className={cn("grid gap-4", savedZip ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
+              {/* State — full width. The ZIP column was removed entirely:
+                  the ZIP captured at signup is authoritative and is never
+                  re-asked on this form. */}
+              <div className="grid grid-cols-1 gap-4">
                 {/* State */}
                 <div
                   className={cn(
@@ -1249,124 +1167,6 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     </p>
                   )}
                 </div>
-
-                {/* ZIP Code — only asked when we have no valid California
-                    ZIP on file from signup. When hidden, the saved signup
-                    ZIP is submitted instead (seeded via setValue). The
-                    live California verdict mirrors the signup form:
-                    GET /api/auth/public/validate-zip/:zip (same rule as
-                    the signup guard; same UX). */}
-                {!savedZip && (
-                <div
-                  className={cn(
-                    "space-y-2 p-4 rounded-2xl border transition-all duration-300",
-                    (zipVerdict === "format-error" || zipVerdict === "not-california" || errors.residentialZip)
-                      ? "border-red-400 dark:border-red-600 bg-red-50 dark:bg-red-950/20"
-                      : zipVerdict === "valid"
-                        ? "border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/10"
-                        : "border-transparent"
-                  )}
-                >
-                  <Label htmlFor="zipCode" className="text-xs font-bold">
-                    ZIP code
-                    {zipVerdict !== "valid" && (
-                      <span className="text-red-500 ml-1">*</span>
-                    )}
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="zipCode"
-                      onFocus={() => setZipFocused(true)}
-                      {...register("residentialZip", {
-                        validate: (v) => {
-                          if (!v?.trim()) return true;
-                          if (!/^\d{5}$/.test(v.trim())) return "Enter a valid 5-digit ZIP code";
-                          return isCaliforniaZip(v) || CALIFORNIA_ZIP_ERROR_MESSAGE;
-                        },
-                        // US ZIPs are exactly 5 digits: strip everything
-                        // that is not a digit and hard-cap at 5 (typing
-                        // AND paste). No validation errors are raised here
-                        // while typing (same policy as the signup form:
-                        // red only on blur-with-incomplete, server
-                        // verdict, or submit); we only re-validate when a
-                        // submit error is already showing, so it clears
-                        // the moment the value becomes valid.
-                        onChange: (e) => {
-                          const digits = e.target.value.replace(/\D/g, "").slice(0, 5);
-                          if (e.target.value !== digits) e.target.value = digits;
-                          if (digits !== watchZipCode) {
-                            setValue("residentialZip", digits, { shouldDirty: true });
-                          }
-                          if (errors.residentialZip) trigger("residentialZip");
-                        },
-                        onBlur: () => {
-                          setZipFocused(false);
-                          setZipBlurred(true);
-                        },
-                      })}
-                      className={cn(
-                        "h-14 rounded-2xl pr-10 transition-colors",
-                        (zipVerdict === "format-error" || zipVerdict === "not-california" || errors.residentialZip)
-                          ? "border-red-400 dark:border-red-500"
-                          : zipVerdict === "valid"
-                            ? "border-green-300 dark:border-green-700"
-                            : ""
-                      )}
-                      placeholder="90012"
-                      autoComplete="postal-code"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={5}
-                      disabled={false}
-                    />
-                    {zipVerdict === "checking" && (
-                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-slate-400" />
-                    )}
-                    {zipVerdict === "valid" && !errors.residentialZip && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                      </div>
-                    )}
-                    {zipVerdict === "not-california" && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <X className="w-5 h-5 text-red-500" />
-                      </div>
-                    )}
-                  </div>
-                  {zipVerdict === "valid" && (
-                    <p className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1.5">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      {zipCheck?.message || "In California — we serve this area."}
-                    </p>
-                  )}
-                  {zipVerdict === "not-california" && (
-                    <p className="text-xs text-red-500 dark:text-red-400 font-medium flex items-center gap-1.5">
-                      <X className="w-3.5 h-3.5" />
-                      {zipCheck?.message || CALIFORNIA_ZIP_ERROR_MESSAGE}
-                    </p>
-                  )}
-                  {zipVerdict === "format-error" && (
-                    <p className="text-xs text-red-500 font-medium">
-                      Enter a valid 5-digit ZIP code.
-                    </p>
-                  )}
-                  {zipVerdict === "checking" && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                      Checking your ZIP code…
-                    </p>
-                  )}
-                  {zipVerdict === "empty" && (
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Enter your 5-digit California ZIP code. We only operate in California — registrations with ZIP codes outside California (90001–96199) are rejected.
-                    </p>
-                  )}
-                  {errors.residentialZip && (zipVerdict === "empty" || zipVerdict === "checking") && (
-                    <p className="text-xs text-red-500 font-medium">
-                      {errors.residentialZip.message}
-                    </p>
-                  )}
-                </div>
-                )}
               </div>
             </CardContent>
 

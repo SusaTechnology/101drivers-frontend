@@ -436,6 +436,41 @@ export default function DriverOnboardingPage() {
           description: 'Please start a new registration.',
         });
       }
+    } else {
+      // Back-navigation restore (e.g. "← Back to registration" from the
+      // OTP page): repopulate everything the driver already entered —
+      // including both consent checkboxes — so nothing needs re-typing.
+      // The draft is written right before the OTP request, so it exists
+      // exactly when the driver was mid-signup.
+      const draftStr = safeLocalStorage.get(DRIVER_SIGNUP_DRAFT_KEY);
+      if (draftStr) {
+        try {
+          const draft = JSON.parse(draftStr);
+          if (draft.formData) {
+            const d = draft.formData;
+            reset({
+              fullName: d.fullName ?? '',
+              dateOfBirth: d.dateOfBirth ?? '',
+              email: d.email ?? '',
+              phone: d.phone ?? '',
+              password: d.password ?? '',
+              confirmPassword: d.confirmPassword ?? '',
+              homeArea: d.homeArea ?? '',
+              radius: d.radius ?? '',
+              districts: d.districts ?? [],
+              alerts: d.alerts ?? true,
+              acceptTerms: d.acceptTerms ?? false,
+            });
+            if (typeof draft.haveInsurance === 'boolean') {
+              setValue('haveInsurance', draft.haveInsurance);
+            }
+            // Remount the radius select so it shows the restored value.
+            setDraftLoaded(true);
+          }
+        } catch (e) {
+          console.error('Failed to restore draft', e);
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, reset]);
@@ -470,8 +505,13 @@ export default function DriverOnboardingPage() {
     // the draft simply won't persist; signup itself still proceeds. A raw
     // setItem here used to throw BEFORE the OTP call, leaving the form
     // silently dead — no toast, no navigation.
+    // haveInsurance is deliberately outside the zod schema (it gates the
+    // submit button via isFormReady, not field validation), so zod strips
+    // it from `data` — persist it separately so the back-to-registration
+    // restore can re-tick it exactly as the driver left it.
     const draft = {
       formData: data,
+      haveInsurance: haveInsurance === true,
     };
     safeLocalStorage.set(DRIVER_SIGNUP_DRAFT_KEY, JSON.stringify(draft));
 

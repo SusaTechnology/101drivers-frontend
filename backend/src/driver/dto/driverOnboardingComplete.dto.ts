@@ -92,14 +92,16 @@ export class CompleteDriverOnboardingDto {
   residentialState!: string;
 
   @ApiProperty({
-    description: "Residential ZIP code (5 digits)",
+    description:
+      "Residential ZIP code (5 digits). Optional: the ZIP captured at signup is authoritative — when omitted, the already-stored value is kept untouched.",
     example: "90001",
+    required: false,
   })
-  @IsNotEmpty({ message: "ZIP code is required" })
+  @IsOptional()
   @Matches(/^\d{5}(-\d{4})?$/, {
     message: "ZIP code must be 5 digits (optionally with 4-digit extension)",
   })
-  residentialZip!: string;
+  residentialZip?: string;
 
   @ApiProperty({
     description: "Selfie photo URL for identity verification",
