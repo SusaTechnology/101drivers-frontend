@@ -28,12 +28,27 @@ interface DriverSignupPayloadWithOtp extends DriverSignupPayload {
   verificationToken: string;
 }
 
+const RESEND_COOLDOWN_MS = 60_000;
+
 export default function DriverVerifyEmailPage() {
   const [otpValue, setOtpValue] = useState('');
   const [isComplete, setIsComplete] = useState(false);
   const [pendingPayload, setPendingPayload] = useState<DriverSignupPayload | null>(null);
   const [email, setEmail] = useState('');
-  const [countdown, setCountdown] = useState(0);
+  // Resend cooldown as a wall-clock deadline (Date.now()-based), NOT a
+  // 1s setTimeout decrement chain. Background-tab timer throttling (mobile
+  // Safari freezes timers; Chrome throttles hidden tabs to ~1/min) made the
+  // old countdown stall, so users who waited out the 60s in their mail app
+  // came back to a button still claiming "Resend Code (45s)" — "not resending
+  // even after waiting the required time". A deadline self-corrects the
+  // moment they return.
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  // Persistent inline error for resend failures. Toasts auto-dismiss in a
+  // few seconds — when the SMTP server rejects/throttles the send, users
+  // saw the spinner stop and then NOTHING (no email, no cooldown, no
+  // message), reading it as "resend doesn't work".
+  const [resendError, setResendError] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -70,12 +85,25 @@ export default function DriverVerifyEmailPage() {
     }
   }, [navigate]);
 
-  // Countdown timer for resend cooldown
+  // Resend cooldown ticker — recomputes remaining seconds from the wall
+  // clock every 500ms and stops itself once the deadline passes.
   useEffect(() => {
-    if (countdown <= 0) return;
-    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [countdown]);
+    if (cooldownUntil <= 0) return;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setCooldownSeconds(remaining);
+      if (remaining <= 0 && timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    tick();
+    timer = setInterval(tick, 500);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [cooldownUntil]);
 
   // Mutation for resending code
   const resendCodeMutation = useDataMutation<
@@ -84,15 +112,16 @@ export default function DriverVerifyEmailPage() {
   >({
     apiEndPoint: `${import.meta.env.VITE_API_URL}/api/auth/signup/driver/`,
     onSuccess: () => {
+      setResendError(null);
+      setCooldownUntil(Date.now() + RESEND_COOLDOWN_MS); // Start 60s cooldown
       toast.success('Code resent successfully', {
         description: 'Check your email for the new verification code.',
       });
-      setCountdown(60); // Start 60s cooldown
     },
     onError: (error) => {
-      toast.error('Failed to resend code', {
-        description: error.message || 'Please try again later.',
-      });
+      // Keep the failure on screen (inline error below the button) — the
+      // toast alone disappears before most users notice it.
+      setResendError(error.message || 'Please try again later.');
     },
     fetchWithoutRefresh: true,
   });
@@ -136,9 +165,16 @@ export default function DriverVerifyEmailPage() {
   }, []);
 
   const handleResend = () => {
-    if (!pendingPayload || countdown > 0) return;
+    if (!pendingPayload || cooldownSeconds > 0) return;
     resendCodeMutation.mutate(pendingPayload);
   };
+
+  // "Email already exists" from the signup re-POST means this email has a
+  // verified account (or belongs to another role) — no OTP will ever fix
+  // that, so point the user at sign-in instead of more resends.
+  const isEmailExistsError =
+    resendError != null &&
+    /already exists|already registered|already associated|already verified/i.test(resendError);
 
   const handleVerify = () => {
     if (!otpValue || otpValue.length !== 6 || !pendingPayload) return;
@@ -216,7 +252,7 @@ export default function DriverVerifyEmailPage() {
             <button
               type="button"
               onClick={handleResend}
-              disabled={resendCodeMutation.isPending || countdown > 0}
+              disabled={resendCodeMutation.isPending || cooldownSeconds > 0}
               className="inline-flex items-center gap-1.5 text-sm font-bold text-lime-600 dark:text-lime-400 hover:text-lime-700 dark:hover:text-lime-300 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition"
             >
               {resendCodeMutation.isPending ? (
@@ -224,8 +260,8 @@ export default function DriverVerifyEmailPage() {
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   Sending...
                 </>
-              ) : countdown > 0 ? (
-                <>Resend Code ({countdown}s)</>
+              ) : cooldownSeconds > 0 ? (
+                <>Resend Code ({cooldownSeconds}s)</>
               ) : (
                 <>
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -233,6 +269,33 @@ export default function DriverVerifyEmailPage() {
                 </>
               )}
             </button>
+
+            {/* Persistent resend failure message — survives until the next
+                attempt/success, unlike toasts. */}
+            {resendError && !resendCodeMutation.isPending && (
+              <p className="mt-3 text-xs leading-relaxed text-red-600 dark:text-red-400">
+                {isEmailExistsError ? (
+                  <>
+                    This email already has an account. Please{' '}
+                    <Link
+                      to="/driver-signin"
+                      className="font-bold underline underline-offset-2"
+                    >
+                      sign in instead
+                    </Link>{' '}
+                    — resending a code will not work for this email.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold">Resend failed: {resendError}</span>
+                    <span className="mt-1 block text-slate-500 dark:text-slate-400">
+                      You can try again. If no email arrives, check your spam /{' '}
+                      promotions folder.
+                    </span>
+                  </>
+                )}
+              </p>
+            )}
           </div>
 
           {/* Continue button */}
