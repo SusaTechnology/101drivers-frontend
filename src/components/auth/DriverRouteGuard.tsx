@@ -142,10 +142,7 @@ export function DriverRouteGuard({ children }: { children: React.ReactNode }) {
             once an administrator approves your application.
           </p>
           <button
-            onClick={() => {
-              window.close();
-              navigate({to:"/home"})
-            }}
+            onClick={() => navigate({ to: "/" })}
             className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
           >
             Done

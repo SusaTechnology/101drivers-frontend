@@ -611,8 +611,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() =>  {window.close();
-                    navigate({to:"/home"})}}
+                  onClick={() => navigate({ to: "/home" })}
                   className="flex-1 inline-flex items-center justify-center h-12 rounded-2xl font-bold bg-lime-500 hover:bg-lime-600 text-black transition-colors"
                 >
                   {/* <ArrowRight className="w-4 h-4 mr-2 rotate-180" /> */}

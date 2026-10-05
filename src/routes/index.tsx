@@ -18,10 +18,17 @@ export const Route = createFileRoute('/')({
           replace: true,
         })
       } else if (roles.includes('DRIVER')) {
-        throw redirect({
-          to: '/driver/dashboard',
-          replace: true,
-        })
+        // Only bounce drivers that have a dashboard to serve. Pending /
+        // waitlisted / on-hold / invited / rejected drivers have no dashboard
+        // — /driver/dashboard's DriverRouteGuard would just bounce them back
+        // to its status screen, which made the "Done" button on the
+        // "Application Pending Approval" screen appear to do nothing.
+        if (user?.driverStatus === 'APPROVED') {
+          throw redirect({
+            to: '/driver/dashboard',
+            replace: true,
+          })
+        }
       } else if (roles.includes('BUSINESS_CUSTOMER') || roles.includes('PRIVATE_CUSTOMER')) {
         // Both business and private customers use the dealer dashboard pages.
         throw redirect({
