@@ -53,6 +53,7 @@ export class DriverOnboardingController {
         onboardingCompleted: { type: "boolean" },
         onboardingCompletedAt: { type: "string", nullable: true },
         driverStatus: { type: "string" },
+        residentialZip: { type: "string", nullable: true },
       },
     },
   })
@@ -68,10 +69,11 @@ export class DriverOnboardingController {
     onboardingCompletedAt: string | null;
     driverStatus: string;
     dateOfBirth: string | null;
+    residentialZip: string | null;
   }> {
     const profileId = (request as any).user?.profileId;
     if (!profileId) {
-      return { onboardingCompleted: false, onboardingCompletedAt: null, driverStatus: "UNKNOWN", dateOfBirth: null };
+      return { onboardingCompleted: false, onboardingCompletedAt: null, driverStatus: "UNKNOWN", dateOfBirth: null, residentialZip: null };
     }
 
     const driver = await this.service.driver({
@@ -80,6 +82,9 @@ export class DriverOnboardingController {
         status: true,
         onboardingCompletedAt: true,
         dateOfBirth: true,
+        // Signup already collects (and stores) a 5-digit home ZIP; exposing
+        // it here lets the onboarding form reuse it instead of asking again.
+        residentialZip: true,
       },
     });
 
@@ -88,6 +93,7 @@ export class DriverOnboardingController {
       onboardingCompletedAt: driver?.onboardingCompletedAt?.toISOString() ?? null,
       driverStatus: driver?.status ?? "UNKNOWN",
       dateOfBirth: driver?.dateOfBirth?.toISOString() ?? null,
+      residentialZip: driver?.residentialZip ?? null,
     };
   }
 }

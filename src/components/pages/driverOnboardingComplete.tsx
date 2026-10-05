@@ -217,6 +217,12 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
   const [driverName, setDriverName] = useState<string | null>(null);
+  // ZIP captured by the signup form (stored as Driver.residentialZip at
+  // signup). When present, this form reuses it instead of asking again —
+  // the input is hidden and the saved value is submitted unchanged. Null
+  // (legacy accounts whose signup ZIP was dropped, or lookup failures)
+  // keeps the ZIP input visible exactly as before.
+  const [savedZip, setSavedZip] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
@@ -247,6 +253,11 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
           setTokenValid(true);
           setAlreadyCompleted(data.onboardingCompleted === true);
           setDriverName(data.driverName || null);
+          // Only trust a bare 5-digit ZIP — signup guarantees this format;
+          // anything else (null, ZIP+4 from API-created records) falls back
+          // to the visible input below.
+          const zip = typeof data?.residentialZip === "string" ? data.residentialZip : null;
+          setSavedZip(zip && /^\d{5}$/.test(zip) ? zip : null);
         })
         .catch((err) => {
           setTokenValid(false);
@@ -254,7 +265,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
         })
         .finally(() => setLoadingStatus(false));
     } else {
-      // Auth-based: use stored login data (no API call needed)
+      // Auth-based: use stored login data (no API call needed).
+      // NOTE: the render below hard-redirects every no-token visitor to
+      // /driver-signin, so this branch never renders the form — the email
+      // token link is the only live path into this page.
       const user = getUser();
       if (user?.onboardingCompleted) {
         setAlreadyCompleted(true);
@@ -287,6 +301,16 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
       selfiePhotoUrl: "",
     },
   });
+
+  // Reuse the ZIP collected at signup: when the backend reports a saved
+  // residentialZip, seed the form with it so the driver never re-types it.
+  // The value is validated and submitted exactly as before — only the
+  // visible input is hidden when we already have the ZIP on file.
+  useEffect(() => {
+    if (savedZip) {
+      setValue("residentialZip", savedZip, { shouldValidate: true });
+    }
+  }, [savedZip, setValue]);
 
   // Selfie photo upload handler
   const handleSelfieChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1090,8 +1114,9 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                 )}
               </div>
 
-              {/* State + ZIP Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* State + ZIP Row — ZIP input is hidden when the signup ZIP
+                  is already on file; State then takes the full width. */}
+              <div className={cn("grid gap-4", savedZip ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
                 {/* State */}
                 <div
                   className={cn(
@@ -1147,7 +1172,10 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                   )}
                 </div>
 
-                {/* ZIP Code */}
+                {/* ZIP Code — only asked when we have no ZIP on file from
+                    signup. When hidden, the saved signup ZIP is submitted
+                    instead (seeded into the form via setValue). */}
+                {!savedZip && (
                 <div
                   className={cn(
                     "space-y-2 p-4 rounded-2xl border transition-all duration-300",
@@ -1195,6 +1223,7 @@ export function DriverOnboardingComplete({ token }: DriverOnboardingCompleteProp
                     </p>
                   )}
                 </div>
+                )}
               </div>
             </CardContent>
 

@@ -599,6 +599,9 @@ async findDriverByOnboardingToken(token: string): Promise<any | null> {
       status: true,
       onboardingCompletedAt: true,
       dateOfBirth: true,
+      // Signup already collects (and stores) a 5-digit home ZIP; exposing it
+      // here lets the onboarding form reuse it instead of asking again.
+      residentialZip: true,
       user: {
         select: {
           fullName: true,

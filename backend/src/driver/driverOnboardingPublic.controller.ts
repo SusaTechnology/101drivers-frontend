@@ -19,6 +19,7 @@ export class DriverOnboardingPublicController {
         onboardingCompleted: { type: "boolean" },
         driverStatus: { type: "string" },
         driverName: { type: "string", nullable: true },
+        residentialZip: { type: "string", nullable: true },
       },
     },
   })
@@ -31,6 +32,7 @@ export class DriverOnboardingPublicController {
     driverStatus: string;
     driverName: string | null;
     dateOfBirth: string | null;
+    residentialZip: string | null;
   }> {
     if (!token) {
       throw new common.NotFoundException("Token is required");
@@ -48,6 +50,7 @@ export class DriverOnboardingPublicController {
       driverStatus: driver.status,
       driverName: driver.user?.fullName ?? null,
       dateOfBirth: driver.dateOfBirth?.toISOString() ?? null,
+      residentialZip: driver.residentialZip ?? null,
     };
   }
 
