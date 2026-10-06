@@ -12,11 +12,24 @@ import { safeLocalStorage } from "@/lib/safeStorage";
 // ==================== TOKEN & USER MANAGEMENT ====================
 const ACCESS_TOKEN_KEY = "accessToken";
 const USER_KEY = "currentUser";
+// The refresh token from the login/refresh response body. The PRIMARY refresh
+// credential is still the httpOnly cookie, but Safari/iOS standalone PWAs (and
+// Chrome with third-party cookies disabled) never store or send cross-site
+// cookies — from the app origin the API cookie is third-party. Without a
+// fallback, those users were force-logged-out every ~15 minutes when the
+// access token expired. We persist the body refresh token and send it in the
+// `x-refresh-token` header; the backend accepts either credential.
+const REFRESH_TOKEN_KEY = "refreshToken";
 
 let currentAccessToken: string | null = null;
 let refreshTokenPromise: Promise<string> | null = null;
 let lastRefreshAttemptTime: number = 0;
-const REFRESH_COOLDOWN_MS = 5000; // 5 seconds cooldown between refresh attempts
+const REFRESH_COOLDOWN_MS = 5000; // 5 seconds cooldown between refresh NETWORK attempts
+// Outcome of the last completed refresh attempt. The cooldown must not turn a
+// healthy session into an error: when the previous refresh SUCCEEDED, callers
+// that raced a 401 against it should receive the (already fresh) token rather
+// than a thrown "on cooldown" error. See refreshShared().
+let lastRefreshSucceeded: boolean = false;
 
 // User data (id, username, roles) from login response
 let currentUser: {
@@ -51,6 +64,16 @@ export function setAccessToken(token: string) {
   socketConnect(token);
 }
 
+export function getRefreshToken(): string | null {
+  return safeLocalStorage.get(REFRESH_TOKEN_KEY);
+}
+
+/** Persists the refresh token (null clears it). */
+export function setRefreshToken(token: string | null | undefined) {
+  if (token) safeLocalStorage.set(REFRESH_TOKEN_KEY, token);
+  else safeLocalStorage.remove(REFRESH_TOKEN_KEY);
+}
+
 export function getUser() {
   if (!currentUser) {
     const stored = safeLocalStorage.get(USER_KEY);
@@ -77,9 +100,14 @@ export function clearAuth() {
   currentAccessToken = null;
   currentUser = null;
   refreshTokenPromise = null;
-  lastRefreshAttemptTime = 0;
+  // NOTE: lastRefreshAttemptTime is deliberately NOT reset here. It rate-limits
+  // refresh NETWORK calls; resetting it (as this used to do) would let every
+  // pending query fire its own refresh right after a failed refresh /
+  // logout, hammering the endpoint exactly when the session is dead.
+  lastRefreshSucceeded = false;
   safeLocalStorage.remove(ACCESS_TOKEN_KEY);
   safeLocalStorage.remove(USER_KEY);
+  safeLocalStorage.remove(REFRESH_TOKEN_KEY);
   // Disconnect WebSocket when user logs out
   socketDisconnect();
 }
@@ -206,7 +234,16 @@ export interface MutationParams<TData = any, TVariables = any> {
 async function refreshShared(): Promise<string> {
   try {
     if (!refreshTokenPromise) {
-      refreshTokenPromise = refreshAccessToken();
+      refreshTokenPromise = refreshAccessToken().then(
+        (token) => {
+          lastRefreshSucceeded = true;
+          return token;
+        },
+        (error) => {
+          lastRefreshSucceeded = false;
+          throw error;
+        },
+      );
     }
     return await refreshTokenPromise;
   } finally {
@@ -315,9 +352,25 @@ async function baseFetch<T>(
 // ==================== REFRESH TOKEN ====================
 // Refresh token function – will be implemented when backend provides refresh token
 async function refreshAccessToken(): Promise<string> {
-  // Check cooldown to prevent rapid refresh attempts
+  // Rate-limit refresh NETWORK calls. A refresh attempt ran recently if we're
+  // inside the cooldown window — but that is only a reason to fail the caller
+  // when the last attempt FAILED (dead refresh credential: don't hammer the
+  // endpoint with an infinite 401→refresh loop). When the last attempt
+  // SUCCEEDED, the access token in memory is already fresh, so callers that
+  // raced a 401 against that refresh simply receive the current token and
+  // retry their request. Previously this branch threw unconditionally, which
+  // produced bursts of random "failed to load" errors: every request that had
+  // left the browser with the old token got a hard error even though the
+  // session was perfectly valid.
   const now = Date.now();
   if (now - lastRefreshAttemptTime < REFRESH_COOLDOWN_MS) {
+    if (lastRefreshSucceeded) {
+      const freshToken = getAccessToken();
+      if (freshToken) {
+        console.log('♻️ Refresh recently succeeded — reusing fresh token');
+        return freshToken;
+      }
+    }
     console.log('⏳ Refresh on cooldown, waiting...');
     throw new Error('Token refresh on cooldown - please wait');
   }
@@ -326,12 +379,22 @@ async function refreshAccessToken(): Promise<string> {
   console.log('🔄 Refreshing token...');
   
   try {
+    const storedRefreshToken = getRefreshToken();
     const response = await fetch(
       `${import.meta.env.VITE_API_URL}/api/auth/refresh-token`,
       {
         method: "GET", // adjust to POST if needed
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // Fallback credential for browsers that block the cross-site
+          // httpOnly cookie (iOS PWA standalone mode, Safari ITP, Chrome
+          // with third-party cookies disabled). The backend accepts the
+          // cookie OR this header — whichever the browser is able to send.
+          ...(storedRefreshToken
+            ? { "x-refresh-token": storedRefreshToken }
+            : {}),
+        },
       }
     );
 
@@ -350,6 +413,11 @@ async function refreshAccessToken(): Promise<string> {
     const data = await response.json();
     const newAccessToken = data.accessToken;
     setAccessToken(newAccessToken);
+
+    // The backend rotates the refresh token on every refresh. Persist the
+    // new one so the header fallback (and thus sessions on third-party-
+    // cookie-blocked browsers) keeps working with a sliding expiry window.
+    if (data.refreshToken) setRefreshToken(data.refreshToken);
 
     // If the refresh response includes user data, refresh the stored user so
     // role/approval-status changes made server-side propagate into the UI.

@@ -29,7 +29,10 @@ export class TokenServiceBase implements ITokenService {
       },
       {
         secret: process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET,
-        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? "7d",
+        // Sliding session: the client refreshes long before this expires, and
+        // each refresh mints a fresh 30d token. Only a user who is completely
+        // inactive for 30 days (or who logs out) loses their session.
+        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? "30d",
       }
     );
   }

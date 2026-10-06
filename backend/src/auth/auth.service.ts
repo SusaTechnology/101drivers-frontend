@@ -36,6 +36,13 @@ import {
   EnumAdminAuditLogActorType,
 } from "@prisma/client";
 
+// Sliding-session refresh-token cookie lifetime. Every successful refresh
+// re-mints the refresh token AND extends this cookie, so the session only
+// ends after this long with ZERO refreshes (i.e. the user fully away) or an
+// explicit logout. Active users are never interrupted. Must match (or be
+// under) JWT_REFRESH_EXPIRES_IN — the code default for that is now 30d too.
+const REFRESH_COOKIE_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 type AuthValidatedUser = {
   id: string;
   username: string;
@@ -284,7 +291,7 @@ export class AuthService {
 
     response.cookie("refreshToken", refreshToken, {
       ...cookieOptions,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: REFRESH_COOKIE_MAX_MS,
     });
 
     return {
@@ -306,91 +313,112 @@ export class AuthService {
   }
 
   async refreshToken(request: Request, response: Response): Promise<UserInfo> {
-    const refreshToken = request.cookies?.["refreshToken"];
+    // Credential resolution: the httpOnly cookie is preferred, but browsers
+    // that block cross-site cookies (iOS standalone PWAs, Safari ITP, Chrome
+    // with third-party cookies disabled) never store or send it — for those
+    // clients the web app sends the refresh token in the `x-refresh-token`
+    // header instead. Either credential alone is sufficient.
+    const cookieToken = request.cookies?.["refreshToken"];
+    const headerToken = request.headers?.["x-refresh-token"];
+    const refreshToken =
+      (typeof cookieToken === "string" && cookieToken) ||
+      (typeof headerToken === "string" && headerToken) ||
+      undefined;
 
     if (!refreshToken) {
       throw new UnauthorizedException("Missing refresh token");
     }
 
+    // Verify the JWT and translate ONLY verification failures (bad signature,
+    // expired token, malformed payload) into 401. Everything after this block
+    // deliberately sits OUTSIDE the catch: a transient infrastructure error
+    // (DB hiccup, brief restart during a deploy) used to be swallowed here and
+    // re-thrown as 401 "Invalid or expired refresh token", which the client
+    // treats as "session truly expired" and force-logs the user out. Infra
+    // errors must surface as 5xx so the client keeps the session and retries.
+    let payload: any;
     try {
-      const payload = await this.tokenService.verifyRefreshToken(refreshToken);
-
-      if (payload?.type !== "refresh") {
-        throw new UnauthorizedException("Invalid refresh token");
-      }
-
-      const user = await this.userService.user({
-        where: { id: payload.sub },
-        select: {
-          id: true,
-          username: true,
-          email: true,
-          roles: true,
-          isActive: true,
-          isSuperAdmin: true,
-          emailVerifiedAt: true,
-          fullName: true,
-        },
-      } as any);
-
-      if (!user || !user.isActive) {
-        throw new UnauthorizedException("User not found or inactive");
-      }
-
-      // Same admin lifecycle gate as login — a never-activated admin
-      // (invite pending or expired) cannot hold a live session either.
-      if (String(user.roles) === "ADMIN" && !user.emailVerifiedAt) {
-        throw new UnauthorizedException(
-          "This admin account hasn't been activated yet — sign-in is blocked until the invite is accepted"
-        );
-      }
-
-      const roles = [String(user.roles)];
-      const authMeta = await this.resolveAuthMeta(user.id, roles);
-
-      const newAccessToken = await this.tokenService.createToken({
-        id: user.id,
-        username: user.username,
-        roles,
-      });
-
-      const newRefreshToken = await this.tokenService.createRefreshToken({
-        id: user.id,
-        username: user.username,
-        roles,
-      });
-
-      const cookieOptions = getCookieOptionsFromRequest(request);
-
-      response.cookie("accessToken", newAccessToken, {
-        ...cookieOptions,
-        maxAge: 15 * 60 * 1000,
-      });
-
-      response.cookie("refreshToken", newRefreshToken, {
-        ...cookieOptions,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
-
-      return {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-        id: user.id,
-        profileId: authMeta.profileId,
-        username: user.username,
-        email: (user as any).email ?? null,
-        fullName: (user as any).fullName ?? null,
-        roles,
-        customerApprovalStatus: authMeta.customerApprovalStatus,
-        driverStatus: authMeta.driverStatus,
-        onboardingCompleted: authMeta.onboardingCompleted,
-        onboardingToken: authMeta.onboardingToken,
-        isActive: user.isActive,
-        isSuperAdmin: (user as any).isSuperAdmin === true,
-      } as UserInfo;
+      payload = await this.tokenService.verifyRefreshToken(refreshToken);
     } catch {
       throw new UnauthorizedException("Invalid or expired refresh token");
     }
+
+    if (payload?.type !== "refresh") {
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+
+    const user = await this.userService.user({
+      where: { id: payload.sub },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        roles: true,
+        isActive: true,
+        isSuperAdmin: true,
+        emailVerifiedAt: true,
+        fullName: true,
+      },
+    } as any);
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException("User not found or inactive");
+    }
+
+    // Same admin lifecycle gate as login — a never-activated admin
+    // (invite pending or expired) cannot hold a live session either.
+    if (String(user.roles) === "ADMIN" && !user.emailVerifiedAt) {
+      throw new UnauthorizedException(
+        "This admin account hasn't been activated yet — sign-in is blocked until the invite is accepted"
+      );
+    }
+
+    const roles = [String(user.roles)];
+    const authMeta = await this.resolveAuthMeta(user.id, roles);
+
+    const newAccessToken = await this.tokenService.createToken({
+      id: user.id,
+      username: user.username,
+      roles,
+    });
+
+    const newRefreshToken = await this.tokenService.createRefreshToken({
+      id: user.id,
+      username: user.username,
+      roles,
+    });
+
+    const cookieOptions = getCookieOptionsFromRequest(request);
+
+    response.cookie("accessToken", newAccessToken, {
+      ...cookieOptions,
+      maxAge: 15 * 60 * 1000,
+    });
+
+    // Sliding session: every successful refresh re-mints the refresh token
+    // and extends its cookie. 30 days of inactivity ends the session; active
+    // users are never interrupted.
+    response.cookie("refreshToken", newRefreshToken, {
+      ...cookieOptions,
+      maxAge: REFRESH_COOKIE_MAX_MS,
+    });
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      id: user.id,
+      profileId: authMeta.profileId,
+      username: user.username,
+      email: (user as any).email ?? null,
+      fullName: (user as any).fullName ?? null,
+      roles,
+      customerApprovalStatus: authMeta.customerApprovalStatus,
+      driverStatus: authMeta.driverStatus,
+      onboardingCompleted: authMeta.onboardingCompleted,
+      onboardingToken: authMeta.onboardingToken,
+      isActive: user.isActive,
+      isSuperAdmin: (user as any).isSuperAdmin === true,
+    } as UserInfo;
   }
 
   async logout(
@@ -1376,7 +1404,7 @@ export class AuthService {
 
     response.cookie("refreshToken", refreshToken, {
       ...cookieOptions,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: REFRESH_COOKIE_MAX_MS,
     });
 
     return {

@@ -6,13 +6,33 @@ import { getLastKnownRoles } from './dataQuery'
 
 const SESSION_EXPIRED_MSG = 'Session expired'
 
+// Retry policy for queries.
+//
+// Client errors (400/401/403/404/409/422...) are permanent for an identical
+// request — retrying them only delays the error UI and, for 401s, hammers
+// the token-refresh endpoint. 408/429 are client-class but retryable by
+// definition, and 5xx + pure network failures (fetch TypeError carries no
+// status) are transient — those are exactly the "backend restarting for a
+// deploy" cases where an automatic retry turns a random "failed to load"
+// into a seamless recovery.
+function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  if (failureCount >= 3) return false
+  const status = (error as { status?: number })?.status
+  if (typeof status === 'number') {
+    if (status === 408 || status === 429) return true
+    return status >= 500
+  }
+  return true
+}
+
 // Create a client
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-      retry: 1,
+      retry: shouldRetryQuery,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
       refetchOnWindowFocus: false,
     },
     mutations: {

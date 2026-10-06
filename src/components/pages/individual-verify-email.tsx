@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from 'sonner';
 import { ArrowRight, Mail, RefreshCw, Loader2, CheckCircle, Clock } from 'lucide-react';
-import { useDataMutation, setAccessToken, setUser, startSessionKeepAlive } from '@/lib/tanstack/dataQuery';
+import { useDataMutation, setAccessToken, setRefreshToken, setUser, startSessionKeepAlive } from '@/lib/tanstack/dataQuery';
 import { cn } from '@/lib/utils';
 
 const INDIVIDUAL_PENDING_PAYLOAD_KEY = 'individualPendingPayload';
@@ -146,6 +146,8 @@ export default function IndividualVerifyEmailPage() {
         // ── Auto-approved private customer → auto-login ──
         // Same token/user handling as the sign-in pages.
         setAccessToken(data.accessToken);
+        // Refresh-token fallback for cookie-blocked browsers (iOS PWA etc.)
+        setRefreshToken(data.refreshToken);
         setUser({
           id: data.id,
           username: data.username,

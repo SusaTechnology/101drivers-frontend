@@ -32,7 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { setAccessToken, setUser, startSessionKeepAlive } from "@/lib/tanstack/dataQuery";
+import { setAccessToken, setRefreshToken, setUser, startSessionKeepAlive } from "@/lib/tanstack/dataQuery";
 import { toast } from "sonner";
 import { useDataMutation } from "@/lib/tanstack/dataQuery";
 
@@ -205,6 +205,10 @@ export function DealerSignIn({
 
       // All checks passed - proceed with login
       setAccessToken(data.accessToken);
+      // Persist the refresh token for the header fallback channel: on browsers
+      // that block the cross-site httpOnly cookie (iOS PWA, Safari, Chrome
+      // without third-party cookies) this is what keeps the session alive.
+      setRefreshToken(data.refreshToken);
       setUser({
         id: data.id,
         username: data.username,
