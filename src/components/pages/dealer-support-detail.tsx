@@ -182,7 +182,7 @@ export default function DealerSupportDetail() {
 
   // Header
   const Header = () => (
-    <header className="sticky top-0 z-50 w-full shrink-0 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+    <header className="sticky top-0 z-50 w-full shrink-0 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8 h-20 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/" className="flex items-center" aria-label="101 Drivers">
