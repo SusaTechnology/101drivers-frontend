@@ -653,7 +653,7 @@ export default function LandingPage() {
   const Footer = () => <PublicFooter />;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-slate-950">
       <SEOHead
         title="101 Drivers — Car Pickup & Delivery Service in California | Flat Rate"
         description="California's flat-rate car pickup & delivery service. Dealers & individuals get instant quotes, real-time GPS tracking, and insured vehicle transport across Southern California."
