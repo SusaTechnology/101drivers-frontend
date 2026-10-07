@@ -1737,6 +1737,13 @@ async schedulePreview(
       //     form-only fields that have no matching column on DeliveryRequest.
       //     The dealer-edit-delivery form includes them for UX but they must
       //     never reach Prisma.
+      //   - paymentType: also form-only — NOT a DeliveryRequest column.
+      //     PREPAID/POSTPAID is decided on the Payment row at create/promote
+      //     time from the customer's postpaidEnabled flag. The review page's
+      //     save-draft payload includes it (shared with the create-draft
+      //     body), and when forwarded it made every draft PATCH fail with
+      //     PrismaClientValidationError "Unknown argument paymentType" —
+      //     for private AND business customers alike.
       //   - customer / quote / createdBy / resubmittedFrom as RELATION
       //     objects are kept and handled by the explicit `connect:` blocks
       //     below (so we delete the raw form here to avoid double-handling).
@@ -1748,6 +1755,7 @@ async schedulePreview(
         transmission,
         transmissionOther,
         recipientBusinessName,
+        paymentType,
         customer: rawCustomer,
         quote: rawQuote,
         createdBy: rawCreatedBy,
