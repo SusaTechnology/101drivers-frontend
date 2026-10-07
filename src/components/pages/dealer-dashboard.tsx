@@ -543,8 +543,14 @@ export default function DealerDashboard() {
   if (isLoading) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-lime-500 mx-auto"></div><p className="mt-4 text-slate-600 dark:text-slate-400">Loading deliveries...</p></div></div>
   if (isError) return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4"><Card className="max-w-md p-6 text-center border-slate-200 dark:border-slate-800 rounded-3xl"><AlertCircle className="h-12 w-12 text-red-500 mx-auto" /><h2 className="mt-4 text-xl font-black text-slate-900 dark:text-white">Failed to load deliveries</h2><p className="mt-2 text-slate-600 dark:text-slate-400">{error?.message || 'Please try again later.'}</p><Button onClick={() => refetch()} className="mt-6 bg-lime-500 text-slate-950 rounded-2xl">Retry</Button></Card></div>
 
+  // Header date labels (both formats cut from ONE render so they can never
+  // straddle midnight mid-render). The long form is shown on >=sm screens;
+  // on phones the compact form keeps the header row from overflowing.
+  const todayLong = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: BUSINESS_TZ });
+  const todayShort = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: BUSINESS_TZ });
+
   return (
-    <div ref={containerRef} className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 overflow-x-hidden" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+    <div ref={containerRef} className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] overflow-x-hidden" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       {/* Pull to refresh indicator */}
       <div className={cn("absolute left-0 right-0 flex justify-center pt-4 transition-all duration-200 z-50", pullDistance > 0 ? "opacity-100" : "opacity-0")} style={{ top: pullDistance * 0.5 }}><RefreshCw className={cn("h-6 w-6 text-lime-500", refreshing && "animate-spin")} /></div>
 
@@ -553,26 +559,29 @@ export default function DealerDashboard() {
         className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
-        <div className="max-w-[980px] mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center"><div className="w-10 h-10 rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-200"><img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" /></div></Link>
-            <div className="leading-tight"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: BUSINESS_TZ })}</div><div className="text-sm font-extrabold text-slate-900 dark:text-white">{isPrivateCustomer ? 'My Deliveries' : 'Delivery Dashboard'}</div></div>
+        <div className="max-w-[980px] mx-auto px-4 h-16 flex items-center justify-between gap-2">
+          {/* min-w-0 + truncate: lets the date/title shrink instead of being
+              squeezed under the icon row on narrow iPhones — previously the
+              long date wrapped and got clipped by the fixed h-16 bar. */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Link to="/" className="flex items-center shrink-0"><div className="w-10 h-10 rounded-xl overflow-hidden bg-black flex items-center justify-center border border-slate-200"><img src="/assets/101drivers-logo.jpg" alt="101 Drivers" className="w-full h-full object-cover" /></div></Link>
+            <div className="leading-tight min-w-0"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 truncate"><span className="hidden sm:inline">{todayLong}</span><span className="sm:hidden">{todayShort}</span></div><div className="text-sm font-extrabold text-slate-900 dark:text-white truncate">{isPrivateCustomer ? 'My Deliveries' : 'Delivery Dashboard'}</div></div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <span className={cn("text-xs font-bold transition-colors", !showAll ? "text-lime-600" : "text-slate-400")}>My</span>
               <Switch checked={showAll} onCheckedChange={setShowAll} className="data-[state=checked]:bg-lime-500" />
               <span className={cn("text-xs font-bold transition-colors", showAll ? "text-lime-600" : "text-slate-400")}>All</span>
             </div> */}
-            <Button variant={showMapView ? "default" : "outline"} size="icon" className={cn("w-10 h-10 rounded-xl", showMapView && "bg-lime-500 text-slate-950")} onClick={() => setShowMapView(!showMapView)} title="Map view"><Map className="h-5 w-5" /></Button>
+            <Button variant={showMapView ? "default" : "outline"} size="icon" className={cn("w-9 h-9 sm:w-10 sm:h-10 rounded-xl", showMapView && "bg-lime-500 text-slate-950")} onClick={() => setShowMapView(!showMapView)} title="Map view"><Map className="h-5 w-5" /></Button>
             <NotificationBell userType="dealer" />
-            <Button asChild variant="ghost" size="icon" className="w-10 h-10 rounded-xl" title="Help">
+            <Button asChild variant="ghost" size="icon" className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl" title="Help">
               <Link to="/help-customer"><HelpCircle className="h-5 w-5" /></Link>
             </Button>
-            <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl" onClick={toggleTheme} title="Toggle theme">{mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</Button>
+            <Button variant="ghost" size="icon" className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl" onClick={toggleTheme} title="Toggle theme">{mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</Button>
             <Button variant="ghost" size="icon" className="hidden sm:flex w-10 h-10 rounded-xl" onClick={handleExportCSV} title="Export CSV"><Share2 className="h-5 w-5" /></Button>
             <Button variant="ghost" size="icon" className="hidden sm:flex w-10 h-10 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={handleSignOut} title="Sign Out"><LogOut className="w-5 h-5" /></Button>
-            <Button variant="ghost" size="icon" className="sm:hidden w-10 h-10 rounded-xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</Button>
+            <Button variant="ghost" size="icon" className="sm:hidden w-9 h-9 sm:w-10 sm:h-10 rounded-xl" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</Button>
           </div>
         </div>
         {mobileMenuOpen && (
@@ -592,7 +601,7 @@ export default function DealerDashboard() {
 
       {/* Map View */}
       {showMapView && (
-        <div className="sticky top-16 z-40 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div className="sticky top-[calc(4rem+env(safe-area-inset-top,0px))] z-40 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
           <div className="max-w-[980px] mx-auto">
             <div className="h-64 sm:h-80 relative bg-slate-200 dark:bg-slate-800">
               {isLoaded && activeDeliveriesForMap.length > 0 ? (
@@ -651,7 +660,8 @@ export default function DealerDashboard() {
       {/* Stats Summary */}
       <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[980px] mx-auto">
-          <div className="grid grid-cols-4 gap-2">
+          {/* 2x2 on phones (4-across was unreadable on iPhone), 4-across from sm up */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button 
               onClick={() => setActiveFilter('ACTIVE')} 
               className={cn(
@@ -705,7 +715,7 @@ export default function DealerDashboard() {
       </div>
 
       {/* Search & Filters */}
-      <div className="sticky top-16 z-40 bg-slate-50 dark:bg-slate-950 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+      <div className="sticky top-[calc(4rem+env(safe-area-inset-top,0px))] z-40 bg-slate-50 dark:bg-slate-950 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-[980px] mx-auto space-y-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -885,7 +895,7 @@ export default function DealerDashboard() {
                       </div>
                       <div className="text-right"><div className="text-lg font-black text-slate-900 dark:text-white">{formatCurrency(delivery.price)}</div><div className="text-[10px] font-bold text-slate-400 uppercase">Est.</div></div>
                     </div>
-                    <div className="mt-4 flex items-center justify-between text-sm text-slate-500 dark:text-slate-400"><div className="flex items-center gap-4"><div className="flex items-center gap-1.5"><CalendarIcon className="h-4 w-4" /><span>{delivery.scheduleDate}</span></div><div className="flex items-center gap-1.5"><Clock className="h-4 w-4" /><span>{delivery.scheduleTime}</span></div></div>{delivery.pickupPin && (<span className="text-sm font-bold text-green-600 dark:text-green-400">PIN: {delivery.pickupPin}</span>)}</div>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400"><div className="flex items-center gap-4"><div className="flex items-center gap-1.5"><CalendarIcon className="h-4 w-4" /><span>{delivery.scheduleDate}</span></div><div className="flex items-center gap-1.5"><Clock className="h-4 w-4" /><span>{delivery.scheduleTime}</span></div></div>{delivery.pickupPin && (<span className="text-sm font-bold text-green-600 dark:text-green-400">PIN: {delivery.pickupPin}</span>)}</div>
                     {delivery.driver && (
                       <div className="mt-4 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -1004,8 +1014,11 @@ export default function DealerDashboard() {
         </div>
       </nav>
 
-      {/* Floating Action Button */}
-      <Link to="/dealer-create-delivery" className="fixed right-4 bottom-20 w-14 h-14 rounded-2xl bg-lime-500 text-slate-950 flex items-center justify-center shadow-lg shadow-lime-500/30 hover:bg-lime-600 hover:scale-105 transition-all z-40 sm:hidden"><Plus className="h-7 w-7" /></Link>
+      {/* Floating Action Button — must clear the bottom nav's FULL iPhone
+          height (h-16 content + home-indicator safe inset) plus a 12px gap,
+          otherwise the nav covers its lower half. The old bottom-20 (80px)
+          assumed a 64px nav with no safe area. */}
+      <Link to="/dealer-create-delivery" className="fixed right-4 bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+0.75rem)] w-14 h-14 rounded-2xl bg-lime-500 text-slate-950 flex items-center justify-center shadow-lg shadow-lime-500/30 hover:bg-lime-600 hover:scale-105 transition-all z-40 sm:hidden"><Plus className="h-7 w-7" /></Link>
 
       {/* Photo Dialog for driver avatar */}
       <PhotoDialog

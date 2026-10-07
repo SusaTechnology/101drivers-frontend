@@ -94,12 +94,18 @@ export function Providers({ children }: AppProvidersProps) {
         <Toaster
           richColors
           position="top-center"
-          toastOptions={{
-            className: 'font-sans',
-            style: {
-              paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
-            },
+          // iPhone / PWA safe-area fix: offset the toast VIEWPORT itself below
+          // the notch/status bar (and above the home indicator at the bottom).
+          // The previous approach padded the inside of each toast, which left
+          // the card's top edge at y=0 — under the notch — so on iPhones the
+          // user only saw a colored sliver of the toast. Sonner v2 accepts CSS
+          // strings per edge, and env() inside them resolves per-device: 0 on
+          // desktop, notch height on iPhone (Safari + installed PWA).
+          offset={{
+            top: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
           }}
+          toastOptions={{ className: 'font-sans' }}
         />
       </QueryClientProvider>
     </ThemeProvider>
