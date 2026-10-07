@@ -134,13 +134,12 @@ export default function LandingPage() {
 
   // ─── Delivery type (Business / Personal) ───────────────────────────
   // Requirement: the delivery-type question is the FIRST interactive
-  // element on the page and Business is selected by default. The choice
+  // element on the page. New visitors start with NOTHING selected — the
+  // From/To address fields stay disabled until they pick a type, and
+  // tapping a disabled field scrolls back to the chooser with a
+  // highlight. Logged-in customers keep the saved/default choice. The choice
   // drives which pricing model the SERVER engine applies (BUSINESS → flat
   // PER_MILE, PERSONAL → A-B-C bands) and is remembered for next visits.
-  const [deliveryType, setDeliveryType] = useState<HomeDeliveryType>(
-    savedPrefill.deliveryType ?? "BUSINESS"
-  );
-
   // Logged-in customers skip the delivery-type question ("land on the map
   // with their saved type and real rate"). Drivers/admins still see it —
   // they are not delivery customers.
@@ -149,6 +148,10 @@ export default function LandingPage() {
     const roles = getLastKnownRoles();
     return !roles.includes("DRIVER") && !roles.includes("ADMIN");
   })();
+
+  const [deliveryType, setDeliveryType] = useState<HomeDeliveryType | null>(
+    isLoggedInCustomer ? (savedPrefill.deliveryType ?? "BUSINESS") : (savedPrefill.deliveryType ?? null)
+  );
 
   // ─── Live pricing config ───────────────────────────────────────────
   // Fetches the admin-configured default pricing config from the
@@ -194,6 +197,18 @@ export default function LandingPage() {
 
   // Pickup zone check state (null = not checked yet)
   const [pickupInZone, setPickupInZone] = useState<boolean | null>(null);
+
+  // ─── "Choose a delivery type first" guidance ────────────────────────
+  // While no delivery type is selected the From/To fields are disabled.
+  // When the visitor taps a disabled field anyway (invisible overlay
+  // buttons on each field), we scroll the type chooser (#quote) into view
+  // and highlight it — lime ring + shadow + pulsing wash — until they
+  // pick a type. The highlight clears as soon as a choice is made.
+  const [typeHighlight, setTypeHighlight] = useState(false);
+  const promptDeliveryType = useCallback(() => {
+    document.getElementById("quote")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTypeHighlight(true);
+  }, []);
 
   // Lead form states
   const [dealerLeadForm, setDealerLeadForm] = useState<DealerLeadForm>({
@@ -366,6 +381,13 @@ export default function LandingPage() {
   const handleCalculateEstimate = useCallback(async (opts?: { scrollToEstimate?: boolean }) => {
     const scrollToEstimate = opts?.scrollToEstimate ?? false;
 
+    // No delivery type chosen → the address fields are disabled, so this
+    // can only happen via a stale CTA. Point the user back to the chooser.
+    if (!deliveryType) {
+      promptDeliveryType();
+      return;
+    }
+
     if (!pickupAddress || !dropoffAddress) {
       if (!pickupAddress) setPickupError("From address is required");
       if (!dropoffAddress) setDropoffError("To address is required");
@@ -442,7 +464,7 @@ export default function LandingPage() {
     } finally {
       setIsLoadingQuote(false);
     }
-  }, [pickupAddress, dropoffAddress, pickupInZone, deliveryType]);
+  }, [pickupAddress, dropoffAddress, pickupInZone, deliveryType, promptDeliveryType]);
 
   // Auto-fire the server quote as soon as both addresses are selected and
   // pickup is confirmed inside the zone. The server computes the driving
@@ -452,7 +474,7 @@ export default function LandingPage() {
   // Note: this auto-fire does NOT scroll — only the button click scrolls,
   // so the page doesn't jump around while the user is still typing.
   useEffect(() => {
-    if (pickupAddress && dropoffAddress && pickupCoords && dropoffCoords && pickupInZone === true && !isLoadingQuote) {
+    if (deliveryType && pickupAddress && dropoffAddress && pickupCoords && dropoffCoords && pickupInZone === true && !isLoadingQuote) {
       const signature = `${deliveryType}||${pickupAddress}||${dropoffAddress}`;
       if (lastQuotedKeyRef.current === signature) return;
       lastQuotedKeyRef.current = signature;
@@ -467,6 +489,7 @@ export default function LandingPage() {
   const handleDeliveryTypeChange = useCallback((type: HomeDeliveryType) => {
     if (type === deliveryType) return;
     setDeliveryType(type);
+    setTypeHighlight(false);
     setQuoteResult(null);
     lastQuotedKeyRef.current = null;
     try {
@@ -760,9 +783,25 @@ export default function LandingPage() {
 
           {/* ── Delivery type selector — the first interactive element ── */}
           {/* Requirement: sits directly under the hero heading + Instant
-              Quote line, BEFORE the address fields. Business is selected by
-              default (dark card, checkmark); Personal is the light card. */}
-          <div id="quote" className="mt-6 scroll-mt-24">
+              Quote line, BEFORE the address fields. New visitors start with
+              NO type selected — both cards render in the light style and the
+              address fields below stay disabled until a card is tapped.
+              Tapping a disabled address field scrolls back here and glows
+              this section (ring + shadow + pulsing wash) until a type is
+              picked. */}
+          <div
+            id="quote"
+            className={cn(
+              "mt-6 scroll-mt-24 relative rounded-2xl p-3 -m-3 transition-all duration-300",
+              typeHighlight && "ring-2 ring-lime-400 shadow-2xl shadow-lime-500/25"
+            )}
+          >
+            {typeHighlight && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-2xl bg-lime-400/10 animate-pulse"
+              />
+            )}
             {isLoggedInCustomer ? (
               // Logged-in customers skip the type question — show their
               // saved choice as a chip instead of the two cards.
@@ -888,38 +927,53 @@ export default function LandingPage() {
                   <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     From Where
                   </Label>
-                  <LocationAutocomplete
-                    key="pickup"
-                    value={pickupAddress}
-                    onChange={setPickupAddress}
-                    onPlaceSelect={handlePickupSelect}
-                    onClear={handlePickupClear}
-                    onReject={() => {
-                      // Address was outside the configured bounds — tell the user
-                      // WHY the field was cleared so they know to enter a CA address.
-                      setPickupAddress("");
-                      setPickupCoords(null);
-                      setPickupInZone(false);
-                      setPickupError("This address is outside California. Please enter a pickup address inside CA.");
-                      setDistance(null);
-                      setQuoteResult(null);
-                      lastQuotedKeyRef.current = null;
-                      routeVersionRef.current += 1;
-                      toast.error("Outside California", {
-                        description: "Pickup must be inside California. Please enter a CA address.",
-                      });
-                    }}
-                    placeholder="Enter address in pickup area"
-                    isLoaded={isLoaded}
-                    icon={<Target className="h-4 w-4 text-slate-400" />}
-                    strictBounds={true}
-                    bounds={{
-                      north: 34.050,
-                      south: 33.930,
-                      east: -118.350,
-                      west: -118.520,
-                    }}
-                  />
+                  <div className="relative">
+                    <LocationAutocomplete
+                      key="pickup"
+                      value={pickupAddress}
+                      onChange={setPickupAddress}
+                      onPlaceSelect={handlePickupSelect}
+                      onClear={handlePickupClear}
+                      onReject={() => {
+                        // Address was outside the configured bounds — tell the user
+                        // WHY the field was cleared so they know to enter a CA address.
+                        setPickupAddress("");
+                        setPickupCoords(null);
+                        setPickupInZone(false);
+                        setPickupError("This address is outside California. Please enter a pickup address inside CA.");
+                        setDistance(null);
+                        setQuoteResult(null);
+                        lastQuotedKeyRef.current = null;
+                        routeVersionRef.current += 1;
+                        toast.error("Outside California", {
+                          description: "Pickup must be inside California. Please enter a CA address.",
+                        });
+                      }}
+                      placeholder="Enter address in pickup area"
+                      isLoaded={isLoaded}
+                      icon={<Target className="h-4 w-4 text-slate-400" />}
+                      strictBounds={true}
+                      bounds={{
+                        north: 34.050,
+                        south: 33.930,
+                        east: -118.350,
+                        west: -118.520,
+                      }}
+                      disabled={!deliveryType}
+                    />
+                    {/* No type chosen yet → the input itself is disabled (a
+                        disabled input never fires click events), so this
+                        invisible overlay catches the tap and bounces the
+                        visitor up to the type chooser with a highlight. */}
+                    {!deliveryType && (
+                      <button
+                        type="button"
+                        aria-label="Choose a delivery type first"
+                        onClick={promptDeliveryType}
+                        className="absolute inset-0 z-30 rounded-2xl cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-lime-500"
+                      />
+                    )}
+                  </div>
                   {pickupError && (
                     <p className={cn(
                       "text-xs mt-1 font-semibold",
@@ -938,37 +992,50 @@ export default function LandingPage() {
                   <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     To Where
                   </Label>
-                  <LocationAutocomplete
-                    key="dropoff"
-                    value={dropoffAddress}
-                    onChange={setDropoffAddress}
-                    onPlaceSelect={handleDropoffSelect}
-                    onClear={handleDropoffClear}
-                    onReject={() => {
-                      // Address was outside the configured bounds — tell the user
-                      // WHY the field was cleared so they know to enter a CA address.
-                      setDropoffAddress("");
-                      setDropoffCoords(null);
-                      setDropoffError("This address is outside California. Please enter a drop-off address inside CA.");
-                      setDistance(null);
-                      setQuoteResult(null);
-                      lastQuotedKeyRef.current = null;
-                      routeVersionRef.current += 1;
-                      toast.error("Outside California", {
-                        description: "Drop-off must be inside California. Please enter a CA address.",
-                      });
-                    }}
-                    placeholder="Anywhere in SoCal"
-                    isLoaded={isLoaded}
-                    icon={<Flag className="h-4 w-4 text-slate-400" />}
-                    strictBounds={true}
-                    bounds={{
-                      north: 35.2,
-                      south: 32.5,
-                      east: -114.8,
-                      west: -120.8,
-                    }}
-                  />
+                  <div className="relative">
+                    <LocationAutocomplete
+                      key="dropoff"
+                      value={dropoffAddress}
+                      onChange={setDropoffAddress}
+                      onPlaceSelect={handleDropoffSelect}
+                      onClear={handleDropoffClear}
+                      onReject={() => {
+                        // Address was outside the configured bounds — tell the user
+                        // WHY the field was cleared so they know to enter a CA address.
+                        setDropoffAddress("");
+                        setDropoffCoords(null);
+                        setDropoffError("This address is outside California. Please enter a drop-off address inside CA.");
+                        setDistance(null);
+                        setQuoteResult(null);
+                        lastQuotedKeyRef.current = null;
+                        routeVersionRef.current += 1;
+                        toast.error("Outside California", {
+                          description: "Drop-off must be inside California. Please enter a CA address.",
+                        });
+                      }}
+                      placeholder="Anywhere in SoCal"
+                      isLoaded={isLoaded}
+                      icon={<Flag className="h-4 w-4 text-slate-400" />}
+                      strictBounds={true}
+                      bounds={{
+                        north: 35.2,
+                        south: 32.5,
+                        east: -114.8,
+                        west: -120.8,
+                      }}
+                      disabled={!deliveryType}
+                    />
+                    {/* Same guidance as the pickup field — tap without a
+                        chosen type → scroll to the chooser + highlight. */}
+                    {!deliveryType && (
+                      <button
+                        type="button"
+                        aria-label="Choose a delivery type first"
+                        onClick={promptDeliveryType}
+                        className="absolute inset-0 z-30 rounded-2xl cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-lime-500"
+                      />
+                    )}
+                  </div>
                   {dropoffError && (
                     <p className="text-xs text-red-500 mt-1">{dropoffError}</p>
                   )}
