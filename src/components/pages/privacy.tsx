@@ -1,7 +1,7 @@
 // privacy-policy.tsx
 import React, { useState, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
-import { PublicFooter } from '../shared/PublicFooter'
+import { SiteFooter } from '../shared/SiteFooter'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -175,7 +175,7 @@ export default function PrivacyPolicy() {
   )
 
   // Footer — shared public footer (single source of truth)
-  const Footer = () => <PublicFooter />
+  const Footer = () => <SiteFooter />
 
   // Section Header Component
   const SectionHeader = ({ icon: Icon, title, id }: { icon: React.ElementType; title: string; id: string }) => (

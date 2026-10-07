@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { PublicFooter } from "../../components/shared/PublicFooter"
+import { SiteFooter } from "../../components/shared/SiteFooter"
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -358,7 +358,7 @@ export function DealerSignIn() {
         </div>
       </main>
 
-      <PublicFooter />
+      <SiteFooter />
     </div>
   )
 }

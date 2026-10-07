@@ -1,7 +1,7 @@
 // terms-of-service.tsx
 import React, { useState, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
-import { PublicFooter } from '../shared/PublicFooter'
+import { SiteFooter } from '../shared/SiteFooter'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -147,7 +147,7 @@ export default function TermsOfService() {
   )
 
   // Footer — shared public footer (single source of truth)
-  const Footer = () => <PublicFooter />
+  const Footer = () => <SiteFooter />
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">

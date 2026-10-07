@@ -4,7 +4,7 @@ import { SocialLinks } from "./SocialLinks";
 import { WhatsAppIcon } from "./WhatsAppSupportButton";
 
 /**
- * PublicFooter — the one shared footer for every public page: landing,
+ * SiteFooter — the one shared footer for every public page: landing,
  * about, legal (privacy / terms / agreement), help, the auth hubs and
  * the blog / news / careers section.
  *
@@ -14,7 +14,7 @@ import { WhatsAppIcon } from "./WhatsAppSupportButton";
  * Vertical spacing is deliberately tight so the footer stays compact
  * on short pages (auth, legal).
  */
-export function PublicFooter() {
+export function SiteFooter() {
   return (
     <footer className="bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 pt-3 pb-1.5">
       <div className="max-w-[1440px] mx-auto px-6 lg:px-8">

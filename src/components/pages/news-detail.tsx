@@ -3,7 +3,7 @@ import { ArrowLeft, Calendar, Newspaper } from "lucide-react";
 
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
-import { PublicFooter } from "../shared/PublicFooter";
+import { SiteFooter } from "../shared/SiteFooter";
 import { ContentNotFound } from "../shared/ContentNotFound";
 import { getNewsPost } from "@/content/news";
 import { formatContentDate } from "@/lib/format-date";
@@ -27,7 +27,7 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
         />
         <NavBar />
         <ContentNotFound label="announcement" backTo="/news" backLabel="Back to news" />
-        <PublicFooter />
+        <SiteFooter />
       </div>
     );
   }
@@ -138,7 +138,7 @@ export default function NewsDetailPage({ slug }: { slug: string }) {
         </article>
       </main>
 
-      <PublicFooter />
+      <SiteFooter />
     </div>
   );
 }

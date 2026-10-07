@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { PublicFooter } from "../shared/PublicFooter"
+import { SiteFooter } from "../shared/SiteFooter"
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -698,7 +698,7 @@ export function ResetPassword() {
         </div>
       </main>
 
-      <PublicFooter />
+      <SiteFooter />
     </div>
   );
 }

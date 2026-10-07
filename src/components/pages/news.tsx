@@ -3,7 +3,7 @@ import { Newspaper } from "lucide-react";
 
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
-import { PublicFooter } from "../shared/PublicFooter";
+import { SiteFooter } from "../shared/SiteFooter";
 import {
   ContentCard,
   ContentCardGrid,
@@ -98,7 +98,7 @@ function NewsPage() {
         </p>
       </main>
 
-      <PublicFooter />
+      <SiteFooter />
     </div>
   );
 }

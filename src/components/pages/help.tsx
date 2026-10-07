@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { WhatsAppSupportButton } from '@/components/shared/WhatsAppSupportButton'
-import { PublicFooter } from '@/components/shared/PublicFooter'
+import { SiteFooter } from '@/components/shared/SiteFooter'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -492,7 +492,7 @@ export default function HelpPage({ type }: { type?: 'customer' | 'driver' }) {
       </main>
 
       {/* Footer — shared public footer */}
-      <PublicFooter />
+      <SiteFooter />
     </div>
   )
 }

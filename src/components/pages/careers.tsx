@@ -3,7 +3,7 @@ import { Briefcase, MapPin, Clock, HeartHandshake } from "lucide-react";
 
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
-import { PublicFooter } from "../shared/PublicFooter";
+import { SiteFooter } from "../shared/SiteFooter";
 import {
   ContentCard,
   ContentCardGrid,
@@ -141,7 +141,7 @@ function CareersPage() {
         </section>
       </main>
 
-      <PublicFooter />
+      <SiteFooter />
     </div>
   );
 }

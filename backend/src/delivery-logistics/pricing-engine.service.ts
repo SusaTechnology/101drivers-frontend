@@ -118,12 +118,115 @@ export class PricingEngineService {
         ? input.deliveryTypePricingOverride
         : pricingContext.customerPricingModeOverride;
 
+    // BUSINESS delivery-type quotes (and business accounts whose signup
+    // pinned pricingModeOverride = PER_MILE) force the flat model onto
+    // whatever config the context resolved — which may be the default
+    // CATEGORY_ABC config (no perMileRate). Instead of hard-failing with
+    // "missing per-mile rate", price against the active flat config using
+    // the same selection rule the registration auto-assign applies for
+    // personal customers (default-if-flat, else latest active flat). No
+    // active flat config → the original admin-actionable error still
+    // applies. Configs that already define perMileRate are never touched,
+    // and ABC-mode quotes are unaffected.
+    const overrideWantsFlatMode =
+      effectiveOverride === EnumCustomerPricingModeOverride.PER_MILE ||
+      effectiveOverride === EnumCustomerPricingModeOverride.FLAT_TIER;
+
+    let config = pricingContext.config;
+    if (overrideWantsFlatMode && config.perMileRate == null) {
+      const flatConfig = await this.loadActiveFlatPricingConfig();
+      if (flatConfig) {
+        config = flatConfig;
+      }
+    }
+
     return this.computeQuoteFromConfig({
-      config: pricingContext.config,
+      config,
       distanceMiles: input.distanceMiles,
       serviceType: input.serviceType,
       customerPricingModeOverride: effectiveOverride,
     });
+  }
+
+  /**
+   * Load the active flat (PER_MILE) pricing config — the SAME selection rule
+   * the registration auto-assign uses when it hands a config to a new
+   * personal customer (see auth.service auto-assign):
+   *   1. the default config — but ONLY if it is active AND flat (PER_MILE)
+   *   2. otherwise the most recently created ACTIVE flat (PER_MILE) config
+   *
+   * Used by calculateQuote when a PER_MILE override (BUSINESS delivery type
+   * from the public landing page, or a business account whose signup pinned
+   * the flat model) lands on a config that has no perMileRate — e.g. the
+   * default CATEGORY_ABC config. Without this the flat branch would reject
+   * the quote with "missing per-mile rate" even though a valid flat config
+   * exists. Returns null when no active flat config exists; the caller then
+   * keeps the existing admin-actionable error. Configs that already define
+   * perMileRate are never affected.
+   */
+  private async loadActiveFlatPricingConfig(): Promise<ResolvedPricingContext["config"] | null> {
+    const select = {
+      id: true,
+      active: true,
+      isDefault: true,
+      baseFee: true,
+      insuranceFee: true,
+      driverSharePct: true,
+      feePassThrough: true,
+      flatMiles: true,
+      perMileRate: true,
+      pricingMode: true,
+      transactionFeeFixed: true,
+      transactionFeePct: true,
+      tiers: {
+        select: { id: true, minMiles: true, maxMiles: true, flatPrice: true },
+        orderBy: { minMiles: "asc" as const },
+      },
+      categoryRules: {
+        select: {
+          id: true,
+          category: true,
+          minMiles: true,
+          maxMiles: true,
+          baseFee: true,
+          flatPrice: true,
+          perMileRate: true,
+        },
+        orderBy: [{ category: "asc" as const }, { minMiles: "asc" as const }],
+      },
+    };
+
+    let config = await this.prisma.pricingConfig.findFirst({
+      where: {
+        active: true,
+        isDefault: true,
+        pricingMode: EnumPricingConfigPricingMode.PER_MILE,
+      },
+      select,
+    });
+
+    if (!config) {
+      config = await this.prisma.pricingConfig.findFirst({
+        where: {
+          active: true,
+          pricingMode: EnumPricingConfigPricingMode.PER_MILE,
+        },
+        orderBy: { createdAt: "desc" },
+        select,
+      });
+    }
+
+    if (!config) {
+      return null;
+    }
+
+    return {
+      ...config,
+      categoryRules: config.categoryRules.map((rule) => ({
+        ...rule,
+        category: rule.category as EnumQuoteMileageCategory,
+      })),
+    };
   }
 
   /**

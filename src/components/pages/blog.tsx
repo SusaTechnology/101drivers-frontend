@@ -3,7 +3,7 @@ import { BookOpen } from "lucide-react";
 
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
-import { PublicFooter } from "../shared/PublicFooter";
+import { SiteFooter } from "../shared/SiteFooter";
 import {
   ContentCard,
   ContentCardGrid,
@@ -97,7 +97,7 @@ function BlogPage() {
         </p>
       </main>
 
-      <PublicFooter />
+      <SiteFooter />
     </div>
   );
 }

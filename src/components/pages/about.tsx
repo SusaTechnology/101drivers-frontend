@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { NavBar } from "../shared/layout/navbar";
 import { SEOHead } from "../shared/SEOHead";
-import { PublicFooter } from "../shared/PublicFooter";
+import { SiteFooter } from "../shared/SiteFooter";
 
 function AboutPage() {
 
@@ -302,7 +302,7 @@ function AboutPage() {
         </section>
       </main>
 
-      <PublicFooter />
+      <SiteFooter />
     </div>
   );
 }

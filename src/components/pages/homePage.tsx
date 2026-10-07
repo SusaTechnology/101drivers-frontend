@@ -780,20 +780,28 @@ export default function LandingPage() {
                   Choose your delivery type
                 </h2>
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Business Delivery — dark card, selected by default */}
+                  {/* Business Delivery — the SELECTED card is always the dark
+                      bg-slate-900 one, whichever type is selected; the
+                      unselected card falls back to the light style. */}
                   <button
                     type="button"
                     onClick={() => handleDeliveryTypeChange("BUSINESS")}
                     aria-pressed={deliveryType === "BUSINESS"}
-                    className={`relative text-left p-4 sm:p-5 rounded-2xl bg-slate-900 text-white transition-all duration-150 ${
+                    className={`relative text-left p-4 sm:p-5 rounded-2xl transition-all duration-150 ${
                       deliveryType === "BUSINESS"
-                        ? "ring-2 ring-lime-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
-                        : "opacity-80 hover:opacity-100"
+                        ? "bg-slate-900 dark:bg-slate-800 text-white ring-2 ring-lime-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 opacity-80 hover:opacity-100"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-black text-sm sm:text-base flex items-center gap-2">
-                        <Building className="h-4 w-4 text-lime-400" />
+                        <Building
+                          className={`h-4 w-4 ${
+                            deliveryType === "BUSINESS"
+                              ? "text-lime-400"
+                              : "text-lime-600 dark:text-lime-400"
+                          }`}
+                        />
                         Business Delivery
                       </span>
                       {deliveryType === "BUSINESS" && (
@@ -802,28 +810,47 @@ export default function LandingPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs mt-2 text-slate-300 leading-relaxed">
+                    <p
+                      className={`text-xs mt-2 leading-relaxed ${
+                        deliveryType === "BUSINESS"
+                          ? "text-slate-300 dark:text-slate-400"
+                          : "text-slate-500 dark:text-slate-400"
+                      }`}
+                    >
                       For dealerships, rental companies, and other businesses needing vehicle delivery services
                     </p>
-                    <p className="text-[10px] mt-2 font-black uppercase tracking-widest text-lime-400">
+                    <p
+                      className={`text-[10px] mt-2 font-black uppercase tracking-widest ${
+                        deliveryType === "BUSINESS"
+                          ? "text-lime-400"
+                          : "text-lime-600 dark:text-lime-400"
+                      }`}
+                    >
                       $101 prepaid · flat rate
                     </p>
                   </button>
 
-                  {/* Personal Delivery — light card, unselected by default */}
+                  {/* Personal Delivery — same rule: selected = dark
+                      bg-slate-900, unselected = light. */}
                   <button
                     type="button"
                     onClick={() => handleDeliveryTypeChange("PERSONAL")}
                     aria-pressed={deliveryType === "PERSONAL"}
-                    className={`relative text-left p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 transition-all duration-150 ${
+                    className={`relative text-left p-4 sm:p-5 rounded-2xl transition-all duration-150 ${
                       deliveryType === "PERSONAL"
-                        ? "ring-2 ring-lime-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
-                        : "opacity-80 hover:opacity-100"
+                        ? "bg-slate-900 dark:bg-slate-800 text-white ring-2 ring-lime-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 shadow-lg"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 opacity-80 hover:opacity-100"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-black text-sm sm:text-base flex items-center gap-2">
-                        <User className="h-4 w-4 text-lime-600 dark:text-lime-400" />
+                        <User
+                          className={`h-4 w-4 ${
+                            deliveryType === "PERSONAL"
+                              ? "text-lime-400"
+                              : "text-lime-600 dark:text-lime-400"
+                          }`}
+                        />
                         Personal Delivery
                       </span>
                       {deliveryType === "PERSONAL" && (
@@ -832,10 +859,22 @@ export default function LandingPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs mt-2 text-slate-500 dark:text-slate-400 leading-relaxed">
+                    <p
+                      className={`text-xs mt-2 leading-relaxed ${
+                        deliveryType === "PERSONAL"
+                          ? "text-slate-300 dark:text-slate-400"
+                          : "text-slate-500 dark:text-slate-400"
+                      }`}
+                    >
                       For individuals who need their own car moved from point A to point B
                     </p>
-                    <p className="text-[10px] mt-2 font-black uppercase tracking-widest text-lime-600 dark:text-lime-400">
+                    <p
+                      className={`text-[10px] mt-2 font-black uppercase tracking-widest ${
+                        deliveryType === "PERSONAL"
+                          ? "text-lime-400"
+                          : "text-lime-600 dark:text-lime-400"
+                      }`}
+                    >
                       A-B-C prepaid · distance-based
                     </p>
                   </button>

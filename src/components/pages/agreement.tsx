@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { PublicFooter } from '../shared/PublicFooter'
+import { SiteFooter } from '../shared/SiteFooter'
 import { Card, CardContent, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -122,7 +122,7 @@ export default function IndependentDriverAgreement() {
   )
 
   // Footer — shared public footer (single source of truth)
-  const Footer = () => <PublicFooter />
+  const Footer = () => <SiteFooter />
 
   // Section Header Component
   const SectionHeader = ({ icon: Icon, title, id }: { icon: React.ElementType; title: string; id: string }) => (

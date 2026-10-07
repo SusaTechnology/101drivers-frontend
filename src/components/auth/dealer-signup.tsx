@@ -1,7 +1,7 @@
 //@ts-nocheck
 import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { PublicFooter } from "../shared/PublicFooter"
+import { SiteFooter } from "../shared/SiteFooter"
 import { useJsApiLoader } from "@react-google-maps/api";
 import { GOOGLE_MAPS_LIBRARIES, GOOGLE_MAPS_SCRIPT_ID } from '@/lib/google-maps-config';
 import {
@@ -194,7 +194,7 @@ export function DealerSignUp() {
         <DealerSignupForm isLoaded={isLoaded} />
       </main>
 
-      <PublicFooter />
+      <SiteFooter />
     </div>
   );
 }
